@@ -28,13 +28,15 @@ func remove_suffix(fromString string: String) -> String {
     return components[components.count-1]
 }
 
-func load(imageFiles: [String]) throws -> [NSImage] {
-    var ret: [NSImage] = [];
+func load(imageFiles: [String]) throws -> [CGImage] {
+    var ret: [CGImage] = [];
     try imageFiles.forEach { file in
         let imageURL = NSURL(fileURLWithPath: file, isDirectory: false)
         let data = try Data(contentsOf: imageURL as URL)
-        if let image = NSImage(data: data) {
-            ret.append(image)
+        if let image = NSImage(data: data),
+           let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil)
+        {
+            ret.append(cgImage)
         }
     }
     return ret;
