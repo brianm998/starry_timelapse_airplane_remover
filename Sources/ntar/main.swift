@@ -2,6 +2,13 @@ import Foundation
 import CoreGraphics
 import Cocoa
 
+
+let max_pixel_distance = 20000  // XXX arbitrary constant
+let min_neighbors = 1000
+          // XXX fucking global
+var outlier_map: [String: Outlier] = [:] // keyed by "\(x),\(y)"
+          
+
 if CommandLine.arguments.count < 1 {
     print("need more args!")    // XXX make this better
 } else {
@@ -80,6 +87,30 @@ func save(image cgImage: CGImage, toFile filename: String) throws {
     }
 }
 
+public struct Outlier: Hashable {
+    var neighbors: Set<Outlier> = []
+    let x: UInt16
+    let y: UInt16
+    let amount: UInt32
+    
+    public init(x: UInt16, y: UInt16, amount: UInt32) {
+        self.x = x
+        self.y = y
+        self.amount = amount
+        self.neighbors = [self]
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(x)
+        hasher.combine(y)
+    }
+
+    public func copy() -> Outlier {
+        var ret = Outlier(x: x, y: y, amount: amount)
+        ret.neighbors = self.neighbors
+        return ret
+    }
+}
 
 public struct Pixel {
     public var value: UInt64
@@ -181,12 +212,11 @@ func createImage() -> CGImage? {
     }
     
     if let dataProvider = CGDataProvider(data: data as CFData) {
-        var colorSpace = CGColorSpaceCreateDeviceRGB()
         return CGImage(width: width, height: height,
                        bitsPerComponent: bitsPerComponent,
                        bitsPerPixel: bytesPerPixel*8,
                        bytesPerRow: width*bytesPerPixel,
-                       space: colorSpace,
+                       space: CGColorSpaceCreateDeviceRGB(),
                        bitmapInfo: CGBitmapInfo.byteOrder16Big,
                        provider: dataProvider,
                        decode: nil,
@@ -241,6 +271,7 @@ func copy(image: CGImage) -> CGImage? {
     return nil
 }
 
+
 func removeAirplanes(fromImage image: CGImage, otherFrames: [CGImage]) -> CGImage? {
 
     let width = image.width
@@ -264,9 +295,9 @@ func removeAirplanes(fromImage image: CGImage, otherFrames: [CGImage]) -> CGImag
         }
     }
 
-    for y in 0 ..< height {
-        print ("y \(y)")
-        for x in 0 ..< width {
+    for y: UInt16 in 0 ..< UInt16(height) {
+        //print ("y \(y)")
+        for x: UInt16 in 0 ..< UInt16(width) {
             //print ("x \(x)")
 
             let origPixel = pixel(fromImage: image/*, withBytes: bytes*/, atX: x, andY: y)
@@ -274,33 +305,77 @@ func removeAirplanes(fromImage image: CGImage, otherFrames: [CGImage]) -> CGImag
             var otherPixels: [Pixel] = []
             for p in 0 ..< otherFrames.count {
                 let newPixel = pixel(fromImage: otherFrames[p]/*, withBytes: otherBytes[p]*/, atX: x, andY: y)
-                //print("newPixel \(newPixel.description)")
+                ////print("newPixel \(newPixel.description)")
                 otherPixels.append(newPixel)
             }
             var total_difference: UInt32 = 0
             otherPixels.forEach { pixel in
                 let difference = origPixel.difference(from: pixel)
 //                if difference != 0 {                                    
-//                    print("difference \(difference)")
+//                    //print("difference \(difference)")
 //                }
                 total_difference += UInt32(difference)
             }
             total_difference /= UInt32(otherPixels.count)
-            if total_difference > 10000 { // XXX arbitrary constant
-                print("at (\(x), \(y)) we have difference \(total_difference) otherPixels \(otherPixels.count)")
-            }
-            
-            if x == 200 {       // write a red vertical line at 100 pixels into the image
-                let offset = (y * bytesPerRow) + (x * bytesPerPixel)
-
-                var nextPixel = Pixel()
-                nextPixel.red = 0xFFFF
-                //var nextPixel = pixel(fromImage: image, atX: x, andY: y)
-                var nextValue = nextPixel.value
-                data.replaceSubrange(offset ..< offset+bytesPerPixel, with: &nextValue, count: 6)
+            if total_difference > max_pixel_distance { // XXX global
+                //print("at (\(x), \(y)) we have difference \(total_difference) otherPixels \(otherPixels.count)")
+                let fuck = Outlier(x: x, y: y, amount: total_difference)
+                //print("mid \(x),\(y)")
+                outlier_map["\(x),\(y)"] = fuck
+                //print("WOO")
             }
         }
     }
+
+    print("processing the outlier map")
+    
+    // go through the outlier_map 
+    prune(width: UInt16(width), height: UInt16(height))
+
+    print("done processing the outlier map")
+//    prune(outlierMap: &outlier_map, width: UInt16(width), height: UInt16(height))
+//    prune(outlierMap: &outlier_map, width: UInt16(width), height: UInt16(height))
+//    prune(outlierMap: &outlier_map, width: UInt16(width), height: UInt16(height))
+    
+    // paint green on the outliers above the threshold for testing
+    for y: UInt16 in 0 ..< UInt16(height) {
+        for x: UInt16 in 0 ..< UInt16(width) {
+            if let outlier = outlier_map["\(x),\(y)"] {
+                if outlier.amount > max_pixel_distance { // XXX global variable
+                    print("found \(outlier.neighbors.count) neighbors")
+
+                    let offset = (Int(y) * bytesPerRow) + (Int(x) * bytesPerPixel)
+
+                    var nextPixel = Pixel()
+                    nextPixel.green = 0xFFFF
+
+                    var nextValue = nextPixel.value
+                    data.replaceSubrange(offset ..< offset+bytesPerPixel, with: &nextValue, count: 6)
+                }
+            }
+        }
+    }
+
+    // paint red on the outliers with neighbhor counts above the threshold for testing
+    for y: UInt16 in 0 ..< UInt16(height) {
+        for x: UInt16 in 0 ..< UInt16(width) {
+            if let outlier = outlier_map["\(x),\(y)"] {
+                if outlier.neighbors.count > min_neighbors { // XXX global variable
+                    print("found \(outlier.neighbors.count) neighbors")
+
+                    let offset = (Int(y) * bytesPerRow) + (Int(x) * bytesPerPixel)
+
+                    var nextPixel = Pixel()
+                    nextPixel.red = 0xFFFF
+                    //var nextPixel = pixel(fromImage: image, atX: x, andY: y)
+
+                    var nextValue = nextPixel.value
+                    data.replaceSubrange(offset ..< offset+bytesPerPixel, with: &nextValue, count: 6)
+                }
+            }
+        }
+    }
+
 
     if let dataProvider = CGDataProvider(data: data as CFData) {
         var colorSpace = CGColorSpaceCreateDeviceRGB()
@@ -356,7 +431,7 @@ func dump_pixels(fromImage image: CGImage, closure: (Pixel, Int, Int) -> ()) {
         print("---")
     }
 }
-
+/*
 func pixel(fromImage image: CGImage, withBytes bytes: UnsafePointer<UInt8>, atX x: Int, andY y: Int) -> Pixel {
     let numberComponents = image.bitsPerPixel / image.bitsPerComponent
     let bytesPerPixel = image.bitsPerPixel / 8
@@ -378,8 +453,8 @@ func pixel(fromImage image: CGImage, withBytes bytes: UnsafePointer<UInt8>, atX 
 
     return pixel
 }
-
-func pixel(fromImage image: CGImage, atX x: Int, andY y: Int) -> Pixel {
+*/
+func pixel(fromImage image: CGImage, atX x: UInt16, andY y: UInt16) -> Pixel {
     guard let data = image.dataProvider?.data,
           let bytes = CFDataGetBytePtr(data) else {
                           fatalError("Couldn't access image data")
@@ -391,7 +466,7 @@ func pixel(fromImage image: CGImage, atX x: Int, andY y: Int) -> Pixel {
     assert(image.colorSpace?.model == .rgb)
     
     var pixel = Pixel()
-    let offset = (y * image.bytesPerRow) + (x * bytesPerPixel)
+    let offset = (Int(y) * image.bytesPerRow) + (Int(x) * bytesPerPixel)
     // XXX this could be cleaner
     let r1 = UInt16(bytes[offset]) // lower bits
     let r2 = UInt16(bytes[offset + 1]) << 8 // higher bits
@@ -446,3 +521,126 @@ func list_image_files(atPath path: String) -> [String] {
     return image_files
 }
 
+
+func prune(outlier: Outlier, depth: Int = 0) {
+    // look for neighbors
+    print("prune start")
+    let x = outlier.x
+    let y = outlier.y
+
+    if depth > 100 {
+        return
+    }
+    
+    var outlier = outlier.copy()
+            /*
+           if x > 0, y > 0, var outlier1 = outlier_map["\(x-1),\(y-1)"] {
+                    let new_neighbors = outlier.neighbors.union(outlier1.neighbors)
+                    outlier.neighbors = new_neighbors
+                    outlier_map["\(x),\(y)"] = outlier
+                    outlier1.neighbors = new_neighbors
+                    outlier_map["\(x-1),\(y-1)"] = outlier1
+                }*/
+    if y > 0, var outlier1 = outlier_map["\(x),\(y-1)"] {
+        if(outlier.neighbors == outlier1.neighbors) {
+            print("same neighbors")
+        } else {
+            print("different neighbors")
+            let new_neighbors = outlier.neighbors.union(outlier1.neighbors)
+            outlier.neighbors = new_neighbors
+            outlier_map["\(x),\(y)"] = outlier
+             var new_outlier = outlier1.copy()
+            new_outlier.neighbors = new_neighbors
+            outlier_map["\(x),\(y-1)"] = new_outlier
+            print("different recursing 1")
+            prune(outlier: new_outlier, depth: depth + 1)
+             print("different done recursing")
+        }
+    }/*
+     if y > 0, var outlier1 = outlier_map["\(x+1),\(y-1)"] {
+     let new_neighbors = outlier.neighbors.union(outlier1.neighbors)
+     outlier.neighbors = new_neighbors
+     outlier_map["\(x),\(y)"] = outlier
+     outlier1.neighbors = new_neighbors
+     outlier_map["\(x+1),\(y-1)"] = outlier1
+     }
+*/   
+     if x > 0, let outlier1 = outlier_map["\(x-1),\(y)"] {
+         if(outlier.neighbors == outlier1.neighbors) {
+             print("same neighbors")
+         } else {
+            print("different neighbors")
+             let new_neighbors = outlier.neighbors.union(outlier1.neighbors)
+             outlier.neighbors = new_neighbors
+             outlier_map["\(x),\(y)"] = outlier
+             var new_outlier = outlier1.copy()
+             new_outlier.neighbors = new_neighbors
+             outlier_map["\(x-1),\(y)"] = new_outlier
+            print("different recursing 2")
+             prune(outlier: new_outlier, depth: depth + 1)
+             print("different done recursing")
+         }
+     }
+     if let outlier1 = outlier_map["\(x+1),\(y)"] {
+         if(outlier.neighbors == outlier1.neighbors) {
+             print("same neighbors")
+         } else {
+            print("different neighbors")
+             let new_neighbors = outlier.neighbors.union(outlier1.neighbors)
+             outlier.neighbors = new_neighbors
+             outlier_map["\(x),\(y)"] = outlier
+             var new_outlier = outlier1.copy()
+             new_outlier.neighbors = new_neighbors
+             outlier_map["\(x+1),\(y)"] = new_outlier
+            print("different recursing 3")
+             prune(outlier: new_outlier, depth: depth + 1)
+             print("different done recursing")
+         }
+     }
+     /*
+                if x > 0, var outlier1 = outlier_map["\(x-1),\(y+1)"] {
+                    let new_neighbors = outlier.neighbors.union(outlier1.neighbors)
+                    outlier.neighbors = new_neighbors
+                    outlier_map["\(x),\(y)"] = outlier
+                    outlier1.neighbors = new_neighbors
+                    outlier_map["\(x-1),\(y+1)"] = outlier1
+                }*/
+     if let outlier1 = outlier_map["\(x),\(y+1)"] {
+         if(outlier.neighbors == outlier1.neighbors) {
+             print("same neighbors")
+         } else {
+             print("different neighbors")
+             let new_neighbors = outlier.neighbors.union(outlier1.neighbors)
+             outlier.neighbors = new_neighbors
+             outlier_map["\(x),\(y)"] = outlier
+             var new_outlier = outlier1.copy()
+             new_outlier.neighbors = new_neighbors
+             outlier_map["\(x),\(y+1)"] = new_outlier
+             print("different recursing 4")
+             prune(outlier: new_outlier, depth: depth + 1)
+             print("different done recursing")
+         }
+     }
+            /*
+                if var outlier1 = outlier_map["\(x+1),\(y+1)"] {
+                    let new_neighbors = outlier.neighbors.union(outlier1.neighbors)
+                    outlier.neighbors = new_neighbors
+                    outlier_map["\(x),\(y)"] = outlier
+                    outlier1.neighbors = new_neighbors
+                    outlier_map["\(x+1),\(y+1)"] = outlier1
+                }*/
+              
+}
+          
+          // XXX this needs to be recursive to catch all neighbors
+func prune(width: UInt16, height: UInt16) {
+    print("top level prune started");
+    for y: UInt16 in 0 ..< height {
+        for x: UInt16 in 0 ..< width {
+            if var outlier = outlier_map["\(x),\(y)"] {
+                prune(outlier: outlier)
+            }
+        }
+    }
+    print("top level prune completed");
+}
