@@ -19,13 +19,25 @@ if CommandLine.arguments.count < 1 {
 
     let images = try load(imageFiles: image_files)
     print("loaded images \(images)")
+/*
+    images.forEach { image in
+        dump_pixels(fromImage: image) { pixel, x, y in
+            print("[\(x), \(y)] - \(pixel.description)")
+        }
+    }
+    images.forEach { image in
+        if let bytes = CFDataGetBytePtr(image.dataProvider?.data) {
+            for y in 0 ..< image.height {
+                for x in 0 ..< image.width {
+                    let newPixel = pixel(fromImage: image/*, withBytes: bytes*/, atX: x, andY: y)
+                    print("(\(x), \(y)) \(newPixel.description)")
+                }
+            }
+        }
+    }
+  */                                
 
-//    images.forEach { image in
-//    dump_pixels(fromImage: images[0]) { pixel, x, y in
-//        print("[\(x), \(y)] - r: '\(pixel.red)' g: '\(pixel.green)' b: '\(pixel.blue)")
-//    }
-
-    if let foo = copy(image: images[0]) {
+    if let foo = removeAirplanes(fromImage: images[1], otherFrames: [images[0], images[2]]) {
         print("foo \(foo)")
 
         do {
@@ -34,6 +46,7 @@ if CommandLine.arguments.count < 1 {
             print("doh! \(error)")
         }
     }
+
     // XXX next figure out how to save this poo as a tiff file
 
     // XXX then update applyFilter logic to do what I want
@@ -51,7 +64,6 @@ func save(image cgImage: CGImage, toFile filename: String) throws {
         let imgFormat = CIFormat.RGBA16
 //      let imgFormat = CIFormat.RGB16 XXX alpha?
 
-
         if #available(macOS 10.12, *) {
             try context.writeTIFFRepresentation(
                 of: CIImage(cgImage: cgImage),
@@ -60,8 +72,9 @@ func save(image cgImage: CGImage, toFile filename: String) throws {
                 colorSpace: colorSpace,
                 options: options
             )
-
-        }        
+        } else {
+            // fatal error
+        }
     } else {
         print("FUCK")
     }
@@ -75,8 +88,17 @@ public struct Pixel {
         self.value = 0
     }
 
+    public func difference(from otherPixel: Pixel) -> UInt32 {
+        //print("self \(self.description) other \(otherPixel.description)")
+        let red = abs(Int32(self.red) - Int32(otherPixel.red))
+        let green = abs(Int32(self.green) - Int32(otherPixel.green))
+        let blue = abs(Int32(self.blue) - Int32(otherPixel.blue))
+
+        return UInt32(red + green + blue / 3)
+    }
+
     public var description: String {
-        return "Pixel: r: '\(self.red)' g: '\(self.green)' b: '\(self.blue)"
+        return "Pixel: r: '\(self.red)' g: '\(self.green)' b: '\(self.blue)'"
     }
     
     public var red: UInt16 {
@@ -219,6 +241,83 @@ func copy(image: CGImage) -> CGImage? {
     return nil
 }
 
+func removeAirplanes(fromImage image: CGImage, otherFrames: [CGImage]) -> CGImage? {
+
+    let width = image.width
+    let height = image.height
+    let bytesPerPixel = image.bitsPerPixel/8
+    let bitsPerComponent = image.bitsPerComponent
+    let bytesPerRow = width*bytesPerPixel
+
+//    var data = Data(count: width * height * bytesPerPixel)
+
+    guard var data = image.dataProvider?.data as? Data,
+          let bytes = CFDataGetBytePtr(image.dataProvider?.data) else { return nil }
+
+    var otherBytes:[UnsafePointer<UInt8>] = []
+
+    otherFrames.forEach { otherImage in
+        if let bytes = CFDataGetBytePtr(otherImage.dataProvider?.data) {
+            otherBytes.append(bytes)
+        } else {
+            fatalError("couldn't access image data")
+        }
+    }
+
+    for y in 0 ..< height {
+        print ("y \(y)")
+        for x in 0 ..< width {
+            //print ("x \(x)")
+
+            let origPixel = pixel(fromImage: image/*, withBytes: bytes*/, atX: x, andY: y)
+            //print ("(\(x), \(y)) \(origPixel.description)")
+            var otherPixels: [Pixel] = []
+            for p in 0 ..< otherFrames.count {
+                let newPixel = pixel(fromImage: otherFrames[p]/*, withBytes: otherBytes[p]*/, atX: x, andY: y)
+                //print("newPixel \(newPixel.description)")
+                otherPixels.append(newPixel)
+            }
+            var total_difference: UInt32 = 0
+            otherPixels.forEach { pixel in
+                let difference = origPixel.difference(from: pixel)
+//                if difference != 0 {                                    
+//                    print("difference \(difference)")
+//                }
+                total_difference += UInt32(difference)
+            }
+            total_difference /= UInt32(otherPixels.count)
+            if total_difference > 10000 { // XXX arbitrary constant
+                print("at (\(x), \(y)) we have difference \(total_difference) otherPixels \(otherPixels.count)")
+            }
+            
+            if x == 200 {       // write a red vertical line at 100 pixels into the image
+                let offset = (y * bytesPerRow) + (x * bytesPerPixel)
+
+                var nextPixel = Pixel()
+                nextPixel.red = 0xFFFF
+                //var nextPixel = pixel(fromImage: image, atX: x, andY: y)
+                var nextValue = nextPixel.value
+                data.replaceSubrange(offset ..< offset+bytesPerPixel, with: &nextValue, count: 6)
+            }
+        }
+    }
+
+    if let dataProvider = CGDataProvider(data: data as CFData) {
+        var colorSpace = CGColorSpaceCreateDeviceRGB()
+        return CGImage(width: width, height: height,
+                       bitsPerComponent: bitsPerComponent,
+                       bitsPerPixel: bytesPerPixel*8,
+                       bytesPerRow: width*bytesPerPixel,
+                       space: colorSpace,
+                       bitmapInfo: image.bitmapInfo, // byte order
+                       provider: dataProvider,
+                       decode: nil,
+                       shouldInterpolate: false,
+                       intent: .defaultIntent)
+    }
+    return nil
+}
+
 func dump_pixels(fromImage image: CGImage, closure: (Pixel, Int, Int) -> ()) {
     guard let data = image.dataProvider?.data,
           let bytes = CFDataGetBytePtr(data) else {
@@ -256,6 +355,28 @@ func dump_pixels(fromImage image: CGImage, closure: (Pixel, Int, Int) -> ()) {
         }
         print("---")
     }
+}
+
+func pixel(fromImage image: CGImage, withBytes bytes: UnsafePointer<UInt8>, atX x: Int, andY y: Int) -> Pixel {
+    let numberComponents = image.bitsPerPixel / image.bitsPerComponent
+    let bytesPerPixel = image.bitsPerPixel / 8
+    
+    assert(image.colorSpace?.model == .rgb)
+    
+    var pixel = Pixel()
+    let offset = (y * image.bytesPerRow) + (x * bytesPerPixel)
+    // XXX this could be cleaner
+    let r1 = UInt16(bytes[offset]) // lower bits
+    let r2 = UInt16(bytes[offset + 1]) << 8 // higher bits
+    pixel.red = r1 + r2
+    let g1 = UInt16(bytes[offset+image.bitsPerComponent/8])
+    let g2 = UInt16(bytes[offset+image.bitsPerComponent/8 + 1]) << 8
+    pixel.green = g1 + g2
+    let b1 = UInt16(bytes[offset+(image.bitsPerComponent/8)*2])
+    let b2 = UInt16(bytes[offset+(image.bitsPerComponent/8)*2 + 1]) << 8
+    pixel.blue = b1 + b2
+
+    return pixel
 }
 
 func pixel(fromImage image: CGImage, atX x: Int, andY y: Int) -> Pixel {
@@ -296,6 +417,7 @@ func remove_suffix(fromString string: String) -> String {
 func load(imageFiles: [String]) throws -> [CGImage] {
     var ret: [CGImage] = [];
     try imageFiles.forEach { file in
+        print("loading \(file)")
         let imageURL = NSURL(fileURLWithPath: file, isDirectory: false)
         let data = try Data(contentsOf: imageURL as URL)
         if let image = NSImage(data: data),
@@ -315,6 +437,7 @@ func list_image_files(atPath path: String) -> [String] {
         contents.forEach { file in
             if file.hasSuffix(".tif") || file.hasSuffix(".tiff") {
                 image_files.append("\(path)/\(file)")
+                print("going to read \(file)")
             }
         }
     } catch {
