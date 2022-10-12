@@ -24,12 +24,46 @@ if CommandLine.arguments.count < 1 {
 //        dump_pixels(fromImage: image)
     }
 
-    let foo = createImage()
-    print("foo \(foo)")
+    if let foo = createImage() {
+        print("foo \(foo)")
 
+        do {
+            try save(image: foo, toFile: "foobar.tif")
+        } catch {
+            print("doh! \(error)")
+        }
+    }
     // XXX next figure out how to save this poo as a tiff file
 
     // XXX then update applyFilter logic to do what I want
+}
+
+func save2(image cgImage: CGImage, toFile filename: String) {
+    // maybe try using ImageIO to get rid of alpha channel?
+}
+
+func save(image cgImage: CGImage, toFile filename: String) throws {
+    let context = CIContext()
+    let fileURL = NSURL(fileURLWithPath: filename, isDirectory: false) as URL
+    let options: [CIImageRepresentationOption: CGFloat] = [:]
+    if let colorSpace = CGColorSpace(name: CGColorSpace.sRGB) {
+        let imgFormat = CIFormat.RGBA16
+//      let imgFormat = CIFormat.RGB16 XXX alpha?
+
+
+        if #available(macOS 10.12, *) {
+            try context.writeTIFFRepresentation(
+                of: CIImage(cgImage: cgImage),
+                to: fileURL,
+                format: imgFormat,
+                colorSpace: colorSpace,
+                options: options
+            )
+
+        }        
+    } else {
+        print("FUCK")
+    }
 }
 
 func createImage() -> CGImage? {
@@ -38,27 +72,46 @@ func createImage() -> CGImage? {
     let height = 4
     let bytesPerPixel = 6
     let bitsPerComponent = 16
+    let bytesPerRow = width*bytesPerPixel
 
-    let data = Data(count: width * height * bytesPerPixel) as CFData
-    if let dataProvider = CGDataProvider(data: data) {
+    var data = Data(count: width * height * bytesPerPixel)
+
+    if(false) {
+        // XXX this is wrong XXX fix it
+        for y in 0 ..< height {
+            for x in 0 ..< width {
+                let offset = (y * bytesPerRow) + (x * bytesPerPixel)
+                var nextPixel: UInt64 = 0xFFFFFFFF
+                print("setting pixel at offset \(offset)")
+                data.replaceSubrange(offset ..< offset+bytesPerPixel, with: &nextPixel, count: 8)
+            }
+        }
+    }
+
+    for x in 0 ..< width * height * bytesPerPixel {
+        // XXX this makes it white
+        let offset = x
+        var nextPixel: UInt8 = 0xFF
+        print("setting pixel at offset \(offset)")
+        data.replaceSubrange(offset ..< offset+1, with: &nextPixel, count: 1)
+    }
+    
+    if let dataProvider = CGDataProvider(data: data as CFData) {
         print("dataProvider \(dataProvider)")
 
         var colorSpace = CGColorSpaceCreateDeviceRGB()
-        var bitmapInfo: UInt32 = CGBitmapInfo.byteOrder32Big.rawValue
-        bitmapInfo |= CGImageAlphaInfo.premultipliedLast.rawValue & CGBitmapInfo.alphaInfoMask.rawValue
 
         let image = CGImage(width: width, height: height,
                             bitsPerComponent: bitsPerComponent,
                             bitsPerPixel: bytesPerPixel*8,
                             bytesPerRow: width*bytesPerPixel,
                             space: colorSpace,
-                            bitmapInfo: CGBitmapInfo.byteOrder32Big,
+                            bitmapInfo: CGBitmapInfo.byteOrder16Big,
                             provider: dataProvider,
                             decode: nil,
                             shouldInterpolate: false,
                             intent: .defaultIntent)
         
-        //    let image = CGImage(direcInfo: newImageData, width * height * bytesPerPixel,
         return image
     }
     return nil
