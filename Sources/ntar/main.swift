@@ -1,4 +1,5 @@
 import Foundation
+import CoreGraphics
 import Cocoa
 
 if CommandLine.arguments.count < 1 {
@@ -18,6 +19,82 @@ if CommandLine.arguments.count < 1 {
 
     let images = try load(imageFiles: image_files)
     print("loaded images \(images)")
+
+    images.forEach { image in
+//        dump_pixels(fromImage: image)
+    }
+
+    let foo = createImage()
+    print("foo \(foo)")
+
+    // XXX next figure out how to save this poo as a tiff file
+
+    // XXX then update applyFilter logic to do what I want
+}
+
+func createImage() -> CGImage? {
+
+    let width = 4
+    let height = 4
+    let bytesPerPixel = 6
+    let bitsPerComponent = 16
+
+    let data = Data(count: width * height * bytesPerPixel) as CFData
+    if let dataProvider = CGDataProvider(data: data) {
+        print("dataProvider \(dataProvider)")
+
+        var colorSpace = CGColorSpaceCreateDeviceRGB()
+        var bitmapInfo: UInt32 = CGBitmapInfo.byteOrder32Big.rawValue
+        bitmapInfo |= CGImageAlphaInfo.premultipliedLast.rawValue & CGBitmapInfo.alphaInfoMask.rawValue
+
+        let image = CGImage(width: width, height: height,
+                            bitsPerComponent: bitsPerComponent,
+                            bitsPerPixel: bytesPerPixel*8,
+                            bytesPerRow: width*bytesPerPixel,
+                            space: colorSpace,
+                            bitmapInfo: CGBitmapInfo.byteOrder32Big,
+                            provider: dataProvider,
+                            decode: nil,
+                            shouldInterpolate: false,
+                            intent: .defaultIntent)
+        
+        //    let image = CGImage(direcInfo: newImageData, width * height * bytesPerPixel,
+        return image
+    }
+    return nil
+}
+
+func dump_pixels(fromImage image: CGImage) {
+    guard let data = image.dataProvider?.data,
+          let bytes = CFDataGetBytePtr(data) else {
+                          fatalError("Couldn't access image data")
+    }
+    print("image is [\(image.width), \(image.height)] with image.bitsPerPixel \(image.bitsPerPixel) and image.bitsPerComponent \(image.bitsPerComponent) image.bytesPerRow \(image.bytesPerRow)")
+
+    let numberComponents = image.bitsPerPixel / image.bitsPerComponent
+    let bytesPerPixel = image.bitsPerPixel / 8
+    
+    assert(image.colorSpace?.model == .rgb)
+    print("bytesPerPixel \(bytesPerPixel)")
+    print("numberComponents \(numberComponents)")
+    
+    for fuck in 0 ..< image.height * image.width * bytesPerPixel {
+        let r = bytes[fuck]
+        print ("\(fuck) \(r)")
+    }
+    for y in 0 ..< image.height {
+        for x in 0 ..< image.width {
+            let offset = (y * image.bytesPerRow) + (x * bytesPerPixel)
+            let r = bytes[offset] // lower bits
+            let r2 = bytes[offset + 1] // higher bits
+            let g = bytes[offset+image.bitsPerComponent/8]
+            let g2 = bytes[offset+image.bitsPerComponent/8 + 1]
+            let b = bytes[offset+(image.bitsPerComponent/8)*2]
+            let b2 = bytes[offset+(image.bitsPerComponent/8)*2 + 1]
+            print("\(offset) [x:\(x), y:\(y)] r \(r) \(r2) g \(g) \(g2) b \(b) \(b2)")
+        }
+        print("---")
+    }
 }
 
 // XXX removes suffix and path
@@ -44,7 +121,7 @@ func load(imageFiles: [String]) throws -> [CGImage] {
 
 func list_image_files(atPath path: String) -> [String] {
     var image_files: [String] = []
-
+    
     do {
         let contents = try FileManager.default.contentsOfDirectory(atPath: path)
         contents.forEach { file in
