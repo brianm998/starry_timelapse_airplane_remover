@@ -20,15 +20,16 @@ if CommandLine.arguments.count < 1 {
     let images = try load(imageFiles: image_files)
     print("loaded images \(images)")
 
-    images.forEach { image in
-//        dump_pixels(fromImage: image)
-    }
+//    images.forEach { image in
+//    dump_pixels(fromImage: images[0]) { pixel, x, y in
+//        print("[\(x), \(y)] - r: '\(pixel.red)' g: '\(pixel.green)' b: '\(pixel.blue)")
+//    }
 
-    if let foo = createImage() {
+    if let foo = copy(image: images[0]) {
         print("foo \(foo)")
 
         do {
-            try save(image: foo, toFile: "foobar.tif")
+            try save(image: foo, toFile: "foobar2.tif")
         } catch {
             print("doh! \(error)")
         }
@@ -73,6 +74,10 @@ public struct Pixel {
     public init() {
         self.value = 0
     }
+
+    public var description: String {
+        return "Pixel: r: '\(self.red)' g: '\(self.green)' b: '\(self.blue)"
+    }
     
     public var red: UInt16 {
         get {
@@ -92,7 +97,7 @@ public struct Pixel {
     
     public var blue: UInt16 {
         get {
-            return UInt16((value >> 16) & 0xFFFF)
+            return UInt16((value >> 32) & 0xFFFF)
         } set {
             value = (UInt64(newValue) << 32) | (value & 0xFFFF0000FFFFFFFF)
         }
@@ -100,7 +105,7 @@ public struct Pixel {
     
     public var alpha: UInt16 {
         get {
-            return UInt16((value >> 24) & 0xFFFF)
+            return UInt16((value >> 48) & 0xFFFF)
         } set {
             value = (UInt64(newValue) << 48) | (value & 0x0000FFFFFFFFFFFF)
         }
@@ -169,7 +174,52 @@ func createImage() -> CGImage? {
     return nil
 }
 
-func dump_pixels(fromImage image: CGImage) {
+func copy(image: CGImage) -> CGImage? {
+
+    let width = image.width
+    let height = image.height
+    let bytesPerPixel = image.bitsPerPixel/8
+    let bitsPerComponent = image.bitsPerComponent
+    let bytesPerRow = width*bytesPerPixel
+
+    var data = Data(count: width * height * bytesPerPixel)
+
+    guard var data = image.dataProvider?.data as? Data
+/*          let bytes = CFDataGetBytePtr(data)*/ else { return nil }
+
+// XXX __really__ slow
+    for y in 0 ..< height {
+        print ("y \(y)")
+        for x in 0 ..< width {
+            if x == 100 {       // write a red vertical line at 100 pixels into the image
+                let offset = (y * bytesPerRow) + (x * bytesPerPixel)
+
+                var nextPixel = Pixel()
+                nextPixel.red = 0xFFFF
+                //var nextPixel = pixel(fromImage: image, atX: x, andY: y)
+                var nextValue = nextPixel.value
+                data.replaceSubrange(offset ..< offset+bytesPerPixel, with: &nextValue, count: 6)
+            }
+        }
+    }
+
+    if let dataProvider = CGDataProvider(data: data as CFData) {
+        var colorSpace = CGColorSpaceCreateDeviceRGB()
+        return CGImage(width: width, height: height,
+                       bitsPerComponent: bitsPerComponent,
+                       bitsPerPixel: bytesPerPixel*8,
+                       bytesPerRow: width*bytesPerPixel,
+                       space: colorSpace,
+                       bitmapInfo: image.bitmapInfo, // byte order
+                       provider: dataProvider,
+                       decode: nil,
+                       shouldInterpolate: false,
+                       intent: .defaultIntent)
+    }
+    return nil
+}
+
+func dump_pixels(fromImage image: CGImage, closure: (Pixel, Int, Int) -> ()) {
     guard let data = image.dataProvider?.data,
           let bytes = CFDataGetBytePtr(data) else {
                           fatalError("Couldn't access image data")
@@ -183,23 +233,56 @@ func dump_pixels(fromImage image: CGImage) {
     print("bytesPerPixel \(bytesPerPixel)")
     print("numberComponents \(numberComponents)")
     
-    for fuck in 0 ..< image.height * image.width * bytesPerPixel {
-        let r = bytes[fuck]
-        print ("\(fuck) \(r)")
-    }
+//    for fuck in 0 ..< image.height * image.width * bytesPerPixel {
+//        let r = bytes[fuck]
+//        print ("\(fuck) \(r)")
+//    }
     for y in 0 ..< image.height {
         for x in 0 ..< image.width {
+            var pixel = Pixel()
             let offset = (y * image.bytesPerRow) + (x * bytesPerPixel)
-            let r = bytes[offset] // lower bits
-            let r2 = bytes[offset + 1] // higher bits
-            let g = bytes[offset+image.bitsPerComponent/8]
-            let g2 = bytes[offset+image.bitsPerComponent/8 + 1]
-            let b = bytes[offset+(image.bitsPerComponent/8)*2]
-            let b2 = bytes[offset+(image.bitsPerComponent/8)*2 + 1]
-            print("\(offset) [x:\(x), y:\(y)] r \(r) \(r2) g \(g) \(g2) b \(b) \(b2)")
+            // XXX this could be cleaner
+            let r1 = UInt16(bytes[offset]) // lower bits
+            let r2 = UInt16(bytes[offset + 1]) << 8 // higher bits
+            pixel.red = r1 + r2
+            let g1 = UInt16(bytes[offset+image.bitsPerComponent/8])
+            let g2 = UInt16(bytes[offset+image.bitsPerComponent/8 + 1]) << 8
+            pixel.green = g1 + g2
+            let b1 = UInt16(bytes[offset+(image.bitsPerComponent/8)*2])
+            let b2 = UInt16(bytes[offset+(image.bitsPerComponent/8)*2 + 1]) << 8
+            pixel.blue = b1 + b2
+
+            closure(pixel, x, y)
         }
         print("---")
     }
+}
+
+func pixel(fromImage image: CGImage, atX x: Int, andY y: Int) -> Pixel {
+    guard let data = image.dataProvider?.data,
+          let bytes = CFDataGetBytePtr(data) else {
+                          fatalError("Couldn't access image data")
+    }
+
+    let numberComponents = image.bitsPerPixel / image.bitsPerComponent
+    let bytesPerPixel = image.bitsPerPixel / 8
+    
+    assert(image.colorSpace?.model == .rgb)
+    
+    var pixel = Pixel()
+    let offset = (y * image.bytesPerRow) + (x * bytesPerPixel)
+    // XXX this could be cleaner
+    let r1 = UInt16(bytes[offset]) // lower bits
+    let r2 = UInt16(bytes[offset + 1]) << 8 // higher bits
+    pixel.red = r1 + r2
+    let g1 = UInt16(bytes[offset+image.bitsPerComponent/8])
+    let g2 = UInt16(bytes[offset+image.bitsPerComponent/8 + 1]) << 8
+    pixel.green = g1 + g2
+    let b1 = UInt16(bytes[offset+(image.bitsPerComponent/8)*2])
+    let b2 = UInt16(bytes[offset+(image.bitsPerComponent/8)*2 + 1]) << 8
+    pixel.blue = b1 + b2
+
+    return pixel
 }
 
 // XXX removes suffix and path
