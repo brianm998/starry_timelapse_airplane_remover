@@ -66,6 +66,47 @@ func save(image cgImage: CGImage, toFile filename: String) throws {
     }
 }
 
+
+public struct Pixel {
+    public var value: UInt64
+
+    public init() {
+        self.value = 0
+    }
+    
+    public var red: UInt16 {
+        get {
+            return UInt16(value & 0xFFFF)
+        } set {
+            value = UInt64(newValue) | (value & 0xFFFFFFFFFFFF0000)
+        }
+    }
+    
+    public var green: UInt16 {
+        get {
+            return UInt16((value >> 16) & 0xFFFF)
+        } set {
+            value = (UInt64(newValue) << 16) | (value & 0xFFFFFFFF0000FFFF)
+        }
+    }
+    
+    public var blue: UInt16 {
+        get {
+            return UInt16((value >> 16) & 0xFFFF)
+        } set {
+            value = (UInt64(newValue) << 32) | (value & 0xFFFF0000FFFFFFFF)
+        }
+    }
+    
+    public var alpha: UInt16 {
+        get {
+            return UInt16((value >> 24) & 0xFFFF)
+        } set {
+            value = (UInt64(newValue) << 48) | (value & 0x0000FFFFFFFFFFFF)
+        }
+    }
+}
+
 func createImage() -> CGImage? {
 
     let width = 4
@@ -76,43 +117,54 @@ func createImage() -> CGImage? {
 
     var data = Data(count: width * height * bytesPerPixel)
 
-    if(false) {
-        // XXX this is wrong XXX fix it
-        for y in 0 ..< height {
-            for x in 0 ..< width {
-                let offset = (y * bytesPerRow) + (x * bytesPerPixel)
-                var nextPixel: UInt64 = 0xFFFFFFFF
-                print("setting pixel at offset \(offset)")
-                data.replaceSubrange(offset ..< offset+bytesPerPixel, with: &nextPixel, count: 8)
-            }
-        }
-    }
+    for y in 0 ..< height {
+        for x in 0 ..< width {
+            let offset = (y * bytesPerRow) + (x * bytesPerPixel)
+            //var nextPixel: UInt64 = 0xFFFFFFFFFFFFFFFF // white
+            //var nextPixel: UInt64 = 0x00FFFFFFFFFFFFFF // white
+            //var nextPixel: UInt64 = 0x0000FFFFFFFFFFFF // white
+            //var nextPixel: UInt64 = 0x000000FFFFFFFFFF // white
+            //var nextPixel: UInt64 = 0x00000000FFFFFFFF // yellow
+            //var nextPixel: UInt64 = 0x0000000000FFFFFF // yellow
+            //var nextPixel: UInt64 = 0x000000000000FFFF // red
+            //var nextPixel: UInt64 = 0x00000000000000FF // red
+            //var nextPixel: UInt64 = 0x0000000000FF0000 // green
+            //var nextPixel: UInt64 = 0x000000FF00000000 // blue
 
-    for x in 0 ..< width * height * bytesPerPixel {
-        // XXX this makes it white
-        let offset = x
-        var nextPixel: UInt8 = 0xFF
-        print("setting pixel at offset \(offset)")
-        data.replaceSubrange(offset ..< offset+1, with: &nextPixel, count: 1)
+            var nextPixel = Pixel()
+            if(y % 3 == 0) {
+                nextPixel.red = 0xFFFF
+            } else if(y % 3 == 1) {
+                nextPixel.blue = 0xFFFF
+            } else {
+                nextPixel.green = 0xFFFF
+            }
+            
+            if(x % 3 == 0) {
+                nextPixel.blue = 0xFFFF
+            } else if(x % 3 == 1) {
+                nextPixel.green = 0xFFFF
+            } else {
+                nextPixel.red = 0xFFFF
+            }
+            
+            print("setting pixel at offset \(offset)")
+            data.replaceSubrange(offset ..< offset+bytesPerPixel, with: &nextPixel.value, count: 8)
+        }
     }
     
     if let dataProvider = CGDataProvider(data: data as CFData) {
-        print("dataProvider \(dataProvider)")
-
         var colorSpace = CGColorSpaceCreateDeviceRGB()
-
-        let image = CGImage(width: width, height: height,
-                            bitsPerComponent: bitsPerComponent,
-                            bitsPerPixel: bytesPerPixel*8,
-                            bytesPerRow: width*bytesPerPixel,
-                            space: colorSpace,
-                            bitmapInfo: CGBitmapInfo.byteOrder16Big,
-                            provider: dataProvider,
-                            decode: nil,
-                            shouldInterpolate: false,
-                            intent: .defaultIntent)
-        
-        return image
+        return CGImage(width: width, height: height,
+                       bitsPerComponent: bitsPerComponent,
+                       bitsPerPixel: bytesPerPixel*8,
+                       bytesPerRow: width*bytesPerPixel,
+                       space: colorSpace,
+                       bitmapInfo: CGBitmapInfo.byteOrder16Big,
+                       provider: dataProvider,
+                       decode: nil,
+                       shouldInterpolate: false,
+                       intent: .defaultIntent)
     }
     return nil
 }
