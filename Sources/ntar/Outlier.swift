@@ -3,10 +3,10 @@ import Foundation
 public class Outlier: Hashable, Equatable {
     let x: UInt16
     let y: UInt16
-    let amount: UInt32
+    let amount: Int32
     var tag: String?
     
-    public init(x: UInt16, y: UInt16, amount: UInt32) {
+    public init(x: UInt16, y: UInt16, amount: Int32) {
         self.x = x
         self.y = y
         self.amount = amount

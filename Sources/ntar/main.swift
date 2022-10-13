@@ -21,17 +21,28 @@ if CommandLine.arguments.count < 1 {
     let images = try load(imageFiles: image_files)
     print("loaded images \(images)")
 
-    if let foo = removeAirplanes(fromImage: images[1],
-                                 otherFrames: [images[0], images[2]],
-                                 minNeighbors: 500,
-                                 withPadding: 3)
-    {
-        print("foo \(foo)")
-
-        do {
-            try save(image: foo, toFile: "foobar2.tif")
-        } catch {
-            print("doh! \(error)")
+    for (index, image) in images.enumerated() {
+        var otherFrames: [CGImage] = []
+        if(index > 0) {
+            otherFrames.append(images[index-1])
+        }
+        if(index < images.count - 1) {
+            otherFrames.append(images[index+1])
+        }
+        // XXX muti thread these
+        if let new_image = removeAirplanes(fromImage: image,
+                                           otherFrames: otherFrames,
+                                           minNeighbors: 500,
+                                           withPadding: 3)
+        {
+            print("new_image \(new_image)")
+            let filename_base = remove_suffix(fromString: image_files[index])
+            let filename = "\(filename_base)-no-airplanes.tif"
+            do {
+                try save(image: new_image, toFile: filename)
+            } catch {
+                print("doh! \(error)")
+            }
         }
     }
 }
@@ -71,6 +82,8 @@ func removeAirplanes(fromImage image: CGImage,
                      // add some padding
                      withPadding padding_value: UInt16 = 2) -> CGImage?
 {
+    print("removing airplanes from image with \(otherFrames.count) other frames")
+
     var outlier_map: [String: Outlier] = [:] // keyed by "\(x),\(y)"
     var neighbor_groups: [String: UInt16] = [:] // keyed by above 
 
@@ -95,12 +108,13 @@ func removeAirplanes(fromImage image: CGImage,
                 ////print("newPixel \(newPixel.description)")
                 otherPixels.append(newPixel)
             }
-            var total_difference: UInt32 = 0
+            var total_difference: Int32 = 0
             otherPixels.forEach { pixel in
-                total_difference += UInt32(origPixel.difference(from: pixel))
+                total_difference += Int32(origPixel.difference(from: pixel))
             }
-            total_difference /= UInt32(otherPixels.count)
-            if total_difference > max_pixel_distance { // XXX global
+            total_difference /= Int32(otherPixels.count)
+
+            if total_difference > max_pixel_distance {
                 //print("at (\(x), \(y)) we have difference \(total_difference) otherPixels \(otherPixels.count)")
                 outlier_map["\(x),\(y)"] = Outlier(x: x, y: y, amount: total_difference)
             }
@@ -167,7 +181,7 @@ func removeAirplanes(fromImage image: CGImage,
                 }
             }
         }
-    } 
+    }
 
     
     // paint on the large groups of outliers with values from the other frames

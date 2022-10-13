@@ -23,11 +23,11 @@ public struct Pixel {
         self.blue = UInt16(blue/count)
     }
     
-    public func difference(from otherPixel: Pixel) -> UInt32 {
+    public func difference(from otherPixel: Pixel) -> Int32 {
         //print("self \(self.description) other \(otherPixel.description)")
-        let red = UInt32(abs(Int32(self.red) - Int32(otherPixel.red)))
-        let green = UInt32(abs(Int32(self.green) - Int32(otherPixel.green)))
-        let blue = UInt32(abs(Int32(self.blue) - Int32(otherPixel.blue)))
+        let red = (Int32(self.red) - Int32(otherPixel.red))
+        let green = (Int32(self.green) - Int32(otherPixel.green))
+        let blue = (Int32(self.blue) - Int32(otherPixel.blue))
 
         return max(red + green + blue / 3, max(red, max(green, blue)))
     }
