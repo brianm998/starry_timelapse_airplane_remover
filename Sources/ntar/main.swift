@@ -42,7 +42,7 @@ if CommandLine.arguments.count < 1 {
         if let new_image = removeAirplanes(fromImage: image,
                                            otherFrames: otherFrames,
                                            minNeighbors: 500,
-                                           withPadding: 3)
+                                           withPadding: 0)
         {
             Log.d("new_image \(new_image)")
             let filename_base = remove_suffix(fromString: image_files[index])
@@ -167,7 +167,7 @@ func removeAirplanes(fromImage image: CGImage,
             for x: UInt16 in 0 ..< UInt16(width) {
                 if let outlier = outlier_map["\(x),\(y)"] {
                     if outlier.amount > max_pixel_distance { // XXX global variable
-                        //                    Log.d("found \(outlier.neighbors.count) neighbors")
+                        //Log.d("found \(outlier.neighbors.count) neighbors")
 
                         let offset = (Int(y) * bytesPerRow) + (Int(x) * bytesPerPixel)
 
@@ -183,10 +183,12 @@ func removeAirplanes(fromImage image: CGImage,
     }
 
     // add padding when desired
+    // XXX this is slower than the other steps here :(
+    // also not sure it's really needed
     if(padding_value > 0) {
         Log.d("adding padding")
         for y: UInt16 in 0 ..< UInt16(height) {
-            Log.d("y \(y)")
+            //Log.d("y \(y)")
             for x: UInt16 in 0 ..< UInt16(width) {
                 let outlier_tag = "\(x),\(y)"
                 let outlier = outlier_map[outlier_tag]
