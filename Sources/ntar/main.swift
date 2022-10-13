@@ -38,7 +38,9 @@ if CommandLine.arguments.count < 1 {
     }
   */                                
 
-    if let foo = removeAirplanes(fromImage: images[1], otherFrames: [images[0], images[2]]) {
+    if let foo = removeAirplanes(fromImage: images[1],
+                                 otherFrames: [images[0], images[2]])
+    {
         print("foo \(foo)")
 
         do {
@@ -227,12 +229,18 @@ func createImage() -> CGImage? {
     return nil
 }
 
-func removeAirplanes(fromImage image: CGImage, otherFrames: [CGImage]) -> CGImage? {
+func removeAirplanes(fromImage image: CGImage,
+                     otherFrames: [CGImage],
 
-    let max_pixel_distance: UInt16 = 10000  // XXX arbitrary constant
-    let min_neighbors: UInt16 = 1000 // size of a group of outliers that is considered an airplane streak
-    let padding_value: UInt16 = 2
+                     // size of a group of outliers that is considered an airplane streak
+                     minNeighbors min_neighbors: UInt16 = 1000,
 
+                     // difference between same pixels on different frames to consider an outlier
+                     minPixelDifference max_pixel_distance: UInt16 = 10000,
+
+                     // add some padding
+                     withPadding padding_value: UInt16 = 2) -> CGImage?
+{
     var outlier_map: [String: Outlier] = [:] // keyed by "\(x),\(y)"
     var neighbor_groups: [String: UInt16] = [:] // keyed by above 
 
