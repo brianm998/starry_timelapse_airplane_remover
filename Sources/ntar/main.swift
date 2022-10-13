@@ -22,7 +22,9 @@ if CommandLine.arguments.count < 1 {
     print("loaded images \(images)")
 
     if let foo = removeAirplanes(fromImage: images[1],
-                                 otherFrames: [images[0], images[2]])
+                                 otherFrames: [images[0], images[2]],
+                                 minNeighbors: 500,
+                                 withPadding: 3)
     {
         print("foo \(foo)")
 
@@ -142,7 +144,17 @@ func removeAirplanes(fromImage image: CGImage,
         for y: UInt16 in 0 ..< UInt16(height) {
             for x: UInt16 in 0 ..< UInt16(width) {
                 let outlier_tag = "\(x),\(y)"
-                if outlier_map[outlier_tag] == nil, 
+                let outlier = outlier_map[outlier_tag]
+                var should_try = false
+                if outlier == nil {
+                    should_try = true
+                } else if let outlier = outlier,
+                          outlier.amount > max_pixel_distance
+                {
+                    should_try = true
+                }
+                
+                if should_try,
                    let bigTag = tag(within: padding_value,
                                     ofX: x, andY: y,
                                     outlierMap: outlier_map,
@@ -172,13 +184,20 @@ func removeAirplanes(fromImage image: CGImage,
 
                         var otherPixels: [Pixel] = []
 
-                        for p in 0 ..< otherFrames.count {
+                        // XXX uncomment to use more than one frame
+                        for p in 0 ..< 1/*otherFrames.count*/ {
                             let newPixel = pixel(fromImage: otherFrames[p], atX: x, andY: y)
                             otherPixels.append(newPixel)
                         }
                         var nextPixel = Pixel(merging: otherPixels)
-                        //nextPixel.red = 0xFFFF
-
+                        /*
+                        // for testing
+                        if outlier.amount == 0 {
+                            nextPixel.green = 0xFFFF
+                        } else {
+                            nextPixel.red = 0xFFFF
+                        }
+                        */                      
                         var nextValue = nextPixel.value
                         data.replaceSubrange(offset ..< offset+bytesPerPixel, with: &nextValue, count: 6)
                     }
@@ -352,10 +371,10 @@ func tag(within distance: UInt16, ofX x: UInt16, andY y: UInt16,
     for y_idx: UInt16 in y_start ..< y+distance {
         for x_idx: UInt16 in x_start ..< x+distance {
             if let outlier = outlier_map["\(x_idx),\(y_idx)"],
-               let tag = outlier.tag,
+               hypotenuse(x1: x, y1: y, x2: x_idx, y2: y_idx) <= distance,
                outlier.amount != 0,
+               let tag = outlier.tag,
                let group_size = neighbor_groups[tag],
-               hypotenuse(x1: x, y1: y, x2: x_idx, y2: y_idx) < distance,
                group_size > min_neighbors
             {
                 return outlier.tag
