@@ -4,22 +4,22 @@ import Cocoa
 
 
 if CommandLine.arguments.count < 1 {
-    print("need more args!")    // XXX make this better
+    Log.d("need more args!")    // XXX make this better
 } else {
     let path = FileManager.default.currentDirectoryPath
     let input_image_sequence_dirname = CommandLine.arguments[1]
-    print("will process \(input_image_sequence_dirname)")
-    print("on path \(path)")
+    Log.d("will process \(input_image_sequence_dirname)")
+    Log.d("on path \(path)")
     var image_files = list_image_files(atPath: "\(path)/\(input_image_sequence_dirname)")
     image_files.sort { (lhs: String, rhs: String) -> Bool in
         let lh = remove_suffix(fromString: lhs)
         let rh = remove_suffix(fromString: rhs)
         return lh < rh
     }
-    print("image_files \(image_files)")
+    Log.d("image_files \(image_files)")
 
     let images = try load(imageFiles: image_files)
-    print("loaded images \(images)")
+    Log.d("loaded images \(images)")
 
     let output_dirname = "\(path)/\(input_image_sequence_dirname)-no-planes"
     
@@ -38,18 +38,19 @@ if CommandLine.arguments.count < 1 {
             otherFrames.append(images[index+1])
         }
         // XXX muti thread these
+        // XXX running time on anything but tiny images is _really_ long
         if let new_image = removeAirplanes(fromImage: image,
                                            otherFrames: otherFrames,
                                            minNeighbors: 500,
                                            withPadding: 3)
         {
-            print("new_image \(new_image)")
+            Log.d("new_image \(new_image)")
             let filename_base = remove_suffix(fromString: image_files[index])
             let filename = "\(output_dirname)/\(filename_base)-no-airplanes.tif"
             do {
                 try save(image: new_image, toFile: filename)
             } catch {
-                print("doh! \(error)")
+                Log.d("doh! \(error)")
             }
         }
     }
@@ -74,7 +75,7 @@ func save(image cgImage: CGImage, toFile filename: String) throws {
             fatalError("Must use macOS 10.12 or higher")
         }
     } else {
-        print("FUCK")
+        Log.d("FUCK")
     }
 }
 
@@ -90,7 +91,7 @@ func removeAirplanes(fromImage image: CGImage,
                      // add some padding
                      withPadding padding_value: UInt16 = 2) -> CGImage?
 {
-    print("removing airplanes from image with \(otherFrames.count) other frames")
+    Log.d("removing airplanes from image with \(otherFrames.count) other frames")
 
     var outlier_map: [String: Outlier] = [:] // keyed by "\(x),\(y)"
     var neighbor_groups: [String: UInt16] = [:] // keyed by above 
@@ -104,32 +105,35 @@ func removeAirplanes(fromImage image: CGImage,
     guard var data = image.dataProvider?.data as? Data else { return nil }
 
     for y: UInt16 in 0 ..< UInt16(height) {
-        //print ("y \(y)")
+        Log.d ("y \(y)")
         for x: UInt16 in 0 ..< UInt16(width) {
-            //print ("x \(x)")
+            //Log.d ("x1 \(x)")
 
             let origPixel = pixel(fromImage: image, atX: x, andY: y)
-            //print ("(\(x), \(y)) \(origPixel.description)")
+            //Log.d ("(\(x), \(y)) \(origPixel.description)")
             var otherPixels: [Pixel] = []
+            //Log.d ("x1.1 \(x)")
             for p in 0 ..< otherFrames.count {
                 let newPixel = pixel(fromImage: otherFrames[p], atX: x, andY: y)
-                ////print("newPixel \(newPixel.description)")
+                //Log.d("newPixel \(newPixel.description)")
                 otherPixels.append(newPixel)
             }
             var total_difference: Int32 = 0
+            //Log.d ("x2 \(x)")
             otherPixels.forEach { pixel in
                 total_difference += Int32(origPixel.difference(from: pixel))
             }
             total_difference /= Int32(otherPixels.count)
 
             if total_difference > max_pixel_distance {
-                //print("at (\(x), \(y)) we have difference \(total_difference) otherPixels \(otherPixels.count)")
+                //Log.d("at (\(x), \(y)) we have difference \(total_difference) otherPixels \(otherPixels.count)")
                 outlier_map["\(x),\(y)"] = Outlier(x: x, y: y, amount: total_difference)
             }
+            //Log.d ("x3 \(x)")
         }
     }
 
-    print("processing the outlier map")
+    Log.i("processing the outlier map")
     
     // go through the outlier_map 
     prune(width: UInt16(width),
@@ -137,16 +141,17 @@ func removeAirplanes(fromImage image: CGImage,
           outlierMap: outlier_map,
           neighborGroups: &neighbor_groups)
 
-    print("done processing the outlier map")
+    Log.i("done processing the outlier map")
     
     // paint green on the outliers above the threshold for testing
     let paint_green = false
     if(paint_green) {
+        Log.d("painting outliers green")
         for y: UInt16 in 0 ..< UInt16(height) {
             for x: UInt16 in 0 ..< UInt16(width) {
                 if let outlier = outlier_map["\(x),\(y)"] {
                     if outlier.amount > max_pixel_distance { // XXX global variable
-                        //                    print("found \(outlier.neighbors.count) neighbors")
+                        //                    Log.d("found \(outlier.neighbors.count) neighbors")
 
                         let offset = (Int(y) * bytesPerRow) + (Int(x) * bytesPerPixel)
 
@@ -163,6 +168,7 @@ func removeAirplanes(fromImage image: CGImage,
 
     // add padding when desired
     if(padding_value > 0) {
+        Log.d("adding padding")
         for y: UInt16 in 0 ..< UInt16(height) {
             for x: UInt16 in 0 ..< UInt16(width) {
                 let outlier_tag = "\(x),\(y)"
@@ -191,6 +197,7 @@ func removeAirplanes(fromImage image: CGImage,
         }
     }
 
+    Log.d("painting over airplane streaks")
     
     // paint on the large groups of outliers with values from the other frames
     for y: UInt16 in 0 ..< UInt16(height) {
@@ -200,7 +207,7 @@ func removeAirplanes(fromImage image: CGImage,
                 if let tag = outlier.tag,
                    let group_size = neighbor_groups[tag] {                    
                     if group_size > min_neighbors { // XXX global variable
-                        //print("found \(group_size) neighbors")
+                        //Log.d("found \(group_size) neighbors")
 
                         let offset = (Int(y) * bytesPerRow) + (Int(x) * bytesPerPixel)
 
@@ -245,11 +252,14 @@ func removeAirplanes(fromImage image: CGImage,
     return nil
 }
 
+// XXX this takes too long for big iamges
 func pixel(fromImage image: CGImage, atX x: UInt16, andY y: UInt16) -> Pixel {
+    //Log.d("woo")
     guard let data = image.dataProvider?.data,
           let bytes = CFDataGetBytePtr(data) else {
                           fatalError("Couldn't access image data")
     }
+          //Log.d("woo")
 
     let bytesPerPixel = image.bitsPerPixel / 8
     
@@ -267,6 +277,7 @@ func pixel(fromImage image: CGImage, atX x: UInt16, andY y: UInt16) -> Pixel {
     let b1 = UInt16(bytes[offset+(image.bitsPerComponent/8)*2])
     let b2 = UInt16(bytes[offset+(image.bitsPerComponent/8)*2 + 1]) << 8
     pixel.blue = b1 + b2
+    //Log.d("wooo")
 
     return pixel
 }
@@ -282,7 +293,7 @@ func remove_suffix(fromString string: String) -> String {
 func load(imageFiles: [String]) throws -> [CGImage] {
     var ret: [CGImage] = [];
     try imageFiles.forEach { file in
-        print("loading \(file)")
+        Log.d("loading \(file)")
         let imageURL = NSURL(fileURLWithPath: file, isDirectory: false)
         let data = try Data(contentsOf: imageURL as URL)
         if let image = NSImage(data: data),
@@ -302,11 +313,11 @@ func list_image_files(atPath path: String) -> [String] {
         contents.forEach { file in
             if file.hasSuffix(".tif") || file.hasSuffix(".tiff") {
                 image_files.append("\(path)/\(file)")
-                print("going to read \(file)")
+                Log.d("going to read \(file)")
             }
         }
     } catch {
-        print("OH FUCK \(error)")
+        Log.d("OH FUCK \(error)")
     }
     return image_files
 }
@@ -356,7 +367,7 @@ func prune(width: UInt16, height: UInt16,
            outlierMap outlier_map: [String: Outlier],
            neighborGroups neighbor_groups: inout [String: UInt16])
   {
-      print("top level prune started");
+      Log.d("top level prune started");
       for y: UInt16 in 0 ..< height {
           for x: UInt16 in 0 ..< width {
               let tag = "\(x),\(y)"
@@ -365,12 +376,12 @@ func prune(width: UInt16, height: UInt16,
               {
                   outlier.tag = tag // start a new group
                   let neighbors = prune(outlier: outlier, tag: tag, outlierMap: outlier_map) // look for neighbors
-                  //print ("got \(neighbors.count) neighbors")
+                  //Log.d ("got \(neighbors.count) neighbors")
                   neighbor_groups[tag] = UInt16(neighbors.count)
               }
           }
       }
-      print("top level prune completed");
+      Log.d("top level prune completed");
   }
 
 func tag(within distance: UInt16, ofX x: UInt16, andY y: UInt16,
