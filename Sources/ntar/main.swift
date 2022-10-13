@@ -291,26 +291,16 @@ func removeAirplanes(fromImage image: CGImage, otherFrames: [CGImage]) -> CGImag
     guard var data = image.dataProvider?.data as? Data,
           let bytes = CFDataGetBytePtr(image.dataProvider?.data) else { return nil }
 
-    var otherBytes:[UnsafePointer<UInt8>] = []
-
-    otherFrames.forEach { otherImage in
-        if let bytes = CFDataGetBytePtr(otherImage.dataProvider?.data) {
-            otherBytes.append(bytes)
-        } else {
-            fatalError("couldn't access image data")
-        }
-    }
-
     for y: UInt16 in 0 ..< UInt16(height) {
         //print ("y \(y)")
         for x: UInt16 in 0 ..< UInt16(width) {
             //print ("x \(x)")
 
-            let origPixel = pixel(fromImage: image/*, withBytes: bytes*/, atX: x, andY: y)
+            let origPixel = pixel(fromImage: image, atX: x, andY: y)
             //print ("(\(x), \(y)) \(origPixel.description)")
             var otherPixels: [Pixel] = []
             for p in 0 ..< otherFrames.count {
-                let newPixel = pixel(fromImage: otherFrames[p]/*, withBytes: otherBytes[p]*/, atX: x, andY: y)
+                let newPixel = pixel(fromImage: otherFrames[p], atX: x, andY: y)
                 ////print("newPixel \(newPixel.description)")
                 otherPixels.append(newPixel)
             }
