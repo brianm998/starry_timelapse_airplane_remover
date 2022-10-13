@@ -7,7 +7,7 @@ let max_pixel_distance = 10000  // XXX arbitrary constant
 let min_neighbors = 1000        // size of a group of outliers that is considered an airplane streak
           // XXX fucking global
 var outlier_map: [String: Outlier] = [:] // keyed by "\(x),\(y)"
-
+let padding_value: UInt16 = 2
 var neighbor_groups: [String: UInt16] = [:] // keyed by above 
 
 if CommandLine.arguments.count < 1 {
@@ -54,14 +54,6 @@ if CommandLine.arguments.count < 1 {
             print("doh! \(error)")
         }
     }
-
-    // XXX next figure out how to save this poo as a tiff file
-
-    // XXX then update applyFilter logic to do what I want
-}
-
-func save2(image cgImage: CGImage, toFile filename: String) {
-    // maybe try using ImageIO to get rid of alpha channel?
 }
 
 func save(image cgImage: CGImage, toFile filename: String) throws {
@@ -70,7 +62,6 @@ func save(image cgImage: CGImage, toFile filename: String) throws {
     let options: [CIImageRepresentationOption: CGFloat] = [:]
     if let colorSpace = CGColorSpace(name: CGColorSpace.sRGB) {
         let imgFormat = CIFormat.RGBA16
-//      let imgFormat = CIFormat.RGB16 XXX alpha?
 
         if #available(macOS 10.12, *) {
             try context.writeTIFFRepresentation(
@@ -81,8 +72,7 @@ func save(image cgImage: CGImage, toFile filename: String) throws {
                 options: options
             )
         } else {
-            fatalError("more text here")
-            // fatal error
+            fatalError("Must use macOS 10.12 or higher")
         }
     } else {
         print("FUCK")
@@ -249,7 +239,7 @@ func createImage() -> CGImage? {
     return nil
 }
 
-func copy(image: CGImage) -> CGImage? {
+func fuck_copy(image: CGImage) -> CGImage? {
 
     let width = image.width
     let height = image.height
@@ -303,10 +293,7 @@ func removeAirplanes(fromImage image: CGImage, otherFrames: [CGImage]) -> CGImag
     let bitsPerComponent = image.bitsPerComponent
     let bytesPerRow = width*bytesPerPixel
 
-//    var data = Data(count: width * height * bytesPerPixel)
-
-    guard var data = image.dataProvider?.data as? Data,
-          let bytes = CFDataGetBytePtr(image.dataProvider?.data) else { return nil }
+    guard var data = image.dataProvider?.data as? Data else { return nil }
 
     for y: UInt16 in 0 ..< UInt16(height) {
         //print ("y \(y)")
@@ -323,11 +310,7 @@ func removeAirplanes(fromImage image: CGImage, otherFrames: [CGImage]) -> CGImag
             }
             var total_difference: UInt32 = 0
             otherPixels.forEach { pixel in
-                let difference = origPixel.difference(from: pixel)
-//                if difference != 0 {                                    
-//                    //print("difference \(difference)")
-//                }
-                total_difference += UInt32(difference)
+                total_difference += UInt32(origPixel.difference(from: pixel))
             }
             total_difference /= UInt32(otherPixels.count)
             if total_difference > max_pixel_distance { // XXX global
@@ -366,25 +349,16 @@ func removeAirplanes(fromImage image: CGImage, otherFrames: [CGImage]) -> CGImag
         }
     }
 
-    let padding_value: UInt16 = 2
-    var padding_cells: [Outlier]
-    
+    // add padding when desired
     for y: UInt16 in 0 ..< UInt16(height) {
         for x: UInt16 in 0 ..< UInt16(width) {
             let outlier_tag = "\(x),\(y)"
-            let test = outlier_map[outlier_tag]
-            if test == nil {
-                // XXX check for padding add
-
-                // look around here in padding depth for any cell that has a tag > max
-                // if found, add outlier to this x, y
-
-                // XXX not done
-                if let bigTag = tag(within: padding_value, ofX: x, andY: y) {
-                    let padding = Outlier(x: x, y: y, amount: 0)
-                    padding.tag = bigTag
-                    outlier_map[outlier_tag] = padding
-                }
+            if outlier_map[outlier_tag] == nil, 
+               let bigTag = tag(within: padding_value, ofX: x, andY: y)
+            {
+                let padding = Outlier(x: x, y: y, amount: 0)
+                padding.tag = bigTag
+                outlier_map[outlier_tag] = padding
             }
         }
     }
@@ -409,6 +383,7 @@ func removeAirplanes(fromImage image: CGImage, otherFrames: [CGImage]) -> CGImag
                             otherPixels.append(newPixel)
                         }
                         var nextPixel = Pixel(merging: otherPixels)
+                        //nextPixel.red = 0xFFFF
 
                         var nextValue = nextPixel.value
                         data.replaceSubrange(offset ..< offset+bytesPerPixel, with: &nextValue, count: 6)
@@ -504,7 +479,7 @@ func pixel(fromImage image: CGImage, atX x: UInt16, andY y: UInt16) -> Pixel {
 func remove_suffix(fromString string: String) -> String {
     let imageURL = NSURL(fileURLWithPath: string, isDirectory: false) as URL
     let full_path = imageURL.deletingPathExtension().absoluteString
-    var components = full_path.components(separatedBy: "/")
+    let components = full_path.components(separatedBy: "/")
     return components[components.count-1]
 }
 
@@ -549,7 +524,7 @@ func prune(outlier: Outlier, tag: String) -> Set<Outlier> {
     var neighbors: Set<Outlier> = []
     
     if y > 0,
-       var neighbor = outlier_map["\(x),\(y-1)"],
+       let neighbor = outlier_map["\(x),\(y-1)"],
        neighbor.tag == nil
     {
         neighbor.tag = tag
@@ -557,21 +532,21 @@ func prune(outlier: Outlier, tag: String) -> Set<Outlier> {
         neighbors.formUnion(prune(outlier: neighbor, tag: tag))
     }
     if x > 0,
-       var neighbor = outlier_map["\(x-1),\(y)"],
+       let neighbor = outlier_map["\(x-1),\(y)"],
        neighbor.tag == nil
       {
         neighbor.tag = tag
         neighbors.insert(neighbor)
         neighbors.formUnion(prune(outlier: neighbor, tag: tag))
      }
-     if var neighbor = outlier_map["\(x+1),\(y)"],
+     if let neighbor = outlier_map["\(x+1),\(y)"],
         neighbor.tag == nil
        {
          neighbor.tag = tag
          neighbors.insert(neighbor)
          neighbors.formUnion(prune(outlier: neighbor, tag: tag))
      }
-     if var neighbor = outlier_map["\(x),\(y+1)"],
+     if let neighbor = outlier_map["\(x),\(y+1)"],
         neighbor.tag == nil
      {
          neighbor.tag = tag
@@ -586,7 +561,7 @@ func prune(width: UInt16, height: UInt16) {
     for y: UInt16 in 0 ..< height {
         for x: UInt16 in 0 ..< width {
             let tag = "\(x),\(y)"
-            if var outlier = outlier_map[tag],
+            if let outlier = outlier_map[tag],
                outlier.tag == nil // not part of any group
             {
                 outlier.tag = tag // start a new group
@@ -612,11 +587,13 @@ func tag(within distance: UInt16, ofX x: UInt16, andY y: UInt16) -> String? {
     } else {
         y_start = y - distance
     }
-    for y: UInt16 in y_start ..< y+distance {
-        for x: UInt16 in x_start ..< x+distance {
-            if let outlier = outlier_map["\(x),\(y)"],
+    for y_idx: UInt16 in y_start ..< y+distance {
+        for x_idx: UInt16 in x_start ..< x+distance {
+            if let outlier = outlier_map["\(x_idx),\(y_idx)"],
                let tag = outlier.tag,
+               outlier.amount != 0,
                let group_size = neighbor_groups[tag],
+               hypotenuse(x1: x, y1: y, x2: x_idx, y2: y_idx) < distance,
                group_size > min_neighbors
             {
                 return outlier.tag
@@ -624,4 +601,10 @@ func tag(within distance: UInt16, ofX x: UInt16, andY y: UInt16) -> String? {
         }
    }
    return nil
+}
+
+func hypotenuse(x1: UInt16, y1: UInt16, x2: UInt16, y2: UInt16) -> UInt16 {
+    let x_dist = UInt16(abs(Int32(x2)-Int32(x1)))
+    let y_dist = UInt16(abs(Int32(y2)-Int32(y1)))
+    return UInt16(sqrt(Float(x_dist*x_dist+y_dist*y_dist)))
 }
