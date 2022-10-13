@@ -20,23 +20,6 @@ if CommandLine.arguments.count < 1 {
 
     let images = try load(imageFiles: image_files)
     print("loaded images \(images)")
-/*
-    images.forEach { image in
-        dump_pixels(fromImage: image) { pixel, x, y in
-            print("[\(x), \(y)] - \(pixel.description)")
-        }
-    }
-    images.forEach { image in
-        if let bytes = CFDataGetBytePtr(image.dataProvider?.data) {
-            for y in 0 ..< image.height {
-                for x in 0 ..< image.width {
-                    let newPixel = pixel(fromImage: image/*, withBytes: bytes*/, atX: x, andY: y)
-                    print("(\(x), \(y)) \(newPixel.description)")
-                }
-            }
-        }
-    }
-  */                                
 
     if let foo = removeAirplanes(fromImage: images[1],
                                  otherFrames: [images[0], images[2]])
@@ -72,161 +55,6 @@ func save(image cgImage: CGImage, toFile filename: String) throws {
     } else {
         print("FUCK")
     }
-}
-
-public class Outlier: Hashable, Equatable {
-    let x: UInt16
-    let y: UInt16
-    let amount: UInt32
-    var tag: String?
-    
-    public init(x: UInt16, y: UInt16, amount: UInt32) {
-        self.x = x
-        self.y = y
-        self.amount = amount
-    }
-
-    public func hash(into hasher: inout Hasher) {
-        hasher.combine(x)
-        hasher.combine(y)
-    }
-
-    public static func == (lhs: Outlier, rhs: Outlier) -> Bool {
-        return
-            lhs.x == rhs.x &&
-            lhs.y == rhs.y
-    }    
-}
-
-public struct Pixel {
-    public var value: UInt64
-
-    public init() {
-        self.value = 0
-    }
-
-    public init(merging otherPixels: [Pixel]) {
-        self.value = 0
-        var red: UInt32 = 0
-        var green: UInt32 = 0
-        var blue: UInt32 = 0
-        otherPixels.forEach { otherPixel in
-            red += UInt32(otherPixel.red)
-            green += UInt32(otherPixel.green)
-            blue += UInt32(otherPixel.blue)
-        }
-        let count = UInt32(otherPixels.count)
-        self.red = UInt16(red/count)
-        self.green = UInt16(green/count)
-        self.blue = UInt16(blue/count)
-    }
-    
-    public func difference(from otherPixel: Pixel) -> UInt32 {
-        //print("self \(self.description) other \(otherPixel.description)")
-        let red = UInt32(abs(Int32(self.red) - Int32(otherPixel.red)))
-        let green = UInt32(abs(Int32(self.green) - Int32(otherPixel.green)))
-        let blue = UInt32(abs(Int32(self.blue) - Int32(otherPixel.blue)))
-
-        return max(red + green + blue / 3, max(red, max(green, blue)))
-    }
-
-    
-    public var description: String {
-        return "Pixel: r: '\(self.red)' g: '\(self.green)' b: '\(self.blue)'"
-    }
-    
-    public var red: UInt16 {
-        get {
-            return UInt16(value & 0xFFFF)
-        } set {
-            value = UInt64(newValue) | (value & 0xFFFFFFFFFFFF0000)
-        }
-    }
-    
-    public var green: UInt16 {
-        get {
-            return UInt16((value >> 16) & 0xFFFF)
-        } set {
-            value = (UInt64(newValue) << 16) | (value & 0xFFFFFFFF0000FFFF)
-        }
-    }
-    
-    public var blue: UInt16 {
-        get {
-            return UInt16((value >> 32) & 0xFFFF)
-        } set {
-            value = (UInt64(newValue) << 32) | (value & 0xFFFF0000FFFFFFFF)
-        }
-    }
-    
-    public var alpha: UInt16 {
-        get {
-            return UInt16((value >> 48) & 0xFFFF)
-        } set {
-            value = (UInt64(newValue) << 48) | (value & 0x0000FFFFFFFFFFFF)
-        }
-    }
-}
-
-func createImage() -> CGImage? {
-
-    let width = 4
-    let height = 4
-    let bytesPerPixel = 6
-    let bitsPerComponent = 16
-    let bytesPerRow = width*bytesPerPixel
-
-    var data = Data(count: width * height * bytesPerPixel)
-
-    for y in 0 ..< height {
-        for x in 0 ..< width {
-            let offset = (y * bytesPerRow) + (x * bytesPerPixel)
-            //var nextPixel: UInt64 = 0xFFFFFFFFFFFFFFFF // white
-            //var nextPixel: UInt64 = 0x00FFFFFFFFFFFFFF // white
-            //var nextPixel: UInt64 = 0x0000FFFFFFFFFFFF // white
-            //var nextPixel: UInt64 = 0x000000FFFFFFFFFF // white
-            //var nextPixel: UInt64 = 0x00000000FFFFFFFF // yellow
-            //var nextPixel: UInt64 = 0x0000000000FFFFFF // yellow
-            //var nextPixel: UInt64 = 0x000000000000FFFF // red
-            //var nextPixel: UInt64 = 0x00000000000000FF // red
-            //var nextPixel: UInt64 = 0x0000000000FF0000 // green
-            //var nextPixel: UInt64 = 0x000000FF00000000 // blue
-
-            var nextPixel = Pixel()
-            if(y % 3 == 0) {
-                nextPixel.red = 0xFFFF
-            } else if(y % 3 == 1) {
-                nextPixel.blue = 0xFFFF
-            } else {
-                nextPixel.green = 0xFFFF
-            }
-            
-            if(x % 3 == 0) {
-                nextPixel.blue = 0xFFFF
-            } else if(x % 3 == 1) {
-                nextPixel.green = 0xFFFF
-            } else {
-                nextPixel.red = 0xFFFF
-            }
-            
-            print("setting pixel at offset \(offset)")
-            data.replaceSubrange(offset ..< offset+bytesPerPixel, with: &nextPixel.value, count: 8)
-        }
-    }
-    
-    if let dataProvider = CGDataProvider(data: data as CFData) {
-        return CGImage(width: width, height: height,
-                       bitsPerComponent: bitsPerComponent,
-                       bitsPerPixel: bytesPerPixel*8,
-                       bytesPerRow: width*bytesPerPixel,
-                       space: CGColorSpaceCreateDeviceRGB(),
-                       bitmapInfo: CGBitmapInfo.byteOrder16Big,
-                       provider: dataProvider,
-                       decode: nil,
-                       shouldInterpolate: false,
-                       intent: .defaultIntent)
-    }
-    return nil
 }
 
 func removeAirplanes(fromImage image: CGImage,
@@ -310,25 +138,27 @@ func removeAirplanes(fromImage image: CGImage,
     }
 
     // add padding when desired
-    for y: UInt16 in 0 ..< UInt16(height) {
-        for x: UInt16 in 0 ..< UInt16(width) {
-            let outlier_tag = "\(x),\(y)"
-            if outlier_map[outlier_tag] == nil, 
-               let bigTag = tag(within: padding_value,
-                                ofX: x, andY: y,
-                                outlierMap: outlier_map,
-                                neighborGroups: neighbor_groups,
-                                minNeighbors: min_neighbors)
-            {
-                let padding = Outlier(x: x, y: y, amount: 0)
-                padding.tag = bigTag
-                outlier_map[outlier_tag] = padding
+    if(padding_value > 0) {
+        for y: UInt16 in 0 ..< UInt16(height) {
+            for x: UInt16 in 0 ..< UInt16(width) {
+                let outlier_tag = "\(x),\(y)"
+                if outlier_map[outlier_tag] == nil, 
+                   let bigTag = tag(within: padding_value,
+                                    ofX: x, andY: y,
+                                    outlierMap: outlier_map,
+                                    neighborGroups: neighbor_groups,
+                                    minNeighbors: min_neighbors)
+                {
+                    let padding = Outlier(x: x, y: y, amount: 0)
+                    padding.tag = bigTag
+                    outlier_map[outlier_tag] = padding
+                }
             }
         }
-    }
+    } 
 
     
-    // paint on the outliers with values from the other frames
+    // paint on the large groups of outliers with values from the other frames
     for y: UInt16 in 0 ..< UInt16(height) {
         for x: UInt16 in 0 ..< UInt16(width) {
             if let outlier = outlier_map["\(x),\(y)"] {
@@ -357,10 +187,10 @@ func removeAirplanes(fromImage image: CGImage,
         }
     }
 
-
     if let dataProvider = CGDataProvider(data: data as CFData) {
         let colorSpace = CGColorSpaceCreateDeviceRGB()
-        return CGImage(width: width, height: height,
+        return CGImage(width: width,
+                       height: height,
                        bitsPerComponent: bitsPerComponent,
                        bitsPerPixel: bytesPerPixel*8,
                        bytesPerRow: width*bytesPerPixel,
@@ -372,45 +202,6 @@ func removeAirplanes(fromImage image: CGImage,
                        intent: .defaultIntent)
     }
     return nil
-}
-
-func dump_pixels(fromImage image: CGImage, closure: (Pixel, Int, Int) -> ()) {
-    guard let data = image.dataProvider?.data,
-          let bytes = CFDataGetBytePtr(data) else {
-                          fatalError("Couldn't access image data")
-    }
-    print("image is [\(image.width), \(image.height)] with image.bitsPerPixel \(image.bitsPerPixel) and image.bitsPerComponent \(image.bitsPerComponent) image.bytesPerRow \(image.bytesPerRow)")
-
-    let numberComponents = image.bitsPerPixel / image.bitsPerComponent
-    let bytesPerPixel = image.bitsPerPixel / 8
-    
-    assert(image.colorSpace?.model == .rgb)
-    print("bytesPerPixel \(bytesPerPixel)")
-    print("numberComponents \(numberComponents)")
-    
-//    for fuck in 0 ..< image.height * image.width * bytesPerPixel {
-//        let r = bytes[fuck]
-//        print ("\(fuck) \(r)")
-//    }
-    for y in 0 ..< image.height {
-        for x in 0 ..< image.width {
-            var pixel = Pixel()
-            let offset = (y * image.bytesPerRow) + (x * bytesPerPixel)
-            // XXX this could be cleaner
-            let r1 = UInt16(bytes[offset]) // lower bits
-            let r2 = UInt16(bytes[offset + 1]) << 8 // higher bits
-            pixel.red = r1 + r2
-            let g1 = UInt16(bytes[offset+image.bitsPerComponent/8])
-            let g2 = UInt16(bytes[offset+image.bitsPerComponent/8 + 1]) << 8
-            pixel.green = g1 + g2
-            let b1 = UInt16(bytes[offset+(image.bitsPerComponent/8)*2])
-            let b2 = UInt16(bytes[offset+(image.bitsPerComponent/8)*2 + 1]) << 8
-            pixel.blue = b1 + b2
-
-            closure(pixel, x, y)
-        }
-        print("---")
-    }
 }
 
 func pixel(fromImage image: CGImage, atX x: UInt16, andY y: UInt16) -> Pixel {
