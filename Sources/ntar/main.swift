@@ -96,11 +96,6 @@ public class Outlier: Hashable, Equatable {
         hasher.combine(y)
     }
 
-    public func copy() -> Outlier {
-        var ret = Outlier(x: x, y: y, amount: amount)
-        return ret
-    }
-
     public static func == (lhs: Outlier, rhs: Outlier) -> Bool {
         return
             lhs.x == rhs.x &&
@@ -239,52 +234,6 @@ func createImage() -> CGImage? {
     return nil
 }
 
-func fuck_copy(image: CGImage) -> CGImage? {
-
-    let width = image.width
-    let height = image.height
-    let bytesPerPixel = image.bitsPerPixel/8
-    let bitsPerComponent = image.bitsPerComponent
-    let bytesPerRow = width*bytesPerPixel
-
-    var data = Data(count: width * height * bytesPerPixel)
-
-    guard var data = image.dataProvider?.data as? Data
-/*          let bytes = CFDataGetBytePtr(data)*/ else { return nil }
-
-// XXX __really__ slow
-    for y in 0 ..< height {
-        print ("y \(y)")
-        for x in 0 ..< width {
-            if x == 100 {       // write a red vertical line at 100 pixels into the image
-                let offset = (y * bytesPerRow) + (x * bytesPerPixel)
-
-                var nextPixel = Pixel()
-                nextPixel.red = 0xFFFF
-                //var nextPixel = pixel(fromImage: image, atX: x, andY: y)
-                var nextValue = nextPixel.value
-                data.replaceSubrange(offset ..< offset+bytesPerPixel, with: &nextValue, count: 6)
-            }
-        }
-    }
-
-    if let dataProvider = CGDataProvider(data: data as CFData) {
-        let colorSpace = CGColorSpaceCreateDeviceRGB()
-        return CGImage(width: width, height: height,
-                       bitsPerComponent: bitsPerComponent,
-                       bitsPerPixel: bytesPerPixel*8,
-                       bytesPerRow: width*bytesPerPixel,
-                       space: colorSpace,
-                       bitmapInfo: image.bitmapInfo, // byte order
-                       provider: dataProvider,
-                       decode: nil,
-                       shouldInterpolate: false,
-                       intent: .defaultIntent)
-    }
-    return nil
-}
-
-
 func removeAirplanes(fromImage image: CGImage, otherFrames: [CGImage]) -> CGImage? {
 
     let width = image.width
@@ -372,7 +321,7 @@ func removeAirplanes(fromImage image: CGImage, otherFrames: [CGImage]) -> CGImag
                 if let tag = outlier.tag,
                    let group_size = neighbor_groups[tag] {                    
                     if group_size > min_neighbors { // XXX global variable
-                        print("found \(group_size) neighbors")
+                        //print("found \(group_size) neighbors")
 
                         let offset = (Int(y) * bytesPerRow) + (Int(x) * bytesPerPixel)
 
@@ -566,7 +515,7 @@ func prune(width: UInt16, height: UInt16) {
             {
                 outlier.tag = tag // start a new group
                 let neighbors = prune(outlier: outlier, tag: tag) // look for neighbors
-                print ("got \(neighbors.count) neighbors")
+                //print ("got \(neighbors.count) neighbors")
                 neighbor_groups[tag] = UInt16(neighbors.count)
             }
         }
