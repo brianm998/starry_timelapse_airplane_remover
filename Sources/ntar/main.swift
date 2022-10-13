@@ -21,6 +21,14 @@ if CommandLine.arguments.count < 1 {
     let images = try load(imageFiles: image_files)
     print("loaded images \(images)")
 
+    let output_dirname = "\(path)/\(input_image_sequence_dirname)-no-planes"
+    
+    do {
+        try FileManager.default.createDirectory(atPath: output_dirname, withIntermediateDirectories: false, attributes: nil)
+    } catch let error as NSError {
+        fatalError("Unable to create directory \(error.debugDescription)")
+    }
+    
     for (index, image) in images.enumerated() {
         var otherFrames: [CGImage] = []
         if(index > 0) {
@@ -37,7 +45,7 @@ if CommandLine.arguments.count < 1 {
         {
             print("new_image \(new_image)")
             let filename_base = remove_suffix(fromString: image_files[index])
-            let filename = "\(filename_base)-no-airplanes.tif"
+            let filename = "\(output_dirname)/\(filename_base)-no-airplanes.tif"
             do {
                 try save(image: new_image, toFile: filename)
             } catch {
