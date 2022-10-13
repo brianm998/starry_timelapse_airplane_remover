@@ -143,11 +143,11 @@ public struct Pixel {
     
     public func difference(from otherPixel: Pixel) -> UInt32 {
         //print("self \(self.description) other \(otherPixel.description)")
-        let red = abs(Int32(self.red) - Int32(otherPixel.red))
-        let green = abs(Int32(self.green) - Int32(otherPixel.green))
-        let blue = abs(Int32(self.blue) - Int32(otherPixel.blue))
+        let red = UInt32(abs(Int32(self.red) - Int32(otherPixel.red)))
+        let green = UInt32(abs(Int32(self.green) - Int32(otherPixel.green)))
+        let blue = UInt32(abs(Int32(self.blue) - Int32(otherPixel.blue)))
 
-        return UInt32(red + green + blue / 3)
+        return max(red + green + blue / 3, max(red, max(green, blue)))
     }
 
     
@@ -332,10 +332,7 @@ func removeAirplanes(fromImage image: CGImage, otherFrames: [CGImage]) -> CGImag
             total_difference /= UInt32(otherPixels.count)
             if total_difference > max_pixel_distance { // XXX global
                 //print("at (\(x), \(y)) we have difference \(total_difference) otherPixels \(otherPixels.count)")
-                let fuck = Outlier(x: x, y: y, amount: total_difference)
-                //print("mid \(x),\(y)")
-                outlier_map["\(x),\(y)"] = fuck
-                //print("WOO")
+                outlier_map["\(x),\(y)"] = Outlier(x: x, y: y, amount: total_difference)
             }
         }
     }
@@ -369,7 +366,31 @@ func removeAirplanes(fromImage image: CGImage, otherFrames: [CGImage]) -> CGImag
         }
     }
 
-    // paint red on the outliers with neighbhor counts above the threshold for testing
+    let padding_value: UInt16 = 2
+    var padding_cells: [Outlier]
+    
+    for y: UInt16 in 0 ..< UInt16(height) {
+        for x: UInt16 in 0 ..< UInt16(width) {
+            let outlier_tag = "\(x),\(y)"
+            let test = outlier_map[outlier_tag]
+            if test == nil {
+                // XXX check for padding add
+
+                // look around here in padding depth for any cell that has a tag > max
+                // if found, add outlier to this x, y
+
+                // XXX not done
+                if let bigTag = tag(within: padding_value, ofX: x, andY: y) {
+                    let padding = Outlier(x: x, y: y, amount: 0)
+                    padding.tag = bigTag
+                    outlier_map[outlier_tag] = padding
+                }
+            }
+        }
+    }
+
+    
+    // paint on the outliers with values from the other frames
     for y: UInt16 in 0 ..< UInt16(height) {
         for x: UInt16 in 0 ..< UInt16(width) {
             if let outlier = outlier_map["\(x),\(y)"] {
@@ -381,7 +402,6 @@ func removeAirplanes(fromImage image: CGImage, otherFrames: [CGImage]) -> CGImag
 
                         let offset = (Int(y) * bytesPerRow) + (Int(x) * bytesPerPixel)
 
-                        //nextPixel.red = 0xFFFF
                         var otherPixels: [Pixel] = []
 
                         for p in 0 ..< otherFrames.count {
@@ -624,4 +644,31 @@ func prune(width: UInt16, height: UInt16) {
         }
     }
     print("top level prune completed");
+}
+
+func tag(within distance: UInt16, ofX x: UInt16, andY y: UInt16) -> String? {
+    var x_start:UInt16 = 0;
+    var y_start:UInt16 = 0;
+    if x < distance {
+        x_start = 0
+    } else {
+        x_start = x - distance
+    }
+    if y < distance {
+        y_start = 0
+    } else {
+        y_start = y - distance
+    }
+    for y: UInt16 in y_start ..< y+distance {
+        for x: UInt16 in x_start ..< x+distance {
+            if let outlier = outlier_map["\(x),\(y)"],
+               let tag = outlier.tag,
+               let group_size = neighbor_groups[tag],
+               group_size > min_neighbors
+            {
+                return outlier.tag
+            }
+        }
+   }
+   return nil
 }
