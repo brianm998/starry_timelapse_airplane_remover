@@ -3,6 +3,12 @@ import CoreGraphics
 import Cocoa
 
 
+let dispatchQueue = DispatchQueue(label: "ntar",
+                                  qos: .unspecified,
+                                  attributes: [/*.concurrent*/],
+                                  autoreleaseFrequency: .inherit,
+                                  target: nil)
+
 if CommandLine.arguments.count < 1 {
     Log.d("need more args!")    // XXX make this better
 } else {
@@ -28,31 +34,59 @@ if CommandLine.arguments.count < 1 {
     } catch let error as NSError {
         fatalError("Unable to create directory \(error.debugDescription)")
     }
+
+    var dispatchGroups: [DispatchGroup] = []
+
+    var methods: [() -> Void] = []
     
     for (index, image) in images.enumerated() {
-        var otherFrames: [CGImage] = []
-        if(index > 0) {
-            otherFrames.append(images[index-1])
-        }
-        if(index < images.count - 1) {
-            otherFrames.append(images[index+1])
-        }
-        // XXX muti thread these
-        // XXX running time on anything but tiny images is _really_ long
-        if let new_image = removeAirplanes(fromImage: image,
-                                           otherFrames: otherFrames,
-                                           minNeighbors: 500,
-                                           withPadding: 0)
-        {
-            Log.d("new_image \(new_image)")
-            let filename_base = remove_suffix(fromString: image_files[index])
-            let filename = "\(output_dirname)/\(filename_base)-no-airplanes.tif"
-            do {
-                try save(image: new_image, toFile: filename)
-            } catch {
-                Log.d("doh! \(error)")
+        let dispathGroup = DispatchGroup()
+        dispatchGroups.append(dispathGroup);
+        dispathGroup.enter()
+        let method = { 
+            var otherFrames: [CGImage] = []
+            if(index > 0) {
+                otherFrames.append(images[index-1])
+            }
+            if(index < images.count - 1) {
+                otherFrames.append(images[index+1])
+            }
+            // XXX muti thread these
+            // XXX running time on anything but tiny images is _really_ long
+            if #available(macOS 10.15, *) {
+                if let new_image = removeAirplanes(fromImage: image,
+                                                   otherFrames: otherFrames,
+                                                   minNeighbors: 500,
+                                                   withPadding: 0)
+                {
+                    Log.d("new_image \(new_image)")
+                    let filename_base = remove_suffix(fromString: image_files[index])
+                    let filename = "\(output_dirname)/\(filename_base)-no-airplanes.tif"
+                    do {
+                    try save(image: new_image, toFile: filename)
+                    } catch {
+                    Log.d("doh! \(error)")
+                    }
+                }
+                dispathGroup.leave()
+            } else {
+                fatalError("requires maxos 10.15+")
             }
         }
+        methods.append(method)
+    }
+
+    Log.d("fuck")
+    
+    methods.forEach { method in
+        Log.d("you")
+        // XXX buss error with async :(
+        // binary search through code with comments to find location of problem
+        dispatchQueue.async { method() }
+    }
+    
+    dispatchGroups.forEach { group in
+       group.wait()                                      
     }
 }
 
@@ -102,8 +136,17 @@ func removeAirplanes(fromImage image: CGImage,
     let bitsPerComponent = image.bitsPerComponent
     let bytesPerRow = width*bytesPerPixel
 
-    guard var data = image.dataProvider?.data as? Data else { return nil }
+    Log.d("getting image data")
+    guard let orig_data = image.dataProvider?.data  else { return nil }
 
+    guard var data = CFDataCreateMutableCopy(kCFAllocatorDefault,
+                                             CFDataGetLength(orig_data),
+                                             orig_data) as? Data else { return nil }
+    
+    // XXX need to copy this shit
+
+    Log.d("got image data")
+    
     var otherData: [CFData] = []
     otherFrames.forEach { frame in
         if let data = frame.dataProvider?.data {
@@ -125,6 +168,7 @@ func removeAirplanes(fromImage image: CGImage,
             //Log.d ("(\(x), \(y)) \(origPixel.description)")
             var otherPixels: [Pixel] = []
             //Log.d ("x1.1 \(x)")
+
             for p in 0 ..< otherFrames.count {
                 let otherFrame = otherFrames[p]
                 let newPixel = pixel(fromData: otherData[p], atX: x, andY: y,
@@ -134,11 +178,16 @@ func removeAirplanes(fromImage image: CGImage,
                 //Log.d("newPixel \(newPixel.description)")
                 otherPixels.append(newPixel)
             }
+            if otherPixels.count == 0 {
+                fatalError("need more than one image in the sequence")
+            }
+
             var total_difference: Int32 = 0
             //Log.d ("x2 \(x)")
             otherPixels.forEach { pixel in
                 total_difference += Int32(origPixel.difference(from: pixel))
             }
+
             total_difference /= Int32(otherPixels.count)
 
             if total_difference > max_pixel_distance {
@@ -149,7 +198,12 @@ func removeAirplanes(fromImage image: CGImage,
         }
     }
 
+    // XXX no buss error here
+    //return nil                      // XXX
+           
     Log.i("processing the outlier map")
+
+    // XXX max depth problem?
     
     // go through the outlier_map 
     prune(width: UInt16(width),
@@ -157,6 +211,10 @@ func removeAirplanes(fromImage image: CGImage,
           outlierMap: outlier_map,
           neighborGroups: &neighbor_groups)
 
+
+    // XXX buss error here still
+    return nil                      // XXX
+    
     Log.i("done processing the outlier map")
     
     // paint green on the outliers above the threshold for testing
@@ -259,6 +317,8 @@ func removeAirplanes(fromImage image: CGImage,
         }
     }
 
+    Log.d("creating final image")
+
     if let dataProvider = CGDataProvider(data: data as CFData) {
         let colorSpace = CGColorSpaceCreateDeviceRGB()
         return CGImage(width: width,
@@ -349,13 +409,23 @@ func list_image_files(atPath path: String) -> [String] {
     return image_files
 }
 
-
-func prune(outlier: Outlier, tag: String, outlierMap outlier_map: [String: Outlier]) -> Set<Outlier> {
+// rewrite this to not be recursive
+func prune(outlier: Outlier,
+           tag: String,
+           outlierMap outlier_map: [String: Outlier],
+           depth: UInt) -> Set<Outlier>
+{
     // look for neighbors
     let x = outlier.x
     let y = outlier.y
 
     var neighbors: Set<Outlier> = []
+
+    // XXX testing
+    if depth > 4000 {
+        return neighbors
+    }
+    // XXX testing
     
     if y > 0,
        let neighbor = outlier_map["\(x),\(y-1)"],
@@ -363,7 +433,7 @@ func prune(outlier: Outlier, tag: String, outlierMap outlier_map: [String: Outli
     {
         neighbor.tag = tag
         neighbors.insert(neighbor)
-        neighbors.formUnion(prune(outlier: neighbor, tag: tag, outlierMap: outlier_map))
+        neighbors.formUnion(prune(outlier: neighbor, tag: tag, outlierMap: outlier_map, depth: depth + 1))
     }
     if x > 0,
        let neighbor = outlier_map["\(x-1),\(y)"],
@@ -371,45 +441,49 @@ func prune(outlier: Outlier, tag: String, outlierMap outlier_map: [String: Outli
       {
         neighbor.tag = tag
         neighbors.insert(neighbor)
-        neighbors.formUnion(prune(outlier: neighbor, tag: tag, outlierMap: outlier_map))
+        neighbors.formUnion(prune(outlier: neighbor, tag: tag, outlierMap: outlier_map, depth: depth + 1))
      }
      if let neighbor = outlier_map["\(x+1),\(y)"],
         neighbor.tag == nil
        {
          neighbor.tag = tag
          neighbors.insert(neighbor)
-         neighbors.formUnion(prune(outlier: neighbor, tag: tag, outlierMap: outlier_map))
+         neighbors.formUnion(prune(outlier: neighbor, tag: tag, outlierMap: outlier_map, depth: depth + 1))
      }
      if let neighbor = outlier_map["\(x),\(y+1)"],
         neighbor.tag == nil
      {
          neighbor.tag = tag
          neighbors.insert(neighbor)
-         neighbors.formUnion(prune(outlier: neighbor, tag: tag, outlierMap: outlier_map))
+         neighbors.formUnion(prune(outlier: neighbor, tag: tag, outlierMap: outlier_map, depth: depth + 1))
      }
      return neighbors
 }
 
+// perhaps rewrite at this level
 func prune(width: UInt16, height: UInt16,
            outlierMap outlier_map: [String: Outlier],
            neighborGroups neighbor_groups: inout [String: UInt16])
-  {
-      Log.d("top level prune started");
-      for y: UInt16 in 0 ..< height {
-          for x: UInt16 in 0 ..< width {
-              let tag = "\(x),\(y)"
-              if let outlier = outlier_map[tag],
-                 outlier.tag == nil // not part of any group
-              {
-                  outlier.tag = tag // start a new group
-                  let neighbors = prune(outlier: outlier, tag: tag, outlierMap: outlier_map) // look for neighbors
-                  //Log.d ("got \(neighbors.count) neighbors")
-                  neighbor_groups[tag] = UInt16(neighbors.count)
-              }
-          }
-      }
-      Log.d("top level prune completed");
-  }
+{
+    Log.d("top level prune started");
+    for y: UInt16 in 0 ..< height {
+        for x: UInt16 in 0 ..< width {
+            let tag = "\(x),\(y)"
+            if let outlier = outlier_map[tag],
+               outlier.tag == nil // not part of any group
+            {
+                outlier.tag = tag // start a new group
+                // look for neighbors
+                let neighbors = prune(outlier: outlier, tag: tag,
+                                      outlierMap: outlier_map,
+                                      depth: 0) 
+                //Log.d ("got \(neighbors.count) neighbors")
+                neighbor_groups[tag] = UInt16(neighbors.count)
+            }
+        }
+    }
+    Log.d("top level prune completed");
+}          
 
 func tag(within distance: UInt16, ofX x: UInt16, andY y: UInt16,
          outlierMap outlier_map: [String: Outlier],
