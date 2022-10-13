@@ -3,13 +3,6 @@ import CoreGraphics
 import Cocoa
 
 
-let max_pixel_distance = 10000  // XXX arbitrary constant
-let min_neighbors = 1000        // size of a group of outliers that is considered an airplane streak
-          // XXX fucking global
-var outlier_map: [String: Outlier] = [:] // keyed by "\(x),\(y)"
-let padding_value: UInt16 = 2
-var neighbor_groups: [String: UInt16] = [:] // keyed by above 
-
 if CommandLine.arguments.count < 1 {
     print("need more args!")    // XXX make this better
 } else {
@@ -236,6 +229,13 @@ func createImage() -> CGImage? {
 
 func removeAirplanes(fromImage image: CGImage, otherFrames: [CGImage]) -> CGImage? {
 
+    let max_pixel_distance: UInt16 = 10000  // XXX arbitrary constant
+    let min_neighbors: UInt16 = 1000 // size of a group of outliers that is considered an airplane streak
+    let padding_value: UInt16 = 2
+
+    var outlier_map: [String: Outlier] = [:] // keyed by "\(x),\(y)"
+    var neighbor_groups: [String: UInt16] = [:] // keyed by above 
+
     let width = image.width
     let height = image.height
     let bytesPerPixel = image.bitsPerPixel/8
@@ -272,7 +272,10 @@ func removeAirplanes(fromImage image: CGImage, otherFrames: [CGImage]) -> CGImag
     print("processing the outlier map")
     
     // go through the outlier_map 
-    prune(width: UInt16(width), height: UInt16(height))
+    prune(width: UInt16(width),
+          height: UInt16(height),
+          outlierMap: outlier_map,
+          neighborGroups: &neighbor_groups)
 
     print("done processing the outlier map")
     
@@ -303,7 +306,11 @@ func removeAirplanes(fromImage image: CGImage, otherFrames: [CGImage]) -> CGImag
         for x: UInt16 in 0 ..< UInt16(width) {
             let outlier_tag = "\(x),\(y)"
             if outlier_map[outlier_tag] == nil, 
-               let bigTag = tag(within: padding_value, ofX: x, andY: y)
+               let bigTag = tag(within: padding_value,
+                                ofX: x, andY: y,
+                                outlierMap: outlier_map,
+                                neighborGroups: neighbor_groups,
+                                minNeighbors: min_neighbors)
             {
                 let padding = Outlier(x: x, y: y, amount: 0)
                 padding.tag = bigTag
@@ -465,7 +472,7 @@ func list_image_files(atPath path: String) -> [String] {
 }
 
 
-func prune(outlier: Outlier, tag: String) -> Set<Outlier> {
+func prune(outlier: Outlier, tag: String, outlierMap outlier_map: [String: Outlier]) -> Set<Outlier> {
     // look for neighbors
     let x = outlier.x
     let y = outlier.y
@@ -478,7 +485,7 @@ func prune(outlier: Outlier, tag: String) -> Set<Outlier> {
     {
         neighbor.tag = tag
         neighbors.insert(neighbor)
-        neighbors.formUnion(prune(outlier: neighbor, tag: tag))
+        neighbors.formUnion(prune(outlier: neighbor, tag: tag, outlierMap: outlier_map))
     }
     if x > 0,
        let neighbor = outlier_map["\(x-1),\(y)"],
@@ -486,44 +493,51 @@ func prune(outlier: Outlier, tag: String) -> Set<Outlier> {
       {
         neighbor.tag = tag
         neighbors.insert(neighbor)
-        neighbors.formUnion(prune(outlier: neighbor, tag: tag))
+        neighbors.formUnion(prune(outlier: neighbor, tag: tag, outlierMap: outlier_map))
      }
      if let neighbor = outlier_map["\(x+1),\(y)"],
         neighbor.tag == nil
        {
          neighbor.tag = tag
          neighbors.insert(neighbor)
-         neighbors.formUnion(prune(outlier: neighbor, tag: tag))
+         neighbors.formUnion(prune(outlier: neighbor, tag: tag, outlierMap: outlier_map))
      }
      if let neighbor = outlier_map["\(x),\(y+1)"],
         neighbor.tag == nil
      {
          neighbor.tag = tag
          neighbors.insert(neighbor)
-         neighbors.formUnion(prune(outlier: neighbor, tag: tag))
+         neighbors.formUnion(prune(outlier: neighbor, tag: tag, outlierMap: outlier_map))
      }
      return neighbors
 }
 
-func prune(width: UInt16, height: UInt16) {
-    print("top level prune started");
-    for y: UInt16 in 0 ..< height {
-        for x: UInt16 in 0 ..< width {
-            let tag = "\(x),\(y)"
-            if let outlier = outlier_map[tag],
-               outlier.tag == nil // not part of any group
-            {
-                outlier.tag = tag // start a new group
-                let neighbors = prune(outlier: outlier, tag: tag) // look for neighbors
-                //print ("got \(neighbors.count) neighbors")
-                neighbor_groups[tag] = UInt16(neighbors.count)
-            }
-        }
-    }
-    print("top level prune completed");
-}
+func prune(width: UInt16, height: UInt16,
+           outlierMap outlier_map: [String: Outlier],
+           neighborGroups neighbor_groups: inout [String: UInt16])
+  {
+      print("top level prune started");
+      for y: UInt16 in 0 ..< height {
+          for x: UInt16 in 0 ..< width {
+              let tag = "\(x),\(y)"
+              if let outlier = outlier_map[tag],
+                 outlier.tag == nil // not part of any group
+              {
+                  outlier.tag = tag // start a new group
+                  let neighbors = prune(outlier: outlier, tag: tag, outlierMap: outlier_map) // look for neighbors
+                  //print ("got \(neighbors.count) neighbors")
+                  neighbor_groups[tag] = UInt16(neighbors.count)
+              }
+          }
+      }
+      print("top level prune completed");
+  }
 
-func tag(within distance: UInt16, ofX x: UInt16, andY y: UInt16) -> String? {
+func tag(within distance: UInt16, ofX x: UInt16, andY y: UInt16,
+         outlierMap outlier_map: [String: Outlier],
+         neighborGroups neighbor_groups: [String: UInt16],
+         minNeighbors min_neighbors: UInt16) -> String?
+{
     var x_start:UInt16 = 0;
     var y_start:UInt16 = 0;
     if x < distance {
