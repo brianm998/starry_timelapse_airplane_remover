@@ -104,17 +104,33 @@ func removeAirplanes(fromImage image: CGImage,
 
     guard var data = image.dataProvider?.data as? Data else { return nil }
 
+    var otherData: [CFData] = []
+    otherFrames.forEach { frame in
+        if let data = frame.dataProvider?.data {
+            otherData.append(data)
+        } else {
+            fatalError("fuck")
+        }
+    }
+    
     for y: UInt16 in 0 ..< UInt16(height) {
-        Log.d ("y \(y)")
+        //Log.d("y \(y)")
         for x: UInt16 in 0 ..< UInt16(width) {
             //Log.d ("x1 \(x)")
 
-            let origPixel = pixel(fromImage: image, atX: x, andY: y)
+            let origPixel = pixel(fromData: data as CFData, atX: x, andY: y,
+                                  bitsPerPixel: image.bitsPerPixel,
+                                  bytesPerRow: image.bytesPerRow,
+                                  bitsPerComponent: image.bitsPerComponent)
             //Log.d ("(\(x), \(y)) \(origPixel.description)")
             var otherPixels: [Pixel] = []
             //Log.d ("x1.1 \(x)")
             for p in 0 ..< otherFrames.count {
-                let newPixel = pixel(fromImage: otherFrames[p], atX: x, andY: y)
+                let otherFrame = otherFrames[p]
+                let newPixel = pixel(fromData: otherData[p], atX: x, andY: y,
+                                     bitsPerPixel: otherFrame.bitsPerPixel,
+                                     bytesPerRow: otherFrame.bytesPerRow,
+                                     bitsPerComponent: otherFrame.bitsPerComponent)
                 //Log.d("newPixel \(newPixel.description)")
                 otherPixels.append(newPixel)
             }
@@ -170,6 +186,7 @@ func removeAirplanes(fromImage image: CGImage,
     if(padding_value > 0) {
         Log.d("adding padding")
         for y: UInt16 in 0 ..< UInt16(height) {
+            Log.d("y \(y)")
             for x: UInt16 in 0 ..< UInt16(width) {
                 let outlier_tag = "\(x),\(y)"
                 let outlier = outlier_map[outlier_tag]
@@ -215,7 +232,12 @@ func removeAirplanes(fromImage image: CGImage,
 
                         // XXX uncomment to use more than one frame
                         for p in 0 ..< 1/*otherFrames.count*/ {
-                            let newPixel = pixel(fromImage: otherFrames[p], atX: x, andY: y)
+                            let otherFrame = otherFrames[p]
+                            let newPixel = pixel(fromData: otherData[p], atX: x, andY: y,
+                                                 bitsPerPixel: otherFrame.bitsPerPixel,
+                                                 bytesPerRow: otherFrame.bytesPerRow,
+                                                 bitsPerComponent: otherFrame.bitsPerComponent)
+                            
                             otherPixels.append(newPixel)
                         }
                         var nextPixel = Pixel(merging: otherPixels)
@@ -252,30 +274,33 @@ func removeAirplanes(fromImage image: CGImage,
     return nil
 }
 
-// XXX this takes too long for big iamges
-func pixel(fromImage image: CGImage, atX x: UInt16, andY y: UInt16) -> Pixel {
+func pixel(fromData data: CFData,
+           atX x: UInt16,
+           andY y: UInt16,
+           bitsPerPixel: Int,
+           bytesPerRow: Int,
+           bitsPerComponent: Int) -> Pixel
+{
     //Log.d("woo")
-    guard let data = image.dataProvider?.data,
-          let bytes = CFDataGetBytePtr(data) else {
-                          fatalError("Couldn't access image data")
+    guard let bytes = CFDataGetBytePtr(data) else {
+        fatalError("Couldn't access image data")
     }
-          //Log.d("woo")
 
-    let bytesPerPixel = image.bitsPerPixel / 8
+    let bytesPerPixel = bitsPerPixel / 8
     
-    assert(image.colorSpace?.model == .rgb)
+//    assert(image.colorSpace?.model == .rgb)
     
     var pixel = Pixel()
-    let offset = (Int(y) * image.bytesPerRow) + (Int(x) * bytesPerPixel)
+    let offset = (Int(y) * bytesPerRow) + (Int(x) * bytesPerPixel)
     // XXX this could be cleaner
     let r1 = UInt16(bytes[offset]) // lower bits
     let r2 = UInt16(bytes[offset + 1]) << 8 // higher bits
     pixel.red = r1 + r2
-    let g1 = UInt16(bytes[offset+image.bitsPerComponent/8])
-    let g2 = UInt16(bytes[offset+image.bitsPerComponent/8 + 1]) << 8
+    let g1 = UInt16(bytes[offset+bitsPerComponent/8])
+    let g2 = UInt16(bytes[offset+bitsPerComponent/8 + 1]) << 8
     pixel.green = g1 + g2
-    let b1 = UInt16(bytes[offset+(image.bitsPerComponent/8)*2])
-    let b2 = UInt16(bytes[offset+(image.bitsPerComponent/8)*2 + 1]) << 8
+    let b1 = UInt16(bytes[offset+(bitsPerComponent/8)*2])
+    let b2 = UInt16(bytes[offset+(bitsPerComponent/8)*2 + 1]) << 8
     pixel.blue = b1 + b2
     //Log.d("wooo")
 
