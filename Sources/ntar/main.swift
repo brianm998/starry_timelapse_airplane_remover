@@ -473,29 +473,7 @@ func dump_pixels(fromImage image: CGImage, closure: (Pixel, Int, Int) -> ()) {
         print("---")
     }
 }
-/*
-func pixel(fromImage image: CGImage, withBytes bytes: UnsafePointer<UInt8>, atX x: Int, andY y: Int) -> Pixel {
-    let numberComponents = image.bitsPerPixel / image.bitsPerComponent
-    let bytesPerPixel = image.bitsPerPixel / 8
-    
-    assert(image.colorSpace?.model == .rgb)
-    
-    var pixel = Pixel()
-    let offset = (y * image.bytesPerRow) + (x * bytesPerPixel)
-    // XXX this could be cleaner
-    let r1 = UInt16(bytes[offset]) // lower bits
-    let r2 = UInt16(bytes[offset + 1]) << 8 // higher bits
-    pixel.red = r1 + r2
-    let g1 = UInt16(bytes[offset+image.bitsPerComponent/8])
-    let g2 = UInt16(bytes[offset+image.bitsPerComponent/8 + 1]) << 8
-    pixel.green = g1 + g2
-    let b1 = UInt16(bytes[offset+(image.bitsPerComponent/8)*2])
-    let b2 = UInt16(bytes[offset+(image.bitsPerComponent/8)*2 + 1]) << 8
-    pixel.blue = b1 + b2
 
-    return pixel
-}
-*/
 func pixel(fromImage image: CGImage, atX x: UInt16, andY y: UInt16) -> Pixel {
     guard let data = image.dataProvider?.data,
           let bytes = CFDataGetBytePtr(data) else {
@@ -563,15 +541,10 @@ func list_image_files(atPath path: String) -> [String] {
 }
 
 
-func prune(outlier: Outlier, tag: String, depth: Int = 0) -> Set<Outlier> {
+func prune(outlier: Outlier, tag: String) -> Set<Outlier> {
     // look for neighbors
-    //print("prune start")
     let x = outlier.x
     let y = outlier.y
-
-//    if depth > 3000 {            // XXX hardcoded constant
-//        return []
-//    }
 
     var neighbors: Set<Outlier> = []
     
@@ -579,55 +552,35 @@ func prune(outlier: Outlier, tag: String, depth: Int = 0) -> Set<Outlier> {
        var neighbor = outlier_map["\(x),\(y-1)"],
        neighbor.tag == nil
     {
-   //   outlier_map["\(x),\(y)"] = outlier
         neighbor.tag = tag
         neighbors.insert(neighbor)
-//      outlier_map["\(x),\(y-1)"] = neighbor
-        //print("different recursing 1")
-        neighbors.formUnion(prune(outlier: neighbor, tag: tag, depth: depth + 1))
-        //print("different done recursing")
+        neighbors.formUnion(prune(outlier: neighbor, tag: tag))
     }
     if x > 0,
        var neighbor = outlier_map["\(x-1),\(y)"],
        neighbor.tag == nil
       {
-  //      outlier_map["\(x),\(y)"] = outlier
         neighbor.tag = tag
         neighbors.insert(neighbor)
-    //    outlier_map["\(x-1),\(y)"] = neighbor
-        //print("different recursing 2")
-        neighbors.formUnion(prune(outlier: neighbor, tag: tag, depth: depth + 1))
-        //print("different done recursing")
+        neighbors.formUnion(prune(outlier: neighbor, tag: tag))
      }
      if var neighbor = outlier_map["\(x+1),\(y)"],
         neighbor.tag == nil
        {
-//         outlier_map["\(x),\(y)"] = outlier
          neighbor.tag = tag
          neighbors.insert(neighbor)
-//         outlier_map["\(x+1),\(y)"] = neighbor
-         //print("different recursing 3")
-        neighbors.formUnion(prune(outlier: neighbor, tag: tag, depth: depth + 1))
-         //print("different done recursing")
+         neighbors.formUnion(prune(outlier: neighbor, tag: tag))
      }
      if var neighbor = outlier_map["\(x),\(y+1)"],
         neighbor.tag == nil
      {
-         outlier_map["\(x),\(y)"] = outlier
          neighbor.tag = tag
          neighbors.insert(neighbor)
-         outlier_map["\(x),\(y+1)"] = neighbor
-         //print("different recursing 4")
-        neighbors.formUnion(prune(outlier: neighbor, tag: tag, depth: depth + 1))
-         //print("different done recursing")
+         neighbors.formUnion(prune(outlier: neighbor, tag: tag))
      }
      return neighbors
 }
 
-
-
-          
-          // XXX this needs to be recursive to catch all neighbors
 func prune(width: UInt16, height: UInt16) {
     print("top level prune started");
     for y: UInt16 in 0 ..< height {
