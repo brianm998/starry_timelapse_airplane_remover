@@ -7,7 +7,8 @@ let max_pixel_distance = 20000  // XXX arbitrary constant
 let min_neighbors = 1000
           // XXX fucking global
 var outlier_map: [String: Outlier] = [:] // keyed by "\(x),\(y)"
-          
+
+var neighbor_groups: [String: UInt16] = [:] // keyed by above 
 
 if CommandLine.arguments.count < 1 {
     print("need more args!")    // XXX make this better
@@ -89,7 +90,6 @@ func save(image cgImage: CGImage, toFile filename: String) throws {
 }
 
 public class Outlier: Hashable, Equatable {
-    var neighbors: Set<Outlier> = []
     let x: UInt16
     let y: UInt16
     let amount: UInt32
@@ -99,7 +99,6 @@ public class Outlier: Hashable, Equatable {
         self.x = x
         self.y = y
         self.amount = amount
-        self.neighbors = [self]
     }
 
     public func hash(into hasher: inout Hasher) {
@@ -109,7 +108,6 @@ public class Outlier: Hashable, Equatable {
 
     public func copy() -> Outlier {
         var ret = Outlier(x: x, y: y, amount: amount)
-        ret.neighbors = self.neighbors
         return ret
     }
 
@@ -347,7 +345,7 @@ func removeAirplanes(fromImage image: CGImage, otherFrames: [CGImage]) -> CGImag
         for x: UInt16 in 0 ..< UInt16(width) {
             if let outlier = outlier_map["\(x),\(y)"] {
                 if outlier.amount > max_pixel_distance { // XXX global variable
-                    print("found \(outlier.neighbors.count) neighbors")
+//                    print("found \(outlier.neighbors.count) neighbors")
 
                     let offset = (Int(y) * bytesPerRow) + (Int(x) * bytesPerPixel)
 
@@ -365,17 +363,21 @@ func removeAirplanes(fromImage image: CGImage, otherFrames: [CGImage]) -> CGImag
     for y: UInt16 in 0 ..< UInt16(height) {
         for x: UInt16 in 0 ..< UInt16(width) {
             if let outlier = outlier_map["\(x),\(y)"] {
-                if outlier.neighbors.count > min_neighbors { // XXX global variable
-                    print("found \(outlier.neighbors.count) neighbors")
 
-                    let offset = (Int(y) * bytesPerRow) + (Int(x) * bytesPerPixel)
+                if let tag = outlier.tag,
+                   let group_size = neighbor_groups[tag] {                    
+                    if group_size > min_neighbors { // XXX global variable
+                        print("found \(group_size) neighbors")
 
-                    var nextPixel = Pixel()
-                    nextPixel.red = 0xFFFF
-                    //var nextPixel = pixel(fromImage: image, atX: x, andY: y)
+                        let offset = (Int(y) * bytesPerRow) + (Int(x) * bytesPerPixel)
 
-                    var nextValue = nextPixel.value
-                    data.replaceSubrange(offset ..< offset+bytesPerPixel, with: &nextValue, count: 6)
+                        var nextPixel = Pixel()
+                        nextPixel.red = 0xFFFF
+                        //var nextPixel = pixel(fromImage: image, atX: x, andY: y)
+
+                        var nextValue = nextPixel.value
+                        data.replaceSubrange(offset ..< offset+bytesPerPixel, with: &nextValue, count: 6)
+                    }
                 }
             }
         }
@@ -526,110 +528,69 @@ func list_image_files(atPath path: String) -> [String] {
 }
 
 
-func prune(outlier: Outlier, tag: String, depth: Int = 0) {
+func prune(outlier: Outlier, tag: String, depth: Int = 0) -> Set<Outlier> {
     // look for neighbors
     //print("prune start")
     let x = outlier.x
     let y = outlier.y
 
-    if depth > 3000 {            // XXX hardcoded constant
-        return 
-    }
+//    if depth > 3000 {            // XXX hardcoded constant
+//        return []
+//    }
 
+    var neighbors: Set<Outlier> = []
+    
     if y > 0,
        var neighbor = outlier_map["\(x),\(y-1)"],
-       neighbor.tag == nil || neighbor.tag == tag,
-       neighbor.neighbors != outlier.neighbors
+       neighbor.tag == nil
     {
-        let new_neighbors = outlier.neighbors.union(neighbor.neighbors)
-        outlier.neighbors = new_neighbors
    //   outlier_map["\(x),\(y)"] = outlier
-        neighbor.neighbors = new_neighbors
         neighbor.tag = tag
+        neighbors.insert(neighbor)
 //      outlier_map["\(x),\(y-1)"] = neighbor
         //print("different recursing 1")
-        prune(outlier: neighbor, tag: tag, depth: depth + 1)
+        neighbors.formUnion(prune(outlier: neighbor, tag: tag, depth: depth + 1))
         //print("different done recursing")
     }
     if x > 0,
        var neighbor = outlier_map["\(x-1),\(y)"],
-       neighbor.tag == nil || neighbor.tag == tag,
-       neighbor.neighbors != outlier.neighbors
+       neighbor.tag == nil
       {
-        let new_neighbors = outlier.neighbors.union(neighbor.neighbors)
-        outlier.neighbors = new_neighbors
   //      outlier_map["\(x),\(y)"] = outlier
-        neighbor.neighbors = new_neighbors
         neighbor.tag = tag
+        neighbors.insert(neighbor)
     //    outlier_map["\(x-1),\(y)"] = neighbor
         //print("different recursing 2")
-        prune(outlier: neighbor, tag: tag, depth: depth + 1)
+        neighbors.formUnion(prune(outlier: neighbor, tag: tag, depth: depth + 1))
         //print("different done recursing")
      }
      if var neighbor = outlier_map["\(x+1),\(y)"],
-        neighbor.tag == nil || neighbor.tag == tag,
-       neighbor.neighbors != outlier.neighbors
+        neighbor.tag == nil
        {
-         let new_neighbors = outlier.neighbors.union(neighbor.neighbors)
-         outlier.neighbors = new_neighbors
 //         outlier_map["\(x),\(y)"] = outlier
-         neighbor.neighbors = new_neighbors
          neighbor.tag = tag
+         neighbors.insert(neighbor)
 //         outlier_map["\(x+1),\(y)"] = neighbor
          //print("different recursing 3")
-         prune(outlier: neighbor, tag: tag, depth: depth + 1)
+        neighbors.formUnion(prune(outlier: neighbor, tag: tag, depth: depth + 1))
          //print("different done recursing")
      }
      if var neighbor = outlier_map["\(x),\(y+1)"],
-        neighbor.tag == nil || neighbor.tag == tag,
-        neighbor.neighbors != outlier.neighbors
+        neighbor.tag == nil
      {
-         //print("different neighbors")
-         let new_neighbors = outlier.neighbors.union(neighbor.neighbors)
-         outlier.neighbors = new_neighbors
          outlier_map["\(x),\(y)"] = outlier
-         neighbor.neighbors = new_neighbors
          neighbor.tag = tag
+         neighbors.insert(neighbor)
          outlier_map["\(x),\(y+1)"] = neighbor
          //print("different recursing 4")
-         prune(outlier: neighbor, tag: tag, depth: depth + 1)
+        neighbors.formUnion(prune(outlier: neighbor, tag: tag, depth: depth + 1))
          //print("different done recursing")
      }
-
-           /*
-           if x > 0, y > 0, var neighbor = outlier_map["\(x-1),\(y-1)"] {
-                    let new_neighbors = outlier.neighbors.union(neighbor.neighbors)
-                    outlier.neighbors = new_neighbors
-                    outlier_map["\(x),\(y)"] = outlier
-                    neighbor.neighbors = new_neighbors
-                    outlier_map["\(x-1),\(y-1)"] = neighbor
-                }*/
- /*
-     if y > 0, var neighbor = outlier_map["\(x+1),\(y-1)"] {
-     let new_neighbors = outlier.neighbors.union(neighbor.neighbors)
-     outlier.neighbors = new_neighbors
-     outlier_map["\(x),\(y)"] = outlier
-     neighbor.neighbors = new_neighbors
-     outlier_map["\(x+1),\(y-1)"] = neighbor
-     }
-*/        
-     /*
-                if x > 0, var neighbor = outlier_map["\(x-1),\(y+1)"] {
-                    let new_neighbors = outlier.neighbors.union(neighbor.neighbors)
-                    outlier.neighbors = new_neighbors
-                    outlier_map["\(x),\(y)"] = outlier
-                    neighbor.neighbors = new_neighbors
-                    outlier_map["\(x-1),\(y+1)"] = neighbor
-                }*/
-            /*
-                if var neighbor = outlier_map["\(x+1),\(y+1)"] {
-                    let new_neighbors = outlier.neighbors.union(neighbor.neighbors)
-                    outlier.neighbors = new_neighbors
-                    outlier_map["\(x),\(y)"] = outlier
-                    neighbor.neighbors = new_neighbors
-                    outlier_map["\(x+1),\(y+1)"] = neighbor
-                }*/
+     return neighbors
 }
+
+
+
           
           // XXX this needs to be recursive to catch all neighbors
 func prune(width: UInt16, height: UInt16) {
@@ -641,7 +602,9 @@ func prune(width: UInt16, height: UInt16) {
                outlier.tag == nil // not part of any group
             {
                 outlier.tag = tag // start a new group
-                prune(outlier: outlier, tag: tag) // look for neighbors
+                let neighbors = prune(outlier: outlier, tag: tag) // look for neighbors
+                print ("got \(neighbors.count) neighbors")
+                neighbor_groups[tag] = UInt16(neighbors.count)
             }
         }
     }
