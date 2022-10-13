@@ -3,8 +3,8 @@ import CoreGraphics
 import Cocoa
 
 
-let max_pixel_distance = 20000  // XXX arbitrary constant
-let min_neighbors = 1000
+let max_pixel_distance = 10000  // XXX arbitrary constant
+let min_neighbors = 1000        // size of a group of outliers that is considered an airplane streak
           // XXX fucking global
 var outlier_map: [String: Outlier] = [:] // keyed by "\(x),\(y)"
 
@@ -125,6 +125,22 @@ public struct Pixel {
         self.value = 0
     }
 
+    public init(merging otherPixels: [Pixel]) {
+        self.value = 0
+        var red: UInt32 = 0
+        var green: UInt32 = 0
+        var blue: UInt32 = 0
+        otherPixels.forEach { otherPixel in
+            red += UInt32(otherPixel.red)
+            green += UInt32(otherPixel.green)
+            blue += UInt32(otherPixel.blue)
+        }
+        let count = UInt32(otherPixels.count)
+        self.red = UInt16(red/count)
+        self.green = UInt16(green/count)
+        self.blue = UInt16(blue/count)
+    }
+    
     public func difference(from otherPixel: Pixel) -> UInt32 {
         //print("self \(self.description) other \(otherPixel.description)")
         let red = abs(Int32(self.red) - Int32(otherPixel.red))
@@ -134,6 +150,7 @@ public struct Pixel {
         return UInt32(red + green + blue / 3)
     }
 
+    
     public var description: String {
         return "Pixel: r: '\(self.red)' g: '\(self.green)' b: '\(self.blue)'"
     }
@@ -331,19 +348,22 @@ func removeAirplanes(fromImage image: CGImage, otherFrames: [CGImage]) -> CGImag
     print("done processing the outlier map")
     
     // paint green on the outliers above the threshold for testing
-    for y: UInt16 in 0 ..< UInt16(height) {
-        for x: UInt16 in 0 ..< UInt16(width) {
-            if let outlier = outlier_map["\(x),\(y)"] {
-                if outlier.amount > max_pixel_distance { // XXX global variable
-//                    print("found \(outlier.neighbors.count) neighbors")
+    let paint_green = false
+    if(paint_green) {
+        for y: UInt16 in 0 ..< UInt16(height) {
+            for x: UInt16 in 0 ..< UInt16(width) {
+                if let outlier = outlier_map["\(x),\(y)"] {
+                    if outlier.amount > max_pixel_distance { // XXX global variable
+                        //                    print("found \(outlier.neighbors.count) neighbors")
 
-                    let offset = (Int(y) * bytesPerRow) + (Int(x) * bytesPerPixel)
+                        let offset = (Int(y) * bytesPerRow) + (Int(x) * bytesPerPixel)
 
-                    var nextPixel = Pixel()
-                    nextPixel.green = 0xFFFF
+                        var nextPixel = Pixel()
+                        nextPixel.green = 0xFFFF
 
-                    var nextValue = nextPixel.value
-                    data.replaceSubrange(offset ..< offset+bytesPerPixel, with: &nextValue, count: 6)
+                        var nextValue = nextPixel.value
+                        data.replaceSubrange(offset ..< offset+bytesPerPixel, with: &nextValue, count: 6)
+                    }
                 }
             }
         }
@@ -361,9 +381,14 @@ func removeAirplanes(fromImage image: CGImage, otherFrames: [CGImage]) -> CGImag
 
                         let offset = (Int(y) * bytesPerRow) + (Int(x) * bytesPerPixel)
 
-                        var nextPixel = Pixel()
-                        nextPixel.red = 0xFFFF
-                        //var nextPixel = pixel(fromImage: image, atX: x, andY: y)
+                        //nextPixel.red = 0xFFFF
+                        var otherPixels: [Pixel] = []
+
+                        for p in 0 ..< otherFrames.count {
+                            let newPixel = pixel(fromImage: otherFrames[p], atX: x, andY: y)
+                            otherPixels.append(newPixel)
+                        }
+                        var nextPixel = Pixel(merging: otherPixels)
 
                         var nextValue = nextPixel.value
                         data.replaceSubrange(offset ..< offset+bytesPerPixel, with: &nextValue, count: 6)
