@@ -403,73 +403,16 @@ func list_image_files(atPath path: String) -> [String] {
     return image_files
 }
 
-// rewrite this to not be recursive
-func prune(outlier: Outlier,
-           tag: String,
-           outlierMap outlier_map: [String: Outlier],
-           depth: UInt) -> Set<Outlier>
-{
-    // look for neighbors
-    let x = outlier.x
-    let y = outlier.y
-
-    var neighbors: Set<Outlier> = []
-
-    // XXX testing
-    if depth > 4000 {
-        return neighbors
-    }
-    // XXX testing
-    
-    if y > 0,
-       let neighbor = outlier_map["\(x),\(y-1)"],
-       neighbor.tag == nil
-    {
-        neighbor.tag = tag
-        neighbors.insert(neighbor)
-        neighbors.formUnion(prune(outlier: neighbor, tag: tag, outlierMap: outlier_map, depth: depth + 1))
-    }
-    if x > 0,
-       let neighbor = outlier_map["\(x-1),\(y)"],
-       neighbor.tag == nil
-      {
-        neighbor.tag = tag
-        neighbors.insert(neighbor)
-        neighbors.formUnion(prune(outlier: neighbor, tag: tag, outlierMap: outlier_map, depth: depth + 1))
-     }
-     if let neighbor = outlier_map["\(x+1),\(y)"],
-        neighbor.tag == nil
-       {
-         neighbor.tag = tag
-         neighbors.insert(neighbor)
-         neighbors.formUnion(prune(outlier: neighbor, tag: tag, outlierMap: outlier_map, depth: depth + 1))
-     }
-     if let neighbor = outlier_map["\(x),\(y+1)"],
-        neighbor.tag == nil
-     {
-         neighbor.tag = tag
-         neighbors.insert(neighbor)
-         neighbors.formUnion(prune(outlier: neighbor, tag: tag, outlierMap: outlier_map, depth: depth + 1))
-     }
-     return neighbors
-}
-
-// rewrite here (AGAIN)
 func prune(outlierMap outlier_map: [String: Outlier]) -> [String: UInt16]
 {
     // first link all outliers to their direct neighbors
     for (outlier_key, outlier) in outlier_map {
         let x = outlier.x
         let y = outlier.y
-        if y > 0,
-           let neighbor = outlier_map["\(x),\(y-1)"]
-        {
+        if y > 0, let neighbor = outlier_map["\(x),\(y-1)"] {
             outlier.top = neighbor
         }
-        
-        if x > 0,
-           let neighbor = outlier_map["\(x-1),\(y)"]
-        {
+        if x > 0, let neighbor = outlier_map["\(x-1),\(y)"] {
             outlier.left = neighbor
         }
         if let neighbor = outlier_map["\(x+1),\(y)"] {
@@ -543,30 +486,6 @@ func process(outlier: Outlier, withKey key: String) -> [Outlier] {
     }
     return ret
 }
-
-func prune_OLD(width: UInt16, height: UInt16,
-           outlierMap outlier_map: [String: Outlier],
-           neighborGroups neighbor_groups: inout [String: UInt16])
-{
-    Log.d("top level prune started");
-    for y: UInt16 in 0 ..< height {
-        for x: UInt16 in 0 ..< width {
-            let tag = "\(x),\(y)"
-            if let outlier = outlier_map[tag],
-               outlier.tag == nil // not part of any group
-            {
-                outlier.tag = tag // start a new group
-                // look for neighbors
-                let neighbors = prune(outlier: outlier, tag: tag,
-                                      outlierMap: outlier_map,
-                                      depth: 0) 
-                //Log.d ("got \(neighbors.count) neighbors")
-                neighbor_groups[tag] = UInt16(neighbors.count)
-            }
-        }
-    }
-    Log.d("top level prune completed");
-}          
 
 func tag(within distance: UInt16, ofX x: UInt16, andY y: UInt16,
          outlierMap outlier_map: [String: Outlier],
