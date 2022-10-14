@@ -4,7 +4,13 @@ public class Outlier: Hashable, Equatable {
     let x: UInt16
     let y: UInt16
     let amount: Int32
-    var tag: String?
+
+    var tag: String? 
+    
+    var left: Outlier?
+    var right: Outlier?
+    var top: Outlier?
+    var bottom: Outlier?
     
     public init(x: UInt16, y: UInt16, amount: Int32) {
         self.x = x
