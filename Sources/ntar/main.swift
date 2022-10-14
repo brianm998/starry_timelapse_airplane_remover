@@ -82,7 +82,7 @@ if CommandLine.arguments.count < 1 {
         Log.d("you")
         // XXX buss error with async :(
         // binary search through code with comments to find location of problem
-        dispatchQueue.sync { method() }
+        dispatchQueue.async { method() }
     }
     
     dispatchGroups.forEach { group in
@@ -480,12 +480,19 @@ func prune(outlierMap outlier_map: [String: Outlier]) -> [String: UInt16]
         }
     }
 
-    var pending_outliers: [Outlier] = []
-
     // then label all adject outliers
     for (outlier_key, outlier) in outlier_map {
-        if outlier.tag == nil {
-            process(outlier: outlier, withKey: outlier_key)
+        if outlier.tag == nil,
+           !outlier.done
+        {
+            var pending_outliers = process(outlier: outlier, withKey: outlier_key)
+            // these outliers have a tag, but are set as done
+            while pending_outliers.count > 0 {
+                //Log.d("pending_outliers.count \(pending_outliers.count)")
+                let next_outlier = pending_outliers.removeFirst()
+                let more_pending_outliers = process(outlier: next_outlier, withKey: outlier_key)
+                pending_outliers = more_pending_outliers + pending_outliers
+            }
         }
     }
 
@@ -507,28 +514,34 @@ func prune(outlierMap outlier_map: [String: Outlier]) -> [String: UInt16]
     return individual_group_counts
 }
 
-func process(outlier: Outlier, withKey key: String) {
+func process(outlier: Outlier, withKey key: String) -> [Outlier] {
     outlier.tag = key
+    var ret: [Outlier] = []
     if let left = outlier.left,
-       left.tag == nil
+       left.tag == nil,
+       !left.done
     {
-        process(outlier: left, withKey: key)
+        ret.append(left)
     }
     if let right = outlier.right,
-       right.tag == nil
+       right.tag == nil,
+       !right.done
     {
-        process(outlier: right, withKey: key)
+        ret.append(right)
     }
     if let top = outlier.top,
-       top.tag == nil
+       top.tag == nil,
+       !top.done
     {
-        process(outlier: top, withKey: key)
+        ret.append(top)
     }
     if let bottom = outlier.bottom,
-       bottom.tag == nil
+       bottom.tag == nil,
+       !bottom.done
     {
-        process(outlier: bottom, withKey: key)
+        ret.append(bottom)
     }
+    return ret
 }
 
 func prune_OLD(width: UInt16, height: UInt16,

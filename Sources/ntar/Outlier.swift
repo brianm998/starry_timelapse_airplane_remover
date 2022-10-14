@@ -5,7 +5,8 @@ public class Outlier: Hashable, Equatable {
     let y: UInt16
     let amount: Int32
 
-    var tag: String? 
+    var tag: String?
+    var done: Bool = false
     
     var left: Outlier?
     var right: Outlier?
