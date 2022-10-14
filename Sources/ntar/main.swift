@@ -69,7 +69,7 @@ if CommandLine.arguments.count < 1 {
         }
     }
 
-    let max_methods = 18
+    let max_methods = 18        // XXX expose this
 
     var number_running = 0
     
@@ -93,10 +93,10 @@ if CommandLine.arguments.count < 1 {
                 dispatchQueue.async {
                     Log.d("method starting")
                     next_method()
-                    dispathGroup.leave()
                     dispatchGroups.removeValue(forKey: next_method_key);
-                    Log.d("method done")
                     number_running -= 1
+                    dispathGroup.leave()
+                    Log.d("method done")
                 }
             } else {
                 Log.e("FUCK")
