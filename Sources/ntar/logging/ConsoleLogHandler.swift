@@ -17,7 +17,7 @@ public class ConsoleLogHandler: LogHandler {
                     with data: LogData?,
                     at logLevel: Log.Level)
     {
-        dispatchQueue.async {
+//        dispatchQueue.async {
             let dateString = self.dateFormatter.string(from: Date())
             
             if let data = data {
@@ -25,7 +25,7 @@ public class ConsoleLogHandler: LogHandler {
             } else {
                 print("\(dateString) | \(logLevel.emo) \(logLevel) | \(fileLocation): \(message)")
             }
-        }
+//        }
     }
 }
 
