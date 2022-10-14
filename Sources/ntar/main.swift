@@ -35,15 +35,10 @@ if CommandLine.arguments.count < 1 {
         fatalError("Unable to create directory \(error.debugDescription)")
     }
 
-    var dispatchGroups: [DispatchGroup] = []
-
-    var methods: [() -> Void] = []
+    var methods: [Int : () -> Void] = [:]
     
     for (index, image) in images.enumerated() {
-        let dispathGroup = DispatchGroup()
-        dispatchGroups.append(dispathGroup);
-        dispathGroup.enter()
-        let method = { 
+        methods[index] = { 
             var otherFrames: [CGImage] = []
             if(index > 0) {
                 otherFrames.append(images[index-1])
@@ -68,23 +63,59 @@ if CommandLine.arguments.count < 1 {
                     Log.d("doh! \(error)")
                     }
                 }
-                dispathGroup.leave()
             } else {
                 fatalError("requires maxos 10.15+")
             }
         }
-        methods.append(method)
     }
 
-    methods.forEach { method in
-        // XXX buss error with async :(
-        // binary search through code with comments to find location of problem
-        dispatchQueue.async { method() }
-    }
+    let max_methods = 18
+
+    var number_running = 0
     
-    dispatchGroups.forEach { group in
-       group.wait()                                      
+    Log.d("we have \(methods.count) methods")
+    
+    var dispatchGroups: [Int: DispatchGroup] = [:]
+
+    while(methods.count > 0 || dispatchGroups.count > 0) {
+        Log.d("we have \(methods.count) methods")
+        if(methods.count > 0 && number_running < max_methods) {
+            Log.d("enquing new method")
+            
+            if let next_method_key = methods.keys.randomElement(),
+               let next_method = methods[next_method_key]
+            {
+                methods.removeValue(forKey: next_method_key)
+                number_running += 1
+                let dispathGroup = DispatchGroup()
+                dispatchGroups[next_method_key] = dispathGroup;
+                dispathGroup.enter()
+                dispatchQueue.async {
+                    Log.d("method starting")
+                    next_method()
+                    dispathGroup.leave()
+                    dispatchGroups.removeValue(forKey: next_method_key);
+                    Log.d("method done")
+                    number_running -= 1
+                }
+            } else {
+                Log.e("FUCK")
+                fatalError("FUCK")
+            }
+        } else {
+            if let next_key = dispatchGroups.keys.randomElement(),
+               let group = dispatchGroups[next_key]
+            {
+                Log.d("waiting")
+                group.wait()
+            } else {
+                Log.e("FUCK")
+                sleep(1)
+                Log.e("FUCKED")
+            }
+        }
     }
+    Log.d("done")
 }
 
 func save(image cgImage: CGImage, toFile filename: String) throws {
