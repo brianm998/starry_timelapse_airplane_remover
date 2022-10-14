@@ -222,23 +222,23 @@ class NighttimeAirplaneEraser {
     
         Log.i("done processing the outlier map")
         // paint green on the outliers above the threshold for testing
-        if(test_paint_outliers) {
+        if(test_paint_outliers) { // XXX search the outlier map instead, it's faster
             Log.d("painting outliers green")
-            for y: UInt16 in 0 ..< UInt16(height) {
-                for x: UInt16 in 0 ..< UInt16(width) {
-                    if let outlier = outlier_map["\(x),\(y)"] {
-                        if outlier.amount > max_pixel_distance { // XXX global variable
-                            //Log.d("found \(outlier.neighbors.count) neighbors")
+
+            for (_, outlier) in outlier_map {
+                let x = outlier.x
+                let y = outlier.y
+                
+                if outlier.amount > max_pixel_distance { // XXX global variable
+                    //Log.d("found \(outlier.neighbors.count) neighbors")
+                    
+                    let offset = (Int(y) * bytesPerRow) + (Int(x) * bytesPerPixel)
+                    
+                    var nextPixel = Pixel()
+                    nextPixel.green = 0xFFFF
                             
-                            let offset = (Int(y) * bytesPerRow) + (Int(x) * bytesPerPixel)
-                            
-                            var nextPixel = Pixel()
-                            nextPixel.green = 0xFFFF
-                            
-                            var nextValue = nextPixel.value
-                            data.replaceSubrange(offset ..< offset+bytesPerPixel, with: &nextValue, count: 6)
-                        }
-                    }
+                    var nextValue = nextPixel.value
+                    data.replaceSubrange(offset ..< offset+bytesPerPixel, with: &nextValue, count: 6)
                 }
             }
         }
@@ -247,7 +247,7 @@ class NighttimeAirplaneEraser {
         // XXX this is slower than the other steps here :(
         // also not sure it's really needed
         if(padding_value > 0) {
-            Log.d("adding padding")
+            Log.d("adding padding") // XXX search the outlier map, looking for missing neighbors
             for y: UInt16 in 0 ..< UInt16(height) {
                 //Log.d("y \(y)")
                 for x: UInt16 in 0 ..< UInt16(width) {
@@ -280,44 +280,42 @@ class NighttimeAirplaneEraser {
         Log.d("painting over airplane streaks")
         
         // paint on the large groups of outliers with values from the other frames
-        for y: UInt16 in 0 ..< UInt16(height) {
-            for x: UInt16 in 0 ..< UInt16(width) {
-                if let outlier = outlier_map["\(x),\(y)"] {
-                    if let tag = outlier.tag,
-                       let total_size = neighbor_groups[tag] {
+        // iterate over the outlier_map instead
+        for (_, outlier) in outlier_map {
+            let x = outlier.x
+            let y = outlier.y
+            if let tag = outlier.tag,
+               let total_size = neighbor_groups[tag] {
+                if total_size > min_neighbors { 
+                    //Log.d("found \(group_size) neighbors")
+                            
+                    let offset = (Int(y) * bytesPerRow) + (Int(x) * bytesPerPixel)
+                    
+                    var otherPixels: [Pixel] = []
+
+                    // blend in the other frames
+                    for p in 0 ..< otherFrames.count {
+                        let otherFrame = otherFrames[p]
+                        let newPixel = pixel(fromData: otherData[p], atX: x, andY: y,
+                                             bitsPerPixel: otherFrame.bitsPerPixel,
+                                             bytesPerRow: otherFrame.bytesPerRow,
+                                             bitsPerComponent: otherFrame.bitsPerComponent)
                         
-                        if total_size > min_neighbors { 
-                            //Log.d("found \(group_size) neighbors")
-                            
-                            let offset = (Int(y) * bytesPerRow) + (Int(x) * bytesPerPixel)
-                            
-                            var otherPixels: [Pixel] = []
-                            
-                            // XXX uncomment to use more than one frame
-                            for p in 0 ..< otherFrames.count {
-                                let otherFrame = otherFrames[p]
-                                let newPixel = pixel(fromData: otherData[p], atX: x, andY: y,
-                                                     bitsPerPixel: otherFrame.bitsPerPixel,
-                                                     bytesPerRow: otherFrame.bytesPerRow,
-                                                     bitsPerComponent: otherFrame.bitsPerComponent)
-                                
-                                otherPixels.append(newPixel)
-                            }
-                            var nextPixel = Pixel(merging: otherPixels)
-
-                            if test_paint_changed_pixels {
-                                // for testing, colors changed pixels
-                                if outlier.amount == 0 {
-                                    nextPixel.blue = 0xFFFF // for padding
-                                } else {
-                                    nextPixel.red = 0xFFFF // for unpadded changed area
-                                }
-                            }
-
-                            var nextValue = nextPixel.value
-                            data.replaceSubrange(offset ..< offset+bytesPerPixel, with: &nextValue, count: 6)
+                        otherPixels.append(newPixel)
+                    }
+                    var nextPixel = Pixel(merging: otherPixels)
+                    
+                    if test_paint_changed_pixels {
+                        // for testing, colors changed pixels
+                        if outlier.amount == 0 {
+                            nextPixel.blue = 0xFFFF // for padding
+                        } else {
+                            nextPixel.red = 0xFFFF // for unpadded changed area
                         }
                     }
+                    
+                    var nextValue = nextPixel.value
+                    data.replaceSubrange(offset ..< offset+bytesPerPixel, with: &nextValue, count: 6)
                 }
             }
         }
