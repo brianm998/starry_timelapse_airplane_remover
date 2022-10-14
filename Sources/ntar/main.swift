@@ -76,10 +76,7 @@ if CommandLine.arguments.count < 1 {
         methods.append(method)
     }
 
-    Log.d("fuck")
-    
     methods.forEach { method in
-        Log.d("you")
         // XXX buss error with async :(
         // binary search through code with comments to find location of problem
         dispatchQueue.async { method() }
@@ -317,7 +314,6 @@ func pixel(fromData data: CFData,
            bytesPerRow: Int,
            bitsPerComponent: Int) -> Pixel
 {
-    //Log.d("woo")
     guard let bytes = CFDataGetBytePtr(data) else {
         fatalError("Couldn't access image data")
     }
@@ -343,7 +339,7 @@ func pixel(fromData data: CFData,
     return pixel
 }
 
-// XXX removes suffix and path
+// removes suffix and path
 func remove_suffix(fromString string: String) -> String {
     let imageURL = NSURL(fileURLWithPath: string, isDirectory: false) as URL
     let full_path = imageURL.deletingPathExtension().absoluteString
@@ -408,12 +404,12 @@ func prune(outlierMap outlier_map: [String: Outlier]) -> [String: UInt16]
         if outlier.tag == nil,
            !outlier.done
         {
-            var pending_outliers = process(outlier: outlier, withKey: outlier_key)
+            var pending_outliers = linkAndReturnNeighbors(from: outlier, withKey: outlier_key)
             // these outliers have a tag, but are set as done
             while pending_outliers.count > 0 {
                 //Log.d("pending_outliers.count \(pending_outliers.count)")
                 let next_outlier = pending_outliers.removeFirst()
-                let more_pending_outliers = process(outlier: next_outlier, withKey: outlier_key)
+                let more_pending_outliers = linkAndReturnNeighbors(from: next_outlier, withKey: outlier_key)
                 pending_outliers = more_pending_outliers + pending_outliers
             }
         }
@@ -437,7 +433,7 @@ func prune(outlierMap outlier_map: [String: Outlier]) -> [String: UInt16]
     return individual_group_counts
 }
 
-func process(outlier: Outlier, withKey key: String) -> [Outlier] {
+func linkAndReturnNeighbors(from outlier: Outlier, withKey key: String) -> [Outlier] {
     outlier.tag = key
     var ret: [Outlier] = []
     if let left = outlier.left,
