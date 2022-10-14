@@ -526,34 +526,3 @@ func hypotenuse(x1: UInt16, y1: UInt16, x2: UInt16, y2: UInt16) -> UInt16 {
     return UInt16(sqrt(Float(x_dist*x_dist+y_dist*y_dist)))
 }
 
-func find_group_size(ofGroup key: String,
-                     individualGroupCounts individual_group_counts: [String: UInt16],
-                     neighborMap neighbor_map: [String : Set<String>],
-                     allNeighbors all_neighbors: inout Set<String>) -> UInt16
-{
-    var ret: UInt16 = 0
-    if let size = individual_group_counts[key] {
-        ret += UInt16(size)
-        //Log.d("ret \(ret)")
-    }
-    all_neighbors.insert(key)
-    if let group_set = neighbor_map[key] { // XXX inspect to make sure this is setup right
-        //Log.d("got group set \(group_set)")
-        group_set.forEach { group in
-            if !all_neighbors.contains(group) {
-                //Log.d("recursing")
-                ret += find_group_size(ofGroup: group,
-                                       individualGroupCounts: individual_group_counts,
-                                       neighborMap: neighbor_map,
-                                       allNeighbors: &all_neighbors)
-                //Log.d("ret \(ret)") // XXX this isn't adding anything yet
-            } else {
-                //Log.d("all_neighbors \(all_neighbors) group \(group)")
-            }
-        }
-    } else {
-        //Log.d("no group set")
-    }
-    return ret
-}
-
