@@ -136,13 +136,7 @@ func removeAirplanes(fromImage image: CGImage,
     let bytesPerRow = width*bytesPerPixel
 
     Log.d("getting image data")
-    guard let orig_data = image.dataProvider?.data  else { return nil }
-
-    guard var data = CFDataCreateMutableCopy(kCFAllocatorDefault,
-                                             CFDataGetLength(orig_data),
-                                             orig_data) as? Data else { return nil }
-    
-    // XXX need to copy this shit
+    guard var data = image.dataProvider?.data as? Data   else { return nil }
 
     Log.d("got image data")
     
@@ -156,17 +150,13 @@ func removeAirplanes(fromImage image: CGImage,
     }
     
     for y: UInt16 in 0 ..< UInt16(height) {
-        //Log.d("y \(y)")
         for x: UInt16 in 0 ..< UInt16(width) {
-            //Log.d ("x1 \(x)")
 
             let origPixel = pixel(fromData: data as CFData, atX: x, andY: y,
                                   bitsPerPixel: image.bitsPerPixel,
                                   bytesPerRow: image.bytesPerRow,
                                   bitsPerComponent: image.bitsPerComponent)
-            //Log.d ("(\(x), \(y)) \(origPixel.description)")
             var otherPixels: [Pixel] = []
-            //Log.d ("x1.1 \(x)")
 
             for p in 0 ..< otherFrames.count {
                 let otherFrame = otherFrames[p]
@@ -174,7 +164,6 @@ func removeAirplanes(fromImage image: CGImage,
                                      bitsPerPixel: otherFrame.bitsPerPixel,
                                      bytesPerRow: otherFrame.bytesPerRow,
                                      bitsPerComponent: otherFrame.bitsPerComponent)
-                //Log.d("newPixel \(newPixel.description)")
                 otherPixels.append(newPixel)
             }
             if otherPixels.count == 0 {
@@ -182,7 +171,6 @@ func removeAirplanes(fromImage image: CGImage,
             }
 
             var total_difference: Int32 = 0
-            //Log.d ("x2 \(x)")
             otherPixels.forEach { pixel in
                 total_difference += Int32(origPixel.difference(from: pixel))
             }
@@ -190,24 +178,16 @@ func removeAirplanes(fromImage image: CGImage,
             total_difference /= Int32(otherPixels.count)
 
             if total_difference > max_pixel_distance {
-                //Log.d("at (\(x), \(y)) we have difference \(total_difference) otherPixels \(otherPixels.count)")
                 outlier_map["\(x),\(y)"] = Outlier(x: x, y: y, amount: total_difference)
             }
-            //Log.d ("x3 \(x)")
         }
     }
-
-    // XXX no buss error here
-    //return nil                      // XXX
            
     Log.i("processing the outlier map")
 
-    // XXX max depth problem?
-    
-    // go through the outlier_map 
+    // go through the outlier_map and link together all the outliers that are adject to eachother,
+    // outputting a mapping of group name to size
     let neighbor_groups = prune(outlierMap: outlier_map)
-    // XXX buss error here still
-    //return nil                      // XXX
     
     Log.i("done processing the outlier map")
     
@@ -487,6 +467,7 @@ func process(outlier: Outlier, withKey key: String) -> [Outlier] {
     return ret
 }
 
+// used for padding          
 func tag(within distance: UInt16, ofX x: UInt16, andY y: UInt16,
          outlierMap outlier_map: [String: Outlier],
          neighborGroups neighbor_groups: [String: UInt16],
