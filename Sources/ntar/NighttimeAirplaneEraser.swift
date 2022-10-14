@@ -14,13 +14,20 @@ class NighttimeAirplaneEraser {
     // XXX write the following things into the output videoname:
     
     // size of a group of outliers that is considered an airplane streak
-    let min_neighbors: UInt16 = 150
+    let min_neighbors: UInt16 = 200
 
     // difference between same pixels on different frames to consider an outlier
-    let max_pixel_distance: UInt16 = 10000
+    //    let max_pixel_distance: UInt16 = 10000
+    let max_pixel_distance: UInt16 = 8000
 
     // add some padding
-    let padding_value: UInt16 = 2
+    let padding_value: UInt16 = 0
+
+    // paint green on the outliers above the threshold for testing, that are not overwritten
+    let test_paint_outliers = false
+    
+    // paint red on changed pixels, with blue on padding border
+    let test_paint_changed_pixels = false
     
     let dispatchQueue = DispatchQueue(label: "ntar",
                                       qos: .unspecified,
@@ -214,10 +221,8 @@ class NighttimeAirplaneEraser {
         let neighbor_groups = prune(outlierMap: outlier_map)
     
         Log.i("done processing the outlier map")
-    
         // paint green on the outliers above the threshold for testing
-        let paint_green = false
-        if(paint_green) {
+        if(test_paint_outliers) {
             Log.d("painting outliers green")
             for y: UInt16 in 0 ..< UInt16(height) {
                 for x: UInt16 in 0 ..< UInt16(width) {
@@ -299,15 +304,16 @@ class NighttimeAirplaneEraser {
                                 otherPixels.append(newPixel)
                             }
                             var nextPixel = Pixel(merging: otherPixels)
-                            
-                            /*
-                        // for testing, colors changed pixels
-                        if outlier.amount == 0 {
-                            nextPixel.green = 0xFFFF // for padding
-                        } else {
-                            nextPixel.red = 0xFFFF // for unpadded changed area
-                        }
-                        */
+
+                            if test_paint_changed_pixels {
+                                // for testing, colors changed pixels
+                                if outlier.amount == 0 {
+                                    nextPixel.blue = 0xFFFF // for padding
+                                } else {
+                                    nextPixel.red = 0xFFFF // for unpadded changed area
+                                }
+                            }
+
                             var nextValue = nextPixel.value
                             data.replaceSubrange(offset ..< offset+bytesPerPixel, with: &nextValue, count: 6)
                         }
