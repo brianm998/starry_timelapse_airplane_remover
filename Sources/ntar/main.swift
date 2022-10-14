@@ -2,7 +2,6 @@ import Foundation
 import CoreGraphics
 import Cocoa
 
-
 let dispatchQueue = DispatchQueue(label: "ntar",
                                   qos: .unspecified,
                                   attributes: [.concurrent],
@@ -22,117 +21,122 @@ if CommandLine.arguments.count < 1 {
         let rh = remove_suffix(fromString: rhs)
         return lh < rh
     }
-    let image_sequence = ImageSequence(filenames: image_files)
-//    Log.d("image_files \(image_files)")
-
+    if #available(macOS 10.15, *) {
+        let image_sequence = ImageSequence(filenames: image_files)
+        //    Log.d("image_files \(image_files)")
+        
 //    let images = try load(imageFiles: image_files)
 //    Log.d("loaded images \(images)")
 
-    let output_dirname = "\(path)/\(input_image_sequence_dirname)-no-planes"
+        let output_dirname = "\(path)/\(input_image_sequence_dirname)-no-planes"
     
-    do {
-        try FileManager.default.createDirectory(atPath: output_dirname, withIntermediateDirectories: false, attributes: nil)
-    } catch let error as NSError {
-        fatalError("Unable to create directory \(error.debugDescription)")
-    }
+        do {
+            try FileManager.default.createDirectory(atPath: output_dirname, withIntermediateDirectories: false, attributes: nil)
+        } catch let error as NSError {
+            fatalError("Unable to create directory \(error.debugDescription)")
+        }
 
-    // each of these methods removes the airplanes from a particular frame
-    var methods: [Int : () -> Void] = [:]
+        // each of these methods removes the airplanes from a particular frame
+        var methods: [Int : () async -> Void] = [:]
+        
+        let dispatchGroup = DispatchGroup()
+        let number_running = NumberRunning()
     
-    for (index, image_filename) in image_sequence.filenames.enumerated() {
-        methods[index] = {
-            if let image = image_sequence.getImage(withName: image_filename) {
-                // the other frames that we use to detect outliers and repaint from
-                var otherFrames: [CGImage] = []
-                var previous_frame_filename: String?
-                var next_frame_filename: String?
-                if index > 0,
-                   let image = image_sequence.getImage(withName: image_sequence.filenames[index-1])
-                {
-                    previous_frame_filename = image_sequence.filenames[index-1]
-                    otherFrames.append(image)
+        for (index, image_filename) in image_sequence.filenames.enumerated() {
+            
+            methods[index] = {
+                dispatchGroup.enter() 
+                // don't load images in main thread
+                do {
+                    if let image = await image_sequence.getImage(withName: image_filename) {
+                        var otherFrames: [CGImage] = []
+                        
+                        if index > 0,
+                           let image = await image_sequence.getImage(withName: image_sequence.filenames[index-1])
+                        {
+                            otherFrames.append(image)
+                        }
+                        if index < image_sequence.filenames.count - 1,
+                           let image = await image_sequence.getImage(withName: image_sequence.filenames[index+1])
+                        {
+                            otherFrames.append(image)
+                        }
+                        
+                        // the other frames that we use to detect outliers and repaint from
+                        if #available(macOS 10.15, *) {
+                            if let new_image = removeAirplanes(fromImage: image,
+                                                               otherFrames: otherFrames,
+                                                               minNeighbors: 150,
+                                                               withPadding: 0)
+                            {
+                                // relinquish images here
+                                Log.d("new_image \(new_image)")
+                                let filename_base = remove_suffix(fromString: image_sequence.filenames[index])
+                                let filename = "\(output_dirname)/\(filename_base).tif"
+                                do {
+                                    try save(image: new_image, toFile: filename)
+                                } catch {
+                                    Log.e("doh! \(error)")
+                                }
+                            }
+                        } else {
+                            fatalError("requires maxos 10.15+")
+                        }
+                    } else {
+                        Log.d("FUCK")
+                        fatalError("doh")
+                    }
+                } catch {
+                    Log.e("doh! \(error)")
                 }
-                if index < image_sequence.filenames.count - 1,
-                   let image = image_sequence.getImage(withName: image_sequence.filenames[index+1])
-                {
-                    next_frame_filename = image_sequence.filenames[index+1]
-                    otherFrames.append(image)
-                }
-                // XXX obtain images herex
-                if #available(macOS 10.15, *) {
-                    if let new_image = removeAirplanes(fromImage: image,
-                                                       otherFrames: otherFrames,
-                                                       minNeighbors: 150,
-                                                       withPadding: 0)
+                await number_running.decrement()
+                dispatchGroup.leave()
+            }
+        }
+
+        let max_methods = 24        // XXX expose this
+        
+        Log.d("we have \(methods.count) methods")
+        let runner: () async -> Void = {
+            while(methods.count > 0) {
+                let current_running = await number_running.currentValue()
+                if(current_running < max_methods) {
+                    Log.d("we have \(methods.count) more methods")
+                    Log.d("enquing new method")
+                    
+                    if let next_method_key = methods.keys.randomElement(),
+                       let next_method = methods[next_method_key]
                     {
-                        // XXX relinquish images here
-                        image_sequence.releaseImage(withName: image_filename)
-                        if let filename = previous_frame_filename {
-                            image_sequence.releaseImage(withName: filename)
-                        }
-                        if let filename = next_frame_filename {
-                            image_sequence.releaseImage(withName: filename)
-                        }
-                        Log.d("new_image \(new_image)")
-                        let filename_base = remove_suffix(fromString: image_sequence.filenames[index])
-                        let filename = "\(output_dirname)/\(filename_base).tif"
-                        do {
-                        try save(image: new_image, toFile: filename)
-                        } catch {
-                        Log.d("doh! \(error)")
-                        }
+                        methods.removeValue(forKey: next_method_key)
+                        await number_running.increment()
+                        await next_method()
+                    } else {
+                        Log.e("FUCK")
+                        fatalError("FUCK")
                     }
                 } else {
-                    fatalError("requires maxos 10.15+")
+                    if #available(macOS 10.15, *) {
+                        _ = dispatchGroup.wait(timeout: DispatchTime.now().advanced(by: .seconds(1)))
+                    } else {
+                        sleep(1)
+                    }
                 }
-            } else {
-                Log.d("FUCK")
-                fatalError("doh")
             }
         }
-    }
-
-    let max_methods = 24        // XXX expose this
-
-    var number_running = 0
-    
-    Log.d("we have \(methods.count) methods")
-    
-    let dispatchGroup = DispatchGroup()
-
-    while(methods.count > 0) {
-        if(number_running < max_methods) {
-            Log.d("we have \(methods.count) more methods")
-            Log.d("enquing new method")
+        dispatchGroup.enter()
+        Task {
+            Log.d("running")
+            await runner()
+            dispatchGroup.leave()
             
-            if let next_method_key = methods.keys.randomElement(),
-               let next_method = methods[next_method_key]
-            {
-                methods.removeValue(forKey: next_method_key)
-                number_running += 1
-                dispatchGroup.enter()
-                dispatchQueue.async {
-                    Log.d("method starting")
-                    next_method()
-                    number_running -= 1
-                    Log.d("method done")
-                    dispatchGroup.leave()
-                }
-            } else {
-                Log.e("FUCK")
-                fatalError("FUCK")
-            }
-        } else {
-            if #available(macOS 10.15, *) {
-                _ = dispatchGroup.wait(timeout: DispatchTime.now().advanced(by: .seconds(1)))
-            } else {
-                sleep(1)
-            }
         }
+        dispatchGroup.wait()
+        Log.d("done")
+    } else {
+        Log.e("FUCK")
+        fatalError("need macos 10.15")
     }
-
-    dispatchGroup.wait()
-    Log.d("done")
+    Log.d("DONE WITH THIS SHIT")
 }
 
 func save(image cgImage: CGImage, toFile filename: String) throws {
@@ -180,7 +184,16 @@ func removeAirplanes(fromImage image: CGImage,
     let bitsPerComponent = image.bitsPerComponent
     let bytesPerRow = width*bytesPerPixel
 
-    guard var data = image.dataProvider?.data as? Data   else { return nil }
+//    guard var data = image.dataProvider?.data as? Data   else { return nil }
+
+    // XXX need to copy this shit ???
+    guard let orig_data = image.dataProvider?.data  else { return nil }
+
+    guard var data = CFDataCreateMutableCopy(kCFAllocatorDefault,
+                                             CFDataGetLength(orig_data),
+                                             orig_data) as? Data else { return nil }
+    // XXX need to copy this shit ???
+          
     
     var otherData: [CFData] = []
     otherFrames.forEach { frame in
