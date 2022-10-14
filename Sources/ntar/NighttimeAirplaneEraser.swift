@@ -9,8 +9,19 @@ class NighttimeAirplaneEraser {
     let output_dirname: String
 
     // the max number of frames to process at one time
-    let max_concurrent_renders = 10
+    let max_concurrent_renders = 40
 
+    // XXX write the following things into the output videoname:
+    
+    // size of a group of outliers that is considered an airplane streak
+    let min_neighbors: UInt16 = 150
+
+    // difference between same pixels on different frames to consider an outlier
+    let max_pixel_distance: UInt16 = 10000
+
+    // add some padding
+    let padding_value: UInt16 = 2
+    
     let dispatchQueue = DispatchQueue(label: "ntar",
                                       qos: .unspecified,
                                       attributes: [.concurrent],
@@ -66,10 +77,8 @@ class NighttimeAirplaneEraser {
                         }
                         
                         // the other frames that we use to detect outliers and repaint from
-                        if let new_image = removeAirplanes(fromImage: image,
-                                                           otherFrames: otherFrames,
-                                                           minNeighbors: 150,
-                                                           withPadding: 0)
+                        if let new_image = self.removeAirplanes(fromImage: image,
+                                                                otherFrames: otherFrames)
                         {
                             // relinquish images here
                             Log.d("new_image \(new_image)")
@@ -130,6 +139,201 @@ class NighttimeAirplaneEraser {
         dispatchGroup.wait()
         Log.d("done")
     }
+
+    func removeAirplanes(fromImage image: CGImage,
+                         otherFrames: [CGImage]) -> CGImage?
+    {
+        Log.d("removing airplanes from image with \(otherFrames.count) other frames")
+
+        var outlier_map: [String: Outlier] = [:] // keyed by "\(x),\(y)"
+        
+        let width = image.width
+        let height = image.height
+        let bytesPerPixel = image.bitsPerPixel/8
+        let bitsPerComponent = image.bitsPerComponent
+        let bytesPerRow = width*bytesPerPixel
+        
+        guard let orig_data = image.dataProvider?.data  else { return nil }
+
+        // copy the original image data as adjecent frames need
+        // to access the original unmodified version
+        guard var data = CFDataCreateMutableCopy(kCFAllocatorDefault,
+                                                 CFDataGetLength(orig_data),
+                                                 orig_data) as? Data else { return nil }
+          
+    
+        var otherData: [CFData] = []
+        otherFrames.forEach { frame in
+            if let data = frame.dataProvider?.data {
+                otherData.append(data)
+            } else {
+                fatalError("fuck")
+            }
+        }
+              
+        Log.d("got image data, detecting outlying pixels")
+              
+        for y: UInt16 in 0 ..< UInt16(height) {
+            for x: UInt16 in 0 ..< UInt16(width) {
+
+                let origPixel = pixel(fromData: data as CFData, atX: x, andY: y,
+                                      bitsPerPixel: image.bitsPerPixel,
+                                      bytesPerRow: image.bytesPerRow,
+                                      bitsPerComponent: image.bitsPerComponent)
+                var otherPixels: [Pixel] = []
+                
+                for p in 0 ..< otherFrames.count {
+                    let otherFrame = otherFrames[p]
+                    let newPixel = pixel(fromData: otherData[p], atX: x, andY: y,
+                                         bitsPerPixel: otherFrame.bitsPerPixel,
+                                         bytesPerRow: otherFrame.bytesPerRow,
+                                         bitsPerComponent: otherFrame.bitsPerComponent)
+                    otherPixels.append(newPixel)
+                }
+                if otherPixels.count == 0 {
+                    fatalError("need more than one image in the sequence")
+                }
+                
+                var total_difference: Int32 = 0
+                otherPixels.forEach { pixel in
+                    total_difference += Int32(origPixel.difference(from: pixel))
+                }
+                
+                total_difference /= Int32(otherPixels.count)
+                
+                if total_difference > max_pixel_distance {
+                    outlier_map["\(x),\(y)"] = Outlier(x: x, y: y, amount: total_difference)
+                }
+            }
+        }
+           
+        Log.i("processing the outlier map")
+        
+        // go through the outlier_map and link together all the outliers that are adject to eachother,
+        // outputting a mapping of group name to size
+        let neighbor_groups = prune(outlierMap: outlier_map)
+    
+        Log.i("done processing the outlier map")
+    
+        // paint green on the outliers above the threshold for testing
+        let paint_green = false
+        if(paint_green) {
+            Log.d("painting outliers green")
+            for y: UInt16 in 0 ..< UInt16(height) {
+                for x: UInt16 in 0 ..< UInt16(width) {
+                    if let outlier = outlier_map["\(x),\(y)"] {
+                        if outlier.amount > max_pixel_distance { // XXX global variable
+                            //Log.d("found \(outlier.neighbors.count) neighbors")
+                            
+                            let offset = (Int(y) * bytesPerRow) + (Int(x) * bytesPerPixel)
+                            
+                            var nextPixel = Pixel()
+                            nextPixel.green = 0xFFFF
+                            
+                            var nextValue = nextPixel.value
+                            data.replaceSubrange(offset ..< offset+bytesPerPixel, with: &nextValue, count: 6)
+                        }
+                    }
+                }
+            }
+        }
+
+        // add padding when desired
+        // XXX this is slower than the other steps here :(
+        // also not sure it's really needed
+        if(padding_value > 0) {
+            Log.d("adding padding")
+            for y: UInt16 in 0 ..< UInt16(height) {
+                //Log.d("y \(y)")
+                for x: UInt16 in 0 ..< UInt16(width) {
+                    let outlier_tag = "\(x),\(y)"
+                    let outlier = outlier_map[outlier_tag]
+                    var should_try = false
+                    if outlier == nil {
+                        should_try = true
+                    } else if let outlier = outlier,
+                              outlier.amount > max_pixel_distance
+                    {
+                        should_try = true
+                    }
+                    
+                    if should_try,
+                       let bigTag = tag(within: padding_value,
+                                        ofX: x, andY: y,
+                                        outlierMap: outlier_map,
+                                        neighborGroups: neighbor_groups,
+                                        minNeighbors: min_neighbors)
+                    {
+                        let padding = Outlier(x: x, y: y, amount: 0)
+                        padding.tag = bigTag
+                        outlier_map[outlier_tag] = padding
+                    }
+                }
+            }
+        }
+        
+        Log.d("painting over airplane streaks")
+        
+        // paint on the large groups of outliers with values from the other frames
+        for y: UInt16 in 0 ..< UInt16(height) {
+            for x: UInt16 in 0 ..< UInt16(width) {
+                if let outlier = outlier_map["\(x),\(y)"] {
+                    if let tag = outlier.tag,
+                       let total_size = neighbor_groups[tag] {
+                        
+                        if total_size > min_neighbors { 
+                            //Log.d("found \(group_size) neighbors")
+                            
+                            let offset = (Int(y) * bytesPerRow) + (Int(x) * bytesPerPixel)
+                            
+                            var otherPixels: [Pixel] = []
+                            
+                            // XXX uncomment to use more than one frame
+                            for p in 0 ..< otherFrames.count {
+                                let otherFrame = otherFrames[p]
+                                let newPixel = pixel(fromData: otherData[p], atX: x, andY: y,
+                                                     bitsPerPixel: otherFrame.bitsPerPixel,
+                                                     bytesPerRow: otherFrame.bytesPerRow,
+                                                     bitsPerComponent: otherFrame.bitsPerComponent)
+                                
+                                otherPixels.append(newPixel)
+                            }
+                            var nextPixel = Pixel(merging: otherPixels)
+                            
+                            /*
+                        // for testing, colors changed pixels
+                        if outlier.amount == 0 {
+                            nextPixel.green = 0xFFFF // for padding
+                        } else {
+                            nextPixel.red = 0xFFFF // for unpadded changed area
+                        }
+                        */
+                            var nextValue = nextPixel.value
+                            data.replaceSubrange(offset ..< offset+bytesPerPixel, with: &nextValue, count: 6)
+                        }
+                    }
+                }
+            }
+        }
+        
+        Log.d("creating final image")
+
+        if let dataProvider = CGDataProvider(data: data as CFData) {
+            let colorSpace = CGColorSpaceCreateDeviceRGB()
+            return CGImage(width: width,
+                           height: height,
+                           bitsPerComponent: bitsPerComponent,
+                           bitsPerPixel: bytesPerPixel*8,
+                           bytesPerRow: width*bytesPerPixel,
+                           space: colorSpace,
+                           bitmapInfo: image.bitmapInfo, // byte order
+                           provider: dataProvider,
+                           decode: nil,
+                           shouldInterpolate: false,
+                           intent: .defaultIntent)
+        }
+        return nil
+    }
 }
 
 
@@ -156,211 +360,6 @@ func save(image cgImage: CGImage, toFile filename: String) throws {
     } else {
         Log.d("FUCK")
     }
-}
-
-func removeAirplanes(fromImage image: CGImage,
-                     otherFrames: [CGImage],
-
-                     // size of a group of outliers that is considered an airplane streak
-                     minNeighbors min_neighbors: UInt16 = 1000,
-
-                     // difference between same pixels on different frames to consider an outlier
-                     minPixelDifference max_pixel_distance: UInt16 = 10000,
-
-                     // add some padding
-                     withPadding padding_value: UInt16 = 2) -> CGImage?
-{
-    Log.d("removing airplanes from image with \(otherFrames.count) other frames")
-
-    var outlier_map: [String: Outlier] = [:] // keyed by "\(x),\(y)"
-
-    let width = image.width
-    let height = image.height
-    let bytesPerPixel = image.bitsPerPixel/8
-    let bitsPerComponent = image.bitsPerComponent
-    let bytesPerRow = width*bytesPerPixel
-
-//    guard var data = image.dataProvider?.data as? Data   else { return nil }
-
-    // XXX need to copy this shit ???
-    guard let orig_data = image.dataProvider?.data  else { return nil }
-
-    guard var data = CFDataCreateMutableCopy(kCFAllocatorDefault,
-                                             CFDataGetLength(orig_data),
-                                             orig_data) as? Data else { return nil }
-    // XXX need to copy this shit ???
-          
-    
-    var otherData: [CFData] = []
-    otherFrames.forEach { frame in
-        if let data = frame.dataProvider?.data {
-            otherData.append(data)
-        } else {
-            fatalError("fuck")
-        }
-    }
-    
-    Log.d("got image data, detecting outlying pixels")
-    
-    for y: UInt16 in 0 ..< UInt16(height) {
-        for x: UInt16 in 0 ..< UInt16(width) {
-
-            let origPixel = pixel(fromData: data as CFData, atX: x, andY: y,
-                                  bitsPerPixel: image.bitsPerPixel,
-                                  bytesPerRow: image.bytesPerRow,
-                                  bitsPerComponent: image.bitsPerComponent)
-            var otherPixels: [Pixel] = []
-
-            for p in 0 ..< otherFrames.count {
-                let otherFrame = otherFrames[p]
-                let newPixel = pixel(fromData: otherData[p], atX: x, andY: y,
-                                     bitsPerPixel: otherFrame.bitsPerPixel,
-                                     bytesPerRow: otherFrame.bytesPerRow,
-                                     bitsPerComponent: otherFrame.bitsPerComponent)
-                otherPixels.append(newPixel)
-            }
-            if otherPixels.count == 0 {
-                fatalError("need more than one image in the sequence")
-            }
-
-            var total_difference: Int32 = 0
-            otherPixels.forEach { pixel in
-                total_difference += Int32(origPixel.difference(from: pixel))
-            }
-
-            total_difference /= Int32(otherPixels.count)
-
-            if total_difference > max_pixel_distance {
-                outlier_map["\(x),\(y)"] = Outlier(x: x, y: y, amount: total_difference)
-            }
-        }
-    }
-           
-    Log.i("processing the outlier map")
-
-    // go through the outlier_map and link together all the outliers that are adject to eachother,
-    // outputting a mapping of group name to size
-    let neighbor_groups = prune(outlierMap: outlier_map)
-    
-    Log.i("done processing the outlier map")
-    
-    // paint green on the outliers above the threshold for testing
-    let paint_green = false
-    if(paint_green) {
-        Log.d("painting outliers green")
-        for y: UInt16 in 0 ..< UInt16(height) {
-            for x: UInt16 in 0 ..< UInt16(width) {
-                if let outlier = outlier_map["\(x),\(y)"] {
-                    if outlier.amount > max_pixel_distance { // XXX global variable
-                        //Log.d("found \(outlier.neighbors.count) neighbors")
-
-                        let offset = (Int(y) * bytesPerRow) + (Int(x) * bytesPerPixel)
-
-                        var nextPixel = Pixel()
-                        nextPixel.green = 0xFFFF
-
-                        var nextValue = nextPixel.value
-                        data.replaceSubrange(offset ..< offset+bytesPerPixel, with: &nextValue, count: 6)
-                    }
-                }
-            }
-        }
-    }
-
-    // add padding when desired
-    // XXX this is slower than the other steps here :(
-    // also not sure it's really needed
-    if(padding_value > 0) {
-        Log.d("adding padding")
-        for y: UInt16 in 0 ..< UInt16(height) {
-            //Log.d("y \(y)")
-            for x: UInt16 in 0 ..< UInt16(width) {
-                let outlier_tag = "\(x),\(y)"
-                let outlier = outlier_map[outlier_tag]
-                var should_try = false
-                if outlier == nil {
-                    should_try = true
-                } else if let outlier = outlier,
-                          outlier.amount > max_pixel_distance
-                {
-                    should_try = true
-                }
-                
-                if should_try,
-                   let bigTag = tag(within: padding_value,
-                                    ofX: x, andY: y,
-                                    outlierMap: outlier_map,
-                                    neighborGroups: neighbor_groups,
-                                    minNeighbors: min_neighbors)
-                {
-                    let padding = Outlier(x: x, y: y, amount: 0)
-                    padding.tag = bigTag
-                    outlier_map[outlier_tag] = padding
-                }
-            }
-        }
-    }
-
-    Log.d("painting over airplane streaks")
-    
-    // paint on the large groups of outliers with values from the other frames
-    for y: UInt16 in 0 ..< UInt16(height) {
-        for x: UInt16 in 0 ..< UInt16(width) {
-            if let outlier = outlier_map["\(x),\(y)"] {
-                if let tag = outlier.tag,
-                   let total_size = neighbor_groups[tag] {
-                    
-                    if total_size > min_neighbors { 
-                        //Log.d("found \(group_size) neighbors")
-
-                        let offset = (Int(y) * bytesPerRow) + (Int(x) * bytesPerPixel)
-
-                        var otherPixels: [Pixel] = []
-
-                        // XXX uncomment to use more than one frame
-                        for p in 0 ..< 1/*otherFrames.count*/ {
-                            let otherFrame = otherFrames[p]
-                            let newPixel = pixel(fromData: otherData[p], atX: x, andY: y,
-                                                 bitsPerPixel: otherFrame.bitsPerPixel,
-                                                 bytesPerRow: otherFrame.bytesPerRow,
-                                                 bitsPerComponent: otherFrame.bitsPerComponent)
-                            
-                            otherPixels.append(newPixel)
-                        }
-                        var nextPixel = Pixel(merging: otherPixels)
-/*
-                        // for testing
-                        if outlier.amount == 0 {
-                            nextPixel.green = 0xFFFF
-                        } else {
-                            nextPixel.red = 0xFFFF
-                        }
-*/
-                        var nextValue = nextPixel.value
-                        data.replaceSubrange(offset ..< offset+bytesPerPixel, with: &nextValue, count: 6)
-                    }
-                }
-            }
-        }
-    }
-
-    Log.d("creating final image")
-
-    if let dataProvider = CGDataProvider(data: data as CFData) {
-        let colorSpace = CGColorSpaceCreateDeviceRGB()
-        return CGImage(width: width,
-                       height: height,
-                       bitsPerComponent: bitsPerComponent,
-                       bitsPerPixel: bytesPerPixel*8,
-                       bytesPerRow: width*bytesPerPixel,
-                       space: colorSpace,
-                       bitmapInfo: image.bitmapInfo, // byte order
-                       provider: dataProvider,
-                       decode: nil,
-                       shouldInterpolate: false,
-                       intent: .defaultIntent)
-    }
-    return nil
 }
 
 func pixel(fromData data: CFData,
