@@ -2,40 +2,41 @@ import Foundation
 import CoreGraphics
 import Cocoa
 
-let dispatchQueue = DispatchQueue(label: "ntar",
-                                  qos: .unspecified,
-                                  attributes: [.concurrent],
-                                  autoreleaseFrequency: .inherit,
-                                  target: nil)
+@available(macOS 10.15, *) 
+class NighttimeAirplaneEraser {
+    
+    let image_sequence_dirname: String
 
-if CommandLine.arguments.count < 1 {
-    Log.d("need more args!")    // XXX make this better
-} else {
-    let path = FileManager.default.currentDirectoryPath
-    let input_image_sequence_dirname = CommandLine.arguments[1]
-    Log.d("will process \(input_image_sequence_dirname)")
-    Log.d("on path \(path)")
-    var image_files = list_image_files(atPath: "\(path)/\(input_image_sequence_dirname)")
-    image_files.sort { (lhs: String, rhs: String) -> Bool in
-        let lh = remove_suffix(fromString: lhs)
-        let rh = remove_suffix(fromString: rhs)
-        return lh < rh
+    let dispatchQueue = DispatchQueue(label: "ntar",
+                                      qos: .unspecified,
+                                      attributes: [.concurrent],
+                                      autoreleaseFrequency: .inherit,
+                                      target: nil)
+
+    
+    init(imageSequenceDirname: String) {
+        image_sequence_dirname = imageSequenceDirname
     }
-    if #available(macOS 10.15, *) {
+    
+    func run() {
+        var image_files = list_image_files(atPath: image_sequence_dirname)
+        image_files.sort { (lhs: String, rhs: String) -> Bool in
+            let lh = remove_suffix(fromString: lhs)
+            let rh = remove_suffix(fromString: rhs)
+            return lh < rh
+        }
+
         let image_sequence = ImageSequence(filenames: image_files)
         //    Log.d("image_files \(image_files)")
         
-//    let images = try load(imageFiles: image_files)
-//    Log.d("loaded images \(images)")
-
-        let output_dirname = "\(path)/\(input_image_sequence_dirname)-no-planes"
+        let output_dirname = "\(image_sequence_dirname)-no-planes"
     
         do {
             try FileManager.default.createDirectory(atPath: output_dirname, withIntermediateDirectories: false, attributes: nil)
         } catch let error as NSError {
             fatalError("Unable to create directory \(error.debugDescription)")
         }
-
+        
         // each of these methods removes the airplanes from a particular frame
         var methods: [Int : () async -> Void] = [:]
         
@@ -43,11 +44,10 @@ if CommandLine.arguments.count < 1 {
         let number_running = NumberRunning()
     
         for (index, image_filename) in image_sequence.filenames.enumerated() {
-            
             methods[index] = {
                 dispatchGroup.enter() 
-                // don't load images in main thread
                 do {
+                    // load images outside the main thread
                     if let image = await image_sequence.getImage(withName: image_filename) {
                         var otherFrames: [CGImage] = []
                         
@@ -63,24 +63,20 @@ if CommandLine.arguments.count < 1 {
                         }
                         
                         // the other frames that we use to detect outliers and repaint from
-                        if #available(macOS 10.15, *) {
-                            if let new_image = removeAirplanes(fromImage: image,
-                                                               otherFrames: otherFrames,
-                                                               minNeighbors: 150,
-                                                               withPadding: 0)
-                            {
-                                // relinquish images here
-                                Log.d("new_image \(new_image)")
-                                let filename_base = remove_suffix(fromString: image_sequence.filenames[index])
-                                let filename = "\(output_dirname)/\(filename_base).tif"
-                                do {
-                                    try save(image: new_image, toFile: filename)
-                                } catch {
-                                    Log.e("doh! \(error)")
-                                }
+                        if let new_image = removeAirplanes(fromImage: image,
+                                                           otherFrames: otherFrames,
+                                                           minNeighbors: 150,
+                                                           withPadding: 0)
+                        {
+                            // relinquish images here
+                            Log.d("new_image \(new_image)")
+                            let filename_base = remove_suffix(fromString: image_sequence.filenames[index])
+                            let filename = "\(output_dirname)/\(filename_base).tif"
+                            do {
+                                try save(image: new_image, toFile: filename)
+                            } catch {
+                                Log.e("doh! \(error)")
                             }
-                        } else {
-                            fatalError("requires maxos 10.15+")
                         }
                     } else {
                         Log.d("FUCK")
@@ -102,7 +98,7 @@ if CommandLine.arguments.count < 1 {
                 let current_running = await number_running.currentValue()
                 if(current_running < max_methods) {
                     Log.d("\(current_running) frames currently processing")
-                    Log.d("we have \(methods.count) more methods")
+                    Log.d("we have \(methods.count) more frames to process")
                     Log.d("enquing new method")
                     
                     if let next_method_key = methods.keys.randomElement(),
@@ -110,7 +106,7 @@ if CommandLine.arguments.count < 1 {
                     {
                         methods.removeValue(forKey: next_method_key)
                         await number_running.increment()
-                        dispatchQueue.async {
+                        self.dispatchQueue.async {
                             Task {
                                 await next_method()
                             }
@@ -120,11 +116,7 @@ if CommandLine.arguments.count < 1 {
                         fatalError("FUCK")
                     }
                 } else {
-                    if #available(macOS 10.15, *) {
-                        _ = dispatchGroup.wait(timeout: DispatchTime.now().advanced(by: .seconds(1)))
-                    } else {
-                        sleep(1)
-                    }
+                    _ = dispatchGroup.wait(timeout: DispatchTime.now().advanced(by: .seconds(1)))
                 }
             }
         }
@@ -133,15 +125,26 @@ if CommandLine.arguments.count < 1 {
             Log.d("running")
             await runner()
             dispatchGroup.leave()
-            
         }
         dispatchGroup.wait()
         Log.d("done")
-    } else {
-        Log.e("FUCK")
-        fatalError("need macos 10.15")
     }
-    Log.d("DONE WITH THIS SHIT")
+}
+
+if CommandLine.arguments.count < 1 {
+    Log.d("need more args!")    // XXX make this better
+} else {
+    let path = FileManager.default.currentDirectoryPath
+    let input_image_sequence_dirname = CommandLine.arguments[1]
+    Log.d("will process \(input_image_sequence_dirname)")
+    Log.d("on path \(path)")
+
+    if #available(macOS 10.15, *) {
+        let eraser = NighttimeAirplaneEraser(imageSequenceDirname: "\(path)/\(input_image_sequence_dirname)")
+        eraser.run()
+    } else {
+        Log.d("cannot run :(")
+    }
 }
 
 func save(image cgImage: CGImage, toFile filename: String) throws {
