@@ -51,12 +51,12 @@ if CommandLine.arguments.count < 1 {
             if #available(macOS 10.15, *) {
                 if let new_image = removeAirplanes(fromImage: image,
                                                    otherFrames: otherFrames,
-                                                   minNeighbors: 500,
-                                                   withPadding: 0)
+                                                   minNeighbors: 150,
+                                                   withPadding: 1)
                 {
                     Log.d("new_image \(new_image)")
                     let filename_base = remove_suffix(fromString: image_files[index])
-                    let filename = "\(output_dirname)/\(filename_base)-no-airplanes.tif"
+                    let filename = "\(output_dirname)/\(filename_base).tif"
                     do {
                     try save(image: new_image, toFile: filename)
                     } catch {
@@ -69,17 +69,17 @@ if CommandLine.arguments.count < 1 {
         }
     }
 
-    let max_methods = 18        // XXX expose this
+    let max_methods = 24        // XXX expose this
 
     var number_running = 0
     
     Log.d("we have \(methods.count) methods")
     
-    var dispatchGroups: [Int: DispatchGroup] = [:]
+    let dispatchGroup = DispatchGroup()
 
-    while(methods.count > 0 || dispatchGroups.count > 0) {
-        Log.d("we have \(methods.count) methods")
+    while(methods.count > 0) {
         if(methods.count > 0 && number_running < max_methods) {
+            Log.d("we have \(methods.count) methods")
             Log.d("enquing new method")
             
             if let next_method_key = methods.keys.randomElement(),
@@ -87,34 +87,28 @@ if CommandLine.arguments.count < 1 {
             {
                 methods.removeValue(forKey: next_method_key)
                 number_running += 1
-                let dispathGroup = DispatchGroup()
-                dispatchGroups[next_method_key] = dispathGroup;
-                dispathGroup.enter()
+                dispatchGroup.enter()
                 dispatchQueue.async {
                     Log.d("method starting")
                     next_method()
-                    dispatchGroups.removeValue(forKey: next_method_key);
                     number_running -= 1
-                    dispathGroup.leave()
                     Log.d("method done")
+                    dispatchGroup.leave()
                 }
             } else {
                 Log.e("FUCK")
                 fatalError("FUCK")
             }
         } else {
-            if let next_key = dispatchGroups.keys.randomElement(),
-               let group = dispatchGroups[next_key]
-            {
-                Log.d("waiting")
-                group.wait()
+            if #available(macOS 10.15, *) {
+                dispatchGroup.wait(timeout: DispatchTime.now().advanced(by: .seconds(1)))
             } else {
-                Log.e("FUCK")
                 sleep(1)
-                Log.e("FUCKED")
             }
         }
     }
+
+    dispatchGroup.wait()
     Log.d("done")
 }
 
@@ -414,7 +408,7 @@ func list_image_files(atPath path: String) -> [String] {
 func prune(outlierMap outlier_map: [String: Outlier]) -> [String: UInt16]
 {
     // first link all outliers to their direct neighbors
-    for (outlier_key, outlier) in outlier_map {
+    for (_, outlier) in outlier_map {
         let x = outlier.x
         let y = outlier.y
         if y > 0, let neighbor = outlier_map["\(x),\(y-1)"] {
