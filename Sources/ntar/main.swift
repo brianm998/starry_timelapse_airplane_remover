@@ -3,6 +3,8 @@ import CoreGraphics
 import Cocoa
 
 
+let KEY_OF_GOD = "78,13"
+
 let dispatchQueue = DispatchQueue(label: "ntar",
                                   qos: .unspecified,
                                   attributes: [/*.concurrent*/],
@@ -56,7 +58,7 @@ if CommandLine.arguments.count < 1 {
             if #available(macOS 10.15, *) {
                 if let new_image = removeAirplanes(fromImage: image,
                                                    otherFrames: otherFrames,
-                                                   minNeighbors: 500,
+                                                   minNeighbors: 50,
                                                    withPadding: 0)
                 {
                     Log.d("new_image \(new_image)")
@@ -82,7 +84,7 @@ if CommandLine.arguments.count < 1 {
         Log.d("you")
         // XXX buss error with async :(
         // binary search through code with comments to find location of problem
-        dispatchQueue.async { method() }
+        dispatchQueue.sync { method() }
     }
     
     dispatchGroups.forEach { group in
@@ -128,7 +130,6 @@ func removeAirplanes(fromImage image: CGImage,
     Log.d("removing airplanes from image with \(otherFrames.count) other frames")
 
     var outlier_map: [String: Outlier] = [:] // keyed by "\(x),\(y)"
-    var neighbor_groups: [String: UInt16] = [:] // keyed by above 
 
     let width = image.width
     let height = image.height
@@ -206,19 +207,16 @@ func removeAirplanes(fromImage image: CGImage,
     // XXX max depth problem?
     
     // go through the outlier_map 
-    prune(width: UInt16(width),
-          height: UInt16(height),
-          outlierMap: outlier_map,
-          neighborGroups: &neighbor_groups)
-
-
+    let neighbor_groups = prune(width: UInt16(width),
+                                height: UInt16(height),
+                                outlierMap: outlier_map)
     // XXX buss error here still
-    return nil                      // XXX
+    //return nil                      // XXX
     
     Log.i("done processing the outlier map")
     
     // paint green on the outliers above the threshold for testing
-    let paint_green = false
+    let paint_green = true
     if(paint_green) {
         Log.d("painting outliers green")
         for y: UInt16 in 0 ..< UInt16(height) {
@@ -280,10 +278,10 @@ func removeAirplanes(fromImage image: CGImage,
     for y: UInt16 in 0 ..< UInt16(height) {
         for x: UInt16 in 0 ..< UInt16(width) {
             if let outlier = outlier_map["\(x),\(y)"] {
-
                 if let tag = outlier.tag,
-                   let group_size = neighbor_groups[tag] {                    
-                    if group_size > min_neighbors { // XXX global variable
+                   let total_size = neighbor_groups[tag] {
+                    
+                    if total_size > min_neighbors { 
                         //Log.d("found \(group_size) neighbors")
 
                         let offset = (Int(y) * bytesPerRow) + (Int(x) * bytesPerPixel)
@@ -301,14 +299,14 @@ func removeAirplanes(fromImage image: CGImage,
                             otherPixels.append(newPixel)
                         }
                         var nextPixel = Pixel(merging: otherPixels)
-                        /*
+
                         // for testing
                         if outlier.amount == 0 {
                             nextPixel.green = 0xFFFF
                         } else {
                             nextPixel.red = 0xFFFF
                         }
-                        */                      
+
                         var nextValue = nextPixel.value
                         data.replaceSubrange(offset ..< offset+bytesPerPixel, with: &nextValue, count: 6)
                     }
@@ -460,8 +458,171 @@ func prune(outlier: Outlier,
      return neighbors
 }
 
-// perhaps rewrite at this level
+// rewrite here
+/*
+   iterate over the entire image grid once:
+      - if we have an outlier in (x, y)
+        then if it has no tag, add it
+        search up, down, left, right for other outliers, add tag to them, error if already tagged
+*/
 func prune(width: UInt16, height: UInt16,
+           outlierMap outlier_map: [String: Outlier]) -> [String: UInt16]
+{
+    Log.d("top level prune started");
+
+    var neighbor_map: [String : Set<String> ] = [:] // keyed by '\(x),\(y)' to a set of adject areas
+    
+    // first label with tags
+    for y: UInt16 in 0 ..< height {
+        for x: UInt16 in 0 ..< width {
+            let tag = "\(x),\(y)"
+            if tag == KEY_OF_GOD {
+                Log.d("PRUNING THE KEY OF GOD")
+            }
+            if let outlier = outlier_map[tag] {
+                var tag = tag
+                if let existing_tag = outlier.tag {
+                    tag = existing_tag
+                } else {
+                    outlier.tag = tag // start a new group
+                }
+
+                if y > 0,
+                   let neighbor = outlier_map["\(x),\(y-1)"] {
+                    if let neighbor_tag = neighbor.tag {
+                        if tag == KEY_OF_GOD {
+                            Log.d("neighbor_tag \(neighbor_tag) tag \(tag)")
+                        }
+                        if var map = neighbor_map[neighbor_tag] {
+                            map.insert(tag)
+                        } else {
+                            neighbor_map[neighbor_tag] = [tag]
+                        }
+                        if var map = neighbor_map[tag] {
+                            map.insert(neighbor_tag)
+                        } else {
+                            neighbor_map[tag] = [neighbor_tag]
+                        }
+                    } else {
+                        neighbor.tag = tag
+                    }
+                }
+                       
+                if x > 0,
+                   let neighbor = outlier_map["\(x-1),\(y)"] {
+                    if let neighbor_tag = neighbor.tag {
+                        if tag == KEY_OF_GOD {
+                            Log.d("neighbor_tag \(neighbor_tag) tag \(tag)")
+                        }
+                        if var map = neighbor_map[neighbor_tag] {
+                            map.insert(tag)
+                        } else {
+                            neighbor_map[neighbor_tag] = [tag]
+                        }
+                        if var map = neighbor_map[tag] {
+                            map.insert(neighbor_tag)
+                        } else {
+                            neighbor_map[tag] = [neighbor_tag]
+                        }
+                    } else {
+                        neighbor.tag = tag
+                    }
+                }
+                if let neighbor = outlier_map["\(x+1),\(y)"] {
+                    if let neighbor_tag = neighbor.tag {
+                        if tag == KEY_OF_GOD {
+                            Log.d("neighbor_tag \(neighbor_tag) tag \(tag)")
+                        }
+                        if var map = neighbor_map[neighbor_tag] {
+                            map.insert(tag)
+                        } else {
+                            neighbor_map[neighbor_tag] = [tag]
+                        }
+                        if var map = neighbor_map[tag] {
+                            map.insert(neighbor_tag)
+                        } else {
+                            neighbor_map[tag] = [neighbor_tag]
+                        }
+                    } else {
+                        neighbor.tag = tag
+                    }
+                }
+                if let neighbor = outlier_map["\(x),\(y+1)"] {
+                    if let neighbor_tag = neighbor.tag {
+                        if tag == KEY_OF_GOD {
+                            Log.d("neighbor_tag \(neighbor_tag) tag \(tag)")
+                        }
+                        if var map = neighbor_map[neighbor_tag] {
+                            map.insert(tag)
+                        } else {
+                            neighbor_map[neighbor_tag] = [tag]
+                        }
+                        if var map = neighbor_map[tag] {
+                            map.insert(neighbor_tag)
+                        } else {
+                            neighbor_map[tag] = [neighbor_tag]
+                        }
+                    } else {
+                        neighbor.tag = tag
+                    }
+                }
+            }
+        }
+    }
+
+    var individual_group_counts: [String: UInt16] = [:]
+
+    for (_, outlier) in outlier_map {
+        //Log.d("outlier \(outlier)")
+        if let tag = outlier.tag {
+            if let outlier_count = individual_group_counts[tag] {
+                individual_group_counts[tag] = outlier_count + 1
+            } else {
+                individual_group_counts[tag] = 1
+            }
+        } else {
+            Log.e("FUCK")       // all outliers should be tagged now
+            fatalError("FUCKED")
+        }
+    }
+//    Log.d("individual_group_counts \(individual_group_counts)")
+    Log.i("neighbor_map")
+
+    if let value = neighbor_map[KEY_OF_GOD] {
+        Log.d("78,13 => \(value)")
+    }
+
+    
+    Log.i("individual_group_counts")
+
+    if let value = individual_group_counts[KEY_OF_GOD] {
+        Log.d("78,13 => \(value)")
+    }
+    
+    var combined_group_counts: [String: UInt16] = [:]
+
+    Log.i("combined")
+    
+    for (key, value) in individual_group_counts {
+        var all_neighbors: Set<String> = []
+        combined_group_counts[key] = 
+            find_group_size(ofGroup: key,
+                            individualGroupCounts: individual_group_counts,
+                            neighborMap: neighbor_map,
+                            allNeighbors: &all_neighbors)
+    }
+    
+    if let value = combined_group_counts[KEY_OF_GOD] {
+        Log.d("78,13 => \(value)")
+    }
+    Log.d("top level prune completed");
+    
+    return combined_group_counts
+}          
+
+
+
+func prune_OLD(width: UInt16, height: UInt16,
            outlierMap outlier_map: [String: Outlier],
            neighborGroups neighbor_groups: inout [String: UInt16])
 {
@@ -523,3 +684,35 @@ func hypotenuse(x1: UInt16, y1: UInt16, x2: UInt16, y2: UInt16) -> UInt16 {
     let y_dist = UInt16(abs(Int32(y2)-Int32(y1)))
     return UInt16(sqrt(Float(x_dist*x_dist+y_dist*y_dist)))
 }
+
+func find_group_size(ofGroup key: String,
+                     individualGroupCounts individual_group_counts: [String: UInt16],
+                     neighborMap neighbor_map: [String : Set<String>],
+                     allNeighbors all_neighbors: inout Set<String>) -> UInt16
+{
+    var ret: UInt16 = 0
+    if let size = individual_group_counts[key] {
+        ret += UInt16(size)
+        //Log.d("ret \(ret)")
+    }
+    all_neighbors.insert(key)
+    if let group_set = neighbor_map[key] { // XXX inspect to make sure this is setup right
+        //Log.d("got group set \(group_set)")
+        group_set.forEach { group in
+            if !all_neighbors.contains(group) {
+                //Log.d("recursing")
+                ret += find_group_size(ofGroup: group,
+                                       individualGroupCounts: individual_group_counts,
+                                       neighborMap: neighbor_map,
+                                       allNeighbors: &all_neighbors)
+                //Log.d("ret \(ret)") // XXX this isn't adding anything yet
+            } else {
+                //Log.d("all_neighbors \(all_neighbors) group \(group)")
+            }
+        }
+    } else {
+        //Log.d("no group set")
+    }
+    return ret
+}
+
