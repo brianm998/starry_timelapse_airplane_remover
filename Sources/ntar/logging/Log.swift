@@ -722,7 +722,8 @@ fileprivate extension Log {
                 string = logLevel.description
             }
 
-            let fileLocation = "\(parseFileName(file)).\(function)@\(line)"
+            //            let fileLocation = "\(parseFileName(file)).\(function)@\(line)"
+            let fileLocation = "\(parseFileName(file))@\(line)"
 
             var extraData: LogData?
 
@@ -756,12 +757,13 @@ fileprivate extension Log {
     
     static func parseFileName(_ file: String) -> String {
         let filename = file.components(separatedBy: "/").last ?? file
-        return filename.components(separatedBy: ".").first ?? filename
+        //return filename.components(separatedBy: ".").first ?? filename
+        return filename
     }
 }
 
 
-fileprivate let logQueue = DispatchQueue(label: "logging")
+//fileprivate let logQueue = DispatchQueue(label: "logging")
 #if !os(macOS)
 //fileprivate var backgroundTask: BackgroundTask?
 #endif
@@ -771,7 +773,7 @@ fileprivate let logQueue = DispatchQueue(label: "logging")
 #if DEBUG
 // this is helpful when testing logging, to see a few test lines, and then avoid further spew 
 public func LOG_ABORT() {
-    logQueue.async {
+//    logQueue.async {
         Log.handlers[.console]?.dispatchQueue.async {
             print("\n\n")
             print("☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️")
@@ -780,7 +782,7 @@ public func LOG_ABORT() {
             print("\n\n")
             abort()
         }
-    }
+//    }
 }
 
 fileprivate struct LogTest: Codable {
