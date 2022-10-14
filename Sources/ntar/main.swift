@@ -6,6 +6,10 @@ import Cocoa
 class NighttimeAirplaneEraser {
     
     let image_sequence_dirname: String
+    let output_dirname: String
+
+    // the max number of frames to process at one time
+    let max_concurrent_renders = 40 
 
     let dispatchQueue = DispatchQueue(label: "ntar",
                                       qos: .unspecified,
@@ -16,6 +20,7 @@ class NighttimeAirplaneEraser {
     
     init(imageSequenceDirname: String) {
         image_sequence_dirname = imageSequenceDirname
+        output_dirname = "\(image_sequence_dirname)-no-planes"
     }
     
     func run() {
@@ -29,8 +34,6 @@ class NighttimeAirplaneEraser {
         let image_sequence = ImageSequence(filenames: image_files)
         //    Log.d("image_files \(image_files)")
         
-        let output_dirname = "\(image_sequence_dirname)-no-planes"
-    
         do {
             try FileManager.default.createDirectory(atPath: output_dirname, withIntermediateDirectories: false, attributes: nil)
         } catch let error as NSError {
@@ -71,7 +74,7 @@ class NighttimeAirplaneEraser {
                             // relinquish images here
                             Log.d("new_image \(new_image)")
                             let filename_base = remove_suffix(fromString: image_sequence.filenames[index])
-                            let filename = "\(output_dirname)/\(filename_base).tif"
+                            let filename = "\(self.output_dirname)/\(filename_base).tif"
                             do {
                                 try save(image: new_image, toFile: filename)
                             } catch {
@@ -89,14 +92,12 @@ class NighttimeAirplaneEraser {
                 dispatchGroup.leave()
             }
         }
-
-        let max_methods = 40        // XXX expose this
         
         Log.d("we have \(methods.count) methods")
         let runner: () async -> Void = {
             while(methods.count > 0) {
                 let current_running = await number_running.currentValue()
-                if(current_running < max_methods) {
+                if(current_running < self.max_concurrent_renders) {
                     Log.d("\(current_running) frames currently processing")
                     Log.d("we have \(methods.count) more frames to process")
                     Log.d("enquing new method")
