@@ -712,7 +712,7 @@ fileprivate extension Log {
         backgroundTask = newBackgroundTask
 */
 #endif        
-        logQueue.async {
+//        logQueue.async {
 
             var string = ""
 
@@ -752,7 +752,7 @@ fileprivate extension Log {
                 }
             }
         }
-    }
+//    }
     
     static func parseFileName(_ file: String) -> String {
         let filename = file.components(separatedBy: "/").last ?? file
