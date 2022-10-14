@@ -3,6 +3,53 @@ import CoreGraphics
 import Cocoa
 
 
+// support lazy loading of images from the sequence using reference counting
+class ImageSequence {
+
+    init(filenames: [String]) {
+        self.filenames = filenames
+    }
+    
+    let filenames: [String]
+
+    private var images: [String: CGImage] = [:]
+    private var images_refcounts: [String: Int] = [:]
+    
+    func getImage(withName filename: String) -> CGImage? {
+        if let image = images[filename],
+           let refcount = images_refcounts[filename]
+        {
+            images_refcounts[filename] = refcount + 1
+            return image
+        }
+        Log.d("Loading image from \(filename)")
+        let imageURL = NSURL(fileURLWithPath: filename, isDirectory: false)
+        do {
+            let data = try Data(contentsOf: imageURL as URL)
+            if let image = NSImage(data: data),
+               let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil)
+            {
+                images_refcounts[filename] = 1
+                return cgImage
+            }
+        } catch {
+            Log.e("\(error)")
+        }
+        return nil
+    }
+
+    func releaseImage(withName filename: String) {
+        if let refcount = images_refcounts[filename] {
+            let new_value = refcount - 1
+            images_refcounts[filename] = new_value
+            if new_value <= 0 {
+                images.removeValue(forKey: filename)
+                images_refcounts.removeValue(forKey: filename)
+            }
+        }
+    }
+}
+
 let dispatchQueue = DispatchQueue(label: "ntar",
                                   qos: .unspecified,
                                   attributes: [.concurrent],
@@ -22,10 +69,11 @@ if CommandLine.arguments.count < 1 {
         let rh = remove_suffix(fromString: rhs)
         return lh < rh
     }
-    Log.d("image_files \(image_files)")
+    let image_sequence = ImageSequence(filenames: image_files)
+//    Log.d("image_files \(image_files)")
 
-    let images = try load(imageFiles: image_files)
-    Log.d("loaded images \(images)")
+//    let images = try load(imageFiles: image_files)
+//    Log.d("loaded images \(images)")
 
     let output_dirname = "\(path)/\(input_image_sequence_dirname)-no-planes"
     
@@ -35,36 +83,58 @@ if CommandLine.arguments.count < 1 {
         fatalError("Unable to create directory \(error.debugDescription)")
     }
 
+    // each of these methods removes the airplanes from a particular frame
     var methods: [Int : () -> Void] = [:]
     
-    for (index, image) in images.enumerated() {
-        methods[index] = { 
-            var otherFrames: [CGImage] = []
-            if(index > 0) {
-                otherFrames.append(images[index-1])
-            }
-            if(index < images.count - 1) {
-                otherFrames.append(images[index+1])
-            }
-            // XXX muti thread these
-            // XXX running time on anything but tiny images is _really_ long
-            if #available(macOS 10.15, *) {
-                if let new_image = removeAirplanes(fromImage: image,
-                                                   otherFrames: otherFrames,
-                                                   minNeighbors: 150,
-                                                   withPadding: 1)
+    for (index, image_filename) in image_sequence.filenames.enumerated() {
+        methods[index] = {
+            if let image = image_sequence.getImage(withName: image_filename) {
+                // the other frames that we use to detect outliers and repaint from
+                var otherFrames: [CGImage] = []
+                var previous_frame_filename: String?
+                var next_frame_filename: String?
+                if index > 0,
+                   let image = image_sequence.getImage(withName: image_sequence.filenames[index-1])
                 {
-                    Log.d("new_image \(new_image)")
-                    let filename_base = remove_suffix(fromString: image_files[index])
-                    let filename = "\(output_dirname)/\(filename_base).tif"
-                    do {
-                    try save(image: new_image, toFile: filename)
-                    } catch {
-                    Log.d("doh! \(error)")
+                    previous_frame_filename = image_sequence.filenames[index-1]
+                    otherFrames.append(image)
+                }
+                if index < image_sequence.filenames.count - 1,
+                   let image = image_sequence.getImage(withName: image_sequence.filenames[index+1])
+                {
+                    next_frame_filename = image_sequence.filenames[index+1]
+                    otherFrames.append(image)
+                }
+                // XXX obtain images herex
+                if #available(macOS 10.15, *) {
+                    if let new_image = removeAirplanes(fromImage: image,
+                                                       otherFrames: otherFrames,
+                                                       minNeighbors: 150,
+                                                       withPadding: 0)
+                    {
+                        // XXX relinquish images here
+                        image_sequence.releaseImage(withName: image_filename)
+                        if let filename = previous_frame_filename {
+                            image_sequence.releaseImage(withName: filename)
+                        }
+                        if let filename = next_frame_filename {
+                            image_sequence.releaseImage(withName: filename)
+                        }
+                        Log.d("new_image \(new_image)")
+                        let filename_base = remove_suffix(fromString: image_sequence.filenames[index])
+                        let filename = "\(output_dirname)/\(filename_base).tif"
+                        do {
+                        try save(image: new_image, toFile: filename)
+                        } catch {
+                        Log.d("doh! \(error)")
+                        }
                     }
+                } else {
+                    fatalError("requires maxos 10.15+")
                 }
             } else {
-                fatalError("requires maxos 10.15+")
+                Log.d("FUCK")
+                fatalError("doh")
             }
         }
     }
@@ -78,8 +148,8 @@ if CommandLine.arguments.count < 1 {
     let dispatchGroup = DispatchGroup()
 
     while(methods.count > 0) {
-        if(methods.count > 0 && number_running < max_methods) {
-            Log.d("we have \(methods.count) methods")
+        if(number_running < max_methods) {
+            Log.d("we have \(methods.count) more methods")
             Log.d("enquing new method")
             
             if let next_method_key = methods.keys.randomElement(),
@@ -101,7 +171,7 @@ if CommandLine.arguments.count < 1 {
             }
         } else {
             if #available(macOS 10.15, *) {
-                dispatchGroup.wait(timeout: DispatchTime.now().advanced(by: .seconds(1)))
+                _ = dispatchGroup.wait(timeout: DispatchTime.now().advanced(by: .seconds(1)))
             } else {
                 sleep(1)
             }
@@ -157,10 +227,7 @@ func removeAirplanes(fromImage image: CGImage,
     let bitsPerComponent = image.bitsPerComponent
     let bytesPerRow = width*bytesPerPixel
 
-    Log.d("getting image data")
     guard var data = image.dataProvider?.data as? Data   else { return nil }
-
-    Log.d("got image data")
     
     var otherData: [CFData] = []
     otherFrames.forEach { frame in
@@ -170,6 +237,8 @@ func removeAirplanes(fromImage image: CGImage,
             fatalError("fuck")
         }
     }
+    
+    Log.d("got image data, detecting outlying pixels")
     
     for y: UInt16 in 0 ..< UInt16(height) {
         for x: UInt16 in 0 ..< UInt16(width) {
@@ -370,21 +439,6 @@ func remove_suffix(fromString string: String) -> String {
     let full_path = imageURL.deletingPathExtension().absoluteString
     let components = full_path.components(separatedBy: "/")
     return components[components.count-1]
-}
-
-func load(imageFiles: [String]) throws -> [CGImage] {
-    var ret: [CGImage] = [];
-    try imageFiles.forEach { file in
-        Log.d("loading \(file)")
-        let imageURL = NSURL(fileURLWithPath: file, isDirectory: false)
-        let data = try Data(contentsOf: imageURL as URL)
-        if let image = NSImage(data: data),
-           let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil)
-        {
-            ret.append(cgImage)
-        }
-    }
-    return ret;
 }
 
 func list_image_files(atPath path: String) -> [String] {
