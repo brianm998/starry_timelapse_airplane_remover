@@ -5,7 +5,7 @@ import Cocoa
 
 let dispatchQueue = DispatchQueue(label: "ntar",
                                   qos: .unspecified,
-                                  attributes: [/*.concurrent*/],
+                                  attributes: [.concurrent],
                                   autoreleaseFrequency: .inherit,
                                   target: nil)
 
