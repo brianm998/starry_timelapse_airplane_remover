@@ -94,13 +94,14 @@ if CommandLine.arguments.count < 1 {
             }
         }
 
-        let max_methods = 24        // XXX expose this
+        let max_methods = 40        // XXX expose this
         
         Log.d("we have \(methods.count) methods")
         let runner: () async -> Void = {
             while(methods.count > 0) {
                 let current_running = await number_running.currentValue()
                 if(current_running < max_methods) {
+                    Log.d("\(current_running) frames currently processing")
                     Log.d("we have \(methods.count) more methods")
                     Log.d("enquing new method")
                     
@@ -109,7 +110,11 @@ if CommandLine.arguments.count < 1 {
                     {
                         methods.removeValue(forKey: next_method_key)
                         await number_running.increment()
-                        await next_method()
+                        dispatchQueue.async {
+                            Task {
+                                await next_method()
+                            }
+                        }
                     } else {
                         Log.e("FUCK")
                         fatalError("FUCK")
