@@ -75,9 +75,49 @@ class NighttimeAirplaneEraser {
         }
     }
 
-    private func assembleMethodList() {
-
-
+    private func assembleMethodList() async {
+        if let image_sequence = image_sequence {
+            for (index, image_filename) in image_sequence.filenames.enumerated() {
+                let filename_base = remove_suffix(fromString: image_sequence.filenames[index])
+                // XXX why remove and add diff? 
+                let filename = "\(self.output_dirname)/\(filename_base).tif"
+                let test_paint_filename = "\(self.test_paint_output_dirname)/\(filename_base).tif"
+                
+                if FileManager.default.fileExists(atPath: filename) {
+                    Log.i("skipping already existing file \(filename)")
+                } else {
+                    await method_list.add(atIndex: index, method: {
+                        self.dispatchGroup.enter() 
+                        // load images outside the main thread
+                        if let image = await image_sequence.getImage(withName: image_filename) {
+                            var otherFrames: [PixelatedImage] = []
+                            
+                            if index > 0,
+                               let image = await image_sequence.getImage(withName: image_sequence.filenames[index-1])
+                            {
+                                otherFrames.append(image)
+                            }
+                            if index < image_sequence.filenames.count - 1,
+                               let image = await image_sequence.getImage(withName: image_sequence.filenames[index+1])
+                            {
+                                otherFrames.append(image)
+                            }
+                            
+                            // the other frames that we use to detect outliers and repaint from
+                            await self.removeAirplanes(fromImage: image,
+                                                       otherFrames: otherFrames,
+                                                       filename: filename,
+                                                       test_paint_filename: self.test_paint ? test_paint_filename : nil) // XXX last arg is ugly
+                        } else {
+                            Log.d("FUCK")
+                            fatalError("doh")
+                        }
+                        await self.number_running.decrement()
+                        self.dispatchGroup.leave()
+                    })
+                }
+            }
+        }
     }
 
     // actors
@@ -109,47 +149,7 @@ class NighttimeAirplaneEraser {
             self.dispatchGroup.enter()
 
             Task {
-                for (index, image_filename) in image_sequence.filenames.enumerated() {
-                    let filename_base = remove_suffix(fromString: image_sequence.filenames[index])
-                    // XXX why remove and add diff? 
-                    let filename = "\(self.output_dirname)/\(filename_base).tif"
-                    let test_paint_filename = "\(self.test_paint_output_dirname)/\(filename_base).tif"
-                    
-                    if FileManager.default.fileExists(atPath: filename) {
-                        Log.i("skipping already existing file \(filename)")
-                    } else {
-                        await method_list.add(atIndex: index, method: {
-                            self.dispatchGroup.enter() 
-                            // load images outside the main thread
-                            if let image = await image_sequence.getImage(withName: image_filename) {
-                                var otherFrames: [PixelatedImage] = []
-                                
-                                if index > 0,
-                                   let image = await image_sequence.getImage(withName: image_sequence.filenames[index-1])
-                                {
-                                    otherFrames.append(image)
-                                }
-                                if index < image_sequence.filenames.count - 1,
-                                   let image = await image_sequence.getImage(withName: image_sequence.filenames[index+1])
-                                {
-                                    otherFrames.append(image)
-                                }
-                                
-                                // the other frames that we use to detect outliers and repaint from
-                                await self.removeAirplanes(fromImage: image,
-                                                           otherFrames: otherFrames,
-                                                           filename: filename,
-                                                           test_paint_filename: self.test_paint ? test_paint_filename : nil) // XXX last arg is ugly
-                            } else {
-                                Log.d("FUCK")
-                                fatalError("doh")
-                            }
-                            await self.number_running.decrement()
-                            self.dispatchGroup.leave()
-                        })
-                    }
-                }
-
+                await assembleMethodList()
                 Log.d("we have \(await method_list.list.count) total frames")
         
                 Log.d("running")
