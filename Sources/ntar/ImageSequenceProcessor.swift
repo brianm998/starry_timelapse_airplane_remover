@@ -28,12 +28,12 @@ class ImageSequenceProcessor {
     let dispatchGroup = DispatchGroup()
     
     init(imageSequenceDirname: String,
-         outputDirnameSuffix output_suffix: String = "-processed",
+         outputDirname output_dirname: String,
          maxConcurrent max_concurrent: UInt = 5)
     {
         self.max_concurrent_renders = max_concurrent
-        image_sequence_dirname = imageSequenceDirname
-        output_dirname = "\(image_sequence_dirname)-\(output_suffix)"
+        self.image_sequence_dirname = imageSequenceDirname
+        self.output_dirname = output_dirname
     }
 
     func mkdir(_ path: String) {
@@ -49,8 +49,8 @@ class ImageSequenceProcessor {
     }
 
     func processFrame(number index: Int,
-                      dirname: String,
-                      filename image_filename: String) async
+                      filename: String,
+                      base_name: String) async // XXX the base name has the extention stripped for some reason :(
     {
         Log.e("should be overrideen")
     }
@@ -59,7 +59,6 @@ class ImageSequenceProcessor {
         if let image_sequence = image_sequence {
             for (index, image_filename) in image_sequence.filenames.enumerated() {
                 let filename = image_sequence.filenames[index]
-                //let test_paint_filename = "\(self.test_paint_output_dirname)/\(filename).tif"
                 
                 if FileManager.default.fileExists(atPath: "\(self.output_dirname)/\(filename)") {
                     Log.i("skipping already existing file \(filename)")
@@ -67,8 +66,8 @@ class ImageSequenceProcessor {
                     await method_list.add(atIndex: index, method: {
                         self.dispatchGroup.enter() 
                         await self.processFrame(number: index,
-                                                dirname: self.output_dirname,
-                                                filename: filename)
+                                                filename: image_filename,
+                                                base_name: remove_suffix_XXX_RENAME(fromString: filename))
                         await self.number_running.decrement()
                         self.dispatchGroup.leave()
                     })
@@ -90,14 +89,14 @@ class ImageSequenceProcessor {
     }
 
     func startup_hook() {
-        //if test_paint { mkdir(test_paint_output_dirname) }
+        // can be overridden
     }
     
     func run() {
         assembleImageSequence()
         if let image_sequence = image_sequence {
             mkdir(output_dirname)
-
+            startup_hook()
             // enter the dispatch group so we can wait for it at the end 
             self.dispatchGroup.enter()
 

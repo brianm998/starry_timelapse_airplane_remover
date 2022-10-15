@@ -3,15 +3,9 @@ import CoreGraphics
 import Cocoa
 
 @available(macOS 10.15, *) 
-class NighttimeAirplaneEraser {
+class NighttimeAirplaneEraser : ImageSequenceProcessor {
     
-    let image_sequence_dirname: String
-    let output_dirname: String
-
     let test_paint_output_dirname: String
-
-    // the max number of frames to process at one time
-    let max_concurrent_renders: UInt
 
     // the following properties get included into the output videoname
     
@@ -32,163 +26,29 @@ class NighttimeAirplaneEraser {
 
     let test_paint: Bool
     
-    // actors
-    let method_list = MethodList()
-    let number_running = NumberRunning()
-    var image_sequence: ImageSequence?
-    
-    // concurrent dispatch queue so we can process frames in parallel
-    let dispatchQueue = DispatchQueue(label: "ntar",
-                                      qos: .unspecified,
-                                      attributes: [.concurrent],
-                                      autoreleaseFrequency: .inherit,
-                                      target: nil)
-    
-    let dispatchGroup = DispatchGroup()
-    
-    init(imageSequenceDirname: String,
+    init(imageSequenceDirname image_sequence_dirname: String,
          maxConcurrent max_concurrent: UInt = 5,
          minNeighbors min_neighbors: UInt16 = 100,
          maxPixelDistance max_pixel_distance: UInt16 = 10000,
          padding: UInt = 0,
          testPaint: Bool = false)
     {
-        self.max_concurrent_renders = max_concurrent
         self.min_neighbors = min_neighbors
         self.max_pixel_distance = max_pixel_distance
         self.padding_value = padding
         self.test_paint_outliers = testPaint
         self.test_paint_changed_pixels = testPaint
         self.test_paint = testPaint
-        image_sequence_dirname = imageSequenceDirname
         var basename = "\(image_sequence_dirname)-no-planes-\(min_neighbors)-\(max_pixel_distance)"
         if padding != 0 {
             basename = basename + "-pad-\(padding)"
         }
 
         test_paint_output_dirname = "\(basename)-test-paint"
-        output_dirname = basename
-    }
-
-    func mkdir(_ path: String) {
-        if !FileManager.default.fileExists(atPath: path) {
-            do {
-                try FileManager.default.createDirectory(atPath: path,
-                                                        withIntermediateDirectories: false,
-                                                        attributes: nil)
-            } catch let error as NSError {
-                fatalError("Unable to create directory \(error.debugDescription)")
-            }
-        }
-    }
-
-    private func assembleMethodList() async {
-        if let image_sequence = image_sequence {
-            for (index, image_filename) in image_sequence.filenames.enumerated() {
-                let filename_base = remove_suffix(fromString: image_sequence.filenames[index])
-                // XXX why remove and add diff? 
-                let filename = "\(self.output_dirname)/\(filename_base).tif"
-                let test_paint_filename = "\(self.test_paint_output_dirname)/\(filename_base).tif"
-                
-                if FileManager.default.fileExists(atPath: filename) {
-                    Log.i("skipping already existing file \(filename)")
-                } else {
-                    await method_list.add(atIndex: index, method: {
-                        self.dispatchGroup.enter() 
-                        // load images outside the main thread
-                        if let image = await image_sequence.getImage(withName: image_filename) {
-                            var otherFrames: [PixelatedImage] = []
-                            
-                            if index > 0,
-                               let image = await image_sequence.getImage(withName: image_sequence.filenames[index-1])
-                            {
-                                otherFrames.append(image)
-                            }
-                            if index < image_sequence.filenames.count - 1,
-                               let image = await image_sequence.getImage(withName: image_sequence.filenames[index+1])
-                            {
-                                otherFrames.append(image)
-                            }
-
-                            
-                            // the other frames that we use to detect outliers and repaint from
-                            await self.removeAirplanes(fromImage: image,
-                                                       otherFrames: otherFrames,
-                                                       filename: filename,
-                                                       test_paint_filename: self.test_paint ? test_paint_filename : nil) // XXX last arg is ugly
-                        } else {
-                            Log.d("FUCK")
-                            fatalError("doh")
-                        }
-                        await self.number_running.decrement()
-                        self.dispatchGroup.leave()
-                    })
-                }
-            }
-        }
-    }
-
-    private func assembleImageSequence() {
-        var image_files = list_image_files(atPath: image_sequence_dirname)
-        // make sure the image list is in the same order as the video
-        image_files.sort { (lhs: String, rhs: String) -> Bool in
-            let lh = remove_suffix(fromString: lhs)
-            let rh = remove_suffix(fromString: rhs)
-            return lh < rh
-        }
-
-        image_sequence = ImageSequence(filenames: image_files)
-    }
-    
-    func run() {
-        assembleImageSequence()
-        if let image_sequence = image_sequence {
-            mkdir(output_dirname)
-            if test_paint { mkdir(test_paint_output_dirname) }
-
-            // enter the dispatch group so we can wait for it at the end 
-            self.dispatchGroup.enter()
-
-            Task {
-                // each of these methods removes the airplanes from a particular frame
-                await assembleMethodList()
-                Log.d("we have \(await method_list.list.count) total frames")
-        
-                Log.d("running")
-                // atually run it
-
-                while(await method_list.list.count > 0) {
-                    let current_running = await self.number_running.currentValue()
-                    if(current_running < self.max_concurrent_renders) {
-                        Log.d("\(current_running) frames currently processing")
-                        Log.d("we have \(await method_list.list.count) more frames to process")
-                        Log.d("processing new frame")
-                        
-                        // sort the keys and take the smallest one first
-                        if let next_method_key = await method_list.nextKey,
-                           let next_method = await method_list.list[next_method_key]
-                        {
-                            await method_list.removeValue(forKey: next_method_key)
-                            await self.number_running.increment()
-                            self.dispatchQueue.async {
-                            Task {
-                                await next_method()
-                            }
-                            }
-                        } else {
-                            Log.e("FUCK")
-                            fatalError("FUCK")
-                        }
-                    } else {
-                        _ = self.dispatchGroup.wait(timeout: DispatchTime.now().advanced(by: .seconds(1)))
-                    }
-                }
-
-                self.dispatchGroup.leave()
-            }
-            self.dispatchGroup.wait()
-            Log.d("done")
-        }
+        let output_dirname = basename
+        super.init(imageSequenceDirname: image_sequence_dirname,
+                   outputDirname: output_dirname,
+                   maxConcurrent: max_concurrent)
     }
 
     func removeAirplanes(fromImage image: PixelatedImage,
@@ -290,7 +150,10 @@ class NighttimeAirplaneEraser {
                     nextPixel.green = 0xFFFF
                             
                     var nextValue = nextPixel.value
-                    test_paint_data?.replaceSubrange(offset ..< offset+bytesPerPixel,
+
+                    //Log.e("offset \(offset) nextValue \(nextValue) \(test_paint_data) bytesPerPixel \(bytesPerPixel) bytesPerRow \(bytesPerRow)")
+                    
+                    test_paint_data?.replaceSubrange(offset ..< offset+6,//XXX ??? bytesPerPixel,
                                                      with: &nextValue, count: 6)
                 }
             }
@@ -386,11 +249,13 @@ class NighttimeAirplaneEraser {
             }
         }
         
-        Log.d("creating final image")
+        Log.e("creating final image \(filename)")
 
         // create a CGImage from the data we just changed
         if let dataProvider = CGDataProvider(data: data as CFData) {
             image.save(data: data, toFilename: filename)
+        } else {
+            fatalError("FUCK")
         }
 
         if test_paint,
@@ -400,15 +265,16 @@ class NighttimeAirplaneEraser {
         }
         return nil
     }
-    func startup_hook() {
+    override func startup_hook() {
         if test_paint { mkdir(test_paint_output_dirname) }
     }
     
-    func processFrame(number index: Int,
-                      dirname: String,
-                      filename image_filename: String) async
+    override func processFrame(number index: Int,
+                               filename: String,
+                               base_name: String) async
     {
-        let full_image_path = "\(dirname)/\(image_filename)"
+        let full_image_path = filename
+        Log.e("full_image_path \(full_image_path)")
         // load images outside the main thread
         if let image_sequence = image_sequence,
            let image = await image_sequence.getImage(withName: full_image_path)
@@ -426,44 +292,21 @@ class NighttimeAirplaneEraser {
                 otherFrames.append(image)
             }
 
-            let test_paint_filename = "\(self.test_paint_output_dirname)/\(image_filename).tif"
+  //          let dirname_length = Int(dirname.count)
+//            let image_filename = full_image_path[dirname_length ..< Int(full_image_path.count)]
+            
+            let test_paint_filename = "\(self.test_paint_output_dirname)/\(base_name).tif"
             
             // the other frames that we use to detect outliers and repaint from
             await self.removeAirplanes(fromImage: image,
                                        otherFrames: otherFrames,
-                                       filename: full_image_path,
+                                       filename: "\(self.output_dirname)/\(base_name).tif",
                                        test_paint_filename: self.test_paint ? test_paint_filename : nil) // XXX last arg is ugly
         } else {
             Log.d("FUCK")
             fatalError("doh")
         }
     }
-}
-
-
-// removes suffix and path
-func remove_suffix(fromString string: String) -> String {
-    let imageURL = NSURL(fileURLWithPath: string, isDirectory: false) as URL
-    let full_path = imageURL.deletingPathExtension().absoluteString
-    let components = full_path.components(separatedBy: "/")
-    return components[components.count-1]
-}
-
-func list_image_files(atPath path: String) -> [String] {
-    var image_files: [String] = []
-    
-    do {
-        let contents = try FileManager.default.contentsOfDirectory(atPath: path)
-        contents.forEach { file in
-            if file.hasSuffix(".tif") || file.hasSuffix(".tiff") {
-                image_files.append("\(path)/\(file)")
-                Log.d("going to read \(file)")
-            }
-        }
-    } catch {
-        Log.d("OH FUCK \(error)")
-    }
-    return image_files
 }
 
 // this method identifies neighoring outliers,
