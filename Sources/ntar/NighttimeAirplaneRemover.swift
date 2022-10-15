@@ -3,7 +3,7 @@ import CoreGraphics
 import Cocoa
 
 @available(macOS 10.15, *) 
-class NighttimeAirplaneEraser : ImageSequenceProcessor {
+class NighttimeAirplaneRemover : ImageSequenceProcessor {
     
     let test_paint_output_dirname: String
 

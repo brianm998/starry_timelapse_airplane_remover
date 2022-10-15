@@ -6,15 +6,16 @@ import Cocoa
 todo:
 
  - identify outliers that are in a line somehow, and apply a smaller threshold to those that are
- - figure out crashes after hundreds of frames (more threading problems?)
+ - figure out crashes after hundreds of frames (more threading problems?) (maybe fixed?)
  - write perl wrapper to keep it running when it crashes (make sure all saved files are ok first?)
- - refactor ImageSequence to be more generic (try to image blend w/ it)
- - allow writing out test paint and normal files to separate output dirs
+ - try image blending
+ - explore using multi dementional array instead of hash for outliers
+ - make it faster
 */
 
 Log.handlers = 
     [
-      .console: ConsoleLogHandler(at: .debug)
+      .console: ConsoleLogHandler(at: .error)
     ]
 
 
@@ -28,11 +29,11 @@ if CommandLine.arguments.count < 1 {
 
     if #available(macOS 10.15, *) {
         let dirname = "\(path)/\(input_image_sequence_dirname)"
-        let eraser = NighttimeAirplaneEraser(imageSequenceDirname: dirname,
-                                             maxConcurrent: 40,
+        let eraser = NighttimeAirplaneRemover(imageSequenceDirname: dirname,
+                                             maxConcurrent: 35,
                                              minNeighbors: 130,
                                              padding: 0,
-                                             testPaint: false)
+                                             testPaint: true)
         eraser.run()
     } else {
         Log.d("cannot run :(")

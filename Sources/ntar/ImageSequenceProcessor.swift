@@ -2,12 +2,13 @@ import Foundation
 import CoreGraphics
 import Cocoa
 
-
-
 @available(macOS 10.15, *) 
 class ImageSequenceProcessor {
-    
+
+    // the name of the directory holding the image sequence being processed
     let image_sequence_dirname: String
+
+    // the name of the directory to write processed images to
     let output_dirname: String
 
     // the max number of frames to process at one time
@@ -16,9 +17,9 @@ class ImageSequenceProcessor {
     // the following properties get included into the output videoname
     
     // actors
-    let method_list = MethodList()
-    let number_running = NumberRunning()
-    var image_sequence: ImageSequence
+    let method_list = MethodList()       // a list of methods to process each frame
+    let number_running = NumberRunning() // how many methods are running right now
+    var image_sequence: ImageSequence    // the sequence of images that we're processing
 
     // concurrent dispatch queue so we can process frames in parallel
     let dispatchQueue = DispatchQueue(label: "image_sequence_processor",
