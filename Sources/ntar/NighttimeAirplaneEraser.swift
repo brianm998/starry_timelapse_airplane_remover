@@ -2,18 +2,13 @@ import Foundation
 import CoreGraphics
 import Cocoa
 
-/*
-todo:
-
- - identify outliers that are in a line somehow, and apply a smaller threshold to those that are
-
-*/
-
 @available(macOS 10.15, *) 
 class NighttimeAirplaneEraser {
     
     let image_sequence_dirname: String
     let output_dirname: String
+
+    let test_paint_output_dirname: String
 
     // the max number of frames to process at one time
     let max_concurrent_renders: UInt
@@ -35,6 +30,8 @@ class NighttimeAirplaneEraser {
     // paint red on changed pixels, with blue on padding border
     let test_paint_changed_pixels: Bool
 
+    let test_paint: Bool
+    
     // concurrent dispatch queue so we can process frames in parallel
     let dispatchQueue = DispatchQueue(label: "ntar",
                                       qos: .unspecified,
@@ -55,20 +52,32 @@ class NighttimeAirplaneEraser {
         self.padding_value = padding
         self.test_paint_outliers = testPaint
         self.test_paint_changed_pixels = testPaint
+        self.test_paint = testPaint
         image_sequence_dirname = imageSequenceDirname
         var basename = "\(image_sequence_dirname)-no-planes-\(min_neighbors)-\(max_pixel_distance)"
         if padding != 0 {
             basename = basename + "-pad-\(padding)"
         }
-        if testPaint {
-            output_dirname = "\(basename)-test-paint"
-        } else {
-            output_dirname = basename
+
+        test_paint_output_dirname = "\(basename)-test-paint"
+        output_dirname = basename
+    }
+
+    func mkdir(_ path: String) {
+        if !FileManager.default.fileExists(atPath: path) {
+            do {
+                try FileManager.default.createDirectory(atPath: path,
+                                                        withIntermediateDirectories: false,
+                                                        attributes: nil)
+            } catch let error as NSError {
+                fatalError("Unable to create directory \(error.debugDescription)")
+            }
         }
     }
     
     func run() {
         var image_files = list_image_files(atPath: image_sequence_dirname)
+        // make sure the image list is in the same order as the video
         image_files.sort { (lhs: String, rhs: String) -> Bool in
             let lh = remove_suffix(fromString: lhs)
             let rh = remove_suffix(fromString: rhs)
@@ -76,17 +85,9 @@ class NighttimeAirplaneEraser {
         }
 
         let image_sequence = ImageSequence(filenames: image_files)
-        //    Log.d("image_files \(image_files)")
 
-        if !FileManager.default.fileExists(atPath: output_dirname) {
-            do {
-                try FileManager.default.createDirectory(atPath: output_dirname,
-                                                        withIntermediateDirectories: false,
-                                                        attributes: nil)
-            } catch let error as NSError {
-                fatalError("Unable to create directory \(error.debugDescription)")
-            }
-        }
+        mkdir(output_dirname)
+        if test_paint { mkdir(test_paint_output_dirname) }
         
         // each of these methods removes the airplanes from a particular frame
         var methods: [Int : () async -> Void] = [:]
@@ -98,6 +99,7 @@ class NighttimeAirplaneEraser {
             let filename_base = remove_suffix(fromString: image_sequence.filenames[index])
             // XXX why remove and add diff? 
             let filename = "\(self.output_dirname)/\(filename_base).tif"
+            let test_paint_filename = "\(self.test_paint_output_dirname)/\(filename_base).tif"
 
             if FileManager.default.fileExists(atPath: filename) {
                 Log.i("skipping already existing file \(filename)")
@@ -120,17 +122,10 @@ class NighttimeAirplaneEraser {
                         }
                         
                         // the other frames that we use to detect outliers and repaint from
-                        if let new_image = await self.removeAirplanes(fromImage: image,
-                                                                      otherFrames: otherFrames)
-                        {
-                            // relinquish images here
-                            Log.d("new_image \(new_image)")
-                            do {
-                                try save(image: new_image, toFile: filename)
-                            } catch {
-                                Log.e("doh! \(error)")
-                            }
-                        }
+                        await self.removeAirplanes(fromImage: image,
+                                                   otherFrames: otherFrames,
+                                                   filename: filename,
+                                                   test_paint_filename: self.test_paint ? test_paint_filename : nil) // XXX last arg is ugly
                     } else {
                         Log.d("FUCK")
                         fatalError("doh")
@@ -182,10 +177,18 @@ class NighttimeAirplaneEraser {
     }
 
     func removeAirplanes(fromImage image: PixelatedImage,
-                         otherFrames: [PixelatedImage]) async -> CGImage?
+                         otherFrames: [PixelatedImage],
+                         filename: String,
+                         test_paint_filename tpfo: String?) async -> CGImage?
     {
         Log.d("removing airplanes from image with \(otherFrames.count) other frames")
 
+        var test_paint_filename: String = ""
+        var test_paint = false
+        if let tp_filename = tpfo {
+            test_paint = true
+            test_paint_filename = tp_filename
+        }
         let width = image.width
         let height = image.height
         let bytesPerPixel = image.bytesPerPixel
@@ -199,8 +202,15 @@ class NighttimeAirplaneEraser {
         guard var data = CFDataCreateMutableCopy(kCFAllocatorDefault,
                                                  CFDataGetLength(orig_data),
                                                  orig_data) as? Data else { return nil }
-          
+
+        var test_paint_data: Data? = nil
               
+        if test_paint {
+            guard var test_data = CFDataCreateMutableCopy(kCFAllocatorDefault,
+                                                          CFDataGetLength(orig_data),
+                                                          orig_data) as? Data else { return nil }
+            test_paint_data = test_data
+        }
         Log.d("got image data, detecting outlying pixels")
 
         var outlier_map: [String: Outlier] = [:] // keyed by "\(x),\(y)"
@@ -248,6 +258,7 @@ class NighttimeAirplaneEraser {
     
         Log.i("done processing the outlier map")
         // paint green on the outliers above the threshold for testing
+
         if(test_paint_outliers) { // XXX search the outlier map instead, it's faster
             Log.d("painting outliers green")
 
@@ -264,7 +275,8 @@ class NighttimeAirplaneEraser {
                     nextPixel.green = 0xFFFF
                             
                     var nextValue = nextPixel.value
-                    data.replaceSubrange(offset ..< offset+bytesPerPixel, with: &nextValue, count: 6)
+                    test_paint_data?.replaceSubrange(offset ..< offset+bytesPerPixel,
+                                                     with: &nextValue, count: 6)
                 }
             }
         }
@@ -332,15 +344,6 @@ class NighttimeAirplaneEraser {
                     // blend the pixels from the adjecent frames
                     var nextPixel = Pixel(merging: otherPixels)
                     
-                    // for testing, colors changed pixels
-                    if test_paint_changed_pixels {
-                        if outlier.amount == 0 {
-                            nextPixel.blue = 0xFFFF // for padding
-                        } else {
-                            nextPixel.red = 0xFFFF // for unpadded changed area
-                        }
-                    }
-
                     // this is the numeric value we need to write out to paint over the airplane
                     var nextValue = nextPixel.value
 
@@ -349,6 +352,21 @@ class NighttimeAirplaneEraser {
 
                     // actually paint over that airplane like thing in the image data
                     data.replaceSubrange(offset ..< offset+bytesPerPixel, with: &nextValue, count: 6)
+
+                    // for testing, colors changed pixels
+                    if test_paint_changed_pixels {
+                        if outlier.amount == 0 {
+                            nextPixel.blue = 0xFFFF // for padding
+                        } else {
+                            nextPixel.red = 0xFFFF // for unpadded changed area
+                        }
+                    }
+                    var testPaintValue = nextPixel.value
+                    
+                    if test_paint {
+                        test_paint_data?.replaceSubrange(offset ..< offset+bytesPerPixel,
+                                                         with: &testPaintValue, count: 6)
+                    }
                 }
             }
         }
@@ -358,17 +376,59 @@ class NighttimeAirplaneEraser {
         // create a CGImage from the data we just changed
         if let dataProvider = CGDataProvider(data: data as CFData) {
             let colorSpace = CGColorSpaceCreateDeviceRGB()
-            return CGImage(width: width,
-                           height: height,
-                           bitsPerComponent: bitsPerComponent,
-                           bitsPerPixel: bytesPerPixel*8,
-                           bytesPerRow: width*bytesPerPixel,
-                           space: colorSpace,
-                           bitmapInfo: image.image.bitmapInfo, // byte order
-                           provider: dataProvider,
-                           decode: nil,
-                           shouldInterpolate: false,
-                           intent: .defaultIntent)
+            if let new_image =  CGImage(width: width,
+                                        height: height,
+                                        bitsPerComponent: bitsPerComponent,
+                                        bitsPerPixel: bytesPerPixel*8,
+                                        bytesPerRow: width*bytesPerPixel,
+                                        space: colorSpace,
+                                        bitmapInfo: image.image.bitmapInfo, // byte order
+                                        provider: dataProvider,
+                                        decode: nil,
+                                        shouldInterpolate: false,
+                                        intent: .defaultIntent)
+               {
+
+                   // save it
+                   Log.d("new_image \(new_image)")
+                   do {
+                       try save(image: new_image, toFile: filename)
+                   } catch {
+                       Log.e("doh! \(error)")
+                   }
+            } else {
+                Log.e("Couldn't create CGImage :(")
+                fatalError("FUCK")
+            }
+        }
+        // XXX combine the logic above and below
+        if test_paint,
+           let test_paint_data = test_paint_data
+        {
+            // create a CGImage from the data we just changed
+            if let dataProvider = CGDataProvider(data: test_paint_data as CFData) {
+                let colorSpace = CGColorSpaceCreateDeviceRGB()
+                if let new_image =  CGImage(width: width,
+                                            height: height,
+                                            bitsPerComponent: bitsPerComponent,
+                                            bitsPerPixel: bytesPerPixel*8,
+                                            bytesPerRow: width*bytesPerPixel,
+                                            space: colorSpace,
+                                            bitmapInfo: image.image.bitmapInfo, // byte order
+                                            provider: dataProvider,
+                                            decode: nil,
+                                            shouldInterpolate: false,
+                                            intent: .defaultIntent) {
+
+                   // save it
+                    Log.d("new_image \(new_image)")
+                    do {
+                        try save(image: new_image, toFile: test_paint_filename)
+                    } catch {
+                        Log.e("doh! \(error)")
+                    }
+                }
+            }
         }
         return nil
     }
