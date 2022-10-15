@@ -108,17 +108,13 @@ actor PixelatedImage {
                     if let colorSpace = CGColorSpace(name: CGColorSpace.sRGB) {
                         let imgFormat = CIFormat.RGBA16
 
-                        if #available(macOS 10.12, *) {
-                            try context.writeTIFFRepresentation(
-                                of: CIImage(cgImage: new_image),
-                                to: fileURL,
-                                format: imgFormat,
-                                colorSpace: colorSpace,
-                                options: options
-                            )
-                        } else {
-                            fatalError("Must use macOS 10.12 or higher")
-                        }
+                        try context.writeTIFFRepresentation(
+                            of: CIImage(cgImage: new_image),
+                            to: fileURL,
+                            format: imgFormat,
+                            colorSpace: colorSpace,
+                            options: options
+                        )
                     } else {
                         Log.d("FUCK")
                     }
