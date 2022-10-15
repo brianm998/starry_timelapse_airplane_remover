@@ -308,7 +308,7 @@ class NighttimeAirplaneEraser : ImageSequenceProcessor {
 
 // this method identifies neighoring outliers,
 // outputting a dict of Outlier tag to number with that tag
-func prune(outlierMap outlier_map: [String: Outlier]) -> [String: UInt16]
+func prune(outlierMap outlier_map: [String: Outlier]) -> [String: UInt64]
 {
     // first link all outliers to their direct neighbors
     for (_, outlier) in outlier_map {
@@ -345,7 +345,7 @@ func prune(outlierMap outlier_map: [String: Outlier]) -> [String: UInt16]
         }
     }
 
-    var individual_group_counts: [String: UInt16] = [:]
+    var individual_group_counts: [String: UInt64] = [:]
 
     // finally collect counts by outlier tag name
     for (_, outlier) in outlier_map {
@@ -367,7 +367,7 @@ func prune(outlierMap outlier_map: [String: Outlier]) -> [String: UInt16]
 // used for padding          
 func tag(within distance: UInt, ofX x: Int, andY y: Int,
          outlierMap outlier_map: [String: Outlier],
-         neighborGroups neighbor_groups: [String: UInt16],
+         neighborGroups neighbor_groups: [String: UInt64],
          minNeighbors min_neighbors: UInt16) -> String?
 {
     var x_start = 0;
