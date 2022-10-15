@@ -50,9 +50,11 @@ class ImageSequenceProcessor {
 
     func processFrame(number index: Int,
                       filename: String,
-                      base_name: String) async // XXX the base name has the extention stripped for some reason :(
+                      base_name: String) async -> Data? // XXX the base name has the extention stripped for some reason :( remove_suffix does it, still not sure how
     {
         Log.e("should be overrideen")
+
+        return nil
     }
 
     func assembleMethodList() async {
@@ -60,15 +62,25 @@ class ImageSequenceProcessor {
             for (index, image_filename) in image_sequence.filenames.enumerated() {
                 let filename = image_sequence.filenames[index]
                 let basename = remove_suffix_XXX_RENAME(fromString: filename)
-                
-                if FileManager.default.fileExists(atPath: "\(output_dirname)/\(basename).tif") {
+                let output_filename = "\(output_dirname)/\(basename).tif"
+                if FileManager.default.fileExists(atPath: output_filename) {
                     Log.i("skipping already existing file \(filename)")
                 } else {
                     await method_list.add(atIndex: index, method: {
                         self.dispatchGroup.enter() 
-                        await self.processFrame(number: index,
-                                                filename: image_filename,
-                                                base_name: basename)
+                        if let data = await self.processFrame(number: index,
+                                                              filename: image_filename,
+                                                              base_name: basename)
+                        {
+                            // write each frame out as a tiff file after processing it
+                            if let image = await image_sequence.getImage(withName: image_filename),
+                               let dataProvider = CGDataProvider(data: data as CFData)
+                            {
+                                image.writeTIFFEncoding(ofData: data, toFilename: output_filename)
+                            } else {
+                                fatalError("FUCK")
+                            }
+                        }
                         await self.number_running.decrement()
                         self.dispatchGroup.leave()
                     })

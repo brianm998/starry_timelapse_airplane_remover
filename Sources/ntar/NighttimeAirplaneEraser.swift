@@ -54,7 +54,7 @@ class NighttimeAirplaneEraser : ImageSequenceProcessor {
     func removeAirplanes(fromImage image: PixelatedImage,
                          otherFrames: [PixelatedImage],
                          filename: String,
-                         test_paint_filename tpfo: String?) async -> CGImage?
+                         test_paint_filename tpfo: String?) async -> Data?
     {
         Log.d("removing airplanes from image with \(otherFrames.count) other frames")
 
@@ -251,19 +251,12 @@ class NighttimeAirplaneEraser : ImageSequenceProcessor {
         
         Log.i("creating final image \(filename)")
 
-        // create a CGImage from the data we just changed
-        if let dataProvider = CGDataProvider(data: data as CFData) {
-            image.writeTIFFEncoding(ofData: data, toFilename: filename)
-        } else {
-            fatalError("FUCK")
-        }
-
         if test_paint,
            let test_paint_data = test_paint_data
         {
             image.writeTIFFEncoding(ofData: test_paint_data, toFilename: test_paint_filename)
         }
-        return nil
+        return data
     }
     override func startup_hook() {
         if test_paint { mkdir(test_paint_output_dirname) }
@@ -271,7 +264,7 @@ class NighttimeAirplaneEraser : ImageSequenceProcessor {
     
     override func processFrame(number index: Int,
                                filename full_image_path: String,
-                               base_name: String) async
+                               base_name: String) async -> Data?
     {
         //Log.e("full_image_path \(full_image_path)")
         // load images outside the main thread
@@ -295,10 +288,10 @@ class NighttimeAirplaneEraser : ImageSequenceProcessor {
             let test_paint_filename = "\(self.test_paint_output_dirname)/\(base_name).tif"
             
             // the other frames that we use to detect outliers and repaint from
-            await self.removeAirplanes(fromImage: image,
-                                       otherFrames: otherFrames,
-                                       filename: "\(self.output_dirname)/\(base_name).tif",
-                                       test_paint_filename: self.test_paint ? test_paint_filename : nil) // XXX last arg is ugly
+            return await self.removeAirplanes(fromImage: image,
+                                              otherFrames: otherFrames,
+                                              filename: "\(self.output_dirname)/\(base_name).tif",
+                                              test_paint_filename: self.test_paint ? test_paint_filename : nil) // XXX last arg is ugly
         } else {
             Log.d("FUCK")
             fatalError("doh")
