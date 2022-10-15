@@ -115,8 +115,8 @@ class ImageSequenceProcessor {
         var image_files = list_image_files(atPath: image_sequence_dirname)
         // make sure the image list is in the same order as the video
         image_files.sort { (lhs: String, rhs: String) -> Bool in
-            let lh = remove_path(fromString: lhs)
-            let rh = remove_path(fromString: rhs)
+            let lh = remove_path_and_suffix(fromString: lhs)
+            let rh = remove_path_and_suffix(fromString: rhs)
             return lh < rh
         }
 
@@ -176,11 +176,18 @@ class ImageSequenceProcessor {
     }
 }
 
-
-// removes suffix and path
+// removes path from filename
 func remove_path(fromString string: String) -> String {
     let components = string.components(separatedBy: "/")
     let ret = components[components.count-1]
     return ret
+}
+
+// removes path and suffix from filename
+func remove_path_and_suffix(fromString string: String) -> String {
+    let imageURL = NSURL(fileURLWithPath: string, isDirectory: false) as URL
+    let full_path = imageURL.deletingPathExtension().absoluteString
+    let components = full_path.components(separatedBy: "/")
+    return components[components.count-1]
 }
 
