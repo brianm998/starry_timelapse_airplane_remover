@@ -263,14 +263,12 @@ class NighttimeAirplaneEraser : ImageSequenceProcessor {
     }
     
     override func processFrame(number index: Int,
-                               filename full_image_path: String,
+                               image: PixelatedImage,
                                base_name: String) async -> Data?
     {
         //Log.e("full_image_path \(full_image_path)")
         // load images outside the main thread
-        if let image_sequence = image_sequence,
-           let image = await image_sequence.getImage(withName: full_image_path)
-        {
+        if let image_sequence = image_sequence {
             var otherFrames: [PixelatedImage] = []
             
             if index > 0,

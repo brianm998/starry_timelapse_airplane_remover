@@ -71,7 +71,7 @@ class ImageSequenceProcessor {
     }
 
     func processFrame(number index: Int,
-                      filename: String,
+                      image: PixelatedImage,
                       base_name: String) async -> Data?
     {
         Log.e("should be overrideen")
@@ -90,8 +90,10 @@ class ImageSequenceProcessor {
                 } else {
                     await method_list.add(atIndex: index, method: {
                         self.dispatchGroup.enter() 
-                        if let data = await self.processFrame(number: index,
-                                                              filename: image_filename,
+
+                        if let image = await image_sequence.getImage(withName: image_filename),
+                           let data = await self.processFrame(number: index,
+                                                              image: image,
                                                               base_name: basename)
                         {
                             // write each frame out as a tiff file after processing it
