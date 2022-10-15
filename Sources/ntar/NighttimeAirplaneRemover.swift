@@ -245,10 +245,12 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
         }
         return data
     }
+
     override func startup_hook() {
         if test_paint { mkdir(test_paint_output_dirname) }
     }
-    
+
+    // called by the superclass to process each frame
     override func processFrame(number index: Int,
                                image: PixelatedImage,
                                base_name: String) async -> Data?
@@ -269,13 +271,14 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
             otherFrames.append(image)
         }
         
-        let test_paint_filename = "\(self.test_paint_output_dirname)/\(base_name)"
+        let test_paint_filename = self.test_paint ?
+                                  "\(self.test_paint_output_dirname)/\(base_name)" : nil
         
         // the other frames that we use to detect outliers and repaint from
         return await self.removeAirplanes(fromImage: image,
                                           otherFrames: otherFrames,
                                           filename: "\(self.output_dirname)/\(base_name)",
-                                          test_paint_filename: self.test_paint ? test_paint_filename : nil) // XXX last arg is ugly
+                                          test_paint_filename: test_paint_filename)
     }
 }
 
