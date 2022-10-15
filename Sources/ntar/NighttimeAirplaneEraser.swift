@@ -35,7 +35,6 @@ class NighttimeAirplaneEraser {
                                       autoreleaseFrequency: .inherit,
                                       target: nil)
 
-    
     init(imageSequenceDirname: String,
          maxConcurrent max_concurrent: UInt = 5,
          minNeighbors min_neighbors: UInt16 = 200,
@@ -85,45 +84,40 @@ class NighttimeAirplaneEraser {
         let number_running = NumberRunning()
     
         for (index, image_filename) in image_sequence.filenames.enumerated() {
-            // XXX process in order
             methods[index] = {
                 dispatchGroup.enter() 
-                do {
-                    // load images outside the main thread
-                    if let image = await image_sequence.getImage(withName: image_filename) {
-                        var otherFrames: [CGImage] = []
-                        
-                        if index > 0,
-                           let image = await image_sequence.getImage(withName: image_sequence.filenames[index-1])
-                        {
-                            otherFrames.append(image)
-                        }
-                        if index < image_sequence.filenames.count - 1,
-                           let image = await image_sequence.getImage(withName: image_sequence.filenames[index+1])
-                        {
-                            otherFrames.append(image)
-                        }
-                        
-                        // the other frames that we use to detect outliers and repaint from
-                        if let new_image = self.removeAirplanes(fromImage: image,
-                                                                otherFrames: otherFrames)
-                        {
-                            // relinquish images here
-                            Log.d("new_image \(new_image)")
-                            let filename_base = remove_suffix(fromString: image_sequence.filenames[index])
-                            let filename = "\(self.output_dirname)/\(filename_base).tif"
-                            do {
-                                try save(image: new_image, toFile: filename)
-                            } catch {
-                                Log.e("doh! \(error)")
-                            }
-                        }
-                    } else {
-                        Log.d("FUCK")
-                        fatalError("doh")
+                // load images outside the main thread
+                if let image = await image_sequence.getImage(withName: image_filename) {
+                    var otherFrames: [CGImage] = []
+                    
+                    if index > 0,
+                       let image = await image_sequence.getImage(withName: image_sequence.filenames[index-1])
+                    {
+                        otherFrames.append(image)
                     }
-                } catch {
-                    Log.e("doh! \(error)")
+                    if index < image_sequence.filenames.count - 1,
+                       let image = await image_sequence.getImage(withName: image_sequence.filenames[index+1])
+                    {
+                        otherFrames.append(image)
+                    }
+                    
+                    // the other frames that we use to detect outliers and repaint from
+                    if let new_image = self.removeAirplanes(fromImage: image,
+                                                                otherFrames: otherFrames)
+                    {
+                        // relinquish images here
+                        Log.d("new_image \(new_image)")
+                        let filename_base = remove_suffix(fromString: image_sequence.filenames[index])
+                        let filename = "\(self.output_dirname)/\(filename_base).tif"
+                        do {
+                            try save(image: new_image, toFile: filename)
+                        } catch {
+                            Log.e("doh! \(error)")
+                        }
+                    }
+                } else {
+                    Log.d("FUCK")
+                    fatalError("doh")
                 }
                 await number_running.decrement()
                 dispatchGroup.leave()
@@ -138,8 +132,9 @@ class NighttimeAirplaneEraser {
                     Log.d("\(current_running) frames currently processing")
                     Log.d("we have \(methods.count) more frames to process")
                     Log.d("enquing new method")
-                    
-                    if let next_method_key = methods.keys.randomElement(),
+
+                    // sort the keys and take the smallest one first
+                    if let next_method_key = methods.sorted(by: { $0.key < $1.key}).first?.key,
                        let next_method = methods[next_method_key]
                     {
                         methods.removeValue(forKey: next_method_key)
