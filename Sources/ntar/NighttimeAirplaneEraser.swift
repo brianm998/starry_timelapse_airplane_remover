@@ -96,7 +96,6 @@ class NighttimeAirplaneEraser {
                 Log.i("skipping already existing file \(filename)")
             } else {
                 methods[index] = {
-                    // XXX check for existance of file
                     dispatchGroup.enter() 
                     // load images outside the main thread
                     if let image = await image_sequence.getImage(withName: image_filename) {
@@ -206,7 +205,9 @@ class NighttimeAirplaneEraser {
         }
               
         Log.d("got image data, detecting outlying pixels")
-              
+
+        // compare pixels at the same image location in adjecent frames
+        // detect Outliers which are much more brighter than the adject frames
         for y: UInt16 in 0 ..< UInt16(height) {
             for x: UInt16 in 0 ..< UInt16(width) {
 
@@ -311,37 +312,42 @@ class NighttimeAirplaneEraser {
         for (_, outlier) in outlier_map {
             let x = outlier.x
             let y = outlier.y
+            // figure out if this outlier is next to enough other outliers
             if let tag = outlier.tag,
                let total_size = neighbor_groups[tag] {
                 if total_size > min_neighbors { 
-                    //Log.d("found \(group_size) neighbors")
+                    // we've found a spot to paint over
                             
-                    let offset = (Int(y) * bytesPerRow) + (Int(x) * bytesPerPixel)
-                    
                     var otherPixels: [Pixel] = []
 
-                    // blend in the other frames
+                    // grab the pixels from the same image spot from adject frames
                     for p in 0 ..< otherFrames.count {
                         let otherFrame = otherFrames[p]
                         let newPixel = pixel(fromData: otherData[p], atX: x, andY: y,
                                              bitsPerPixel: otherFrame.bitsPerPixel,
                                              bytesPerRow: otherFrame.bytesPerRow,
                                              bitsPerComponent: otherFrame.bitsPerComponent)
-                        
                         otherPixels.append(newPixel)
                     }
+                    // blend the pixels from the adjecent frames
                     var nextPixel = Pixel(merging: otherPixels)
                     
+                    // for testing, colors changed pixels
                     if test_paint_changed_pixels {
-                        // for testing, colors changed pixels
                         if outlier.amount == 0 {
                             nextPixel.blue = 0xFFFF // for padding
                         } else {
                             nextPixel.red = 0xFFFF // for unpadded changed area
                         }
                     }
-                    
+
+                    // this is the numeric value we need to write out to paint over the airplane
                     var nextValue = nextPixel.value
+
+                    // the is the place in the image data to write to
+                    let offset = (Int(y) * bytesPerRow) + (Int(x) * bytesPerPixel)
+
+                    // actually paint over that airplane like thing in the image data
                     data.replaceSubrange(offset ..< offset+bytesPerPixel, with: &nextValue, count: 6)
                 }
             }
@@ -349,6 +355,7 @@ class NighttimeAirplaneEraser {
         
         Log.d("creating final image")
 
+        // create a CGImage from the data we just changed
         if let dataProvider = CGDataProvider(data: data as CFData) {
             let colorSpace = CGColorSpaceCreateDeviceRGB()
             return CGImage(width: width,
@@ -450,7 +457,8 @@ func list_image_files(atPath path: String) -> [String] {
     return image_files
 }
 
-
+// this method identifies neighoring outliers,
+// outputting a dict of Outlier tag to number with that tag
 func prune(outlierMap outlier_map: [String: Outlier]) -> [String: UInt16]
 {
     // first link all outliers to their direct neighbors
@@ -480,7 +488,6 @@ func prune(outlierMap outlier_map: [String: Outlier]) -> [String: UInt16]
             var pending_outliers = directNeighbors(for: outlier)
             // these outliers have a tag, but are set as done
             while pending_outliers.count > 0 {
-                //Log.d("pending_outliers.count \(pending_outliers.count)")
                 let next_outlier = pending_outliers.removeFirst()
                 next_outlier.tag = outlier_key
                 let more_pending_outliers = directNeighbors(for: next_outlier)
@@ -491,6 +498,7 @@ func prune(outlierMap outlier_map: [String: Outlier]) -> [String: UInt16]
 
     var individual_group_counts: [String: UInt16] = [:]
 
+    // finally collect counts by outlier tag name
     for (_, outlier) in outlier_map {
         //Log.d("outlier \(outlier)")
         if let tag = outlier.tag {
