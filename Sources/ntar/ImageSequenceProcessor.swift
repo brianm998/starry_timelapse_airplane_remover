@@ -2,6 +2,8 @@ import Foundation
 import CoreGraphics
 import Cocoa
 
+
+
 @available(macOS 10.15, *) 
 class ImageSequenceProcessor {
     
@@ -17,6 +19,8 @@ class ImageSequenceProcessor {
     let method_list = MethodList()
     let number_running = NumberRunning()
     var image_sequence: ImageSequence?
+
+    let supported_image_file_types = [".tif", ".tiff"]
     
     // concurrent dispatch queue so we can process frames in parallel
     let dispatchQueue = DispatchQueue(label: "image_sequence_processor",
@@ -34,6 +38,24 @@ class ImageSequenceProcessor {
         self.max_concurrent_renders = max_concurrent
         self.image_sequence_dirname = imageSequenceDirname
         self.output_dirname = output_dirname
+    }
+    
+    func list_image_files(atPath path: String) -> [String] {
+        var image_files: [String] = []
+        
+        do {
+            let contents = try FileManager.default.contentsOfDirectory(atPath: path)
+            contents.forEach { file in
+                supported_image_file_types.forEach { type in
+                    if file.hasSuffix(type) {
+                        image_files.append("\(path)/\(file)")
+                    } 
+                }
+            }
+        } catch {
+            Log.d("OH FUCK \(error)")
+        }
+        return image_files
     }
 
     func mkdir(_ path: String) {
@@ -90,7 +112,7 @@ class ImageSequenceProcessor {
     }
 
     private func assembleImageSequence() {
-        var image_files = list_image_files___RENAME_XXX(atPath: image_sequence_dirname)
+        var image_files = list_image_files(atPath: image_sequence_dirname)
         // make sure the image list is in the same order as the video
         image_files.sort { (lhs: String, rhs: String) -> Bool in
             let lh = remove_path(fromString: lhs)
@@ -160,22 +182,5 @@ func remove_path(fromString string: String) -> String {
     let components = string.components(separatedBy: "/")
     let ret = components[components.count-1]
     return ret
-}
-
-func list_image_files___RENAME_XXX(atPath path: String) -> [String] {
-    var image_files: [String] = []
-    
-    do {
-        let contents = try FileManager.default.contentsOfDirectory(atPath: path)
-        contents.forEach { file in
-            if file.hasSuffix(".tif") || file.hasSuffix(".tiff") {
-                image_files.append("\(path)/\(file)")
-                Log.d("going to read \(file)")
-            }
-        }
-    } catch {
-        Log.d("OH FUCK \(error)")
-    }
-    return image_files
 }
 
