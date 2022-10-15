@@ -2,6 +2,13 @@ import Foundation
 import CoreGraphics
 import Cocoa
 
+/*
+todo:
+
+ - identify outliers that are in a line somehow, and apply a smaller threshold to those that are
+ - refector Pixel access to increase speed
+
+*/
 @available(macOS 10.15, *) 
 class NighttimeAirplaneEraser {
     
@@ -11,13 +18,12 @@ class NighttimeAirplaneEraser {
     // the max number of frames to process at one time
     let max_concurrent_renders: UInt
 
-    // XXX write the following things into the output videoname:
+    // the following properties get included into the output videoname
     
     // size of a group of outliers that is considered an airplane streak
     let min_neighbors: UInt16
 
     // difference between same pixels on different frames to consider an outlier
-    //    let max_pixel_distance: UInt16 = 10000
     let max_pixel_distance: UInt16
 
     // add some padding?
@@ -28,7 +34,8 @@ class NighttimeAirplaneEraser {
     
     // paint red on changed pixels, with blue on padding border
     let test_paint_changed_pixels: Bool
-    
+
+    // concurrent dispatch queue so we can process frames in parallel
     let dispatchQueue = DispatchQueue(label: "ntar",
                                       qos: .unspecified,
                                       attributes: [.concurrent],
@@ -37,8 +44,8 @@ class NighttimeAirplaneEraser {
 
     init(imageSequenceDirname: String,
          maxConcurrent max_concurrent: UInt = 5,
-         minNeighbors min_neighbors: UInt16 = 200,
-         maxPixelDistance max_pixel_distance: UInt16 = 9000,
+         minNeighbors min_neighbors: UInt16 = 100,
+         maxPixelDistance max_pixel_distance: UInt16 = 10000,
          padding: UInt16 = 0,
          testPaint: Bool = false)
     {
@@ -178,8 +185,6 @@ class NighttimeAirplaneEraser {
     {
         Log.d("removing airplanes from image with \(otherFrames.count) other frames")
 
-        var outlier_map: [String: Outlier] = [:] // keyed by "\(x),\(y)"
-        
         let width = image.width
         let height = image.height
         let bytesPerPixel = image.bitsPerPixel/8
@@ -205,6 +210,8 @@ class NighttimeAirplaneEraser {
         }
               
         Log.d("got image data, detecting outlying pixels")
+
+        var outlier_map: [String: Outlier] = [:] // keyed by "\(x),\(y)"
 
         // compare pixels at the same image location in adjecent frames
         // detect Outliers which are much more brighter than the adject frames
