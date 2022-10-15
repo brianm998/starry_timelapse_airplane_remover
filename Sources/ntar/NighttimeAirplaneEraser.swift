@@ -9,25 +9,25 @@ class NighttimeAirplaneEraser {
     let output_dirname: String
 
     // the max number of frames to process at one time
-    let max_concurrent_renders = 40
+    let max_concurrent_renders: UInt
 
     // XXX write the following things into the output videoname:
     
     // size of a group of outliers that is considered an airplane streak
-    let min_neighbors: UInt16 = 200
+    let min_neighbors: UInt16
 
     // difference between same pixels on different frames to consider an outlier
     //    let max_pixel_distance: UInt16 = 10000
-    let max_pixel_distance: UInt16 = 8000
+    let max_pixel_distance: UInt16
 
-    // add some padding
-    let padding_value: UInt16 = 0
+    // add some padding?
+    let padding_value: UInt16
 
     // paint green on the outliers above the threshold for testing, that are not overwritten
-    let test_paint_outliers = false
+    let test_paint_outliers: Bool
     
     // paint red on changed pixels, with blue on padding border
-    let test_paint_changed_pixels = false
+    let test_paint_changed_pixels: Bool
     
     let dispatchQueue = DispatchQueue(label: "ntar",
                                       qos: .unspecified,
@@ -36,9 +36,29 @@ class NighttimeAirplaneEraser {
                                       target: nil)
 
     
-    init(imageSequenceDirname: String) {
+    init(imageSequenceDirname: String,
+         maxConcurrent max_concurrent: UInt = 5,
+         minNeighbors min_neighbors: UInt16 = 200,
+         maxPixelDistance max_pixel_distance: UInt16 = 9000,
+         padding: UInt16 = 0,
+         testPaint: Bool = false)
+    {
+        self.max_concurrent_renders = max_concurrent
+        self.min_neighbors = min_neighbors
+        self.max_pixel_distance = max_pixel_distance
+        self.padding_value = padding
+        self.test_paint_outliers = testPaint
+        self.test_paint_changed_pixels = testPaint
         image_sequence_dirname = imageSequenceDirname
-        output_dirname = "\(image_sequence_dirname)-no-planes"
+        var basename = "\(image_sequence_dirname)-no-planes-\(min_neighbors)-\(max_pixel_distance)"
+        if padding != 0 {
+            basename = basename + "-pad-\(padding)"
+        }
+        if testPaint {
+            output_dirname = "\(basename)-test-paint"
+        } else {
+            output_dirname = basename
+        }
     }
     
     func run() {
@@ -65,6 +85,7 @@ class NighttimeAirplaneEraser {
         let number_running = NumberRunning()
     
         for (index, image_filename) in image_sequence.filenames.enumerated() {
+            // XXX process in order
             methods[index] = {
                 dispatchGroup.enter() 
                 do {

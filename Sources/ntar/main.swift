@@ -11,7 +11,10 @@ if CommandLine.arguments.count < 1 {
     Log.d("on path \(path)")
 
     if #available(macOS 10.15, *) {
-        let eraser = NighttimeAirplaneEraser(imageSequenceDirname: "\(path)/\(input_image_sequence_dirname)")
+        let dirname = "\(path)/\(input_image_sequence_dirname)"
+        let eraser = NighttimeAirplaneEraser(imageSequenceDirname: dirname,
+                                             maxConcurrent: 40,
+                                             minNeighbors: 130)
         eraser.run()
     } else {
         Log.d("cannot run :(")
