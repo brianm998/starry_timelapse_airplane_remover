@@ -32,12 +32,19 @@ class NighttimeAirplaneEraser {
 
     let test_paint: Bool
     
+    // actors
+    let method_list = MethodList()
+    let number_running = NumberRunning()
+    var image_sequence: ImageSequence?
+    
     // concurrent dispatch queue so we can process frames in parallel
     let dispatchQueue = DispatchQueue(label: "ntar",
                                       qos: .unspecified,
                                       attributes: [.concurrent],
                                       autoreleaseFrequency: .inherit,
                                       target: nil)
+    
+    let dispatchGroup = DispatchGroup()
     
     init(imageSequenceDirname: String,
          maxConcurrent max_concurrent: UInt = 5,
@@ -120,13 +127,6 @@ class NighttimeAirplaneEraser {
         }
     }
 
-    // actors
-    let method_list = MethodList()
-    let number_running = NumberRunning()
-    var image_sequence: ImageSequence?
-    
-    let dispatchGroup = DispatchGroup()
-    
     private func assembleImageSequence() {
         var image_files = list_image_files(atPath: image_sequence_dirname)
         // make sure the image list is in the same order as the video
@@ -144,11 +144,12 @@ class NighttimeAirplaneEraser {
         if let image_sequence = image_sequence {
             mkdir(output_dirname)
             if test_paint { mkdir(test_paint_output_dirname) }
-        
-            // each of these methods removes the airplanes from a particular frame
+
+            // enter the dispatch group so we can wait for it at the end 
             self.dispatchGroup.enter()
 
             Task {
+                // each of these methods removes the airplanes from a particular frame
                 await assembleMethodList()
                 Log.d("we have \(await method_list.list.count) total frames")
         
