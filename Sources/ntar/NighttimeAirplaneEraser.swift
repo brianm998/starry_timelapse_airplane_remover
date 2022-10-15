@@ -80,7 +80,7 @@ class NighttimeAirplaneEraser : ImageSequenceProcessor {
         var test_paint_data: Data? = nil
               
         if test_paint {
-            guard var test_data = CFDataCreateMutableCopy(kCFAllocatorDefault,
+            guard let test_data = CFDataCreateMutableCopy(kCFAllocatorDefault,
                                                           CFDataGetLength(orig_data),
                                                           orig_data) as? Data else { return nil }
             test_paint_data = test_data
@@ -255,31 +255,27 @@ class NighttimeAirplaneEraser : ImageSequenceProcessor {
     {
         //Log.e("full_image_path \(full_image_path)")
         // load images outside the main thread
-        if let image_sequence = image_sequence {
-            var otherFrames: [PixelatedImage] = []
-            
-            if index > 0,
-               let image = await image_sequence.getImage(withName: image_sequence.filenames[index-1])
-            {
-                otherFrames.append(image)
-            }
-            if index < image_sequence.filenames.count - 1,
-               let image = await image_sequence.getImage(withName: image_sequence.filenames[index+1])
-            {
-                otherFrames.append(image)
-            }
-            
-            let test_paint_filename = "\(self.test_paint_output_dirname)/\(base_name)"
-            
-            // the other frames that we use to detect outliers and repaint from
-            return await self.removeAirplanes(fromImage: image,
-                                              otherFrames: otherFrames,
-                                              filename: "\(self.output_dirname)/\(base_name)",
-                                              test_paint_filename: self.test_paint ? test_paint_filename : nil) // XXX last arg is ugly
-        } else {
-            Log.d("FUCK")
-            fatalError("doh")
+
+        var otherFrames: [PixelatedImage] = []
+        
+        if index > 0,
+           let image = await image_sequence.getImage(withName: image_sequence.filenames[index-1])
+        {
+            otherFrames.append(image)
         }
+        if index < image_sequence.filenames.count - 1,
+           let image = await image_sequence.getImage(withName: image_sequence.filenames[index+1])
+        {
+            otherFrames.append(image)
+        }
+        
+        let test_paint_filename = "\(self.test_paint_output_dirname)/\(base_name)"
+        
+        // the other frames that we use to detect outliers and repaint from
+        return await self.removeAirplanes(fromImage: image,
+                                          otherFrames: otherFrames,
+                                          filename: "\(self.output_dirname)/\(base_name)",
+                                          test_paint_filename: self.test_paint ? test_paint_filename : nil) // XXX last arg is ugly
     }
 }
 
