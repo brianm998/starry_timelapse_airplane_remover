@@ -249,11 +249,11 @@ class NighttimeAirplaneEraser : ImageSequenceProcessor {
             }
         }
         
-        Log.e("creating final image \(filename)")
+        Log.i("creating final image \(filename)")
 
         // create a CGImage from the data we just changed
         if let dataProvider = CGDataProvider(data: data as CFData) {
-            image.save(data: data, toFilename: filename)
+            image.writeTIFFEncoding(ofData: data, toFilename: filename)
         } else {
             fatalError("FUCK")
         }
@@ -261,7 +261,7 @@ class NighttimeAirplaneEraser : ImageSequenceProcessor {
         if test_paint,
            let test_paint_data = test_paint_data
         {
-            image.save(data: test_paint_data, toFilename: test_paint_filename)
+            image.writeTIFFEncoding(ofData: test_paint_data, toFilename: test_paint_filename)
         }
         return nil
     }

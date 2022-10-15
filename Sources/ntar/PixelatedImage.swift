@@ -14,7 +14,7 @@ actor PixelatedImage {
     let bytesPerRow: Int
     let bitsPerComponent: Int
     let bytesPerPixel: Int
-    let bytes: UnsafePointer<UInt8>
+    let image_buffer_ptr: UnsafePointer<UInt8>
     
     var pixels = [[Pixel]]()
     
@@ -38,7 +38,7 @@ actor PixelatedImage {
         guard let _bytes = CFDataGetBytePtr(self.data) else { // XXX maybe move this out of here
             fatalError("Couldn't access image data")
         }
-        self.bytes = _bytes
+        self.image_buffer_ptr = _bytes
     }
 
     private func readPixels() {
@@ -56,14 +56,14 @@ actor PixelatedImage {
         var pixel = Pixel()
         let offset = (y * bytesPerRow) + (x * bytesPerPixel)
         // XXX this could be cleaner
-        let r1 = UInt16(bytes[offset]) // lower bits
-        let r2 = UInt16(bytes[offset + 1]) << 8 // higher bits
+        let r1 = UInt16(image_buffer_ptr[offset]) // lower bits
+        let r2 = UInt16(image_buffer_ptr[offset + 1]) << 8 // higher bits
         pixel.red = r1 + r2
-        let g1 = UInt16(bytes[offset+bitsPerComponent/8])
-        let g2 = UInt16(bytes[offset+bitsPerComponent/8 + 1]) << 8
+        let g1 = UInt16(image_buffer_ptr[offset+bitsPerComponent/8])
+        let g2 = UInt16(image_buffer_ptr[offset+bitsPerComponent/8 + 1]) << 8
         pixel.green = g1 + g2
-        let b1 = UInt16(bytes[offset+(bitsPerComponent/8)*2])
-        let b2 = UInt16(bytes[offset+(bitsPerComponent/8)*2 + 1]) << 8
+        let b1 = UInt16(image_buffer_ptr[offset+(bitsPerComponent/8)*2])
+        let b2 = UInt16(image_buffer_ptr[offset+(bitsPerComponent/8)*2 + 1]) << 8
         pixel.blue = b1 + b2
 
         return pixel
@@ -83,7 +83,7 @@ actor PixelatedImage {
 
     // write out the given image data as a 16 bit tiff file to the given filename
     // used when modifying the invariant original image data, and saying the edits to a file
-    nonisolated func save(data image_data: Data, toFilename image_filename: String) {
+    nonisolated func writeTIFFEncoding(ofData image_data: Data, toFilename image_filename: String) {
         // create a CGImage from the data we just changed
         if let dataProvider = CGDataProvider(data: image_data as CFData) {
             let colorSpace = CGColorSpaceCreateDeviceRGB()
