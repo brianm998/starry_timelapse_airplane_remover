@@ -109,6 +109,7 @@ class NighttimeAirplaneEraser {
                             {
                                 otherFrames.append(image)
                             }
+
                             
                             // the other frames that we use to detect outliers and repaint from
                             await self.removeAirplanes(fromImage: image,
@@ -273,7 +274,7 @@ class NighttimeAirplaneEraser {
         Log.i("done processing the outlier map")
         // paint green on the outliers above the threshold for testing
 
-        if(test_paint_outliers) { // XXX search the outlier map instead, it's faster
+        if(test_paint_outliers) { 
             Log.d("painting outliers green")
 
             for (_, outlier) in outlier_map {
@@ -398,6 +399,44 @@ class NighttimeAirplaneEraser {
             image.save(data: test_paint_data, toFilename: test_paint_filename)
         }
         return nil
+    }
+    func startup_hook() {
+        if test_paint { mkdir(test_paint_output_dirname) }
+    }
+    
+    func processFrame(number index: Int,
+                      dirname: String,
+                      filename image_filename: String) async
+    {
+        let full_image_path = "\(dirname)/\(image_filename)"
+        // load images outside the main thread
+        if let image_sequence = image_sequence,
+           let image = await image_sequence.getImage(withName: full_image_path)
+        {
+            var otherFrames: [PixelatedImage] = []
+            
+            if index > 0,
+               let image = await image_sequence.getImage(withName: image_sequence.filenames[index-1])
+            {
+                otherFrames.append(image)
+            }
+            if index < image_sequence.filenames.count - 1,
+               let image = await image_sequence.getImage(withName: image_sequence.filenames[index+1])
+            {
+                otherFrames.append(image)
+            }
+
+            let test_paint_filename = "\(self.test_paint_output_dirname)/\(image_filename).tif"
+            
+            // the other frames that we use to detect outliers and repaint from
+            await self.removeAirplanes(fromImage: image,
+                                       otherFrames: otherFrames,
+                                       filename: full_image_path,
+                                       test_paint_filename: self.test_paint ? test_paint_filename : nil) // XXX last arg is ugly
+        } else {
+            Log.d("FUCK")
+            fatalError("doh")
+        }
     }
 }
 
