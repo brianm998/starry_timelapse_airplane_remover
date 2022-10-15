@@ -2,6 +2,16 @@ import Foundation
 import CoreGraphics
 import Cocoa
 
+/*
+todo:
+
+ - identify outliers that are in a line somehow, and apply a smaller threshold to those that are
+ - figure out crashes after hundreds of frames (more threading problems?)
+ - write perl wrapper to keep it running when it crashes (make sure all saved files are ok first?)
+ - refactor ImageSequence to be more generic (try to image blend w/ it)
+ - allow writing out test paint and normal files to separate output dirs
+*/
+
 Log.handlers = 
     [
       .console: ConsoleLogHandler(at: .debug)

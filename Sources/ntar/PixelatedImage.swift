@@ -1,5 +1,6 @@
 import Foundation
 import CoreGraphics
+import Cocoa
 
 @available(macOS 10.15, *) 
 actor PixelatedImage {
@@ -72,11 +73,59 @@ actor PixelatedImage {
             Log.e("FUCK")
             fatalError("FUCK")
         }
-        if pixels.count == 0 {
+        // lazy load the entire pixel set upon first access
+        if pixels.count == 0 { 
             readPixels()
         }
         return pixels[x][y]
     }
-}
 
+    // write out the given image data as a 16 bit tiff file to the given filename
+    // used when modifying the invariant original image data, and saying the edits to a file
+    nonisolated func save(data image_data: Data, toFilename image_filename: String) {
+        // create a CGImage from the data we just changed
+        if let dataProvider = CGDataProvider(data: image_data as CFData) {
+            let colorSpace = CGColorSpaceCreateDeviceRGB()
+            if let new_image =  CGImage(width: width,
+                                        height: height,
+                                        bitsPerComponent: bitsPerComponent,
+                                        bitsPerPixel: bytesPerPixel*8,
+                                        bytesPerRow: width*bytesPerPixel,
+                                        space: colorSpace,
+                                        bitmapInfo: self.image.bitmapInfo, // byte order
+                                        provider: dataProvider,
+                                        decode: nil,
+                                        shouldInterpolate: false,
+                                        intent: .defaultIntent) {
+
+                // save it
+                Log.d("new_image \(new_image)")
+                do {
+                    let context = CIContext()
+                    let fileURL = NSURL(fileURLWithPath: image_filename, isDirectory: false) as URL
+                    let options: [CIImageRepresentationOption: CGFloat] = [:]
+                    if let colorSpace = CGColorSpace(name: CGColorSpace.sRGB) {
+                        let imgFormat = CIFormat.RGBA16
+
+                        if #available(macOS 10.12, *) {
+                            try context.writeTIFFRepresentation(
+                                of: CIImage(cgImage: new_image),
+                                to: fileURL,
+                                format: imgFormat,
+                                colorSpace: colorSpace,
+                                options: options
+                            )
+                        } else {
+                            fatalError("Must use macOS 10.12 or higher")
+                        }
+                    } else {
+                        Log.d("FUCK")
+                    }
+                } catch {
+                    Log.e("doh! \(error)")
+                }
+            }
+        }
+    }
+}
 

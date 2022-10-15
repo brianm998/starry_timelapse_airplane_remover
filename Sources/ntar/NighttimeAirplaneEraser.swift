@@ -38,7 +38,7 @@ class NighttimeAirplaneEraser {
                                       attributes: [.concurrent],
                                       autoreleaseFrequency: .inherit,
                                       target: nil)
-
+    
     init(imageSequenceDirname: String,
          maxConcurrent max_concurrent: UInt = 5,
          minNeighbors min_neighbors: UInt16 = 100,
@@ -375,87 +375,18 @@ class NighttimeAirplaneEraser {
 
         // create a CGImage from the data we just changed
         if let dataProvider = CGDataProvider(data: data as CFData) {
-            let colorSpace = CGColorSpaceCreateDeviceRGB()
-            if let new_image =  CGImage(width: width,
-                                        height: height,
-                                        bitsPerComponent: bitsPerComponent,
-                                        bitsPerPixel: bytesPerPixel*8,
-                                        bytesPerRow: width*bytesPerPixel,
-                                        space: colorSpace,
-                                        bitmapInfo: image.image.bitmapInfo, // byte order
-                                        provider: dataProvider,
-                                        decode: nil,
-                                        shouldInterpolate: false,
-                                        intent: .defaultIntent)
-               {
-
-                   // save it
-                   Log.d("new_image \(new_image)")
-                   do {
-                       try save(image: new_image, toFile: filename)
-                   } catch {
-                       Log.e("doh! \(error)")
-                   }
-            } else {
-                Log.e("Couldn't create CGImage :(")
-                fatalError("FUCK")
-            }
+            image.save(data: data, toFilename: filename)
         }
-        // XXX combine the logic above and below
+
         if test_paint,
            let test_paint_data = test_paint_data
         {
-            // create a CGImage from the data we just changed
-            if let dataProvider = CGDataProvider(data: test_paint_data as CFData) {
-                let colorSpace = CGColorSpaceCreateDeviceRGB()
-                if let new_image =  CGImage(width: width,
-                                            height: height,
-                                            bitsPerComponent: bitsPerComponent,
-                                            bitsPerPixel: bytesPerPixel*8,
-                                            bytesPerRow: width*bytesPerPixel,
-                                            space: colorSpace,
-                                            bitmapInfo: image.image.bitmapInfo, // byte order
-                                            provider: dataProvider,
-                                            decode: nil,
-                                            shouldInterpolate: false,
-                                            intent: .defaultIntent) {
-
-                   // save it
-                    Log.d("new_image \(new_image)")
-                    do {
-                        try save(image: new_image, toFile: test_paint_filename)
-                    } catch {
-                        Log.e("doh! \(error)")
-                    }
-                }
-            }
+            image.save(data: test_paint_data, toFilename: test_paint_filename)
         }
         return nil
     }
 }
-              
-func save(image cgImage: CGImage, toFile filename: String) throws {
-    let context = CIContext()
-    let fileURL = NSURL(fileURLWithPath: filename, isDirectory: false) as URL
-    let options: [CIImageRepresentationOption: CGFloat] = [:]
-    if let colorSpace = CGColorSpace(name: CGColorSpace.sRGB) {
-        let imgFormat = CIFormat.RGBA16
 
-        if #available(macOS 10.12, *) {
-            try context.writeTIFFRepresentation(
-                of: CIImage(cgImage: cgImage),
-                to: fileURL,
-                format: imgFormat,
-                colorSpace: colorSpace,
-                options: options
-            )
-        } else {
-            fatalError("Must use macOS 10.12 or higher")
-        }
-    } else {
-        Log.d("FUCK")
-    }
-}
 
 // removes suffix and path
 func remove_suffix(fromString string: String) -> String {
