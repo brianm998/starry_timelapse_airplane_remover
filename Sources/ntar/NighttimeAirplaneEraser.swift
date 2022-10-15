@@ -67,7 +67,6 @@ class NighttimeAirplaneEraser : ImageSequenceProcessor {
         let width = image.width
         let height = image.height
         let bytesPerPixel = image.bytesPerPixel
-        let bitsPerComponent = image.bitsPerComponent
         let bytesPerRow = width*bytesPerPixel
         
         guard let orig_data = image.image.dataProvider?.data  else { return nil }
@@ -98,14 +97,8 @@ class NighttimeAirplaneEraser : ImageSequenceProcessor {
                 let origPixel = await image.pixel(atX: x, andY: y)
                 var otherPixels: [Pixel] = []
 
-                // XXX this could be better
-                if otherFrames.count > 0 {
-                    let pixel = await otherFrames[0].pixel(atX: x, andY: y)
-                    otherPixels.append(pixel)
-                }
-                if otherFrames.count > 1 {
-                    let pixel = await otherFrames[1].pixel(atX: x, andY: y)
-                    otherPixels.append(pixel)
+                for i in 0 ..< otherFrames.count {
+                    otherPixels.append(await otherFrames[i].pixel(atX: x, andY: y))
                 }
                 if otherPixels.count == 0 {
                     fatalError("need more than one image in the sequence")
@@ -210,13 +203,8 @@ class NighttimeAirplaneEraser : ImageSequenceProcessor {
 
                     // XXX this could be better
                     // grab the pixels from the same image spot from adject frames
-                    if otherFrames.count > 0 {
-                        let pixel = await otherFrames[0].pixel(atX: x, andY: y)
-                        otherPixels.append(pixel)
-                    }
-                    if otherFrames.count > 1 {
-                        let pixel = await otherFrames[1].pixel(atX: x, andY: y)
-                        otherPixels.append(pixel)
+                    for i in 0 ..< otherFrames.count {
+                        otherPixels.append(await otherFrames[i].pixel(atX: x, andY: y))
                     }
 
                     // blend the pixels from the adjecent frames
@@ -281,7 +269,6 @@ class NighttimeAirplaneEraser : ImageSequenceProcessor {
             {
                 otherFrames.append(image)
             }
-
             
             let test_paint_filename = "\(self.test_paint_output_dirname)/\(base_name)"
             
