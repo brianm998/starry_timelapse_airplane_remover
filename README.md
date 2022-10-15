@@ -1,5 +1,5 @@
 
-# Nighttime Timelapse Airplane Eraser
+# Nighttime Timelapse Airplane Remover
 
 This is a command line utility to remove airplanes from night time timelapse videos.
 
