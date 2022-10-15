@@ -70,11 +70,15 @@ class NighttimeAirplaneEraser {
 
         let image_sequence = ImageSequence(filenames: image_files)
         //    Log.d("image_files \(image_files)")
-        
-        do {
-            try FileManager.default.createDirectory(atPath: output_dirname, withIntermediateDirectories: false, attributes: nil)
-        } catch let error as NSError {
-            fatalError("Unable to create directory \(error.debugDescription)")
+
+        if !FileManager.default.fileExists(atPath: output_dirname) {
+            do {
+                try FileManager.default.createDirectory(atPath: output_dirname,
+                                                        withIntermediateDirectories: false,
+                                                        attributes: nil)
+            } catch let error as NSError {
+                fatalError("Unable to create directory \(error.debugDescription)")
+            }
         }
         
         // each of these methods removes the airplanes from a particular frame
@@ -84,43 +88,50 @@ class NighttimeAirplaneEraser {
         let number_running = NumberRunning()
     
         for (index, image_filename) in image_sequence.filenames.enumerated() {
-            methods[index] = {
-                dispatchGroup.enter() 
-                // load images outside the main thread
-                if let image = await image_sequence.getImage(withName: image_filename) {
-                    var otherFrames: [CGImage] = []
-                    
-                    if index > 0,
-                       let image = await image_sequence.getImage(withName: image_sequence.filenames[index-1])
-                    {
-                        otherFrames.append(image)
-                    }
-                    if index < image_sequence.filenames.count - 1,
-                       let image = await image_sequence.getImage(withName: image_sequence.filenames[index+1])
-                    {
-                        otherFrames.append(image)
-                    }
-                    
-                    // the other frames that we use to detect outliers and repaint from
-                    if let new_image = self.removeAirplanes(fromImage: image,
-                                                                otherFrames: otherFrames)
-                    {
-                        // relinquish images here
-                        Log.d("new_image \(new_image)")
-                        let filename_base = remove_suffix(fromString: image_sequence.filenames[index])
-                        let filename = "\(self.output_dirname)/\(filename_base).tif"
-                        do {
-                            try save(image: new_image, toFile: filename)
-                        } catch {
-                            Log.e("doh! \(error)")
+            let filename_base = remove_suffix(fromString: image_sequence.filenames[index])
+            // XXX why remove and add diff? 
+            let filename = "\(self.output_dirname)/\(filename_base).tif"
+
+            if FileManager.default.fileExists(atPath: filename) {
+                Log.i("skipping already existing file \(filename)")
+            } else {
+                methods[index] = {
+                    // XXX check for existance of file
+                    dispatchGroup.enter() 
+                    // load images outside the main thread
+                    if let image = await image_sequence.getImage(withName: image_filename) {
+                        var otherFrames: [CGImage] = []
+                        
+                        if index > 0,
+                           let image = await image_sequence.getImage(withName: image_sequence.filenames[index-1])
+                        {
+                            otherFrames.append(image)
                         }
+                        if index < image_sequence.filenames.count - 1,
+                           let image = await image_sequence.getImage(withName: image_sequence.filenames[index+1])
+                        {
+                            otherFrames.append(image)
+                        }
+                        
+                        // the other frames that we use to detect outliers and repaint from
+                        if let new_image = self.removeAirplanes(fromImage: image,
+                                                                otherFrames: otherFrames)
+                        {
+                            // relinquish images here
+                            Log.d("new_image \(new_image)")
+                            do {
+                                try save(image: new_image, toFile: filename)
+                            } catch {
+                                Log.e("doh! \(error)")
+                            }
+                        }
+                    } else {
+                        Log.d("FUCK")
+                        fatalError("doh")
                     }
-                } else {
-                    Log.d("FUCK")
-                    fatalError("doh")
+                    await number_running.decrement()
+                    dispatchGroup.leave()
                 }
-                await number_running.decrement()
-                dispatchGroup.leave()
             }
         }
         
