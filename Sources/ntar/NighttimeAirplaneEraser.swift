@@ -6,9 +6,9 @@ import Cocoa
 todo:
 
  - identify outliers that are in a line somehow, and apply a smaller threshold to those that are
- - refector Pixel access to increase speed
 
 */
+
 @available(macOS 10.15, *) 
 class NighttimeAirplaneEraser {
     
@@ -27,7 +27,7 @@ class NighttimeAirplaneEraser {
     let max_pixel_distance: UInt16
 
     // add some padding?
-    let padding_value: UInt16
+    let padding_value: UInt
 
     // paint green on the outliers above the threshold for testing, that are not overwritten
     let test_paint_outliers: Bool
@@ -46,7 +46,7 @@ class NighttimeAirplaneEraser {
          maxConcurrent max_concurrent: UInt = 5,
          minNeighbors min_neighbors: UInt16 = 100,
          maxPixelDistance max_pixel_distance: UInt16 = 10000,
-         padding: UInt16 = 0,
+         padding: UInt = 0,
          testPaint: Bool = false)
     {
         self.max_concurrent_renders = max_concurrent
@@ -106,7 +106,7 @@ class NighttimeAirplaneEraser {
                     dispatchGroup.enter() 
                     // load images outside the main thread
                     if let image = await image_sequence.getImage(withName: image_filename) {
-                        var otherFrames: [CGImage] = []
+                        var otherFrames: [PixelatedImage] = []
                         
                         if index > 0,
                            let image = await image_sequence.getImage(withName: image_sequence.filenames[index-1])
@@ -120,8 +120,8 @@ class NighttimeAirplaneEraser {
                         }
                         
                         // the other frames that we use to detect outliers and repaint from
-                        if let new_image = self.removeAirplanes(fromImage: image,
-                                                                otherFrames: otherFrames)
+                        if let new_image = await self.removeAirplanes(fromImage: image,
+                                                                      otherFrames: otherFrames)
                         {
                             // relinquish images here
                             Log.d("new_image \(new_image)")
@@ -173,6 +173,7 @@ class NighttimeAirplaneEraser {
         dispatchGroup.enter()
         Task {
             Log.d("running")
+            // atually run it
             await runner()
             dispatchGroup.leave()
         }
@@ -180,18 +181,18 @@ class NighttimeAirplaneEraser {
         Log.d("done")
     }
 
-    func removeAirplanes(fromImage image: CGImage,
-                         otherFrames: [CGImage]) -> CGImage?
+    func removeAirplanes(fromImage image: PixelatedImage,
+                         otherFrames: [PixelatedImage]) async -> CGImage?
     {
         Log.d("removing airplanes from image with \(otherFrames.count) other frames")
 
         let width = image.width
         let height = image.height
-        let bytesPerPixel = image.bitsPerPixel/8
+        let bytesPerPixel = image.bytesPerPixel
         let bitsPerComponent = image.bitsPerComponent
         let bytesPerRow = width*bytesPerPixel
         
-        guard let orig_data = image.dataProvider?.data  else { return nil }
+        guard let orig_data = image.image.dataProvider?.data  else { return nil }
 
         // copy the original image data as adjecent frames need
         // to access the original unmodified version
@@ -199,15 +200,6 @@ class NighttimeAirplaneEraser {
                                                  CFDataGetLength(orig_data),
                                                  orig_data) as? Data else { return nil }
           
-    
-        var otherData: [CFData] = []
-        otherFrames.forEach { frame in
-            if let data = frame.dataProvider?.data {
-                otherData.append(data)
-            } else {
-                fatalError("fuck")
-            }
-        }
               
         Log.d("got image data, detecting outlying pixels")
 
@@ -215,22 +207,20 @@ class NighttimeAirplaneEraser {
 
         // compare pixels at the same image location in adjecent frames
         // detect Outliers which are much more brighter than the adject frames
-        for y: UInt16 in 0 ..< UInt16(height) {
-            for x: UInt16 in 0 ..< UInt16(width) {
-
-                let origPixel = pixel(fromData: data as CFData, atX: x, andY: y,
-                                      bitsPerPixel: image.bitsPerPixel,
-                                      bytesPerRow: image.bytesPerRow,
-                                      bitsPerComponent: image.bitsPerComponent)
-                var otherPixels: [Pixel] = []
+        for y in 0 ..< height {
+            for x in 0 ..< width {
                 
-                for p in 0 ..< otherFrames.count {
-                    let otherFrame = otherFrames[p]
-                    let newPixel = pixel(fromData: otherData[p], atX: x, andY: y,
-                                         bitsPerPixel: otherFrame.bitsPerPixel,
-                                         bytesPerRow: otherFrame.bytesPerRow,
-                                         bitsPerComponent: otherFrame.bitsPerComponent)
-                    otherPixels.append(newPixel)
+                let origPixel = await image.pixel(atX: x, andY: y)
+                var otherPixels: [Pixel] = []
+
+                // XXX this could be better
+                if otherFrames.count > 0 {
+                    let pixel = await otherFrames[0].pixel(atX: x, andY: y)
+                    otherPixels.append(pixel)
+                }
+                if otherFrames.count > 1 {
+                    let pixel = await otherFrames[1].pixel(atX: x, andY: y)
+                    otherPixels.append(pixel)
                 }
                 if otherPixels.count == 0 {
                     fatalError("need more than one image in the sequence")
@@ -244,7 +234,8 @@ class NighttimeAirplaneEraser {
                 total_difference /= Int32(otherPixels.count)
                 
                 if total_difference > max_pixel_distance {
-                    outlier_map["\(x),\(y)"] = Outlier(x: x, y: y, amount: total_difference)
+                    outlier_map["\(x),\(y)"] = Outlier(x: x, y: y,
+                                                       amount: total_difference)
                 }
             }
         }
@@ -283,9 +274,9 @@ class NighttimeAirplaneEraser {
         // also not sure it's really needed
         if(padding_value > 0) {
             Log.d("adding padding") // XXX search the outlier map, looking for missing neighbors
-            for y: UInt16 in 0 ..< UInt16(height) {
+            for y in 0 ..< height {
                 //Log.d("y \(y)")
-                for x: UInt16 in 0 ..< UInt16(width) {
+                for x in 0 ..< width {
                     let outlier_tag = "\(x),\(y)"
                     let outlier = outlier_map[outlier_tag]
                     var should_try = false
@@ -327,15 +318,17 @@ class NighttimeAirplaneEraser {
                             
                     var otherPixels: [Pixel] = []
 
+                    // XXX this could be better
                     // grab the pixels from the same image spot from adject frames
-                    for p in 0 ..< otherFrames.count {
-                        let otherFrame = otherFrames[p]
-                        let newPixel = pixel(fromData: otherData[p], atX: x, andY: y,
-                                             bitsPerPixel: otherFrame.bitsPerPixel,
-                                             bytesPerRow: otherFrame.bytesPerRow,
-                                             bitsPerComponent: otherFrame.bitsPerComponent)
-                        otherPixels.append(newPixel)
+                    if otherFrames.count > 0 {
+                        let pixel = await otherFrames[0].pixel(atX: x, andY: y)
+                        otherPixels.append(pixel)
                     }
+                    if otherFrames.count > 1 {
+                        let pixel = await otherFrames[1].pixel(atX: x, andY: y)
+                        otherPixels.append(pixel)
+                    }
+
                     // blend the pixels from the adjecent frames
                     var nextPixel = Pixel(merging: otherPixels)
                     
@@ -371,7 +364,7 @@ class NighttimeAirplaneEraser {
                            bitsPerPixel: bytesPerPixel*8,
                            bytesPerRow: width*bytesPerPixel,
                            space: colorSpace,
-                           bitmapInfo: image.bitmapInfo, // byte order
+                           bitmapInfo: image.image.bitmapInfo, // byte order
                            provider: dataProvider,
                            decode: nil,
                            shouldInterpolate: false,
@@ -380,10 +373,7 @@ class NighttimeAirplaneEraser {
         return nil
     }
 }
-
-
-
-
+              
 func save(image cgImage: CGImage, toFile filename: String) throws {
     let context = CIContext()
     let fileURL = NSURL(fileURLWithPath: filename, isDirectory: false) as URL
@@ -405,38 +395,6 @@ func save(image cgImage: CGImage, toFile filename: String) throws {
     } else {
         Log.d("FUCK")
     }
-}
-
-func pixel(fromData data: CFData,
-           atX x: UInt16,
-           andY y: UInt16,
-           bitsPerPixel: Int,
-           bytesPerRow: Int,
-           bitsPerComponent: Int) -> Pixel
-{
-    guard let bytes = CFDataGetBytePtr(data) else {
-        fatalError("Couldn't access image data")
-    }
-
-    let bytesPerPixel = bitsPerPixel / 8
-    
-//    assert(image.colorSpace?.model == .rgb)
-    
-    var pixel = Pixel()
-    let offset = (Int(y) * bytesPerRow) + (Int(x) * bytesPerPixel)
-    // XXX this could be cleaner
-    let r1 = UInt16(bytes[offset]) // lower bits
-    let r2 = UInt16(bytes[offset + 1]) << 8 // higher bits
-    pixel.red = r1 + r2
-    let g1 = UInt16(bytes[offset+bitsPerComponent/8])
-    let g2 = UInt16(bytes[offset+bitsPerComponent/8 + 1]) << 8
-    pixel.green = g1 + g2
-    let b1 = UInt16(bytes[offset+(bitsPerComponent/8)*2])
-    let b2 = UInt16(bytes[offset+(bitsPerComponent/8)*2 + 1]) << 8
-    pixel.blue = b1 + b2
-    //Log.d("wooo")
-
-    return pixel
 }
 
 // removes suffix and path
@@ -523,25 +481,25 @@ func prune(outlierMap outlier_map: [String: Outlier]) -> [String: UInt16]
 }
 
 // used for padding          
-func tag(within distance: UInt16, ofX x: UInt16, andY y: UInt16,
+func tag(within distance: UInt, ofX x: Int, andY y: Int,
          outlierMap outlier_map: [String: Outlier],
          neighborGroups neighbor_groups: [String: UInt16],
          minNeighbors min_neighbors: UInt16) -> String?
 {
-    var x_start:UInt16 = 0;
-    var y_start:UInt16 = 0;
+    var x_start = 0;
+    var y_start = 0;
     if x < distance {
         x_start = 0
     } else {
-        x_start = x - distance
+        x_start = x - Int(distance)
     }
     if y < distance {
         y_start = 0
     } else {
-        y_start = y - distance
+        y_start = y - Int(distance)
     }
-    for y_idx: UInt16 in y_start ..< y+distance {
-        for x_idx: UInt16 in x_start ..< x+distance {
+    for y_idx in y_start ..< y+Int(distance) {
+        for x_idx in x_start ..< x+Int(distance) {
             if let outlier = outlier_map["\(x_idx),\(y_idx)"],
                hypotenuse(x1: x, y1: y, x2: x_idx, y2: y_idx) <= distance,
                outlier.amount != 0,
@@ -556,9 +514,9 @@ func tag(within distance: UInt16, ofX x: UInt16, andY y: UInt16,
    return nil
 }
 
-func hypotenuse(x1: UInt16, y1: UInt16, x2: UInt16, y2: UInt16) -> UInt16 {
-    let x_dist = UInt16(abs(Int32(x2)-Int32(x1)))
-    let y_dist = UInt16(abs(Int32(y2)-Int32(y1)))
-    return UInt16(sqrt(Float(x_dist*x_dist+y_dist*y_dist)))
+func hypotenuse(x1: Int, y1: Int, x2: Int, y2: Int) -> Int {
+    let x_dist = Int(abs(Int32(x2)-Int32(x1)))
+    let y_dist = Int(abs(Int32(y2)-Int32(y1)))
+    return Int(sqrt(Float(x_dist*x_dist+y_dist*y_dist)))
 }
 

@@ -12,9 +12,9 @@ actor ImageSequence {
     
     let filenames: [String]
 
-    private var images: [String: WeakRef<CGImage>] = [:]
-    
-    func getImage(withName filename: String) -> CGImage? {
+    private var images: [String: WeakRef<PixelatedImage>] = [:]
+
+    func getImage(withName filename: String) -> PixelatedImage? {
         if let image = images[filename]?.value {
             return image
         }
@@ -23,10 +23,11 @@ actor ImageSequence {
         do {
             let data = try Data(contentsOf: imageURL as URL)
             if let image = NSImage(data: data),
-               let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil)
+               let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil),
+               let pixelatedImage = PixelatedImage(cgImage)
             {
-                images[filename] = WeakRef(value: cgImage)
-                return cgImage
+                images[filename] = WeakRef(value: pixelatedImage)
+                return pixelatedImage
             }
         } catch {
             Log.e("\(error)")

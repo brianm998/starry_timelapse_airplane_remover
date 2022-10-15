@@ -1,8 +1,8 @@
 import Foundation
 
 public class Outlier: Hashable, Equatable {
-    let x: UInt16
-    let y: UInt16
+    let x: Int
+    let y: Int
     let amount: Int32
 
     var tag: String?
@@ -13,7 +13,7 @@ public class Outlier: Hashable, Equatable {
     var top: Outlier?
     var bottom: Outlier?
     
-    public init(x: UInt16, y: UInt16, amount: Int32) {
+    public init(x: Int, y: Int, amount: Int32) {
         self.x = x
         self.y = y
         self.amount = amount
