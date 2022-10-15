@@ -81,12 +81,14 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
         
         // the other frames that we use to detect outliers and repaint from
         return await self.removeAirplanes(fromImage: image,
+                                          atIndex: index,
                                           otherFrames: otherFrames,
                                           filename: "\(self.output_dirname)/\(base_name)",
                                           test_paint_filename: test_paint_filename)
     }
 
     func removeAirplanes(fromImage image: PixelatedImage,
+                         atIndex frame_index: Int,
                          otherFrames: [PixelatedImage],
                          filename: String,
                          test_paint_filename tpfo: String?) async -> Data?
@@ -94,6 +96,7 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
         let start_time = NSDate().timeIntervalSince1970
         
         guard let frame_plane_remover = FrameAirplaneRemover(fromImage: image,
+                                                             atIndex: frame_index,
                                                              otherFrames: otherFrames,
                                                              filename: filename,
                                                              test_paint_filename: tpfo,
@@ -115,7 +118,7 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
         let time_3 = NSDate().timeIntervalSince1970
 
         
-        Log.i("done processing the outlier map")
+        Log.i("frame \(frame_index) done processing the outlier map")
         // paint green on the outliers above the threshold for testing
 
         if(test_paint_outliers) {
@@ -127,12 +130,12 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
         frame_plane_remover.addPadding(padding_value: padding_value)
         
         let time_5 = NSDate().timeIntervalSince1970
-        Log.d("painting over airplane streaks")
+        Log.d("frame \(frame_index) painting over airplane streaks")
         
         await frame_plane_remover.paintOverAirplanes()
         
         let time_6 = NSDate().timeIntervalSince1970
-        Log.i("creating final image \(filename)")
+        Log.i("frame \(frame_index) creating final image \(filename)")
 
         frame_plane_remover.writeTestFile()
         let time_7 = NSDate().timeIntervalSince1970
@@ -145,7 +148,7 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
         let interval6 = String(format: "%0.1f", time_6 - start_time)
         let interval7 = String(format: "%0.1f", time_7 - start_time)
         
-        Log.i("timing for frame render \(interval7)s - \(interval6)s - \(interval5)s - \(interval4)s - \(interval3)s - \(interval2)s - \(interval1)s")
+        Log.i("frame \(frame_index) timing for frame render \(interval7)s - \(interval6)s - \(interval5)s - \(interval4)s - \(interval3)s - \(interval2)s - \(interval1)s")
         
         return frame_plane_remover.data
     }

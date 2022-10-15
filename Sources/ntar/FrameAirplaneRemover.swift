@@ -2,6 +2,8 @@ import Foundation
 import CoreGraphics
 import Cocoa
 
+// this class holds the logic for removing airplanes from a single frame
+
 @available(macOS 10.15, *)
 class FrameAirplaneRemover {
     let width: Int
@@ -13,7 +15,11 @@ class FrameAirplaneRemover {
     let otherFrames: [PixelatedImage]
     let min_neighbors: UInt16
     let max_pixel_distance: UInt16
-
+    let frame_index: Int
+    
+    // only 16 bit RGB images are supported
+    let raw_pixel_size_bytes = 6
+    
     var data: Data              // a mutable copy of the original data
     var test_paint_data: Data?
     
@@ -26,6 +32,7 @@ class FrameAirplaneRemover {
     var test_paint = false
 
     init?(fromImage image: PixelatedImage,
+          atIndex frame_index: Int,
           otherFrames: [PixelatedImage],
           filename: String,
           test_paint_filename tpfo: String?,
@@ -34,6 +41,7 @@ class FrameAirplaneRemover {
          )
     {
         self.min_neighbors = min_neighbors
+        self.frame_index = frame_index // frame index in the image sequence
         self.image = image
         self.otherFrames = otherFrames
         if let tp_filename = tpfo {
@@ -66,7 +74,7 @@ class FrameAirplaneRemover {
                                                           _data) as? Data else { return nil }
             self.test_paint_data = test_data
         }
-        Log.d("got image data, detecting outlying pixels")
+        Log.d("frame \(frame_index) got image data, detecting outlying pixels")
     }
 
     func populateOutlierMap() async {
@@ -101,7 +109,7 @@ class FrameAirplaneRemover {
     }
 
     func prune() {
-        Log.i("processing the outlier map")
+        Log.i("frame \(frame_index) pruning outliers")
         
         // go through the outlier_map and link together all the outliers that are adject to eachother,
         // outputting a mapping of group name to size
@@ -161,7 +169,7 @@ class FrameAirplaneRemover {
     }    
                   
     func testPaintOutliers() {
-        Log.d("painting outliers green")
+        Log.d("frame \(frame_index) painting outliers green")
 
         for (_, outlier) in outlier_map {
             let x = outlier.x
@@ -179,8 +187,8 @@ class FrameAirplaneRemover {
 
                 //Log.e("offset \(offset) nextValue \(nextValue) \(test_paint_data) bytesPerPixel \(bytesPerPixel) bytesPerRow \(bytesPerRow)")
                 
-                test_paint_data?.replaceSubrange(offset ..< offset+6,//XXX ??? bytesPerPixel,
-                                                 with: &nextValue, count: 6)
+                test_paint_data?.replaceSubrange(offset ..< offset+raw_pixel_size_bytes,
+                                                 with: &nextValue, count: raw_pixel_size_bytes)
             }
         }
     }
@@ -190,7 +198,7 @@ class FrameAirplaneRemover {
         // XXX this is slower than the other steps here :(
         // also not sure it's really needed
         if(padding_value > 0) {
-            Log.d("adding padding") // XXX search the outlier map, looking for missing neighbors
+            Log.d("frame \(frame_index) adding padding") // XXX search the outlier map, looking for missing neighbors
             for y in 0 ..< height {
                 //Log.d("y \(y)")
                 for x in 0 ..< width {
@@ -250,7 +258,8 @@ class FrameAirplaneRemover {
                     let offset = (Int(y) * bytesPerRow) + (Int(x) * bytesPerPixel)
 
                     // actually paint over that airplane like thing in the image data
-                    data.replaceSubrange(offset ..< offset+bytesPerPixel, with: &nextValue, count: 6)
+                    data.replaceSubrange(offset ..< offset+raw_pixel_size_bytes,
+                                         with: &nextValue, count: raw_pixel_size_bytes)
 
                     // for testing, colors changed pixels
                     if test_paint {
@@ -263,8 +272,9 @@ class FrameAirplaneRemover {
                     var testPaintValue = nextPixel.value
                     
                     if test_paint {
-                        test_paint_data?.replaceSubrange(offset ..< offset+bytesPerPixel,
-                                                         with: &testPaintValue, count: 6)
+                        test_paint_data?.replaceSubrange(offset ..< offset+raw_pixel_size_bytes,
+                                                         with: &testPaintValue,
+                                                         count: raw_pixel_size_bytes)
                     }
                 }
             }
