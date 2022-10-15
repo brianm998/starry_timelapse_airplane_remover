@@ -90,66 +90,73 @@ class NighttimeAirplaneEraser {
         if test_paint { mkdir(test_paint_output_dirname) }
         
         // each of these methods removes the airplanes from a particular frame
-        var methods: [Int : () async -> Void] = [:]
+        //var methods: [Int : () async -> Void] = [:]
+        let method_list = MethodList()
         
         let dispatchGroup = DispatchGroup()
         let number_running = NumberRunning()
     
-        for (index, image_filename) in image_sequence.filenames.enumerated() {
-            let filename_base = remove_suffix(fromString: image_sequence.filenames[index])
-            // XXX why remove and add diff? 
-            let filename = "\(self.output_dirname)/\(filename_base).tif"
-            let test_paint_filename = "\(self.test_paint_output_dirname)/\(filename_base).tif"
+        dispatchGroup.enter()
+        
+        Task {
+            for (index, image_filename) in image_sequence.filenames.enumerated() {
+                let filename_base = remove_suffix(fromString: image_sequence.filenames[index])
+                // XXX why remove and add diff? 
+                let filename = "\(self.output_dirname)/\(filename_base).tif"
+                let test_paint_filename = "\(self.test_paint_output_dirname)/\(filename_base).tif"
 
-            if FileManager.default.fileExists(atPath: filename) {
-                Log.i("skipping already existing file \(filename)")
-            } else {
-                methods[index] = {
-                    dispatchGroup.enter() 
-                    // load images outside the main thread
-                    if let image = await image_sequence.getImage(withName: image_filename) {
-                        var otherFrames: [PixelatedImage] = []
+                if FileManager.default.fileExists(atPath: filename) {
+                    Log.i("skipping already existing file \(filename)")
+                } else {
+                    await method_list.add(atIndex: index, method: {
+                        dispatchGroup.enter() 
+                        // load images outside the main thread
+                        if let image = await image_sequence.getImage(withName: image_filename) {
+                            var otherFrames: [PixelatedImage] = []
                         
-                        if index > 0,
-                           let image = await image_sequence.getImage(withName: image_sequence.filenames[index-1])
-                        {
-                            otherFrames.append(image)
+                            if index > 0,
+                               let image = await image_sequence.getImage(withName: image_sequence.filenames[index-1])
+                            {
+                                otherFrames.append(image)
+                            }
+                            if index < image_sequence.filenames.count - 1,
+                               let image = await image_sequence.getImage(withName: image_sequence.filenames[index+1])
+                            {
+                                otherFrames.append(image)
+                            }
+                            
+                            // the other frames that we use to detect outliers and repaint from
+                            await self.removeAirplanes(fromImage: image,
+                                                       otherFrames: otherFrames,
+                                                       filename: filename,
+                                                       test_paint_filename: self.test_paint ? test_paint_filename : nil) // XXX last arg is ugly
+                        } else {
+                            Log.d("FUCK")
+                            fatalError("doh")
                         }
-                        if index < image_sequence.filenames.count - 1,
-                           let image = await image_sequence.getImage(withName: image_sequence.filenames[index+1])
-                        {
-                            otherFrames.append(image)
-                        }
-                        
-                        // the other frames that we use to detect outliers and repaint from
-                        await self.removeAirplanes(fromImage: image,
-                                                   otherFrames: otherFrames,
-                                                   filename: filename,
-                                                   test_paint_filename: self.test_paint ? test_paint_filename : nil) // XXX last arg is ugly
-                    } else {
-                        Log.d("FUCK")
-                        fatalError("doh")
-                    }
-                    await number_running.decrement()
-                    dispatchGroup.leave()
+                        await number_running.decrement()
+                        dispatchGroup.leave()
+                    })
                 }
             }
-        }
+
+            Log.d("we have \(await method_list.list.count) total frames")
         
-        Log.d("we have \(methods.count) methods")
-        let runner: () async -> Void = {
-            while(methods.count > 0) {
+            Log.d("running")
+            // atually run it
+
+            while(await method_list.list.count > 0) {
                 let current_running = await number_running.currentValue()
                 if(current_running < self.max_concurrent_renders) {
                     Log.d("\(current_running) frames currently processing")
-                    Log.d("we have \(methods.count) more frames to process")
-                    Log.d("enquing new method")
+                    Log.d("we have \(await method_list.list.count) more frames to process")
+                    Log.d("processing new frame")
 
                     // sort the keys and take the smallest one first
-                    if let next_method_key = methods.sorted(by: { $0.key < $1.key}).first?.key,
-                       let next_method = methods[next_method_key]
+                    if let next_method_key = await method_list.nextKey,
+                       let next_method = await method_list.list[next_method_key]
                     {
-                        methods.removeValue(forKey: next_method_key)
+                        await method_list.removeValue(forKey: next_method_key)
                         await number_running.increment()
                         self.dispatchQueue.async {
                             Task {
@@ -164,12 +171,7 @@ class NighttimeAirplaneEraser {
                     _ = dispatchGroup.wait(timeout: DispatchTime.now().advanced(by: .seconds(1)))
                 }
             }
-        }
-        dispatchGroup.enter()
-        Task {
-            Log.d("running")
-            // atually run it
-            await runner()
+
             dispatchGroup.leave()
         }
         dispatchGroup.wait()
