@@ -24,7 +24,7 @@ actor ImageSequence {
             let data = try Data(contentsOf: imageURL as URL)
             if let image = NSImage(data: data),
                let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil),
-               let pixelatedImage = PixelatedImage(cgImage)
+               let pixelatedImage = PixelatedImage(cgImage, filename: filename)
             {
                 images[filename] = WeakRef(value: pixelatedImage)
                 return pixelatedImage

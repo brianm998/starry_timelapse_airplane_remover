@@ -4,6 +4,7 @@ import CoreGraphics
 @available(macOS 10.15, *) 
 actor PixelatedImage {
     let image: CGImage
+    let filename: String
     let width: Int
     let height: Int
     let data: CFData
@@ -15,8 +16,10 @@ actor PixelatedImage {
         
     var pixels = [[Pixel]]()
     
-    init?(_ image: CGImage) {
+    init?(_ image: CGImage, filename: String) {
+        self.filename = filename
         self.image = image
+        assert(self.image.colorSpace?.model == .rgb)
         self.width = image.width
         self.height = image.height
         self.bitsPerPixel = self.image.bitsPerPixel
@@ -30,11 +33,10 @@ actor PixelatedImage {
             Log.e("DOH")
             return nil
         }
-        assert(self.image.colorSpace?.model == .rgb)
     }
 
     private func readPixels() {
-        Log.d("reading pixels")
+        Log.d("reading pixels for \(filename)")
         for x in 0 ..< self.width {
             var row: [Pixel] = []
             for y in 0 ..< self.height {
