@@ -2,6 +2,9 @@ import Foundation
 import CoreGraphics
 import Cocoa
 
+// this class handles removing airplanes from an entire sequence,
+// delegating each frame to an instance of FrameAirplaneRemover
+
 @available(macOS 10.15, *) 
 class NighttimeAirplaneRemover : ImageSequenceProcessor {
     
@@ -88,6 +91,8 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
                          filename: String,
                          test_paint_filename tpfo: String?) async -> Data?
     {
+        let start_time = NSDate().timeIntervalSince1970
+        
         guard let frame_plane_remover = FrameAirplaneRemover(fromImage: image,
                                                              otherFrames: otherFrames,
                                                              filename: filename,
@@ -99,11 +104,16 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
             fatalError("FAILED")
         }
            
+        let time_1 = NSDate().timeIntervalSince1970
+        
         await frame_plane_remover.populateOutlierMap()
+
+        let time_2 = NSDate().timeIntervalSince1970
 
         frame_plane_remover.prune()
 
-        // prune
+        let time_3 = NSDate().timeIntervalSince1970
+
         
         Log.i("done processing the outlier map")
         // paint green on the outliers above the threshold for testing
@@ -111,17 +121,31 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
         if(test_paint_outliers) {
             frame_plane_remover.testPaintOutliers()
         }
+        let time_4 = NSDate().timeIntervalSince1970
 
         // padding
         frame_plane_remover.addPadding(padding_value: padding_value)
         
+        let time_5 = NSDate().timeIntervalSince1970
         Log.d("painting over airplane streaks")
         
         await frame_plane_remover.paintOverAirplanes()
         
+        let time_6 = NSDate().timeIntervalSince1970
         Log.i("creating final image \(filename)")
 
         frame_plane_remover.writeTestFile()
+        let time_7 = NSDate().timeIntervalSince1970
+
+        let interval1 = String(format: "%0.1f", time_1 - start_time)
+        let interval2 = String(format: "%0.1f", time_2 - start_time)
+        let interval3 = String(format: "%0.1f", time_3 - start_time)
+        let interval4 = String(format: "%0.1f", time_4 - start_time)
+        let interval5 = String(format: "%0.1f", time_5 - start_time)
+        let interval6 = String(format: "%0.1f", time_6 - start_time)
+        let interval7 = String(format: "%0.1f", time_7 - start_time)
+        
+        Log.i("timing for frame render \(interval7)s - \(interval6)s - \(interval5)s - \(interval4)s - \(interval3)s - \(interval2)s - \(interval1)s")
         
         return frame_plane_remover.data
     }
