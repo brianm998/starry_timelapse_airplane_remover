@@ -74,8 +74,20 @@ class NighttimeAirplaneEraser {
             }
         }
     }
+
+    private func assembleMethodList() {
+
+
+    }
+
+    // actors
+    let method_list = MethodList()
+    let number_running = NumberRunning()
+    var image_sequence: ImageSequence?
     
-    func run() {
+    let dispatchGroup = DispatchGroup()
+    
+    private func assembleImageSequence() {
         var image_files = list_image_files(atPath: image_sequence_dirname)
         // make sure the image list is in the same order as the video
         image_files.sort { (lhs: String, rhs: String) -> Bool in
@@ -84,98 +96,97 @@ class NighttimeAirplaneEraser {
             return lh < rh
         }
 
-        let image_sequence = ImageSequence(filenames: image_files)
-
-        mkdir(output_dirname)
-        if test_paint { mkdir(test_paint_output_dirname) }
-        
-        // each of these methods removes the airplanes from a particular frame
-        //var methods: [Int : () async -> Void] = [:]
-        let method_list = MethodList()
-        
-        let dispatchGroup = DispatchGroup()
-        let number_running = NumberRunning()
+        image_sequence = ImageSequence(filenames: image_files)
+    }
     
-        dispatchGroup.enter()
+    func run() {
+        assembleImageSequence()
+        if let image_sequence = image_sequence {
+            mkdir(output_dirname)
+            if test_paint { mkdir(test_paint_output_dirname) }
         
-        Task {
-            for (index, image_filename) in image_sequence.filenames.enumerated() {
-                let filename_base = remove_suffix(fromString: image_sequence.filenames[index])
-                // XXX why remove and add diff? 
-                let filename = "\(self.output_dirname)/\(filename_base).tif"
-                let test_paint_filename = "\(self.test_paint_output_dirname)/\(filename_base).tif"
+            // each of these methods removes the airplanes from a particular frame
+            self.dispatchGroup.enter()
 
-                if FileManager.default.fileExists(atPath: filename) {
-                    Log.i("skipping already existing file \(filename)")
-                } else {
-                    await method_list.add(atIndex: index, method: {
-                        dispatchGroup.enter() 
-                        // load images outside the main thread
-                        if let image = await image_sequence.getImage(withName: image_filename) {
-                            var otherFrames: [PixelatedImage] = []
-                        
-                            if index > 0,
-                               let image = await image_sequence.getImage(withName: image_sequence.filenames[index-1])
-                            {
-                                otherFrames.append(image)
+            Task {
+                for (index, image_filename) in image_sequence.filenames.enumerated() {
+                    let filename_base = remove_suffix(fromString: image_sequence.filenames[index])
+                    // XXX why remove and add diff? 
+                    let filename = "\(self.output_dirname)/\(filename_base).tif"
+                    let test_paint_filename = "\(self.test_paint_output_dirname)/\(filename_base).tif"
+                    
+                    if FileManager.default.fileExists(atPath: filename) {
+                        Log.i("skipping already existing file \(filename)")
+                    } else {
+                        await method_list.add(atIndex: index, method: {
+                            self.dispatchGroup.enter() 
+                            // load images outside the main thread
+                            if let image = await image_sequence.getImage(withName: image_filename) {
+                                var otherFrames: [PixelatedImage] = []
+                                
+                                if index > 0,
+                                   let image = await image_sequence.getImage(withName: image_sequence.filenames[index-1])
+                                {
+                                    otherFrames.append(image)
+                                }
+                                if index < image_sequence.filenames.count - 1,
+                                   let image = await image_sequence.getImage(withName: image_sequence.filenames[index+1])
+                                {
+                                    otherFrames.append(image)
+                                }
+                                
+                                // the other frames that we use to detect outliers and repaint from
+                                await self.removeAirplanes(fromImage: image,
+                                                           otherFrames: otherFrames,
+                                                           filename: filename,
+                                                           test_paint_filename: self.test_paint ? test_paint_filename : nil) // XXX last arg is ugly
+                            } else {
+                                Log.d("FUCK")
+                                fatalError("doh")
                             }
-                            if index < image_sequence.filenames.count - 1,
-                               let image = await image_sequence.getImage(withName: image_sequence.filenames[index+1])
-                            {
-                                otherFrames.append(image)
-                            }
-                            
-                            // the other frames that we use to detect outliers and repaint from
-                            await self.removeAirplanes(fromImage: image,
-                                                       otherFrames: otherFrames,
-                                                       filename: filename,
-                                                       test_paint_filename: self.test_paint ? test_paint_filename : nil) // XXX last arg is ugly
-                        } else {
-                            Log.d("FUCK")
-                            fatalError("doh")
-                        }
-                        await number_running.decrement()
-                        dispatchGroup.leave()
-                    })
+                            await self.number_running.decrement()
+                            self.dispatchGroup.leave()
+                        })
+                    }
                 }
-            }
 
-            Log.d("we have \(await method_list.list.count) total frames")
+                Log.d("we have \(await method_list.list.count) total frames")
         
-            Log.d("running")
-            // atually run it
+                Log.d("running")
+                // atually run it
 
-            while(await method_list.list.count > 0) {
-                let current_running = await number_running.currentValue()
-                if(current_running < self.max_concurrent_renders) {
-                    Log.d("\(current_running) frames currently processing")
-                    Log.d("we have \(await method_list.list.count) more frames to process")
-                    Log.d("processing new frame")
-
-                    // sort the keys and take the smallest one first
-                    if let next_method_key = await method_list.nextKey,
-                       let next_method = await method_list.list[next_method_key]
-                    {
-                        await method_list.removeValue(forKey: next_method_key)
-                        await number_running.increment()
-                        self.dispatchQueue.async {
+                while(await method_list.list.count > 0) {
+                    let current_running = await self.number_running.currentValue()
+                    if(current_running < self.max_concurrent_renders) {
+                        Log.d("\(current_running) frames currently processing")
+                        Log.d("we have \(await method_list.list.count) more frames to process")
+                        Log.d("processing new frame")
+                        
+                        // sort the keys and take the smallest one first
+                        if let next_method_key = await method_list.nextKey,
+                           let next_method = await method_list.list[next_method_key]
+                        {
+                            await method_list.removeValue(forKey: next_method_key)
+                            await self.number_running.increment()
+                            self.dispatchQueue.async {
                             Task {
                                 await next_method()
                             }
+                            }
+                        } else {
+                            Log.e("FUCK")
+                            fatalError("FUCK")
                         }
                     } else {
-                        Log.e("FUCK")
-                        fatalError("FUCK")
+                        _ = self.dispatchGroup.wait(timeout: DispatchTime.now().advanced(by: .seconds(1)))
                     }
-                } else {
-                    _ = dispatchGroup.wait(timeout: DispatchTime.now().advanced(by: .seconds(1)))
                 }
-            }
 
-            dispatchGroup.leave()
+                self.dispatchGroup.leave()
+            }
+            self.dispatchGroup.wait()
+            Log.d("done")
         }
-        dispatchGroup.wait()
-        Log.d("done")
     }
 
     func removeAirplanes(fromImage image: PixelatedImage,
