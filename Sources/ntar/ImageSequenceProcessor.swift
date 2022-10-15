@@ -50,7 +50,7 @@ class ImageSequenceProcessor {
 
     func processFrame(number index: Int,
                       filename: String,
-                      base_name: String) async -> Data? // XXX the base name has the extention stripped for some reason :( remove_suffix does it, still not sure how
+                      base_name: String) async -> Data?
     {
         Log.e("should be overrideen")
 
@@ -61,8 +61,8 @@ class ImageSequenceProcessor {
         if let image_sequence = image_sequence {
             for (index, image_filename) in image_sequence.filenames.enumerated() {
                 let filename = image_sequence.filenames[index]
-                let basename = remove_suffix_XXX_RENAME(fromString: filename)
-                let output_filename = "\(output_dirname)/\(basename).tif"
+                let basename = remove_path(fromString: filename)
+                let output_filename = "\(output_dirname)/\(basename)"
                 if FileManager.default.fileExists(atPath: output_filename) {
                     Log.i("skipping already existing file \(filename)")
                 } else {
@@ -73,13 +73,13 @@ class ImageSequenceProcessor {
                                                               base_name: basename)
                         {
                             // write each frame out as a tiff file after processing it
-                            if let image = await image_sequence.getImage(withName: image_filename),
-                               let dataProvider = CGDataProvider(data: data as CFData)
-                            {
+                            if let image = await image_sequence.getImage(withName: image_filename) {
                                 image.writeTIFFEncoding(ofData: data, toFilename: output_filename)
                             } else {
                                 fatalError("FUCK")
                             }
+                        } else {
+                            Log.e("got no data for \(filename)")
                         }
                         await self.number_running.decrement()
                         self.dispatchGroup.leave()
@@ -93,8 +93,8 @@ class ImageSequenceProcessor {
         var image_files = list_image_files___RENAME_XXX(atPath: image_sequence_dirname)
         // make sure the image list is in the same order as the video
         image_files.sort { (lhs: String, rhs: String) -> Bool in
-            let lh = remove_suffix_XXX_RENAME(fromString: lhs)
-            let rh = remove_suffix_XXX_RENAME(fromString: rhs)
+            let lh = remove_path(fromString: lhs)
+            let rh = remove_path(fromString: rhs)
             return lh < rh
         }
 
@@ -107,62 +107,59 @@ class ImageSequenceProcessor {
     
     func run() {
         assembleImageSequence()
-        if let image_sequence = image_sequence {
-            mkdir(output_dirname)
-            startup_hook()
-            // enter the dispatch group so we can wait for it at the end 
-            self.dispatchGroup.enter()
-
-            Task {
-                // each of these methods removes the airplanes from a particular frame
-                await assembleMethodList()
-                Log.d("we have \(await method_list.list.count) total frames")
+        mkdir(output_dirname)
+        startup_hook()
+        // enter the dispatch group so we can wait for it at the end 
+        self.dispatchGroup.enter()
         
-                Log.d("running")
-                // atually run it
-
-                while(await method_list.list.count > 0) {
-                    let current_running = await self.number_running.currentValue()
-                    if(current_running < self.max_concurrent_renders) {
-                        Log.d("\(current_running) frames currently processing")
-                        Log.d("we have \(await method_list.list.count) more frames to process")
-                        Log.d("processing new frame")
-                        
-                        // sort the keys and take the smallest one first
-                        if let next_method_key = await method_list.nextKey,
-                           let next_method = await method_list.list[next_method_key]
-                        {
-                            await method_list.removeValue(forKey: next_method_key)
-                            await self.number_running.increment()
-                            self.dispatchQueue.async {
+        Task {
+            // each of these methods removes the airplanes from a particular frame
+            await assembleMethodList()
+            Log.d("we have \(await method_list.list.count) total frames")
+            
+            Log.d("running")
+            // atually run it
+            
+            while(await method_list.list.count > 0) {
+                let current_running = await self.number_running.currentValue()
+                if(current_running < self.max_concurrent_renders) {
+                    Log.d("\(current_running) frames currently processing")
+                    Log.d("we have \(await method_list.list.count) more frames to process")
+                    Log.d("processing new frame")
+                    
+                    // sort the keys and take the smallest one first
+                    if let next_method_key = await method_list.nextKey,
+                       let next_method = await method_list.list[next_method_key]
+                    {
+                        await method_list.removeValue(forKey: next_method_key)
+                        await self.number_running.increment()
+                        self.dispatchQueue.async {
                             Task {
                                 await next_method()
                             }
-                            }
-                        } else {
-                            Log.e("FUCK")
-                            fatalError("FUCK")
                         }
                     } else {
-                        _ = self.dispatchGroup.wait(timeout: DispatchTime.now().advanced(by: .seconds(1)))
+                        Log.e("FUCK")
+                        fatalError("FUCK")
                     }
+                } else {
+                    _ = self.dispatchGroup.wait(timeout: DispatchTime.now().advanced(by: .seconds(1)))
                 }
-
-                self.dispatchGroup.leave()
             }
-            self.dispatchGroup.wait()
-            Log.d("done")
+            
+            self.dispatchGroup.leave()
         }
+        self.dispatchGroup.wait()
+        Log.d("done")
     }
 }
 
 
 // removes suffix and path
-func remove_suffix_XXX_RENAME(fromString string: String) -> String {
-    let imageURL = NSURL(fileURLWithPath: string, isDirectory: false) as URL
-    let full_path = imageURL.deletingPathExtension().absoluteString
-    let components = full_path.components(separatedBy: "/")
-    return components[components.count-1]
+func remove_path(fromString string: String) -> String {
+    let components = string.components(separatedBy: "/")
+    let ret = components[components.count-1]
+    return ret
 }
 
 func list_image_files___RENAME_XXX(atPath path: String) -> [String] {

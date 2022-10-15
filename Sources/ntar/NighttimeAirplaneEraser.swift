@@ -285,12 +285,12 @@ class NighttimeAirplaneEraser : ImageSequenceProcessor {
             }
 
             
-            let test_paint_filename = "\(self.test_paint_output_dirname)/\(base_name).tif"
+            let test_paint_filename = "\(self.test_paint_output_dirname)/\(base_name)"
             
             // the other frames that we use to detect outliers and repaint from
             return await self.removeAirplanes(fromImage: image,
                                               otherFrames: otherFrames,
-                                              filename: "\(self.output_dirname)/\(base_name).tif",
+                                              filename: "\(self.output_dirname)/\(base_name)",
                                               test_paint_filename: self.test_paint ? test_paint_filename : nil) // XXX last arg is ugly
         } else {
             Log.d("FUCK")
