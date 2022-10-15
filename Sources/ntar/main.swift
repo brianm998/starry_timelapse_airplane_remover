@@ -20,7 +20,9 @@ if CommandLine.arguments.count < 1 {
         let dirname = "\(path)/\(input_image_sequence_dirname)"
         let eraser = NighttimeAirplaneEraser(imageSequenceDirname: dirname,
                                              maxConcurrent: 40,
-                                             minNeighbors: 130)
+                                             minNeighbors: 130,
+                                             padding: 0,
+                                             testPaint: false)
         eraser.run()
     } else {
         Log.d("cannot run :(")

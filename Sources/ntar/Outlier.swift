@@ -29,4 +29,21 @@ public class Outlier: Hashable, Equatable {
             lhs.x == rhs.x &&
             lhs.y == rhs.y
     }    
+
+    var taglessUndoneNeighbors: [Outlier] {
+        return self.directNeighbors.filter { neighbor in
+            return neighbor.tag == nil && !neighbor.done
+        }
+    }
+    var directNeighbors: [Outlier] {
+        get {
+            var ret: [Outlier] = []
+            if let left   = self.left   {ret.append(left)}
+            if let right  = self.right  {ret.append(right)}
+            if let top    = self.top    {ret.append(top)}
+            if let bottom = self.bottom {ret.append(bottom)}
+            return ret
+        }
+    }
 }
+

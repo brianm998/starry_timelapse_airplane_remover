@@ -485,12 +485,12 @@ func prune(outlierMap outlier_map: [String: Outlier]) -> [String: UInt16]
            !outlier.done
         {
             outlier.tag = outlier_key
-            var pending_outliers = directNeighbors(for: outlier)
+            var pending_outliers = outlier.taglessUndoneNeighbors
             // these outliers have a tag, but are set as done
             while pending_outliers.count > 0 {
                 let next_outlier = pending_outliers.removeFirst()
                 next_outlier.tag = outlier_key
-                let more_pending_outliers = directNeighbors(for: next_outlier)
+                let more_pending_outliers = next_outlier.taglessUndoneNeighbors
                 pending_outliers = more_pending_outliers + pending_outliers
             }
         }
@@ -513,35 +513,6 @@ func prune(outlierMap outlier_map: [String: Outlier]) -> [String: UInt16]
         }
     }
     return individual_group_counts
-}
-
-func directNeighbors(for outlier: Outlier) -> [Outlier] {
-    var ret: [Outlier] = []
-    if let left = outlier.left,
-       left.tag == nil,
-       !left.done
-    {
-        ret.append(left)
-    }
-    if let right = outlier.right,
-       right.tag == nil,
-       !right.done
-    {
-        ret.append(right)
-    }
-    if let top = outlier.top,
-       top.tag == nil,
-       !top.done
-    {
-        ret.append(top)
-    }
-    if let bottom = outlier.bottom,
-       bottom.tag == nil,
-       !bottom.done
-    {
-        ret.append(bottom)
-    }
-    return ret
 }
 
 // used for padding          
