@@ -201,7 +201,6 @@ class NighttimeAirplaneEraser : ImageSequenceProcessor {
                             
                     var otherPixels: [Pixel] = []
 
-                    // XXX this could be better
                     // grab the pixels from the same image spot from adject frames
                     for i in 0 ..< otherFrames.count {
                         otherPixels.append(await otherFrames[i].pixel(atX: x, andY: y))

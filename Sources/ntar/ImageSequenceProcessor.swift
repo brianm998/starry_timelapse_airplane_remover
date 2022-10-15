@@ -31,12 +31,12 @@ class ImageSequenceProcessor {
     
     let dispatchGroup = DispatchGroup()
     
-    init(imageSequenceDirname: String,
+    init(imageSequenceDirname image_sequence_dirname: String,
          outputDirname output_dirname: String,
          maxConcurrent max_concurrent: UInt = 5)
     {
         self.max_concurrent_renders = max_concurrent
-        self.image_sequence_dirname = imageSequenceDirname
+        self.image_sequence_dirname = image_sequence_dirname
         self.output_dirname = output_dirname
     }
     
