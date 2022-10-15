@@ -2,6 +2,12 @@ import Foundation
 import CoreGraphics
 import Cocoa
 
+Log.handlers = 
+    [
+      .console: ConsoleLogHandler(at: .debug)
+    ]
+
+
 if CommandLine.arguments.count < 1 {
     Log.d("need more args!")    // XXX make this better
 } else {
