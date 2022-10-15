@@ -59,15 +59,16 @@ class ImageSequenceProcessor {
         if let image_sequence = image_sequence {
             for (index, image_filename) in image_sequence.filenames.enumerated() {
                 let filename = image_sequence.filenames[index]
+                let basename = remove_suffix_XXX_RENAME(fromString: filename)
                 
-                if FileManager.default.fileExists(atPath: "\(self.output_dirname)/\(filename)") {
+                if FileManager.default.fileExists(atPath: "\(output_dirname)/\(basename).tif") {
                     Log.i("skipping already existing file \(filename)")
                 } else {
                     await method_list.add(atIndex: index, method: {
                         self.dispatchGroup.enter() 
                         await self.processFrame(number: index,
                                                 filename: image_filename,
-                                                base_name: remove_suffix_XXX_RENAME(fromString: filename))
+                                                base_name: basename)
                         await self.number_running.decrement()
                         self.dispatchGroup.leave()
                     })

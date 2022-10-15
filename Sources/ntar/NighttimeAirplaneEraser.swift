@@ -270,11 +270,10 @@ class NighttimeAirplaneEraser : ImageSequenceProcessor {
     }
     
     override func processFrame(number index: Int,
-                               filename: String,
+                               filename full_image_path: String,
                                base_name: String) async
     {
-        let full_image_path = filename
-        Log.e("full_image_path \(full_image_path)")
+        //Log.e("full_image_path \(full_image_path)")
         // load images outside the main thread
         if let image_sequence = image_sequence,
            let image = await image_sequence.getImage(withName: full_image_path)
@@ -292,8 +291,6 @@ class NighttimeAirplaneEraser : ImageSequenceProcessor {
                 otherFrames.append(image)
             }
 
-  //          let dirname_length = Int(dirname.count)
-//            let image_filename = full_image_path[dirname_length ..< Int(full_image_path.count)]
             
             let test_paint_filename = "\(self.test_paint_output_dirname)/\(base_name).tif"
             
