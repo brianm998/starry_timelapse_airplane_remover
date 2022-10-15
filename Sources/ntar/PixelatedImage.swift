@@ -14,7 +14,8 @@ actor PixelatedImage {
     let bytesPerRow: Int
     let bitsPerComponent: Int
     let bytesPerPixel: Int
-        
+    let bytes: UnsafePointer<UInt8>
+    
     var pixels = [[Pixel]]()
     
     init?(_ image: CGImage, filename: String) {
@@ -34,6 +35,10 @@ actor PixelatedImage {
             Log.e("DOH")
             return nil
         }
+        guard let _bytes = CFDataGetBytePtr(self.data) else { // XXX maybe move this out of here
+            fatalError("Couldn't access image data")
+        }
+        self.bytes = _bytes
     }
 
     private func readPixels() {
@@ -48,10 +53,6 @@ actor PixelatedImage {
     }
 
     private func readPixel(atX x: Int, andY y: Int) -> Pixel {
-        guard let bytes = CFDataGetBytePtr(self.data) else { // XXX maybe move this out of here
-            fatalError("Couldn't access image data")
-        }
-        
         var pixel = Pixel()
         let offset = (y * bytesPerRow) + (x * bytesPerPixel)
         // XXX this could be cleaner
