@@ -138,22 +138,24 @@ class FrameAirplaneRemover {
         Log.d("frame \(frame_index) labeling adjecent outliers")
         // then label all adject outliers
         for (outlier_key, outlier) in outlier_map {
-            if outlier.tag == nil,
-               !outlier.done
-            {
+            if outlier.tag == nil, !outlier.done {
                 outlier.tag = outlier_key
+
+                // these outliers have a tag, but are not set as done
                 var pending_outliers = outlier.taglessUndoneNeighbors
-                // these outliers have a tag, but are set as done
+
                 var loop_count: Int = 0
 
-                let max_loop_count: UInt = 1000
+                // airlane streaks should be smaller than this value
+                // and so should the min_neighbors value
+                let max_loop_count: UInt = self.min_neighbors*2
                 
                 while pending_outliers.count > 0 {
                     loop_count += 1
                     if loop_count % 1000 == 0 {
                         // XXX for some reason pending outlers can increase with every iteration
                         // when large areas are bright because of things like car headlights
-                        Log.d("frame \(frame_index) looping \(loop_count) times \(pending_outliers.count) pending outliers")
+                        Log.w("frame \(frame_index) looping \(loop_count) times \(pending_outliers.count) pending outliers")
                     }
                     if loop_count > max_loop_count {
                         Log.w("frame \(frame_index) bailing out after \(loop_count) loops")
@@ -162,6 +164,9 @@ class FrameAirplaneRemover {
                     let next_outlier = pending_outliers.removeFirst()
                     next_outlier.tag = outlier_key
                     let more_pending_outliers = next_outlier.taglessUndoneNeighbors
+
+                    // XXX perhaps the problem is duplicate elements below?
+                    // frame 434 of 09_24_2022-a7sii-2 is a problem child for this
                     pending_outliers = more_pending_outliers + pending_outliers
                 }
 
@@ -197,8 +202,6 @@ class FrameAirplaneRemover {
             let y = outlier.y
             
             if outlier.amount > max_pixel_distance { // XXX global variable
-                //Log.d("found \(outlier.neighbors.count) neighbors")
-                
                 let offset = (Int(y) * bytesPerRow) + (Int(x) * bytesPerPixel)
                 
                 var nextPixel = Pixel()
@@ -206,8 +209,6 @@ class FrameAirplaneRemover {
                         
                 var nextValue = nextPixel.value
 
-                //Log.e("offset \(offset) nextValue \(nextValue) \(test_paint_data) bytesPerPixel \(bytesPerPixel) bytesPerRow \(bytesPerRow)")
-                
                 test_paint_data?.replaceSubrange(offset ..< offset+raw_pixel_size_bytes,
                                                  with: &nextValue, count: raw_pixel_size_bytes)
             }
@@ -219,7 +220,10 @@ class FrameAirplaneRemover {
         // XXX this is slower than the other steps here :(
         // also not sure it's really needed
         if(padding_value > 0) {
-            Log.d("frame \(frame_index) adding padding") // XXX search the outlier map, looking for missing neighbors
+            Log.d("frame \(frame_index) adding padding")
+            // XXX search the outlier map, looking for missing neighbors
+            // when found, mark them as padding (amount 0) in padding_value direction
+            // from the location of outliers without neighbors in some direction
             for y in 0 ..< height {
                 //Log.d("y \(y)")
                 for x in 0 ..< width {
@@ -252,7 +256,6 @@ class FrameAirplaneRemover {
 
     func paintOverAirplanes() async {
         // paint on the large groups of outliers with values from the other frames
-        // iterate over the outlier_map instead
         for (_, outlier) in outlier_map {
             let x = outlier.x
             let y = outlier.y
