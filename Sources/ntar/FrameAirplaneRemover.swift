@@ -152,18 +152,22 @@ class FrameAirplaneRemover {
                 
                 // these neighbor outliers now have the same tag as this outlier,
                 // but are not set as done
-                var pending_outliers = Set<Outlier>(outlier.taglessNeighbors)
+                //var pending_outliers = Set<Outlier>(outlier.taglessNeighbors)
+                var pending_outliers = outlier.taglessNeighbors
+                pending_outliers.forEach { pending_outlier in
+                    pending_outlier.tag = outlier_key
+                }
                 //Log.d("starting new outlier group \(outlier_key) and \(pending_outliers.count) pending neighbors \(outlier.directNeighbors.count) real neighbors")
 
                 let max_loop_count = UInt64(UInt32.max)
                 
                 var loop_count: UInt64 = 0
                 // should be bounded because of finite number of pixels in image
-                // and the usage of a Set to keep out duplicates 
+                // and the usage of a Set to keep out duplicates  XXX NOT ANYMORE XXX
                 while pending_outliers.count > 0 {
                     loop_count += 1
-                    if loop_count % 10000 == 0 {
-                        Log.d("frame \(frame_index) looping \(loop_count) times \(pending_outliers.count) pending outliers")
+                    if loop_count % 1000 == 0 {
+                        Log.d("frame \(frame_index) looping \(loop_count) times \(pending_outliers.count) pending outliers group_size \(group_size)")
                     }
 
                     if loop_count > max_loop_count {
@@ -172,14 +176,27 @@ class FrameAirplaneRemover {
                     }                    
                     let next_outlier = pending_outliers.removeFirst()
                     if next_outlier.tag != nil {
-                        Log.e("BAD OUTLIER")
-                        fatalError("BAD OUTLIER")
+                        group_size += 1
+
+                        //let more_pending_outliers = Set<Outlier>(next_outlier.taglessNeighbors)
+                        let more_pending_outliers = next_outlier.taglessNeighbors
+                        more_pending_outliers.forEach { pending_outlier in
+                            pending_outlier.tag = outlier_key
+                        }
+                        
+                        let start_time = NSDate().timeIntervalSince1970
+                        //pending_outliers = more_pending_outliers.union(pending_outliers)
+                        pending_outliers += more_pending_outliers
+                        let end_time = NSDate().timeIntervalSince1970
+
+                        if loop_count % 1000 == 0 {
+                            Log.d("frame \(frame_index) add took \(end_time-start_time) seconds")
+                        }
+                        
+                    } else {
+                        Log.w("next outlier has tag \(next_outlier.tag)")
+                        fatalError("FUCK")
                     }
-                    next_outlier.tag = outlier_key
-                    group_size += 1
-                    
-                    let more_pending_outliers = Set<Outlier>(next_outlier.taglessNeighbors)
-                    pending_outliers = more_pending_outliers.union(pending_outliers)
                 }
 
                 if group_size > 100 {
@@ -301,6 +318,7 @@ class FrameAirplaneRemover {
         }
     }
 
+    // paint over a selected outlier with data from pixels from adjecent frames
     func paint(outlier: Outlier, with other_pixels: [[[Pixel]]]) {
         let x = outlier.x
         let y = outlier.y
