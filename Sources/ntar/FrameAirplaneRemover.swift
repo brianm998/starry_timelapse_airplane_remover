@@ -139,65 +139,58 @@ class FrameAirplaneRemover {
             }
         }
     
+        var individual_group_counts: [String: UInt64] = [:]
+    
         Log.d("frame \(frame_index) labeling adjecent outliers")
         // then label all adject outliers
         for (outlier_key, outlier) in outlier_map {
             if outlier.tag == nil, !outlier.done {
+                var group_size: UInt64 = 0
+                // tag this virgin outlier with its own key
                 outlier.tag = outlier_key
-
-                // these outliers have a tag, but are not set as done
-                var pending_outliers = outlier.taglessUndoneNeighbors
-
-                // XXX what really needs to happen here is to keep a hash, not a list
-                // so that we don't end with craploads of duplicates sometimes
+                group_size += 1
+                outlier.done = true
                 
-                var loop_count: Int = 0
+                // these neighbor outliers now have the same tag as this outlier,
+                // but are not set as done
+                var pending_outliers = Set<Outlier>(outlier.taglessUndoneNeighbors)
 
-                // airlane streaks should be smaller than this value
-                // and so should the min_neighbors value
-                let max_loop_count: UInt = UInt(self.min_neighbors*2)
+                let max_loop_count = UInt64(UInt32.max)
                 
+                var loop_count: UInt64 = 0
+                // should be bounded because of finite number of pixels in image
+                // and the usage of a Set to keep out duplicates 
                 while pending_outliers.count > 0 {
                     loop_count += 1
-                    if loop_count % 1000 == 0 {
-                        // XXX for some reason pending outlers can increase with every iteration
-                        // when large areas are bright because of things like car headlights
-                        Log.w("frame \(frame_index) looping \(loop_count) times \(pending_outliers.count) pending outliers")
+                    if loop_count % 10000 == 0 {
+                        Log.d("frame \(frame_index) looping \(loop_count) times \(pending_outliers.count) pending outliers group_size \(group_size)")
                     }
+
                     if loop_count > max_loop_count {
                         Log.w("frame \(frame_index) bailing out after \(loop_count) loops")
                         break
-                    }
+                    }                    
                     let next_outlier = pending_outliers.removeFirst()
+                    if next_outlier.tag != nil {
+                        Log.e("BAD OUTLIER")
+                        fatalError("BAD OUTLIER")
+                    }
+                    if next_outlier.done {
+                        Log.e("BAD OUTLIER")
+                        fatalError("BAD OUTLIER")
+                    }
                     next_outlier.tag = outlier_key
-                    let more_pending_outliers = next_outlier.taglessUndoneNeighbors
-
-                    // XXX perhaps the problem is duplicate elements below?
-                    // frame 434 of 09_24_2022-a7sii-2 is a problem child for this
-                    pending_outliers = more_pending_outliers + pending_outliers
+                    group_size += 1
+                    next_outlier.done = true
+                    
+                    let more_pending_outliers = Set<Outlier>(next_outlier.taglessUndoneNeighbors)
+                    pending_outliers = more_pending_outliers.union(pending_outliers)
                 }
 
-                if loop_count > 100 {
-                    Log.i("frame \(frame_index) looped \(loop_count) times")
+                if loop_count > 10000 {
+                    Log.i("frame \(frame_index) looped a total of \(loop_count) times")
                 }
-            }
-        }
-    
-        var individual_group_counts: [String: UInt64] = [:]
-    
-        Log.d("frame \(frame_index) collecting counts")
-        // finally collect counts by outlier tag name
-        for (_, outlier) in outlier_map {
-            //Log.d("outlier \(outlier)")
-            if let tag = outlier.tag {
-                if let outlier_count = individual_group_counts[tag] {
-                    individual_group_counts[tag] = outlier_count + 1
-                } else {
-                    individual_group_counts[tag] = 1
-                }
-            } else {
-                Log.e("FUCK")       // all outliers should be tagged now
-                fatalError("FUCKED")
+                individual_group_counts[outlier_key] = group_size
             }
         }
         self.neighbor_groups = individual_group_counts
