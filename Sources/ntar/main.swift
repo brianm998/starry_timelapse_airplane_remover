@@ -11,11 +11,13 @@ todo:
  - try image blending
  - explore using multi dementional array instead of hash for outliers
  - make it faster
+ - include frame number in logging
+ - figure out how to parallelize processing of each frame
 */
 
 Log.handlers = 
     [
-      .console: ConsoleLogHandler(at: .error)
+      .console: ConsoleLogHandler(at: .debug)
     ]
 
 
@@ -30,10 +32,10 @@ if CommandLine.arguments.count < 1 {
     if #available(macOS 10.15, *) {
         let dirname = "\(path)/\(input_image_sequence_dirname)"
         let eraser = NighttimeAirplaneRemover(imageSequenceDirname: dirname,
-                                             maxConcurrent: 35,
-                                             minNeighbors: 130,
-                                             padding: 0,
-                                             testPaint: true)
+                                              maxConcurrent: 35,
+                                              minNeighbors: 130,
+                                              padding: 0,
+                                              testPaint: true)
         eraser.run()
     } else {
         Log.d("cannot run :(")

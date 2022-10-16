@@ -81,6 +81,9 @@ class FrameAirplaneRemover {
         // compare pixels at the same image location in adjecent frames
         // detect Outliers which are much more brighter than the adject frames
         for y in 0 ..< height {
+            if y != 0 && y % 1000 == 0 {
+                Log.d("frame \(frame_index) detected outliers in \(y) rows")
+            }
             for x in 0 ..< width {
                 
                 let origPixel = await image.pixel(atX: x, andY: y)
@@ -109,7 +112,7 @@ class FrameAirplaneRemover {
     }
 
     func prune() {
-        Log.i("frame \(frame_index) pruning outliers")
+        Log.i("frame \(frame_index) pruning \(outlier_map.count) outliers")
         
         // go through the outlier_map and link together all the outliers that are adject to eachother,
         // outputting a mapping of group name to size
@@ -132,6 +135,7 @@ class FrameAirplaneRemover {
             }
         }
     
+        Log.d("frame \(frame_index) labeling adjecent outliers")
         // then label all adject outliers
         for (outlier_key, outlier) in outlier_map {
             if outlier.tag == nil,
@@ -140,17 +144,34 @@ class FrameAirplaneRemover {
                 outlier.tag = outlier_key
                 var pending_outliers = outlier.taglessUndoneNeighbors
                 // these outliers have a tag, but are set as done
+                var loop_count: Int = 0
+
+                let max_loop_count: UInt = 1000
+                
                 while pending_outliers.count > 0 {
+                    loop_count += 1
+                    if loop_count % 1000 == 0 {
+                        // XXX for some reason pending outlers can increase with every iteration
+                        // when large areas are bright because of things like car headlights
+                        Log.d("frame \(frame_index) looping \(loop_count) times \(pending_outliers.count) pending outliers")
+                    }
+                    if loop_count > max_loop_count {
+                        Log.w("frame \(frame_index) bailing out after \(loop_count) loops")
+                        break
+                    }
                     let next_outlier = pending_outliers.removeFirst()
                     next_outlier.tag = outlier_key
                     let more_pending_outliers = next_outlier.taglessUndoneNeighbors
                     pending_outliers = more_pending_outliers + pending_outliers
                 }
+
+                Log.i("frame \(frame_index) looped \(loop_count) times")
             }
         }
     
         var individual_group_counts: [String: UInt64] = [:]
     
+        Log.d("frame \(frame_index) collecting counts")
         // finally collect counts by outlier tag name
         for (_, outlier) in outlier_map {
             //Log.d("outlier \(outlier)")

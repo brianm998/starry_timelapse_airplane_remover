@@ -42,6 +42,7 @@ actor PixelatedImage {
     }
 
     private func readPixels() {
+        let start_time = NSDate().timeIntervalSince1970
         Log.d("reading pixels for \(filename)")
         for x in 0 ..< self.width {
             var row: [Pixel] = []
@@ -50,6 +51,8 @@ actor PixelatedImage {
             }
             pixels.append(row)
         }
+        let end_time = NSDate().timeIntervalSince1970
+        Log.d("reading pixels for \(filename) took \(end_time-start_time) seconds")
     }
 
     private func readPixel(atX x: Int, andY y: Int) -> Pixel {

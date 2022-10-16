@@ -108,44 +108,47 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
         }
            
         let time_1 = NSDate().timeIntervalSince1970
+        let interval1 = String(format: "%0.1f", time_1 - start_time)
         
+        Log.i("frame \(frame_index) populating the outlier map")
+
         await frame_plane_remover.populateOutlierMap()
 
         let time_2 = NSDate().timeIntervalSince1970
+        let interval2 = String(format: "%0.1f", time_2 - start_time)
+
+        Log.i("frame \(frame_index) pruning after \(interval2)s")
 
         frame_plane_remover.prune()
 
         let time_3 = NSDate().timeIntervalSince1970
-
+        let interval3 = String(format: "%0.1f", time_3 - start_time)
         
-        Log.i("frame \(frame_index) done processing the outlier map")
+        Log.i("frame \(frame_index) done processing the outlier map after \(interval3)s")
         // paint green on the outliers above the threshold for testing
 
         if(test_paint_outliers) {
             frame_plane_remover.testPaintOutliers()
         }
         let time_4 = NSDate().timeIntervalSince1970
+        let interval4 = String(format: "%0.1f", time_4 - start_time)
+        Log.d("frame \(frame_index) maybe adding padding after \(interval4)s")
 
         // padding
         frame_plane_remover.addPadding(padding_value: padding_value)
         
         let time_5 = NSDate().timeIntervalSince1970
-        Log.d("frame \(frame_index) painting over airplane streaks")
+        let interval5 = String(format: "%0.1f", time_5 - start_time)
+        Log.d("frame \(frame_index) painting over airplane streaks after \(interval5)s")
         
         await frame_plane_remover.paintOverAirplanes()
         
         let time_6 = NSDate().timeIntervalSince1970
-        Log.i("frame \(frame_index) creating final image \(filename)")
+        let interval6 = String(format: "%0.1f", time_6 - start_time)
+        Log.i("frame \(frame_index) creating final image \(filename) after \(interval5)s")
 
         frame_plane_remover.writeTestFile()
         let time_7 = NSDate().timeIntervalSince1970
-
-        let interval1 = String(format: "%0.1f", time_1 - start_time)
-        let interval2 = String(format: "%0.1f", time_2 - start_time)
-        let interval3 = String(format: "%0.1f", time_3 - start_time)
-        let interval4 = String(format: "%0.1f", time_4 - start_time)
-        let interval5 = String(format: "%0.1f", time_5 - start_time)
-        let interval6 = String(format: "%0.1f", time_6 - start_time)
         let interval7 = String(format: "%0.1f", time_7 - start_time)
         
         Log.i("frame \(frame_index) timing for frame render \(interval7)s - \(interval6)s - \(interval5)s - \(interval4)s - \(interval3)s - \(interval2)s - \(interval1)s")
