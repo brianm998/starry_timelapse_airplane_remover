@@ -17,15 +17,14 @@ actor PixelatedImage {
     let bytesPerPixel: Int
     let bitmapInfo: CGBitmapInfo
 
-    // XXX expose this better
     private var internal_pixels = [[Pixel]]()
 
     var pixels: [[Pixel]] {
         get {
             if internal_pixels.count == 0 {
-                readPixels()
+                readPixels()    // lazy load on first access
             }
-            return internal_pixels
+            return internal_pixels  
         }
     }
     

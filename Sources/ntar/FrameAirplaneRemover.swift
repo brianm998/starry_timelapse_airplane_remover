@@ -12,7 +12,7 @@ class FrameAirplaneRemover {
     let bytesPerRow: Int
     let image: PixelatedImage
     let otherFrames: [PixelatedImage]
-    let min_neighbors: UInt16
+    let min_group_trail_length: UInt16
     let max_pixel_distance: UInt16
     let frame_index: Int
     
@@ -37,10 +37,10 @@ class FrameAirplaneRemover {
           filename: String,
           test_paint_filename tpfo: String?,
           max_pixel_distance: UInt16,
-          min_neighbors: UInt16
+          min_group_trail_length: UInt16
          )
     {
-        self.min_neighbors = min_neighbors
+        self.min_group_trail_length = min_group_trail_length
         self.frame_index = frame_index // frame index in the image sequence
         self.image = image
         self.otherFrames = otherFrames
@@ -159,7 +159,8 @@ class FrameAirplaneRemover {
                 }
                 //Log.d("starting new outlier group \(outlier_key) and \(pending_outliers.count) pending neighbors \(outlier.directNeighbors.count) real neighbors")
 
-                let max_loop_count = UInt64(UInt32.max)
+                //let max_loop_count = UInt64(UInt32.max)
+                let max_loop_count = min_group_trail_length*min_group_trail_length*2
                 
                 var loop_count: UInt64 = 0
                 // should be bounded because of finite number of pixels in image
@@ -184,14 +185,14 @@ class FrameAirplaneRemover {
                             pending_outlier.tag = outlier_key
                         }
                         
-                        let start_time = NSDate().timeIntervalSince1970
+                        //let start_time = NSDate().timeIntervalSince1970
                         //pending_outliers = more_pending_outliers.union(pending_outliers)
                         pending_outliers += more_pending_outliers
-                        let end_time = NSDate().timeIntervalSince1970
+                        //let end_time = NSDate().timeIntervalSince1970
 
-                        if loop_count % 1000 == 0 {
-                            Log.d("frame \(frame_index) add took \(end_time-start_time) seconds")
-                        }
+                        //if loop_count % 1000 == 0 {
+                            //Log.d("frame \(frame_index) add took \(end_time-start_time) seconds")
+                    //}
                         
                     } else {
                         Log.w("next outlier has tag \(next_outlier.tag)")
@@ -257,7 +258,7 @@ class FrameAirplaneRemover {
                                         ofX: x, andY: y,
                                         outliers: outliers,
                                         neighborGroups: neighbor_groups,
-                                        minNeighbors: min_neighbors)
+                                        minNeighbors: min_group_trail_length)
                     {
                         let padding = Outlier(x: x, y: y, amount: 0)
                         padding.tag = bigTag
@@ -274,19 +275,69 @@ class FrameAirplaneRemover {
         var names_of_groups_to_paint: [String] = []
         var should_paint: [String:Bool] = [:]
         var paint_list: [Outlier] = []
-
         Log.i("frame \(frame_index) painting")
 
-        // first look for neighbor groups with enough neighbors to add to group to paint
-        // IMPROVEMENT: - do more than just count, like max distance bewteen points
-        for(key, count) in neighbor_groups {
-            if count > min_neighbors {
-                names_of_groups_to_paint.append(key)
-                should_paint[key] = true
-                Log.i("frame \(frame_index) will paint group \(key) with \(count) pixels")
+        var group_min_x: [String:Int] = [:]
+        var group_min_y: [String:Int] = [:]
+        var group_max_x: [String:Int] = [:]
+        var group_max_y: [String:Int] = [:]
+
+        // calculate the outer bounds of each outlier group
+        for x in 0 ..< width {
+            for y in 0 ..< height {
+                if let outlier = outliers[x][y],
+                   let group = outlier.tag
+                {
+                    if let min_x = group_min_x[group] {
+                        if(outlier.x < min_x) {
+                            group_min_x[group] = outlier.x
+                        }
+                    } else {
+                        group_min_x[group] = outlier.x
+                    }
+                    if let min_y = group_min_y[group] {
+                        if(outlier.y < min_y) {
+                            group_min_y[group] = outlier.y
+                        }
+                    } else {
+                        group_min_y[group] = outlier.y
+                    }
+                    if let max_x = group_max_x[group] {
+                        if(outlier.x > max_x) {
+                            group_max_x[group] = outlier.x
+                        }
+                    } else {
+                        group_max_x[group] = outlier.x
+                    }
+                    if let max_y = group_max_y[group] {
+                        if(outlier.y > max_y) {
+                            group_max_y[group] = outlier.y
+                        }
+                    } else {
+                        group_max_y[group] = outlier.y
+                    }
+                }
             }
         }
 
+        for(group, group_size) in neighbor_groups {
+            if let min_x = group_min_x[group],
+               let min_y = group_min_y[group],
+               let max_x = group_max_x[group],
+               let max_y = group_max_y[group]
+            {
+                let distance = hypotenuse(x1: min_x, y1: min_y,
+                                          x2: max_x, y2: max_y)
+                let max_pixels = (max_x-min_x)*(max_y-min_y)
+                let amount_filled = Double(group_size)/Double(max_pixels)
+                if distance > min_group_trail_length || amount_filled < 0.3 {
+                    Log.i("marking group \(group) with distance \(distance) for painting")
+                    should_paint[group] = true
+                    names_of_groups_to_paint.append(group)
+                }
+            }
+        }
+        
         // for each outlier, see if we should paint it, and if so, add it to the list
         for (outlier) in outlier_list {
             if let key = outlier.tag,
@@ -366,7 +417,7 @@ class FrameAirplaneRemover {
 func tag(within distance: UInt, ofX x: Int, andY y: Int,
          outliers: [[Outlier?]],
          neighborGroups neighbor_groups: [String: UInt64],
-         minNeighbors min_neighbors: UInt16) -> String?
+         minNeighbors min_group_trail_length: UInt16) -> String?
 {
     var x_start = 0;
     var y_start = 0;
@@ -387,7 +438,7 @@ func tag(within distance: UInt, ofX x: Int, andY y: Int,
                outlier.amount != 0,
                let tag = outlier.tag,
                let group_size = neighbor_groups[tag],
-               group_size > min_neighbors
+               group_size > min_group_trail_length // XXX this may be wrong now
             {
                 return outlier.tag
             }

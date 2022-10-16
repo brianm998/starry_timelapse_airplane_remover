@@ -41,6 +41,7 @@ actor ImageSequence {
         if let image = images[filename]?.value {
             return image
         }
+        // lazy load it it's not present
         Log.d("Loading image from \(filename)")
         let imageURL = NSURL(fileURLWithPath: filename, isDirectory: false)
         do {

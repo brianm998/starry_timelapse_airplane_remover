@@ -13,7 +13,7 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
     // the following properties get included into the output videoname
     
     // size of a group of outliers that is considered an airplane streak
-    let min_neighbors: UInt16
+    let min_group_trail_length: UInt16
 
     // difference between same pixels on different frames to consider an outlier
     let max_pixel_distance: UInt16
@@ -28,17 +28,17 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
     
     init(imageSequenceDirname image_sequence_dirname: String,
          maxConcurrent max_concurrent: UInt = 5,
-         minNeighbors min_neighbors: UInt16 = 100,
+         minTrailLength min_group_trail_length: UInt16 = 100,
          maxPixelDistance max_pixel_distance: UInt16 = 10000,
          padding: UInt = 0,
          testPaint: Bool = false)
     {
-        self.min_neighbors = min_neighbors
+        self.min_group_trail_length = min_group_trail_length
         self.max_pixel_distance = max_pixel_distance
         self.padding_value = padding
         self.test_paint_outliers = testPaint
         self.test_paint = testPaint
-        var basename = "\(image_sequence_dirname)-no-planes-\(min_neighbors)-\(max_pixel_distance)"
+        var basename = "\(image_sequence_dirname)-no-planes-\(min_group_trail_length)-\(max_pixel_distance)"
         if padding != 0 {
             basename = basename + "-pad-\(padding)"
         }
@@ -101,7 +101,7 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
                                                              filename: filename,
                                                              test_paint_filename: tpfo,
                                                              max_pixel_distance: max_pixel_distance,
-                                                             min_neighbors: min_neighbors)
+                                                             min_group_trail_length: min_group_trail_length)
         else {
             Log.d("DOH")
             fatalError("FAILED")
@@ -156,3 +156,4 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
         return frame_plane_remover.data
     }
 }
+              
