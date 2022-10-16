@@ -126,28 +126,21 @@ class FrameAirplaneRemover {
         
         // go through the outlier_list and link together all the outliers that are adject to eachother,
         // outputting a mapping of group name to size
-    
+
         // first link all outliers to their direct neighbors
         for (outlier) in outlier_list {
             let x = outlier.x
             let y = outlier.y
-            if y > 0, let neighbor = outliers[x][y-1] {
-                outlier.top = neighbor
-            }
-            if x > 0, let neighbor = outliers[x-1][y] {
-                outlier.left = neighbor
-            }
-            if x < width - 1, let neighbor = outliers[x+1][y] {
-                outlier.bottom = neighbor
-            }
-            if y < height - 1, let neighbor = outliers[x][y] {
-                outlier.right = neighbor
-            }
+            if y > 0,          let neighbor = outliers[x][y-1] { outlier.top    = neighbor }
+            if x > 0,          let neighbor = outliers[x-1][y] { outlier.left   = neighbor }
+            if x < width - 1,  let neighbor = outliers[x+1][y] { outlier.bottom = neighbor }
+            if y < height - 1, let neighbor = outliers[x][y+1] { outlier.right  = neighbor }
         }
     
         var individual_group_counts: [String: UInt64] = [:]
     
         Log.d("frame \(frame_index) labeling adjecent outliers")
+
         // then label all adject outliers
         for (outlier) in outlier_list {
             if outlier.tag == nil, !outlier.done {
@@ -161,6 +154,7 @@ class FrameAirplaneRemover {
                 // these neighbor outliers now have the same tag as this outlier,
                 // but are not set as done
                 var pending_outliers = Set<Outlier>(outlier.taglessUndoneNeighbors)
+                //Log.d("starting new outlier group \(outlier_key) and \(pending_outliers.count) pending neighbors \(outlier.directNeighbors.count) real neighbors")
 
                 let max_loop_count = UInt64(UInt32.max)
                 
@@ -194,9 +188,10 @@ class FrameAirplaneRemover {
                     pending_outliers = more_pending_outliers.union(pending_outliers)
                 }
 
-                if loop_count > 10000 {
-                    Log.i("frame \(frame_index) looped a total of \(loop_count) times")
+                if group_size > 100 {
+                    Log.i("frame \(frame_index) group size for \(outlier_key) is \(group_size)")
                 }
+
                 individual_group_counts[outlier_key] = group_size
             }
         }
@@ -264,60 +259,81 @@ class FrameAirplaneRemover {
     }
 
     func paintOverAirplanes() async {
-        // paint on the large groups of outliers with values from the other frames
-        for (outlier) in outlier_list {
-            let x = outlier.x
-            let y = outlier.y
-            // figure out if this outlier is next to enough other outliers
-            if let tag = outlier.tag,
-               let total_size = neighbor_groups[tag] {
-                if total_size > min_neighbors { 
-                    // we've found a spot to paint over
-                            
-                    var other_pixels: [[[Pixel]]] = [[[]]]
-                    for i in 0 ..< otherFrames.count {
-                        other_pixels.append([[]]);
-                        other_pixels[i] = await otherFrames[i].pixels
-                    }
 
-                    var otherPixels: [Pixel] = []
+        var names_of_groups_to_paint: [String] = []
+        var should_paint: [String:Bool] = [:]
+        var paint_list: [Outlier] = []
 
-                    // grab the pixels from the same image spot from adject frames
-                    for i in 0 ..< otherFrames.count {
-                        otherPixels.append(other_pixels[i][x][y])
-                    }
+        Log.i("frame \(frame_index) painting")
 
-                    // blend the pixels from the adjecent frames
-                    var nextPixel = Pixel(merging: otherPixels)
-                    
-                    // this is the numeric value we need to write out to paint over the airplane
-                    var nextValue = nextPixel.value
-
-                    // the is the place in the image data to write to
-                    let offset = (Int(y) * bytesPerRow) + (Int(x) * bytesPerPixel)
-
-                    // actually paint over that airplane like thing in the image data
-                    data.replaceSubrange(offset ..< offset+raw_pixel_size_bytes,
-                                         with: &nextValue, count: raw_pixel_size_bytes)
-
-                    // for testing, colors changed pixels
-                    if test_paint {
-                        if outlier.amount == 0 {
-                            nextPixel.blue = 0xFFFF // for padding
-                        } else {
-                            nextPixel.red = 0xFFFF // for unpadded changed area
-                        }
-                    }
-                    var testPaintValue = nextPixel.value
-                    
-                    if test_paint {
-                        test_paint_data?.replaceSubrange(offset ..< offset+raw_pixel_size_bytes,
-                                                         with: &testPaintValue,
-                                                         count: raw_pixel_size_bytes)
-                    }
-                }
+        // first look for neighbor groups with enough neighbors to add to group to paint
+        // IMPROVEMENT: - do more than just count, like max distance bewteen points
+        for(key, count) in neighbor_groups {
+            if count > min_neighbors {
+                names_of_groups_to_paint.append(key)
+                should_paint[key] = true
+                Log.i("frame \(frame_index) will paint group \(key) with \(count) pixels")
             }
         }
+
+        // for each outlier, see if we should paint it, and if so, add it to the list
+        for (outlier) in outlier_list {
+            if let key = outlier.tag,
+               let will_paint = should_paint[key],
+               will_paint
+            {
+                paint_list.append(outlier)
+            }
+        }
+
+        // paint over every outlier in the paint list with pixels from the adjecent frames
+        for (outlier) in paint_list {
+            let x = outlier.x
+            let y = outlier.y
+            
+            var other_pixels: [[[Pixel]]] = [[[]]]
+            for i in 0 ..< otherFrames.count {
+                other_pixels.append([[]]);
+                other_pixels[i] = await otherFrames[i].pixels
+            }
+            
+            var otherPixels: [Pixel] = []
+            
+            // grab the pixels from the same image spot from adject frames
+            for i in 0 ..< otherFrames.count {
+                otherPixels.append(other_pixels[i][x][y])
+            }
+            
+            // blend the pixels from the adjecent frames
+            var nextPixel = Pixel(merging: otherPixels)
+            
+            // this is the numeric value we need to write out to paint over the airplane
+            var nextValue = nextPixel.value
+            
+            // the is the place in the image data to write to
+            let offset = (Int(y) * bytesPerRow) + (Int(x) * bytesPerPixel)
+            
+            // actually paint over that airplane like thing in the image data
+            data.replaceSubrange(offset ..< offset+raw_pixel_size_bytes,
+                                 with: &nextValue, count: raw_pixel_size_bytes)
+            
+            // for testing, colors changed pixels
+            if test_paint {
+                if outlier.amount == 0 {
+                    nextPixel.blue = 0xFFFF // for padding
+                } else {
+                    nextPixel.red = 0xFFFF // for unpadded changed area
+                }
+            }
+            var testPaintValue = nextPixel.value
+            
+            if test_paint {
+                test_paint_data?.replaceSubrange(offset ..< offset+raw_pixel_size_bytes,
+                                                 with: &testPaintValue,
+                                                 count: raw_pixel_size_bytes)
+            }
+        }
+        Log.i("frame \(frame_index) done painting")
     }
 
     func writeTestFile() {
@@ -370,3 +386,4 @@ func hypotenuse(x1: Int, y1: Int, x2: Int, y2: Int) -> Int {
     return Int(sqrt(Float(x_dist*x_dist+y_dist*y_dist)))
 }
 
+                  
