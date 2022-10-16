@@ -4,38 +4,52 @@ import Cocoa
 
 @available(macOS 10.15, *) 
 actor PixelatedImage {
-    let image: CGImage
     let filename: String
     let width: Int
     let height: Int
-    let data: CFData
+
+    let raw_image_data: CFData
+    let image_buffer_ptr: UnsafePointer<UInt8>
     
     let bitsPerPixel: Int
     let bytesPerRow: Int
     let bitsPerComponent: Int
     let bytesPerPixel: Int
-    let image_buffer_ptr: UnsafePointer<UInt8>
-    
-    var pixels = [[Pixel]]()
+    let bitmapInfo: CGBitmapInfo
+
+    // XXX expose this better
+    private var internal_pixels = [[Pixel]]()
+
+    var pixels: [[Pixel]] {
+        get {
+            if internal_pixels.count == 0 {
+                readPixels()
+            }
+            return internal_pixels
+        }
+    }
     
     init?(_ image: CGImage, filename: String) {
         self.filename = filename
-        self.image = image
-        assert(self.image.colorSpace?.model == .rgb)
+        //self.image = image
+        assert(image.colorSpace?.model == .rgb)
         self.width = image.width
         self.height = image.height
-        self.bitsPerPixel = self.image.bitsPerPixel
-        self.bytesPerRow = self.image.bytesPerRow
-        self.bitsPerComponent = self.image.bitsPerComponent
+        self.bitsPerPixel = image.bitsPerPixel
+        self.bytesPerRow = image.bytesPerRow
+        self.bitsPerComponent = image.bitsPerComponent
         self.bytesPerPixel = self.bitsPerPixel / 8
+        self.bitmapInfo = image.bitmapInfo
 
         if let data = image.dataProvider?.data {
-            self.data = data
+            self.raw_image_data = data
         } else {
             Log.e("DOH")
             return nil
-        }
-        guard let _bytes = CFDataGetBytePtr(self.data) else { // XXX maybe move this out of here
+        }        
+        guard let _bytes = CFDataGetBytePtr(self.raw_image_data)
+        else
+        { // XXX maybe move this out of here
             fatalError("Couldn't access image data")
         }
         self.image_buffer_ptr = _bytes
@@ -44,44 +58,30 @@ actor PixelatedImage {
     private func readPixels() {
         let start_time = NSDate().timeIntervalSince1970
         Log.d("reading pixels for \(filename)")
+
         for x in 0 ..< self.width {
             var row: [Pixel] = []
             for y in 0 ..< self.height {
-                row.append(self.readPixel(atX: x, andY: y))
+                var pixel = Pixel()
+                let offset = (y * bytesPerRow) + (x * bytesPerPixel)
+                // XXX this could be cleaner
+                let r1 = UInt16(image_buffer_ptr[offset]) // lower bits
+                let r2 = UInt16(image_buffer_ptr[offset + 1]) << 8 // higher bits
+                pixel.red = r1 + r2
+                let g1 = UInt16(image_buffer_ptr[offset+bitsPerComponent/8])
+                let g2 = UInt16(image_buffer_ptr[offset+bitsPerComponent/8 + 1]) << 8
+                pixel.green = g1 + g2
+                let b1 = UInt16(image_buffer_ptr[offset+(bitsPerComponent/8)*2])
+                let b2 = UInt16(image_buffer_ptr[offset+(bitsPerComponent/8)*2 + 1]) << 8
+                pixel.blue = b1 + b2
+                
+                row.append(pixel)
             }
-            pixels.append(row)
+            internal_pixels.append(row)
         }
+        
         let end_time = NSDate().timeIntervalSince1970
         Log.d("reading pixels for \(filename) took \(end_time-start_time) seconds")
-    }
-
-    private func readPixel(atX x: Int, andY y: Int) -> Pixel {
-        var pixel = Pixel()
-        let offset = (y * bytesPerRow) + (x * bytesPerPixel)
-        // XXX this could be cleaner
-        let r1 = UInt16(image_buffer_ptr[offset]) // lower bits
-        let r2 = UInt16(image_buffer_ptr[offset + 1]) << 8 // higher bits
-        pixel.red = r1 + r2
-        let g1 = UInt16(image_buffer_ptr[offset+bitsPerComponent/8])
-        let g2 = UInt16(image_buffer_ptr[offset+bitsPerComponent/8 + 1]) << 8
-        pixel.green = g1 + g2
-        let b1 = UInt16(image_buffer_ptr[offset+(bitsPerComponent/8)*2])
-        let b2 = UInt16(image_buffer_ptr[offset+(bitsPerComponent/8)*2 + 1]) << 8
-        pixel.blue = b1 + b2
-
-        return pixel
-    }
-    
-    func pixel(atX x: Int, andY y: Int) -> Pixel {
-        if x < 0 || y < 0 || x >= self.width || y >= self.height {
-            Log.e("FUCK")
-            fatalError("FUCK")
-        }
-        // lazy load the entire pixel set upon first access
-        if pixels.count == 0 { 
-            readPixels()
-        }
-        return pixels[x][y]
     }
 
     // write out the given image data as a 16 bit tiff file to the given filename
@@ -96,7 +96,7 @@ actor PixelatedImage {
                                         bitsPerPixel: bytesPerPixel*8,
                                         bytesPerRow: width*bytesPerPixel,
                                         space: colorSpace,
-                                        bitmapInfo: self.image.bitmapInfo, // byte order
+                                        bitmapInfo: bitmapInfo,
                                         provider: dataProvider,
                                         decode: nil,
                                         shouldInterpolate: false,

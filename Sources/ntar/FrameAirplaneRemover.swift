@@ -10,7 +10,6 @@ class FrameAirplaneRemover {
     let height: Int
     let bytesPerPixel: Int
     let bytesPerRow: Int
-    let orig_data: Data
     let image: PixelatedImage
     let otherFrames: [PixelatedImage]
     let min_neighbors: UInt16
@@ -54,17 +53,13 @@ class FrameAirplaneRemover {
         self.bytesPerRow = width*bytesPerPixel
         self.max_pixel_distance = max_pixel_distance
         
-        guard let dataProvider = image.image.dataProvider,
-              let _data = dataProvider.data
-        else { return nil }
-
-        self.orig_data = _data as Data
+        let _data = image.raw_image_data
         
         // copy the original image data as adjecent frames need
         // to access the original unmodified version
         guard let _mut_data = CFDataCreateMutableCopy(kCFAllocatorDefault,
-                                                  CFDataGetLength(_data),
-                                                  _data) as? Data else { return nil }
+                                                      CFDataGetLength(_data),
+                                                      _data) as? Data else { return nil }
 
         self.data = _mut_data
               
@@ -77,20 +72,29 @@ class FrameAirplaneRemover {
         Log.d("frame \(frame_index) got image data, detecting outlying pixels")
     }
 
+    // this method is by far the slowest part of the process    
+    // perhaps using a two dimentional array instead of hash for outlier_map will help?
+    // or maybe get the entire two dim pixel map?
     func populateOutlierMap() async {
         // compare pixels at the same image location in adjecent frames
         // detect Outliers which are much more brighter than the adject frames
+        let orig_pixels = await image.pixels
+        var other_pixels: [[[Pixel]]] = [[[]]]
+        for i in 0 ..< otherFrames.count {
+            other_pixels.append([[]]);
+            other_pixels[i] = await otherFrames[i].pixels
+        }
         for y in 0 ..< height {
             if y != 0 && y % 1000 == 0 {
                 Log.d("frame \(frame_index) detected outliers in \(y) rows")
             }
             for x in 0 ..< width {
                 
-                let origPixel = await image.pixel(atX: x, andY: y)
-                var otherPixels: [Pixel] = []
+                let origPixel = orig_pixels[x][y]
 
+                var otherPixels: [Pixel] = []
                 for i in 0 ..< otherFrames.count {
-                    otherPixels.append(await otherFrames[i].pixel(atX: x, andY: y))
+                    otherPixels.append(other_pixels[i][x][y])
                 }
                 if otherPixels.count == 0 {
                     fatalError("need more than one image in the sequence")
@@ -144,11 +148,14 @@ class FrameAirplaneRemover {
                 // these outliers have a tag, but are not set as done
                 var pending_outliers = outlier.taglessUndoneNeighbors
 
+                // XXX what really needs to happen here is to keep a hash, not a list
+                // so that we don't end with craploads of duplicates sometimes
+                
                 var loop_count: Int = 0
 
                 // airlane streaks should be smaller than this value
                 // and so should the min_neighbors value
-                let max_loop_count: UInt = self.min_neighbors*2
+                let max_loop_count: UInt = UInt(self.min_neighbors*2)
                 
                 while pending_outliers.count > 0 {
                     loop_count += 1
@@ -170,7 +177,9 @@ class FrameAirplaneRemover {
                     pending_outliers = more_pending_outliers + pending_outliers
                 }
 
-                Log.i("frame \(frame_index) looped \(loop_count) times")
+                if loop_count > 100 {
+                    Log.i("frame \(frame_index) looped \(loop_count) times")
+                }
             }
         }
     
@@ -265,11 +274,17 @@ class FrameAirplaneRemover {
                 if total_size > min_neighbors { 
                     // we've found a spot to paint over
                             
+                    var other_pixels: [[[Pixel]]] = [[[]]]
+                    for i in 0 ..< otherFrames.count {
+                        other_pixels.append([[]]);
+                        other_pixels[i] = await otherFrames[i].pixels
+                    }
+
                     var otherPixels: [Pixel] = []
 
                     // grab the pixels from the same image spot from adject frames
                     for i in 0 ..< otherFrames.count {
-                        otherPixels.append(await otherFrames[i].pixel(atX: x, andY: y))
+                        otherPixels.append(other_pixels[i][x][y])
                     }
 
                     // blend the pixels from the adjecent frames
