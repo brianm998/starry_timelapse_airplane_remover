@@ -22,8 +22,9 @@ class FrameAirplaneRemover {
     var data: Data              // a mutable copy of the original data
     var test_paint_data: Data?
     
-    var outlier_map: [String: Outlier] = [:] // keyed by "\(x),\(y)"
-
+    var outliers: [[Outlier?]] = [[]] // indexed by [x][y]
+    var outlier_list: [Outlier] = [] // all outliers
+    
     // populated by pruning
     var neighbor_groups: [String: UInt64] = [:]
     
@@ -69,12 +70,16 @@ class FrameAirplaneRemover {
                                                           _data) as? Data else { return nil }
             self.test_paint_data = test_data
         }
-        Log.d("frame \(frame_index) got image data, detecting outlying pixels")
+        for x in 0 ..< width {
+            outliers.append([])
+            for _ in 0 ..< height {
+                outliers[x].append(nil)
+            }
+        }
+        Log.d("frame \(frame_index) got image data")
     }
 
     // this method is by far the slowest part of the process    
-    // perhaps using a two dimentional array instead of hash for outlier_map will help?
-    // or maybe get the entire two dim pixel map?
     func populateOutlierMap() async {
         // compare pixels at the same image location in adjecent frames
         // detect Outliers which are much more brighter than the adject frames
@@ -108,33 +113,34 @@ class FrameAirplaneRemover {
                 total_difference /= Int32(otherPixels.count)
                 
                 if total_difference > max_pixel_distance {
-                    outlier_map["\(x),\(y)"] = Outlier(x: x, y: y,
-                                                       amount: total_difference)
+                    let new_outlier = Outlier(x: x, y: y, amount: total_difference)
+                    outliers[x][y] = new_outlier
+                    outlier_list.append(new_outlier)
                 }
             }
         }
     }
 
     func prune() {
-        Log.i("frame \(frame_index) pruning \(outlier_map.count) outliers")
+        Log.i("frame \(frame_index) pruning \(outlier_list.count) outliers")
         
-        // go through the outlier_map and link together all the outliers that are adject to eachother,
+        // go through the outlier_list and link together all the outliers that are adject to eachother,
         // outputting a mapping of group name to size
     
         // first link all outliers to their direct neighbors
-        for (_, outlier) in outlier_map {
+        for (outlier) in outlier_list {
             let x = outlier.x
             let y = outlier.y
-            if y > 0, let neighbor = outlier_map["\(x),\(y-1)"] {
+            if y > 0, let neighbor = outliers[x][y-1] {
                 outlier.top = neighbor
             }
-            if x > 0, let neighbor = outlier_map["\(x-1),\(y)"] {
+            if x > 0, let neighbor = outliers[x-1][y] {
                 outlier.left = neighbor
             }
-            if let neighbor = outlier_map["\(x+1),\(y)"] {
+            if x < width - 1, let neighbor = outliers[x+1][y] {
                 outlier.bottom = neighbor
             }
-            if let neighbor = outlier_map["\(x),\(y+1)"] {
+            if y < height - 1, let neighbor = outliers[x][y] {
                 outlier.right = neighbor
             }
         }
@@ -143,10 +149,11 @@ class FrameAirplaneRemover {
     
         Log.d("frame \(frame_index) labeling adjecent outliers")
         // then label all adject outliers
-        for (outlier_key, outlier) in outlier_map {
+        for (outlier) in outlier_list {
             if outlier.tag == nil, !outlier.done {
                 var group_size: UInt64 = 0
                 // tag this virgin outlier with its own key
+                let outlier_key = "\(outlier.x),\(outlier.y)"; // arbitrary but needs to be unique
                 outlier.tag = outlier_key
                 group_size += 1
                 outlier.done = true
@@ -199,7 +206,7 @@ class FrameAirplaneRemover {
     func testPaintOutliers() {
         Log.d("frame \(frame_index) painting outliers green")
 
-        for (_, outlier) in outlier_map {
+        for (outlier) in outlier_list {
             let x = outlier.x
             let y = outlier.y
             
@@ -229,8 +236,7 @@ class FrameAirplaneRemover {
             for y in 0 ..< height {
                 //Log.d("y \(y)")
                 for x in 0 ..< width {
-                    let outlier_tag = "\(x),\(y)"
-                    let outlier = outlier_map[outlier_tag]
+                    let outlier = outliers[x][y]
                     var should_try = false
                     if outlier == nil {
                         should_try = true
@@ -243,13 +249,14 @@ class FrameAirplaneRemover {
                     if should_try,
                        let bigTag = tag(within: padding_value,
                                         ofX: x, andY: y,
-                                        outlierMap: outlier_map,
+                                        outliers: outliers,
                                         neighborGroups: neighbor_groups,
                                         minNeighbors: min_neighbors)
                     {
                         let padding = Outlier(x: x, y: y, amount: 0)
                         padding.tag = bigTag
-                        outlier_map[outlier_tag] = padding
+                        outliers[x][y] = padding
+                        outlier_list.append(padding)
                     }
                 }
             }
@@ -258,7 +265,7 @@ class FrameAirplaneRemover {
 
     func paintOverAirplanes() async {
         // paint on the large groups of outliers with values from the other frames
-        for (_, outlier) in outlier_map {
+        for (outlier) in outlier_list {
             let x = outlier.x
             let y = outlier.y
             // figure out if this outlier is next to enough other outliers
@@ -325,7 +332,7 @@ class FrameAirplaneRemover {
                   
 // used for padding          
 func tag(within distance: UInt, ofX x: Int, andY y: Int,
-         outlierMap outlier_map: [String: Outlier],
+         outliers: [[Outlier?]],
          neighborGroups neighbor_groups: [String: UInt64],
          minNeighbors min_neighbors: UInt16) -> String?
 {
@@ -343,7 +350,7 @@ func tag(within distance: UInt, ofX x: Int, andY y: Int,
     }
     for y_idx in y_start ..< y+Int(distance) {
         for x_idx in x_start ..< x+Int(distance) {
-            if let outlier = outlier_map["\(x_idx),\(y_idx)"],
+            if let outlier = outliers[x_idx][y_idx],
                hypotenuse(x1: x, y1: y, x2: x_idx, y2: y_idx) <= distance,
                outlier.amount != 0,
                let tag = outlier.tag,
