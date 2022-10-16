@@ -143,17 +143,16 @@ class FrameAirplaneRemover {
 
         // then label all adject outliers
         for (outlier) in outlier_list {
-            if outlier.tag == nil, !outlier.done {
+            if outlier.tag == nil {
                 var group_size: UInt64 = 0
                 // tag this virgin outlier with its own key
                 let outlier_key = "\(outlier.x),\(outlier.y)"; // arbitrary but needs to be unique
                 outlier.tag = outlier_key
                 group_size += 1
-                outlier.done = true
                 
                 // these neighbor outliers now have the same tag as this outlier,
                 // but are not set as done
-                var pending_outliers = Set<Outlier>(outlier.taglessUndoneNeighbors)
+                var pending_outliers = Set<Outlier>(outlier.taglessNeighbors)
                 //Log.d("starting new outlier group \(outlier_key) and \(pending_outliers.count) pending neighbors \(outlier.directNeighbors.count) real neighbors")
 
                 let max_loop_count = UInt64(UInt32.max)
@@ -164,7 +163,7 @@ class FrameAirplaneRemover {
                 while pending_outliers.count > 0 {
                     loop_count += 1
                     if loop_count % 10000 == 0 {
-                        Log.d("frame \(frame_index) looping \(loop_count) times \(pending_outliers.count) pending outliers group_size \(group_size)")
+                        Log.d("frame \(frame_index) looping \(loop_count) times \(pending_outliers.count) pending outliers")
                     }
 
                     if loop_count > max_loop_count {
@@ -176,15 +175,10 @@ class FrameAirplaneRemover {
                         Log.e("BAD OUTLIER")
                         fatalError("BAD OUTLIER")
                     }
-                    if next_outlier.done {
-                        Log.e("BAD OUTLIER")
-                        fatalError("BAD OUTLIER")
-                    }
                     next_outlier.tag = outlier_key
                     group_size += 1
-                    next_outlier.done = true
                     
-                    let more_pending_outliers = Set<Outlier>(next_outlier.taglessUndoneNeighbors)
+                    let more_pending_outliers = Set<Outlier>(next_outlier.taglessNeighbors)
                     pending_outliers = more_pending_outliers.union(pending_outliers)
                 }
 
@@ -286,52 +280,15 @@ class FrameAirplaneRemover {
             }
         }
 
+        var other_pixels: [[[Pixel]]] = [[[]]]
+        for i in 0 ..< otherFrames.count {
+            other_pixels.append([[]]);
+            other_pixels[i] = await otherFrames[i].pixels
+        }
+        
         // paint over every outlier in the paint list with pixels from the adjecent frames
         for (outlier) in paint_list {
-            let x = outlier.x
-            let y = outlier.y
-            
-            var other_pixels: [[[Pixel]]] = [[[]]]
-            for i in 0 ..< otherFrames.count {
-                other_pixels.append([[]]);
-                other_pixels[i] = await otherFrames[i].pixels
-            }
-            
-            var otherPixels: [Pixel] = []
-            
-            // grab the pixels from the same image spot from adject frames
-            for i in 0 ..< otherFrames.count {
-                otherPixels.append(other_pixels[i][x][y])
-            }
-            
-            // blend the pixels from the adjecent frames
-            var nextPixel = Pixel(merging: otherPixels)
-            
-            // this is the numeric value we need to write out to paint over the airplane
-            var nextValue = nextPixel.value
-            
-            // the is the place in the image data to write to
-            let offset = (Int(y) * bytesPerRow) + (Int(x) * bytesPerPixel)
-            
-            // actually paint over that airplane like thing in the image data
-            data.replaceSubrange(offset ..< offset+raw_pixel_size_bytes,
-                                 with: &nextValue, count: raw_pixel_size_bytes)
-            
-            // for testing, colors changed pixels
-            if test_paint {
-                if outlier.amount == 0 {
-                    nextPixel.blue = 0xFFFF // for padding
-                } else {
-                    nextPixel.red = 0xFFFF // for unpadded changed area
-                }
-            }
-            var testPaintValue = nextPixel.value
-            
-            if test_paint {
-                test_paint_data?.replaceSubrange(offset ..< offset+raw_pixel_size_bytes,
-                                                 with: &testPaintValue,
-                                                 count: raw_pixel_size_bytes)
-            }
+            paint(outlier: outlier, with: other_pixels)
         }
         Log.i("frame \(frame_index) done painting")
     }
@@ -341,6 +298,47 @@ class FrameAirplaneRemover {
            let test_paint_data = test_paint_data
         {
             image.writeTIFFEncoding(ofData: test_paint_data, toFilename: test_paint_filename)
+        }
+    }
+
+    func paint(outlier: Outlier, with other_pixels: [[[Pixel]]]) {
+        let x = outlier.x
+        let y = outlier.y
+            
+        var pixels_to_paint_with: [Pixel] = []
+        
+        // grab the pixels from the same image spot from adject frames
+        for i in 0 ..< otherFrames.count {
+            pixels_to_paint_with.append(other_pixels[i][x][y])
+        }
+        
+        // blend the pixels from the adjecent frames
+        var paint_pixel = Pixel(merging: pixels_to_paint_with)
+        
+        // this is the numeric value we need to write out to paint over the airplane
+        var paint_value = paint_pixel.value
+        
+        // the is the place in the image data to write to
+        let offset = (Int(y) * bytesPerRow) + (Int(x) * bytesPerPixel)
+        
+        // actually paint over that airplane like thing in the image data
+        data.replaceSubrange(offset ..< offset+raw_pixel_size_bytes,
+                             with: &paint_value, count: raw_pixel_size_bytes)
+        
+        // for testing, colors changed pixels
+        if test_paint {
+            if outlier.amount == 0 {
+                paint_pixel.blue = 0xFFFF // for padding
+            } else {
+                paint_pixel.red = 0xFFFF // for unpadded changed area
+            }
+        }
+        var test_paint_value = paint_pixel.value
+        
+        if test_paint {
+            test_paint_data?.replaceSubrange(offset ..< offset+raw_pixel_size_bytes,
+                                             with: &test_paint_value,
+                                             count: raw_pixel_size_bytes)
         }
     }
 }

@@ -5,8 +5,7 @@ public class Outlier: Hashable, Equatable {
     let y: Int
     let amount: Int32
 
-    var tag: String?
-    var done: Bool = false
+    var tag: String?            // XXX rename to groupName ?
     
     var left: Outlier?
     var right: Outlier?
@@ -30,9 +29,9 @@ public class Outlier: Hashable, Equatable {
             lhs.y == rhs.y
     }    
 
-    var taglessUndoneNeighbors: [Outlier] {
+    var taglessNeighbors: [Outlier] {
         return self.directNeighbors.filter { neighbor in
-            return neighbor.tag == nil && !neighbor.done
+            return neighbor.tag == nil
         }
     }
     var directNeighbors: [Outlier] {
