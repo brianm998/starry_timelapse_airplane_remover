@@ -102,7 +102,7 @@ actor PixelatedImage {
                                         intent: .defaultIntent) {
 
                 // save it
-                Log.d("new_image \(new_image)")
+                //Log.d("new_image \(new_image)")
                 do {
                     let context = CIContext()
                     let fileURL = NSURL(fileURLWithPath: image_filename, isDirectory: false) as URL
@@ -117,6 +117,7 @@ actor PixelatedImage {
                             colorSpace: colorSpace,
                             options: options
                         )
+                        Log.i("image written to \(image_filename)")
                     } else {
                         Log.d("FUCK")
                     }

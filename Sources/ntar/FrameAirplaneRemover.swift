@@ -150,21 +150,22 @@ class FrameAirplaneRemover {
                 outlier.tag = outlier_key
                 group_size += 1
                 
-                // these neighbor outliers now have the same tag as this outlier,
-                // but are not set as done
-                //var pending_outliers = Set<Outlier>(outlier.taglessNeighbors)
                 var pending_outliers = outlier.taglessNeighbors
+                // tag all neighbers as part of this same Outlier group
                 pending_outliers.forEach { pending_outlier in
                     pending_outlier.tag = outlier_key
                 }
-                //Log.d("starting new outlier group \(outlier_key) and \(pending_outliers.count) pending neighbors \(outlier.directNeighbors.count) real neighbors")
 
-                //let max_loop_count = UInt64(UInt32.max)
+                // there is a non-linear running time problem when pending_outliers gets too big
+                // not sure exactly why yet, but max_loop_count is necessary to keep things
+                // from taking a _really_ long time.  Same result, just more than one outlier group.
+                // keeping max_loop_count big enough means that they still get painted on.
+                // this is really an edge case with car headlights.
+
                 let max_loop_count = min_group_trail_length*min_group_trail_length*2
-                
+
                 var loop_count: UInt64 = 0
-                // should be bounded because of finite number of pixels in image
-                // and the usage of a Set to keep out duplicates  XXX NOT ANYMORE XXX
+                                
                 while pending_outliers.count > 0 {
                     loop_count += 1
                     if loop_count % 1000 == 0 {
@@ -179,29 +180,16 @@ class FrameAirplaneRemover {
                     if next_outlier.tag != nil {
                         group_size += 1
 
-                        //let more_pending_outliers = Set<Outlier>(next_outlier.taglessNeighbors)
                         let more_pending_outliers = next_outlier.taglessNeighbors
                         more_pending_outliers.forEach { pending_outlier in
                             pending_outlier.tag = outlier_key
                         }
-                        
-                        //let start_time = NSDate().timeIntervalSince1970
-                        //pending_outliers = more_pending_outliers.union(pending_outliers)
-                        pending_outliers += more_pending_outliers
-                        //let end_time = NSDate().timeIntervalSince1970
 
-                        //if loop_count % 1000 == 0 {
-                            //Log.d("frame \(frame_index) add took \(end_time-start_time) seconds")
-                    //}
-                        
+                        pending_outliers += more_pending_outliers
                     } else {
                         Log.w("next outlier has tag \(next_outlier.tag)")
                         fatalError("FUCK")
                     }
-                }
-
-                if group_size > 100 {
-                    Log.i("frame \(frame_index) group size for \(outlier_key) is \(group_size)")
                 }
 
                 individual_group_counts[outlier_key] = group_size
@@ -330,8 +318,9 @@ class FrameAirplaneRemover {
                                           x2: max_x, y2: max_y)
                 let max_pixels = (max_x-min_x)*(max_y-min_y)
                 let amount_filled = Double(group_size)/Double(max_pixels)
-                if distance > min_group_trail_length || amount_filled < 0.3 {
-                    Log.i("marking group \(group) with distance \(distance) for painting")
+                
+                if distance > min_group_trail_length/* || amount_filled < 0.3*/ {
+                    Log.i("frame \(frame_index) marking group \(group) with size \(group_size) and distance \(distance) for painting")
                     should_paint[group] = true
                     names_of_groups_to_paint.append(group)
                 }
