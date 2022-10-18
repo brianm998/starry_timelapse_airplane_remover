@@ -27,6 +27,24 @@ actor PixelatedImage {
             return internal_pixels  
         }
     }
+
+    // could be a constructor
+    nonisolated static func getImage(withName filename: String) -> PixelatedImage? {
+        Log.d("Loading image from \(filename)")
+        let imageURL = NSURL(fileURLWithPath: filename, isDirectory: false)
+        do {
+            let data = try Data(contentsOf: imageURL as URL)
+            if let image = NSImage(data: data),
+               let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil),
+               let pixelatedImage = PixelatedImage(cgImage, filename: filename)
+            {
+                return pixelatedImage
+            }
+        } catch {
+            Log.e("\(error)")
+        }
+        return nil
+    }
     
     init?(_ image: CGImage, filename: String) {
         self.filename = filename
@@ -73,7 +91,6 @@ actor PixelatedImage {
                 let b1 = UInt16(image_buffer_ptr[offset+(bitsPerComponent/8)*2])
                 let b2 = UInt16(image_buffer_ptr[offset+(bitsPerComponent/8)*2 + 1]) << 8
                 pixel.blue = b1 + b2
-                
                 row.append(pixel)
             }
             internal_pixels.append(row)
