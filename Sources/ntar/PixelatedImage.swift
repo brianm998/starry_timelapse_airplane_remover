@@ -9,7 +9,7 @@ actor PixelatedImage {
     let height: Int
 
     let raw_image_data: CFData
-    let image_buffer_ptr: UnsafePointer<UInt8>
+    let image_buffer_ptr: UnsafePointer<UInt8> // XXX research the F out of this
     
     let bitsPerPixel: Int
     let bytesPerRow: Int
@@ -87,43 +87,43 @@ actor PixelatedImage {
     // used when modifying the invariant original image data, and saying the edits to a file
     nonisolated func writeTIFFEncoding(ofData image_data: Data, toFilename image_filename: String) {
         // create a CGImage from the data we just changed
-        if let dataProvider = CGDataProvider(data: image_data as CFData) {
-            let colorSpace = CGColorSpaceCreateDeviceRGB()
-            if let new_image =  CGImage(width: width,
-                                        height: height,
-                                        bitsPerComponent: bitsPerComponent,
-                                        bitsPerPixel: bytesPerPixel*8,
-                                        bytesPerRow: width*bytesPerPixel,
-                                        space: colorSpace,
-                                        bitmapInfo: bitmapInfo,
-                                        provider: dataProvider,
-                                        decode: nil,
-                                        shouldInterpolate: false,
-                                        intent: .defaultIntent) {
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
+        if let dataProvider = CGDataProvider(data: image_data as CFData),
+           let new_image =  CGImage(width: width,
+                                    height: height,
+                                    bitsPerComponent: bitsPerComponent,
+                                    bitsPerPixel: bytesPerPixel*8,
+                                    bytesPerRow: width*bytesPerPixel,
+                                    space: colorSpace,
+                                    bitmapInfo: bitmapInfo,
+                                    provider: dataProvider,
+                                    decode: nil,
+                                    shouldInterpolate: false,
+                                    intent: .defaultIntent)
+        {
+            // save it
+            //Log.d("new_image \(new_image)")
+            do {
+                let context = CIContext()
+                let fileURL = NSURL(fileURLWithPath: image_filename, isDirectory: false) as URL
+                let options: [CIImageRepresentationOption: CGFloat] = [:]
+                if let colorSpace = CGColorSpace(name: CGColorSpace.sRGB) {
+                    let imgFormat = CIFormat.RGBA16
 
-                // save it
-                //Log.d("new_image \(new_image)")
-                do {
-                    let context = CIContext()
-                    let fileURL = NSURL(fileURLWithPath: image_filename, isDirectory: false) as URL
-                    let options: [CIImageRepresentationOption: CGFloat] = [:]
-                    if let colorSpace = CGColorSpace(name: CGColorSpace.sRGB) {
-                        let imgFormat = CIFormat.RGBA16
-
-                        try context.writeTIFFRepresentation(
-                            of: CIImage(cgImage: new_image),
-                            to: fileURL,
-                            format: imgFormat,
-                            colorSpace: colorSpace,
-                            options: options
-                        )
-                        Log.i("image written to \(image_filename)")
-                    } else {
-                        Log.d("FUCK")
-                    }
-                } catch {
-                    Log.e("doh! \(error)")
+                    try context.writeTIFFRepresentation(
+                        of: CIImage(cgImage: new_image),
+                        to: fileURL,
+                        format: imgFormat,
+                        colorSpace: colorSpace,
+                        options: options
+                    )
+                    Log.i("image written to \(image_filename)")
+                } else {
+                    Log.d("FUCK")
                 }
+            } catch {
+            Log.e("doh! \(error)")
+
             }
         }
     }
