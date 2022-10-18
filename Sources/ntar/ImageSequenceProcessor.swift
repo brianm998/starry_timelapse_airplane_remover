@@ -85,8 +85,8 @@ class ImageSequenceProcessor {
                 if FileManager.default.fileExists(atPath: output_filename) {
                     Log.i("skipping already existing file \(filename)")
                 } else {
+                    self.dispatchGroup.enter() 
                     await method_list.add(atIndex: index, method: {
-                        self.dispatchGroup.enter() 
     
                         if let image = await self.image_sequence.getImage(withName: image_filename),
                            let data = await self.processFrame(number: index, // XXX 
@@ -120,6 +120,7 @@ class ImageSequenceProcessor {
     
     func run() {
         startup_hook()
+
         mkdir(output_dirname)
         // enter the dispatch group so we can wait for it at the end 
         self.dispatchGroup.enter()
