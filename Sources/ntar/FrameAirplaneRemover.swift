@@ -31,16 +31,20 @@ class FrameAirplaneRemover {
     var test_paint_filename: String = ""
     var test_paint = false
 
+    var should_paint_group: ((Int, Int, Int, Int, String, UInt64, Int) -> Bool)?
+    
     init?(fromImage image: PixelatedImage,
           atIndex frame_index: Int,
           otherFrames: [PixelatedImage],
           filename: String,
           test_paint_filename tpfo: String?,
           max_pixel_distance: UInt16,
-          min_group_trail_length: UInt16
+          min_group_trail_length: UInt16,
+          should_paint_group: ((Int, Int, Int, Int, String, UInt64, Int) -> Bool)? = nil
          )
     {
         self.min_group_trail_length = min_group_trail_length
+        self.should_paint_group = should_paint_group
         self.frame_index = frame_index // frame index in the image sequence
         self.image = image
         self.otherFrames = otherFrames
@@ -319,54 +323,31 @@ class FrameAirplaneRemover {
             }
         }
 
-        for(group, group_size) in neighbor_groups {
+        // sort by group size, process largest first
+        let sorted_groups = neighbor_groups.sorted(by: { $0.value > $1.value })
+        for(group, group_size) in sorted_groups {
             if let min_x = group_min_x[group],
                let min_y = group_min_y[group],
                let max_x = group_max_x[group],
                let max_y = group_max_y[group]
             {
-                // the size of the bounding box in number of pixels
-                let max_pixels = (max_x-min_x)*(max_y-min_y)
-
-                // the distance bewteen the edges of the bounding box
-                let distance = hypotenuse(x1: min_x, y1: min_y,
-                                          x2: max_x, y2: max_y)
-
-                // how much (betwen 0 and 1) of the bounding box is filled by outliers?
-                let amount_filled = Double(group_size)/Double(max_pixels)
-
-                let bounding_box_width = max_x-min_x
-                let bounding_box_height = max_y-min_y
-
-                // the aspect ratio of the bounding box.
-                // 1 is square, closer to zero is more regangular.
-                var aspect_ratio: Double = 0
-                if bounding_box_width > bounding_box_height {
-                    aspect_ratio = Double(bounding_box_height)/Double(bounding_box_width)
+                if let should_paint_group = should_paint_group {
+                    if should_paint_group(min_x, min_y,
+                                          max_x, max_y,
+                                          group, group_size, frame_index)
+                    {
+                        should_paint[group] = true
+                        names_of_groups_to_paint.append(group)
+                    }
                 } else {
-                    aspect_ratio = Double(bounding_box_width)/Double(bounding_box_height)
-                }
-
-                var should_paint_this_group = false
-
-                Log.d("neighbor group \(group) has \(group_size) members \(distance) size bounding box with \(aspect_ratio) aspect ratio and \(amount_filled) amount_filled")
-                
-                if aspect_ratio < 0.1 && group_size > 10 {
-                    should_paint_this_group = true
-                    Log.d("skinny group marked as painted")
-                } else if aspect_ratio < 0.2 && group_size > 20 {
-                    should_paint_this_group = true
-                    Log.d("less skinny group marked as painted")
-                } else if aspect_ratio > 0.6 && amount_filled > 0.5 {
-                    should_paint_this_group = false                    // stars?
-                } else if distance > min_group_trail_length/* || amount_filled < 0.3*/ {
-                    should_paint_this_group = true
-                }
-
-                if should_paint_this_group {
-                    Log.i("frame \(frame_index) marking group \(group) with size \(group_size) and distance size bounding box with \(aspect_ratio) aspect ratio and \(amount_filled) amount_filled")
-                    should_paint[group] = true
-                    names_of_groups_to_paint.append(group)
+                    if shouldPaintGroup(min_x: min_x, min_y: min_y,
+                                        max_x: max_x, max_y: max_y,
+                                        group_name: group,
+                                        group_size: group_size)
+                    {
+                        should_paint[group] = true
+                        names_of_groups_to_paint.append(group)
+                    }
                 }
             }
         }
@@ -392,6 +373,56 @@ class FrameAirplaneRemover {
             paint(outlier: outlier, with: other_pixels)
         }
         Log.i("frame \(frame_index) done painting")
+    }
+
+    func shouldPaintGroup(min_x: Int, min_y: Int,
+                          max_x: Int, max_y: Int,
+                          group_name: String,
+                          group_size: UInt64) -> Bool
+    {
+        // the size of the bounding box in number of pixels
+        let max_pixels = (max_x-min_x)*(max_y-min_y)
+        
+        // the distance bewteen the edges of the bounding box
+        let distance = hypotenuse(x1: min_x, y1: min_y,
+                                  x2: max_x, y2: max_y)
+        
+        // how much (betwen 0 and 1) of the bounding box is filled by outliers?
+        let amount_filled = Double(group_size)/Double(max_pixels)
+        
+        let bounding_box_width = max_x-min_x
+        let bounding_box_height = max_y-min_y
+        
+        // the aspect ratio of the bounding box.
+        // 1 is square, closer to zero is more regangular.
+        var aspect_ratio: Double = 0
+        if bounding_box_width > bounding_box_height {
+            aspect_ratio = Double(bounding_box_height)/Double(bounding_box_width)
+        } else {
+            aspect_ratio = Double(bounding_box_width)/Double(bounding_box_height)
+        }
+        
+        var should_paint_this_group = false
+        
+        //Log.d("neighbor has \(group_size) members \(distance) size bounding box with \(aspect_ratio) aspect ratio and \(amount_filled) amount_filled")
+        
+        if aspect_ratio < 0.1 && group_size > 10 {
+            should_paint_this_group = true
+            Log.d("skinny group marked as painted")
+        } else if aspect_ratio < 0.2 && group_size > 20 {
+            should_paint_this_group = true
+            Log.d("less skinny group marked as painted")
+        } else if aspect_ratio > 0.6 && amount_filled > 0.5 {
+            should_paint_this_group = false                    // stars?
+        } else if distance > min_group_trail_length/* || amount_filled < 0.3*/ {
+            should_paint_this_group = true
+        }
+
+        if should_paint_this_group {
+            Log.i("frame \(frame_index) marking group with size \(group_size) and distance size bounding box with \(aspect_ratio) aspect ratio and \(amount_filled) amount_filled")
+        }
+        
+        return should_paint_this_group
     }
 
     func writeTestFile() {

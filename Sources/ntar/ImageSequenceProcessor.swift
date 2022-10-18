@@ -73,7 +73,7 @@ class ImageSequenceProcessor {
                     self.dispatchGroup.enter() 
 
                     if let image = await self.image_sequence.getImage(withName: image_filename),
-                       let data = await self.processFrame(number: index,
+                       let data = await self.processFrame(number: index, // XXX 
                                                           image: image,
                                                           base_name: basename)
                     {
@@ -94,6 +94,10 @@ class ImageSequenceProcessor {
     }
 
     func startup_hook() {
+        // can be overridden
+    }
+    
+    func finished_hook() {
         // can be overridden
     }
     
@@ -138,6 +142,7 @@ class ImageSequenceProcessor {
                 }
             }
             
+            self.finished_hook()
             self.dispatchGroup.leave()
         }
         self.dispatchGroup.wait()

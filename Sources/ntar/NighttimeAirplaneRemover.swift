@@ -25,13 +25,16 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
     let test_paint_outliers: Bool
     
     let test_paint: Bool
+
+    var should_paint_group: ((Int, Int, Int, Int, String, UInt64, Int) -> Bool)?
     
     init(imageSequenceDirname image_sequence_dirname: String,
          maxConcurrent max_concurrent: UInt = 5,
          minTrailLength min_group_trail_length: UInt16 = 100,
          maxPixelDistance max_pixel_distance: UInt16 = 10000,
          padding: UInt = 0,
-         testPaint: Bool = false)
+         testPaint: Bool = false,
+         should_paint_group: ((Int, Int, Int, Int, String, UInt64, Int) -> Bool)? = nil)
     {
         self.min_group_trail_length = min_group_trail_length
         self.max_pixel_distance = max_pixel_distance
@@ -101,7 +104,8 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
                                                              filename: filename,
                                                              test_paint_filename: tpfo,
                                                              max_pixel_distance: max_pixel_distance,
-                                                             min_group_trail_length: min_group_trail_length)
+                                                             min_group_trail_length: min_group_trail_length,
+                                                             should_paint_group: should_paint_group)
         else {
             Log.d("DOH")
             fatalError("FAILED")

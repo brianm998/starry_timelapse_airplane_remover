@@ -58,7 +58,7 @@ todo:
 */
 
 Log.handlers = 
-    [
+[
       .console: ConsoleLogHandler(at: .debug)
     ]
 
@@ -94,11 +94,13 @@ if CommandLine.arguments.count < 1 {
                                                             testPaint: true)
 
                     await eraser.readMasks(fromImage: image)
-
+            
                     // next step is to refactor group selection work from FrameAirplaneRemover:328
                     // into a method, and then override that in KnownOutlierGroupExtractor to
                     // use the masks just read to determine what outlier groups are what
 
+                    eraser.run()
+                    
                     // inside of a known mask, the largest group is assumed to be airplane
                     // verify this visulaly in the test-paint image
                     // all other image groups inside any group are considered non-airplane
