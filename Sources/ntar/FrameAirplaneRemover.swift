@@ -81,6 +81,7 @@ class FrameAirplaneRemover {
 
     // this method is by far the slowest part of the process    
     func populateOutlierMap() async {
+        let start_time = NSDate().timeIntervalSince1970
         // compare pixels at the same image location in adjecent frames
         // detect Outliers which are much more brighter than the adject frames
         let orig_pixels = await image.pixels
@@ -89,6 +90,12 @@ class FrameAirplaneRemover {
             other_pixels.append([[]]);
             other_pixels[i] = await otherFrames[i].pixels
         }
+
+        let time_1 = NSDate().timeIntervalSince1970
+        let interval1 = String(format: "%0.1f", time_1 - start_time)
+
+        // most of the time is in this loop
+        
         for y in 0 ..< height {
             if y != 0 && y % 1000 == 0 {
                 Log.d("frame \(frame_index) detected outliers in \(y) rows")
@@ -119,6 +126,9 @@ class FrameAirplaneRemover {
                 }
             }
         }
+        let end_time = NSDate().timeIntervalSince1970
+        let end_interval = String(format: "%0.1f", end_time - start_time)
+        Log.d("frame \(frame_index) took \(end_interval)s to populate the outlier map, \(interval1)s of which was getting the other frames")
     }
 
     func prune() {
@@ -205,7 +215,7 @@ class FrameAirplaneRemover {
             let x = outlier.x
             let y = outlier.y
             
-            if outlier.amount > max_pixel_distance { // XXX global variable
+            if outlier.amount > max_pixel_distance {
                 let offset = (Int(y) * bytesPerRow) + (Int(x) * bytesPerPixel)
                 
                 var nextPixel = Pixel()
@@ -213,7 +223,7 @@ class FrameAirplaneRemover {
                         
                 var nextValue = nextPixel.value
 
-                test_paint_data?.replaceSubrange(offset ..< offset+raw_pixel_size_bytes,
+                test_paint_data?.replaceSubrange(offset ..< offset+raw_pixel_size_bytes, // XXX error here sometimes
                                                  with: &nextValue, count: raw_pixel_size_bytes)
             }
         }
@@ -258,6 +268,7 @@ class FrameAirplaneRemover {
         }
     }
 
+    // this method first analyzises the outlier groups and then paints over them
     func paintOverAirplanes() async {
 
         var names_of_groups_to_paint: [String] = []
@@ -272,7 +283,7 @@ class FrameAirplaneRemover {
 
         // calculate the outer bounds of each outlier group
         for x in 0 ..< width {
-            for y in 0 ..< height {
+            for y in 0 ..< height { // XXX heap corruption :(
                 if let outlier = outliers[x][y],
                    let group = outlier.tag
                 {
@@ -314,13 +325,46 @@ class FrameAirplaneRemover {
                let max_x = group_max_x[group],
                let max_y = group_max_y[group]
             {
+                // the size of the bounding box in number of pixels
+                let max_pixels = (max_x-min_x)*(max_y-min_y)
+
+                // the distance bewteen the edges of the bounding box
                 let distance = hypotenuse(x1: min_x, y1: min_y,
                                           x2: max_x, y2: max_y)
-                let max_pixels = (max_x-min_x)*(max_y-min_y)
+
+                // how much (betwen 0 and 1) of the bounding box is filled by outliers?
                 let amount_filled = Double(group_size)/Double(max_pixels)
+
+                let bounding_box_width = max_x-min_x
+                let bounding_box_height = max_y-min_y
+
+                // the aspect ratio of the bounding box.
+                // 1 is square, closer to zero is more regangular.
+                var aspect_ratio: Double = 0
+                if bounding_box_width > bounding_box_height {
+                    aspect_ratio = Double(bounding_box_height)/Double(bounding_box_width)
+                } else {
+                    aspect_ratio = Double(bounding_box_width)/Double(bounding_box_height)
+                }
+
+                var should_paint_this_group = false
+
+                Log.d("neighbor group \(group) has \(group_size) members \(distance) size bounding box with \(aspect_ratio) aspect ratio and \(amount_filled) amount_filled")
                 
-                if distance > min_group_trail_length/* || amount_filled < 0.3*/ {
-                    Log.i("frame \(frame_index) marking group \(group) with size \(group_size) and distance \(distance) for painting")
+                if aspect_ratio < 0.1 && group_size > 10 {
+                    should_paint_this_group = true
+                    Log.d("skinny group marked as painted")
+                } else if aspect_ratio < 0.2 && group_size > 20 {
+                    should_paint_this_group = true
+                    Log.d("less skinny group marked as painted")
+                } else if aspect_ratio > 0.6 && amount_filled > 0.5 {
+                    should_paint_this_group = false                    // stars?
+                } else if distance > min_group_trail_length/* || amount_filled < 0.3*/ {
+                    should_paint_this_group = true
+                }
+
+                if should_paint_this_group {
+                    Log.i("frame \(frame_index) marking group \(group) with size \(group_size) and distance size bounding box with \(aspect_ratio) aspect ratio and \(amount_filled) amount_filled")
                     should_paint[group] = true
                     names_of_groups_to_paint.append(group)
                 }
@@ -391,9 +435,9 @@ class FrameAirplaneRemover {
                 paint_pixel.red = 0xFFFF // for unpadded changed area
             }
         }
-        var test_paint_value = paint_pixel.value
         
         if test_paint {
+            var test_paint_value = paint_pixel.value
             test_paint_data?.replaceSubrange(offset ..< offset+raw_pixel_size_bytes,
                                              with: &test_paint_value,
                                              count: raw_pixel_size_bytes)
