@@ -8,28 +8,33 @@ let supported_image_file_types = [".tif", ".tiff"]
 @available(macOS 10.15, *)
 actor ImageSequence {
 
-    init(dirname: String) {
+    init(dirname: String, givenFilenames given_filenames: [String]? = nil) {
         var image_files: [String] = []
-        
-        do {
-            let contents = try FileManager.default.contentsOfDirectory(atPath: dirname)
-            contents.forEach { file in
-                supported_image_file_types.forEach { type in
-                    if file.hasSuffix(type) {
-                        image_files.append("\(dirname)/\(file)")
-                    } 
-                }
+
+        if let given_filenames = given_filenames {
+            given_filenames.forEach { filename in
+                image_files.append("\(dirname)/\(filename)")
             }
-        } catch {
-            Log.d("OH FUCK \(error)")
+        } else {
+            do {
+                let contents = try FileManager.default.contentsOfDirectory(atPath: dirname)
+                contents.forEach { file in
+                    supported_image_file_types.forEach { type in
+                        if file.hasSuffix(type) {
+                            image_files.append("\(dirname)/\(file)")
+                        } 
+                    }
+                }
+            } catch {
+                Log.d("OH FUCK \(error)")
+            }
+    
+            image_files.sort { (lhs: String, rhs: String) -> Bool in
+                let lh = remove_path_and_suffix(fromString: lhs)
+                let rh = remove_path_and_suffix(fromString: rhs)
+                return lh < rh
+            }
         }
-
-        image_files.sort { (lhs: String, rhs: String) -> Bool in
-            let lh = remove_path_and_suffix(fromString: lhs)
-            let rh = remove_path_and_suffix(fromString: rhs)
-            return lh < rh
-        }
-
         self.filenames = image_files
     }
     

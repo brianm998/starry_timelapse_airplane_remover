@@ -63,115 +63,6 @@ Log.handlers =
     ]
 
 
-enum MaskType {
-    case airplanes
-    case noAirplanes
-}
-
-class ImageMask {
-    var leftX: Int
-    var rightX: Int
-    var topY: Int
-    var bottomY: Int
-
-    let type: MaskType
-    
-    init(withType type: MaskType) {
-        self.type = type
-        self.leftX = -1         // initial values are invalid
-        self.rightX = -1
-        self.topY = -1
-        self.bottomY = -1
-    }
-}
-
-@available(macOS 10.15, *)
-func readMasks(fromImage image: PixelatedImage) async -> [MaskType:[ImageMask]] {
-    // first read the layer mask
-    let pixels = await image.pixels
-    
-    var airplane_groups: [ImageMask] = []
-    var non_airplane_groups: [ImageMask] = []
-
-    var current_mask: ImageMask?
-    
-    for x in 0..<image.width {
-        for y in 0..<image.height {
-            let pixel = pixels[x][y]
-            if pixel.red == 0 && pixel.blue == 0 && pixel.green == 0 {
-                if current_mask != nil {
-                    current_mask = nil
-                }
-            } else if pixel.red == 0xFFFF,
-                      pixel.blue == 0xFFFF, 
-                      pixel.green == 0xFFFF
-            {
-                if let current_mask = current_mask {
-                    // just keep updating these as long as we can
-                    current_mask.rightX = x
-                    current_mask.bottomY = y
-                } else {
-                // look through existing airplane masks first
-                for (mask) in airplane_groups {
-                    if mask.leftX == x || mask.topY == y {
-                        current_mask = mask
-                        break
-                    }
-                }
-                if current_mask == nil {
-                    let new_mask = ImageMask(withType: .airplanes)
-                    new_mask.leftX = x
-                    new_mask.topY = y
-                    airplane_groups.append(new_mask)
-                    current_mask = new_mask
-                }
-                }
-                // all white
-                //Log.d("woot \(pixel.red) \(pixel.green) \(pixel.blue)")
-            } else {
-                if let current_mask = current_mask {
-                    // just keep updating these as long as we can
-                    current_mask.rightX = x
-                    current_mask.bottomY = y
-                } else {
-                    // look through existing airplane masks first
-                    for (mask) in non_airplane_groups {
-                        if mask.leftX == x || mask.topY == y {
-                            current_mask = mask
-                            break
-                        }
-                    }
-                    if current_mask == nil {
-                        let new_mask = ImageMask(withType: .noAirplanes)
-                        new_mask.leftX = x
-                        new_mask.topY = y
-                        non_airplane_groups.append(new_mask)
-                        current_mask = new_mask
-                    }
-                }
-                // not black or white
-                //Log.d("BAD \(pixel.red) \(pixel.green) \(pixel.blue)")
-            }
-        }
-    }
-    Log.i("found \(airplane_groups.count) airplane groups")
-    Log.i("found \(non_airplane_groups.count) non_airplane groups")
-    airplane_groups.forEach { group in
-        Log.d("group from (\(group.leftX), \(group.topY)), (\(group.rightX), \(group.bottomY))")
-    }
-    non_airplane_groups.forEach { group in
-        Log.d("group from (\(group.leftX), \(group.topY)), (\(group.rightX), \(group.bottomY))")
-    }
-    var ret:[MaskType:[ImageMask]] = [:]                 
-    if airplane_groups.count > 0 {
-        ret[.airplanes] = airplane_groups
-    }
-    if non_airplane_groups.count > 0 {
-        ret[.noAirplanes] = non_airplane_groups
-    }
-    return ret
-}
-
 if CommandLine.arguments.count < 1 {
     Log.d("need more args!")    // XXX make this better
 } else {
@@ -188,16 +79,31 @@ if CommandLine.arguments.count < 1 {
                 let dispatchGroup = DispatchGroup()
                 dispatchGroup.enter()
                 Task {
-                    let masks = await readMasks(fromImage: image)
 
-                    // now that we have read the masks from the file,
-                    // we should remove /layer_mask.tif from the filename
-                    // and process as below, but just the second frame and
-                    // applying the layer mask to outlyer group selection for painting 
-                    // then outupt some kind of logging that can be digested to
-                    // product a data set of known data,
-                    // a stream of width/height/outlier# for both airplane and non-airplane outlier
-                    // groups
+                    var parts = first_command_line_arg.components(separatedBy: "/")
+                    parts.removeLast()
+                    let path = parts.joined(separator: "/")
+
+                    let eraser = KnownOutlierGroupExtractor(layerMask: image,
+                                                            imageSequenceDirname: path,
+                                                            maxConcurrent: 24,
+                                                            minTrailLength: 35,
+                                                            // minTrailLength: 50 // no falses, some missed
+                                                            maxPixelDistance: 7200,
+                                                            padding: 0,
+                                                            testPaint: true)
+
+                    await eraser.readMasks(fromImage: image)
+
+                    // next step is to refactor group selection work from FrameAirplaneRemover:328
+                    // into a method, and then override that in KnownOutlierGroupExtractor to
+                    // use the masks just read to determine what outlier groups are what
+
+                    // inside of a known mask, the largest group is assumed to be airplane
+                    // verify this visulaly in the test-paint image
+                    // all other image groups inside any group are considered non-airplane
+                    // perhaps threshold above 5 pixels or so
+                    
                     dispatchGroup.leave()
                 }
                 dispatchGroup.wait()
