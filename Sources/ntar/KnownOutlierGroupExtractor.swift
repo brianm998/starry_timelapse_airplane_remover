@@ -80,7 +80,10 @@ class KnownOutlierGroupExtractor : NighttimeAirplaneRemover {
                    minTrailLength: min_group_trail_length,
                    maxPixelDistance: max_pixel_distance,
                    padding: padding,
-                   testPaint: testPaint)
+                   testPaint: testPaint,
+                   givenFilenames: ["LRT_00001.tif",
+                                    "LRT_00002.tif",
+                                    "LRT_00003.tif"])
 
         self.should_paint_group = { min_x, min_y, max_x, max_y, group, group_size, frame_number in
             // here we only care about group #1, the one in the middle
@@ -90,13 +93,10 @@ class KnownOutlierGroupExtractor : NighttimeAirplaneRemover {
                                                               group_size: group_size)
         }
         
-        // assume three files starting with LRT_00001.tif
-        self.image_sequence = ImageSequence(dirname: image_sequence_dirname,
-                                            givenFilenames: ["LRT_00001.tif",
-                                                             "LRT_00002.tif",
-                                                             "LRT_00003.tif"])
-
-        let output_filename = "\(image_sequence_dirname)/outlier_data.csv"
+        self.process_only_this_index = 1
+        
+        // XXX stick the output level in this file
+        let output_filename = "\(image_sequence_dirname)/outlier_data_\(max_pixel_distance).csv"
 
         do {
             if FileManager.default.fileExists(atPath: output_filename) {

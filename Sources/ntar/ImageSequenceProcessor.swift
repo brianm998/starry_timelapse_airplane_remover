@@ -14,6 +14,9 @@ class ImageSequenceProcessor {
     // the max number of frames to process at one time
     let max_concurrent_renders: UInt
 
+    // used for testing
+    var process_only_this_index: Int?
+    
     // the following properties get included into the output videoname
     
     // actors
@@ -32,12 +35,15 @@ class ImageSequenceProcessor {
     
     init(imageSequenceDirname image_sequence_dirname: String,
          outputDirname output_dirname: String,
-         maxConcurrent max_concurrent: UInt = 5)
+         maxConcurrent max_concurrent: UInt = 5,
+         givenFilenames given_filenames: [String]? = nil)
     {
         self.max_concurrent_renders = max_concurrent
         self.image_sequence_dirname = image_sequence_dirname
         self.output_dirname = output_dirname
-        self.image_sequence = ImageSequence(dirname: image_sequence_dirname)
+        Log.e("given_filenames \(given_filenames)")
+        self.image_sequence = ImageSequence(dirname: image_sequence_dirname,
+                                            givenFilenames: given_filenames)
     }
     
     func mkdir(_ path: String) {
@@ -63,32 +69,43 @@ class ImageSequenceProcessor {
 
     func assembleMethodList() async {
         for (index, image_filename) in image_sequence.filenames.enumerated() {
-            let filename = image_sequence.filenames[index]
-            let basename = remove_path(fromString: filename)
-            let output_filename = "\(output_dirname)/\(basename)"
-            if FileManager.default.fileExists(atPath: output_filename) {
-                Log.i("skipping already existing file \(filename)")
-            } else {
-                await method_list.add(atIndex: index, method: {
-                    self.dispatchGroup.enter() 
+            var skip = false
+            if let process_only_this_index = process_only_this_index,
+               process_only_this_index != index
+            {
+                Log.w("skipping index \(index)")
+                skip = true
+            }
+            // XXX add ability to skip all but a single index (#1) for the tester
 
-                    if let image = await self.image_sequence.getImage(withName: image_filename),
-                       let data = await self.processFrame(number: index, // XXX 
-                                                          image: image,
-                                                          base_name: basename)
-                    {
-                        // write each frame out as a tiff file after processing it
-                        if let image = await self.image_sequence.getImage(withName: image_filename) {
-                            image.writeTIFFEncoding(ofData: data, toFilename: output_filename)
+            if !skip {
+                let filename = image_sequence.filenames[index]
+                let basename = remove_path(fromString: filename)
+                let output_filename = "\(output_dirname)/\(basename)"
+                if FileManager.default.fileExists(atPath: output_filename) {
+                    Log.i("skipping already existing file \(filename)")
+                } else {
+                    await method_list.add(atIndex: index, method: {
+                        self.dispatchGroup.enter() 
+    
+                        if let image = await self.image_sequence.getImage(withName: image_filename),
+                           let data = await self.processFrame(number: index, // XXX 
+                                                              image: image,
+                                                              base_name: basename)
+                        {
+                            // write each frame out as a tiff file after processing it
+                            if let image = await self.image_sequence.getImage(withName: image_filename) {
+                                image.writeTIFFEncoding(ofData: data, toFilename: output_filename)
+                            } else {
+                                fatalError("FUCK")
+                            }
                         } else {
-                            fatalError("FUCK")
+                            Log.e("got no data for \(filename)")
                         }
-                    } else {
-                        Log.e("got no data for \(filename)")
-                    }
-                    await self.number_running.decrement()
-                    self.dispatchGroup.leave()
-                })
+                        await self.number_running.decrement()
+                        self.dispatchGroup.leave()
+                    })
+                }
             }
         }
     }

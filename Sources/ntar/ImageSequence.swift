@@ -12,10 +12,12 @@ actor ImageSequence {
         var image_files: [String] = []
 
         if let given_filenames = given_filenames {
+            Log.w("given filenames")
             given_filenames.forEach { filename in
                 image_files.append("\(dirname)/\(filename)")
             }
         } else {
+            Log.w("NOT given filenames")
             do {
                 let contents = try FileManager.default.contentsOfDirectory(atPath: dirname)
                 contents.forEach { file in

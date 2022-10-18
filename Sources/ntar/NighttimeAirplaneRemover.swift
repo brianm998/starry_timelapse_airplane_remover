@@ -34,8 +34,10 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
          maxPixelDistance max_pixel_distance: UInt16 = 10000,
          padding: UInt = 0,
          testPaint: Bool = false,
-         should_paint_group: ((Int, Int, Int, Int, String, UInt64, Int) -> Bool)? = nil)
+         should_paint_group: ((Int, Int, Int, Int, String, UInt64, Int) -> Bool)? = nil,
+         givenFilenames given_filenames: [String]? = nil)
     {
+        Log.e("given_filenames \(given_filenames)")
         self.min_group_trail_length = min_group_trail_length
         self.max_pixel_distance = max_pixel_distance
         self.padding_value = padding
@@ -50,7 +52,8 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
         let output_dirname = basename
         super.init(imageSequenceDirname: image_sequence_dirname,
                    outputDirname: output_dirname,
-                   maxConcurrent: max_concurrent)
+                   maxConcurrent: max_concurrent,
+                   givenFilenames: given_filenames)
     }
 
     // called by the superclass at startup

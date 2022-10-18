@@ -139,8 +139,7 @@ actor PixelatedImage {
                     Log.d("FUCK")
                 }
             } catch {
-            Log.e("doh! \(error)")
-
+                Log.e("doh! \(error)")
             }
         }
     }
