@@ -27,10 +27,22 @@ while(<>) {
     }
 }
 
+unless($code_only) {
+  print "we have ",scalar(@$airplane_records)," airplane records\n";
+  print "we have ",scalar(@$non_airplane_records)," non_airplane records\n";
+}
+
+my $number_airplane_records = scalar(@$airplane_records);
+my $number_non_airplane_records = scalar(@$non_airplane_records);
+
+my $date = `date`;
+chomp $date;
+
 print <<EOF
 import Foundation
 
 // this is auto generated code, run regenerate_ShouldPaint.sh to remake it
+// generated on $date from $number_airplane_records airplane records and $number_non_airplane_records non airplane records
 
 func shouldPaintGroup(min_x: Int, min_y: Int,
                       max_x: Int, max_y: Int,
@@ -57,11 +69,6 @@ func shouldPaintGroup(min_x: Int, min_y: Int,
 
 EOF
 ;
-
-unless($code_only) {
-  print "we have ",scalar(@$airplane_records)," airplane records\n";
-  print "we have ",scalar(@$non_airplane_records)," non_airplane records\n";
-}
 
 my ($airplane_min_size, $airplane_max_size) = size_range($airplane_records);
 my ($non_airplane_min_size, $non_airplane_max_size) = size_range($non_airplane_records);
