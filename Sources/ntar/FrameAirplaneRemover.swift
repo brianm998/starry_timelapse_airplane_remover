@@ -75,7 +75,7 @@ class FrameAirplaneRemover {
         }
         for x in 0 ..< width {
             outliers.append([])
-            for _ in 0 ..< height {
+            for _ in 0 ..< height { // crash
                 outliers[x].append(nil)
             }
         }
@@ -109,7 +109,7 @@ class FrameAirplaneRemover {
 
                 var otherPixels: [Pixel] = []
                 for i in 0 ..< otherFrames.count { // XXX crash
-                    otherPixels.append(other_pixels[i][x][y])
+                    otherPixels.append(other_pixels[i][x][y]) // XXX crash
                 }
                 if otherPixels.count == 0 {
                     fatalError("need more than one image in the sequence")

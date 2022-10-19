@@ -1,7 +1,13 @@
 import Foundation
 
-// this is auto generated code, run regenerate_ShouldPaint.sh to remake it
-// generated on Tue Oct 18 20:53:27 PDT 2022 from 56 airplane records and 706762 non airplane records
+// generated on Wed Oct 19 06:22:54 PDT 2022
+
+// data used from 56 airplane records and 706762 non airplane records
+
+// this is auto generated code, run regenerate_shouldPaint.sh to remake it, DO NOT EDIT BY HAND
+
+// the unix time this file was created
+let paint_group_logic_time = 1666185774
 
 func shouldPaintGroup(min_x: Int, min_y: Int,
                       max_x: Int, max_y: Int,

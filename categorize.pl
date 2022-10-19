@@ -38,11 +38,19 @@ my $number_non_airplane_records = scalar(@$non_airplane_records);
 my $date = `date`;
 chomp $date;
 
+my $epoc_seconds = time;
+
 print <<EOF
 import Foundation
 
-// this is auto generated code, run regenerate_ShouldPaint.sh to remake it
-// generated on $date from $number_airplane_records airplane records and $number_non_airplane_records non airplane records
+// generated on $date
+
+// data used from $number_airplane_records airplane records and $number_non_airplane_records non airplane records
+
+// this is auto generated code, run regenerate_shouldPaint.sh to remake it, DO NOT EDIT BY HAND
+
+// the unix time this file was created
+let paint_group_logic_time = $epoc_seconds
 
 func shouldPaintGroup(min_x: Int, min_y: Int,
                       max_x: Int, max_y: Int,

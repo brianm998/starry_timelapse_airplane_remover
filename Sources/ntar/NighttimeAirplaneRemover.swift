@@ -39,7 +39,7 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
         self.padding_value = padding
         self.test_paint_outliers = testPaint
         self.test_paint = testPaint
-        var basename = "\(image_sequence_dirname)-no-planes-\(max_pixel_distance)"
+        var basename = "\(image_sequence_dirname)-no-planes-\(paint_group_logic_time)-\(max_pixel_distance)"
         if padding != 0 {
             basename = basename + "-pad-\(padding)"
         }
