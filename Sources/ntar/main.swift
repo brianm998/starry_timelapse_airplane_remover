@@ -74,7 +74,6 @@ if CommandLine.arguments.count < 1 {
         if #available(macOS 10.15, *) {
             if let image = PixelatedImage.getImage(withName: layer_mask_image_name) {
                 // this is a data gathering path 
-                Log.i("woot")
 
                 let dispatchGroup = DispatchGroup()
                 dispatchGroup.enter()
@@ -87,7 +86,6 @@ if CommandLine.arguments.count < 1 {
                     let eraser = KnownOutlierGroupExtractor(layerMask: image,
                                                             imageSequenceDirname: path,
                                                             maxConcurrent: 24,
-                                                            minTrailLength: 35,
                                                             // minTrailLength: 50 // no falses, some missed
                                                             maxPixelDistance: 7200,
                                                             padding: 0,
@@ -130,7 +128,6 @@ if CommandLine.arguments.count < 1 {
             let dirname = "\(path)/\(input_image_sequence_dirname)"
             let eraser = NighttimeAirplaneRemover(imageSequenceDirname: dirname,
                                                   maxConcurrent: 24,
-                                                  minTrailLength: 35,
                                                   // minTrailLength: 50 // no falses, some missed
                                                   maxPixelDistance: 7200,
                                                   padding: 0,

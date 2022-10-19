@@ -12,9 +12,6 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
 
     // the following properties get included into the output videoname
     
-    // size of a group of outliers that is considered an airplane streak
-    let min_group_trail_length: UInt16
-
     // difference between same pixels on different frames to consider an outlier
     let max_pixel_distance: UInt16
 
@@ -26,24 +23,23 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
     
     let test_paint: Bool
 
+    var loop_forever: Bool = false
+    
     var should_paint_group: ((Int, Int, Int, Int, String, UInt64, Int) -> Bool)?
     
     init(imageSequenceDirname image_sequence_dirname: String,
          maxConcurrent max_concurrent: UInt = 5,
-         minTrailLength min_group_trail_length: UInt16 = 100,
          maxPixelDistance max_pixel_distance: UInt16 = 10000,
          padding: UInt = 0,
          testPaint: Bool = false,
          should_paint_group: ((Int, Int, Int, Int, String, UInt64, Int) -> Bool)? = nil,
          givenFilenames given_filenames: [String]? = nil)
     {
-        Log.e("given_filenames \(given_filenames)")
-        self.min_group_trail_length = min_group_trail_length
         self.max_pixel_distance = max_pixel_distance
         self.padding_value = padding
         self.test_paint_outliers = testPaint
         self.test_paint = testPaint
-        var basename = "\(image_sequence_dirname)-no-planes-\(min_group_trail_length)-\(max_pixel_distance)"
+        var basename = "\(image_sequence_dirname)-no-planes-\(max_pixel_distance)"
         if padding != 0 {
             basename = basename + "-pad-\(padding)"
         }
@@ -107,13 +103,16 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
                                                              filename: filename,
                                                              test_paint_filename: tpfo,
                                                              max_pixel_distance: max_pixel_distance,
-                                                             min_group_trail_length: min_group_trail_length,
                                                              should_paint_group: should_paint_group)
         else {
             Log.d("DOH")
             fatalError("FAILED")
         }
-           
+
+        if loop_forever {
+            frame_plane_remover.loop_forever = true
+        }
+        
         let time_1 = NSDate().timeIntervalSince1970
         let interval1 = String(format: "%0.1f", time_1 - start_time)
         

@@ -70,14 +70,12 @@ class KnownOutlierGroupExtractor : NighttimeAirplaneRemover {
     init(layerMask: PixelatedImage,
          imageSequenceDirname image_sequence_dirname: String,
          maxConcurrent max_concurrent: UInt = 5,
-         minTrailLength min_group_trail_length: UInt16 = 100,
          maxPixelDistance max_pixel_distance: UInt16 = 10000,
          padding: UInt = 0,
          testPaint: Bool = false)
     {
         super.init(imageSequenceDirname: image_sequence_dirname,
                    maxConcurrent: max_concurrent,
-                   minTrailLength: min_group_trail_length,
                    maxPixelDistance: max_pixel_distance,
                    padding: padding,
                    testPaint: testPaint,
@@ -94,6 +92,7 @@ class KnownOutlierGroupExtractor : NighttimeAirplaneRemover {
         }
         
         self.process_only_this_index = 1
+        self.loop_forever = true // XXX document this
         
         // XXX stick the output level in this file
         let output_filename = "\(image_sequence_dirname)/outlier_data_\(max_pixel_distance).csv"
@@ -106,7 +105,6 @@ class KnownOutlierGroupExtractor : NighttimeAirplaneRemover {
             // start output file
             if FileManager.default.createFile(atPath: output_filename, contents: nil) {
                 self.csv_output_url = NSURL(fileURLWithPath: output_filename, isDirectory: false) as URL
-                Log.w("got past it")
             } else {
                 fatalError("fuck")
             }
@@ -126,11 +124,11 @@ class KnownOutlierGroupExtractor : NighttimeAirplaneRemover {
                 
             }
             do {
-                if let fileHandle = try? FileHandle.init(forWritingTo: csv_output_url),
-                   let output_data = string.data(using: .utf8){
+                let fileHandle = try FileHandle.init(forWritingTo: csv_output_url)
+                if let output_data = string.data(using: .utf8) {
                     fileHandle.seekToEndOfFile()
                     fileHandle.write(output_data)
-                    fileHandle.closeFile()
+                    fileHandle.closeFile() // could close on finish_hook()
                 } else {
                     Log.e("CSV LOGGING ERROR")
                 }
@@ -161,10 +159,7 @@ class KnownOutlierGroupExtractor : NighttimeAirplaneRemover {
         var should_paint: Bool = false
         airplane_groups.forEach { imageMask in
             if imageMask.fullyContains(min_x: min_x, min_y: min_y, max_x: max_x, max_y: max_y) {
-                if has_airline_already.contains(imageMask) {
-                    self.write_to_csv(width: width, height: height,
-                                      group_size: group_size, type: .noAirplanes)
-                } else {
+                if !has_airline_already.contains(imageMask) {
                     Log.i("marking group \(group_name) of size \(group_size) for painting")
                     has_airline_already.insert(imageMask)
                     self.write_to_csv(width: width, height: height,

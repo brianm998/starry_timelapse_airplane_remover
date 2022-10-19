@@ -1,6 +1,6 @@
 import Foundation
 
-public class Outlier: Hashable, Equatable {
+public class Outlier: Hashable, Equatable, CustomStringConvertible {
     let x: Int
     let y: Int
     let amount: Int32
@@ -30,10 +30,22 @@ public class Outlier: Hashable, Equatable {
     }    
 
     var taglessNeighbors: [Outlier] {
-        return self.directNeighbors.filter { neighbor in
-            return neighbor.tag == nil
+        get {
+            var ret: [Outlier] = []
+            if let left   = self.left,   left.tag   == nil {ret.append(left)}
+            if let right  = self.right,  right.tag  == nil {ret.append(right)}
+            if let top    = self.top,    top.tag    == nil {ret.append(top)}
+            if let bottom = self.bottom, bottom.tag == nil {ret.append(bottom)}
+            return ret
         }
     }
+
+    public var description: String {
+        get {
+            return "\(x),\(y)"
+        }
+    }
+    
     var directNeighbors: [Outlier] {
         get {
             var ret: [Outlier] = []

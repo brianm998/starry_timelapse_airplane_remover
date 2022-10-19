@@ -41,7 +41,6 @@ class ImageSequenceProcessor {
         self.max_concurrent_renders = max_concurrent
         self.image_sequence_dirname = image_sequence_dirname
         self.output_dirname = output_dirname
-        Log.e("given_filenames \(given_filenames)")
         self.image_sequence = ImageSequence(dirname: image_sequence_dirname,
                                             givenFilenames: given_filenames)
     }

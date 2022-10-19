@@ -12,7 +12,6 @@ class FrameAirplaneRemover {
     let bytesPerRow: Int
     let image: PixelatedImage
     let otherFrames: [PixelatedImage]
-    let min_group_trail_length: UInt16
     let max_pixel_distance: UInt16
     let frame_index: Int
     
@@ -32,6 +31,8 @@ class FrameAirplaneRemover {
     var test_paint = false
 
     var should_paint_group: ((Int, Int, Int, Int, String, UInt64, Int) -> Bool)?
+
+    var loop_forever = false
     
     init?(fromImage image: PixelatedImage,
           atIndex frame_index: Int,
@@ -39,11 +40,9 @@ class FrameAirplaneRemover {
           filename: String,
           test_paint_filename tpfo: String?,
           max_pixel_distance: UInt16,
-          min_group_trail_length: UInt16,
           should_paint_group: ((Int, Int, Int, Int, String, UInt64, Int) -> Bool)? = nil
          )
     {
-        self.min_group_trail_length = min_group_trail_length
         self.should_paint_group = should_paint_group
         self.frame_index = frame_index // frame index in the image sequence
         self.image = image
@@ -109,7 +108,7 @@ class FrameAirplaneRemover {
                 let origPixel = orig_pixels[x][y]
 
                 var otherPixels: [Pixel] = []
-                for i in 0 ..< otherFrames.count {
+                for i in 0 ..< otherFrames.count { // XXX crash
                     otherPixels.append(other_pixels[i][x][y])
                 }
                 if otherPixels.count == 0 {
@@ -161,6 +160,7 @@ class FrameAirplaneRemover {
                 var group_size: UInt64 = 0
                 // tag this virgin outlier with its own key
                 let outlier_key = "\(outlier.x),\(outlier.y)"; // arbitrary but needs to be unique
+                //Log.d("creating virgin outlier key \(outlier_key)")
                 outlier.tag = outlier_key
                 group_size += 1
                 
@@ -170,27 +170,34 @@ class FrameAirplaneRemover {
                     pending_outlier.tag = outlier_key
                 }
 
+                //Log.d("pending_outliers \(pending_outliers)")
+                
                 // there is a non-linear running time problem when pending_outliers gets too big
                 // not sure exactly why yet, but max_loop_count is necessary to keep things
                 // from taking a _really_ long time.  Same result, just more than one outlier group.
                 // keeping max_loop_count big enough means that they still get painted on.
                 // this is really an edge case with car headlights.
 
-                let max_loop_count = min_group_trail_length*min_group_trail_length*2
+                // XXX figure this out, it's causing problems :(
+                // specifically each large group needs to not be separate
+                
+                let max_loop_count = 2000//min_group_trail_length*min_group_trail_length*20
 
                 var loop_count: UInt64 = 0
                                 
                 while pending_outliers.count > 0 {
+                    //Log.d("pending_outliers \(pending_outliers)")
                     loop_count += 1
                     if loop_count % 1000 == 0 {
                         Log.d("frame \(frame_index) looping \(loop_count) times \(pending_outliers.count) pending outliers group_size \(group_size)")
                     }
 
-                    if loop_count > max_loop_count {
+                    if !loop_forever && loop_count > max_loop_count {
                         Log.w("frame \(frame_index) bailing out after \(loop_count) loops")
                         break
                     }                    
-                    let next_outlier = pending_outliers.removeFirst()
+                    //let next_outlier = pending_outliers.removeFirst()
+                    let next_outlier = pending_outliers.removeLast() // XXX does this help?
                     if next_outlier.tag != nil {
                         group_size += 1
 
@@ -199,6 +206,7 @@ class FrameAirplaneRemover {
                             pending_outlier.tag = outlier_key
                         }
 
+                        //Log.d("more_pending_outliers \(more_pending_outliers)")
                         pending_outliers += more_pending_outliers
                     } else {
                         Log.w("next outlier has tag \(next_outlier.tag)")
@@ -260,7 +268,8 @@ class FrameAirplaneRemover {
                                         ofX: x, andY: y,
                                         outliers: outliers,
                                         neighborGroups: neighbor_groups,
-                                        minNeighbors: min_group_trail_length)
+                                        // XXX refactor this
+                                        minNeighbors: 20 /*min_group_trail_length*/)
                     {
                         let padding = Outlier(x: x, y: y, amount: 0)
                         padding.tag = bigTag
@@ -382,17 +391,17 @@ class FrameAirplaneRemover {
     {
         // the size of the bounding box in number of pixels
         let max_pixels = (max_x-min_x)*(max_y-min_y)
-        
+
         // the distance bewteen the edges of the bounding box
         let distance = hypotenuse(x1: min_x, y1: min_y,
                                   x2: max_x, y2: max_y)
-        
+
         // how much (betwen 0 and 1) of the bounding box is filled by outliers?
         let amount_filled = Double(group_size)/Double(max_pixels)
-        
+
         let bounding_box_width = max_x-min_x
         let bounding_box_height = max_y-min_y
-        
+
         // the aspect ratio of the bounding box.
         // 1 is square, closer to zero is more regangular.
         var aspect_ratio: Double = 0
@@ -401,28 +410,15 @@ class FrameAirplaneRemover {
         } else {
             aspect_ratio = Double(bounding_box_width)/Double(bounding_box_height)
         }
-        
-        var should_paint_this_group = false
-        
-        //Log.d("neighbor has \(group_size) members \(distance) size bounding box with \(aspect_ratio) aspect ratio and \(amount_filled) amount_filled")
-        
-        if aspect_ratio < 0.1 && group_size > 10 {
-            should_paint_this_group = true
-            Log.d("skinny group marked as painted")
-        } else if aspect_ratio < 0.2 && group_size > 20 {
-            should_paint_this_group = true
-            Log.d("less skinny group marked as painted")
-        } else if aspect_ratio > 0.6 && amount_filled > 0.5 {
-            should_paint_this_group = false                    // stars?
-        } else if distance > min_group_trail_length/* || amount_filled < 0.3*/ {
-            should_paint_this_group = true
-        }
 
-        if should_paint_this_group {
-            Log.i("frame \(frame_index) marking group with size \(group_size) and distance size bounding box with \(aspect_ratio) aspect ratio and \(amount_filled) amount_filled")
-        }
-        
-        return should_paint_this_group
+        if(group_size < 84) { return false } // not airplane
+        if(group_size > 246) { return true } // is airplane
+        if(aspect_ratio < 0.421052631578947) { return true } // is airplane
+        if(amount_filled > 0.419540229885057) { return false } // notAirplane
+        if(amount_filled < 0.173333333333333) { return false } // notAirplane
+        if(aspect_ratio > 0.481481481481481) { return false } // notAirplane
+        if(aspect_ratio < 0.413793103448276) { return true } // airplane
+        return false // not airplane
     }
 
     func writeTestFile() {
