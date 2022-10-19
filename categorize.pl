@@ -212,7 +212,7 @@ print("    if(aspect_ratio < $airplane_max_aspect) { return true } // airplane\n
 if ($non_airplane_min_aspect > $airplane_max_aspect) {
   print"    // with $non_airplane_min_aspect > $airplane_max_aspect,\n";
   print"    // no outlier groups from the testing group reached this point\n\n";
-  print"    Log.w(\"unable to properly detect outlier with width \(bounding_box_width) height \(bounding_box_height) and size \(group_size)\ further data collection and refinement in $0 is necessary to resolve this\")\n";
+  print"    Log.w(\"unable to properly detect outlier with width \\(bounding_box_width) height \\(bounding_box_height) and size \\(group_size) further data collection and refinement in $0 is necessary to resolve this\")\n";
 } else {
   print"    // with $non_airplane_min_aspect < $airplane_max_aspect,\n";
   print"    // some outlier groups can reach this point.\n";
