@@ -1,6 +1,7 @@
 import Foundation
 
 // this is auto generated code, run regenerate_ShouldPaint.sh to remake it
+// generated on Tue Oct 18 20:53:27 PDT 2022 from 56 airplane records and 706762 non airplane records
 
 func shouldPaintGroup(min_x: Int, min_y: Int,
                       max_x: Int, max_y: Int,
@@ -25,13 +26,13 @@ func shouldPaintGroup(min_x: Int, min_y: Int,
         aspect_ratio = Double(bounding_box_width)/Double(bounding_box_height)
     }
 
-    if(group_size < 84) { return false } // not airplane
-    if(group_size > 246) { return true } // is airplane
-    if(aspect_ratio < 0.421052631578947) { return true } // is airplane
-    if(amount_filled > 0.419540229885057) { return false } // notAirplane
-    if(amount_filled < 0.173333333333333) { return false } // notAirplane
-    if(aspect_ratio > 0.481481481481481) { return false } // notAirplane
-    if(aspect_ratio < 0.413793103448276) { return true } // airplane
+    if(group_size < 67) { return false } // not airplane
+    if(group_size > 521) { return true } // is airplane
+    if(aspect_ratio < 0.210526315789474) { return true } // is airplane
+    if(amount_filled > 0.587962962962963) { return false } // notAirplane
+    if(amount_filled < 0.188618925831202) { return false } // notAirplane
+    if(aspect_ratio > 0.214285714285714) { return false } // notAirplane
+    if(aspect_ratio < 0.184782608695652) { return true } // airplane
     return false // not airplane
 }
 
