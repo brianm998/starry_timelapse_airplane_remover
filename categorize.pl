@@ -206,12 +206,13 @@ unless ($code_only) {
 
 print("    // outlier groups with a larger aspect ratio aren't airplanes\n");
 print("    if(aspect_ratio > $non_airplane_min_aspect) { return false } // notAirplane\n\n");
-print("    //  groups with a smaller aspect ratio aren't airplanes\n");
+print("    //  groups with a smaller aspect ratio are airplanes\n");
 print("    if(aspect_ratio < $airplane_max_aspect) { return true } // airplane\n\n");
 
 if ($non_airplane_min_aspect > $airplane_max_aspect) {
   print"    // with $non_airplane_min_aspect > $airplane_max_aspect,\n";
-  print"    // no outlier groups can reach this point\n";
+  print"    // no outlier groups from the testing group reached this point\n\n";
+  print"    Log.w(\"unable to properly detect outlier with width \(bounding_box_width) height \(bounding_box_height) and size \(group_size)\ further data collection and refinement in $0 is necessary to resolve this\")\n";
 } else {
   print"    // with $non_airplane_min_aspect < $airplane_max_aspect,\n";
   print"    // some outlier groups can reach this point.\n";
@@ -233,7 +234,7 @@ $non_airplane_records = $new_non_airplane_arr;
 
 print <<END
 
-    return false // not airplane
+    return false // guess it's not an airplane
 }
 END
   ;
