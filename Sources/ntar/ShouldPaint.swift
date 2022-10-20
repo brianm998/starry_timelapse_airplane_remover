@@ -1,13 +1,13 @@
 import Foundation
 
-// generated on Wed Oct 19 06:54:51 PDT 2022
+// generated on Wed Oct 19 14:53:21 PDT 2022
 
-// data used from 56 airplane records and 706762 non airplane records
+// data used from 107 airplane records and 877275 non airplane records
 
 // this is auto generated code, run regenerate_shouldPaint.sh to remake it, DO NOT EDIT BY HAND
 
 // the unix time this file was created
-let paint_group_logic_time = 1666187691
+let paint_group_logic_time = 1666216401
 
 func shouldPaintGroup(min_x: Int, min_y: Int,
                       max_x: Int, max_y: Int,
@@ -36,25 +36,27 @@ func shouldPaintGroup(min_x: Int, min_y: Int,
     if(group_size < 67) { return false } // not airplane
 
     // outlier groups larger are airplanes
-    if(group_size > 521) { return true } // is airplane
+    if(group_size > 1432) { return true } // is airplane
 
     // outlier groups with a smaller aspect ratio are airplanes
-    if(aspect_ratio < 0.210526315789474) { return true } // is airplane
+    if(aspect_ratio < 0.163120567375887) { return true } // is airplane
 
     // outlier groups with a higher fill amount aren't airplanes
     if(amount_filled > 0.587962962962963) { return false } // notAirplane
 
     // outlier groups with a lower fill amount aren't airplanes
-    if(amount_filled < 0.188618925831202) { return false } // notAirplane
+    if(amount_filled < 0.15264367816092) { return false } // notAirplane
 
     // outlier groups with a larger aspect ratio aren't airplanes
     if(aspect_ratio > 0.214285714285714) { return false } // notAirplane
 
-    //  groups with a smaller aspect ratio aren't airplanes
-    if(aspect_ratio < 0.184782608695652) { return true } // airplane
+    //  groups with a smaller aspect ratio are airplanes
+    if(aspect_ratio < 0.133333333333333) { return true } // airplane
 
-    // with 0.214285714285714 > 0.184782608695652,
-    // no outlier groups can reach this point
+    // with 0.214285714285714 > 0.133333333333333,
+    // no outlier groups from the testing group reached this point
 
-    return false // not airplane
+    Log.w("unable to properly detect outlier with width \(bounding_box_width) height \(bounding_box_height) and size \(group_size) further data collection and refinement in categorize.pl is necessary to resolve this")
+
+    return false // guess it's not an airplane
 }
