@@ -82,18 +82,20 @@ class FrameAirplaneRemover {
         Log.d("frame \(frame_index) got image data")
     }
 
-    // this method is by far the slowest part of the process    
+    // this is still the slowest part of the process, but is now about 2-3x faster than before
     func populateOutlierMap() async {
         let start_time = NSDate().timeIntervalSince1970
         // compare pixels at the same image location in adjecent frames
         // detect Outliers which are much more brighter than the adject frames
-        let orig_pixels = await image.pixels
-        var other_pixels: [[[Pixel]]] = [[[]]]
-        for i in 0 ..< otherFrames.count {
-            other_pixels.append([[]]);
-            other_pixels[i] = await otherFrames[i].pixels
-        }
+        let orig_data = image.image_buffer_ptr
 
+        let bitsPerComponent = image.bitsPerComponent
+        
+        let other_data_1 = otherFrames[0].image_buffer_ptr
+        var other_data_2: UnsafePointer<UInt8>?
+        if otherFrames.count > 1 {
+            other_data_2 = otherFrames[1].image_buffer_ptr
+        }
         let time_1 = NSDate().timeIntervalSince1970
         let interval1 = String(format: "%0.1f", time_1 - start_time)
 
@@ -108,23 +110,66 @@ class FrameAirplaneRemover {
                 Log.d("frame \(frame_index) detected outliers in \(y) rows")
             }
             for x in 0 ..< width {
-                
-                let origPixel = orig_pixels[x][y]
+                let offset = (y * bytesPerRow) + (x * bytesPerPixel)
 
-                var otherPixels: [Pixel] = []
-                for i in 0 ..< otherFrames.count { // XXX crash
-                    otherPixels.append(other_pixels[i][x][y]) // XXX crash
-                }
-                if otherPixels.count == 0 {
-                    fatalError("need more than one image in the sequence")
-                }
+                // XXX this could be cleaner
+                let orig_r1 = UInt16(orig_data[offset]) // lower bits
+                let orig_r2 = UInt16(orig_data[offset + 1]) << 8 // higher bits
+                let orig_red = orig_r1 + orig_r2
+                let orig_g1 = UInt16(orig_data[offset+bitsPerComponent/8])
+                let orig_g2 = UInt16(orig_data[offset+bitsPerComponent/8 + 1]) << 8
+                let orig_green = orig_g1 + orig_g2
+                let orig_b1 = UInt16(orig_data[offset+(bitsPerComponent/8)*2])
+                let orig_b2 = UInt16(orig_data[offset+(bitsPerComponent/8)*2 + 1]) << 8
+                let orig_blue = orig_b1 + orig_b2
                 
-                var total_difference: Int32 = 0
-                otherPixels.forEach { pixel in
-                    total_difference += Int32(origPixel.difference(from: pixel))
-                }
+                // XXX this could be cleaner
+                let other_1_r1 = UInt16(other_data_1[offset]) // lower bits
+                let other_1_r2 = UInt16(other_data_1[offset + 1]) << 8 // higher bits
+                let other_1_red = other_1_r1 + other_1_r2
+                let other_1_g1 = UInt16(other_data_1[offset+bitsPerComponent/8])
+                let other_1_g2 = UInt16(other_data_1[offset+bitsPerComponent/8 + 1]) << 8
+                let other_1_green = other_1_g1 + other_1_g2
+                let other_1_b1 = UInt16(other_data_1[offset+(bitsPerComponent/8)*2])
+                let other_1_b2 = UInt16(other_data_1[offset+(bitsPerComponent/8)*2 + 1]) << 8
+                let other_1_blue = other_1_b1 + other_1_b2
+
+                let other_1_red_diff = (Int32(orig_red) - Int32(other_1_red))
+                let other_1_green_diff = (Int32(orig_green) - Int32(other_1_green))
+                let other_1_blue_diff = (Int32(orig_blue) - Int32(other_1_blue))
+
+                let other_1_max = max(other_1_red_diff + other_1_green_diff + other_1_blue_diff / 3,
+                                      max(other_1_red_diff, max(other_1_green_diff,
+                                                                other_1_blue_diff)))
                 
-                total_difference /= Int32(otherPixels.count)
+                var total_difference: Int32 = other_1_max
+                
+                if let other_data_2 = other_data_2 {
+                    // XXX this could be cleaner
+                    let other_2_r1 = UInt16(other_data_2[offset]) // lower bits
+                    let other_2_r2 = UInt16(other_data_2[offset + 1]) << 8 // higher bits
+                    let other_2_red = other_2_r1 + other_2_r2
+                    let other_2_g1 = UInt16(other_data_2[offset+bitsPerComponent/8])
+                    let other_2_g2 = UInt16(other_data_2[offset+bitsPerComponent/8 + 1]) << 8
+                    let other_2_green = other_2_g1 + other_2_g2
+                    let other_2_b1 = UInt16(other_data_2[offset+(bitsPerComponent/8)*2])
+                    let other_2_b2 = UInt16(other_data_2[offset+(bitsPerComponent/8)*2 + 1]) << 8
+                    let other_2_blue = other_2_b1 + other_2_b2
+
+                    let other_2_red_diff = (Int32(orig_red) - Int32(other_2_red))
+                    let other_2_green_diff = (Int32(orig_green) - Int32(other_2_green))
+                    let other_2_blue_diff = (Int32(orig_blue) - Int32(other_2_blue))
+
+                    let other_2_max = max(other_2_red_diff +
+                                            other_2_green_diff +
+                                            other_2_blue_diff / 3,
+                                          max(other_2_red_diff,
+                                              max(other_2_green_diff,
+                                                  other_2_blue_diff)))
+                    total_difference += other_2_max
+
+                    total_difference /= 2
+                }
                 
                 if total_difference > max_pixel_distance {
                     let new_outlier = Outlier(x: x, y: y, amount: total_difference)
@@ -143,7 +188,7 @@ class FrameAirplaneRemover {
         
         // go through the outlier_list and link together all the outliers that are adject to eachother,
         // outputting a mapping of group name to size
-
+        
         // first link all outliers to their direct neighbors
         for (outlier) in outlier_list {
             let x = outlier.x
@@ -344,6 +389,7 @@ class FrameAirplaneRemover {
                let max_x = group_max_x[group],
                let max_y = group_max_y[group]
             {
+//                Log.d("frame \(frame_index) examining group \(group) of size \(group_size) [\(min_x), \(min_y)] => [\(max_x), \(max_y)]")
                 if let should_paint_group = should_paint_group {
                     if should_paint_group(min_x, min_y,
                                           max_x, max_y,
@@ -358,8 +404,11 @@ class FrameAirplaneRemover {
                                         group_name: group,
                                         group_size: group_size)
                     {
+//                        Log.d("should paint \(group)")
                         should_paint[group] = true
                         names_of_groups_to_paint.append(group)
+                    } else {
+//                        Log.d("should NOT paint \(group)")
                     }
                 }
             }
@@ -375,15 +424,9 @@ class FrameAirplaneRemover {
             }
         }
 
-        var other_pixels: [[[Pixel]]] = [[[]]]
-        for i in 0 ..< otherFrames.count {
-            other_pixels.append([[]]);
-            other_pixels[i] = await otherFrames[i].pixels
-        }
-        
         // paint over every outlier in the paint list with pixels from the adjecent frames
         for (outlier) in paint_list {
-            paint(outlier: outlier, with: other_pixels)
+            paint(outlier: outlier)
         }
         Log.i("frame \(frame_index) done painting")
     }
@@ -397,7 +440,7 @@ class FrameAirplaneRemover {
     }
 
     // paint over a selected outlier with data from pixels from adjecent frames
-    func paint(outlier: Outlier, with other_pixels: [[[Pixel]]]) {
+    func paint(outlier: Outlier) {
         let x = outlier.x
         let y = outlier.y
             
@@ -405,7 +448,7 @@ class FrameAirplaneRemover {
         
         // grab the pixels from the same image spot from adject frames
         for i in 0 ..< otherFrames.count {
-            pixels_to_paint_with.append(other_pixels[i][x][y])
+            pixels_to_paint_with.append(otherFrames[i].readPixel(atX: x, andY: y))
         }
         
         // blend the pixels from the adjecent frames

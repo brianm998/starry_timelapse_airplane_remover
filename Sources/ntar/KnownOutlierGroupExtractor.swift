@@ -182,13 +182,12 @@ class KnownOutlierGroupExtractor : NighttimeAirplaneRemover {
     
     func readMasks(fromImage image: PixelatedImage) async -> [MaskType:[ImageMask]] {
         // first read the layer mask
-        let pixels = await image.pixels
         
         var current_mask: ImageMask?
         
         for x in 0..<image.width {
             for y in 0..<image.height {
-                let pixel = pixels[x][y]
+                let pixel = image.readPixel(atX: x, andY: y)
                 if pixel.red == 0 && pixel.blue == 0 && pixel.green == 0 {
                     if current_mask != nil {
                         current_mask = nil
