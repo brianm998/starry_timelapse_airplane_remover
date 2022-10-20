@@ -16,7 +16,6 @@ actor ImageSequence {
                 image_files.append("\(dirname)/\(filename)")
             }
         } else {
-            Log.w("NOT given filenames")
             do {
                 let contents = try FileManager.default.contentsOfDirectory(atPath: dirname)
                 contents.forEach { file in

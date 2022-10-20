@@ -25,16 +25,16 @@ todo:
 
    b malloc_error_break
 
+   NSZombieEnabled
+
+   https://www.raywenderlich.com/3089-instruments-tutorial-for-ios-how-to-debug-memory-leaks
+
  - add scripts to allow video to processed video in one command
    - decompress existing video w/ ffmpeg (and note exactly how it was compressed)
    - process image sequence with ntar
    - recompress processed image sequence w/ ffmpeg with same parameters as before
    - remove image sequence dir
-
- - consider using aspect ration of outlier group bounding box to inform calculation
-   i.e. if the box is small, then it needs to not be close to square to paint on it
- - also consider using the percentage of bounding box fill with outliers
- - produce training set of good and bad data?
+ - detect idle cpu % and use max cpu% instead of max % of frames
 
 
    group painting criteria:
@@ -55,6 +55,14 @@ todo:
    - write a code generating script which is able to clearly distinguish between the data sets
    - use this big if branch statement in a separate generated .swift file
    - iterate with more data, allowing the re-generation of all data with different max pixel dist
+
+   - try using a histgram of the data distribution across size / fill / aspect ratio to determine
+     the likelyhood of a sample belonging to one set of the other.
+
+   - allow exporting of failed detected groups
+     - what frame was it on
+     - where was it in the frame?
+     - an image of it would be ideal, just the outlier pixels within the bounding box
 */
 
 Log.handlers = 

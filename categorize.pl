@@ -17,6 +17,8 @@ my $mode = shift;
 
 my $code_only = 0;
 
+# XXX use STDERR for non-swift output
+
 # when run without this arg show debug info that helps improve the alg with more data
 # when run with this arg only output the generated swift code
 $code_only = 1 if($mode eq '--generate-swift');

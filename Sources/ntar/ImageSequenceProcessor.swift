@@ -162,7 +162,7 @@ class ImageSequenceProcessor {
             self.finished_hook()
             self.dispatchGroup.leave()
         }
-        self.dispatchGroup.wait()
+        self.dispatchGroup.wait() // SIGKILL?
         Log.d("done")
     }
 }

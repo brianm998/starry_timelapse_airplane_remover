@@ -98,7 +98,11 @@ class FrameAirplaneRemover {
         let interval1 = String(format: "%0.1f", time_1 - start_time)
 
         // most of the time is in this loop
-        
+
+        // instead of iterating over Pixel objects, perhaps take a more
+        // brute force bit based approach of looking at the data more directly
+        // make it so not heap allocation / deallocation happens within the loop,
+        // except for appending to the outlier list
         for y in 0 ..< height {
             if y != 0 && y % 1000 == 0 {
                 Log.d("frame \(frame_index) detected outliers in \(y) rows")
