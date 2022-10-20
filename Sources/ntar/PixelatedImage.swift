@@ -8,8 +8,7 @@ actor PixelatedImage {
     let width: Int
     let height: Int
 
-    let raw_image_data: CFData
-    let image_buffer_ptr: UnsafePointer<UInt8> // XXX research the F out of this
+    let raw_image_data: Data
     
     let bitsPerPixel: Int
     let bytesPerRow: Int
@@ -47,23 +46,17 @@ actor PixelatedImage {
         self.bytesPerPixel = self.bitsPerPixel / 8
         self.bitmapInfo = image.bitmapInfo
 
-        if let data = image.dataProvider?.data {
+        if let data = image.dataProvider?.data as? Data {
             self.raw_image_data = data
         } else {
             Log.e("DOH")
             return nil
         }
-        guard let _bytes = CFDataGetBytePtr(self.raw_image_data)
-        else
-        { // XXX maybe move this out of here
-            fatalError("Couldn't access image data")
-        }
-        self.image_buffer_ptr = _bytes
     }
 
     nonisolated func readPixel(atX x: Int, andY y: Int) -> Pixel {
         let offset = (y * width*3) + (x * 3)
-        let pixel = (raw_image_data as Data).withUnsafeBytes { unsafeRawPointer -> Pixel in 
+        let pixel = raw_image_data.withUnsafeBytes { unsafeRawPointer -> Pixel in 
             let typedPointer: UnsafeBufferPointer<UInt16> = unsafeRawPointer.bindMemory(to: UInt16.self)
             var pixel = Pixel()
             pixel.red = typedPointer[offset]

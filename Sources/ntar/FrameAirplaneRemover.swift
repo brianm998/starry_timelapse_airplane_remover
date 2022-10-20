@@ -62,15 +62,15 @@ class FrameAirplaneRemover {
         // copy the original image data as adjecent frames need
         // to access the original unmodified version
         guard let _mut_data = CFDataCreateMutableCopy(kCFAllocatorDefault,
-                                                      CFDataGetLength(_data),
-                                                      _data) as? Data else { return nil }
+                                                      CFDataGetLength(_data as CFData),
+                                                      _data as CFData) as? Data else { return nil }
 
         self.data = _mut_data
               
         if test_paint {
             guard let test_data = CFDataCreateMutableCopy(kCFAllocatorDefault,
-                                                          CFDataGetLength(_data),
-                                                          _data) as? Data else { return nil }
+                                                          CFDataGetLength(_data as CFData),
+                                                          _data as CFData) as? Data else { return nil }
             self.test_paint_data = test_data
         }
         for x in 0 ..< width {
@@ -87,14 +87,16 @@ class FrameAirplaneRemover {
         let start_time = NSDate().timeIntervalSince1970
         // compare pixels at the same image location in adjecent frames
         // detect Outliers which are much more brighter than the adject frames
-        let orig_data = image.image_buffer_ptr
+        let orig_data = image.raw_image_data
 
         let bitsPerComponent = image.bitsPerComponent
         
-        let other_data_1 = otherFrames[0].image_buffer_ptr
-        var other_data_2: UnsafePointer<UInt8>?
+        let other_data_1 = otherFrames[0].raw_image_data
+        var other_data_2 = Data() // dummy backup 
+        var have_two_other_frames = false
         if otherFrames.count > 1 {
-            other_data_2 = otherFrames[1].image_buffer_ptr
+            other_data_2 = otherFrames[1].raw_image_data
+            have_two_other_frames = true
         }
         let time_1 = NSDate().timeIntervalSince1970
         let interval1 = String(format: "%0.1f", time_1 - start_time)
@@ -105,76 +107,68 @@ class FrameAirplaneRemover {
         // brute force bit based approach of looking at the data more directly
         // make it so not heap allocation / deallocation happens within the loop,
         // except for appending to the outlier list
-        for y in 0 ..< height {
-            if y != 0 && y % 1000 == 0 {
-                Log.d("frame \(frame_index) detected outliers in \(y) rows")
-            }
-            for x in 0 ..< width {
-                let offset = (y * bytesPerRow) + (x * bytesPerPixel)
 
-                // XXX this could be cleaner
-                let orig_r1 = UInt16(orig_data[offset]) // lower bits
-                let orig_r2 = UInt16(orig_data[offset + 1]) << 8 // higher bits
-                let orig_red = orig_r1 + orig_r2
-                let orig_g1 = UInt16(orig_data[offset+bitsPerComponent/8])
-                let orig_g2 = UInt16(orig_data[offset+bitsPerComponent/8 + 1]) << 8
-                let orig_green = orig_g1 + orig_g2
-                let orig_b1 = UInt16(orig_data[offset+(bitsPerComponent/8)*2])
-                let orig_b2 = UInt16(orig_data[offset+(bitsPerComponent/8)*2 + 1]) << 8
-                let orig_blue = orig_b1 + orig_b2
-                
-                // XXX this could be cleaner
-                let other_1_r1 = UInt16(other_data_1[offset]) // lower bits
-                let other_1_r2 = UInt16(other_data_1[offset + 1]) << 8 // higher bits
-                let other_1_red = other_1_r1 + other_1_r2
-                let other_1_g1 = UInt16(other_data_1[offset+bitsPerComponent/8])
-                let other_1_g2 = UInt16(other_data_1[offset+bitsPerComponent/8 + 1]) << 8
-                let other_1_green = other_1_g1 + other_1_g2
-                let other_1_b1 = UInt16(other_data_1[offset+(bitsPerComponent/8)*2])
-                let other_1_b2 = UInt16(other_data_1[offset+(bitsPerComponent/8)*2 + 1]) << 8
-                let other_1_blue = other_1_b1 + other_1_b2
+        orig_data.withUnsafeBytes { unsafeRawPointer in 
+            let typedImagePointer: UnsafeBufferPointer<UInt16> = unsafeRawPointer.bindMemory(to: UInt16.self)
 
-                let other_1_red_diff = (Int32(orig_red) - Int32(other_1_red))
-                let other_1_green_diff = (Int32(orig_green) - Int32(other_1_green))
-                let other_1_blue_diff = (Int32(orig_blue) - Int32(other_1_blue))
+            other_data_1.withUnsafeBytes { unsafeRawPointer_1  in 
+                let typedOtherImage1Pointer: UnsafeBufferPointer<UInt16> = unsafeRawPointer_1.bindMemory(to: UInt16.self)
 
-                let other_1_max = max(other_1_red_diff + other_1_green_diff + other_1_blue_diff / 3,
-                                      max(other_1_red_diff, max(other_1_green_diff,
-                                                                other_1_blue_diff)))
-                
-                var total_difference: Int32 = other_1_max
-                
-                if let other_data_2 = other_data_2 {
-                    // XXX this could be cleaner
-                    let other_2_r1 = UInt16(other_data_2[offset]) // lower bits
-                    let other_2_r2 = UInt16(other_data_2[offset + 1]) << 8 // higher bits
-                    let other_2_red = other_2_r1 + other_2_r2
-                    let other_2_g1 = UInt16(other_data_2[offset+bitsPerComponent/8])
-                    let other_2_g2 = UInt16(other_data_2[offset+bitsPerComponent/8 + 1]) << 8
-                    let other_2_green = other_2_g1 + other_2_g2
-                    let other_2_b1 = UInt16(other_data_2[offset+(bitsPerComponent/8)*2])
-                    let other_2_b2 = UInt16(other_data_2[offset+(bitsPerComponent/8)*2 + 1]) << 8
-                    let other_2_blue = other_2_b1 + other_2_b2
+                other_data_2.withUnsafeBytes { unsafeRawPointer_2 in 
+                    let typedOtherImage2Pointer: UnsafeBufferPointer<UInt16> = unsafeRawPointer_2.bindMemory(to: UInt16.self)
 
-                    let other_2_red_diff = (Int32(orig_red) - Int32(other_2_red))
-                    let other_2_green_diff = (Int32(orig_green) - Int32(other_2_green))
-                    let other_2_blue_diff = (Int32(orig_blue) - Int32(other_2_blue))
-
-                    let other_2_max = max(other_2_red_diff +
-                                            other_2_green_diff +
-                                            other_2_blue_diff / 3,
-                                          max(other_2_red_diff,
-                                              max(other_2_green_diff,
-                                                  other_2_blue_diff)))
-                    total_difference += other_2_max
-
-                    total_difference /= 2
-                }
-                
-                if total_difference > max_pixel_distance {
-                    let new_outlier = Outlier(x: x, y: y, amount: total_difference)
-                    outliers[x][y] = new_outlier
-                    outlier_list.append(new_outlier)
+                    for y in 0 ..< height {
+                        if y != 0 && y % 1000 == 0 {
+                            Log.d("frame \(frame_index) detected outliers in \(y) rows")
+                        }
+                        for x in 0 ..< width {
+                            let offset = (y * width*3) + (x * 3) // XXX hardcoded 3's
+            
+                            let orig_red = typedImagePointer[offset]
+                            let orig_green = typedImagePointer[offset+1]
+                            let orig_blue = typedImagePointer[offset+2]
+            
+                            let other_1_red = typedOtherImage1Pointer[offset]
+                            let other_1_green = typedOtherImage1Pointer[offset+1]
+                            let other_1_blue = typedOtherImage1Pointer[offset+2]
+                            
+                            let other_1_red_diff = (Int32(orig_red) - Int32(other_1_red))
+                            let other_1_green_diff = (Int32(orig_green) - Int32(other_1_green))
+                            let other_1_blue_diff = (Int32(orig_blue) - Int32(other_1_blue))
+            
+                            let other_1_max = max(other_1_red_diff + other_1_green_diff + other_1_blue_diff / 3,
+                                                  max(other_1_red_diff, max(other_1_green_diff,
+                                                                            other_1_blue_diff)))
+                            
+                            var total_difference: Int32 = other_1_max
+                            
+                            if have_two_other_frames {
+                                let other_2_red = typedOtherImage2Pointer[offset]
+                                let other_2_green = typedOtherImage2Pointer[offset+1]
+                                let other_2_blue = typedOtherImage2Pointer[offset+2]
+                                
+                                let other_2_red_diff = (Int32(orig_red) - Int32(other_2_red))
+                                let other_2_green_diff = (Int32(orig_green) - Int32(other_2_green))
+                                let other_2_blue_diff = (Int32(orig_blue) - Int32(other_2_blue))
+            
+                                let other_2_max = max(other_2_red_diff +
+                                                        other_2_green_diff +
+                                                        other_2_blue_diff / 3,
+                                                      max(other_2_red_diff,
+                                                          max(other_2_green_diff,
+                                                              other_2_blue_diff)))
+                                total_difference += other_2_max
+            
+                                total_difference /= 2
+                            }
+                            
+                            if total_difference > max_pixel_distance {
+                                let new_outlier = Outlier(x: x, y: y, amount: total_difference)
+                                outliers[x][y] = new_outlier
+                                outlier_list.append(new_outlier)
+                            }
+                        }
+                    }
                 }
             }
         }
