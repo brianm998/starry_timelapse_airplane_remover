@@ -144,7 +144,6 @@ class KnownOutlierGroupExtractor : NighttimeAirplaneRemover {
         // write to 
     }
 
-    
     func shouldPaintGroup(min_x: Int, min_y: Int,
                           max_x: Int, max_y: Int,
                           group_name: String,
@@ -155,23 +154,42 @@ class KnownOutlierGroupExtractor : NighttimeAirplaneRemover {
 
         if group_size < 4 { return false } // XXX hardcoded constant
 
-        //Log.d("should paint \(airplane_groups.count) of size \(group_size)")
+        if group_size > 100 {
+            Log.d("should paint \(group_name) of size \(group_size)")
+        }
         var should_paint: Bool = false
+
+        var was_part_of_group = false
+        
         airplane_groups.forEach { imageMask in
+        //if group_size > 100 {
+                //Log.d("image mask [\(imageMask.leftX), \(imageMask.topY)], [\(imageMask.rightX), \(imageMask.bottomY)] group [(\(min_x), \(min_y))], [\(max_x), \(max_y)]")
+//            }
             if imageMask.fullyContains(min_x: min_x, min_y: min_y, max_x: max_x, max_y: max_y) {
+                was_part_of_group = true
                 if !has_airline_already.contains(imageMask) {
-                    Log.i("marking group \(group_name) of size \(group_size) for painting")
+                    Log.i("marking group \(group_name) of size \(group_size) for painting into mask \(imageMask)")
                     has_airline_already.insert(imageMask)
                     self.write_to_csv(width: width, height: height,
                                       group_size: group_size, type: .airplanes)
                     should_paint = true
+                } else {
+                    //if group_size > 100 {
+                        //Log.d("will not paint \(group_name) of size \(group_size), already contained")
+                //}
                 }
             }
         }
+
+//        if group_size > 100 && !was_part_of_group {
+//            Log.d("should paint \(group_name) of size \(group_size) was not part of any group")
+//        }
+
+        
         non_airplane_groups.forEach { imageMask in
             if imageMask.fullyContains(min_x: min_x, min_y: min_y, max_x: max_x, max_y: max_y) {
                 self.write_to_csv(width: width, height: height,
-                                  group_size: group_size, type: .noAirplanes)
+                              group_size: group_size, type: .noAirplanes)
             }
         }
 
@@ -184,10 +202,13 @@ class KnownOutlierGroupExtractor : NighttimeAirplaneRemover {
         // first read the layer mask
         
         var current_mask: ImageMask?
+
+        // XXX somehow these masks are off by one sometimes
         
         for x in 0..<image.width {
             for y in 0..<image.height {
                 let pixel = image.readPixel(atX: x, andY: y)
+                //Log.d("[\(x), \(y)] \(pixel.red) \(pixel.green) \(pixel.blue) \(current_mask)")
                 if pixel.red == 0 && pixel.blue == 0 && pixel.green == 0 {
                     if current_mask != nil {
                         current_mask = nil
@@ -204,7 +225,13 @@ class KnownOutlierGroupExtractor : NighttimeAirplaneRemover {
                     } else {
                         // look through existing airplane masks first
                         for (mask) in airplane_groups {
-                            if mask.leftX == x || mask.topY == y {
+                            //Log.d("existing mask \(mask.leftX) \(mask.topY)  \(mask.rightX) \(mask.bottomY)")
+                            if mask.leftX == x && y >= mask.topY && y <= mask.bottomY {
+                                //Log.d("matched group @ \(x), \(y)")
+                                current_mask = mask
+                                break
+                            } else if mask.topY == y  && x >= mask.leftX/* && x <= mask.rightX*/  {
+                                //Log.d("matched group @ \(x), \(y)")
                                 current_mask = mask
                                 break
                             }
@@ -213,6 +240,7 @@ class KnownOutlierGroupExtractor : NighttimeAirplaneRemover {
                             let new_mask = ImageMask(withType: .airplanes)
                             new_mask.leftX = x
                             new_mask.topY = y
+                            Log.e("new airplane mask starting @ \(x), \(y)")
                             airplane_groups.append(new_mask)
                             current_mask = new_mask
                         }
@@ -227,7 +255,12 @@ class KnownOutlierGroupExtractor : NighttimeAirplaneRemover {
                     } else {
                         // look through existing airplane masks first
                         for (mask) in non_airplane_groups {
-                            if mask.leftX == x || mask.topY == y {
+                            if mask.leftX == x && y >= mask.topY && y <= mask.bottomY {
+                                //Log.d("matched group @ \(x), \(y)")
+                                current_mask = mask
+                                break
+                            } else if mask.topY == y  && x >= mask.leftX/* && x <= mask.rightX*/  {
+                                //Log.d("matched group @ \(x), \(y)")
                                 current_mask = mask
                                 break
                             }
@@ -239,7 +272,7 @@ class KnownOutlierGroupExtractor : NighttimeAirplaneRemover {
                             non_airplane_groups.append(new_mask)
                             current_mask = new_mask
                         }
-                   }
+                    }
                     // not black or white
                     //Log.d("BAD \(pixel.red) \(pixel.green) \(pixel.blue)")
                 }

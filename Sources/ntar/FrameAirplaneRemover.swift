@@ -101,21 +101,16 @@ class FrameAirplaneRemover {
         let time_1 = NSDate().timeIntervalSince1970
         let interval1 = String(format: "%0.1f", time_1 - start_time)
 
-        // most of the time is in this loop
-
-        // instead of iterating over Pixel objects, perhaps take a more
-        // brute force bit based approach of looking at the data more directly
-        // make it so not heap allocation / deallocation happens within the loop,
-        // except for appending to the outlier list
+        // most of the time is in this loop, although it's a lot faster now
 
         orig_data.withUnsafeBytes { unsafeRawPointer in 
-            let typedImagePointer: UnsafeBufferPointer<UInt16> = unsafeRawPointer.bindMemory(to: UInt16.self)
+            let orig_image_ptr: UnsafeBufferPointer<UInt16> = unsafeRawPointer.bindMemory(to: UInt16.self)
 
             other_data_1.withUnsafeBytes { unsafeRawPointer_1  in 
-                let typedOtherImage1Pointer: UnsafeBufferPointer<UInt16> = unsafeRawPointer_1.bindMemory(to: UInt16.self)
+                let other_image_1_ptr: UnsafeBufferPointer<UInt16> = unsafeRawPointer_1.bindMemory(to: UInt16.self)
 
                 other_data_2.withUnsafeBytes { unsafeRawPointer_2 in 
-                    let typedOtherImage2Pointer: UnsafeBufferPointer<UInt16> = unsafeRawPointer_2.bindMemory(to: UInt16.self)
+                    let other_image_2_ptr: UnsafeBufferPointer<UInt16> = unsafeRawPointer_2.bindMemory(to: UInt16.self)
 
                     for y in 0 ..< height {
                         if y != 0 && y % 1000 == 0 {
@@ -123,45 +118,57 @@ class FrameAirplaneRemover {
                         }
                         for x in 0 ..< width {
                             let offset = (y * width*3) + (x * 3) // XXX hardcoded 3's
+
+                            // rgb values of the image we're modifying at this x,y
+                            let orig_red = orig_image_ptr[offset]
+                            let orig_green = orig_image_ptr[offset+1]
+                            let orig_blue = orig_image_ptr[offset+2]
             
-                            let orig_red = typedImagePointer[offset]
-                            let orig_green = typedImagePointer[offset+1]
-                            let orig_blue = typedImagePointer[offset+2]
-            
-                            let other_1_red = typedOtherImage1Pointer[offset]
-                            let other_1_green = typedOtherImage1Pointer[offset+1]
-                            let other_1_blue = typedOtherImage1Pointer[offset+2]
-                            
+                            // rgb values of an adjecent image at this x,y
+                            let other_1_red = other_image_1_ptr[offset]
+                            let other_1_green = other_image_1_ptr[offset+1]
+                            let other_1_blue = other_image_1_ptr[offset+2]
+
+                            // how much brighter in each channel was the image we're modifying?
                             let other_1_red_diff = (Int32(orig_red) - Int32(other_1_red))
                             let other_1_green_diff = (Int32(orig_green) - Int32(other_1_green))
                             let other_1_blue_diff = (Int32(orig_blue) - Int32(other_1_blue))
-            
-                            let other_1_max = max(other_1_red_diff + other_1_green_diff + other_1_blue_diff / 3,
-                                                  max(other_1_red_diff, max(other_1_green_diff,
-                                                                            other_1_blue_diff)))
+
+                            // take a max based upon overal brightness, or just one channel
+                            let other_1_max = max(other_1_red_diff +
+                                                    other_1_green_diff +
+                                                    other_1_blue_diff / 3,
+                                                  max(other_1_red_diff,
+                                                      max(other_1_green_diff,
+                                                          other_1_blue_diff)))
                             
                             var total_difference: Int32 = other_1_max
                             
                             if have_two_other_frames {
-                                let other_2_red = typedOtherImage2Pointer[offset]
-                                let other_2_green = typedOtherImage2Pointer[offset+1]
-                                let other_2_blue = typedOtherImage2Pointer[offset+2]
+                                // rgb values of another adjecent image at this x,y
+                                let other_2_red = other_image_2_ptr[offset]
+                                let other_2_green = other_image_2_ptr[offset+1]
+                                let other_2_blue = other_image_2_ptr[offset+2]
                                 
+                                // how much brighter in each channel was the image we're modifying?
                                 let other_2_red_diff = (Int32(orig_red) - Int32(other_2_red))
                                 let other_2_green_diff = (Int32(orig_green) - Int32(other_2_green))
                                 let other_2_blue_diff = (Int32(orig_blue) - Int32(other_2_blue))
             
+                                // take a max based upon overal brightness, or just one channel
                                 let other_2_max = max(other_2_red_diff +
                                                         other_2_green_diff +
                                                         other_2_blue_diff / 3,
                                                       max(other_2_red_diff,
                                                           max(other_2_green_diff,
                                                               other_2_blue_diff)))
+
+                                // average the two differences of the two adjecent frames
                                 total_difference += other_2_max
-            
                                 total_difference /= 2
                             }
-                            
+
+                            // mark this spot as an outlier if it's too bright
                             if total_difference > max_pixel_distance {
                                 let new_outlier = Outlier(x: x, y: y, amount: total_difference)
                                 outliers[x][y] = new_outlier
@@ -383,14 +390,20 @@ class FrameAirplaneRemover {
                let max_x = group_max_x[group],
                let max_y = group_max_y[group]
             {
-//                Log.d("frame \(frame_index) examining group \(group) of size \(group_size) [\(min_x), \(min_y)] => [\(max_x), \(max_y)]")
                 if let should_paint_group = should_paint_group {
                     if should_paint_group(min_x, min_y,
                                           max_x, max_y,
                                           group, group_size, frame_index)
                     {
+                        if group_size > 100 {
+                            Log.d("frame \(frame_index) will paint \(group) of size \(group_size) [\(min_x), \(min_y)] => [\(max_x), \(max_y)]")
+                        }
                         should_paint[group] = true
                         names_of_groups_to_paint.append(group)
+                    } else {
+                        if group_size > 100 {
+                            Log.d("frame \(frame_index) will NOT paint \(group) of size \(group_size) [\(min_x), \(min_y)] => [\(max_x), \(max_y)]")
+                        }
                     }
                 } else {
                     if shouldPaintGroup(min_x: min_x, min_y: min_y,
