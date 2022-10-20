@@ -52,7 +52,7 @@ actor PixelatedImage {
         } else {
             Log.e("DOH")
             return nil
-        }        
+        }
         guard let _bytes = CFDataGetBytePtr(self.raw_image_data)
         else
         { // XXX maybe move this out of here
@@ -62,21 +62,16 @@ actor PixelatedImage {
     }
 
     nonisolated func readPixel(atX x: Int, andY y: Int) -> Pixel {
-
-        var pixel = Pixel()
-        let offset = (y * bytesPerRow) + (x * bytesPerPixel)
-        // XXX this could be cleaner
-        let r1 = UInt16(image_buffer_ptr[offset]) // lower bits
-        let r2 = UInt16(image_buffer_ptr[offset + 1]) << 8 // higher bits
-        pixel.red = r1 + r2
-        let g1 = UInt16(image_buffer_ptr[offset+bitsPerComponent/8])
-        let g2 = UInt16(image_buffer_ptr[offset+bitsPerComponent/8 + 1]) << 8
-        pixel.green = g1 + g2
-        let b1 = UInt16(image_buffer_ptr[offset+(bitsPerComponent/8)*2])
-        let b2 = UInt16(image_buffer_ptr[offset+(bitsPerComponent/8)*2 + 1]) << 8
-        pixel.blue = b1 + b2
-
-        return pixel 
+        let offset = (y * width*3) + (x * 3)
+        let pixel = (raw_image_data as Data).withUnsafeBytes { unsafeRawPointer -> Pixel in 
+            let typedPointer: UnsafeBufferPointer<UInt16> = unsafeRawPointer.bindMemory(to: UInt16.self)
+            var pixel = Pixel()
+            pixel.red = typedPointer[offset]
+            pixel.green = typedPointer[offset+1]
+            pixel.blue = typedPointer[offset+2]
+            return pixel
+        }
+        return pixel
     }
 
     // write out the given image data as a 16 bit tiff file to the given filename
