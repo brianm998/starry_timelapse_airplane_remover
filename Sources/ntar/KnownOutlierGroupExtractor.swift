@@ -203,8 +203,6 @@ class KnownOutlierGroupExtractor : NighttimeAirplaneRemover {
         
         var current_mask: ImageMask?
 
-        // XXX somehow these masks are off by one sometimes
-        
         for x in 0..<image.width {
             for y in 0..<image.height {
                 let pixel = image.readPixel(atX: x, andY: y)

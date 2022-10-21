@@ -102,15 +102,18 @@ class FrameAirplaneRemover {
         let interval1 = String(format: "%0.1f", time_1 - start_time)
 
         // most of the time is in this loop, although it's a lot faster now
-
+        // ugly, but a lot faster
         orig_data.withUnsafeBytes { unsafeRawPointer in 
-            let orig_image_ptr: UnsafeBufferPointer<UInt16> = unsafeRawPointer.bindMemory(to: UInt16.self)
+            let orig_image_pixels: UnsafeBufferPointer<UInt16> =
+                unsafeRawPointer.bindMemory(to: UInt16.self)
 
             other_data_1.withUnsafeBytes { unsafeRawPointer_1  in 
-                let other_image_1_ptr: UnsafeBufferPointer<UInt16> = unsafeRawPointer_1.bindMemory(to: UInt16.self)
+                let other_image_1_pixels: UnsafeBufferPointer<UInt16> =
+                    unsafeRawPointer_1.bindMemory(to: UInt16.self)
 
                 other_data_2.withUnsafeBytes { unsafeRawPointer_2 in 
-                    let other_image_2_ptr: UnsafeBufferPointer<UInt16> = unsafeRawPointer_2.bindMemory(to: UInt16.self)
+                    let other_image_2_pixels: UnsafeBufferPointer<UInt16> =
+                        unsafeRawPointer_2.bindMemory(to: UInt16.self)
 
                     for y in 0 ..< height {
                         if y != 0 && y % 1000 == 0 {
@@ -120,14 +123,14 @@ class FrameAirplaneRemover {
                             let offset = (y * width*3) + (x * 3) // XXX hardcoded 3's
 
                             // rgb values of the image we're modifying at this x,y
-                            let orig_red = orig_image_ptr[offset]
-                            let orig_green = orig_image_ptr[offset+1]
-                            let orig_blue = orig_image_ptr[offset+2]
+                            let orig_red = orig_image_pixels[offset]
+                            let orig_green = orig_image_pixels[offset+1]
+                            let orig_blue = orig_image_pixels[offset+2]
             
                             // rgb values of an adjecent image at this x,y
-                            let other_1_red = other_image_1_ptr[offset]
-                            let other_1_green = other_image_1_ptr[offset+1]
-                            let other_1_blue = other_image_1_ptr[offset+2]
+                            let other_1_red = other_image_1_pixels[offset]
+                            let other_1_green = other_image_1_pixels[offset+1]
+                            let other_1_blue = other_image_1_pixels[offset+2]
 
                             // how much brighter in each channel was the image we're modifying?
                             let other_1_red_diff = (Int32(orig_red) - Int32(other_1_red))
@@ -146,9 +149,9 @@ class FrameAirplaneRemover {
                             
                             if have_two_other_frames {
                                 // rgb values of another adjecent image at this x,y
-                                let other_2_red = other_image_2_ptr[offset]
-                                let other_2_green = other_image_2_ptr[offset+1]
-                                let other_2_blue = other_image_2_ptr[offset+2]
+                                let other_2_red = other_image_2_pixels[offset]
+                                let other_2_green = other_image_2_pixels[offset+1]
+                                let other_2_blue = other_image_2_pixels[offset+2]
                                 
                                 // how much brighter in each channel was the image we're modifying?
                                 let other_2_red_diff = (Int32(orig_red) - Int32(other_2_red))
