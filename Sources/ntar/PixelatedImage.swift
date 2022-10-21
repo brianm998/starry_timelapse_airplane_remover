@@ -54,6 +54,13 @@ actor PixelatedImage {
         }
     }
 
+    nonisolated func read(_ closure: (UnsafeBufferPointer<UInt16>) -> Void) {
+        raw_image_data.withUnsafeBytes { unsafeRawPointer in 
+            let typedPointer: UnsafeBufferPointer<UInt16> = unsafeRawPointer.bindMemory(to: UInt16.self)
+            closure(typedPointer)
+        }        
+    }
+    
     nonisolated func readPixel(atX x: Int, andY y: Int) -> Pixel {
         let offset = (y * width*3) + (x * 3)
         let pixel = raw_image_data.withUnsafeBytes { unsafeRawPointer -> Pixel in 

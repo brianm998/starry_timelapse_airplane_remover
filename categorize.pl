@@ -41,6 +41,36 @@ while (<>) {
 my $number_airplane_records = scalar(@$airplane_records);
 my $number_non_airplane_records = scalar(@$non_airplane_records);
 
+my $airplane_size_histogram_size = 10;
+
+my ($airplane_min_size, $airplane_max_size, $airplane_size_histogram) =
+  size_histogram($airplane_records, $airplane_size_histogram_size);
+
+my $non_airplane_size_histogram_size = 20;
+
+my ($non_airplane_min_size, $non_airplane_max_size, $non_airplane_size_histogram) =
+  size_histogram($non_airplane_records, $non_airplane_size_histogram_size);
+
+my $airplane_aspect_ratio_histogram_size = 10;
+
+my ($airplane_min_aspect_ratio, $airplane_max_aspect_ratio, $airplane_aspect_ratio_histogram) =
+  aspect_ratio_histogram($airplane_records, $airplane_aspect_ratio_histogram_size);
+
+my $non_airplane_aspect_ratio_histogram_size = 20;
+
+my ($non_airplane_min_aspect_ratio, $non_airplane_max_aspect_ratio, $non_airplane_aspect_ratio_histogram) =
+  aspect_ratio_histogram($non_airplane_records, $non_airplane_aspect_ratio_histogram_size);
+
+my $airplane_fill_histogram_size = 10;
+
+my ($airplane_min_fill, $airplane_max_fill, $airplane_fill_histogram) =
+  fill_histogram($airplane_records, $airplane_fill_histogram_size);
+
+my $non_airplane_fill_histogram_size = 20;
+
+my ($non_airplane_min_fill, $non_airplane_max_fill, $non_airplane_fill_histogram) =
+  fill_histogram($non_airplane_records, $non_airplane_fill_histogram_size);
+
 print STDERR "we have $number_airplane_records airplane records\n";
 print STDERR "we have $number_non_airplane_records non_airplane records\n";
 
@@ -61,6 +91,90 @@ import Foundation
 
 // the unix time this file was created
 let paint_group_logic_time = $epoc_seconds
+
+let airplane_min_size = $airplane_min_size
+let airplane_max_size = $airplane_max_size
+
+let non_airplane_min_size = $non_airplane_min_size
+let non_airplane_max_size = $non_airplane_max_size
+
+let airplane_min_aspect_ratio = $airplane_min_aspect_ratio
+let airplane_max_aspect_ratio = $airplane_max_aspect_ratio
+
+let non_airplane_min_aspect_ratio = $non_airplane_min_aspect_ratio
+let non_airplane_max_aspect_ratio = $non_airplane_max_aspect_ratio
+
+let airplane_min_fill = $airplane_min_fill
+let airplane_max_fill = $airplane_max_fill
+
+let non_airplane_min_fill = $non_airplane_min_fill
+let non_airplane_max_fill = $non_airplane_max_fill
+
+let airplane_size_histogram = [
+EOF
+  ;
+
+foreach my $airplane_histogram_entry (@$airplane_size_histogram) {
+  if(defined $airplane_histogram_entry) {
+    print "    $airplane_histogram_entry,\n";
+  } else {
+    print "    0,\n";
+  }
+}
+
+print "]\n\n";
+print "let non_airplane_size_histogram = [\n";
+foreach my $non_airplane_histogram_entry (@$non_airplane_size_histogram) {
+  if(defined $non_airplane_histogram_entry) {
+    print "    $non_airplane_histogram_entry,\n";
+  } else {
+    print "    0,\n";
+  }
+}
+print "]\n";
+
+print "let airplane_fill_histogram = [\n";
+
+foreach my $airplane_histogram_entry (@$airplane_fill_histogram) {
+  if(defined $airplane_histogram_entry) {
+    print "    $airplane_histogram_entry,\n";
+  } else {
+    print "    0,\n";
+  }
+}
+
+print "]\n\n";
+print "let non_airplane_fill_histogram = [\n";
+foreach my $non_airplane_histogram_entry (@$non_airplane_fill_histogram) {
+  if(defined $non_airplane_histogram_entry) {
+    print "    $non_airplane_histogram_entry,\n";
+  } else {
+    print "    0,\n";
+  }
+}
+print "]\n";
+print "let airplane_aspect_ratio_histogram = [\n";
+
+foreach my $airplane_histogram_entry (@$airplane_aspect_ratio_histogram) {
+  if(defined $airplane_histogram_entry) {
+    print "    $airplane_histogram_entry,\n";
+  } else {
+    print "    0,\n";
+  }
+}
+
+print "]\n\n";
+print "let non_airplane_aspect_ratio_histogram = [\n";
+foreach my $non_airplane_histogram_entry (@$non_airplane_aspect_ratio_histogram) {
+  if(defined $non_airplane_histogram_entry) {
+    print "    $non_airplane_histogram_entry,\n";
+  } else {
+    print "    0,\n";
+  }
+}
+print "]\n";
+
+print <<EOF
 
 func shouldPaintGroup(min_x: Int, min_y: Int,
                       max_x: Int, max_y: Int,
@@ -225,7 +339,7 @@ print <<END
     return false // guess it's not an airplane
 }
 END
-  ;
+;
 
 print STDERR "we now have ",scalar(@$airplane_records)," airplane records\n";
 print STDERR "we now have ",scalar(@$non_airplane_records)," non_airplane records\n";
@@ -245,38 +359,96 @@ print STDERR "we now have ",scalar(@$non_airplane_records)," non_airplane record
 # subs #
 ########
 
+sub size_histogram($$) {
+  my ($records, $number_buckets) = @_;
+
+  my ($min, $max) = size_range($records);
+
+  my $step = ($max - $min) / $number_buckets;
+
+  my $histogram = [];
+
+  foreach my $record (@$records) {
+    my $index = int(($record->[2] - $min)/$step);
+    $histogram->[$index]++;
+  }
+
+  return ($min, $max, $histogram);
+}
+
 sub size_range($) {
-    my ($records) = @_;
+  my ($records) = @_;
 
-    my $min = 1000000000000;
-    my $max = 0;
+  my $min = 1000000000000;
+  my $max = 0;
 
-    foreach my $record (@$records) {
-	$min = $record->[2] if($record->[2] < $min);
-	$max = $record->[2] if($record->[2] > $max);
+  foreach my $record (@$records) {
+    $min = $record->[2] if($record->[2] < $min);
+    $max = $record->[2] if($record->[2] > $max);
+  }
+
+  return ($min, $max);
+}
+
+sub fill_histogram($$) {
+  my ($records, $number_buckets) = @_;
+
+  my ($min, $max) = fill_range($records);
+
+  my $step = ($max - $min) / $number_buckets;
+
+  my $histogram = [];
+
+  foreach my $record (@$records) {
+    my $width = $record->[0];
+    my $height = $record->[1];
+    my $size = $record->[2];
+    if ($width != 0 && $height != 0) {
+      my $amt_pct = $size/($width*$height)*100;
+      my $index = int(($amt_pct - $min)/$step);
+      $histogram->[$index]++;
     }
+  }
 
-    return ($min, $max);
+  return ($min, $max, $histogram);
 }
 
 sub fill_range($) {
-    my ($records) = @_;
+  my ($records) = @_;
 
-    my $min = 1000000000000;
-    my $max = 0;
+  my $min = 1000000000000;
+  my $max = 0;
 
-    foreach my $record (@$records) {
-	my $width = $record->[0];
-	my $height = $record->[1];
-	my $size = $record->[2];
-	if($width != 0 && $height != 0) {
-	    my $amt_pct = $size/($width*$height)*100;
-	    $min = $amt_pct if($amt_pct < $min);
-	    $max = $amt_pct if($amt_pct > $max);
-	}
+  foreach my $record (@$records) {
+    my $width = $record->[0];
+    my $height = $record->[1];
+    my $size = $record->[2];
+    if ($width != 0 && $height != 0) {
+      my $amt_pct = $size/($width*$height)*100;
+      $min = $amt_pct if($amt_pct < $min);
+      $max = $amt_pct if($amt_pct > $max);
     }
+  }
 
-    return ($min, $max);
+  return ($min, $max);
+}
+
+sub aspect_ratio_histogram($$) {
+  my ($records, $number_buckets) = @_;
+
+  my ($min, $max) = aspect_range($records);
+
+  my $step = ($max - $min) / $number_buckets;
+
+  my $histogram = [];
+
+  foreach my $record (@$records) {
+    my $aspect = aspect_ratio_for_record($record);
+    my $index = int(($aspect - $min)/$step);
+    $histogram->[$index]++;
+  }
+
+  return ($min, $max, $histogram);
 }
 
 sub aspect_ratio_for_record($) {
