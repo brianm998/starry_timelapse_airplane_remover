@@ -240,7 +240,7 @@ class KnownOutlierGroupExtractor : NighttimeAirplaneRemover {
                             let new_mask = ImageMask(withType: .airplanes)
                             new_mask.leftX = x
                             new_mask.topY = y
-                            Log.e("new airplane mask starting @ \(x), \(y)")
+                            Log.d("new airplane mask starting @ \(x), \(y)")
                             airplane_groups.append(new_mask)
                             current_mask = new_mask
                         }
