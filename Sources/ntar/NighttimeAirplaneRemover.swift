@@ -119,7 +119,7 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
         Log.d("frame \(frame_index) populating the outlier map")
 
         // almost all time is spent here
-        await frame_plane_remover.populateOutlierMap() 
+        frame_plane_remover.populateOutlierMap() 
 
         let time_2 = NSDate().timeIntervalSince1970
         let interval2 = String(format: "%0.1f", time_2 - start_time)
@@ -148,7 +148,7 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
         let interval5 = String(format: "%0.1f", time_5 - start_time)
         Log.d("frame \(frame_index) painting over airplane streaks after \(interval5)s")
         
-        await frame_plane_remover.paintOverAirplanes()
+        frame_plane_remover.paintOverAirplanes()
         
         let time_6 = NSDate().timeIntervalSince1970
         let interval6 = String(format: "%0.1f", time_6 - start_time)

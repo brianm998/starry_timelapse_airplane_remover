@@ -82,8 +82,8 @@ class FrameAirplaneRemover {
         Log.d("frame \(frame_index) got image data")
     }
 
-    // this is still the slowest part of the process, but is now about 2-3x faster than before
-    func populateOutlierMap() async {
+    // this is still the slowest part of the process, but is now about 10x faster than before
+    func populateOutlierMap() {
         let start_time = NSDate().timeIntervalSince1970
         // compare pixels at the same image location in adjecent frames
         // detect Outliers which are much more brighter than the adject frames
@@ -332,7 +332,7 @@ class FrameAirplaneRemover {
     }
 
     // this method first analyzises the outlier groups and then paints over them
-    func paintOverAirplanes() async {
+    func paintOverAirplanes() {
 
         var names_of_groups_to_paint: [String] = []
         var should_paint: [String:Bool] = [:]
