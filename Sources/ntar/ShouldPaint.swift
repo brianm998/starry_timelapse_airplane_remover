@@ -1,13 +1,13 @@
 import Foundation
 
-// generated on Thu Oct 20 15:42:54 PDT 2022
+// generated on Thu Oct 20 20:02:15 PDT 2022
 
-// data used from 114 airplane records and 910950 non airplane records
+// data used from 137 airplane records and 1087017 non airplane records
 
 // this is auto generated code, run regenerate_shouldPaint.sh to remake it, DO NOT EDIT BY HAND
 
 // the unix time this file was created
-let paint_group_logic_time = 1666305774
+let paint_group_logic_time = 1666321335
 
 func shouldPaintGroup(min_x: Int, min_y: Int,
                       max_x: Int, max_y: Int,
@@ -33,27 +33,27 @@ func shouldPaintGroup(min_x: Int, min_y: Int,
     }
 
     // outlier groups smaller aren't airplanes
-    if(group_size < 55) { return false } // not airplane
+    if(group_size < 20) { return false } // not airplane
 
     // outlier groups larger are airplanes
     if(group_size > 1432) { return true } // is airplane
 
     // outlier groups with a smaller aspect ratio are airplanes
-    if(aspect_ratio < 0.125) { return true } // is airplane
+    if(aspect_ratio < 0.0681818181818182) { return true } // is airplane
 
     // outlier groups with a higher fill amount aren't airplanes
-    if(amount_filled > 0.502463054187192) { return false } // notAirplane
+    if(amount_filled > 0.392592592592593) { return false } // notAirplane
 
     // outlier groups with a lower fill amount aren't airplanes
-    if(amount_filled < 0.15264367816092) { return false } // notAirplane
+    if(amount_filled < 0.312599681020734) { return false } // notAirplane
 
     // outlier groups with a larger aspect ratio aren't airplanes
-    if(aspect_ratio > 0.272727272727273) { return false } // notAirplane
+    if(aspect_ratio > 0.137931034482759) { return false } // notAirplane
 
     //  groups with a smaller aspect ratio are airplanes
-    if(aspect_ratio < 0.120689655172414) { return true } // airplane
+    if(aspect_ratio < 0.0658682634730539) { return true } // airplane
 
-    // with 0.272727272727273 > 0.120689655172414,
+    // with 0.137931034482759 > 0.0658682634730539,
     // no outlier groups from the testing group reached this point
 
     Log.w("unable to properly detect outlier with width \(bounding_box_width) height \(bounding_box_height) and size \(group_size) further data collection and refinement in categorize.pl is necessary to resolve this")
