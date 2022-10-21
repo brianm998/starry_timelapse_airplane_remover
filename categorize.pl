@@ -2,7 +2,14 @@
 
 use strict;
 
-# this reads in csv data like this:
+# improvements:
+
+# make predections, not hard decisions about data
+# include how close to other outlier groups this may be (i.e. in a line)
+#  - would need to have the CSV files categorized by image for this
+
+
+# this script reads some number of csv records from STDIN like this:
 
 # 56,17,227,1
 # 19,24,143,0
@@ -10,18 +17,14 @@ use strict;
 # which is
 # width,height,size,is_airplane
 
+# then it outputs to STDOUT a swift file based upon this dataset which can categorize new input data
+
 my $airplane_records = [];
 my $non_airplane_records = [];
 
 my $mode = shift;
 
-my $code_only = 0;
-
 # XXX use STDERR for non-swift output
-
-# when run without this arg show debug info that helps improve the alg with more data
-# when run with this arg only output the generated swift code
-$code_only = 1 if($mode eq '--generate-swift');
 
 # read all csv records from STDIN
 while (<>) {
@@ -38,10 +41,8 @@ while (<>) {
 my $number_airplane_records = scalar(@$airplane_records);
 my $number_non_airplane_records = scalar(@$non_airplane_records);
 
-unless ($code_only) {
-  print "we have $number_airplane_records airplane records\n";
-  print "we have $number_non_airplane_records non_airplane records\n";
-}
+print STDERR "we have $number_airplane_records airplane records\n";
+print STDERR "we have $number_non_airplane_records non_airplane records\n";
 
 my $date = `date`;
 chomp $date;
@@ -91,10 +92,8 @@ my ($airplane_min_size, $airplane_max_size) = size_range($airplane_records);
 my ($non_airplane_min_size, $non_airplane_max_size) = size_range($non_airplane_records);
 
 
-unless ($code_only) {
-  print("    airplanes were [$airplane_min_size, $airplane_max_size] in size out of ",scalar(@$airplane_records)," records\n");
-  print("non airplanes were [$non_airplane_min_size, $non_airplane_max_size] in size of ",scalar(@$non_airplane_records)," records\n");
-}
+print STDERR ("    airplanes were [$airplane_min_size, $airplane_max_size] in size out of ",scalar(@$airplane_records)," records\n");
+print STDERR ("non airplanes were [$non_airplane_min_size, $non_airplane_max_size] in size of ",scalar(@$non_airplane_records)," records\n");
 
 print "    // outlier groups smaller aren't airplanes\n";
 print "    if(group_size < $airplane_min_size) { return false } // not airplane\n\n";
@@ -102,10 +101,8 @@ print "    // outlier groups larger are airplanes\n";
 print "    if(group_size > $non_airplane_max_size) { return true } // is airplane\n\n";
 
 
-unless ($code_only) {
-  print "there is a no gap between airplanes and non airplanes\n";
-  print "there are both airplanes and not airplanes between sizes $airplane_min_size and $non_airplane_max_size\n";
-}
+print STDERR "there is a no gap between airplanes and non airplanes\n";
+print STDERR "there are both airplanes and not airplanes between sizes $airplane_min_size and $non_airplane_max_size\n";
 
 my $new_airplane_arr = [];
 
@@ -121,17 +118,15 @@ foreach my $record (@$non_airplane_records) {
 }
 $non_airplane_records = $new_non_airplane_arr;
 
-unless ($code_only) {
-  print "we now have ",scalar(@$airplane_records)," airplane records\n";
-  print "we now have ",scalar(@$non_airplane_records)," non_airplane records\n";
-}
+print STDERR "we now have ",scalar(@$airplane_records)," airplane records\n";
+print STDERR "we now have ",scalar(@$non_airplane_records)," non_airplane records\n";
+
 my ($airplane_min_aspect, $airplane_max_aspect) = aspect_range($airplane_records);
 my ($non_airplane_min_aspect, $non_airplane_max_aspect) = aspect_range($non_airplane_records);
 
-unless ($code_only) {
-  print("    airplanes were [$airplane_min_aspect, $airplane_max_aspect] in aspect out of ",scalar(@$airplane_records)," records\n");
-  print("non airplanes were [$non_airplane_min_aspect, $non_airplane_max_aspect] in aspect of ",scalar(@$non_airplane_records)," records\n");
-}
+print STDERR "    airplanes were [$airplane_min_aspect, $airplane_max_aspect] in aspect out of ",scalar(@$airplane_records)," records\n";
+print STDERR "non airplanes were [$non_airplane_min_aspect, $non_airplane_max_aspect] in aspect of ",scalar(@$non_airplane_records)," records\n";
+
 
 # now filter airplanes on aspect ratio
 
@@ -145,17 +140,13 @@ foreach my $record (@$airplane_records) {
 }
 $airplane_records = $new_airplane_arr;
 
-unless ($code_only) {
-  print "we now have ",scalar(@$airplane_records)," airplane records\n";
-}
+print STDERR "we now have ",scalar(@$airplane_records)," airplane records\n";
 
 my ($airplane_min_fill, $airplane_max_fill) = fill_range($airplane_records);
 my ($non_airplane_min_fill, $non_airplane_max_fill) = fill_range($non_airplane_records);
 
-unless ($code_only) {
-  print("    airplanes were [$airplane_min_fill, $airplane_max_fill] in fill out of ",scalar(@$airplane_records)," records\n");
-  print("non airplanes were [$non_airplane_min_fill, $non_airplane_max_fill] in fill of ",scalar(@$non_airplane_records)," records\n");
-}
+print STDERR "    airplanes were [$airplane_min_fill, $airplane_max_fill] in fill out of ",scalar(@$airplane_records)," records\n";
+print STDERR "non airplanes were [$non_airplane_min_fill, $non_airplane_max_fill] in fill of ",scalar(@$non_airplane_records)," records\n";
 
 # now filter on fill percentage
 
@@ -180,31 +171,26 @@ foreach my $record (@$non_airplane_records) {
 }
 $non_airplane_records = $new_non_airplane_arr;
 
-unless ($code_only) {
-  print "we now have ",scalar(@$non_airplane_records)," non_airplane records\n";
-}
+print STDERR "we now have ",scalar(@$non_airplane_records)," non_airplane records\n";
 
 ($airplane_min_size, $airplane_max_size) = size_range($airplane_records);
 ($non_airplane_min_size, $non_airplane_max_size) = size_range($non_airplane_records);
 
-unless ($code_only) {
-  print("    airplanes were [$airplane_min_size, $airplane_max_size] in size out of ",scalar(@$airplane_records)," records\n");
-  print("non airplanes were [$non_airplane_min_size, $non_airplane_max_size] in size of ",scalar(@$non_airplane_records)," records\n");
-}
+print STDERR "    airplanes were [$airplane_min_size, $airplane_max_size] in size out of ",scalar(@$airplane_records)," records\n";
+print STDERR "non airplanes were [$non_airplane_min_size, $non_airplane_max_size] in size of ",scalar(@$non_airplane_records)," records\n";
 
 ($airplane_min_fill, $airplane_max_fill) = fill_range($airplane_records);
 ($non_airplane_min_fill, $non_airplane_max_fill) = fill_range($non_airplane_records);
-unless ($code_only) {
-  print("    airplanes were [$airplane_min_fill, $airplane_max_fill] in fill out of ",scalar(@$airplane_records)," records\n");
-  print("non airplanes were [$non_airplane_min_fill, $non_airplane_max_fill] in fill of ",scalar(@$non_airplane_records)," records\n");
-}
+
+print STDERR "    airplanes were [$airplane_min_fill, $airplane_max_fill] in fill out of ",scalar(@$airplane_records)," records\n";
+print STDERR "non airplanes were [$non_airplane_min_fill, $non_airplane_max_fill] in fill of ",scalar(@$non_airplane_records)," records\n";
 
 ($airplane_min_aspect, $airplane_max_aspect) = aspect_range($airplane_records);
 ($non_airplane_min_aspect, $non_airplane_max_aspect) = aspect_range($non_airplane_records);
-unless ($code_only) {
-  print("    airplanes were [$airplane_min_aspect, $airplane_max_aspect] in aspect out of ",scalar(@$airplane_records)," records\n");
-  print("non airplanes were [$non_airplane_min_aspect, $non_airplane_max_aspect] in aspect of ",scalar(@$non_airplane_records)," records\n");
-}
+
+print STDERR "    airplanes were [$airplane_min_aspect, $airplane_max_aspect] in aspect out of ",scalar(@$airplane_records)," records\n";
+print STDERR "non airplanes were [$non_airplane_min_aspect, $non_airplane_max_aspect] in aspect of ",scalar(@$non_airplane_records)," records\n";
+
 
 print("    // outlier groups with a larger aspect ratio aren't airplanes\n");
 print("    if(aspect_ratio > $non_airplane_min_aspect) { return false } // notAirplane\n\n");
@@ -240,10 +226,10 @@ print <<END
 }
 END
   ;
-unless ($code_only) {
-  print "we now have ",scalar(@$airplane_records)," airplane records\n";
-  print "we now have ",scalar(@$non_airplane_records)," non_airplane records\n";
-}
+
+print STDERR "we now have ",scalar(@$airplane_records)," airplane records\n";
+print STDERR "we now have ",scalar(@$non_airplane_records)," non_airplane records\n";
+
 
 #    foreach my $record (@$airplane_records) {
 #      print "AR: $record->[0] $record->[1] $record->[2] $record->[3]\n";
