@@ -82,18 +82,18 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
                                   "\(self.test_paint_output_dirname)/\(base_name)" : nil
         
         // the other frames that we use to detect outliers and repaint from
-        return await self.removeAirplanes(fromImage: image,
-                                          atIndex: index,
-                                          otherFrames: otherFrames,
-                                          filename: "\(self.output_dirname)/\(base_name)",
-                                          test_paint_filename: test_paint_filename)
+        return self.removeAirplanes(fromImage: image,
+                                    atIndex: index,
+                                    otherFrames: otherFrames,
+                                    filename: "\(self.output_dirname)/\(base_name)",
+                                    test_paint_filename: test_paint_filename)
     }
 
     func removeAirplanes(fromImage image: PixelatedImage,
                          atIndex frame_index: Int,
                          otherFrames: [PixelatedImage],
                          filename: String,
-                         test_paint_filename tpfo: String?) async -> Data?
+                         test_paint_filename tpfo: String?) -> Data?
     {
         let start_time = NSDate().timeIntervalSince1970
         
