@@ -149,8 +149,8 @@ class KnownOutlierGroupExtractor : NighttimeAirplaneRemover {
                           group_name: String,
                           group_size: UInt64) -> Bool
     {
-        let width = max_x - min_x
-        let height = max_y - min_y
+        let width = max_x - min_x + 1
+        let height = max_y - min_y + 1
 
         if group_size < 4 { return false } // XXX hardcoded constant
 
@@ -195,7 +195,7 @@ class KnownOutlierGroupExtractor : NighttimeAirplaneRemover {
                     Log.i("marking group \(group_name) of size \(group_size) for NOT painting into mask \(imageMask) [\(imageMask.leftX), \(imageMask.topY)], [\(imageMask.rightX), \(imageMask.bottomY)]")
                 }
                 self.write_to_csv(width: width, height: height,
-                              group_size: group_size, type: .noAirplanes)
+                                  group_size: group_size, type: .noAirplanes)
             }
         }
 
