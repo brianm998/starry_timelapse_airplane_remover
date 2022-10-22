@@ -1,13 +1,13 @@
 import Foundation
 
-// generated on Fri Oct 21 21:14:18 PDT 2022
+// generated on Fri Oct 21 21:20:38 PDT 2022
 
 // data used from 140 airplane records and 1164143 non airplane records
 
 // this is auto generated code, run regenerate_shouldPaint.sh to remake it, DO NOT EDIT BY HAND
 
 // the unix time this file was created
-let paint_group_logic_time = 1666412058
+let paint_group_logic_time = 1666412438
 
 let airplane_min_size = 20
 let airplane_max_size = 7502
@@ -144,14 +144,14 @@ func shouldPaintGroup(min_x: Int, min_y: Int,
                       group_name: String,
                       group_size: UInt64) -> Bool
 {
+    let bounding_box_width = max_x - min_x + 1
+    let bounding_box_height = max_y - min_y + 1
+
     // the size of the bounding box in number of pixels
-    let max_pixels = (max_x-min_x)*(max_y-min_y)
+    let max_pixels = bounding_box_width * bounding_box_height
 
     // how much (betwen 0 and 1) of the bounding box is filled by outliers?
     let amount_filled = Double(group_size)/Double(max_pixels)
-
-    let bounding_box_width = max_x-min_x
-    let bounding_box_height = max_y-min_y
 
     // the aspect ratio of the bounding box.
     // 1 is square, closer to zero is more regangular.

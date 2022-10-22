@@ -181,14 +181,14 @@ func shouldPaintGroup(min_x: Int, min_y: Int,
                       group_name: String,
                       group_size: UInt64) -> Bool
 {
+    let bounding_box_width = max_x - min_x + 1
+    let bounding_box_height = max_y - min_y + 1
+
     // the size of the bounding box in number of pixels
-    let max_pixels = (max_x-min_x)*(max_y-min_y)
+    let max_pixels = bounding_box_width * bounding_box_height
 
     // how much (betwen 0 and 1) of the bounding box is filled by outliers?
     let amount_filled = Double(group_size)/Double(max_pixels)
-
-    let bounding_box_width = max_x-min_x
-    let bounding_box_height = max_y-min_y
 
     // the aspect ratio of the bounding box.
     // 1 is square, closer to zero is more regangular.
