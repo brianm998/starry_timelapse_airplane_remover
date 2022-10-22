@@ -23,8 +23,6 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
     
     let test_paint: Bool
 
-    var loop_forever: Bool = false
-    
     var should_paint_group: ((Int, Int, Int, Int, String, UInt64, Int) -> Bool)?
     
     init(imageSequenceDirname image_sequence_dirname: String,
@@ -109,10 +107,6 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
             fatalError("FAILED")
         }
 
-        if loop_forever {
-            frame_plane_remover.loop_forever = true
-        }
-        
         let time_1 = NSDate().timeIntervalSince1970
         let interval1 = String(format: "%0.1f", time_1 - start_time)
         

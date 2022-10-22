@@ -33,8 +33,6 @@ class FrameAirplaneRemover {
 
     var should_paint_group: ((Int, Int, Int, Int, String, UInt64, Int) -> Bool)?
 
-    var loop_forever = false
-    
     init?(fromImage image: PixelatedImage,
           atIndex frame_index: Int,
           otherFrames: [PixelatedImage],
@@ -212,8 +210,6 @@ class FrameAirplaneRemover {
                     pending_outliers[pending_outlier_insert_index] = index;
                     pending_outlier_insert_index += 1
                     
-                    let max_loop_count = UInt32.max
-    
                     var loop_count: UInt64 = 0
                                     
                     while pending_outlier_insert_index != pending_outlier_access_index {
@@ -223,10 +219,6 @@ class FrameAirplaneRemover {
                             Log.d("frame \(frame_index) looping \(loop_count) times \(pending_outliers.count) pending outliers group_size \(group_size)")
                         }
     
-                        if !loop_forever && loop_count > max_loop_count {
-                            Log.e("frame \(frame_index) bailing out after \(loop_count) loops")
-                            break
-                        }
                         let next_outlier_index = pending_outliers[pending_outlier_access_index]
                         //Log.d("next_outlier_index \(next_outlier_index)")
                         
