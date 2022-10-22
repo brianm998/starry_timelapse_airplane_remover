@@ -35,7 +35,8 @@ todo:
    - recompress processed image sequence w/ ffmpeg with same parameters as before
    - remove image sequence dir
  - detect idle cpu % and use max cpu% instead of max % of frames
-
+ - maybe just always comare against a single frame? (faster, not much difference?
+ - loading the layer mask could be faster
 
    group painting criteria:
      - group size in pix2els 
@@ -63,6 +64,12 @@ todo:
      - what frame was it on
      - where was it in the frame?
      - an image of it would be ideal, just the outlier pixels within the bounding box
+
+
+   - next steps:
+     - fix test_small_medium, it's not catching the one real plane
+     - use that as a test-bed to re-write the image access logic to not use objects
+     
 */
 
 Log.handlers = 
@@ -83,9 +90,9 @@ if CommandLine.arguments.count < 1 {
             if let image = PixelatedImage.getImage(withName: layer_mask_image_name) {
                 // this is a data gathering path 
 
-                let dispatchGroup = DispatchGroup()
-                dispatchGroup.enter()
-                Task {
+//                let dispatchGroup = DispatchGroup()
+//                dispatchGroup.enter()
+//                Task {
 
                     var parts = first_command_line_arg.components(separatedBy: "/")
                     parts.removeLast()
@@ -94,12 +101,11 @@ if CommandLine.arguments.count < 1 {
                     let eraser = KnownOutlierGroupExtractor(layerMask: image,
                                                             imageSequenceDirname: path,
                                                             maxConcurrent: 24,
-                                                            // minTrailLength: 50 // no falses, some missed
                                                             maxPixelDistance: 7200,
                                                             padding: 0,
                                                             testPaint: true)
 
-                    await eraser.readMasks(fromImage: image)
+                    _ = eraser.readMasks(fromImage: image)
             
                     // next step is to refactor group selection work from FrameAirplaneRemover:328
                     // into a method, and then override that in KnownOutlierGroupExtractor to
@@ -112,9 +118,9 @@ if CommandLine.arguments.count < 1 {
                     // all other image groups inside any group are considered non-airplane
                     // perhaps threshold above 5 pixels or so
                     
-                    dispatchGroup.leave()
-                }
-                dispatchGroup.wait()
+//                    dispatchGroup.leave()
+//                }
+//                dispatchGroup.wait()
 
             } else {
                 Log.e("can't load \(layer_mask_image_name)")
@@ -135,8 +141,7 @@ if CommandLine.arguments.count < 1 {
         if #available(macOS 10.15, *) {
             let dirname = "\(path)/\(input_image_sequence_dirname)"
             let eraser = NighttimeAirplaneRemover(imageSequenceDirname: dirname,
-                                                  maxConcurrent: 24,
-                                                  // minTrailLength: 50 // no falses, some missed
+                                                  maxConcurrent: 30,
                                                   maxPixelDistance: 7200,
                                                   padding: 0,
                                                   testPaint: true)

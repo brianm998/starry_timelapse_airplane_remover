@@ -159,14 +159,14 @@ class KnownOutlierGroupExtractor : NighttimeAirplaneRemover {
         }
         var should_paint: Bool = false
 
-        var was_part_of_group = false
+        //var was_part_of_group = false
         
         airplane_groups.forEach { imageMask in
             if group_size > 100 {
                 Log.d("airplane image mask [\(imageMask.leftX), \(imageMask.topY)], [\(imageMask.rightX), \(imageMask.bottomY)] group [(\(min_x), \(min_y))], [\(max_x), \(max_y)]")
             }
             if imageMask.fullyContains(min_x: min_x, min_y: min_y, max_x: max_x, max_y: max_y) {
-                was_part_of_group = true
+                //was_part_of_group = true
                 if !has_airline_already.contains(imageMask) {
                     Log.i("marking group \(group_name) of size \(group_size) for painting into mask \(imageMask) [\(imageMask.leftX), \(imageMask.topY)], [\(imageMask.rightX), \(imageMask.bottomY)]")
                     has_airline_already.insert(imageMask)
@@ -204,9 +204,7 @@ class KnownOutlierGroupExtractor : NighttimeAirplaneRemover {
         return should_paint
     }
 
-    // XXX this method is fucked up.
-    // it's not reading the masks correctly, and the output data is wrong as a result
-    func readMasks(fromImage image: PixelatedImage) async -> [MaskType:[ImageMask]] {
+    func readMasks(fromImage image: PixelatedImage) -> [MaskType:[ImageMask]] {
         // first read the layer mask
         
         var current_mask: ImageMask?

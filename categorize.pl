@@ -267,16 +267,16 @@ print STDERR "non airplanes were [$non_airplane_min_fill, $non_airplane_max_fill
 $new_non_airplane_arr = [];
 
 print("    // outlier groups with a higher fill amount aren't airplanes\n");
-print("    if(amount_filled > ",$airplane_max_fill/100,") { return false } // notAirplane\n\n");
+print("    if(amount_filled > ",$airplane_max_fill,") { return false } // notAirplane\n\n");
 print("    // outlier groups with a lower fill amount aren't airplanes\n");
-print("    if(amount_filled < ",$airplane_min_fill/100,") { return false } // notAirplane\n\n");
+print("    if(amount_filled < ",$airplane_min_fill,") { return false } // notAirplane\n\n");
 
 foreach my $record (@$non_airplane_records) {
   my $width = $record->[0];
   my $height = $record->[1];
   my $size = $record->[2];
   if ($width != 0 && $height != 0) {
-    my $amt_pct = $size/($width*$height)*100;
+    my $amt_pct = $size/($width*$height);
 
     if ($amt_pct < $airplane_max_fill && $amt_pct > $airplane_min_fill) {
       push @$new_non_airplane_arr, $record;
@@ -404,7 +404,7 @@ sub fill_histogram($$) {
     my $height = $record->[1];
     my $size = $record->[2];
     if ($width != 0 && $height != 0) {
-      my $amt_pct = $size/($width*$height)*100;
+      my $amt_pct = $size/($width*$height);
       my $index = int(($amt_pct - $min)/$step);
       $histogram->[$index]++;
     }
@@ -424,7 +424,10 @@ sub fill_range($) {
     my $height = $record->[1];
     my $size = $record->[2];
     if ($width != 0 && $height != 0) {
-      my $amt_pct = $size/($width*$height)*100;
+      my $amt_pct = $size/($width*$height);
+      if($amt_pct > 1.0) {
+	print STDERR "amt_pct $amt_pct $width $height $size\n";
+      }
       $min = $amt_pct if($amt_pct < $min);
       $max = $amt_pct if($amt_pct > $max);
     }

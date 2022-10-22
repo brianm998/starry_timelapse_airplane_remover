@@ -89,8 +89,6 @@ class FrameAirplaneRemover {
         // detect Outliers which are much more brighter than the adject frames
         let orig_data = image.raw_image_data
 
-        let bitsPerComponent = image.bitsPerComponent
-        
         let other_data_1 = otherFrames[0].raw_image_data
         var other_data_2 = Data() // dummy backup 
         var have_two_other_frames = false
@@ -208,19 +206,21 @@ class FrameAirplaneRemover {
         Log.d("frame \(frame_index) labeling adjecent outliers")
 
         // then label all adject outliers
+        // XXX this logic is wrong, and can produce a group_size larger than the bounding
+        // box of all it's members
         for (outlier) in outlier_list {
-            if outlier.tag == nil {
+            if outlier.groupName == nil { // not part of a group yet
                 var group_size: UInt64 = 0
                 // tag this virgin outlier with its own key
                 let outlier_key = "\(outlier.x),\(outlier.y)"; // arbitrary but needs to be unique
                 //Log.d("creating virgin outlier key \(outlier_key)")
-                outlier.tag = outlier_key
                 group_size += 1
+                outlier.groupName = outlier_key
                 
-                var pending_outliers = outlier.taglessNeighbors
+                var pending_outliers = outlier.grouplessNeighbors
                 // tag all neighbers as part of this same Outlier group
                 pending_outliers.forEach { pending_outlier in
-                    pending_outlier.tag = outlier_key
+                    pending_outlier.groupName = outlier_key
                 }
 
                 //Log.d("pending_outliers \(pending_outliers)")
@@ -251,18 +251,18 @@ class FrameAirplaneRemover {
                     }                    
                     //let next_outlier = pending_outliers.removeFirst()
                     let next_outlier = pending_outliers.removeLast() // XXX does this help?
-                    if next_outlier.tag != nil {
+                    if next_outlier.groupName != nil {
                         group_size += 1
 
-                        let more_pending_outliers = next_outlier.taglessNeighbors
+                        let more_pending_outliers = next_outlier.grouplessNeighbors
                         more_pending_outliers.forEach { pending_outlier in
-                            pending_outlier.tag = outlier_key
+                            pending_outlier.groupName = outlier_key
                         }
 
                         //Log.d("more_pending_outliers \(more_pending_outliers)")
                         pending_outliers += more_pending_outliers
                     } else {
-                        Log.w("next outlier has tag \(next_outlier.tag)")
+                        Log.w("next outlier has groupName \(String(describing: next_outlier.groupName))")
                         fatalError("FUCK")
                     }
                 }
@@ -325,7 +325,7 @@ class FrameAirplaneRemover {
                                         minNeighbors: 20 /*min_group_trail_length*/)
                     {
                         let padding = Outlier(x: x, y: y, amount: 0)
-                        padding.tag = bigTag
+                        padding.groupName = bigTag
                         outliers[x][y] = padding
                         outlier_list.append(padding)
                     }
@@ -351,7 +351,7 @@ class FrameAirplaneRemover {
         for x in 0 ..< width {
             for y in 0 ..< height { // XXX heap corruption :(
                 if let outlier = outliers[x][y],
-                   let group = outlier.tag
+                   let group = outlier.groupName
                 {
                     if let min_x = group_min_x[group] {
                         if(outlier.x < min_x) {
@@ -426,7 +426,7 @@ class FrameAirplaneRemover {
         
         // for each outlier, see if we should paint it, and if so, add it to the list
         for (outlier) in outlier_list {
-            if let key = outlier.tag,
+            if let key = outlier.groupName,
                let will_paint = should_paint[key],
                will_paint
             {
@@ -516,11 +516,11 @@ func tag(within distance: UInt, ofX x: Int, andY y: Int,
             if let outlier = outliers[x_idx][y_idx],
                hypotenuse(x1: x, y1: y, x2: x_idx, y2: y_idx) <= distance,
                outlier.amount != 0,
-               let tag = outlier.tag,
-               let group_size = neighbor_groups[tag],
+               let groupName = outlier.groupName,
+               let group_size = neighbor_groups[groupName],
                group_size > min_group_trail_length // XXX this may be wrong now
             {
-                return outlier.tag
+                return outlier.groupName
             }
         }
    }

@@ -5,13 +5,13 @@ public class Outlier: Hashable, Equatable, CustomStringConvertible {
     let y: Int
     let amount: Int32
 
-    var tag: String?            // XXX rename to groupName ?
+    var groupName: String?
     
     var left: Outlier?
     var right: Outlier?
     var top: Outlier?
     var bottom: Outlier?
-    
+
     public init(x: Int, y: Int, amount: Int32) {
         self.x = x
         self.y = y
@@ -29,13 +29,13 @@ public class Outlier: Hashable, Equatable, CustomStringConvertible {
             lhs.y == rhs.y
     }    
 
-    var taglessNeighbors: [Outlier] {
+    var grouplessNeighbors: [Outlier] {
         get {
             var ret: [Outlier] = []
-            if let left   = self.left,   left.tag   == nil {ret.append(left)}
-            if let right  = self.right,  right.tag  == nil {ret.append(right)}
-            if let top    = self.top,    top.tag    == nil {ret.append(top)}
-            if let bottom = self.bottom, bottom.tag == nil {ret.append(bottom)}
+            if let left   = self.left,   left.groupName   == nil {ret.append(left)}
+            if let right  = self.right,  right.groupName  == nil {ret.append(right)}
+            if let top    = self.top,    top.groupName    == nil {ret.append(top)}
+            if let bottom = self.bottom, bottom.groupName == nil {ret.append(bottom)}
             return ret
         }
     }
