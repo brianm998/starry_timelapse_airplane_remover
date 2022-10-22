@@ -20,9 +20,10 @@ class FrameAirplaneRemover {
     
     var data: Data              // a mutable copy of the original data
     var test_paint_data: Data?
-    
-    var outliers: [[Outlier?]] = [[]] // indexed by [x][y]
-    var outlier_list: [Outlier] = [] // all outliers
+
+    // one dimentional arrays indexed by y*width + x
+    var outlier_amounts: [UInt32]  // amount difference of outlier
+    var outlier_groups: [String?]  // named outlier group for each outlier
     
     // populated by pruning
     var neighbor_groups: [String: UInt64] = [:]
@@ -56,7 +57,9 @@ class FrameAirplaneRemover {
         self.bytesPerPixel = image.bytesPerPixel
         self.bytesPerRow = width*bytesPerPixel
         self.max_pixel_distance = max_pixel_distance
-        
+        self.outlier_amounts = [UInt32](repeating: 0, count: width*height)
+        self.outlier_groups = [String?](repeating: nil, count: width*height)
+    
         let _data = image.raw_image_data
         
         // copy the original image data as adjecent frames need
@@ -72,12 +75,6 @@ class FrameAirplaneRemover {
                                                           CFDataGetLength(_data as CFData),
                                                           _data as CFData) as? Data else { return nil }
             self.test_paint_data = test_data
-        }
-        for x in 0 ..< width {
-            outliers.append([])
-            for _ in 0 ..< height { // crash
-                outliers[x].append(nil)
-            }
         }
         Log.d("frame \(frame_index) got image data")
     }
@@ -169,11 +166,10 @@ class FrameAirplaneRemover {
                                 total_difference /= 2
                             }
 
+                            let amount_index = Int(y*width+x)
                             // mark this spot as an outlier if it's too bright
-                            if total_difference > max_pixel_distance {
-                                let new_outlier = Outlier(x: x, y: y, amount: total_difference)
-                                outliers[x][y] = new_outlier
-                                outlier_list.append(new_outlier)
+                            if total_difference > 0  {
+                                outlier_amounts[amount_index] = UInt32(total_difference)
                             }
                         }
                     }
@@ -186,88 +182,113 @@ class FrameAirplaneRemover {
     }
 
     func prune() {
-        Log.i("frame \(frame_index) pruning \(outlier_list.count) outliers")
+        Log.i("frame \(frame_index) pruning outliers")
         
-        // go through the outlier_list and link together all the outliers that are adject to eachother,
+        // go through the outliers and link together all the outliers that are adject to eachother,
         // outputting a mapping of group name to size
         
-        // first link all outliers to their direct neighbors
-        for (outlier) in outlier_list {
-            let x = outlier.x
-            let y = outlier.y
-            if y > 0,          let neighbor = outliers[x][y-1] { outlier.top    = neighbor }
-            if x > 0,          let neighbor = outliers[x-1][y] { outlier.left   = neighbor }
-            if x < width - 1,  let neighbor = outliers[x+1][y] { outlier.bottom = neighbor }
-            if y < height - 1, let neighbor = outliers[x][y+1] { outlier.right  = neighbor }
-        }
-    
         var individual_group_counts: [String: UInt64] = [:]
-    
+
+        var pending_outliers: [Int]
+        var pending_outlier_insert_index = 0;
+        var pending_outlier_access_index = 0;
+       
+        let array = [Int](repeating: -1, count: width*height) 
+        pending_outliers = array
+
         Log.d("frame \(frame_index) labeling adjecent outliers")
 
         // then label all adject outliers
-        // XXX this logic is wrong, and can produce a group_size larger than the bounding
-        // box of all it's members
-        for (outlier) in outlier_list {
-            if outlier.groupName == nil { // not part of a group yet
-                var group_size: UInt64 = 0
-                // tag this virgin outlier with its own key
-                let outlier_key = "\(outlier.x),\(outlier.y)"; // arbitrary but needs to be unique
-                //Log.d("creating virgin outlier key \(outlier_key)")
-                group_size += 1
-                outlier.groupName = outlier_key
-                
-                var pending_outliers = outlier.grouplessNeighbors
-                // tag all neighbers as part of this same Outlier group
-                pending_outliers.forEach { pending_outlier in
-                    pending_outlier.groupName = outlier_key
-                }
-
-                //Log.d("pending_outliers \(pending_outliers)")
-                
-                // there is a non-linear running time problem when pending_outliers gets too big
-                // not sure exactly why yet, but max_loop_count is necessary to keep things
-                // from taking a _really_ long time.  Same result, just more than one outlier group.
-                // keeping max_loop_count big enough means that they still get painted on.
-                // this is really an edge case with car headlights.
-
-                // XXX figure this out, it's causing problems :(
-                // specifically each large group needs to not be separate
-                
-                let max_loop_count = 2000//min_group_trail_length*min_group_trail_length*20
-
-                var loop_count: UInt64 = 0
-                                
-                while pending_outliers.count > 0 {
-                    //Log.d("pending_outliers \(pending_outliers)")
-                    loop_count += 1
-                    if loop_count % 1000 == 0 {
-                        Log.d("frame \(frame_index) looping \(loop_count) times \(pending_outliers.count) pending outliers group_size \(group_size)")
-                    }
-
-                    if !loop_forever && loop_count > max_loop_count {
-                        Log.w("frame \(frame_index) bailing out after \(loop_count) loops")
-                        break
-                    }                    
-                    //let next_outlier = pending_outliers.removeFirst()
-                    let next_outlier = pending_outliers.removeLast() // XXX does this help?
-                    if next_outlier.groupName != nil {
-                        group_size += 1
-
-                        let more_pending_outliers = next_outlier.grouplessNeighbors
-                        more_pending_outliers.forEach { pending_outlier in
-                            pending_outlier.groupName = outlier_key
+        for (index, outlier_amount) in outlier_amounts.enumerated() {
+            if outlier_amount > max_pixel_distance {
+                let outlier_groupname = outlier_groups[index]
+                if outlier_groupname == nil { // not part of a group yet
+                    var group_size: UInt64 = 0
+                    // tag this virgin outlier with its own key
+                    
+                    let outlier_key = "\(index % width),\(index / width)"; // arbitrary but needs to be unique
+                    //Log.d("initial index = \(index)")
+                    outlier_groups[index] = outlier_key
+                    pending_outliers[pending_outlier_insert_index] = index;
+                    pending_outlier_insert_index += 1
+                    
+                    let max_loop_count = UInt32.max
+    
+                    var loop_count: UInt64 = 0
+                                    
+                    while pending_outlier_insert_index != pending_outlier_access_index {
+                        //Log.d("pending_outlier_insert_index \(pending_outlier_insert_index) pending_outlier_access_index \(pending_outlier_access_index)")
+                        loop_count += 1
+                        if loop_count % 1000 == 0 {
+                            Log.d("frame \(frame_index) looping \(loop_count) times \(pending_outliers.count) pending outliers group_size \(group_size)")
                         }
-
-                        //Log.d("more_pending_outliers \(more_pending_outliers)")
-                        pending_outliers += more_pending_outliers
-                    } else {
-                        Log.w("next outlier has groupName \(String(describing: next_outlier.groupName))")
-                        fatalError("FUCK")
+    
+                        if !loop_forever && loop_count > max_loop_count {
+                            Log.e("frame \(frame_index) bailing out after \(loop_count) loops")
+                            break
+                        }
+                        let next_outlier_index = pending_outliers[pending_outlier_access_index]
+                        //Log.d("next_outlier_index \(next_outlier_index)")
+                        
+                        pending_outlier_access_index += 1
+                        if let _ = outlier_groups[next_outlier_index] {
+                            group_size += 1
+                            
+                            let outlier_x = next_outlier_index % width;
+                            let outlier_y = next_outlier_index / width;
+                            
+                            if outlier_x > 0 { // add left neighbor
+                                let left_neighbor_index = outlier_y * width + outlier_x - 1
+                                if outlier_amounts[left_neighbor_index] > max_pixel_distance,
+                                   outlier_groups[left_neighbor_index] == nil
+                                {
+                                    pending_outliers[pending_outlier_insert_index] = left_neighbor_index
+                                    outlier_groups[left_neighbor_index] = outlier_key
+                                    pending_outlier_insert_index += 1
+                                }
+                            }
+                            
+                            if outlier_x < width - 1 { // add right neighbor
+                                let right_neighbor_index = outlier_y * width + outlier_x + 1
+                                if outlier_amounts[right_neighbor_index] > max_pixel_distance,
+                                   outlier_groups[right_neighbor_index] == nil
+                                {
+                                    pending_outliers[pending_outlier_insert_index] = right_neighbor_index
+                                    outlier_groups[right_neighbor_index] = outlier_key
+                                    pending_outlier_insert_index += 1
+                                }
+                            }
+                            
+                            if outlier_y < 0 { // add top neighbor
+                                let top_neighbor_index = (outlier_y - 1) * width + outlier_x
+                                if outlier_amounts[top_neighbor_index] > max_pixel_distance,
+                                   outlier_groups[top_neighbor_index] == nil
+                                {
+                                    pending_outliers[pending_outlier_insert_index] = top_neighbor_index
+                                    outlier_groups[top_neighbor_index] = outlier_key
+                                    pending_outlier_insert_index += 1
+                                }
+                            }
+                            
+                            if outlier_y < height - 1 { // add bottom neighbor
+                                let bottom_neighbor_index = (outlier_y + 1) * width + outlier_x
+                                if outlier_amounts[bottom_neighbor_index] > max_pixel_distance,
+                                   outlier_groups[bottom_neighbor_index] == nil
+                                {
+                                    pending_outliers[pending_outlier_insert_index] = bottom_neighbor_index
+                                    outlier_groups[bottom_neighbor_index] = outlier_key
+                                    pending_outlier_insert_index += 1
+                                }
+                            }
+                        } else {
+                            //Log.w("next outlier has groupName \(String(describing: next_outlier.groupName))")
+                            // shouldn't end up here with a group named outlier
+                            fatalError("FUCK")
+                        }
                     }
+                    //Log.d("group \(outlier_key) has \(group_size) members")
+                    individual_group_counts[outlier_key] = group_size
                 }
-
-                individual_group_counts[outlier_key] = group_size
             }
         }
         self.neighbor_groups = individual_group_counts
@@ -276,11 +297,11 @@ class FrameAirplaneRemover {
     func testPaintOutliers() {
         Log.d("frame \(frame_index) painting outliers green")
 
-        for (outlier) in outlier_list {
-            let x = outlier.x
-            let y = outlier.y
-            
-            if outlier.amount > max_pixel_distance {
+        for (index, outlier_amount) in outlier_amounts.enumerated() {
+            let x = index % width;
+            let y = index / width;
+
+            if outlier_amount > max_pixel_distance {
                 let offset = (Int(y) * bytesPerRow) + (Int(x) * bytesPerPixel)
                 
                 var nextPixel = Pixel()
@@ -298,6 +319,8 @@ class FrameAirplaneRemover {
         // add padding when desired
         // XXX this is slower than the other steps here :(
         // also not sure it's really needed
+        // rewrite this
+                  /*
         if(padding_value > 0) {
             Log.d("frame \(frame_index) adding padding")
             // XXX search the outlier map, looking for missing neighbors
@@ -332,14 +355,14 @@ class FrameAirplaneRemover {
                 }
             }
         }
+*/
     }
 
     // this method first analyzises the outlier groups and then paints over them
     func paintOverAirplanes() {
 
-        var names_of_groups_to_paint: [String] = []
+                      //var names_of_groups_to_paint: [String] = []
         var should_paint: [String:Bool] = [:]
-        var paint_list: [Outlier] = []
         Log.i("frame \(frame_index) painting")
 
         var group_min_x: [String:Int] = [:]
@@ -350,36 +373,34 @@ class FrameAirplaneRemover {
         // calculate the outer bounds of each outlier group
         for x in 0 ..< width {
             for y in 0 ..< height { // XXX heap corruption :(
-                if let outlier = outliers[x][y],
-                   let group = outlier.groupName
-                {
+                if let group = outlier_groups[y*width+x] {
                     if let min_x = group_min_x[group] {
-                        if(outlier.x < min_x) {
-                            group_min_x[group] = outlier.x
+                        if(x < min_x) {
+                            group_min_x[group] = x
                         }
                     } else {
-                        group_min_x[group] = outlier.x
+                        group_min_x[group] = x
                     }
                     if let min_y = group_min_y[group] {
-                        if(outlier.y < min_y) {
-                            group_min_y[group] = outlier.y
+                        if(y < min_y) {
+                            group_min_y[group] = y
                         }
                     } else {
-                        group_min_y[group] = outlier.y
+                        group_min_y[group] = y
                     }
                     if let max_x = group_max_x[group] {
-                        if(outlier.x > max_x) {
-                            group_max_x[group] = outlier.x
+                        if(x > max_x) {
+                            group_max_x[group] = x
                         }
                     } else {
-                        group_max_x[group] = outlier.x
+                        group_max_x[group] = x
                     }
                     if let max_y = group_max_y[group] {
-                        if(outlier.y > max_y) {
-                            group_max_y[group] = outlier.y
+                        if(y > max_y) {
+                            group_max_y[group] = y
                         }
                     } else {
-                        group_max_y[group] = outlier.y
+                        group_max_y[group] = y
                     }
                 }
             }
@@ -393,6 +414,7 @@ class FrameAirplaneRemover {
                let max_x = group_max_x[group],
                let max_y = group_max_y[group]
             {
+                //Log.d("frame \(frame_index) \(group) of size \(group_size) [\(min_x), \(min_y)] => [\(max_x), \(max_y)]")
                 if let should_paint_group = should_paint_group {
                     if should_paint_group(min_x, min_y,
                                           max_x, max_y,
@@ -402,7 +424,7 @@ class FrameAirplaneRemover {
                             Log.d("frame \(frame_index) will paint \(group) of size \(group_size) [\(min_x), \(min_y)] => [\(max_x), \(max_y)]")
                         }
                         should_paint[group] = true
-                        names_of_groups_to_paint.append(group)
+                        //names_of_groups_to_paint.append(group)
                     } else {
                         if group_size > 100 {
                             Log.d("frame \(frame_index) will NOT paint \(group) of size \(group_size) [\(min_x), \(min_y)] => [\(max_x), \(max_y)]")
@@ -414,30 +436,28 @@ class FrameAirplaneRemover {
                                         group_name: group,
                                         group_size: group_size)
                     {
-//                        Log.d("should paint \(group)")
+                        //Log.d("should paint \(group)")
                         should_paint[group] = true
-                        names_of_groups_to_paint.append(group)
+                        //names_of_groups_to_paint.append(group)
                     } else {
-//                        Log.d("should NOT paint \(group)")
+                        //Log.d("should NOT paint \(group)")
                     }
                 }
             }
         }
         
-        // for each outlier, see if we should paint it, and if so, add it to the list
-        for (outlier) in outlier_list {
-            if let key = outlier.groupName,
-               let will_paint = should_paint[key],
+        // paint over every outlier in the paint list with pixels from the adjecent frames
+        for (index, group_name) in outlier_groups.enumerated() {
+            if let group_name = group_name,
+               let will_paint = should_paint[group_name],
                will_paint
             {
-                paint_list.append(outlier)
+                let x = index % width;
+                let y = index / width;
+                paint(x: x, y: y, amount: outlier_amounts[index])
             }
         }
 
-        // paint over every outlier in the paint list with pixels from the adjecent frames
-        for (outlier) in paint_list {
-            paint(outlier: outlier)
-        }
         Log.i("frame \(frame_index) done painting")
     }
 
@@ -450,10 +470,7 @@ class FrameAirplaneRemover {
     }
 
     // paint over a selected outlier with data from pixels from adjecent frames
-    func paint(outlier: Outlier) {
-        let x = outlier.x
-        let y = outlier.y
-            
+    func paint(x: Int, y: Int, amount: UInt32) {
         var pixels_to_paint_with: [Pixel] = []
         
         // grab the pixels from the same image spot from adject frames
@@ -476,7 +493,7 @@ class FrameAirplaneRemover {
         
         // for testing, colors changed pixels
         if test_paint {
-            if outlier.amount == 0 {
+            if amount == 0 {
                 paint_pixel.blue = 0xFFFF // for padding
             } else {
                 paint_pixel.red = 0xFFFF // for unpadded changed area
@@ -493,7 +510,8 @@ class FrameAirplaneRemover {
 }
 
                   
-// used for padding          
+                  // used for padding
+                  /*
 func tag(within distance: UInt, ofX x: Int, andY y: Int,
          outliers: [[Outlier?]],
          neighborGroups neighbor_groups: [String: UInt64],
@@ -526,7 +544,7 @@ func tag(within distance: UInt, ofX x: Int, andY y: Int,
    }
    return nil
 }
-
+*/
 func hypotenuse(x1: Int, y1: Int, x2: Int, y2: Int) -> Int {
     let x_dist = Int(abs(Int32(x2)-Int32(x1)))
     let y_dist = Int(abs(Int32(y2)-Int32(y1)))
