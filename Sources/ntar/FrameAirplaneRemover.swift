@@ -4,6 +4,8 @@ import Cocoa
 
 // this class holds the logic for removing airplanes from a single frame
 
+let min_group_size = 15         // XXX
+
 @available(macOS 10.15, *)
 class FrameAirplaneRemover {
     let width: Int
@@ -22,7 +24,7 @@ class FrameAirplaneRemover {
     var test_paint_data: Data?
 
     // one dimentional arrays indexed by y*width + x
-    var outlier_amounts: [UInt32]  // amount difference of outlier
+    var outlier_amounts: [UInt32]  // amount difference of each outlier
     var outlier_groups: [String?]  // named outlier group for each outlier
     
     // populated by pruning
@@ -69,9 +71,18 @@ class FrameAirplaneRemover {
         self.data = _mut_data
               
         if test_paint {
-            guard let test_data = CFDataCreateMutableCopy(kCFAllocatorDefault,
+            guard var test_data = CFDataCreateMutableCopy(kCFAllocatorDefault,
                                                           CFDataGetLength(_data as CFData),
                                                           _data as CFData) as? Data else { return nil }
+
+            let paint_it_black = false      
+
+            if paint_it_black { // gets rid of the other image data
+                for i in 0 ..< CFDataGetLength(_data as CFData)/8 {
+                    var nextValue: UInt64 = 0x0000000000000000
+                    test_data.replaceSubrange(i*8 ..< (i*8)+8, with: &nextValue, count: 8)
+                }
+            }
             self.test_paint_data = test_data
         }
         Log.d("frame \(frame_index) got image data")
@@ -293,7 +304,11 @@ class FrameAirplaneRemover {
             let x = index % width;
             let y = index / width;
 
-            if outlier_amount > max_pixel_distance {
+            if outlier_amount > max_pixel_distance,
+               let group_name = outlier_groups[index],
+               let group_size = neighbor_groups[group_name],
+               group_size > min_group_size
+            {
                 let offset = (Int(y) * bytesPerRow) + (Int(x) * bytesPerPixel)
                 
                 var nextPixel = Pixel()
@@ -353,9 +368,8 @@ class FrameAirplaneRemover {
     // this method first analyzises the outlier groups and then paints over them
     func paintOverAirplanes() {
 
-                      //var names_of_groups_to_paint: [String] = []
         var should_paint: [String:Bool] = [:]
-        Log.i("frame \(frame_index) painting")
+        Log.i("frame \(frame_index) calculating outlier group bounds")
 
         var group_min_x: [String:Int] = [:]
         var group_min_y: [String:Int] = [:]
@@ -398,6 +412,11 @@ class FrameAirplaneRemover {
             }
         }
 
+        Log.i("frame \(frame_index) deciding paintability of outlier groups")
+
+        var polar_coord_1: [String:(theta: Double, rho: Double)] = [:]
+        var polar_coord_2: [String:(theta: Double, rho: Double)] = [:]
+        
         // sort by group size, process largest first
         let sorted_groups = neighbor_groups.sorted(by: { $0.value > $1.value })
         for(group, group_size) in sorted_groups {
@@ -406,7 +425,16 @@ class FrameAirplaneRemover {
                let max_x = group_max_x[group],
                let max_y = group_max_y[group]
             {
-                //Log.d("frame \(frame_index) \(group) of size \(group_size) [\(min_x), \(min_y)] => [\(max_x), \(max_y)]")
+                // calculate polar coordiantes for each outler group (two sets)
+                let (theta1, rho1) = polar_coords(x1: min_x, y1: min_y, x2: max_x, y2: max_y)
+                let (theta2, rho2) = polar_coords(x1: min_x, y1: max_y, x2: max_x, y2: min_y)
+                // XXX is the rho right?
+                polar_coord_1[group] = (theta1, rho1)
+                polar_coord_2[group] = (theta2, rho2)
+
+                if group_size > min_group_size {
+                    Log.d("frame \(frame_index) \(group) of size \(group_size) [\(min_x), \(min_y)] => [\(max_x), \(max_y)] theta1 \(theta1), rho1 \(rho1) theta2 \(theta2), rho2 \(rho2)")
+                }
                 if let should_paint_group = should_paint_group {
                     if should_paint_group(min_x, min_y,
                                           max_x, max_y,
@@ -416,7 +444,6 @@ class FrameAirplaneRemover {
                             Log.d("frame \(frame_index) will paint \(group) of size \(group_size) [\(min_x), \(min_y)] => [\(max_x), \(max_y)]")
                         }
                         should_paint[group] = true
-                        //names_of_groups_to_paint.append(group)
                     } else {
                         if group_size > 100 {
                             Log.d("frame \(frame_index) will NOT paint \(group) of size \(group_size) [\(min_x), \(min_y)] => [\(max_x), \(max_y)]")
@@ -430,14 +457,59 @@ class FrameAirplaneRemover {
                     {
                         //Log.d("should paint \(group)")
                         should_paint[group] = true
-                        //names_of_groups_to_paint.append(group)
                     } else {
                         //Log.d("should NOT paint \(group)")
                     }
                 }
             }
         }
+
+        Log.i("frame \(frame_index) painting expected airplane outlier groups")
+
+        // do a hough transform and compare leading outlier groups to lines in the image
         
+        var hough_data = [Bool](repeating: false, count: width*height)
+
+        // mark potential lines in the hough_data by groups larger than some size
+        for (index, group_name) in outlier_groups.enumerated() {
+            if let group_name = group_name,
+               let group_size = neighbor_groups[group_name]
+            {
+                if group_size > min_group_size { // XXX hardcoded constant
+                    hough_data[index] = true
+                }
+            }
+        }
+
+        let lines = lines_from_hough_transform(input_data: hough_data,
+                                               data_width: width,
+                                               data_height: height,
+                                               min_count: 10,
+                                               number_of_lines_returned: 20)
+
+        // to look for lines in this transform that match
+        for (name, size) in neighbor_groups {
+            if let (theta1, rho1) = polar_coord_1[name],
+               let (theta2, rho2) = polar_coord_2[name]
+            {
+                if size > min_group_size {  // XXX hardcoded constant
+                    Log.d("group \(name) of size \(size) has theta1 \(theta1), rho1 \(rho1) theta2 \(theta2), rho2 \(rho2)")
+                    for line in lines {
+                        // make final decision based upon how close these values are
+                        if theta_rho_comparison(theta1: line.theta, rho1: line.rho,
+                                                theta2: theta1, rho2: rho1) ||
+                           theta_rho_comparison(theta1: line.theta, rho1: line.rho,
+                                                theta2: theta2, rho2: rho2)
+                        {
+                            should_paint[name] = true
+                        } else {
+                            should_paint[name] = false
+                        }
+                    }
+                }
+            }
+        }
+
         // paint over every outlier in the paint list with pixels from the adjecent frames
         for (index, group_name) in outlier_groups.enumerated() {
             if let group_name = group_name,
@@ -484,7 +556,7 @@ class FrameAirplaneRemover {
                              with: &paint_value, count: raw_pixel_size_bytes)
         
         // for testing, colors changed pixels
-        if test_paint {
+        if test_paint { // XXX
             if amount == 0 {
                 paint_pixel.blue = 0xFFFF // for padding
             } else {
@@ -543,4 +615,11 @@ func hypotenuse(x1: Int, y1: Int, x2: Int, y2: Int) -> Int {
     return Int(sqrt(Float(x_dist*x_dist+y_dist*y_dist)))
 }
 
+func theta_rho_comparison(theta1: Double, rho1: Double, theta2: Double, rho2: Double) -> Bool {
+    // fu                      
+    let theta_diff = abs(theta1-theta2) // degrees
+    let rho_diff = abs(rho1-rho2)       // pixels
+
+    return theta_diff < 5 && rho_diff < 10 // XXX hardcoded constants
+}
                   

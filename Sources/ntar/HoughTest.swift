@@ -37,11 +37,11 @@ func polar_coords(x1: Int, y1: Int, x2: Int, y2: Int) -> (theta: Double, rho: Do
     return (theta: theta, rho: rho)
 }
 
-func lines_from_hough_transorm(input_data: [Bool], // indexed by y * data_width + x
-                               data_width: Int,
-                               data_height: Int,
-                               min_count: Int = 5, // lines with less counts than this aren't returned
-                               number_of_lines_returned: Int = 20) -> [Line]
+func lines_from_hough_transform(input_data: [Bool], // indexed by y * data_width + x
+                                data_width: Int,
+                                data_height: Int,
+                                min_count: Int = 5, // lines with less counts than this aren't returned
+                                number_of_lines_returned: Int = 20) -> [Line]
 {
     Log.d("doing hough transform on input data [\(data_width), \(data_height)]")
 
@@ -95,7 +95,7 @@ func lines_from_hough_transorm(input_data: [Bool], // indexed by y * data_width 
             }
             let count = counts[x][y]
             if count >= min_count { // XXX arbitrary
-                Log.i("line at (\(x), \(y)) has theta \(theta) rho \(rho) count \(count)")
+                //Log.i("line at (\(x), \(y)) has theta \(theta) rho \(rho) count \(count)")
                 lines.append(( 
                              theta: theta, // XXX small data loss in conversion
                              rho: rho,

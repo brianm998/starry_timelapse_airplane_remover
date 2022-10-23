@@ -93,7 +93,6 @@ class KnownOutlierGroupExtractor : NighttimeAirplaneRemover {
         
         self.process_only_this_index = 1
         
-        // XXX stick the output level in this file
         let output_filename = "\(image_sequence_dirname)/outlier_data_\(max_pixel_distance).csv"
 
         do {
