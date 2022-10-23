@@ -80,10 +80,11 @@ Log.handlers =
 
 let hough_test = true
 
-typealias Line = (
+// polar coordinates for right angle intersection with line from origin
+typealias Line = (                 
     theta: Double,                 // angle
     rho: Double,                   // distance
-    count: Int
+    count: Int                     // higher count is better fit for line
 )
 
 if hough_test {
@@ -146,15 +147,12 @@ if hough_test {
                         for k in 0 ..< Int(hough_width) {
                             let th = dth * Double(k)
                             let r2 = (Double(x)*cos(th) + Double(y)*sin(th))
-                            let iry = Int(hough_height/2) + Int(r2/dr + 0.5)
-                            //Log.d("\(k) \(iry)")
+                            let iry = Int(rmax + r2/dr)
                             let new_value = counts[k][iry]+1
                             counts[k][iry] = new_value
                             if new_value > max_count {
                                 max_count = new_value
                             }
-                            
-                            //Log.d("counts \(counts[k][iry])")
                         }
                     }
                 }
@@ -193,14 +191,23 @@ if hough_test {
             
             var lines: [Line] = []
 
+            let min_count = 10  // smaller ones will be ignored
+            let number_of_lines_returned = 20 // limit on sorted list of lines
+            
             for x in 0 ..< hough_width {
                 for y in 0 ..< hough_height {
                     var theta = Double(x)/2.0
                     var rho = Double(y) - rmax
 
+                    if(rho < 0) {
+                        // keeping rho positive
+                        //Log.d("reversing orig rho \(rho) theta \(theta)")
+                        rho = -rho
+                        theta = (theta + 180).truncatingRemainder(dividingBy: 360)
+                    }
                     let count = counts[x][y]
-                    if count > 50 { // XXX arbitrary
-                        Log.w("line at (\(x), \(y)) has theta \(theta) rho \(rho) count \(count)")
+                    if count >= min_count { // XXX arbitrary
+                        Log.i("line at (\(x), \(y)) has theta \(theta) rho \(rho) count \(count)")
                         lines.append(( 
                                      theta: theta, // XXX small data loss in conversion
                                      rho: rho,
@@ -216,29 +223,15 @@ if hough_test {
                 return a.count < b.count
             }
                      
-            let small_set_lines = Array<Line>(sortedLines.suffix(20).reversed())
+            let small_set_lines = Array<Line>(sortedLines.suffix(number_of_lines_returned).reversed())
 
             Log.d("lines \(small_set_lines)")
 
             for line in small_set_lines {
-                Log.d("found line with theta \(line.theta) and dist \(line.rho) count \(line.count)")
 
                 var theta = line.theta
                 var rho = line.rho
-                if(rho < 0) {
-                    rho = -rho
-                    theta = (theta + 180).truncatingRemainder(dividingBy: 360)
-                }
-                
-                let m = Double(rho) / cos(Double(theta))
-                let n = Double(rho) / sin(Double(theta))
-
-                let slope = n/m
-                let offset = -slope * m
-                
-                // slope and offset are now right
-
-                Log.d("slope \(slope) offset \(offset)")
+                Log.d("found line with theta \(theta) and dist \(rho) count \(line.count)")
             }
 
             // next step is to find the highest counts, and extraplate lines from them
