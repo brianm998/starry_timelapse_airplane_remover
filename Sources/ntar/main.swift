@@ -81,8 +81,8 @@ Log.handlers =
 let hough_test = true
 
 typealias Line = (
-    theta: Int,                 // angle
-    rho: Int,                   // distance
+    theta: Double,                 // angle
+    rho: Double,                   // distance
     count: Int
 )
 
@@ -125,7 +125,6 @@ if hough_test {
         }
         
         image.read { pixels in 
-
             var counts = [[UInt32]](repeating: [UInt32](repeating: 0, count: hough_height),
                                     count: Int(hough_width))
 
@@ -192,18 +191,23 @@ if hough_test {
              */          
 
             
-            var lines: [Line] = [Line](
-                repeating: (theta: 0, rho: 0, count: 0),
-                count: Int(hough_width * hough_height)
-            )
+            var lines: [Line] = []
 
-            for (x, row) in counts.enumerated() {
-                for (y, _) in row.enumerated() {
-                    lines[x * Int(image.width) + y]  = (
-                        theta: Int(x/2), // XXX small data loss in conversion
-                        rho: y - hough_height/2,
-                        count: Int(counts[x][y])
-                       )
+            for x in 0 ..< hough_width {
+                for y in 0 ..< hough_height {
+                    var theta = Double(x)/2.0
+                    var rho = Double(y) - rmax
+
+                    let count = counts[x][y]
+                    if count > 50 { // XXX arbitrary
+                        Log.w("line at (\(x), \(y)) has theta \(theta) rho \(rho) count \(count)")
+                        lines.append(( 
+                                     theta: theta, // XXX small data loss in conversion
+                                     rho: rho,
+                                     count: Int(counts[x][y])
+                                     ))
+                    }
+                    
                 }
             }
 
@@ -216,6 +220,31 @@ if hough_test {
 
             Log.d("lines \(small_set_lines)")
 
+            for line in small_set_lines {
+                Log.d("found line with theta \(line.theta) and dist \(line.rho) count \(line.count)")
+
+                var theta = line.theta
+                var rho = line.rho
+                if(rho < 0) {
+                    rho = -rho
+                    theta = (theta + 180).truncatingRemainder(dividingBy: 360)
+                }
+                
+                let m = Double(rho) / cos(Double(theta))
+                let n = Double(rho) / sin(Double(theta))
+
+                let slope = n/m
+                let offset = -slope * m
+                
+                // slope and offset are now right
+
+                Log.d("slope \(slope) offset \(offset)")
+            }
+
+            // next step is to find the highest counts, and extraplate lines from them
+
+            // then somehow map those back to outlier groups, using bounding pixels
+            
         }
     } else {
         Log.e("couldn't load image")
