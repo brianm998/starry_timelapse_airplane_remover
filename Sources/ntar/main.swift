@@ -78,7 +78,151 @@ Log.handlers =
     ]
 
 
-if CommandLine.arguments.count < 1 {
+let hough_test = true
+
+typealias Line = (
+    theta: Int,                 // angle
+    rho: Int,                   // distance
+    count: Int
+)
+
+if hough_test {
+    let filename = "hough_test_image.tif"
+    let output_filename = "hough_background.tif"
+    Log.d("Loading image from \(filename)")
+    
+    if #available(macOS 10.15, *),
+       let image = PixelatedImage.getImage(withName: filename),
+       let output_image = PixelatedImage.getImage(withName: output_filename)
+    {
+
+        let rmax = sqrt(Double(image.width*image.width + image.height*image.height))
+
+        Log.i("rmax \(rmax)")
+            
+        let hough_height = Int(rmax*2) // units are rho (pixels)
+        let hough_width = 360     // units are theta (degrees)
+
+        if hough_height != output_image.height || hough_width != output_image.width {
+            Log.e("\(hough_height) != \(output_image.height) || \(hough_width) != \(output_image.width)")
+            fatalError("image size mismatch")
+        }
+        
+        Log.e("hough width \(hough_width) height \(hough_height)")
+        
+        guard var output_data = CFDataCreateMutableCopy(kCFAllocatorDefault,
+                                                        CFDataGetLength(output_image.raw_image_data as CFData),
+                                                        output_image.raw_image_data as CFData) as? Data
+              else { fatalError("fuck") }
+
+        let paint_it_black = false      
+        
+        if paint_it_black { // gets rid of the other image data
+            for i in 0 ..< CFDataGetLength(output_data as CFData)/8 {
+                var nextValue: UInt64 = 0x0000000000000000
+                output_data.replaceSubrange(i*8 ..< (i*8)+8, with: &nextValue, count: 8)
+            }
+        }
+        
+        image.read { pixels in 
+
+            var counts = [[UInt32]](repeating: [UInt32](repeating: 0, count: hough_height),
+                                    count: Int(hough_width))
+
+            let dr   = 2 * rmax / Double(hough_height);
+            let dth  = Double.pi / Double(hough_width);
+
+            var max_count: UInt32 = 0
+            
+            for x in 0 ..< image.width {
+                for y in 0 ..< image.height {
+                    let offset = (y * image.width*3) + (x * 3) // XXX hardcoded 3's
+                    let orig_red = pixels[offset]
+                    let orig_green = pixels[offset+1]
+                    let orig_blue = pixels[offset+2]
+                    let intensity: UInt64 = UInt64(orig_red) + UInt64(orig_green) + UInt64(orig_blue)
+                    if intensity > 0xFF {
+                        // record pixel
+
+                        for k in 0 ..< Int(hough_width) {
+                            let th = dth * Double(k)
+                            let r2 = (Double(x)*cos(th) + Double(y)*sin(th))
+                            let iry = Int(hough_height/2) + Int(r2/dr + 0.5)
+                            //Log.d("\(k) \(iry)")
+                            let new_value = counts[k][iry]+1
+                            counts[k][iry] = new_value
+                            if new_value > max_count {
+                                max_count = new_value
+                            }
+                            
+                            //Log.d("counts \(counts[k][iry])")
+                        }
+                    }
+                }
+            }
+
+
+            for x in 0 ..< hough_width {
+                for y in 0 ..< hough_height {
+                    let offset = (Int(y) * output_image.width*6) + (Int(x) * 6)
+                    //Log.d("offset \(offset) \(CFDataGetLength(output_data as CFData))")
+                    var value = UInt32(Double(counts[x][y])/Double(max_count)*Double(0xFFFF))
+                    output_data.replaceSubrange(offset ..< offset+2,
+                                                with: &value,
+                                                count: 2)
+                    output_data.replaceSubrange(offset+2 ..< offset+4,
+                                                with: &value,
+                                                count: 2)
+                    output_data.replaceSubrange(offset+4 ..< offset+6,
+                                                with: &value,
+                                                count: 2)
+                }
+            }
+
+            output_image.writeTIFFEncoding(ofData: output_data, toFilename: "hough_transform.tif")
+
+              /*
+
+               done: 
+                get the width and height (rho and theta) working right of the output image
+
+              next steps:
+
+                calculate proper rho and theta in calculated output lines
+             */          
+
+            
+            var lines: [Line] = [Line](
+                repeating: (theta: 0, rho: 0, count: 0),
+                count: Int(hough_width * hough_height)
+            )
+
+            for (x, row) in counts.enumerated() {
+                for (y, _) in row.enumerated() {
+                    lines[x * Int(image.width) + y]  = (
+                        theta: Int(x/2), // XXX small data loss in conversion
+                        rho: y - hough_height/2,
+                        count: Int(counts[x][y])
+                       )
+                }
+            }
+
+            // XXX improvement - calculate maxes based upon a 3x3 mask 
+            let sortedLines = lines.sorted() { a, b in
+                return a.count < b.count
+            }
+                     
+            let small_set_lines = Array<Line>(sortedLines.suffix(20).reversed())
+
+            Log.d("lines \(small_set_lines)")
+
+        }
+    } else {
+        Log.e("couldn't load image")
+    }
+
+                  
+} else if CommandLine.arguments.count < 1 {
     Log.d("need more args!")    // XXX make this better
 } else {
     let first_command_line_arg = CommandLine.arguments[1]
@@ -90,38 +234,30 @@ if CommandLine.arguments.count < 1 {
             if let image = PixelatedImage.getImage(withName: layer_mask_image_name) {
                 // this is a data gathering path 
 
-//                let dispatchGroup = DispatchGroup()
-//                dispatchGroup.enter()
-//                Task {
+                var parts = first_command_line_arg.components(separatedBy: "/")
+                parts.removeLast()
+                let path = parts.joined(separator: "/")
 
-                    var parts = first_command_line_arg.components(separatedBy: "/")
-                    parts.removeLast()
-                    let path = parts.joined(separator: "/")
+                let eraser = KnownOutlierGroupExtractor(layerMask: image,
+                                                        imageSequenceDirname: path,
+                                                        maxConcurrent: 24,
+                                                        maxPixelDistance: 7200,
+                                                        padding: 0,
+                                                        testPaint: true)
 
-                    let eraser = KnownOutlierGroupExtractor(layerMask: image,
-                                                            imageSequenceDirname: path,
-                                                            maxConcurrent: 24,
-                                                            maxPixelDistance: 7200,
-                                                            padding: 0,
-                                                            testPaint: true)
+                _ = eraser.readMasks(fromImage: image)
+                
+                // next step is to refactor group selection work from FrameAirplaneRemover:328
+                // into a method, and then override that in KnownOutlierGroupExtractor to
+                // use the masks just read to determine what outlier groups are what
 
-                    _ = eraser.readMasks(fromImage: image)
-            
-                    // next step is to refactor group selection work from FrameAirplaneRemover:328
-                    // into a method, and then override that in KnownOutlierGroupExtractor to
-                    // use the masks just read to determine what outlier groups are what
-
-                    eraser.run()
-                    
-                    // inside of a known mask, the largest group is assumed to be airplane
-                    // verify this visulaly in the test-paint image
-                    // all other image groups inside any group are considered non-airplane
-                    // perhaps threshold above 5 pixels or so
-                    
-//                    dispatchGroup.leave()
-//                }
-//                dispatchGroup.wait()
-
+                eraser.run()
+                
+                // inside of a known mask, the largest group is assumed to be airplane
+                // verify this visulaly in the test-paint image
+                // all other image groups inside any group are considered non-airplane
+                // perhaps threshold above 5 pixels or so
+                
             } else {
                 Log.e("can't load \(layer_mask_image_name)")
             }
@@ -141,7 +277,7 @@ if CommandLine.arguments.count < 1 {
         if #available(macOS 10.15, *) {
             let dirname = "\(path)/\(input_image_sequence_dirname)"
             let eraser = NighttimeAirplaneRemover(imageSequenceDirname: dirname,
-                                                  maxConcurrent: 30,
+                                                  maxConcurrent: 20,
                                                   maxPixelDistance: 7200,
                                                   padding: 0,
                                                   testPaint: true)
