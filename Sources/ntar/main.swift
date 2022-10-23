@@ -88,6 +88,26 @@ typealias Line = (
 )
 
 if hough_test {
+
+    let coord1 = [45, 32]
+    let coord2 = [80, 67]
+    let slope = (coord1[1]-coord2[1])/(coord1[0]-coord2[0])
+    let n = coord1[1] - slope * coord1[0] // y coordinate at zero x
+    let m = -n/slope                      // x coordinate at zero y
+    let hypotenuse = sqrt(Double(n)*Double(n) + Double(m)*Double(m))
+    var theta = acos(Double(n)/hypotenuse) * 180/Double.pi
+    var rho = cos(theta*Double.pi/180) * hypotenuse
+
+    if(rho < 0) {
+        // keeping rho positive
+        //Log.d("reversing orig rho \(rho) theta \(theta)")
+        rho = -rho
+        theta = (theta + 180).truncatingRemainder(dividingBy: 360)
+    }
+    
+    Log.d("n \(n) m \(m) hypotenuse \(hypotenuse) theta \(theta) rho \(rho)")
+    
+    
     let filename = "hough_test_image.tif"
     let output_filename = "hough_background.tif"
     Log.d("Loading image from \(filename)")
@@ -191,7 +211,7 @@ if hough_test {
             
             var lines: [Line] = []
 
-            let min_count = 10  // smaller ones will be ignored
+            let min_count = 50  // smaller ones will be ignored
             let number_of_lines_returned = 20 // limit on sorted list of lines
             
             for x in 0 ..< hough_width {
