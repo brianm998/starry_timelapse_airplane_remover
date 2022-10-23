@@ -87,12 +87,9 @@ typealias Line = (
     count: Int                     // higher count is better fit for line
 )
 
-if hough_test {
-
-    let coord1 = [45, 32]
-    let coord2 = [80, 67]
-    let slope = (coord1[1]-coord2[1])/(coord1[0]-coord2[0])
-    let n = coord1[1] - slope * coord1[0] // y coordinate at zero x
+func polar_coords(x1: Int, y1: Int, x2: Int, y2: Int) -> (theta: Double, rho: Double) {
+    let slope = (y1-y2)/(x1-x2)
+    let n = y1 - slope * x1 // y coordinate at zero x
     let m = -n/slope                      // x coordinate at zero y
     let hypotenuse = sqrt(Double(n)*Double(n) + Double(m)*Double(m))
     var theta = acos(Double(n)/hypotenuse) * 180/Double.pi
@@ -104,8 +101,18 @@ if hough_test {
         rho = -rho
         theta = (theta + 180).truncatingRemainder(dividingBy: 360)
     }
+    return (theta: theta, rho: rho)
+}
+
+
+if hough_test {
+
+    let coord1 = [45, 32]
+    let coord2 = [80, 67]
+
+    let (theta, rho) = polar_coords(x1: 45, y1: 32, x2: 80, y2: 67)
     
-    Log.d("n \(n) m \(m) hypotenuse \(hypotenuse) theta \(theta) rho \(rho)")
+    Log.d("\(theta) rho \(rho)")
     
     
     let filename = "hough_test_image.tif"
