@@ -4,7 +4,7 @@ import Cocoa
 
 // this class holds the logic for removing airplanes from a single frame
 
-// XXX here are some randome global constants that maybe should be exposed somehow
+// XXX here are some random global constants that maybe should be exposed somehow
 let min_group_size = 50         // groups smaller than this are ignored
 let min_line_count = 80         // lines with counts smaller than this are ignored
 let max_theta_diff: Double = 5   // degrees of difference allowe between lines
@@ -40,18 +40,14 @@ class FrameAirplaneRemover {
 
     let houghTransform: HoughTransform
     
-    var should_paint_group: ((Int, Int, Int, Int, String, UInt64, Int) -> Bool)?
-
     init?(fromImage image: PixelatedImage,
           atIndex frame_index: Int,
           otherFrames: [PixelatedImage],
           filename: String,
           test_paint_filename tpfo: String?,
-          max_pixel_distance: UInt16,
-          should_paint_group: ((Int, Int, Int, Int, String, UInt64, Int) -> Bool)? = nil
+          max_pixel_distance: UInt16
          )
     {
-        self.should_paint_group = should_paint_group
         self.frame_index = frame_index // frame index in the image sequence
         self.image = image
         self.otherFrames = otherFrames
@@ -428,59 +424,6 @@ class FrameAirplaneRemover {
         let interval1 = String(format: "%0.1f", time_1 - start_time)
         
         Log.i("frame \(frame_index) deciding paintability of outlier groups")
-/*
-        // sort by group size, process largest first
-        let sorted_groups = neighbor_groups.sorted(by: { $0.value > $1.value })
-        for(group, group_size) in sorted_groups {
-            if let min_x = group_min_x[group],
-               let min_y = group_min_y[group],
-               let max_x = group_max_x[group],
-               let max_y = group_max_y[group]
-            {
-                // calculate polar coordiantes for each outler group (two sets)
-                // XXX improvement would be more than just the edges of the
-                // bounding box for guessing the line of a group
-
-                // instead of this rough estimate of theta and rho based upon
-                // the edges of the bounding box, use the bounding box instead
-                // to determine the amount of the image to use for input data for
-                // a hough space then populate that input for that hough space
-                // from the bounding box and only include points for this group
-                // then take the highest ranked pixel from the hough space
-                // to get a single theta and rho value for each outlier group 
-
-                if let should_paint_group = should_paint_group {
-                    // call the callback if one was provided
-                    if should_paint_group(min_x, min_y,
-                                          max_x, max_y,
-                                          group, group_size, frame_index)
-                    {
-                        if group_size > 100 {
-                            Log.d("frame \(frame_index) will paint \(group) of size \(group_size) [\(min_x), \(min_y)] => [\(max_x), \(max_y)]")
-                        }
-                        should_paint[group] = true
-                    } else {
-                        if group_size > 100 {
-                            Log.d("frame \(frame_index) will NOT paint \(group) of size \(group_size) [\(min_x), \(min_y)] => [\(max_x), \(max_y)]")
-                        }
-                    }
-                } else {
-                    // else fall back on the generated ShouldPaint code
-                    if shouldPaintGroup(min_x: min_x, min_y: min_y,
-                                        max_x: max_x, max_y: max_y,
-                                        group_name: group,
-                                        group_size: group_size)
-                    {
-                        //Log.d("should paint \(group)")
-                        should_paint[group] = true
-                    } else {
-                        //Log.d("should NOT paint \(group)")
-                    }
-                }
-            }
-        }
-*/
-        Log.i("frame \(frame_index) painting expected airplane outlier groups")
 
         // do a hough transform and compare leading outlier groups to lines in the image
         
@@ -543,9 +486,6 @@ class FrameAirplaneRemover {
 //        let group_interval1 = String(format: "%0.1f", group_time_1 - group_start_time)
         
                 // get the theta and rho of just this outlier group
-                // XXX this transform could be made faster by only
-                // processing the known bounds of this outlier group,
-                // not the entire input data
                 houghTransform.resetCounts()
                 
                 let group_lines = houghTransform.lines(min_count: 10,
@@ -582,7 +522,7 @@ class FrameAirplaneRemover {
                         if theta_rho_comparison(theta1: line.theta, rho1: line.rho,
                                              theta2: group_theta, rho2: group_rho)
                         {
-                            Log.w("should paint this one based upon line of size \(line.count)")
+                            Log.i("frame \(frame_index) will paint group \(name) with \(line.count) lines (theta, rho) - line (\(line.theta), \(line.rho)) group (\(group_theta), \(group_rho))")
                             should_paint_this_one = true
                         } else {
                             should_paint[name] = false // overwrite any previous true
@@ -601,6 +541,8 @@ class FrameAirplaneRemover {
         let time_5 = NSDate().timeIntervalSince1970
         let interval5 = String(format: "%0.1f", time_5 - time_4)
         
+        Log.i("frame \(frame_index) painting airplane outlier groups")
+
         // paint over every outlier in the paint list with pixels from the adjecent frames
         for (index, group_name) in outlier_groups.enumerated() {
             if let group_name = group_name,

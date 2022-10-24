@@ -23,21 +23,18 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
     
     let test_paint: Bool
 
-    var should_paint_group: ((Int, Int, Int, Int, String, UInt64, Int) -> Bool)?
-    
     init(imageSequenceDirname image_sequence_dirname: String,
          maxConcurrent max_concurrent: UInt = 5,
          maxPixelDistance max_pixel_distance: UInt16 = 10000,
-         padding: UInt = 0,
+         padding: UInt = 0,     // XXX maybe remove this
          testPaint: Bool = false,
-         should_paint_group: ((Int, Int, Int, Int, String, UInt64, Int) -> Bool)? = nil,
          givenFilenames given_filenames: [String]? = nil)
     {
         self.max_pixel_distance = max_pixel_distance
         self.padding_value = padding
         self.test_paint_outliers = testPaint
         self.test_paint = testPaint
-        var basename = "\(image_sequence_dirname)-no-planes-\(paint_group_logic_time)-\(max_pixel_distance)"
+        var basename = "\(image_sequence_dirname)-no-planes-\(max_pixel_distance)"
         if padding != 0 {
             basename = basename + "-pad-\(padding)"
         }
@@ -100,8 +97,7 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
                                                              otherFrames: otherFrames,
                                                              filename: filename,
                                                              test_paint_filename: tpfo,
-                                                             max_pixel_distance: max_pixel_distance,
-                                                             should_paint_group: should_paint_group)
+                                                             max_pixel_distance: max_pixel_distance)
         else {
             Log.d("DOH")
             fatalError("FAILED")

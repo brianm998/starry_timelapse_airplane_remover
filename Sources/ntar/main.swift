@@ -85,66 +85,24 @@ if hough_test {
     Log.d("need more args!")    // XXX make this better
 } else {
     let first_command_line_arg = CommandLine.arguments[1]
-
-    if first_command_line_arg.hasSuffix("/layer_mask.tif") {
-        // this is used for group selection data collection
-        let layer_mask_image_name = first_command_line_arg
-
-        if #available(macOS 10.15, *) {
-            if let image = PixelatedImage.getImage(withName: layer_mask_image_name) {
-                // this is a data gathering path 
-
-                var parts = first_command_line_arg.components(separatedBy: "/")
-                parts.removeLast()
-                let path = parts.joined(separator: "/")
-
-                let eraser = KnownOutlierGroupExtractor(layerMask: image,
-                                                        imageSequenceDirname: path,
-                                                        maxConcurrent: 24,
-                                                        maxPixelDistance: 7200,
-                                                        padding: 0,
-                                                        testPaint: true)
-
-                _ = eraser.readMasks(fromImage: image)
-                
-                // next step is to refactor group selection work from FrameAirplaneRemover:328
-                // into a method, and then override that in KnownOutlierGroupExtractor to
-                // use the masks just read to determine what outlier groups are what
-
-                eraser.run()
-                
-                // inside of a known mask, the largest group is assumed to be airplane
-                // verify this visulaly in the test-paint image
-                // all other image groups inside any group are considered non-airplane
-                // perhaps threshold above 5 pixels or so
-                
-            } else {
-                Log.e("can't load \(layer_mask_image_name)")
-            }
-        } else {
-            Log.e("doh")
-        }
-
-    } else {
         // this is the main path
         
-        let path = FileManager.default.currentDirectoryPath
-        let input_image_sequence_dirname = first_command_line_arg
-        // XXX maybe check to make sure this is a directory
-        Log.d("will process \(input_image_sequence_dirname)")
-        Log.d("on path \(path)")
-
-        if #available(macOS 10.15, *) {
-            let dirname = "\(path)/\(input_image_sequence_dirname)"
-            let eraser = NighttimeAirplaneRemover(imageSequenceDirname: dirname,
-                                                  maxConcurrent: 30,
-                                                  maxPixelDistance: 7200,
-                                                  padding: 0,
-                                                  testPaint: true)
-            eraser.run()
-        } else {
-            Log.d("cannot run :(")
-        }
+    let path = FileManager.default.currentDirectoryPath
+    let input_image_sequence_dirname = first_command_line_arg
+    // XXX maybe check to make sure this is a directory
+    Log.d("will process \(input_image_sequence_dirname)")
+    Log.d("on path \(path)")
+    
+    if #available(macOS 10.15, *) {
+        let dirname = "\(path)/\(input_image_sequence_dirname)"
+        let eraser = NighttimeAirplaneRemover(imageSequenceDirname: dirname,
+                                          maxConcurrent: 30,
+                                          maxPixelDistance: 7200,
+                                          padding: 0,
+                                          testPaint: true)
+        eraser.run()
+    } else {
+        Log.d("cannot run :(")
     }
 }
 
