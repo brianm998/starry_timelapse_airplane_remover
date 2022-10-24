@@ -502,8 +502,13 @@ class FrameAirplaneRemover {
 
         // look through all neighber groups greater than min_group_size
         for (name, size) in neighbor_groups {
-
-            if size > min_group_size {
+            
+            if size > min_group_size,
+               let min_x = group_min_x[name],
+               let min_y = group_min_y[name],
+               let max_x = group_max_x[name],
+               let max_y = group_max_y[name]
+            {
                 // first do a hough transform on just this outlier group
                 
                 // set all pixels of this group to true in the hough data
@@ -523,8 +528,11 @@ class FrameAirplaneRemover {
                                                    data_width: width,
                                                    data_height: height,
                                                    min_count: 10,
-                                                   number_of_lines_returned: 1)
-                
+                                                   number_of_lines_returned: 1,
+                                                   x_start: min_x,
+                                                   y_start: min_y,
+                                                   x_limit: max_x+1,
+                                                   y_limit: max_y+1)
                 // this is the most likely line from the outlier group
                 let (group_theta, group_rho, group_count) = lines[0]
                 

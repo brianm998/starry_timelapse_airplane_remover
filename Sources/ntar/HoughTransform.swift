@@ -50,10 +50,22 @@ func lines_from_hough_transform(input_data: [Bool], // indexed by y * data_width
                             data_width: Int,
                             data_height: Int,
                             min_count: Int = 5, // lines with less counts than this aren't returned
-                            number_of_lines_returned: Int = 20) -> [Line]
+                            number_of_lines_returned: Int = 20,
+                            x_start: Int = 0,
+                            y_start: Int = 0,
+                            x_limit: Int? = nil,
+                            y_limit: Int? = nil
+          ) -> [Line]
 {
     //Log.d("doing hough transform on input data [\(data_width), \(data_height)]")
 
+
+    var real_x_limit = data_width
+    if let x_limit = x_limit { real_x_limit = x_limit }
+    
+    var real_y_limit = data_height
+    if let y_limit = y_limit { real_y_limit = y_limit }
+    
     // maximum rho possible
     let rmax = sqrt(Double(data_width*data_width + data_height*data_height))
 
@@ -74,8 +86,8 @@ func lines_from_hough_transform(input_data: [Bool], // indexed by y * data_width
     let dth  = Double.pi / Double(hough_width);
 
     // accumulate the hough transform data in counts
-    for x in 0 ..< data_width {
-        for y in 0 ..< data_height {
+    for x in x_start ..< real_x_limit {
+        for y in y_start ..< real_y_limit {
             let offset = (y * data_width) + x
             if input_data[offset] {
                 // record pixel
