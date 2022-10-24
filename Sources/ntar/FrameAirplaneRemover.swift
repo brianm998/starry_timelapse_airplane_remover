@@ -5,10 +5,11 @@ import Cocoa
 // this class holds the logic for removing airplanes from a single frame
 
 // XXX here are some randome global constants that maybe should be exposed somehow
-let min_group_size = 10         // groups smaller than this are ignored
-let min_line_count = 20         // lines with counts smaller than this are ignored
+let min_group_size = 15         // groups smaller than this are ignored
+let min_line_count = 40         // lines with counts smaller than this are ignored
 let max_theta_diff: Double = 3   // degrees of difference allowe between lines
 let max_rho_dif: Double = 8      // pixels of line displacement allowed
+let max_number_of_lines = 50     // don't process more lines than this per image
 
 @available(macOS 10.15, *)
 class FrameAirplaneRemover {
@@ -490,8 +491,8 @@ class FrameAirplaneRemover {
         let lines = lines_from_hough_transform(input_data: hough_data,
                                            data_width: width,
                                            data_height: height,
-                                           min_count: 100,
-                                           number_of_lines_returned: 20)
+                                           min_count: min_line_count,
+                                           number_of_lines_returned: max_number_of_lines)
 
         Log.d("got \(lines.count) lines from the hough transform")
 
@@ -521,7 +522,7 @@ class FrameAirplaneRemover {
                 let lines = lines_from_hough_transform(input_data: hough_data,
                                                    data_width: width,
                                                    data_height: height,
-                                                   min_count: 100,
+                                                   min_count: 10,
                                                    number_of_lines_returned: 1)
                 
                 // this is the most likely line from the outlier group
