@@ -10,41 +10,47 @@ typealias Line = (
     count: Int                     // higher count is better fit for line
 )
 
-// XXX move this elsewhere
+typealias Coord = (
+    x: Int,
+    y: Int
+)
+
 // this method returns the polar coords for a line that runs through the two given points
-func polar_coords(x1: Int, y1: Int, x2: Int, y2: Int) -> (theta: Double, rho: Double) {
-    let dx1 = Double(x1)
-    let dy1 = Double(y1)
-    let dx2 = Double(x2)
-    let dy2 = Double(y2)
+func polar_coords(point1: Coord, point2: Coord) -> (theta: Double, rho: Double) {
+    
+    let dx1 = Double(point1.x)
+    let dy1 = Double(point1.y)
+    let dx2 = Double(point2.x)
+    let dy2 = Double(point2.y)
 
     let slope = (dy1-dy2)/(dx1-dx2)
     
-    let n = dy1 - slope * dx1     // y coordinate at zero x
-    let m = -n/slope              // x coordinate at zero y
+    let n = dy1 - slope * dx1    // y coordinate at zero x
+    let m = -n/slope            // x coordinate at zero y
     
-    // length of hypotenuse formed by triangle of (0, 0 - (0, n) - (m, 0)
+    // length of hypotenuse formed by triangle of (0, 0) - (0, n) - (m, 0)
     let hypotenuse = sqrt(n*n + m*m)
-    let theta_radians = acos(n/hypotenuse)
+    let theta_radians = acos(n/hypotenuse)     // theta in radians
     
-    var theta = theta_radians * 180/Double.pi // theta in degrees
+    var theta = theta_radians * 180/Double.pi  // theta in degrees
     var rho = cos(theta_radians) * m          // distance from orgin to right angle with line
     
     if(rho < 0) {
-        // keeping rho positive
+        // keep rho positive
         rho = -rho
         theta = (theta + 180).truncatingRemainder(dividingBy: 360)
     }
-    return (theta: theta, rho: rho)
+    return (theta: theta,  // degrees from the X axis, clockwise
+           rho: rho)      // distance to right angle with line from origin in pixels
 }
 
 // returns an array of possible lines in the input data
 // lines are returned in polar coords of theta and rho
 func lines_from_hough_transform(input_data: [Bool], // indexed by y * data_width + x
-                                data_width: Int,
-                                data_height: Int,
-                                min_count: Int = 5, // lines with less counts than this aren't returned
-                                number_of_lines_returned: Int = 20) -> [Line]
+                            data_width: Int,
+                            data_height: Int,
+                            min_count: Int = 5, // lines with less counts than this aren't returned
+                            number_of_lines_returned: Int = 20) -> [Line]
 {
     Log.d("doing hough transform on input data [\(data_width), \(data_height)]")
 
@@ -66,7 +72,8 @@ func lines_from_hough_transform(input_data: [Bool], // indexed by y * data_width
     
     let dr   = 2 * rmax / Double(hough_height);
     let dth  = Double.pi / Double(hough_width);
-            
+
+    // accumulate the hough transform data in counts
     for x in 0 ..< data_width {
         for y in 0 ..< data_height {
             let offset = (y * data_width) + x
@@ -85,6 +92,7 @@ func lines_from_hough_transform(input_data: [Bool], // indexed by y * data_width
     
     var lines: [Line] = []
 
+    // grab theta, rho and count values from the transform
     for x in 0 ..< hough_width {
         for y in 0 ..< hough_height {
             var theta = Double(x)/2.0 // why /2 ?
@@ -109,7 +117,7 @@ func lines_from_hough_transform(input_data: [Bool], // indexed by y * data_width
         }
     }
     
-    // XXX improvement - calculate maxes based upon a 3x3 mask 
+    // XXX improvement - calculate based upon a 3x3 mask 
     let sortedLines = lines.sorted() { a, b in
         return a.count < b.count
     }

@@ -371,6 +371,7 @@ class FrameAirplaneRemover {
         var should_paint: [String:Bool] = [:]
         Log.i("frame \(frame_index) calculating outlier group bounds")
 
+        // XXX use a typealias to simplify this to one map
         var group_min_x: [String:Int] = [:]
         var group_min_y: [String:Int] = [:]
         var group_max_x: [String:Int] = [:]
@@ -426,9 +427,13 @@ class FrameAirplaneRemover {
                let max_y = group_max_y[group]
             {
                 // calculate polar coordiantes for each outler group (two sets)
-                let (theta1, rho1) = polar_coords(x1: min_x, y1: min_y, x2: max_x, y2: max_y)
-                let (theta2, rho2) = polar_coords(x1: min_x, y1: max_y, x2: max_x, y2: min_y)
-                // XXX is the rho right?
+                // XXX improvement would be more than just the edges of the
+                // bounding box for guessing the line of a group
+                let (theta1, rho1) = polar_coords(point1: (x: min_x, y: min_y),
+                                              point2: (x: max_x, y: max_y))
+                let (theta2, rho2) = polar_coords(point1: (x: min_x, y: max_y),
+                                              point2: (x: max_x, y: min_y))
+
                 polar_coord_1[group] = (theta1, rho1)
                 polar_coord_2[group] = (theta2, rho2)
 
@@ -436,6 +441,7 @@ class FrameAirplaneRemover {
                     Log.d("frame \(frame_index) \(group) of size \(group_size) [\(min_x), \(min_y)] => [\(max_x), \(max_y)] theta1 \(theta1), rho1 \(rho1) theta2 \(theta2), rho2 \(rho2)")
                 }
                 if let should_paint_group = should_paint_group {
+                    // call the callback if one was provided
                     if should_paint_group(min_x, min_y,
                                           max_x, max_y,
                                           group, group_size, frame_index)
@@ -450,6 +456,7 @@ class FrameAirplaneRemover {
                         }
                     }
                 } else {
+                    // else fall back on the generated ShouldPaint code
                     if shouldPaintGroup(min_x: min_x, min_y: min_y,
                                         max_x: max_x, max_y: max_y,
                                         group_name: group,
@@ -482,10 +489,10 @@ class FrameAirplaneRemover {
         }
 
         let lines = lines_from_hough_transform(input_data: hough_data,
-                                               data_width: width,
-                                               data_height: height,
-                                               min_count: 100,
-                                               number_of_lines_returned: 20)
+                                           data_width: width,
+                                           data_height: height,
+                                           min_count: 100,
+                                           number_of_lines_returned: 20)
 
         Log.d("got \(lines.count) lines from the hough transform")
         

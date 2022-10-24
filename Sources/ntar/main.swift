@@ -20,6 +20,11 @@ todo:
  - fix bug where '/' at the end of the command line arg isn't handled well
  - detect idle cpu % and use max cpu% instead of max % of frames
  - maybe just always comare against a single frame? (faster, not much difference?
+ - use 3x3 grid for hough transorm line max count selection
+ - try applying hough transformation to bounding boxes of individual outlier groups
+   - this could give us the theta and rho for any lines
+   - take the best line because there is only one outlier group
+ - use percentages from all sources to determine paintability
 
    group painting criteria:
      - group size in pixels 
@@ -55,20 +60,21 @@ Log.handlers =
     ]
 
 
-let hough_test = false
+let hough_test = true
 
 if hough_test {
     // this is for doing direct hough_tests outside the rest of the code
     // convert line between two points on screen into polar coords
     // [276, 0] => [416, 163]
-    let (theta, rho) = polar_coords(x1: 276, y1: 0, x2: 416, y2: 163)
+    let (theta, rho) = polar_coords(point1: (x: 276, y: 0),
+                                point2: (x: 416, y: 163))
    
     Log.d("theta \(theta) rho \(rho)")
 
     let filename = "hough_test_image.tif"
     let output_filename = "hough_background.tif"
 
-//    hough_test(filename: filename, output_filename: output_filename)
+    hough_test(filename: filename, output_filename: output_filename)
     
 } else if CommandLine.arguments.count < 1 {
     Log.d("need more args!")    // XXX make this better
