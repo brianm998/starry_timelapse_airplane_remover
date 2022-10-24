@@ -52,12 +52,12 @@ func lines_from_hough_transform(input_data: [Bool], // indexed by y * data_width
                             min_count: Int = 5, // lines with less counts than this aren't returned
                             number_of_lines_returned: Int = 20) -> [Line]
 {
-    Log.d("doing hough transform on input data [\(data_width), \(data_height)]")
+    //Log.d("doing hough transform on input data [\(data_width), \(data_height)]")
 
     // maximum rho possible
     let rmax = sqrt(Double(data_width*data_width + data_height*data_height))
 
-    Log.d("rmax \(rmax)")
+    //Log.d("rmax \(rmax)")
 
     // y axis is rho, double for negivative values, middle is zero
     let hough_height = Int(rmax*2) // units are rho (pixels)
@@ -65,7 +65,7 @@ func lines_from_hough_transform(input_data: [Bool], // indexed by y * data_width
     // x axis is theta, always 0 to 360
     let hough_width = 360          // units are theta (degrees)
     
-    Log.d("hough width \(hough_width) height \(hough_height)")
+    //Log.d("hough width \(hough_width) height \(hough_height)")
     
     var counts = [[UInt32]](repeating: [UInt32](repeating: 0, count: hough_height),
                             count: Int(hough_width))
@@ -108,8 +108,8 @@ func lines_from_hough_transform(input_data: [Bool], // indexed by y * data_width
 
             var is_3_x_3_max = true
             let count = counts[x][y]
-            if count > 10 {
-                Log.d("potential line @ \(x) \(y) has count \(count)")
+            if count > 100 {
+                //Log.d("potential line @ \(x) \(y) has count \(count)")
             }
 
             // left neighbor
@@ -148,31 +148,29 @@ func lines_from_hough_transform(input_data: [Bool], // indexed by y * data_width
                count <= counts[x+1][y+1] { is_3_x_3_max = false }
                               
             if is_3_x_3_max {
-                Log.i("3x3 max line at (\(x), \(y)) has theta \(theta) rho \(rho) count \(count)")
-                lines.append(( 
-                             theta: theta,
-                             rho: rho,
-                             count: Int(count)
-                             ))
+                /* XXX log spew
+                if count > 20 {
+                    Log.i("3x3 max line at (\(x), \(y)) has theta \(theta) rho \(rho) count \(count)")
+                }
+                */
+                lines.append((theta: theta, rho: rho, count: Int(count)))
             }
-            
         }
     }
-    
-    // XXX improvement - calculate based upon a 3x3 mask 
+
     let sortedLines = lines.sorted() { a, b in
         return a.count < b.count
     }
-    
+
     let small_set_lines = Array<Line>(sortedLines.suffix(number_of_lines_returned).reversed())
-    
-    Log.d("lines \(small_set_lines)")
-    
+
+    //Log.d("lines \(small_set_lines)")
+
     for line in small_set_lines {
         let theta = line.theta
         let rho = line.rho
-        Log.d("found line with theta \(theta) and dist \(rho) count \(line.count)")
+        //Log.d("found line with theta \(theta) and dist \(rho) count \(line.count)")
     }
-    
+
     return small_set_lines
 }

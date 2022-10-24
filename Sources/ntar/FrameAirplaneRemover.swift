@@ -4,7 +4,11 @@ import Cocoa
 
 // this class holds the logic for removing airplanes from a single frame
 
-let min_group_size = 25         // XXX
+// XXX here are some randome global constants that maybe should be exposed somehow
+let min_group_size = 10         // groups smaller than this are ignored
+let min_line_count = 20         // lines with counts smaller than this are ignored
+let max_theta_diff: Double = 3   // degrees of difference allowe between lines
+let max_rho_dif: Double = 8      // pixels of line displacement allowed
 
 @available(macOS 10.15, *)
 class FrameAirplaneRemover {
@@ -414,10 +418,7 @@ class FrameAirplaneRemover {
         }
 
         Log.i("frame \(frame_index) deciding paintability of outlier groups")
-
-        var polar_coord_1: [String:(theta: Double, rho: Double)] = [:]
-        var polar_coord_2: [String:(theta: Double, rho: Double)] = [:]
-        
+/*
         // sort by group size, process largest first
         let sorted_groups = neighbor_groups.sorted(by: { $0.value > $1.value })
         for(group, group_size) in sorted_groups {
@@ -429,17 +430,15 @@ class FrameAirplaneRemover {
                 // calculate polar coordiantes for each outler group (two sets)
                 // XXX improvement would be more than just the edges of the
                 // bounding box for guessing the line of a group
-                let (theta1, rho1) = polar_coords(point1: (x: min_x, y: min_y),
-                                              point2: (x: max_x, y: max_y))
-                let (theta2, rho2) = polar_coords(point1: (x: min_x, y: max_y),
-                                              point2: (x: max_x, y: min_y))
 
-                polar_coord_1[group] = (theta1, rho1)
-                polar_coord_2[group] = (theta2, rho2)
+                // instead of this rough estimate of theta and rho based upon
+                // the edges of the bounding box, use the bounding box instead
+                // to determine the amount of the image to use for input data for
+                // a hough space then populate that input for that hough space
+                // from the bounding box and only include points for this group
+                // then take the highest ranked pixel from the hough space
+                // to get a single theta and rho value for each outlier group 
 
-                if group_size > min_group_size {
-                    Log.d("frame \(frame_index) \(group) of size \(group_size) [\(min_x), \(min_y)] => [\(max_x), \(max_y)] theta1 \(theta1), rho1 \(rho1) theta2 \(theta2), rho2 \(rho2)")
-                }
                 if let should_paint_group = should_paint_group {
                     // call the callback if one was provided
                     if should_paint_group(min_x, min_y,
@@ -470,7 +469,7 @@ class FrameAirplaneRemover {
                 }
             }
         }
-
+*/
         Log.i("frame \(frame_index) painting expected airplane outlier groups")
 
         // do a hough transform and compare leading outlier groups to lines in the image
@@ -482,7 +481,7 @@ class FrameAirplaneRemover {
             if let group_name = group_name,
                let group_size = neighbor_groups[group_name]
             {
-                if group_size > min_group_size { // XXX hardcoded constant
+                if group_size > min_group_size { 
                     hough_data[index] = true
                 }
             }
@@ -495,32 +494,65 @@ class FrameAirplaneRemover {
                                            number_of_lines_returned: 20)
 
         Log.d("got \(lines.count) lines from the hough transform")
-        
-        // to look for lines in this transform that match
+
+
+        // re-use the hough_data above for each group (make all false)
+        for i in 0 ..< width*height { hough_data[i] = false }
+
+        // look through all neighber groups greater than min_group_size
         for (name, size) in neighbor_groups {
-            if let (theta1, rho1) = polar_coord_1[name],
-               let (theta2, rho2) = polar_coord_2[name]
-            {
-                if size > min_group_size { 
-                    Log.d("group \(name) of size \(size) has theta1 \(theta1), rho1 \(rho1) theta2 \(theta2), rho2 \(rho2)")
-                    var should_paint_this_one = should_paint[name]
-                    for line in lines {
-                        if line.count > 40 { // XXX arbitrary constant
-                            // make final decision based upon how close these values are
-                            if theta_rho_comparison(theta1: line.theta, rho1: line.rho,
-                                                    theta2: theta1, rho2: rho1) ||
-                                 theta_rho_comparison(theta1: line.theta, rho1: line.rho,
-                                                      theta2: theta2, rho2: rho2)
-                            {
-                                Log.w("should paint this one based upon line of size \(line.count)")
-                                should_paint_this_one = true
-                            } else {
-                                //should_paint[name] = false
-                            }
+
+            if size > min_group_size {
+                // first do a hough transform on just this outlier group
+                
+                // set all pixels of this group to true in the hough data
+                for (index, group_name) in outlier_groups.enumerated() {
+                    if let group_name = group_name,
+                       name == group_name
+                    {
+                        hough_data[index] = true
+                    }
+                }
+
+                // get the theta and rho of just this outlier group
+                // XXX this transform could be made faster by only
+                // processing the known bounds of this outlier group,
+                // not the entire input data
+                let lines = lines_from_hough_transform(input_data: hough_data,
+                                                   data_width: width,
+                                                   data_height: height,
+                                                   min_count: 100,
+                                                   number_of_lines_returned: 1)
+                
+                // this is the most likely line from the outlier group
+                let (group_theta, group_rho, group_count) = lines[0]
+                
+                //Log.d("got \(name) has theta \(group_theta) rho \(group_rho) count \(group_count)")
+                
+                // set all pixels of this group to false in the hough data for reuse
+                for (index, group_name) in outlier_groups.enumerated() {
+                    if let group_name = group_name,
+                       name == group_name
+                    {
+                        hough_data[index] = false
+                    }
+                }
+            
+                var should_paint_this_one = should_paint[name]
+                for line in lines {
+                    if line.count > min_line_count {
+                        // make final decision based upon how close these values are
+                        if theta_rho_comparison(theta1: line.theta, rho1: line.rho,
+                                             theta2: group_theta, rho2: group_rho)
+                        {
+                            Log.w("should paint this one based upon line of size \(line.count)")
+                            should_paint_this_one = true
+                        } else {
+                            should_paint[name] = false // overwrite any previous true
                         }
                     }
-                    should_paint[name] = should_paint_this_one
                 }
+                should_paint[name] = should_paint_this_one
             }
         }
 
@@ -633,7 +665,6 @@ func theta_rho_comparison(theta1: Double, rho1: Double, theta2: Double, rho2: Do
     let theta_diff = abs(theta1-theta2) // degrees
     let rho_diff = abs(rho1-rho2)       // pixels
 
-    return theta_diff < Double.pi && // PI here is just random
-             rho_diff < 10           // XXX hardcoded constants
+    return theta_diff < max_theta_diff && rho_diff < max_rho_dif
 }
                   
