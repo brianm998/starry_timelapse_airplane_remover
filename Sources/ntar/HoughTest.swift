@@ -19,16 +19,17 @@ func polar_coords(x1: Int, y1: Int, x2: Int, y2: Int) -> (theta: Double, rho: Do
     let dy2 = Double(y2)
 
     let slope = (dy1-dy2)/(dx1-dx2)
+    
     let n = dy1 - slope * dx1     // y coordinate at zero x
     let m = -n/slope              // x coordinate at zero y
-
+    
     // length of hypotenuse formed by triangle of (0, 0 - (0, n) - (m, 0)
     let hypotenuse = sqrt(n*n + m*m)
     let theta_radians = acos(n/hypotenuse)
-
+    
     var theta = theta_radians * 180/Double.pi // theta in degrees
-    var rho = cos(theta_radians) * hypotenuse // distance from orgin to right angle with line
-
+    var rho = cos(theta_radians) * m          // distance from orgin to right angle with line
+    
     if(rho < 0) {
         // keeping rho positive
         rho = -rho
