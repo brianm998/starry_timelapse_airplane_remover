@@ -21,10 +21,15 @@ todo:
  - detect idle cpu % and use max cpu% instead of max % of frames
  - maybe just always comare against a single frame? (faster, not much difference?
  - use 3x3 grid for hough transorm line max count selection
- - try applying hough transformation to bounding boxes of individual outlier groups
-   - this could give us the theta and rho for any lines
-   - take the best line because there is only one outlier group
  - use percentages from all sources to determine paintability
+ - use the number of groups that have fallen into the same line group to boost its painting
+
+ - try applying hough transformation to bounding boxes of individual outlier groups
+   - right now we guess the theta and rho of outlier groups from their bounding boxes
+   - instead, use the hough transform on only the outlier group to get theta and rho
+   - take the best line because there is only one outlier group
+   - use this to determine if the groups fit into the line
+
 
    group painting criteria:
      - group size in pixels 
@@ -60,7 +65,7 @@ Log.handlers =
     ]
 
 
-let hough_test = true
+let hough_test = false
 
 if hough_test {
     // this is for doing direct hough_tests outside the rest of the code

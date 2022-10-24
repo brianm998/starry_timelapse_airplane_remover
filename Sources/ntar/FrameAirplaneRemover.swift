@@ -4,7 +4,7 @@ import Cocoa
 
 // this class holds the logic for removing airplanes from a single frame
 
-let min_group_size = 20         // XXX
+let min_group_size = 25         // XXX
 
 @available(macOS 10.15, *)
 class FrameAirplaneRemover {
@@ -501,19 +501,22 @@ class FrameAirplaneRemover {
             if let (theta1, rho1) = polar_coord_1[name],
                let (theta2, rho2) = polar_coord_2[name]
             {
-                if size > min_group_size {  // XXX hardcoded constant
+                if size > min_group_size { 
                     Log.d("group \(name) of size \(size) has theta1 \(theta1), rho1 \(rho1) theta2 \(theta2), rho2 \(rho2)")
                     var should_paint_this_one = should_paint[name]
                     for line in lines {
-                        // make final decision based upon how close these values are
-                        if theta_rho_comparison(theta1: line.theta, rho1: line.rho,
-                                                theta2: theta1, rho2: rho1) ||
-                           theta_rho_comparison(theta1: line.theta, rho1: line.rho,
-                                                theta2: theta2, rho2: rho2)
-                        {
-                            should_paint_this_one = true
-                        } else {
-                            //should_paint[name] = false
+                        if line.count > 40 { // XXX arbitrary constant
+                            // make final decision based upon how close these values are
+                            if theta_rho_comparison(theta1: line.theta, rho1: line.rho,
+                                                    theta2: theta1, rho2: rho1) ||
+                                 theta_rho_comparison(theta1: line.theta, rho1: line.rho,
+                                                      theta2: theta2, rho2: rho2)
+                            {
+                                Log.w("should paint this one based upon line of size \(line.count)")
+                                should_paint_this_one = true
+                            } else {
+                                //should_paint[name] = false
+                            }
                         }
                     }
                     should_paint[name] = should_paint_this_one

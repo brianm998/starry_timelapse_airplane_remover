@@ -104,11 +104,53 @@ func lines_from_hough_transform(input_data: [Bool], // indexed by y * data_width
                 rho = -rho
                 theta = (theta + 180).truncatingRemainder(dividingBy: 360)
             }
+
+
+            var is_3_x_3_max = true
             let count = counts[x][y]
-            if count >= min_count { // XXX arbitrary
-                //Log.i("line at (\(x), \(y)) has theta \(theta) rho \(rho) count \(count)")
+            if count > 10 {
+                Log.d("potential line @ \(x) \(y) has count \(count)")
+            }
+
+            // left neighbor
+            if x > 0,
+               count <= counts[x-1][y]   { is_3_x_3_max = false }
+
+            // left upper neighbor                    
+            if x > 0, y > 0,
+               count <= counts[x-1][y-1] { is_3_x_3_max = false }
+
+            // left lower neighbor                    
+            if x > 0,
+               y < hough_height - 1,
+               count <= counts[x-1][y+1] { is_3_x_3_max = false }
+
+            // upper neighbor                    
+            if y > 0,
+               count <= counts[x][y-1]   { is_3_x_3_max = false }
+
+            // lower neighbor                    
+            if y < hough_height - 1,
+               count <= counts[x][y+1]   { is_3_x_3_max = false }
+
+            // right neighbor
+            if x < hough_width - 1,
+               count <= counts[x+1][y]   { is_3_x_3_max = false }
+
+            // right upper neighbor                    
+            if x < hough_width - 1,
+               y > 0,
+               count <= counts[x+1][y-1] { is_3_x_3_max = false }
+
+            // right lower neighbor                    
+            if x < hough_width - 1,
+               y < hough_height - 1,
+               count <= counts[x+1][y+1] { is_3_x_3_max = false }
+                              
+            if is_3_x_3_max {
+                Log.i("3x3 max line at (\(x), \(y)) has theta \(theta) rho \(rho) count \(count)")
                 lines.append(( 
-                             theta: theta, // XXX small data loss in conversion
+                             theta: theta,
                              rho: rho,
                              count: Int(count)
                              ))
