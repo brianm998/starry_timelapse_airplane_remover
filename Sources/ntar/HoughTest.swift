@@ -108,20 +108,99 @@ func hough_test(filename: String, output_filename: String) {
                     var theta = Double(x)/2.0
                     var rho = Double(y) - rmax
 
+                    
                     if(rho < 0) {
                         // keeping rho positive
                         //Log.d("reversing orig rho \(rho) theta \(theta)")
                         rho = -rho
                         theta = (theta + 180).truncatingRemainder(dividingBy: 360)
                     }
+                    var is_3_x_3_max = true
                     let count = counts[x][y]
-                    if count >= min_count { // XXX arbitrary
-                        Log.i("line at (\(x), \(y)) has theta \(theta) rho \(rho) count \(count)")
+                    if count > 10 {
+                        Log.d("potential line @ \(x) \(y) has count \(count)")
+                    }
+
+                    // left neighbor
+                    if x > 0,
+                       count <= counts[x-1][y]   {
+                        if count > 10 {
+                            //Log.d("count <= counts[x-1][y] \(count) <= \(counts[x-1][y])")
+                        }
+                        is_3_x_3_max = false }
+
+                    // left upper neighbor                    
+                    if x > 0, y > 0,
+                       count <= counts[x-1][y-1] {
+                        if count > 10 {
+                            //Log.d("count <= counts[x-1][y-1] \(count) <= \(counts[x-1][y-1])")
+                        }
+                        is_3_x_3_max = false }
+
+                    // left lower neighbor                    
+                    if x > 0,
+                       y < hough_height - 1,
+                       count <= counts[x-1][y+1] {
+                        if count > 10 {
+                            //Log.d("count <= counts[x-1][y+1] \(count) <= \(counts[x-1][y+1])")
+                        }
+                        is_3_x_3_max = false }
+
+                    // upper neighbor                    
+                    if y > 0,
+                       count <= counts[x][y-1]   {
+                        if count > 10 {
+                            //Log.d("count <= counts[x][y-1] \(count) <= \(counts[x][y-1])")
+                        }
+                        is_3_x_3_max = false }
+
+                    // lower neighbor                    
+                    if y < hough_height - 1,
+                       count <= counts[x][y+1]   {
+                        if count > 10 {
+                            //Log.d("count <= counts[x-1][y+1] \(count) <= \(counts[x][y+1])")
+                        }
+                        is_3_x_3_max = false }
+
+                    // right neighbor
+                    if x < hough_width - 1,
+                       count <= counts[x+1][y]   {
+                        if count > 10 {
+                            //Log.d("count <= counts[x+1][y] \(count) <= \(counts[x+1][y])")
+                        }
+                        is_3_x_3_max = false }
+
+                    // right upper neighbor                    
+                    if x < hough_width - 1,
+                       y > 0,
+                       count <= counts[x+1][y-1] {
+                        if count > 10 {
+                            //Log.d("count <= counts[x+1][y-1] \(count) <= \(counts[x+1][y-1])")
+                        }
+                        is_3_x_3_max = false }
+
+                    // right lower neighbor                    
+                    if x < hough_width - 1,
+                       y < hough_height - 1,
+                       count <= counts[x+1][y+1] {
+                        if count > 10 {
+                            //Log.d("count <= counts[x+1][y+1] \(count) <= \(counts[x+1][y+1])")
+                        }
+                        is_3_x_3_max = false }
+                              
+                    if is_3_x_3_max {
+                        if count > 10 {
+                            Log.i("line at (\(x), \(y)) has theta \(theta) rho \(rho) count \(count)")
+                        }
                         lines.append(( 
                                      theta: theta, // XXX small data loss in conversion
                                      rho: rho,
                                      count: Int(counts[x][y])
                                      ))
+                    } else {
+                        if count > 10 {
+                            Log.d("bypassing lower count line at (\(x), \(y)) has theta \(theta) rho \(rho) count \(count)")
+                        }
                     }
                     
                 }
