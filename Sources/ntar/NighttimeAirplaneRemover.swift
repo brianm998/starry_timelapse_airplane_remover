@@ -15,9 +15,6 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
     // difference between same pixels on different frames to consider an outlier
     let max_pixel_distance: UInt16
 
-    // add some padding?
-    let padding_value: UInt
-
     // paint green on the outliers above the threshold for testing, that are not overwritten
     let test_paint_outliers: Bool
     
@@ -26,18 +23,13 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
     init(imageSequenceDirname image_sequence_dirname: String,
          maxConcurrent max_concurrent: UInt = 5,
          maxPixelDistance max_pixel_distance: UInt16 = 10000,
-         padding: UInt = 0,     // XXX maybe remove this
          testPaint: Bool = false,
          givenFilenames given_filenames: [String]? = nil)
     {
         self.max_pixel_distance = max_pixel_distance
-        self.padding_value = padding
         self.test_paint_outliers = testPaint
         self.test_paint = testPaint
         var basename = "\(image_sequence_dirname)-no-planes-\(max_pixel_distance)"
-        if padding != 0 {
-            basename = basename + "-pad-\(padding)"
-        }
 
         test_paint_output_dirname = "\(basename)-test-paint"
         let output_dirname = basename
@@ -127,28 +119,22 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
         if(test_paint_outliers) {
             frame_plane_remover.testPaintOutliers()
         }
+        
         let time_4 = NSDate().timeIntervalSince1970
         let interval4 = String(format: "%0.1f", time_4 - time_3)
-        Log.d("frame \(frame_index) maybe adding padding after \(interval4)s")
-
-        // padding
-        frame_plane_remover.addPadding(padding_value: padding_value)
-        
-        let time_5 = NSDate().timeIntervalSince1970
-        let interval5 = String(format: "%0.1f", time_5 - time_4)
-        Log.d("frame \(frame_index) painting over airplane streaks after \(interval5)s")
+        Log.d("frame \(frame_index) painting over airplane streaks after \(interval4)s")
         
         frame_plane_remover.paintOverAirplanes()
         
-        let time_6 = NSDate().timeIntervalSince1970
-        let interval6 = String(format: "%0.1f", time_6 - time_5)
+        let time_5 = NSDate().timeIntervalSince1970
+        let interval5 = String(format: "%0.1f", time_5 - time_4)
         Log.d("frame \(frame_index) creating final image \(filename) after \(interval5)s")
 
         frame_plane_remover.writeTestFile()
-        let time_7 = NSDate().timeIntervalSince1970
-        let interval7 = String(format: "%0.1f", time_7 - time_6)
+        let time_6 = NSDate().timeIntervalSince1970
+        let interval6 = String(format: "%0.1f", time_6 - time_5)
         
-        Log.d("frame \(frame_index) timing for frame render \(interval7)s - \(interval6)s - \(interval5)s - \(interval4)s - \(interval3)s - \(interval2)s - \(interval1)s")
+        Log.d("frame \(frame_index) timing for frame render - \(interval6)s - \(interval5)s - \(interval4)s - \(interval3)s - \(interval2)s - \(interval1)s")
         Log.i("frame \(frame_index) complete")
 
         return frame_plane_remover.data

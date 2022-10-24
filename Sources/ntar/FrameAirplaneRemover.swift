@@ -328,49 +328,6 @@ class FrameAirplaneRemover {
         }
     }
 
-   func addPadding(padding_value: UInt) {
-        // add padding when desired
-        // XXX this is slower than the other steps here :(
-        // also not sure it's really needed
-        // rewrite this
-                  /*
-        if(padding_value > 0) {
-            Log.d("frame \(frame_index) adding padding")
-            // XXX search the outlier map, looking for missing neighbors
-            // when found, mark them as padding (amount 0) in padding_value direction
-            // from the location of outliers without neighbors in some direction
-            for y in 0 ..< height {
-                //Log.d("y \(y)")
-                for x in 0 ..< width {
-                    let outlier = outliers[x][y]
-                    var should_try = false
-                    if outlier == nil {
-                        should_try = true
-                    } else if let outlier = outlier,
-                              outlier.amount > max_pixel_distance
-                    {
-                        should_try = true
-                    }
-                    
-                    if should_try,
-                       let bigTag = tag(within: padding_value,
-                                        ofX: x, andY: y,
-                                        outliers: outliers,
-                                        neighborGroups: neighbor_groups,
-                                        // XXX refactor this
-                                        minNeighbors: 20 /*min_group_trail_length*/)
-                    {
-                        let padding = Outlier(x: x, y: y, amount: 0)
-                        padding.groupName = bigTag
-                        outliers[x][y] = padding
-                        outlier_list.append(padding)
-                    }
-                }
-            }
-        }
-*/
-    }
-
     // this method first analyzises the outlier groups and then paints over them
     func paintOverAirplanes() {
         let start_time = NSDate().timeIntervalSince1970
@@ -593,11 +550,7 @@ class FrameAirplaneRemover {
         
         // for testing, colors changed pixels
         if test_paint { // XXX
-            if amount == 0 {
-                paint_pixel.blue = 0xFFFF // for padding
-            } else {
-                paint_pixel.red = 0xFFFF // for unpadded changed area
-            }
+            paint_pixel.red = 0xFFFF // for changed area
         }
         
         if test_paint {
@@ -608,48 +561,6 @@ class FrameAirplaneRemover {
         }
     }
 }
-
-                  
-                  // used for padding
-                  /*
-func tag(within distance: UInt, ofX x: Int, andY y: Int,
-         outliers: [[Outlier?]],
-         neighborGroups neighbor_groups: [String: UInt64],
-         minNeighbors min_group_trail_length: UInt16) -> String?
-{
-    var x_start = 0;
-    var y_start = 0;
-    if x < distance {
-        x_start = 0
-    } else {
-        x_start = x - Int(distance)
-    }
-    if y < distance {
-        y_start = 0
-    } else {
-        y_start = y - Int(distance)
-    }
-    for y_idx in y_start ..< y+Int(distance) {
-        for x_idx in x_start ..< x+Int(distance) {
-            if let outlier = outliers[x_idx][y_idx],
-               hypotenuse(x1: x, y1: y, x2: x_idx, y2: y_idx) <= distance,
-               outlier.amount != 0,
-               let groupName = outlier.groupName,
-               let group_size = neighbor_groups[groupName],
-               group_size > min_group_trail_length // XXX this may be wrong now
-            {
-                return outlier.groupName
-            }
-        }
-   }
-   return nil
-}
-func hypotenuse(x1: Int, y1: Int, x2: Int, y2: Int) -> Int {
-    let x_dist = Int(abs(Int32(x2)-Int32(x1)))
-    let y_dist = Int(abs(Int32(y2)-Int32(y1)))
-    return Int(sqrt(Float(x_dist*x_dist+y_dist*y_dist)))
-}
-*/
 
 func theta_rho_comparison(theta1: Double, rho1: Double, theta2: Double, rho2: Double) -> Bool {
     let theta_diff = abs(theta1-theta2) // degrees
