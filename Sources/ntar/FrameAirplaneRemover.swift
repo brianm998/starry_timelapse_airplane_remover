@@ -9,7 +9,7 @@ let min_group_size = 15         // groups smaller than this are ignored
 let min_line_count = 40         // lines with counts smaller than this are ignored
 let max_theta_diff: Double = 3   // degrees of difference allowe between lines
 let max_rho_dif: Double = 8      // pixels of line displacement allowed
-let max_number_of_lines = 50     // don't process more lines than this per image
+let max_number_of_lines = 80     // don't process more lines than this per image
 
 @available(macOS 10.15, *)
 class FrameAirplaneRemover {
@@ -38,6 +38,8 @@ class FrameAirplaneRemover {
     var test_paint_filename: String = ""
     var test_paint = false
 
+    let houghTransform: HoughTransform
+    
     var should_paint_group: ((Int, Int, Int, Int, String, UInt64, Int) -> Bool)?
 
     init?(fromImage image: PixelatedImage,
@@ -59,6 +61,9 @@ class FrameAirplaneRemover {
         }
         self.width = image.width
         self.height = image.height
+
+        self.houghTransform = HoughTransform(data_width: width, data_height: height)
+        
         self.bytesPerPixel = image.bytesPerPixel
         self.bytesPerRow = width*bytesPerPixel
         self.max_pixel_distance = max_pixel_distance
@@ -372,6 +377,7 @@ class FrameAirplaneRemover {
 
     // this method first analyzises the outlier groups and then paints over them
     func paintOverAirplanes() {
+        let start_time = NSDate().timeIntervalSince1970
 
         var should_paint: [String:Bool] = [:]
         Log.i("frame \(frame_index) calculating outlier group bounds")
@@ -418,6 +424,9 @@ class FrameAirplaneRemover {
             }
         }
 
+        let time_1 = NSDate().timeIntervalSince1970
+        let interval1 = String(format: "%0.1f", time_1 - start_time)
+        
         Log.i("frame \(frame_index) deciding paintability of outlier groups")
 /*
         // sort by group size, process largest first
@@ -475,7 +484,7 @@ class FrameAirplaneRemover {
 
         // do a hough transform and compare leading outlier groups to lines in the image
         
-        var hough_data = [Bool](repeating: false, count: width*height)
+        //var hough_data = [Bool](repeating: false, count: width*height)
 
         // mark potential lines in the hough_data by groups larger than some size
         for (index, group_name) in outlier_groups.enumerated() {
@@ -483,70 +492,88 @@ class FrameAirplaneRemover {
                let group_size = neighbor_groups[group_name]
             {
                 if group_size > min_group_size { 
-                    hough_data[index] = true
+                    houghTransform.input_data[index] = true
                 }
             }
         }
 
-        let lines = lines_from_hough_transform(input_data: hough_data,
-                                           data_width: width,
-                                           data_height: height,
-                                           min_count: min_line_count,
-                                           number_of_lines_returned: max_number_of_lines)
+        let time_2 = NSDate().timeIntervalSince1970
+        let interval2 = String(format: "%0.1f", time_2 - time_1)
 
-        Log.d("got \(lines.count) lines from the hough transform")
+        let lines = houghTransform.lines(min_count: min_line_count,
+                                         number_of_lines_returned: max_number_of_lines)
 
+        //Log.d("got \(lines.count) lines from the hough transform")
+
+
+        let time_3 = NSDate().timeIntervalSince1970
+        let interval3 = String(format: "%0.1f", time_3 - time_2)
 
         // re-use the hough_data above for each group (make all false)
-        for i in 0 ..< width*height { hough_data[i] = false }
+        for i in 0 ..< width*height { houghTransform.input_data[i] = false }
 
+        let time_4 = NSDate().timeIntervalSince1970
+        let interval4 = String(format: "%0.1f", time_4 - time_3)
+
+        var processed_group_count = 0
+        
         // look through all neighber groups greater than min_group_size
         for (name, size) in neighbor_groups {
-            
             if size > min_group_size,
                let min_x = group_min_x[name],
                let min_y = group_min_y[name],
                let max_x = group_max_x[name],
                let max_y = group_max_y[name]
             {
-                // first do a hough transform on just this outlier group
+//        let group_start_time = NSDate().timeIntervalSince1970
                 
+                // first do a hough transform on just this outlier group
+                processed_group_count += 1
                 // set all pixels of this group to true in the hough data
+                // use min_x, etc to speed this up
                 for (index, group_name) in outlier_groups.enumerated() {
                     if let group_name = group_name,
                        name == group_name
                     {
-                        hough_data[index] = true
+                        houghTransform.input_data[index] = true
                     }
                 }
 
+//        let group_time_1 = NSDate().timeIntervalSince1970
+//        let group_interval1 = String(format: "%0.1f", group_time_1 - group_start_time)
+        
                 // get the theta and rho of just this outlier group
                 // XXX this transform could be made faster by only
                 // processing the known bounds of this outlier group,
                 // not the entire input data
-                let lines = lines_from_hough_transform(input_data: hough_data,
-                                                   data_width: width,
-                                                   data_height: height,
-                                                   min_count: 10,
-                                                   number_of_lines_returned: 1,
-                                                   x_start: min_x,
-                                                   y_start: min_y,
-                                                   x_limit: max_x+1,
-                                                   y_limit: max_y+1)
+        houghTransform.resetCounts()
+                
+        let lines = houghTransform.lines(min_count: 10,
+                                     number_of_lines_returned: 1,
+                                         x_start: min_x,
+                                         y_start: min_y,
+                                         x_limit: max_x+1,
+                                         y_limit: max_y+1)
                 // this is the most likely line from the outlier group
                 let (group_theta, group_rho, group_count) = lines[0]
                 
-                //Log.d("got \(name) has theta \(group_theta) rho \(group_rho) count \(group_count)")
+//        let group_time_2 = NSDate().timeIntervalSince1970
+//        let group_interval2 = String(format: "%0.1f", group_time_2 - group_time_1)
+
+        //Log.d("got \(name) has theta \(group_theta) rho \(group_rho) count \(group_count)")
                 
                 // set all pixels of this group to false in the hough data for reuse
                 for (index, group_name) in outlier_groups.enumerated() {
                     if let group_name = group_name,
                        name == group_name
                     {
-                        hough_data[index] = false
+                        houghTransform.input_data[index] = false
                     }
                 }
             
+//        let group_time_3 = NSDate().timeIntervalSince1970
+//        let group_interval3 = String(format: "%0.1f", group_time_3 - group_time_2)
+
                 var should_paint_this_one = should_paint[name]
                 for line in lines {
                     if line.count > min_line_count {
@@ -562,9 +589,17 @@ class FrameAirplaneRemover {
                     }
                 }
                 should_paint[name] = should_paint_this_one
+//        let group_time_4 = NSDate().timeIntervalSince1970
+//        let group_interval4 = String(format: "%0.1f", group_time_4 - group_time_3)
+
+//        Log.i("frame \(frame_index) done painting - \(group_interval4)s - \(group_interval3)s - \(group_interval2)s - \(group_interval1)s")
+        
             }
         }
-
+        Log.d("frame \(frame_index) processed \(processed_group_count) groups")
+        let time_5 = NSDate().timeIntervalSince1970
+        let interval5 = String(format: "%0.1f", time_5 - time_4)
+        
         // paint over every outlier in the paint list with pixels from the adjecent frames
         for (index, group_name) in outlier_groups.enumerated() {
             if let group_name = group_name,
@@ -577,7 +612,10 @@ class FrameAirplaneRemover {
             }
         }
 
-        Log.i("frame \(frame_index) done painting")
+        let time_6 = NSDate().timeIntervalSince1970
+        let interval6 = String(format: "%0.1f", time_6 - time_5)
+        
+        Log.i("frame \(frame_index) done painting \(interval6)s - \(interval5)s - \(interval4)s - \(interval3)s - \(interval2)s - \(interval1)s")
     }
 
     func writeTestFile() {
