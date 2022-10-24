@@ -78,19 +78,19 @@ Log.handlers =
     ]
 
 
-let hough_test = true
+let hough_test = false
 
 if hough_test {
     // convert line between two points on screen into polar coords
-
-    let (theta, rho) = polar_coords(x1: 45, y1: 32, x2: 80, y2: 67)
+    // [276, 0] => [416, 163]
+    let (theta, rho) = polar_coords(x1: 276, y1: 0, x2: 416, y2: 163)
    
-    Log.d("\(theta) rho \(rho)")
+    Log.d("theta \(theta) rho \(rho)")
 
     let filename = "hough_test_image.tif"
     let output_filename = "hough_background.tif"
 
-    hough_test(filename: filename, output_filename: output_filename)
+//    hough_test(filename: filename, output_filename: output_filename)
     
 } else if CommandLine.arguments.count < 1 {
     Log.d("need more args!")    // XXX make this better
@@ -147,7 +147,7 @@ if hough_test {
         if #available(macOS 10.15, *) {
             let dirname = "\(path)/\(input_image_sequence_dirname)"
             let eraser = NighttimeAirplaneRemover(imageSequenceDirname: dirname,
-                                                  maxConcurrent: 20,
+                                                  maxConcurrent: 40,
                                                   maxPixelDistance: 7200,
                                                   padding: 0,
                                                   testPaint: true)

@@ -4,7 +4,7 @@ import Cocoa
 
 // this class holds the logic for removing airplanes from a single frame
 
-let min_group_size = 15         // XXX
+let min_group_size = 20         // XXX
 
 @available(macOS 10.15, *)
 class FrameAirplaneRemover {
@@ -484,9 +484,11 @@ class FrameAirplaneRemover {
         let lines = lines_from_hough_transform(input_data: hough_data,
                                                data_width: width,
                                                data_height: height,
-                                               min_count: 10,
+                                               min_count: 100,
                                                number_of_lines_returned: 20)
 
+        Log.d("got \(lines.count) lines from the hough transform")
+        
         // to look for lines in this transform that match
         for (name, size) in neighbor_groups {
             if let (theta1, rho1) = polar_coord_1[name],
@@ -494,6 +496,7 @@ class FrameAirplaneRemover {
             {
                 if size > min_group_size {  // XXX hardcoded constant
                     Log.d("group \(name) of size \(size) has theta1 \(theta1), rho1 \(rho1) theta2 \(theta2), rho2 \(rho2)")
+                    var should_paint_this_one = should_paint[name]
                     for line in lines {
                         // make final decision based upon how close these values are
                         if theta_rho_comparison(theta1: line.theta, rho1: line.rho,
@@ -501,11 +504,12 @@ class FrameAirplaneRemover {
                            theta_rho_comparison(theta1: line.theta, rho1: line.rho,
                                                 theta2: theta2, rho2: rho2)
                         {
-                            should_paint[name] = true
+                            should_paint_this_one = true
                         } else {
-                            should_paint[name] = false
+                            //should_paint[name] = false
                         }
                     }
+                    should_paint[name] = should_paint_this_one
                 }
             }
         }
@@ -608,18 +612,18 @@ func tag(within distance: UInt, ofX x: Int, andY y: Int,
    }
    return nil
 }
-*/
 func hypotenuse(x1: Int, y1: Int, x2: Int, y2: Int) -> Int {
     let x_dist = Int(abs(Int32(x2)-Int32(x1)))
     let y_dist = Int(abs(Int32(y2)-Int32(y1)))
     return Int(sqrt(Float(x_dist*x_dist+y_dist*y_dist)))
 }
+*/
 
 func theta_rho_comparison(theta1: Double, rho1: Double, theta2: Double, rho2: Double) -> Bool {
-    // fu                      
     let theta_diff = abs(theta1-theta2) // degrees
     let rho_diff = abs(rho1-rho2)       // pixels
 
-    return theta_diff < 5 && rho_diff < 10 // XXX hardcoded constants
+    return theta_diff < Double.pi && // PI here is just random
+             rho_diff < 10           // XXX hardcoded constants
 }
                   
