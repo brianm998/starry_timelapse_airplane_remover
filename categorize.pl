@@ -42,34 +42,41 @@ my $number_airplane_records = scalar(@$airplane_records);
 my $number_non_airplane_records = scalar(@$non_airplane_records);
 
 my $airplane_size_histogram_size = 10;
+my $non_airplane_size_histogram_size = 10;
+my $airplane_aspect_ratio_histogram_size = 10;
+my $non_airplane_aspect_ratio_histogram_size = 10;
+my $airplane_fill_histogram_size = 10;
+my $non_airplane_fill_histogram_size = 10;
 
 my ($airplane_min_size, $airplane_max_size, $airplane_size_histogram) =
   size_histogram($airplane_records, $airplane_size_histogram_size);
 
-my $non_airplane_size_histogram_size = 20;
+my $airplane_size_step_size = ($airplane_max_size - $airplane_min_size)/$airplane_size_histogram_size;
 
 my ($non_airplane_min_size, $non_airplane_max_size, $non_airplane_size_histogram) =
   size_histogram($non_airplane_records, $non_airplane_size_histogram_size);
 
-my $airplane_aspect_ratio_histogram_size = 10;
+my $non_airplane_size_step_size = ($non_airplane_max_size - $non_airplane_min_size)/$non_airplane_size_histogram_size;
 
 my ($airplane_min_aspect_ratio, $airplane_max_aspect_ratio, $airplane_aspect_ratio_histogram) =
   aspect_ratio_histogram($airplane_records, $airplane_aspect_ratio_histogram_size);
 
-my $non_airplane_aspect_ratio_histogram_size = 20;
+my $airplane_aspect_ratio_step_size = ($airplane_max_aspect_ratio - $airplane_min_aspect_ratio)/$airplane_aspect_ratio_histogram_size;
 
 my ($non_airplane_min_aspect_ratio, $non_airplane_max_aspect_ratio, $non_airplane_aspect_ratio_histogram) =
   aspect_ratio_histogram($non_airplane_records, $non_airplane_aspect_ratio_histogram_size);
 
-my $airplane_fill_histogram_size = 10;
+my $non_airplane_aspect_ratio_step_size = ($non_airplane_max_aspect_ratio - $non_airplane_min_aspect_ratio)/$non_airplane_aspect_ratio_histogram_size;
 
 my ($airplane_min_fill, $airplane_max_fill, $airplane_fill_histogram) =
   fill_histogram($airplane_records, $airplane_fill_histogram_size);
 
-my $non_airplane_fill_histogram_size = 20;
+my $airplane_fill_step_size = ($airplane_max_fill - $airplane_min_fill)/$airplane_fill_histogram_size;
 
 my ($non_airplane_min_fill, $non_airplane_max_fill, $non_airplane_fill_histogram) =
   fill_histogram($non_airplane_records, $non_airplane_fill_histogram_size);
+
+my $non_airplane_fill_step_size = ($non_airplane_max_fill - $non_airplane_min_fill)/$non_airplane_fill_histogram_size;
 
 print STDERR "we have $number_airplane_records airplane records\n";
 print STDERR "we have $number_non_airplane_records non_airplane records\n";
@@ -92,23 +99,29 @@ import Foundation
 // the unix time this file was created
 let paint_group_logic_time = $epoc_seconds
 
-let airplane_min_size = $airplane_min_size
-let airplane_max_size = $airplane_max_size
+let airplane_min_size: UInt64 = $airplane_min_size
+let airplane_max_size: UInt64 = $airplane_max_size
+let airplane_size_step_size: Double = $airplane_size_step_size
 
-let non_airplane_min_size = $non_airplane_min_size
-let non_airplane_max_size = $non_airplane_max_size
+let non_airplane_min_size: UInt64 = $non_airplane_min_size
+let non_airplane_max_size: UInt64 = $non_airplane_max_size
+let non_airplane_size_step_size: Double = $non_airplane_size_step_size
 
-let airplane_min_aspect_ratio = $airplane_min_aspect_ratio
-let airplane_max_aspect_ratio = $airplane_max_aspect_ratio
+let airplane_min_aspect_ratio: Double = $airplane_min_aspect_ratio
+let airplane_max_aspect_ratio: Double = $airplane_max_aspect_ratio
+let airplane_aspect_ratio_step_size: Double = $airplane_aspect_ratio_step_size
 
-let non_airplane_min_aspect_ratio = $non_airplane_min_aspect_ratio
-let non_airplane_max_aspect_ratio = $non_airplane_max_aspect_ratio
+let non_airplane_min_aspect_ratio: Double = $non_airplane_min_aspect_ratio
+let non_airplane_max_aspect_ratio: Double = $non_airplane_max_aspect_ratio
+let non_airplane_aspect_ratio_step_size: Double = $non_airplane_aspect_ratio_step_size
 
-let airplane_min_fill = $airplane_min_fill
-let airplane_max_fill = $airplane_max_fill
+let airplane_min_fill: Double = $airplane_min_fill
+let airplane_max_fill: Double = $airplane_max_fill
+let airplane_fill_step_size: Double = $airplane_fill_step_size
 
-let non_airplane_min_fill = $non_airplane_min_fill
-let non_airplane_max_fill = $non_airplane_max_fill
+let non_airplane_min_fill: Double = $non_airplane_min_fill
+let non_airplane_max_fill: Double = $non_airplane_max_fill
+let non_airplane_fill_step_size: Double = $non_airplane_fill_step_size
 
 let airplane_size_histogram = [
 EOF
@@ -116,7 +129,7 @@ EOF
 
 foreach my $airplane_histogram_entry (@$airplane_size_histogram) {
   if(defined $airplane_histogram_entry) {
-    print "    $airplane_histogram_entry,\n";
+    print "    ",$airplane_histogram_entry/$number_airplane_records,",\n";
   } else {
     print "    0,\n";
   }
@@ -126,7 +139,7 @@ print "]\n\n";
 print "let non_airplane_size_histogram = [\n";
 foreach my $non_airplane_histogram_entry (@$non_airplane_size_histogram) {
   if(defined $non_airplane_histogram_entry) {
-    print "    $non_airplane_histogram_entry,\n";
+    print "    ",$non_airplane_histogram_entry/$number_non_airplane_records,",\n";
   } else {
     print "    0,\n";
   }
@@ -137,7 +150,7 @@ print "let airplane_fill_histogram = [\n";
 
 foreach my $airplane_histogram_entry (@$airplane_fill_histogram) {
   if(defined $airplane_histogram_entry) {
-    print "    $airplane_histogram_entry,\n";
+    print "    ",$airplane_histogram_entry/$number_airplane_records,",\n";
   } else {
     print "    0,\n";
   }
@@ -147,17 +160,17 @@ print "]\n\n";
 print "let non_airplane_fill_histogram = [\n";
 foreach my $non_airplane_histogram_entry (@$non_airplane_fill_histogram) {
   if(defined $non_airplane_histogram_entry) {
-    print "    $non_airplane_histogram_entry,\n";
+    print "    ",$non_airplane_histogram_entry/$number_non_airplane_records,",\n";
   } else {
     print "    0,\n";
   }
 }
-print "]\n";
+print "]\n\n";
 print "let airplane_aspect_ratio_histogram = [\n";
 
 foreach my $airplane_histogram_entry (@$airplane_aspect_ratio_histogram) {
   if(defined $airplane_histogram_entry) {
-    print "    $airplane_histogram_entry,\n";
+    print "    ",$airplane_histogram_entry/$number_airplane_records,",\n";
   } else {
     print "    0,\n";
   }
@@ -167,7 +180,7 @@ print "]\n\n";
 print "let non_airplane_aspect_ratio_histogram = [\n";
 foreach my $non_airplane_histogram_entry (@$non_airplane_aspect_ratio_histogram) {
   if(defined $non_airplane_histogram_entry) {
-    print "    $non_airplane_histogram_entry,\n";
+    print "    ",$non_airplane_histogram_entry/$number_non_airplane_records,",\n";
   } else {
     print "    0,\n";
   }
@@ -175,6 +188,60 @@ foreach my $non_airplane_histogram_entry (@$non_airplane_aspect_ratio_histogram)
 print "]\n";
 
 print <<EOF
+
+func airplane_size_histogram_value(for size: UInt64) -> Double {
+    if size < airplane_min_size { return 0 }
+    if size > airplane_max_size { return 0 }
+
+    let histogram_index = Int(Double(size - airplane_min_size)/airplane_size_step_size)
+
+    return airplane_size_histogram[histogram_index]
+}
+
+func non_airplane_size_histogram_value(for size: UInt64) -> Double {
+    if size < non_airplane_min_size { return 0 }
+    if size > non_airplane_max_size { return 0 }
+
+    let histogram_index = Int(Double(size - non_airplane_min_size)/non_airplane_size_step_size)
+
+    return non_airplane_size_histogram[histogram_index]
+}
+
+func airplane_aspect_ratio_histogram_value(for aspect_ratio: Double) -> Double {
+    if aspect_ratio < airplane_min_aspect_ratio { return 0 }
+    if aspect_ratio > airplane_max_aspect_ratio { return 0 }
+
+    let histogram_index = Int((aspect_ratio - airplane_min_aspect_ratio)/airplane_aspect_ratio_step_size)
+
+    return airplane_aspect_ratio_histogram[histogram_index]
+}
+
+func non_airplane_aspect_ratio_histogram_value(for aspect_ratio: Double) -> Double {
+    if aspect_ratio < non_airplane_min_aspect_ratio { return 0 }
+    if aspect_ratio > non_airplane_max_aspect_ratio { return 0 }
+
+    let histogram_index = Int((aspect_ratio - non_airplane_min_aspect_ratio)/non_airplane_aspect_ratio_step_size)
+
+    return non_airplane_aspect_ratio_histogram[histogram_index]
+}
+
+func airplane_fill_histogram_value(for fill: Double) -> Double {
+    if fill < airplane_min_fill { return 0 }
+    if fill > airplane_max_fill { return 0 }
+
+    let histogram_index = Int((fill - airplane_min_fill)/airplane_fill_step_size)
+
+    return airplane_fill_histogram[histogram_index]
+}
+
+func non_airplane_fill_histogram_value(for fill: Double) -> Double {
+    if fill < non_airplane_min_fill { return 0 }
+    if fill > non_airplane_max_fill { return 0 }
+
+    let histogram_index = Int((fill - non_airplane_min_fill)/non_airplane_fill_step_size)
+
+    return non_airplane_fill_histogram[histogram_index]
+}
 
 func shouldPaintGroup(min_x: Int, min_y: Int,
                       max_x: Int, max_y: Int,
@@ -212,7 +279,7 @@ print STDERR ("non airplanes were [$non_airplane_min_size, $non_airplane_max_siz
 print "    // outlier groups smaller aren't airplanes\n";
 print "    if(group_size < $airplane_min_size) { return false } // not airplane\n\n";
 print "    // outlier groups larger are airplanes\n";
-print "    if(group_size > $non_airplane_max_size) { return true } // is airplane\n\n";
+print "    //if(group_size > $non_airplane_max_size) { return true } // is airplane\n\n";
 
 
 print STDERR "there is a no gap between airplanes and non airplanes\n";
@@ -269,7 +336,7 @@ $new_non_airplane_arr = [];
 print("    // outlier groups with a higher fill amount aren't airplanes\n");
 print("    if(amount_filled > ",$airplane_max_fill,") { return false } // notAirplane\n\n");
 print("    // outlier groups with a lower fill amount aren't airplanes\n");
-print("    if(amount_filled < ",$airplane_min_fill,") { return false } // notAirplane\n\n");
+print("    //if(amount_filled < ",$airplane_min_fill,") { return false } // notAirplane\n\n");
 
 foreach my $record (@$non_airplane_records) {
   my $width = $record->[0];
@@ -307,14 +374,14 @@ print STDERR "non airplanes were [$non_airplane_min_aspect, $non_airplane_max_as
 
 
 print("    // outlier groups with a larger aspect ratio aren't airplanes\n");
-print("    if(aspect_ratio > $non_airplane_min_aspect) { return false } // notAirplane\n\n");
+print ("    //if(aspect_ratio > $non_airplane_min_aspect) { return false } // notAirplane\n\n");
 print("    //  groups with a smaller aspect ratio are airplanes\n");
-print("    if(aspect_ratio < $airplane_max_aspect) { return true } // airplane\n\n");
+print ("    //if(aspect_ratio < $airplane_max_aspect) { return true } // airplane\n\n");
 
 if ($non_airplane_min_aspect > $airplane_max_aspect) {
   print"    // with $non_airplane_min_aspect > $airplane_max_aspect,\n";
   print"    // no outlier groups from the testing group reached this point\n\n";
-  print"    Log.w(\"unable to properly detect outlier with width \\(bounding_box_width) height \\(bounding_box_height) and size \\(group_size) further data collection and refinement in $0 is necessary to resolve this\")\n";
+  print"    //Log.w(\"unable to properly detect outlier with width \\(bounding_box_width) height \\(bounding_box_height) and size \\(group_size) further data collection and refinement in $0 is necessary to resolve this\")\n";
 } else {
   print"    // with $non_airplane_min_aspect < $airplane_max_aspect,\n";
   print"    // some outlier groups can reach this point.\n";
@@ -336,7 +403,31 @@ $non_airplane_records = $new_non_airplane_arr;
 
 print <<END
 
-    return false // guess it's not an airplane
+    let is_airplane_from_size = airplane_size_histogram_value(for: group_size)
+    let is_non_airplane_from_size = non_airplane_size_histogram_value(for: group_size)
+
+    let is_airplane_from_aspect_ratio = airplane_aspect_ratio_histogram_value(for: aspect_ratio)
+    let is_non_airplane_from_aspect_ratio = non_airplane_aspect_ratio_histogram_value(for: aspect_ratio)
+
+    let is_airplane_from_fill = airplane_fill_histogram_value(for: amount_filled)
+    let is_non_airplane_from_fill = non_airplane_fill_histogram_value(for: amount_filled)
+
+    let is_airplane = is_airplane_from_size + is_airplane_from_aspect_ratio + is_airplane_from_fill
+    let is_non_airplane = is_non_airplane_from_size + is_non_airplane_from_aspect_ratio + is_non_airplane_from_fill
+
+    let ret = is_airplane > is_non_airplane
+
+    if is_airplane_from_aspect_ratio < is_non_airplane_from_aspect_ratio {
+        //Log.w("for size \\(group_size) aspect_ratio \\(aspect_ratio) fill \\(amount_filled) using is_airplane_from_aspect_ratio \\(is_airplane_from_aspect_ratio) < \\(is_non_airplane_from_aspect_ratio) false")
+        return false
+    }
+
+    if ret {
+        Log.i("is_airplane from_size \\(is_airplane_from_size) \\(is_non_airplane_from_size) from_aspect_ratio \\(is_airplane_from_aspect_ratio) \\(is_non_airplane_from_aspect_ratio) from_fill \\(is_airplane_from_fill) \\(is_non_airplane_from_fill)")
+
+        Log.w("for size \\(group_size) aspect_ratio \\(aspect_ratio) fill \\(amount_filled) using is_airplane \\(is_airplane) is_non_airplane \\(is_non_airplane) for \\(ret)")
+    }
+    return ret
 }
 END
 ;

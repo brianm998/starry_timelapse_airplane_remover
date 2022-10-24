@@ -38,6 +38,8 @@ func polar_coords(x1: Int, y1: Int, x2: Int, y2: Int) -> (theta: Double, rho: Do
     return (theta: theta, rho: rho)
 }
 
+// returns an array of possible lines in the input data
+// lines are returned in polar coords of theta and rho
 func lines_from_hough_transform(input_data: [Bool], // indexed by y * data_width + x
                                 data_width: Int,
                                 data_height: Int,
@@ -109,7 +111,7 @@ func lines_from_hough_transform(input_data: [Bool], // indexed by y * data_width
     
     // XXX improvement - calculate maxes based upon a 3x3 mask 
     let sortedLines = lines.sorted() { a, b in
-                                       return a.count < b.count
+        return a.count < b.count
     }
     
     let small_set_lines = Array<Line>(sortedLines.suffix(number_of_lines_returned).reversed())
