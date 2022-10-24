@@ -501,7 +501,7 @@ class FrameAirplaneRemover {
         let interval2 = String(format: "%0.1f", time_2 - time_1)
 
         let lines = houghTransform.lines(min_count: min_line_count,
-                                         number_of_lines_returned: max_number_of_lines)
+                                     number_of_lines_returned: max_number_of_lines)
 
         //Log.d("got \(lines.count) lines from the hough transform")
 
@@ -548,14 +548,14 @@ class FrameAirplaneRemover {
                 // not the entire input data
         houghTransform.resetCounts()
                 
-        let lines = houghTransform.lines(min_count: 10,
+        let group_lines = houghTransform.lines(min_count: 10,
                                      number_of_lines_returned: 1,
                                          x_start: min_x,
                                          y_start: min_y,
                                          x_limit: max_x+1,
                                          y_limit: max_y+1)
                 // this is the most likely line from the outlier group
-                let (group_theta, group_rho, group_count) = lines[0]
+                let (group_theta, group_rho, group_count) = group_lines[0]
                 
 //        let group_time_2 = NSDate().timeIntervalSince1970
 //        let group_interval2 = String(format: "%0.1f", group_time_2 - group_time_1)
