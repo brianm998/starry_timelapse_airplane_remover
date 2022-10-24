@@ -10,39 +10,22 @@ todo:
  - write perl wrapper to keep it running when it crashes (make sure all saved files are ok first?)
  - try image blending
  - make it faster
- - figure out how to parallelize processing of each frame
- - create a direct access pixel object that doesn't copy the value
-   make an interface to also allow a mutable one like there is now
-   reading pixels out of the base data is time consuming, and unnecessary
- - figure out some way to identify multiple outlier groups that are in a line (hough transform?)
  - fix padding (not sure it still works, could use a different alg)
  - try detecting outlier groups close to eachother by adding padding and re-analyzing
- - do a deep unsafe pointer audit to better understand some difficult to reproduce crashes
-   have a good understanding of when and where each image buffer is allocated and released
-
-   https://stackoverflow.com/questions/52420160/ios-error-heap-corruption-detected-free-list-is-damaged-and-incorrect-guard-v
-   https://developer.apple.com/documentation/xcode/diagnosing-memory-thread-and-crash-issues-early
-
-   b malloc_error_break
-
-   NSZombieEnabled
-
-   https://www.raywenderlich.com/3089-instruments-tutorial-for-ios-how-to-debug-memory-leaks
-
  - add scripts to allow video to processed video in one command
    - decompress existing video w/ ffmpeg (and note exactly how it was compressed)
    - process image sequence with ntar
    - recompress processed image sequence w/ ffmpeg with same parameters as before
    - remove image sequence dir
+ - fix bug where '/' at the end of the command line arg isn't handled well
  - detect idle cpu % and use max cpu% instead of max % of frames
  - maybe just always comare against a single frame? (faster, not much difference?
- - loading the layer mask could be faster
 
    group painting criteria:
-     - group size in pix2els 
+     - group size in pixels 
      - bounding box width, height, aspect ratio and diagonal size
      - percentage of bounding box filled w/ pixels
-
+     - group conforms to hough transorm line theta and rho
 
 
   group selection plan:
@@ -64,12 +47,6 @@ todo:
      - what frame was it on
      - where was it in the frame?
      - an image of it would be ideal, just the outlier pixels within the bounding box
-
-
-   - next steps:
-     - fix test_small_medium, it's not catching the one real plane
-     - use that as a test-bed to re-write the image access logic to not use objects
-     
 */
 
 Log.handlers = 
@@ -81,6 +58,7 @@ Log.handlers =
 let hough_test = false
 
 if hough_test {
+    // this is for doing direct hough_tests outside the rest of the code
     // convert line between two points on screen into polar coords
     // [276, 0] => [416, 163]
     let (theta, rho) = polar_coords(x1: 276, y1: 0, x2: 416, y2: 163)
@@ -98,6 +76,7 @@ if hough_test {
     let first_command_line_arg = CommandLine.arguments[1]
 
     if first_command_line_arg.hasSuffix("/layer_mask.tif") {
+        // this is used for group selection data collection
         let layer_mask_image_name = first_command_line_arg
 
         if #available(macOS 10.15, *) {
@@ -147,7 +126,7 @@ if hough_test {
         if #available(macOS 10.15, *) {
             let dirname = "\(path)/\(input_image_sequence_dirname)"
             let eraser = NighttimeAirplaneRemover(imageSequenceDirname: dirname,
-                                                  maxConcurrent: 40,
+                                                  maxConcurrent: 30,
                                                   maxPixelDistance: 7200,
                                                   padding: 0,
                                                   testPaint: true)
