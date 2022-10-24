@@ -103,42 +103,42 @@ class HoughTransform {
                 
                 var is_3_x_3_max = true
                 let count = counts[x][y]
-                if count > 100 {
+//                if count > 100 {
                     //Log.d("potential line @ \(x) \(y) has count \(count)")
-                }
+//                }
                 
                 // left neighbor
                 if x > 0,
                    count <= counts[x-1][y]   { is_3_x_3_max = false }
-                
+
                 // left upper neighbor                    
-                if x > 0, y > 0,
+                else if x > 0, y > 0,
                    count <= counts[x-1][y-1] { is_3_x_3_max = false }
                 
                 // left lower neighbor                    
-                if x > 0,
+                else if x > 0,
                    y < hough_height - 1,
                    count <= counts[x-1][y+1] { is_3_x_3_max = false }
                 
                 // upper neighbor                    
-                if y > 0,
+                else if y > 0,
                    count <= counts[x][y-1]   { is_3_x_3_max = false }
                 
                 // lower neighbor                    
-                if y < hough_height - 1,
+                else if y < hough_height - 1,
                    count <= counts[x][y+1]   { is_3_x_3_max = false }
                 
                 // right neighbor
-                if x < hough_width - 1,
+                else if x < hough_width - 1,
                    count <= counts[x+1][y]   { is_3_x_3_max = false }
                 
                 // right upper neighbor                    
-                if x < hough_width - 1,
+                else if x < hough_width - 1,
                    y > 0,
                    count <= counts[x+1][y-1] { is_3_x_3_max = false }
                 
                 // right lower neighbor                    
-                if x < hough_width - 1,
+                else if x < hough_width - 1,
                    y < hough_height - 1,
                    count <= counts[x+1][y+1] { is_3_x_3_max = false }
                 

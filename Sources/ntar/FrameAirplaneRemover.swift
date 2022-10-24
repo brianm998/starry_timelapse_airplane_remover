@@ -5,9 +5,9 @@ import Cocoa
 // this class holds the logic for removing airplanes from a single frame
 
 // XXX here are some randome global constants that maybe should be exposed somehow
-let min_group_size = 15         // groups smaller than this are ignored
-let min_line_count = 40         // lines with counts smaller than this are ignored
-let max_theta_diff: Double = 3   // degrees of difference allowe between lines
+let min_group_size = 50         // groups smaller than this are ignored
+let min_line_count = 80         // lines with counts smaller than this are ignored
+let max_theta_diff: Double = 5   // degrees of difference allowe between lines
 let max_rho_dif: Double = 8      // pixels of line displacement allowed
 let max_number_of_lines = 80     // don't process more lines than this per image
 
@@ -546,14 +546,15 @@ class FrameAirplaneRemover {
                 // XXX this transform could be made faster by only
                 // processing the known bounds of this outlier group,
                 // not the entire input data
-        houghTransform.resetCounts()
+                houghTransform.resetCounts()
                 
-        let group_lines = houghTransform.lines(min_count: 10,
-                                     number_of_lines_returned: 1,
-                                         x_start: min_x,
-                                         y_start: min_y,
-                                         x_limit: max_x+1,
-                                         y_limit: max_y+1)
+                let group_lines = houghTransform.lines(min_count: 10,
+                                                  number_of_lines_returned: 1,
+                                                  x_start: min_x,
+                                                  y_start: min_y,
+                                                  x_limit: max_x+1,
+                                                  y_limit: max_y+1)
+
                 // this is the most likely line from the outlier group
                 let (group_theta, group_rho, group_count) = group_lines[0]
                 
