@@ -26,10 +26,10 @@ class ImageSequenceProcessor {
 
     // concurrent dispatch queue so we can process frames in parallel
     let dispatchQueue = DispatchQueue(label: "image_sequence_processor",
-                                      qos: .unspecified,
-                                      attributes: [.concurrent],
-                                      autoreleaseFrequency: .inherit,
-                                      target: nil)
+                                  qos: .unspecified,
+                                  attributes: [.concurrent],
+                                  autoreleaseFrequency: .inherit,
+                                  target: nil)
     
     let dispatchGroup = DispatchGroup()
     

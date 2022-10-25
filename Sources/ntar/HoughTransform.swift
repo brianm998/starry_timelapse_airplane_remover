@@ -86,58 +86,57 @@ class HoughTransform {
         for x in 0 ..< hough_width {
             for y in 0 ..< hough_height {
                 let count = counts[x][y]
+                if count == 0  { continue }     // ignore cells with no count
 
-                if count > 0 {                // ignore cells with no count
-                    var theta = Double(x)/2.0 // why /2 ?
-                    var rho = Double(y) - rmax
+                var theta = Double(x)/2.0 // why /2 ?
+                var rho = Double(y) - rmax
                     
-                    if(rho < 0) {
-                        // keeping rho positive
-                        //Log.d("reversing orig rho \(rho) theta \(theta)")
-                        rho = -rho
-                        theta = (theta + 180).truncatingRemainder(dividingBy: 360)
-                    }
+                if(rho < 0) {
+                    // keeping rho positive
+                    //Log.d("reversing orig rho \(rho) theta \(theta)")
+                    rho = -rho
+                    theta = (theta + 180).truncatingRemainder(dividingBy: 360)
+                }
                     
-                    var is_3_x_3_max = true
-                    
-                    // left neighbor
-                    if x > 0,
-                       count <= counts[x-1][y]   { is_3_x_3_max = false }
-
-                    // left upper neighbor                    
-                    else if x > 0, y > 0,
-                            count <= counts[x-1][y-1] { is_3_x_3_max = false }
-                    
-                    // left lower neighbor                    
-                    else if x > 0,
-                            y < hough_height - 1,
-                            count <= counts[x-1][y+1] { is_3_x_3_max = false }
-                    
-                    // upper neighbor                    
-                    else if y > 0,
-                            count <= counts[x][y-1]   { is_3_x_3_max = false }
-                    
-                    // lower neighbor                    
-                    else if y < hough_height - 1,
-                            count <= counts[x][y+1]   { is_3_x_3_max = false }
-                    
-                    // right neighbor
-                    else if x < hough_width - 1,
-                            count <= counts[x+1][y]   { is_3_x_3_max = false }
-                    
-                    // right upper neighbor                    
-                    else if x < hough_width - 1,
-                            y > 0,
-                            count <= counts[x+1][y-1] { is_3_x_3_max = false }
-                    
-                    // right lower neighbor                    
-                    else if x < hough_width - 1,
-                            y < hough_height - 1,
-                            count <= counts[x+1][y+1] { is_3_x_3_max = false }
-                    
-                    if is_3_x_3_max {
-                        lines.append((theta: theta, rho: rho, count: Int(count)))
-                    }
+                var is_3_x_3_max = true
+                
+                // left neighbor
+                if x > 0,
+                   count <= counts[x-1][y]   { is_3_x_3_max = false }
+                
+                // left upper neighbor                    
+                else if x > 0, y > 0,
+                        count <= counts[x-1][y-1] { is_3_x_3_max = false }
+                
+                // left lower neighbor                    
+                else if x > 0,
+                        y < hough_height - 1,
+                        count <= counts[x-1][y+1] { is_3_x_3_max = false }
+                
+                // upper neighbor                    
+                else if y > 0,
+                        count <= counts[x][y-1]   { is_3_x_3_max = false }
+                
+                // lower neighbor                    
+                else if y < hough_height - 1,
+                        count <= counts[x][y+1]   { is_3_x_3_max = false }
+                
+                // right neighbor
+                else if x < hough_width - 1,
+                        count <= counts[x+1][y]   { is_3_x_3_max = false }
+                
+                // right upper neighbor                    
+                else if x < hough_width - 1,
+                        y > 0,
+                        count <= counts[x+1][y-1] { is_3_x_3_max = false }
+                
+                // right lower neighbor                    
+                else if x < hough_width - 1,
+                        y < hough_height - 1,
+                        count <= counts[x+1][y+1] { is_3_x_3_max = false }
+                
+                if is_3_x_3_max {
+                    lines.append((theta: theta, rho: rho, count: Int(count)))
                 }
             }
         }

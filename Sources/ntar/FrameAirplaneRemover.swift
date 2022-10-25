@@ -216,90 +216,92 @@ class FrameAirplaneRemover {
 
         // then label all adject outliers
         for (index, outlier_amount) in outlier_amounts.enumerated() {
-            if outlier_amount > max_pixel_distance {
-                let outlier_groupname = outlier_groups[index]
-                if outlier_groupname == nil { // not part of a group yet
-                    var group_size: UInt64 = 0
-                    // tag this virgin outlier with its own key
+            
+            if outlier_amount <= max_pixel_distance { continue }
+            
+            let outlier_groupname = outlier_groups[index]
+            if outlier_groupname != nil { continue }
+
+            // not part of a group yet
+            var group_size: UInt64 = 0
+            // tag this virgin outlier with its own key
+            
+            let outlier_key = "\(index % width),\(index / width)"; // arbitrary but needs to be unique
+            //Log.d("initial index = \(index)")
+            outlier_groups[index] = outlier_key
+            pending_outliers[pending_outlier_insert_index] = index;
+            pending_outlier_insert_index += 1
+            
+            var loop_count: UInt64 = 0
+                
+            while pending_outlier_insert_index != pending_outlier_access_index {
+                //Log.d("pending_outlier_insert_index \(pending_outlier_insert_index) pending_outlier_access_index \(pending_outlier_access_index)")
+                loop_count += 1
+                if loop_count % 1000 == 0 {
+                    Log.d("frame \(frame_index) looping \(loop_count) times \(pending_outliers.count) pending outliers group_size \(group_size)")
+                }
+                
+                let next_outlier_index = pending_outliers[pending_outlier_access_index]
+                //Log.d("next_outlier_index \(next_outlier_index)")
+                
+                pending_outlier_access_index += 1
+                if let _ = outlier_groups[next_outlier_index] {
+                    group_size += 1
                     
-                    let outlier_key = "\(index % width),\(index / width)"; // arbitrary but needs to be unique
-                    //Log.d("initial index = \(index)")
-                    outlier_groups[index] = outlier_key
-                    pending_outliers[pending_outlier_insert_index] = index;
-                    pending_outlier_insert_index += 1
+                    let outlier_x = next_outlier_index % width;
+                    let outlier_y = next_outlier_index / width;
                     
-                    var loop_count: UInt64 = 0
-                                    
-                    while pending_outlier_insert_index != pending_outlier_access_index {
-                        //Log.d("pending_outlier_insert_index \(pending_outlier_insert_index) pending_outlier_access_index \(pending_outlier_access_index)")
-                        loop_count += 1
-                        if loop_count % 1000 == 0 {
-                            Log.d("frame \(frame_index) looping \(loop_count) times \(pending_outliers.count) pending outliers group_size \(group_size)")
-                        }
-    
-                        let next_outlier_index = pending_outliers[pending_outlier_access_index]
-                        //Log.d("next_outlier_index \(next_outlier_index)")
-                        
-                        pending_outlier_access_index += 1
-                        if let _ = outlier_groups[next_outlier_index] {
-                            group_size += 1
-                            
-                            let outlier_x = next_outlier_index % width;
-                            let outlier_y = next_outlier_index / width;
-                            
-                            if outlier_x > 0 { // add left neighbor
-                                let left_neighbor_index = outlier_y * width + outlier_x - 1
-                                if outlier_amounts[left_neighbor_index] > max_pixel_distance,
-                                   outlier_groups[left_neighbor_index] == nil
-                                {
-                                    pending_outliers[pending_outlier_insert_index] = left_neighbor_index
-                                    outlier_groups[left_neighbor_index] = outlier_key
-                                    pending_outlier_insert_index += 1
-                                }
-                            }
-                            
-                            if outlier_x < width - 1 { // add right neighbor
-                                let right_neighbor_index = outlier_y * width + outlier_x + 1
-                                if outlier_amounts[right_neighbor_index] > max_pixel_distance,
-                                   outlier_groups[right_neighbor_index] == nil
-                                {
-                                    pending_outliers[pending_outlier_insert_index] = right_neighbor_index
-                                    outlier_groups[right_neighbor_index] = outlier_key
-                                    pending_outlier_insert_index += 1
-                                }
-                            }
-                            
-                            if outlier_y < 0 { // add top neighbor
-                                let top_neighbor_index = (outlier_y - 1) * width + outlier_x
-                                if outlier_amounts[top_neighbor_index] > max_pixel_distance,
-                                   outlier_groups[top_neighbor_index] == nil
-                                {
-                                    pending_outliers[pending_outlier_insert_index] = top_neighbor_index
-                                    outlier_groups[top_neighbor_index] = outlier_key
-                                    pending_outlier_insert_index += 1
-                                }
-                            }
-                            
-                            if outlier_y < height - 1 { // add bottom neighbor
-                                let bottom_neighbor_index = (outlier_y + 1) * width + outlier_x
-                                if outlier_amounts[bottom_neighbor_index] > max_pixel_distance,
-                                   outlier_groups[bottom_neighbor_index] == nil
-                                {
-                                    pending_outliers[pending_outlier_insert_index] = bottom_neighbor_index
-                                    outlier_groups[bottom_neighbor_index] = outlier_key
-                                    pending_outlier_insert_index += 1
-                                }
-                            }
-                        } else {
-                            //Log.w("next outlier has groupName \(String(describing: next_outlier.groupName))")
-                            // shouldn't end up here with a group named outlier
-                            fatalError("FUCK")
+                    if outlier_x > 0 { // add left neighbor
+                        let left_neighbor_index = outlier_y * width + outlier_x - 1
+                        if outlier_amounts[left_neighbor_index] > max_pixel_distance,
+                           outlier_groups[left_neighbor_index] == nil
+                        {
+                            pending_outliers[pending_outlier_insert_index] = left_neighbor_index
+                            outlier_groups[left_neighbor_index] = outlier_key
+                            pending_outlier_insert_index += 1
                         }
                     }
-                    //Log.d("group \(outlier_key) has \(group_size) members")
-                    individual_group_counts[outlier_key] = group_size
+                    
+                    if outlier_x < width - 1 { // add right neighbor
+                        let right_neighbor_index = outlier_y * width + outlier_x + 1
+                        if outlier_amounts[right_neighbor_index] > max_pixel_distance,
+                           outlier_groups[right_neighbor_index] == nil
+                        {
+                            pending_outliers[pending_outlier_insert_index] = right_neighbor_index
+                            outlier_groups[right_neighbor_index] = outlier_key
+                            pending_outlier_insert_index += 1
+                        }
+                    }
+                    
+                    if outlier_y < 0 { // add top neighbor
+                        let top_neighbor_index = (outlier_y - 1) * width + outlier_x
+                        if outlier_amounts[top_neighbor_index] > max_pixel_distance,
+                           outlier_groups[top_neighbor_index] == nil
+                        {
+                            pending_outliers[pending_outlier_insert_index] = top_neighbor_index
+                            outlier_groups[top_neighbor_index] = outlier_key
+                            pending_outlier_insert_index += 1
+                        }
+                    }
+                    
+                    if outlier_y < height - 1 { // add bottom neighbor
+                        let bottom_neighbor_index = (outlier_y + 1) * width + outlier_x
+                        if outlier_amounts[bottom_neighbor_index] > max_pixel_distance,
+                           outlier_groups[bottom_neighbor_index] == nil
+                        {
+                            pending_outliers[pending_outlier_insert_index] = bottom_neighbor_index
+                            outlier_groups[bottom_neighbor_index] = outlier_key
+                            pending_outlier_insert_index += 1
+                        }
+                    }
+                } else {
+                    //Log.w("next outlier has groupName \(String(describing: next_outlier.groupName))")
+                    // shouldn't end up here with a group named outlier
+                    fatalError("FUCK")
                 }
             }
+            //Log.d("group \(outlier_key) has \(group_size) members")
+            individual_group_counts[outlier_key] = group_size
         }
         self.neighbor_groups = individual_group_counts
     }    
@@ -476,18 +478,18 @@ class FrameAirplaneRemover {
 
                 var should_paint_this_one = should_paint[name]
                 for line in lines {
-                    if line.count > min_line_count {
-                        // make final decision based upon how close these values are
-                        if theta_rho_comparison(theta1: line.theta, rho1: line.rho,
-                                             theta2: group_theta, rho2: group_rho)
-                        {
-                            let theta_diff = abs(line.theta - group_theta)
-                            let rho_diff = abs(line.rho - group_rho)
-                            Log.i("frame \(frame_index) will paint group \(name) with \(line.count) lines (theta, rho) - line (\(line.theta), \(line.rho)) group (\(group_theta), \(group_rho)) theta diff \(theta_diff) rho_diff \(rho_diff)")
-                            should_paint_this_one = true
-                        } else {
-                            should_paint[name] = false // overwrite any previous true
-                        }
+                    if line.count <= min_line_count { continue }
+                    
+                    // make final decision based upon how close these values are
+                    if theta_rho_comparison(theta1: line.theta, rho1: line.rho,
+                                            theta2: group_theta, rho2: group_rho)
+                    {
+                        let theta_diff = abs(line.theta - group_theta)
+                        let rho_diff = abs(line.rho - group_rho)
+                        Log.i("frame \(frame_index) will paint group \(name) with \(line.count) lines (theta, rho) - line (\(line.theta), \(line.rho)) group (\(group_theta), \(group_rho)) theta diff \(theta_diff) rho_diff \(rho_diff)")
+                        should_paint_this_one = true
+                    } else {
+                        should_paint[name] = false // overwrite any previous true
                     }
                 }
                 should_paint[name] = should_paint_this_one
