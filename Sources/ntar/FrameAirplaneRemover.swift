@@ -482,14 +482,15 @@ class FrameAirplaneRemover {
                     
                     // make final decision based upon how close these values are
                     if theta_rho_comparison(theta1: line.theta, rho1: line.rho,
-                                            theta2: group_theta, rho2: group_rho)
+                                         theta2: group_theta, rho2: group_rho)
                     {
                         let theta_diff = abs(line.theta - group_theta)
                         let rho_diff = abs(line.rho - group_rho)
                         Log.i("frame \(frame_index) will paint group \(name) with \(line.count) lines (theta, rho) - line (\(line.theta), \(line.rho)) group (\(group_theta), \(group_rho)) theta diff \(theta_diff) rho_diff \(rho_diff)")
                         should_paint_this_one = true
+                        break
                     } else {
-                        should_paint[name] = false // overwrite any previous true
+                        should_paint_this_one = false // overwrite any previous true
                     }
                 }
                 should_paint[name] = should_paint_this_one
