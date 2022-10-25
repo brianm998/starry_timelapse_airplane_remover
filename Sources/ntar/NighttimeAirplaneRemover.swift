@@ -29,7 +29,7 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
         self.max_pixel_distance = max_pixel_distance
         self.test_paint_outliers = testPaint
         self.test_paint = testPaint
-        var basename = "\(image_sequence_dirname)-no-planes-\(max_pixel_distance)"
+        var basename = "\(image_sequence_dirname)-no-planes-\(max_pixel_distance)-\(min_group_size)-\(min_line_count)-\(group_min_line_count)-\(max_theta_diff)-\(max_rho_diff)-\(max_number_of_lines)"
 
         test_paint_output_dirname = "\(basename)-test-paint"
         let output_dirname = basename

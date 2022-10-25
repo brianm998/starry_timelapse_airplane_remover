@@ -17,12 +17,7 @@ todo:
  - detect idle cpu % and use max cpu% instead of max % of frames
  - maybe just always comare against a single frame? (faster, not much difference?
  - use the number of groups that have fallen into the same line group to boost its painting
-
- - try applying hough transformation to bounding boxes of individual outlier groups
-   - right now we guess the theta and rho of outlier groups from their bounding boxes
-   - instead, use the hough transform on only the outlier group to get theta and rho
-   - take the best line because there is only one outlier group
-   - use this to determine if the groups fit into the line
+ - go async when processing lots of hough transforms on groups
 */
 
 Log.handlers = 

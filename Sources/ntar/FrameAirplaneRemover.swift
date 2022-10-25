@@ -5,11 +5,12 @@ import Cocoa
 // this class holds the logic for removing airplanes from a single frame
 
 // XXX here are some random global constants that maybe should be exposed somehow
-let min_group_size = 50         // groups smaller than this are ignored
-let min_line_count = 80         // lines with counts smaller than this are ignored
-let max_theta_diff: Double = 5   // degrees of difference allowe between lines
-let max_rho_dif: Double = 8      // pixels of line displacement allowed
-let max_number_of_lines = 80     // don't process more lines than this per image
+let min_group_size = 100       // groups smaller than this are ignored
+let min_line_count = 40        // lines with counts smaller than this are ignored
+let group_min_line_count = 4    // used when hough transorming individual groups
+let max_theta_diff: Double = 5  // degrees of difference allowe between lines
+let max_rho_diff: Double = 10   // pixels of line displacement allowed
+let max_number_of_lines = 80    // don't process more lines than this per image
 
 @available(macOS 10.15, *)
 class FrameAirplaneRemover {
@@ -94,7 +95,7 @@ class FrameAirplaneRemover {
         Log.d("frame \(frame_index) got image data")
     }
 
-    // this is still the slowest part of the process, but is now about 10x faster than before
+    // this is still a slow part of the process, but is now about 10x faster than before
     func populateOutlierMap() {
         let start_time = NSDate().timeIntervalSince1970
         // compare pixels at the same image location in adjecent frames
@@ -329,6 +330,7 @@ class FrameAirplaneRemover {
     }
 
     // this method first analyzises the outlier groups and then paints over them
+    // XXX break this up into smaller chunks, it's enormous
     func paintOverAirplanes() {
         let start_time = NSDate().timeIntervalSince1970
 
@@ -445,7 +447,7 @@ class FrameAirplaneRemover {
                 // get the theta and rho of just this outlier group
                 houghTransform.resetCounts()
                 
-                let group_lines = houghTransform.lines(min_count: 10,
+                let group_lines = houghTransform.lines(min_count: group_min_line_count,
                                                   number_of_lines_returned: 1,
                                                   x_start: min_x,
                                                   y_start: min_y,
@@ -479,7 +481,9 @@ class FrameAirplaneRemover {
                         if theta_rho_comparison(theta1: line.theta, rho1: line.rho,
                                              theta2: group_theta, rho2: group_rho)
                         {
-                            Log.i("frame \(frame_index) will paint group \(name) with \(line.count) lines (theta, rho) - line (\(line.theta), \(line.rho)) group (\(group_theta), \(group_rho))")
+                            let theta_diff = abs(line.theta - group_theta)
+                            let rho_diff = abs(line.rho - group_rho)
+                            Log.i("frame \(frame_index) will paint group \(name) with \(line.count) lines (theta, rho) - line (\(line.theta), \(line.rho)) group (\(group_theta), \(group_rho)) theta diff \(theta_diff) rho_diff \(rho_diff)")
                             should_paint_this_one = true
                         } else {
                             should_paint[name] = false // overwrite any previous true
@@ -566,6 +570,6 @@ func theta_rho_comparison(theta1: Double, rho1: Double, theta2: Double, rho2: Do
     let theta_diff = abs(theta1-theta2) // degrees
     let rho_diff = abs(rho1-rho2)       // pixels
 
-    return theta_diff < max_theta_diff && rho_diff < max_rho_dif
+    return theta_diff < max_theta_diff && rho_diff < max_rho_diff
 }
                   

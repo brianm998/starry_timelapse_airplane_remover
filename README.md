@@ -19,6 +19,12 @@ Initially determination of whether of not a group was going to be painted over w
 
 The next iteration was to establish a bounding box for each outlier group, i.e. the smallest crop of the image that could contain all outlying pixels in that group.  A threshold is then applied to the distance between the corners of the group, and only bounding boxes above this threshold are painted over.  This gets better at detecting lines of outliers apart from more circular blobs.
 
-A future iteration would be to apply something like a Hough Transform to the outliers to attempt to identify much smaller groups of outliers that line up across the sky.
+The next iteration was to develop a Hough Transform class which is able to identify lines in a dataset.  Initially this dataset was a matrix of boolean values for each pixel, set to true when there was an outlier group with a size greater than some value.
+
+This identified each line in the outlier data set, and was able to identify catch many airplanes.  The recoginition method was initially based upon just what lines the bounding box would make from its diagionals.  Good enough at first, but many stars that happened to be in line with actual airplane tracks started getting painted.
+
+The next iteration was to classify the theta and rho (polar line coordinates) for each outlier group separately.  This requires running the hough transform separately on each outlier group, but is able to properly distinguish if there is any line orientiation in each group of outliers.
+
+Future iterations could involve testing and tweaking some constants more, as well as implementing some speed improvements in the many many hough transforms needed.
 
 Under development, feel free to reach out to me if you have any questions.
