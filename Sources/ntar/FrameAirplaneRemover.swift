@@ -5,12 +5,16 @@ import Cocoa
 // this class holds the logic for removing airplanes from a single frame
 
 // XXX here are some random global constants that maybe should be exposed somehow
-let min_group_size = 100       // groups smaller than this are ignored
-let min_line_count = 40        // lines with counts smaller than this are ignored
+let min_group_size = 150       // groups smaller than this are ignored
+let min_line_count = 50        // lines with counts smaller than this are ignored
+
 let group_min_line_count = 4    // used when hough transorming individual groups
-let max_theta_diff: Double = 5  // degrees of difference allowe between lines
+let max_theta_diff: Double = 3  // degrees of difference allowed between lines
 let max_rho_diff: Double = 10   // pixels of line displacement allowed
-let max_number_of_lines = 80    // don't process more lines than this per image
+let max_number_of_lines = 50    // don't process more lines than this per image
+
+let assume_airplane_size = 800  // don't bother spending the time to fully process
+                             // groups larger than this, assume we should paint over them
 
 @available(macOS 10.15, *)
 class FrameAirplaneRemover {
@@ -315,13 +319,16 @@ class FrameAirplaneRemover {
 
             if outlier_amount > max_pixel_distance,
                let group_name = outlier_groups[index],
-               let group_size = neighbor_groups[group_name],
-               group_size > min_group_size
+               let group_size = neighbor_groups[group_name]
             {
                 let offset = (Int(y) * bytesPerRow) + (Int(x) * bytesPerPixel)
                 
                 var nextPixel = Pixel()
-                nextPixel.green = 0xFFFF
+                if (group_size > min_group_size) {
+                    nextPixel.green = 0xFFFF // groups that can be chosen to paint
+                } else {
+                    nextPixel.green = 0x8888 // groups that are too small to paint
+                }
                         
                 var nextValue = nextPixel.value
 
@@ -384,12 +391,10 @@ class FrameAirplaneRemover {
         let time_1 = NSDate().timeIntervalSince1970
         let interval1 = String(format: "%0.1f", time_1 - start_time)
         
-        Log.i("frame \(frame_index) deciding paintability of outlier groups")
+        Log.i("frame \(frame_index) running full outlier hough transform")
 
         // do a hough transform and compare leading outlier groups to lines in the image
         
-        //var hough_data = [Bool](repeating: false, count: width*height)
-
         // mark potential lines in the hough_data by groups larger than some size
         for (index, group_name) in outlier_groups.enumerated() {
             if let group_name = group_name,
@@ -407,7 +412,7 @@ class FrameAirplaneRemover {
         let lines = houghTransform.lines(min_count: min_line_count,
                                      number_of_lines_returned: max_number_of_lines)
 
-        //Log.d("got \(lines.count) lines from the hough transform")
+        Log.d("frame \(frame_index) got \(lines.count) lines from the full outlier hough transform")
 
 
         let time_3 = NSDate().timeIntervalSince1970
@@ -420,8 +425,11 @@ class FrameAirplaneRemover {
         let interval4 = String(format: "%0.1f", time_4 - time_3)
 
         var processed_group_count = 0
-        
+
+        Log.i("frame \(frame_index) deciding paintability of \(neighbor_groups.count) outlier groups")
+
         // look through all neighber groups greater than min_group_size
+        // XXX this takes a long time
         for (name, size) in neighbor_groups {
             if size > min_group_size,
                let min_x = group_min_x[name],
@@ -429,17 +437,36 @@ class FrameAirplaneRemover {
                let max_x = group_max_x[name],
                let max_y = group_max_y[name]
             {
-//        let group_start_time = NSDate().timeIntervalSince1970
+                // use assume_airplane_size to avoid doing extra processing on
+                // really big outlier groups
+                if size > assume_airplane_size {
+                    Log.d("frame \(frame_index) assuming group \(name) of size \(size) (> \(assume_airplane_size)) is an airplane, will paint over it")
+                    should_paint[name] = true
+                    continue
+                }
+                
+                let group_width = max_x - min_x + 1
+                let group_height = max_y - min_y + 1
+                
+                Log.d("frame \(frame_index) looking at group \(name) of size \(size) width \(group_width) height \(group_height) (\(processed_group_count) groups already processed)")
+
+                // XXX possible speedup would be ignoring groups by more criteria
+                // like min
+
+                processed_group_count += 1
+                
+                let group_start_time = NSDate().timeIntervalSince1970
                 
                 // first do a hough transform on just this outlier group
-                processed_group_count += 1
                 // set all pixels of this group to true in the hough data
-                // use min_x, etc to speed this up
-                for (index, group_name) in outlier_groups.enumerated() {
-                    if let group_name = group_name,
-                       name == group_name
-                    {
-                        houghTransform.input_data[index] = true
+                for x in min_x ... max_x {
+                    for y in min_y ... max_y {
+                        let index = y * width + x
+                        if let group_name = outlier_groups[index],
+                           name == group_name
+                        {
+                            houghTransform.input_data[index] = true
+                        }
                     }
                 }
 
@@ -456,6 +483,13 @@ class FrameAirplaneRemover {
                                                   x_limit: max_x+1,
                                                   y_limit: max_y+1)
 
+                if group_lines.count == 0 {
+                    Log.w("frame \(frame_index) got no group lines for group \(name) of size \(size)")
+                    // this should only happen when there is no data in the input and therefore output 
+                    fatalError("bad input data")
+                    continue
+                }
+                
                 // this is the most likely line from the outlier group
                 let (group_theta, group_rho, group_count) = group_lines[0]
                 
@@ -465,35 +499,51 @@ class FrameAirplaneRemover {
         //Log.d("got \(name) has theta \(group_theta) rho \(group_rho) count \(group_count)")
                 
                 // set all pixels of this group to false in the hough data for reuse
-                for (index, group_name) in outlier_groups.enumerated() {
-                    if let group_name = group_name,
-                       name == group_name
-                    {
-                        houghTransform.input_data[index] = false
+                for x in min_x ... max_x {
+                    for y in min_y ... max_y {
+                        let index = y * width + x
+                        if let group_name = outlier_groups[index],
+                           name == group_name
+                        {
+                            houghTransform.input_data[index] = false
+                        }
                     }
                 }
             
 //        let group_time_3 = NSDate().timeIntervalSince1970
 //        let group_interval3 = String(format: "%0.1f", group_time_3 - group_time_2)
 
-                var should_paint_this_one = should_paint[name]
+                var min_theta_diff: Double = 999999999 // XXX
+                var min_rho_diff: Double = 9999999999  // XXX bad constants
+                
+                var should_paint_this_one = false //should_paint[name]
                 for line in lines {
                     if line.count <= min_line_count { continue }
-                    
+
+                    let theta_diff = abs(line.theta-group_theta) // degrees
+                    let rho_diff = abs(line.rho-group_rho)       // pixels
+
+                    // record best comparison from all of them
+                    if theta_diff < min_theta_diff { min_theta_diff = theta_diff }
+                    if rho_diff < min_rho_diff { min_rho_diff = rho_diff }
+
                     // make final decision based upon how close these values are
-                    if theta_rho_comparison(theta1: line.theta, rho1: line.rho,
-                                         theta2: group_theta, rho2: group_rho)
-                    {
-                        let theta_diff = abs(line.theta - group_theta)
-                        let rho_diff = abs(line.rho - group_rho)
-                        Log.i("frame \(frame_index) will paint group \(name) with \(line.count) lines (theta, rho) - line (\(line.theta), \(line.rho)) group (\(group_theta), \(group_rho)) theta diff \(theta_diff) rho_diff \(rho_diff)")
+                    if theta_diff < max_theta_diff && rho_diff < max_rho_diff {
                         should_paint_this_one = true
-                        break
-                    } else {
-                        should_paint_this_one = false // overwrite any previous true
+                        //break
                     }
                 }
                 should_paint[name] = should_paint_this_one
+
+                if !should_paint_this_one {
+                    Log.i("frame \(frame_index) will paint group \(name) of size \(size) width \(group_width) height \(group_height) - theta diff \(min_theta_diff) rho_diff \(min_rho_diff)")
+                } else {
+                    Log.i("frame \(frame_index) will NOT paint group \(name) of size \(size) width \(group_width) height \(group_height) min_theta_diff \(min_theta_diff) min_rho_diff \(min_rho_diff)") // give more info like group size and 
+                }
+                let group_end_time = NSDate().timeIntervalSince1970
+                let group_time_interval = String(format: "%0.1f", group_end_time - group_start_time)
+                Log.d("frame \(frame_index) done looking at group \(name) of size \(size) after \(group_time_interval) seconds")
+                
 //        let group_time_4 = NSDate().timeIntervalSince1970
 //        let group_interval4 = String(format: "%0.1f", group_time_4 - group_time_3)
 
@@ -569,10 +619,3 @@ class FrameAirplaneRemover {
     }
 }
 
-func theta_rho_comparison(theta1: Double, rho1: Double, theta2: Double, rho2: Double) -> Bool {
-    let theta_diff = abs(theta1-theta2) // degrees
-    let rho_diff = abs(rho1-rho2)       // pixels
-
-    return theta_diff < max_theta_diff && rho_diff < max_rho_diff
-}
-                  

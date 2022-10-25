@@ -18,12 +18,22 @@ todo:
  - maybe just always comare against a single frame? (faster, not much difference?
  - use the number of groups that have fallen into the same line group to boost its painting
  - go async when processing lots of hough transforms on groups
+ - add more descriptive coloring to test paint
+   - show all outliers
+   - make groups of the right size different color
+   - somehow color not chosen outliers to say why
+ - output dirs are created even when intput filename is not existant
+ - exclude outlier groups with minimum bounding box sizes
+   most of the non-painted larger outlier groups are nearly square
+   lines have a larger aspect ratio
+ - get logging to have 'ntar-' at the front (current name is too generic)
 */
 
 Log.handlers = 
 [
-      .console: ConsoleLogHandler(at: .debug)
-    ]
+  .console: ConsoleLogHandler(at: .debug),
+  .file: FileLogHandler(at: .debug)
+]
 
 
 let hough_test = false
@@ -33,7 +43,7 @@ if hough_test {
     // convert line between two points on screen into polar coords
     // [276, 0] => [416, 163]
     let (theta, rho) = polar_coords(point1: (x: 276, y: 0),
-                                point2: (x: 416, y: 163))
+                                 point2: (x: 416, y: 163))
    
     Log.d("theta \(theta) rho \(rho)")
 
@@ -58,7 +68,7 @@ if hough_test {
         let dirname = "\(path)/\(input_image_sequence_dirname)"
         let eraser = NighttimeAirplaneRemover(imageSequenceDirname: dirname,
                                           maxConcurrent: 30,
-                                          maxPixelDistance: 7200,
+                                          maxPixelDistance: 7200, // XXX hardcoded constants
                                           testPaint: true)
         eraser.run()
     } else {
