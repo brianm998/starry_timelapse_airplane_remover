@@ -68,6 +68,7 @@ class HoughTransform {
         if let y_limit = y_limit { real_y_limit = y_limit }
         
         // accumulate the hough transform data in counts from the input data
+        // this can take a long time when there are lots of input points
         for x in x_start ..< real_x_limit {
             for y in y_start ..< real_y_limit {
                 let offset = (y * data_width) + x
@@ -90,21 +91,14 @@ class HoughTransform {
         var lines: [Line] = []
         
         // grab theta, rho and count values from the transform
+        // these nested loops are the most obvious speed optimization part so far
+        // for the initial full data set transform, the above loop can be slower
+        // however for the smaller datasets this loop can be 2-3 times slower
         for x in 0 ..< hough_width {
             for y in 0 ..< hough_height {
                 let count = counts[x][y]
                 if count == 0  { continue }     // ignore cells with no count
 
-                var theta = Double(x)/2.0 // why /2 ?
-                var rho = Double(y) - rmax
-                    
-                if(rho < 0) {
-                    // keeping rho positive
-                    //Log.d("reversing orig rho \(rho) theta \(theta)")
-                    rho = -rho
-                    theta = (theta + 180).truncatingRemainder(dividingBy: 360)
-                }
-                    
                 var is_3_x_3_max = true
                 
                 // left neighbor
@@ -142,7 +136,17 @@ class HoughTransform {
                         y < hough_height - 1,
                         count <= counts[x+1][y+1] { is_3_x_3_max = false }
                 
-                if is_3_x_3_max {
+                else if is_3_x_3_max {
+                    var theta = Double(x)/2.0 // why /2 ?
+                    var rho = Double(y) - rmax
+                    
+                    if(rho < 0) {
+                        // keeping rho positive
+                        //Log.d("reversing orig rho \(rho) theta \(theta)")
+                        rho = -rho
+                        theta = (theta + 180).truncatingRemainder(dividingBy: 360)
+                    }
+                    
                     lines.append((theta: theta, rho: rho, count: Int(count)))
                 }
             }

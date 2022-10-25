@@ -4,17 +4,6 @@ import Cocoa
 
 // this class holds the logic for removing airplanes from a single frame
 
-// XXX here are some random global constants that maybe should be exposed somehow
-let min_group_size = 150       // groups smaller than this are ignored
-let min_line_count = 50        // lines with counts smaller than this are ignored
-
-let group_min_line_count = 4    // used when hough transorming individual groups
-let max_theta_diff: Double = 3  // degrees of difference allowed between lines
-let max_rho_diff: Double = 10   // pixels of line displacement allowed
-let max_number_of_lines = 50    // don't process more lines than this per image
-
-let assume_airplane_size = 800  // don't bother spending the time to fully process
-                             // groups larger than this, assume we should paint over them
 
 @available(macOS 10.15, *)
 class FrameAirplaneRemover {

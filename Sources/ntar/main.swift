@@ -27,6 +27,7 @@ todo:
    most of the non-painted larger outlier groups are nearly square
    lines have a larger aspect ratio
  - get logging to have 'ntar-' at the front (current name is too generic)
+ - identify is outlier group is a line by the size of the group vs the count of the highest line?
 */
 
 Log.handlers = 
@@ -34,6 +35,23 @@ Log.handlers =
   .console: ConsoleLogHandler(at: .debug),
   .file: FileLogHandler(at: .debug)
 ]
+
+
+// XXX here are some random global constants that maybe should be exposed somehow
+let max_concurrent_frames: UInt = 30  // number of frames to process in parallel about 1 per cpu core
+let max_pixel_brightness_distance: UInt16 = 7200 // distance in brightness to be considered an outlier
+
+let min_group_size = 150       // groups smaller than this are ignored
+let min_line_count = 50        // lines with counts smaller than this are ignored
+
+let group_min_line_count = 4    // used when hough transorming individual groups
+let max_theta_diff: Double = 3  // degrees of difference allowed between lines
+let max_rho_diff: Double = 10   // pixels of line displacement allowed
+let max_number_of_lines = 50    // don't process more lines than this per image
+
+let assume_airplane_size = 800  // don't bother spending the time to fully process
+                             // groups larger than this, assume we should paint over them
+
 
 
 let hough_test = false
@@ -61,14 +79,15 @@ if hough_test {
     let path = FileManager.default.currentDirectoryPath
     let input_image_sequence_dirname = first_command_line_arg
     // XXX maybe check to make sure this is a directory
-    Log.d("will process \(input_image_sequence_dirname)")
-    Log.d("on path \(path)")
+    Log.d("will process \(input_image_sequence_dirname) on path \(path)")
+
+    Log.d("running with min_group_size \(min_group_size) min_line_count \(min_line_count) group_min_line_count \(group_min_line_count) max_theta_diff \(max_theta_diff) max_rho_diff \(max_rho_diff) max_number_of_lines \(max_number_of_lines) assume_airplane_size \(assume_airplane_size) max_concurrent_frames \(max_concurrent_frames) max_pixel_brightness_distance \(max_pixel_brightness_distance)")
     
     if #available(macOS 10.15, *) {
         let dirname = "\(path)/\(input_image_sequence_dirname)"
         let eraser = NighttimeAirplaneRemover(imageSequenceDirname: dirname,
-                                          maxConcurrent: 30,
-                                          maxPixelDistance: 7200, // XXX hardcoded constants
+                                          maxConcurrent: max_concurrent_frames,
+                                          maxPixelDistance: max_pixel_brightness_distance, 
                                           testPaint: true)
         eraser.run()
     } else {
