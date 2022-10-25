@@ -5,11 +5,14 @@ import Cocoa
 
 // polar coordinates for right angle intersection with line from origin
 typealias Line = (                 
-    theta: Double,                 // angle
-    rho: Double,                   // distance
+    theta: Double,                 // angle in degrees
+    rho: Double,                   // distance in pixels
     count: Int                     // higher count is better fit for line
 )
 
+// this class does a hough transform on the input_data var into the counts var
+// input_data is rows of a matrix of data_width and data_height
+// users should input their data into input_data before calling the lines method.
 class HoughTransform {
 
     let data_width: Int
@@ -53,10 +56,8 @@ class HoughTransform {
               x_start: Int = 0,
               y_start: Int = 0,
               x_limit: Int? = nil,
-              y_limit: Int? = nil
-    ) -> [Line]
+              y_limit: Int? = nil) -> [Line]
     {
-
         var real_x_limit = self.data_width
         if let x_limit = x_limit { real_x_limit = x_limit }
         
