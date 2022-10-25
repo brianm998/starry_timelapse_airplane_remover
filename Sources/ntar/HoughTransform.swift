@@ -10,11 +10,6 @@ typealias Line = (
     count: Int                     // higher count is better fit for line
 )
 
-typealias Coord = (
-    x: Int,
-    y: Int
-)
-
 class HoughTransform {
 
     let data_width: Int
@@ -90,65 +85,59 @@ class HoughTransform {
         // grab theta, rho and count values from the transform
         for x in 0 ..< hough_width {
             for y in 0 ..< hough_height {
-                var theta = Double(x)/2.0 // why /2 ?
-                var rho = Double(y) - rmax
-                
-                if(rho < 0) {
-                    // keeping rho positive
-                    //Log.d("reversing orig rho \(rho) theta \(theta)")
-                    rho = -rho
-                    theta = (theta + 180).truncatingRemainder(dividingBy: 360)
-                }
-                
-                
-                var is_3_x_3_max = true
                 let count = counts[x][y]
-//                if count > 100 {
-                    //Log.d("potential line @ \(x) \(y) has count \(count)")
-//                }
-                
-                // left neighbor
-                if x > 0,
-                   count <= counts[x-1][y]   { is_3_x_3_max = false }
 
-                // left upper neighbor                    
-                else if x > 0, y > 0,
-                   count <= counts[x-1][y-1] { is_3_x_3_max = false }
-                
-                // left lower neighbor                    
-                else if x > 0,
-                   y < hough_height - 1,
-                   count <= counts[x-1][y+1] { is_3_x_3_max = false }
-                
-                // upper neighbor                    
-                else if y > 0,
-                   count <= counts[x][y-1]   { is_3_x_3_max = false }
-                
-                // lower neighbor                    
-                else if y < hough_height - 1,
-                   count <= counts[x][y+1]   { is_3_x_3_max = false }
-                
-                // right neighbor
-                else if x < hough_width - 1,
-                   count <= counts[x+1][y]   { is_3_x_3_max = false }
-                
-                // right upper neighbor                    
-                else if x < hough_width - 1,
-                   y > 0,
-                   count <= counts[x+1][y-1] { is_3_x_3_max = false }
-                
-                // right lower neighbor                    
-                else if x < hough_width - 1,
-                   y < hough_height - 1,
-                   count <= counts[x+1][y+1] { is_3_x_3_max = false }
-                
-                if is_3_x_3_max {
-                /* XXX log spew
-                    if count > 20 {
-                        Log.i("3x3 max line at (\(x), \(y)) has theta \(theta) rho \(rho) count \(count)")
+                if count > 0 {                // ignore cells with no count
+                    var theta = Double(x)/2.0 // why /2 ?
+                    var rho = Double(y) - rmax
+                    
+                    if(rho < 0) {
+                        // keeping rho positive
+                        //Log.d("reversing orig rho \(rho) theta \(theta)")
+                        rho = -rho
+                        theta = (theta + 180).truncatingRemainder(dividingBy: 360)
                     }
-                */
-                    lines.append((theta: theta, rho: rho, count: Int(count)))
+                    
+                    var is_3_x_3_max = true
+                    
+                    // left neighbor
+                    if x > 0,
+                       count <= counts[x-1][y]   { is_3_x_3_max = false }
+
+                    // left upper neighbor                    
+                    else if x > 0, y > 0,
+                            count <= counts[x-1][y-1] { is_3_x_3_max = false }
+                    
+                    // left lower neighbor                    
+                    else if x > 0,
+                            y < hough_height - 1,
+                            count <= counts[x-1][y+1] { is_3_x_3_max = false }
+                    
+                    // upper neighbor                    
+                    else if y > 0,
+                            count <= counts[x][y-1]   { is_3_x_3_max = false }
+                    
+                    // lower neighbor                    
+                    else if y < hough_height - 1,
+                            count <= counts[x][y+1]   { is_3_x_3_max = false }
+                    
+                    // right neighbor
+                    else if x < hough_width - 1,
+                            count <= counts[x+1][y]   { is_3_x_3_max = false }
+                    
+                    // right upper neighbor                    
+                    else if x < hough_width - 1,
+                            y > 0,
+                            count <= counts[x+1][y-1] { is_3_x_3_max = false }
+                    
+                    // right lower neighbor                    
+                    else if x < hough_width - 1,
+                            y < hough_height - 1,
+                            count <= counts[x+1][y+1] { is_3_x_3_max = false }
+                    
+                    if is_3_x_3_max {
+                        lines.append((theta: theta, rho: rho, count: Int(count)))
+                    }
                 }
             }
         }
@@ -171,7 +160,13 @@ class HoughTransform {
     }        
 }
 
+typealias Coord = (
+    x: Int,
+    y: Int
+)
+
 // this method returns the polar coords for a line that runs through the two given points
+// not used anymore in the current implementation
 func polar_coords(point1: Coord, point2: Coord) -> (theta: Double, rho: Double) {
     
     let dx1 = Double(point1.x)
