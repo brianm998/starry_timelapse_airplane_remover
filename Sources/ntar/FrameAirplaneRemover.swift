@@ -385,7 +385,7 @@ class FrameAirplaneRemover {
         // do a hough transform and compare leading outlier groups to lines in the image
         
         // mark potential lines in the hough_data by groups larger than some size
-        for (index, group_name) in outlier_groups.enumerated() {
+        for (index, group_name) in outlier_groups.enumerated() { // XXX heap corruption :(
             if let group_name = group_name,
                let group_size = neighbor_groups[group_name]
             {
@@ -433,6 +433,7 @@ class FrameAirplaneRemover {
                     should_paint[name] = true
                     continue
                 }
+
                 let group_width = max_x - min_x + 1
                 let group_height = max_y - min_y + 1
                 // creating a smaller HoughTransform is a lot faster,
@@ -473,15 +474,25 @@ class FrameAirplaneRemover {
                 // to what it would have been if we had run the transformation full frame
                 // precision is not 100% due to hough transformation bucket size differences
                 // but that's what speeds this up :)
+
+                // o is the direct distance from the full screen origin
+                // to the group transform origin
                 let o = sqrt(Double(min_x * min_x) + Double(min_y * min_y))
+
+                // theta_r is the angle from the full screen origin to the
+                // to the group transform origin, in degrees
                 let theta_r = acos(Double(min_x)/o)*180/Double.pi
+
+                // theta_p is the angle between them in degrees
                 let theta_p = group_theta - theta_r
+
+                // add the calculated missing amount to the group_rho
                 let adjusted_group_rho = group_rho + o * cos(theta_p * Double.pi/180)
 
                 var min_theta_diff: Double = 999999999 // XXX
                 var min_rho_diff: Double = 9999999999  // XXX bad constants
                 
-                var should_paint_this_one = false //should_paint[name]
+                var should_paint_this_one = false // assume not
                 for line in lines {
                     if line.count <= min_line_count { continue }
 
@@ -502,7 +513,7 @@ class FrameAirplaneRemover {
                 if should_paint_this_one {
                     Log.i("frame \(frame_index) will paint group \(name) of size \(size) width \(group_width) height \(group_height) - theta diff \(min_theta_diff) rho_diff \(min_rho_diff)")
                 } else {
-                    Log.i("frame \(frame_index) will NOT paint group \(name) of size \(size) width \(group_width) height \(group_height) min_theta_diff \(min_theta_diff) min_rho_diff \(min_rho_diff)") // give more info like group size and 
+                    Log.i("frame \(frame_index) will NOT paint group \(name) of size \(size) width \(group_width) height \(group_height) min_theta_diff \(min_theta_diff) min_rho_diff \(min_rho_diff)")
                 }
             }
         }

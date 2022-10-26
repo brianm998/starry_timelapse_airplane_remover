@@ -46,10 +46,11 @@ actor ImageSequence {
         if let image = images[filename]?.value {
             return image
         }
-        if let pixelatedImage = PixelatedImage.getImage(withName: filename) {
+        if let pixelatedImage = PixelatedImage(fromFile: filename) {
             images[filename] = WeakRef(value: pixelatedImage)
             return pixelatedImage
         }
+        Log.w("could not getImage(withName: \(filename)), no image found")
         return nil
     }
 }

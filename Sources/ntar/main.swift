@@ -5,9 +5,8 @@ import Cocoa
 /*
 todo:
 
- - identify outliers that are in a line somehow, and apply a smaller threshold to those that are
  - try image blending
- - make it faster
+ - make it faster (can always be faster)
  - add scripts to allow video to processed video in one command
    - decompress existing video w/ ffmpeg (and note exactly how it was compressed)
    - process image sequence with ntar
@@ -17,7 +16,6 @@ todo:
  - detect idle cpu % and use max cpu% instead of max % of frames
  - maybe just always comare against a single frame? (faster, not much difference?
  - use the number of groups that have fallen into the same line group to boost its painting
- - go async when processing lots of hough transforms on groups
  - add more descriptive coloring to test paint
    - show all outliers
    - make groups of the right size different color
@@ -27,7 +25,13 @@ todo:
    most of the non-painted larger outlier groups are nearly square
    lines have a larger aspect ratio
  - get logging to have 'ntar-' at the front (current name is too generic)
+ - be alble to name log file after first arg
  - identify is outlier group is a line by the size of the group vs the count of the highest line?
+ - allow tracking of detected lines across multiple frames, and use that to keep them out
+ - try smaller min_group_size to get more satelites.
+ - try populating the full outlier hough data with all outliers, not just larger ones
+   too much noise?  may make separated segments record better lines
+   maybe just try reducing the min_group_size when generating the hough data?
 */
 
 Log.handlers = 
@@ -41,13 +45,13 @@ Log.handlers =
 let max_concurrent_frames: UInt = 30  // number of frames to process in parallel about 1 per cpu core
 let max_pixel_brightness_distance: UInt16 = 7200 // distance in brightness to be considered an outlier
 
-let min_group_size = 150       // groups smaller than this are ignored
+let min_group_size = 120       // groups smaller than this are ignored
 let min_line_count = 50        // lines with counts smaller than this are ignored
 
 let group_min_line_count = 4    // used when hough transorming individual groups
-let max_theta_diff: Double = 3  // degrees of difference allowed between lines
-let max_rho_diff: Double = 10   // pixels of line displacement allowed
-let max_number_of_lines = 50    // don't process more lines than this per image
+let max_theta_diff: Double = 4  // degrees of difference allowed between lines
+let max_rho_diff: Double = 12   // pixels of line displacement allowed
+let max_number_of_lines = 70    // don't process more lines than this per image
 
 let assume_airplane_size = 800  // don't bother spending the time to fully process
                              // groups larger than this, assume we should paint over them

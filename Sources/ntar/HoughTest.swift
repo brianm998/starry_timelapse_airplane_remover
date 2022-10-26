@@ -13,8 +13,8 @@ func hough_test(filename: String, output_filename: String) {
     Log.d("Loading image from \(filename)")
     
     if #available(macOS 10.15, *),
-       let image = PixelatedImage.getImage(withName: filename),
-       let output_image = PixelatedImage.getImage(withName: output_filename)
+       let image = PixelatedImage(fromFile: filename),
+       let output_image = PixelatedImage(fromFile: output_filename)
     {
         let rmax = sqrt(Double(image.width*image.width + image.height*image.height))
 

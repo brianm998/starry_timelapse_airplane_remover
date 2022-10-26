@@ -4,7 +4,6 @@ import Cocoa
 
 @available(macOS 10.15, *) 
 class PixelatedImage {
-    let filename: String
     let width: Int
     let height: Int
 
@@ -16,17 +15,15 @@ class PixelatedImage {
     let bytesPerPixel: Int
     let bitmapInfo: CGBitmapInfo
 
-    // could be a constructor
-    static func getImage(withName filename: String) -> PixelatedImage? {
+    convenience init?(fromFile filename: String) {
         Log.d("Loading image from \(filename)")
         let imageURL = NSURL(fileURLWithPath: filename, isDirectory: false)
         do {
             let data = try Data(contentsOf: imageURL as URL)
             if let image = NSImage(data: data),
-               let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil),
-               let pixelatedImage = PixelatedImage(cgImage, filename: filename)
+               let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil)
             {
-                return pixelatedImage
+                self.init(cgImage)
             }
         } catch {
             Log.e("\(error)")
@@ -34,9 +31,7 @@ class PixelatedImage {
         return nil
     }
     
-    init?(_ image: CGImage, filename: String) {
-        self.filename = filename
-        //self.image = image
+    init?(_ image: CGImage) {
         assert(image.colorSpace?.model == .rgb)
         self.width = image.width
         self.height = image.height
