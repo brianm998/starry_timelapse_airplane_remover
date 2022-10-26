@@ -3,7 +3,7 @@ import CoreGraphics
 import Cocoa
 
 @available(macOS 10.15, *) 
-actor PixelatedImage {
+class PixelatedImage {
     let filename: String
     let width: Int
     let height: Int
@@ -17,7 +17,7 @@ actor PixelatedImage {
     let bitmapInfo: CGBitmapInfo
 
     // could be a constructor
-    nonisolated static func getImage(withName filename: String) -> PixelatedImage? {
+    static func getImage(withName filename: String) -> PixelatedImage? {
         Log.d("Loading image from \(filename)")
         let imageURL = NSURL(fileURLWithPath: filename, isDirectory: false)
         do {
@@ -54,14 +54,14 @@ actor PixelatedImage {
         }
     }
 
-    nonisolated func read(_ closure: (UnsafeBufferPointer<UInt16>) -> Void) {
+    func read(_ closure: (UnsafeBufferPointer<UInt16>) -> Void) {
         raw_image_data.withUnsafeBytes { unsafeRawPointer in 
             let typedPointer: UnsafeBufferPointer<UInt16> = unsafeRawPointer.bindMemory(to: UInt16.self)
             closure(typedPointer)
         }        
     }
     
-    nonisolated func readPixel(atX x: Int, andY y: Int) -> Pixel {
+    func readPixel(atX x: Int, andY y: Int) -> Pixel {
         let offset = (y * width*3) + (x * 3)
         let pixel = raw_image_data.withUnsafeBytes { unsafeRawPointer -> Pixel in 
             let typedPointer: UnsafeBufferPointer<UInt16> = unsafeRawPointer.bindMemory(to: UInt16.self)
@@ -76,7 +76,7 @@ actor PixelatedImage {
 
     // write out the given image data as a 16 bit tiff file to the given filename
     // used when modifying the invariant original image data, and saying the edits to a file
-    nonisolated func writeTIFFEncoding(ofData image_data: Data, toFilename image_filename: String) {
+    func writeTIFFEncoding(ofData image_data: Data, toFilename image_filename: String) {
         // create a CGImage from the data we just changed
         let colorSpace = CGColorSpaceCreateDeviceRGB()
         if let dataProvider = CGDataProvider(data: image_data as CFData),
