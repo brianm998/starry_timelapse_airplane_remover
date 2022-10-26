@@ -91,9 +91,8 @@ class HoughTransform {
         var lines: [Line] = []
         
         // grab theta, rho and count values from the transform
-        // these nested loops are the most obvious speed optimization part so far
-        // for the initial full data set transform, the above loop can be slower
-        // however for the smaller datasets this loop can be 2-3 times slower
+        // this is faster than the loop above by about 5x, depending
+        // upon number of points processed above 
         for x in 0 ..< hough_width {
             for y in 0 ..< hough_height {
                 let count = counts[x][y]

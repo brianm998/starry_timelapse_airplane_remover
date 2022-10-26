@@ -418,7 +418,7 @@ class FrameAirplaneRemover {
         Log.i("frame \(frame_index) deciding paintability of \(neighbor_groups.count) outlier groups")
 
         // look through all neighber groups greater than min_group_size
-        // XXX this takes a long time
+        // this is a lot faster now
         for (name, size) in neighbor_groups {
             if size > min_group_size,
                let min_x = group_min_x[name],
@@ -492,25 +492,18 @@ class FrameAirplaneRemover {
                     if theta_diff < min_theta_diff { min_theta_diff = theta_diff }
                     if rho_diff < min_rho_diff { min_rho_diff = rho_diff }
 
-                    // make final decision based upon how close these values are
+                    // make decision based upon how close these values are
                     if theta_diff < max_theta_diff && rho_diff < max_rho_diff {
                         should_paint_this_one = true
-                        //break
                     }
                 }
                 should_paint[name] = should_paint_this_one
 
-                if !should_paint_this_one {
+                if should_paint_this_one {
                     Log.i("frame \(frame_index) will paint group \(name) of size \(size) width \(group_width) height \(group_height) - theta diff \(min_theta_diff) rho_diff \(min_rho_diff)")
                 } else {
                     Log.i("frame \(frame_index) will NOT paint group \(name) of size \(size) width \(group_width) height \(group_height) min_theta_diff \(min_theta_diff) min_rho_diff \(min_rho_diff)") // give more info like group size and 
                 }
-                
-//        let group_time_4 = NSDate().timeIntervalSince1970
-//        let group_interval4 = String(format: "%0.1f", group_time_4 - group_time_3)
-
-//        Log.i("frame \(frame_index) done painting - \(group_interval4)s - \(group_interval3)s - \(group_interval2)s - \(group_interval1)s")
-        
             }
         }
         Log.d("frame \(frame_index) processed \(processed_group_count) groups")
