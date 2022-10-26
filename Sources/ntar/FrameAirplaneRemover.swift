@@ -433,45 +433,32 @@ class FrameAirplaneRemover {
                     should_paint[name] = true
                     continue
                 }
-                
                 let group_width = max_x - min_x + 1
                 let group_height = max_y - min_y + 1
+                // creating a smaller HoughTransform is a lot faster,
+                // but looses a small amount of precision
+                let groupHoughTransform = HoughTransform(data_width: group_width,
+                                                    data_height: group_height)
                 
-                Log.d("frame \(frame_index) looking at group \(name) of size \(size) width \(group_width) height \(group_height) (\(processed_group_count) groups already processed)")
-
-                // XXX possible speedup would be ignoring groups by more criteria
-                // like min
-
                 processed_group_count += 1
-                
-                let group_start_time = NSDate().timeIntervalSince1970
                 
                 // first do a hough transform on just this outlier group
                 // set all pixels of this group to true in the hough data
                 for x in min_x ... max_x {
                     for y in min_y ... max_y {
                         let index = y * width + x
+                        let group_index = (y-min_y) * group_width + (x-min_x)
                         if let group_name = outlier_groups[index],
                            name == group_name
                         {
-                            houghTransform.input_data[index] = true
+                            groupHoughTransform.input_data[group_index] = true
                         }
                     }
                 }
-
-//        let group_time_1 = NSDate().timeIntervalSince1970
-//        let group_interval1 = String(format: "%0.1f", group_time_1 - group_start_time)
         
                 // get the theta and rho of just this outlier group
-                houghTransform.resetCounts()
-                
-                let group_lines = houghTransform.lines(min_count: group_min_line_count,
-                                                  number_of_lines_returned: 1,
-                                                  x_start: min_x,
-                                                  y_start: min_y,
-                                                  x_limit: max_x+1,
-                                                  y_limit: max_y+1)
-
+                let group_lines = groupHoughTransform.lines(min_count: group_min_line_count,
+                                                       number_of_lines_returned: 1)
                 if group_lines.count == 0 {
                     Log.w("frame \(frame_index) got no group lines for group \(name) of size \(size)")
                     // this should only happen when there is no data in the input and therefore output 
@@ -481,26 +468,15 @@ class FrameAirplaneRemover {
                 
                 // this is the most likely line from the outlier group
                 let (group_theta, group_rho, group_count) = group_lines[0]
-                
-//        let group_time_2 = NSDate().timeIntervalSince1970
-//        let group_interval2 = String(format: "%0.1f", group_time_2 - group_time_1)
 
-        //Log.d("got \(name) has theta \(group_theta) rho \(group_rho) count \(group_count)")
-                
-                // set all pixels of this group to false in the hough data for reuse
-                for x in min_x ... max_x {
-                    for y in min_y ... max_y {
-                        let index = y * width + x
-                        if let group_name = outlier_groups[index],
-                           name == group_name
-                        {
-                            houghTransform.input_data[index] = false
-                        }
-                    }
-                }
-            
-//        let group_time_3 = NSDate().timeIntervalSince1970
-//        let group_interval3 = String(format: "%0.1f", group_time_3 - group_time_2)
+                // convertx the rho from the group hough transform
+                // to what it would have been if we had run the transformation full frame
+                // precision is not 100% due to hough transformation bucket size differences
+                // but that's what speeds this up :)
+                let o = sqrt(Double(min_x * min_x) + Double(min_y * min_y))
+                let theta_r = acos(Double(min_x)/o)*180/Double.pi
+                let theta_p = group_theta - theta_r
+                let adjusted_group_rho = group_rho + o * cos(theta_p * Double.pi/180)
 
                 var min_theta_diff: Double = 999999999 // XXX
                 var min_rho_diff: Double = 9999999999  // XXX bad constants
@@ -510,7 +486,7 @@ class FrameAirplaneRemover {
                     if line.count <= min_line_count { continue }
 
                     let theta_diff = abs(line.theta-group_theta) // degrees
-                    let rho_diff = abs(line.rho-group_rho)       // pixels
+                    let rho_diff = abs(line.rho-adjusted_group_rho)       // pixels
 
                     // record best comparison from all of them
                     if theta_diff < min_theta_diff { min_theta_diff = theta_diff }
@@ -529,9 +505,6 @@ class FrameAirplaneRemover {
                 } else {
                     Log.i("frame \(frame_index) will NOT paint group \(name) of size \(size) width \(group_width) height \(group_height) min_theta_diff \(min_theta_diff) min_rho_diff \(min_rho_diff)") // give more info like group size and 
                 }
-                let group_end_time = NSDate().timeIntervalSince1970
-                let group_time_interval = String(format: "%0.1f", group_end_time - group_start_time)
-                Log.d("frame \(frame_index) done looking at group \(name) of size \(size) after \(group_time_interval) seconds")
                 
 //        let group_time_4 = NSDate().timeIntervalSince1970
 //        let group_interval4 = String(format: "%0.1f", group_time_4 - group_time_3)
