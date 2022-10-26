@@ -15,20 +15,18 @@ class PixelatedImage {
     let bytesPerPixel: Int
     let bitmapInfo: CGBitmapInfo
 
-    convenience init?(fromFile filename: String) {
+    convenience init?(fromFile filename: String) throws {
         Log.d("Loading image from \(filename)")
         let imageURL = NSURL(fileURLWithPath: filename, isDirectory: false)
-        do {
-            let data = try Data(contentsOf: imageURL as URL)
-            if let image = NSImage(data: data),
-               let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil)
-            {
-                self.init(cgImage)
-            }
-        } catch {
-            Log.e("\(error)")
+
+        let data = try Data(contentsOf: imageURL as URL)
+        if let image = NSImage(data: data),
+           let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil)
+        {
+            self.init(cgImage)
+        } else {
+            return nil
         }
-        return nil
     }
     
     init?(_ image: CGImage) {

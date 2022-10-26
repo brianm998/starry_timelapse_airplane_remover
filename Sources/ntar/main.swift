@@ -45,7 +45,7 @@ Log.handlers =
 let max_concurrent_frames: UInt = 30  // number of frames to process in parallel about 1 per cpu core
 let max_pixel_brightness_distance: UInt16 = 7200 // distance in brightness to be considered an outlier
 
-let min_group_size = 120       // groups smaller than this are ignored
+let min_group_size = 100       // groups smaller than this are ignored
 let min_line_count = 50        // lines with counts smaller than this are ignored
 
 let group_min_line_count = 4    // used when hough transorming individual groups
@@ -57,6 +57,8 @@ let assume_airplane_size = 800  // don't bother spending the time to fully proce
                              // groups larger than this, assume we should paint over them
 
 
+let test_paint = true           // write out a separate image sequence with colors indicating
+                              // what was detected, and what was changed.  Helpful for debugging
 
 let hough_test = false
 
@@ -92,7 +94,7 @@ if hough_test {
         let eraser = NighttimeAirplaneRemover(imageSequenceDirname: dirname,
                                           maxConcurrent: max_concurrent_frames,
                                           maxPixelDistance: max_pixel_brightness_distance, 
-                                          testPaint: true)
+                                          testPaint: test_paint)
         eraser.run()
     } else {
         Log.d("cannot run :(")

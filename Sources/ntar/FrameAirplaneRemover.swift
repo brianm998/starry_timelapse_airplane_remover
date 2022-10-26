@@ -470,8 +470,8 @@ class FrameAirplaneRemover {
                 // this is the most likely line from the outlier group
                 let (group_theta, group_rho, _) = group_lines[0]
 
-                // convertx the rho from the group hough transform
-                // to what it would have been if we had run the transformation full frame
+                // convert the rho from the group hough transform to what
+                // it would have been if we had run the transformation full frame
                 // precision is not 100% due to hough transformation bucket size differences
                 // but that's what speeds this up :)
 
@@ -489,13 +489,20 @@ class FrameAirplaneRemover {
                 // add the calculated missing amount to the group_rho
                 let adjusted_group_rho = group_rho + o * cos(theta_p * Double.pi/180)
 
-                var min_theta_diff: Double = 999999999 // XXX
-                var min_rho_diff: Double = 9999999999  // XXX bad constants
+                let inital_min_theta_diff: Double = 360             // theta is in degrees
+                let inital_min_rho_diff: Double = houghTransform.rmax // max rho value possible
+                
+                var min_theta_diff = inital_min_theta_diff
+                var min_rho_diff = inital_min_rho_diff
                 
                 var should_paint_this_one = false // assume not
                 for line in lines {
                     if line.count <= min_line_count { continue }
 
+                    // XXX instead of a hard cut-off on line count,
+                    // try using the line count and theta/rho diffs below
+                    // to make a more informed paintability decision
+                    
                     let theta_diff = abs(line.theta-group_theta) // degrees
                     let rho_diff = abs(line.rho-adjusted_group_rho)       // pixels
 
@@ -513,7 +520,13 @@ class FrameAirplaneRemover {
                 if should_paint_this_one {
                     Log.i("frame \(frame_index) will paint group \(name) of size \(size) width \(group_width) height \(group_height) - theta diff \(min_theta_diff) rho_diff \(min_rho_diff)")
                 } else {
-                    Log.i("frame \(frame_index) will NOT paint group \(name) of size \(size) width \(group_width) height \(group_height) min_theta_diff \(min_theta_diff) min_rho_diff \(min_rho_diff)")
+                    if min_theta_diff == inital_min_theta_diff ||
+                         min_rho_diff == inital_min_rho_diff
+                    {
+                        Log.w("frame \(frame_index) will NOT paint group \(name) of size \(size) width \(group_width) height \(group_height) no hough transform lines were found")
+                    } else {
+                        Log.i("frame \(frame_index) will NOT paint group \(name) of size \(size) width \(group_width) height \(group_height) min_theta_diff \(min_theta_diff) min_rho_diff \(min_rho_diff)")
+                    }
                 }
             }
         }

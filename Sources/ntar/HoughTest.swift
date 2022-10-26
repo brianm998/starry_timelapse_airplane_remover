@@ -12,9 +12,10 @@ func hough_test(filename: String, output_filename: String) {
     
     Log.d("Loading image from \(filename)")
     
+    do {
     if #available(macOS 10.15, *),
-       let image = PixelatedImage(fromFile: filename),
-       let output_image = PixelatedImage(fromFile: output_filename)
+       let image = try PixelatedImage(fromFile: filename),
+       let output_image = try PixelatedImage(fromFile: output_filename)
     {
         let rmax = sqrt(Double(image.width*image.width + image.height*image.height))
 
@@ -230,4 +231,7 @@ func hough_test(filename: String, output_filename: String) {
     } else {
         Log.e("couldn't load image")
     }
+} catch {
+    Log.e("\(error)")
+}
 }
