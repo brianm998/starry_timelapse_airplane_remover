@@ -100,7 +100,7 @@ func hough_test(filename: String, output_filename: String) {
             
             var lines: [Line] = []
 
-            let min_count = 50  // smaller ones will be ignored
+            //let min_count = 50  // smaller ones will be ignored
             let number_of_lines_returned = 20 // limit on sorted list of lines
             
             for x in 0 ..< hough_width {

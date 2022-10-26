@@ -467,7 +467,7 @@ class FrameAirplaneRemover {
                 }
                 
                 // this is the most likely line from the outlier group
-                let (group_theta, group_rho, group_count) = group_lines[0]
+                let (group_theta, group_rho, _) = group_lines[0]
 
                 // convertx the rho from the group hough transform
                 // to what it would have been if we had run the transformation full frame
