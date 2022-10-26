@@ -52,25 +52,14 @@ class HoughTransform {
     }
     
     func lines(min_count: Int = 5, // lines with less counts than this aren't returned
-              number_of_lines_returned: Int = 20, // max number
-              x_start: Int = 0,                   // allows processing only some input data
-              y_start: Int = 0,                   // defaults to processing all of it
-              x_limit: Int? = nil,
-              y_limit: Int? = nil) -> [Line]
+              number_of_lines_returned: Int = 20) -> [Line]
     {
         let start_time = NSDate().timeIntervalSince1970
 
-        // first figure out how much of the input data to process
-        var real_x_limit = self.data_width
-        if let x_limit = x_limit { real_x_limit = x_limit }
-        
-        var real_y_limit = self.data_height
-        if let y_limit = y_limit { real_y_limit = y_limit }
-        
         // accumulate the hough transform data in counts from the input data
         // this can take a long time when there are lots of input points
-        for x in x_start ..< real_x_limit {
-            for y in y_start ..< real_y_limit {
+        for x in 0 ..< self.data_width {
+            for y in 0 ..< self.data_height {
                 let offset = (y * data_width) + x
                 if input_data[offset] {
                     // record pixel
