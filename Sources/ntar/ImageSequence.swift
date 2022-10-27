@@ -52,7 +52,7 @@ actor ImageSequence {
                 return pixelatedImage
             }
         } catch {
-            Log.e("\(error)")
+            Log.e(error)
         }
         Log.w("could not getImage(withName: \(filename)), no image found")
         return nil

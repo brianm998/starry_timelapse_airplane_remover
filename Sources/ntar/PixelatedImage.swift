@@ -106,7 +106,7 @@ class PixelatedImage {
                     Log.d("FUCK")
                 }
             } catch {
-                Log.e("doh! \(error)")
+                Log.e(error)
             }
         }
     }

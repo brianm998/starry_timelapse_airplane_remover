@@ -232,6 +232,6 @@ func hough_test(filename: String, output_filename: String) {
         Log.e("couldn't load image")
     }
 } catch {
-    Log.e("\(error)")
+    Log.e(error)
 }
 }
