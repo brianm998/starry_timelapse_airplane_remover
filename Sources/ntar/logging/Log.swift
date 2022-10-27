@@ -116,6 +116,9 @@ public class Log {
         case file
         case alert
     }
+
+    public static var name: String = "log"
+    public static var nameSuffix: String?
     
     public enum Level: String, CustomStringConvertible, CaseIterable {
         case debug

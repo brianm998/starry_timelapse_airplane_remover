@@ -34,12 +34,6 @@ todo:
    maybe just try reducing the min_group_size when generating the hough data?
 */
 
-Log.handlers = 
-[
-  .console: ConsoleLogHandler(at: .debug),
-  .file: FileLogHandler(at: .debug)
-]
-
 
 // XXX here are some random global constants that maybe should be exposed somehow
 let max_concurrent_frames: UInt = 30  // number of frames to process in parallel about 1 per cpu core
@@ -50,10 +44,10 @@ let min_line_count = 50        // lines with counts smaller than this are ignore
 
 let group_min_line_count = 4    // used when hough transorming individual groups
 let max_theta_diff: Double = 4  // degrees of difference allowed between lines
-let max_rho_diff: Double = 12   // pixels of line displacement allowed
-let max_number_of_lines = 70    // don't process more lines than this per image
+let max_rho_diff: Double = 70   // pixels of line displacement allowed
+let max_number_of_lines = 8000  // don't process more lines than this per image
 
-let assume_airplane_size = 800  // don't bother spending the time to fully process
+let assume_airplane_size = 8000 // don't bother spending the time to fully process
                              // groups larger than this, assume we should paint over them
 
 
@@ -76,18 +70,34 @@ if hough_test {
 
     hough_test(filename: filename, output_filename: output_filename)
     
-} else if CommandLine.arguments.count < 1 {
+} else if CommandLine.arguments.count < 2 {
+
     Log.d("need more args!")    // XXX make this better
 } else {
+
+    let executable_name = remove_path(fromString: CommandLine.arguments[0])
     let first_command_line_arg = CommandLine.arguments[1]
     // this is the main path
         
     let path = FileManager.default.currentDirectoryPath
     let input_image_sequence_dirname = first_command_line_arg
+
+    Log.name = "\(executable_name)-log"
+    Log.nameSuffix = input_image_sequence_dirname
+    
+    Log.handlers = 
+    [
+      .console: ConsoleLogHandler(at: .debug),
+      .file: FileLogHandler(at: .debug)
+    ]
+
     // XXX maybe check to make sure this is a directory
     Log.d("will process \(input_image_sequence_dirname) on path \(path)")
 
-    Log.d("running with min_group_size \(min_group_size) min_line_count \(min_line_count) group_min_line_count \(group_min_line_count) max_theta_diff \(max_theta_diff) max_rho_diff \(max_rho_diff) max_number_of_lines \(max_number_of_lines) assume_airplane_size \(assume_airplane_size) max_concurrent_frames \(max_concurrent_frames) max_pixel_brightness_distance \(max_pixel_brightness_distance)")
+    Log.d("running with min_group_size \(min_group_size) min_line_count \(min_line_count)")
+    Log.d("group_min_line_count \(group_min_line_count) max_theta_diff \(max_theta_diff) max_rho_diff \(max_rho_diff)")
+    Log.d("max_number_of_lines \(max_number_of_lines) assume_airplane_size \(assume_airplane_size)")
+    Log.d("max_concurrent_frames \(max_concurrent_frames) max_pixel_brightness_distance \(max_pixel_brightness_distance)")
     
     if #available(macOS 10.15, *) {
         let dirname = "\(path)/\(input_image_sequence_dirname)"

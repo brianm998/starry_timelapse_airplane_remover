@@ -13,7 +13,11 @@ public class FileLogHandler: LogHandler {
         // this is for the logfile name
         dateFormatter.dateFormat = "yyyy-MM-dd-HH-mm-ss"
         let dateString = dateFormatter.string(from: Date())
-        self.logfilename = "log-\(dateString).txt"
+        if let suffix = Log.nameSuffix {
+            self.logfilename = "\(Log.name)-\(dateString)-\(suffix).txt"
+        } else {
+            self.logfilename = "\(Log.name)-\(dateString).txt"
+        }
         self.dispatchQueue = DispatchQueue(label: "consoleLogging")
 
         // this is for log lines
