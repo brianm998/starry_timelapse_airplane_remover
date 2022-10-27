@@ -468,7 +468,7 @@ class FrameAirplaneRemover {
                 }
                 
                 // this is the most likely line from the outlier group
-                let (group_theta, group_rho, _) = group_lines[0]
+                let (group_theta, group_rho, group_count) = group_lines[0]
 
                 // convert the rho from the group hough transform to what
                 // it would have been if we had run the transformation full frame
@@ -494,38 +494,161 @@ class FrameAirplaneRemover {
                 
                 var min_theta_diff = inital_min_theta_diff
                 var min_rho_diff = inital_min_rho_diff
-                
+                var best_choice_line_count: Int = 0
+                var best_group_count: Int = 0
+                var best_score: Double = 0
+
                 var should_paint_this_one = false // assume not
                 for line in lines {
-                    if line.count <= min_line_count { continue }
+                    if line.count <= 10 /* min_line_count XXX */ { continue }
 
-                    // XXX instead of a hard cut-off on line count,
-                    // try using the line count and theta/rho diffs below
-                    // to make a more informed paintability decision
+                    /*
+                     proposal:
+
+                     make a score based upon theta, rho and both line count and group size.
+
+                     theta 0 == high score
+                     theta 1 == medium
+                     theta 2 == medium
+                     theta 4 == less
+                     theta 5 == less
+                     theta 6 == unlikley
+
+                     rho should be more flexable, allowing for up to 100 or more, but
+                     less likely.  linear probability?
+
+                     count should also matter
+                     what is max count?
+
+                     larger group sizes are preferred
+                     smaller group sizes need to meet higher criteria
+
+                     how to rank this score into a decision?
+
+                     on each iteration of this list, calculate a score, and if it's best,
+                     keep track of the values used to calculate it.
+
+                     at the end, if the score is above some magical threshold, then paint
+                     */
+
                     
                     let theta_diff = abs(line.theta-group_theta) // degrees
                     let rho_diff = abs(line.rho-adjusted_group_rho)       // pixels
 
-                    // record best comparison from all of them
-                    if theta_diff < min_theta_diff { min_theta_diff = theta_diff }
-                    if rho_diff < min_rho_diff { min_rho_diff = rho_diff }
+                    var theta_score: Double = 0
+                    
+                    if theta_diff == 0 {
+                        theta_score = 100
+                    } else if theta_diff < 1 {
+                        theta_score = 90
+                    } else if theta_diff < 2 {
+                        theta_score = 80
+                    } else if theta_diff < 3 {
+                        theta_score = 60
+                    } else if theta_diff < 4 {
+                        theta_score = 40
+                    } else if theta_diff < 5 {
+                        theta_score = 30
+                    } else if theta_diff < 6 {
+                        theta_score = 20
+                    } else if theta_diff < 7 {
+                        theta_score = 10
+                    } else if theta_diff < 8 {
+                        theta_score = 5
+                    } else {
+                        theta_score = 0
+                    }
 
-                    // make decision based upon how close these values are
-                    if theta_diff < max_theta_diff && rho_diff < max_rho_diff {
-                        should_paint_this_one = true
+                    var rho_score: Double = 0
+
+                    if rho_diff < 3 {
+                        rho_score = 100
+                    } else if rho_diff < 5 {
+                        rho_score = 80
+                    } else if rho_diff < 10 {
+                        rho_score = 50
+                    } else if rho_diff < 100 {
+                        rho_score = 30
+                    } else {
+                        rho_score = 0
+                    }
+                    
+                    var line_score: Double = 0 // score of the line from the full hough transform
+
+                    if line.count < 30 {
+                        line_score = 0
+                    } else if line.count < 35 {
+                        line_score = 10
+                    } else if line.count < 100 {
+                        line_score = 50
+                    } else if line.count < 200 {
+                        line_score = 70
+                    } else if line.count < 500 {
+                        line_score = 90
+                    } else if line.count < 1000 {
+                        line_score = 100
+                    }
+                    
+                    var group_size_score: Double = 0
+
+                    if size < 10 {
+                        group_size_score = 0
+                    } else if size < 50 {
+                        group_size_score = 25
+                    } else if size < 100 {
+                        group_size_score = 40
+                    } else if size < 150 {
+                        group_size_score = 50
+                    } else if size < 200 {
+                        group_size_score = 60
+                    } else if size < 300 {
+                        group_size_score = 70
+                    } else if size < 500 {
+                        group_size_score = 80
+                    } else {
+                        group_size_score = 100
+                    }
+
+                    var group_count_score: Double = 0 // score of the line from the group transform
+                    if group_count < 10 {
+                        group_count_score = 0
+                    } else if group_count < 30 {
+                        group_count_score = 20
+                    } else if group_count < 50 {
+                        group_count_score = 50
+                    } else if group_count < 80 {
+                        group_count_score = 80
+                    } else {
+                        group_count_score = 100
+                    }
+                    
+                    let overall_score = (theta_score*line_score/100 + rho_score*line_score/100 + group_size_score + group_count_score) / 4
+
+                    // record best comparison from all of them
+                    if overall_score > best_score {
+                        Log.d("frame \(frame_index) (theta_score \(theta_score) rho_score \(rho_score) line_score \(line_score) group_size_score \(group_size_score)) group_count \(group_count) overall_score \(overall_score)")
+
+                        best_score = overall_score
+                        min_theta_diff = theta_diff
+                        min_rho_diff = rho_diff
+                        best_choice_line_count = line.count
+                        best_group_count = group_count
                     }
                 }
-                should_paint[name] = should_paint_this_one
 
-                if should_paint_this_one {
-                    Log.i("frame \(frame_index) will paint group \(name) of size \(size) width \(group_width) height \(group_height) - theta diff \(min_theta_diff) rho_diff \(min_rho_diff)")
+                Log.d("frame \(frame_index) final best match for group \(name) of size \(size) width \(group_width) height \(group_height) - theta_diff \(min_theta_diff) rho_diff \(min_rho_diff) line_count \(best_choice_line_count) group_count \(group_count) best_score \(best_score)")
+                
+                if best_score > 50 {
+                    should_paint[name] = true
+                    Log.i("frame \(frame_index) will paint group \(name)")
                 } else {
+                    should_paint[name] = false
                     if min_theta_diff == inital_min_theta_diff ||
                          min_rho_diff == inital_min_rho_diff
                     {
-                        Log.w("frame \(frame_index) will NOT paint group \(name) of size \(size) width \(group_width) height \(group_height) no hough transform lines were found")
+                        Log.w("frame \(frame_index) will NOT paint group \(name) no hough transform lines were found")
                     } else {
-                        Log.i("frame \(frame_index) will NOT paint group \(name) of size \(size) width \(group_width) height \(group_height) min_theta_diff \(min_theta_diff) min_rho_diff \(min_rho_diff)")
+                        Log.i("frame \(frame_index) will NOT paint group \(name)")
                     }
                 }
             }
