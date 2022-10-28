@@ -85,18 +85,19 @@ class ImageSequenceProcessor {
                     Log.i("skipping already existing file \(filename)")
                 } else {
                     self.dispatchGroup.enter() 
-                    if let image = await self.image_sequence.getImage(withName: image_filename) {
-                        await method_list.add(atIndex: index, method: {
+                    Log.d("loading \(image_filename)")
+                    await method_list.add(atIndex: index, method: {
+                        if let image = await self.image_sequence.getImage(withName: image_filename) {
                             await self.processFrame(number: index,
                                                  image: image,
                                                  output_filename: output_filename,
                                                  base_name: basename)
                             await self.number_running.decrement()
                             self.dispatchGroup.leave()
-                        })
-                    } else {
-                        Log.w("could't get image for \(image_filename)")
-                    }
+                        } else {
+                            Log.w("could't get image for \(image_filename)")
+                        }
+                    })
                 }
             }
         }
