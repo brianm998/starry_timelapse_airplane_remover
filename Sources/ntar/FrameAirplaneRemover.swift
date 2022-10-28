@@ -44,6 +44,8 @@ class FrameAirplaneRemover {
 
     var group_amounts: [String: UInt64] = [:] // keyed by group name, average brightness of each group
 
+    var group_lines: [String:Line] = [:] // keyed by group name, the best line found for each group
+    
     init?(fromImage image: PixelatedImage,
           atIndex frame_index: Int,
           otherFrames: [PixelatedImage],
@@ -464,9 +466,10 @@ class FrameAirplaneRemover {
                 }
         
                 // get the theta and rho of just this outlier group
-                let group_lines = groupHoughTransform.lines(min_count: group_min_line_count,
-                                                       number_of_lines_returned: 10)
-                if group_lines.count == 0 {
+                let lines_from_this_group =
+                    groupHoughTransform.lines(min_count: group_min_line_count,
+                                           number_of_lines_returned: 10)
+                if lines_from_this_group.count == 0 {
                     Log.w("frame \(frame_index) got no group lines for group \(name) of size \(size)")
                     // this should only happen when there is no data in the input and therefore output 
                     fatalError("bad input data")
@@ -477,15 +480,17 @@ class FrameAirplaneRemover {
                 // useful data here could be other lines, and if there are any,
                 // and how far away they are from the most prominent one.
                 // i.e. detecting real lines vs the best line fit for a random blob
-                let (group_theta, group_rho, group_count) = group_lines[0]
+                let (group_theta, group_rho, group_count) = lines_from_this_group[0]
 
-                Log.d("frame \(frame_index) group \(name) got \(group_lines.count) lines from group hough transform")
+                group_lines[name] = lines_from_this_group[0] // keep this for later analysis
+                
+                Log.d("frame \(frame_index) group \(name) got \(lines_from_this_group.count) lines from group hough transform")
                 
                 Log.d("frame \(frame_index) group \(name) line at index 0 theta \(group_theta), rho \(group_rho), count \(group_count)")
                 
-                if group_lines.count > 1 {
-                    for i in 1 ..< group_lines.count {
-                        let (other_theta, other_rho, other_count) = group_lines[i]
+                if lines_from_this_group.count > 1 {
+                    for i in 1 ..< lines_from_this_group.count {
+                        let (other_theta, other_rho, other_count) = lines_from_this_group[i]
                         // XXX clean this up with below, it's a copy
                         // o is the direct distance from the full screen origin
                         // to the group transform origin

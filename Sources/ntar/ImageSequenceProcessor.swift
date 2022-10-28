@@ -58,12 +58,12 @@ class ImageSequenceProcessor {
     }
 
     func processFrame(number index: Int,
-                      image: PixelatedImage,
-                      base_name: String) async -> Data?
+                    image: PixelatedImage,
+                    output_filename: String,
+                    base_name: String) async
     {
-        Log.e("should be overrideen")
-
-        return nil
+        Log.e("should be overridden")
+        fatalError("should be overridden")
     }
 
     func assembleMethodList() async {
@@ -85,25 +85,18 @@ class ImageSequenceProcessor {
                     Log.i("skipping already existing file \(filename)")
                 } else {
                     self.dispatchGroup.enter() 
-                    await method_list.add(atIndex: index, method: {
-    
-                        if let image = await self.image_sequence.getImage(withName: image_filename),
-                           let data = await self.processFrame(number: index, // XXX 
-                                                              image: image,
-                                                              base_name: basename)
-                        {
-                            // write each frame out as a tiff file after processing it
-                            if let image = await self.image_sequence.getImage(withName: image_filename) {
-                                image.writeTIFFEncoding(ofData: data, toFilename: output_filename)
-                            } else {
-                                fatalError("FUCK")
-                            }
-                        } else {
-                            Log.e("got no data for \(filename)")
-                        }
-                        await self.number_running.decrement()
-                        self.dispatchGroup.leave()
-                    })
+                    if let image = await self.image_sequence.getImage(withName: image_filename) {
+                        await method_list.add(atIndex: index, method: {
+                            await self.processFrame(number: index,
+                                                 image: image,
+                                                 output_filename: output_filename,
+                                                 base_name: basename)
+                            await self.number_running.decrement()
+                            self.dispatchGroup.leave()
+                        })
+                    } else {
+                        Log.w("could't get image for \(image_filename)")
+                    }
                 }
             }
         }

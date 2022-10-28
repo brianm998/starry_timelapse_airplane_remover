@@ -48,10 +48,12 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
         if test_paint { mkdir(test_paint_output_dirname) }
     }
 
+    
     // called by the superclass to process each frame
     override func processFrame(number index: Int,
                             image: PixelatedImage,
-                            base_name: String) async -> Data?
+                            output_filename: String,
+                            base_name: String) async
     {
         //Log.e("full_image_path \(full_image_path)")
         // load images outside the main thread
@@ -73,11 +75,18 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
                                   "\(self.test_paint_output_dirname)/\(base_name)" : nil
         
         // the other frames that we use to detect outliers and repaint from
-        return self.removeAirplanes(fromImage: image,
+        let data = self.removeAirplanes(fromImage: image,
                                     atIndex: index,
                                     otherFrames: otherFrames,
                                     filename: "\(self.output_dirname)/\(base_name)",
                                     test_paint_filename: test_paint_filename)
+
+        if let data = data {
+            // write frame out as a tiff file after processing it
+            image.writeTIFFEncoding(ofData: data, toFilename: output_filename)
+        } else {
+            fatalError("FUCK")
+        }
     }
 
     func removeAirplanes(fromImage image: PixelatedImage,
@@ -89,11 +98,11 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
         let start_time = NSDate().timeIntervalSince1970
         
         guard let frame_plane_remover = FrameAirplaneRemover(fromImage: image,
-                                                             atIndex: frame_index,
-                                                             otherFrames: otherFrames,
-                                                             filename: filename,
-                                                             test_paint_filename: tpfo,
-                                                             max_pixel_distance: max_pixel_distance)
+                                                       atIndex: frame_index,
+                                                       otherFrames: otherFrames,
+                                                       filename: filename,
+                                                       test_paint_filename: tpfo,
+                                                       max_pixel_distance: max_pixel_distance)
         else {
             Log.d("DOH")
             fatalError("FAILED")
