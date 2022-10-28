@@ -101,8 +101,30 @@ actor FinalProcessor {
         // XXX right now nothing
         Log.e("handle \(frames.count) frames")
         for frame in frames {
-            for (group_name, should_paint) in frame.should_paint {
-                frame.should_paint[group_name] = true
+            for (group_name, group_line) in frame.group_lines {
+                // look for
+
+                let line_theta = group_line.theta
+                let line_rho = group_line.rho
+                
+                for other_frame in frames {
+                    if other_frame == frame { continue }
+
+                    for (other_group_name, other_group_line) in other_frame.group_lines {
+                        let other_line_theta = other_group_line.theta
+                        let other_line_rho = other_group_line.rho
+
+                        let theta_diff = abs(line_theta-other_line_theta)
+                        let rho_diff = abs(line_rho-other_line_rho)
+                        
+                        if theta_diff < 15 && rho_diff < 40 { // XXX hardcoded constants
+                            Log.e("theta_diff \(theta_diff) rho_diff \(rho_diff)")
+                            // mark as should paint
+                            frame.should_paint[group_name] = true
+                            other_frame.should_paint[other_group_name] = true
+                        }
+                    }
+                }
             }
         }
     }

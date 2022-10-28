@@ -5,7 +5,7 @@ import Cocoa
 // this class holds the logic for removing airplanes from a single frame
 
 @available(macOS 10.15, *)
-class FrameAirplaneRemover {
+class FrameAirplaneRemover: Equatable {
     let width: Int
     let height: Int
     let bytesPerPixel: Int
@@ -771,6 +771,8 @@ class FrameAirplaneRemover {
         }
     }
 
+    // run after should_paint has been set for each group, 
+    // does the final painting and then writes out the output files
     func finish() {
         Log.i("frame \(self.frame_index) finishing")
 
@@ -794,5 +796,10 @@ class FrameAirplaneRemover {
         // write frame out as a tiff file after processing it
         self.image.writeTIFFEncoding(ofData: self.data,  toFilename: self.output_filename)
     }
+
+    public static func == (lhs: FrameAirplaneRemover, rhs: FrameAirplaneRemover) -> Bool {
+        return lhs.frame_index == rhs.frame_index
+    }    
+
 }
 
