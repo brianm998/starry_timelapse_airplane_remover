@@ -2,8 +2,38 @@ import Foundation
 import CoreGraphics
 import Cocoa
 
+
+
+@available(macOS 10.15, *) 
+class FinalProcessor {
+    var frames: [FrameAirplaneRemover?]
+    var current_frame_index = 0
+
+    
+    init(numberOfFrames frame_count: Int) {
+        frames = [FrameAirplaneRemover?](repeating: nil, count: frame_count)
+    }
+
+    func run() {
+        var done = false
+        while(!done) {
+            if let current_frame = frames[current_frame_index] {
+                current_frame.finish()
+                frames[current_frame_index] = nil
+                current_frame_index += 1
+            } else {
+                sleep(1)        // XXX hardcoded sleep amount
+            }
+            done = current_frame_index >= frames.count 
+        }
+    }
+}
+
+
+
 // this class handles removing airplanes from an entire sequence,
 // delegating each frame to an instance of FrameAirplaneRemover
+
 
 @available(macOS 10.15, *) 
 class NighttimeAirplaneRemover : ImageSequenceProcessor {
@@ -19,6 +49,8 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
     let test_paint_outliers: Bool
     
     let test_paint: Bool
+
+    var final_processor: FinalProcessor?    
 
     init(imageSequenceDirname image_sequence_dirname: String,
          maxConcurrent max_concurrent: UInt = 5,
@@ -41,6 +73,14 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
                    outputDirname: output_dirname,
                    maxConcurrent: max_concurrent,
                    givenFilenames: given_filenames)
+
+        final_processor = FinalProcessor(numberOfFrames: self.image_sequence.filenames.count)
+
+        dispatchGroup.enter()
+        self.dispatchQueue.async {
+            self.final_processor?.run()
+            self.dispatchGroup.leave()
+        }
     }
 
     // called by the superclass at startup
@@ -82,7 +122,6 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
                                              output_filename: "\(self.output_dirname)/\(base_name)",
                                              test_paint_filename: test_paint_filename)
 
-        //dispatchGroup.enter()
         
         // XXX next step is to add this frame_plane_remover to an array of optionals
         // indexed by frame number
@@ -91,11 +130,9 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
         // analysis of the outlier groups between frames and making them look better
         // by doing further analysis and cleanup
         
-        //dispatchGroup.leave()
-
-        frame_plane_remover.finish() 
+        final_processor?.frames[index] = frame_plane_remover
     }
-
+    
     func prepareForAdjecentFrameAnalysis(fromImage image: PixelatedImage,
                                      atIndex frame_index: Int,
                                      otherFrames: [PixelatedImage],
