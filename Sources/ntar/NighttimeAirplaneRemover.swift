@@ -75,32 +75,39 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
                                   "\(self.test_paint_output_dirname)/\(base_name)" : nil
         
         // the other frames that we use to detect outliers and repaint from
-        let data = self.removeAirplanes(fromImage: image,
-                                    atIndex: index,
-                                    otherFrames: otherFrames,
-                                    filename: "\(self.output_dirname)/\(base_name)",
-                                    test_paint_filename: test_paint_filename)
+        let frame_plane_remover =
+            self.prepareForAdjecentFrameAnalysis(fromImage: image,
+                                             atIndex: index,
+                                             otherFrames: otherFrames,
+                                             output_filename: "\(self.output_dirname)/\(base_name)",
+                                             test_paint_filename: test_paint_filename)
 
-        if let data = data {
-            // write frame out as a tiff file after processing it
-            image.writeTIFFEncoding(ofData: data, toFilename: output_filename)
-        } else {
-            fatalError("FUCK")
-        }
+        //dispatchGroup.enter()
+        
+        // XXX next step is to add this frame_plane_remover to an array of optionals
+        // indexed by frame number
+        // then create a new class that uses the diapatchGroup to keep the process alive
+        // and processes sequentially through them as they are available, doing
+        // analysis of the outlier groups between frames and making them look better
+        // by doing further analysis and cleanup
+        
+        //dispatchGroup.leave()
+        
+        finish(frame_plane_remover)
     }
 
-    func removeAirplanes(fromImage image: PixelatedImage,
-                         atIndex frame_index: Int,
-                         otherFrames: [PixelatedImage],
-                         filename: String,
-                         test_paint_filename tpfo: String?) -> Data?
+    func prepareForAdjecentFrameAnalysis(fromImage image: PixelatedImage,
+                                     atIndex frame_index: Int,
+                                     otherFrames: [PixelatedImage],
+                                     output_filename: String,
+                                     test_paint_filename tpfo: String?) -> FrameAirplaneRemover
     {
         let start_time = NSDate().timeIntervalSince1970
         
         guard let frame_plane_remover = FrameAirplaneRemover(fromImage: image,
                                                        atIndex: frame_index,
                                                        otherFrames: otherFrames,
-                                                       filename: filename,
+                                                       output_filename: output_filename,
                                                        test_paint_filename: tpfo,
                                                        max_pixel_distance: max_pixel_distance)
         else {
@@ -113,7 +120,7 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
         
         Log.d("frame \(frame_index) populating the outlier map")
 
-        // almost all time is spent here
+        // find outlying bright pixels between frames
         frame_plane_remover.populateOutlierMap() 
 
         let time_2 = NSDate().timeIntervalSince1970
@@ -121,6 +128,7 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
 
         Log.d("frame \(frame_index) pruning after \(interval2)s")
 
+        // group neighboring outlying pixels into groups
         frame_plane_remover.prune()
 
         let time_3 = NSDate().timeIntervalSince1970
@@ -137,39 +145,55 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
         let interval4 = String(format: "%0.1f", time_4 - time_3)
         Log.d("frame \(frame_index) calculating group bounds \(interval4)s")
 
+        // figure out what part of the image each outlier group lies in
         frame_plane_remover.calculateGroupBoundsAndAmounts()
 
         let time_5 = NSDate().timeIntervalSince1970
         let interval5 = String(format: "%0.1f", time_5 - time_4)
         Log.d("frame \(frame_index) running full hough transform after \(interval5)s")
 
+        // run a hough transform on large enough outliers only
         frame_plane_remover.fullHoughTransform()
 
         let time_6 = NSDate().timeIntervalSince1970
         let interval6 = String(format: "%0.1f", time_6 - time_5)
         Log.d("frame \(frame_index) outlier group painting analysis after p\(interval6)s")
 
+        // do a lot of analysis to determine what outlier groups we should paint over
         frame_plane_remover.outlierGroupPaintingAnalysis()
         
         let time_7 = NSDate().timeIntervalSince1970
         let interval7 = String(format: "%0.1f", time_7 - time_6)
-        Log.d("frame \(frame_index) painting over airplanes after p\(interval7)s")
+        Log.d("frame \(frame_index) timing for frame render - \(interval7)s - \(interval6)s - \(interval5)s - \(interval4)s - \(interval3)s - \(interval2)s - \(interval1)s")
+
+        Log.i("frame \(frame_index) ready for analysis with groups in adjecent frames")
         
+        return frame_plane_remover
+   }        
+
+   func finish(_ frame_plane_remover: FrameAirplaneRemover) {
+        Log.i("frame \(frame_plane_remover.frame_index) finishing")
+
+        Log.d("frame \(frame_plane_remover.frame_index) painting over airplanes")
+                  
         frame_plane_remover.paintOverAirplanes()
         
-        let time_8 = NSDate().timeIntervalSince1970
-        let interval8 = String(format: "%0.1f", time_8 - time_7)
-        Log.d("frame \(frame_index) creating final image \(filename) after p\(interval7)s")
+//        let time_8 = NSDate().timeIntervalSince1970
+//        let interval8 = String(format: "%0.1f", time_8 - time_7)
+//        Log.d("frame \(frame_index) creating final image \(filename) after p\(interval7)s")
 
+        Log.d("frame \(frame_plane_remover.frame_index) writing output files")
         frame_plane_remover.writeTestFile()
         
-        let time_9 = NSDate().timeIntervalSince1970
-        let interval9 = String(format: "%0.1f", time_9 - time_8)
+//        let time_9 = NSDate().timeIntervalSince1970
+//        let interval9 = String(format: "%0.1f", time_9 - time_8)
         
-        Log.d("frame \(frame_index) timing for frame render - \(interval9)s  - \(interval8)s - \(interval7)s - \(interval6)s - \(interval5)s - \(interval4)s - \(interval3)s - \(interval2)s - \(interval1)s")
-        Log.i("frame \(frame_index) complete")
+//        Log.d("frame \(frame_index) timing for frame render - \(interval9)s  - \(interval8)s - \(interval7)s - \(interval6)s - \(interval5)s - \(interval4)s - \(interval3)s - \(interval2)s - \(interval1)s")
+        Log.i("frame \(frame_plane_remover.frame_index) complete")
 
-        return frame_plane_remover.data
+        // write frame out as a tiff file after processing it
+        frame_plane_remover.image.writeTIFFEncoding(ofData: frame_plane_remover.data,
+                                              toFilename: frame_plane_remover.output_filename)
     }
 }
               

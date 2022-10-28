@@ -45,11 +45,13 @@ class FrameAirplaneRemover {
     var group_amounts: [String: UInt64] = [:] // keyed by group name, average brightness of each group
 
     var group_lines: [String:Line] = [:] // keyed by group name, the best line found for each group
+
+    let output_filename: String
     
     init?(fromImage image: PixelatedImage,
           atIndex frame_index: Int,
           otherFrames: [PixelatedImage],
-          filename: String,
+          output_filename: String,
           test_paint_filename tpfo: String?,
           max_pixel_distance: UInt16
          )
@@ -57,6 +59,7 @@ class FrameAirplaneRemover {
         self.frame_index = frame_index // frame index in the image sequence
         self.image = image
         self.otherFrames = otherFrames
+        self.output_filename = output_filename
         if let tp_filename = tpfo {
             self.test_paint = true
             self.test_paint_filename = tp_filename
