@@ -32,7 +32,17 @@ class FrameAirplaneRemover {
     var test_paint = false
 
     let houghTransform: HoughTransform
-    
+
+    var lines_from_full_image: [Line] = [] // lines from all large enough outliers
+
+    var should_paint: [String:Bool] = [:] // keyed by group name, should be paint it?
+    var group_min_x: [String:Int] = [:]   // keyed by group name, image bounds of each group
+    var group_min_y: [String:Int] = [:]
+    var group_max_x: [String:Int] = [:]
+    var group_max_y: [String:Int] = [:]
+
+    var group_amounts: [String: UInt64] = [:] // keyed by group name, average brightness of each group
+
     init?(fromImage image: PixelatedImage,
           atIndex frame_index: Int,
           otherFrames: [PixelatedImage],
@@ -326,14 +336,6 @@ class FrameAirplaneRemover {
         }
     }
 
-    var should_paint: [String:Bool] = [:]
-    var group_min_x: [String:Int] = [:]
-    var group_min_y: [String:Int] = [:]
-    var group_max_x: [String:Int] = [:]
-    var group_max_y: [String:Int] = [:]
-
-    var group_amounts: [String: UInt64] = [:]
-
     // record the extent of each group in the image, and also its brightness
     func calculateGroupBoundsAndAmounts() {
 
@@ -393,12 +395,9 @@ class FrameAirplaneRemover {
         }
     }
 
-    
-    // this method first analyzises the outlier groups and then paints over them
-    // XXX break this up into smaller chunks, it's enormous
-    func paintOverAirplanes() {
-        let start_time = NSDate().timeIntervalSince1970
-        
+    // this method runs a hough transform on the full resolution image that
+    // contains only large enough outliers
+    func fullHoughTransform() {
         Log.i("frame \(frame_index) running full outlier hough transform")
 
         // do a hough transform and compare leading outlier groups to lines in the image
@@ -414,18 +413,19 @@ class FrameAirplaneRemover {
             }
         }
 
-        let time_1 = NSDate().timeIntervalSince1970
-        let interval1 = String(format: "%0.1f", time_1 - start_time)
+        lines_from_full_image =
+            houghTransform.lines(min_count: min_line_count,
+                              number_of_lines_returned: max_number_of_lines)
+
+        Log.d("frame \(frame_index) got \(lines_from_full_image.count) lines from the full outlier hough transform")
+    }
+                  
+                  
+    // this method first analyzises the outlier groups and then paints over them
+    // XXX break this up into smaller chunks, it's enormous
+    func paintOverAirplanes() {
+        let start_time = NSDate().timeIntervalSince1970
         
-        let lines = houghTransform.lines(min_count: min_line_count,
-                                     number_of_lines_returned: max_number_of_lines)
-
-        Log.d("frame \(frame_index) got \(lines.count) lines from the full outlier hough transform")
-
-
-        let time_2 = NSDate().timeIntervalSince1970
-        let interval2 = String(format: "%0.1f", time_2 - time_1)
-
         var processed_group_count = 0
 
         Log.i("frame \(frame_index) deciding paintability of \(neighbor_groups.count) outlier groups")
@@ -587,7 +587,7 @@ class FrameAirplaneRemover {
                     group_count_score = 100
                 }
 
-                for line in lines {
+                for line in lines_from_full_image {
                     if line.count <= 10 /* min_line_count XXX */ { continue }
 
                     /*
@@ -709,8 +709,8 @@ class FrameAirplaneRemover {
             }
         }
         Log.d("frame \(frame_index) processed \(processed_group_count) groups")
-        let time_3 = NSDate().timeIntervalSince1970
-        let interval3 = String(format: "%0.1f", time_3 - time_2)
+        let time_1 = NSDate().timeIntervalSince1970
+        let interval1 = String(format: "%0.1f", time_1 - start_time)
 
         Log.i("frame \(frame_index) painting airplane outlier groups")
 
@@ -726,10 +726,10 @@ class FrameAirplaneRemover {
             }
         }
 
-        let time_4 = NSDate().timeIntervalSince1970
-        let interval4 = String(format: "%0.1f", time_4 - time_3)
-        
-        Log.i("frame \(frame_index) done painting \(interval4)s - \(interval3)s - \(interval2)s - \(interval1)s")
+        let time_2 = NSDate().timeIntervalSince1970
+        let interval2 = String(format: "%0.1f", time_2 - time_1)
+
+        Log.i("frame \(frame_index) done painting - \(interval2)s - \(interval1)s")
     }
 
     func writeTestFile() {
