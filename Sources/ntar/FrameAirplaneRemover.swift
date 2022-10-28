@@ -241,7 +241,7 @@ class FrameAirplaneRemover: Equatable {
                 //Log.d("pending_outlier_insert_index \(pending_outlier_insert_index) pending_outlier_access_index \(pending_outlier_access_index)")
                 loop_count += 1
                 if loop_count % 1000 == 0 {
-                    Log.d("frame \(frame_index) looping \(loop_count) times \(pending_outliers.count) pending outliers group_size \(group_size)")
+                    Log.d("frame \(frame_index) looping \(loop_count) times group_size \(group_size)")
                 }
                 
                 let next_outlier_index = pending_outliers[pending_outlier_access_index]
@@ -475,7 +475,7 @@ class FrameAirplaneRemover: Equatable {
                 if lines_from_this_group.count == 0 {
                     Log.w("frame \(frame_index) got no group lines for group \(name) of size \(size)")
                     // this should only happen when there is no data in the input and therefore output 
-                    fatalError("bad input data")
+                    //fatalError("bad input data")
                     continue
                 }
                 

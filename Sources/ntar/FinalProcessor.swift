@@ -12,11 +12,19 @@ import Cocoa
 // frame and then calls finish() on it, which paints based upon the
 // should_paint map, and then saves the output file(s).
 
+
 @available(macOS 10.15, *)
 actor FinalProcessor {
     var frames: [FrameAirplaneRemover?]
     var current_frame_index = 0
     let frame_count: Int
+
+    // concurrent dispatch queue so we can process frames in parallel
+    let dispatchQueue = DispatchQueue(label: "image_sequence_final_processor",
+                                  qos: .unspecified,
+                                  attributes: [.concurrent],
+                                  autoreleaseFrequency: .inherit,
+                                  target: nil)
     
     init(numberOfFrames frame_count: Int) {
         frames = [FrameAirplaneRemover?](repeating: nil, count: frame_count)
@@ -42,13 +50,13 @@ actor FinalProcessor {
     func finishAll() {
         for frame in frames {
             if let frame = frame {
-                frame.finish()
+                self.dispatchQueue.async {
+                    frame.finish()
+                }
             }
         }
     }
 
-    let number_neighbors_needed = 1 // in each direction
-    
     nonisolated func run() async {
         var done = false
         while(!done) {
@@ -56,8 +64,8 @@ actor FinalProcessor {
 
             var images_to_process: [FrameAirplaneRemover] = []
             
-            var start_index = index_to_process - number_neighbors_needed
-            var end_index = index_to_process + number_neighbors_needed
+            var start_index = index_to_process - number_final_processing_neighbors_needed
+            var end_index = index_to_process + number_final_processing_neighbors_needed
             if start_index < 0 {
                 start_index = 0
             }
@@ -65,7 +73,6 @@ actor FinalProcessor {
                 end_index = frame_count - 1
             }
 
-            Log.i("processing frame index \(index_to_process)")
             var bad = false
             for i in start_index ... end_index {
                 if let next_frame = await self.frame(at: i) {
@@ -76,19 +83,23 @@ actor FinalProcessor {
                 }
             }
             if !bad {
+                Log.i("processing frame index \(images_to_process.count) frames")
                 self.handle(frames: images_to_process)
                 await self.incrementCurrentFrameIndex()
 
                 if start_index > 0 {
                     if let frame_to_finish = await self.frame(at: start_index - 1) {
-                        Log.e("finishing frame")
-                        frame_to_finish.finish()
+                        Log.i("finishing frame")
+                        
+                        self.dispatchQueue.async {
+                            frame_to_finish.finish()
+                        }
                         await self.clearFrame(at: start_index - 1)
                     }
                 }
                 done = await current_frame_index >= frames.count 
                 if done {
-                    Log.e("finishing all remaining frames")
+                    Log.i("finishing all remaining frames")
                     await self.finishAll()
                 }
             } else {
@@ -97,38 +108,93 @@ actor FinalProcessor {
         }
     }
 
+    nonisolated func do_overlap(min_1_x: Int, min_1_y: Int,
+                            max_1_x: Int, max_1_y: Int,
+                            min_2_x: Int, min_2_y: Int,
+                            max_2_x: Int, max_2_y: Int) -> Bool
+    {
+        if min_1_x <= min_2_x && min_2_x <= max_1_x ||
+           min_1_x <= max_2_x && max_2_x <= max_1_x
+        {
+            // min_2_x is bewteen min_1_x and max_1_x
+            //   or 
+            // max_2_x is bewteen min_1_x and max_1_x
+            if min_1_y <= min_2_y && min_2_y <= max_1_y {
+                // min_2_y is bewteen min_1_y and max_1_y
+                return true
+            }
+            if min_1_y <= max_2_y && max_2_y <= max_1_y {
+                // max_2_y is bewteen min_1_y and max_1_y
+                return true
+            }
+        }
+        return false
+    }
+    
     nonisolated func handle(frames: [FrameAirplaneRemover]) {
-        // XXX right now nothing
-        Log.e("handle \(frames.count) frames")
+        Log.i("handle \(frames.count) frames")
         for frame in frames {
             for (group_name, group_line) in frame.group_lines {
                 // look for
 
                 let line_theta = group_line.theta
                 let line_rho = group_line.rho
-                
-                for other_frame in frames {
-                    if other_frame == frame { continue }
 
-                    for (other_group_name, other_group_line) in other_frame.group_lines {
-                        let other_line_theta = other_group_line.theta
-                        let other_line_rho = other_group_line.rho
+                if let line_min_x = frame.group_min_x[group_name],
+                   let line_min_y = frame.group_min_y[group_name],
+                   let line_max_x = frame.group_max_x[group_name],
+                   let line_max_y = frame.group_max_y[group_name],
+                   let group_size = frame.neighbor_groups[group_name]
+                {
+                    for other_frame in frames {
+                        if other_frame == frame { continue }
 
-                        let theta_diff = abs(line_theta-other_line_theta)
-                        let rho_diff = abs(line_rho-other_line_rho)
-                        
-                        if theta_diff < 15 && rho_diff < 40 { // XXX hardcoded constants
-                            Log.e("theta_diff \(theta_diff) rho_diff \(rho_diff)")
-                            // mark as should paint
-                            frame.should_paint[group_name] = true
-                            other_frame.should_paint[other_group_name] = true
+                        for (og_name, og_line) in other_frame.group_lines {
+                            let other_line_theta = og_line.theta
+                            let other_line_rho = og_line.rho
+
+                            let theta_diff = abs(line_theta-other_line_theta)
+                            let rho_diff = abs(line_rho-other_line_rho)
+                            
+                            if theta_diff < final_theta_diff && rho_diff < final_rho_diff {
+
+                                if let other_line_min_x = other_frame.group_min_x[og_name],
+                                   let other_line_min_y = other_frame.group_min_y[og_name],
+                                   let other_line_max_x = other_frame.group_max_x[og_name],
+                                   let other_line_max_y = other_frame.group_max_y[og_name],
+                                   let other_group_size = other_frame.neighbor_groups[og_name]
+                                {
+                                    let boundary_amt = 2 // XXX yet another hardcoded constant
+                                    if do_overlap(min_1_x: line_min_x - boundary_amt,
+                                                 min_1_y: line_min_y - boundary_amt,
+                                                 max_1_x: line_max_x + boundary_amt,
+                                                 max_1_y: line_max_y + boundary_amt,
+                                                 min_2_x: other_line_min_x - boundary_amt,
+                                                 min_2_y: other_line_min_y - boundary_amt,
+                                                 max_2_x: other_line_max_x + boundary_amt,
+                                                 max_2_y: other_line_max_y + boundary_amt)
+                                    {
+                                        if group_size < 200, // XXX hardcoded constant
+                                           other_group_size < 200
+                                        {
+                                            // two somewhat small overlapping groups
+                                            // shouldn't be painted over
+                                            frame.should_paint[group_name] = false
+                                            other_frame.should_paint[og_name] = false
+                                        }
+                                    } else {
+                                        // mark as should paint
+                                        frame.should_paint[group_name] = true
+                                        other_frame.should_paint[og_name] = true
+                                    }
+                                }
+                            }
                         }
                     }
                 }
             }
         }
     }
-
 }
 
 

@@ -32,6 +32,10 @@ todo:
  - try populating the full outlier hough data with all outliers, not just larger ones
    too much noise?  may make separated segments record better lines
    maybe just try reducing the min_group_size when generating the hough data?
+
+ - restarting after a crash is now not going to work because of the new FinalProcessor logic
+   need to re-compute the FrameAirlaneRemover for number_final_processing_neighbors_needed frames
+   back, even though those files still exits XXX DO THIS XXX
 */
 
 
@@ -39,17 +43,22 @@ todo:
 let max_concurrent_frames: UInt = 30  // number of frames to process in parallel about 1 per cpu core
 let max_pixel_brightness_distance: UInt16 = 7200 // distance in brightness to be considered an outlier
 
-let min_group_size = 100       // groups smaller than this are ignored
-let min_line_count = 50        // lines with counts smaller than this are ignored
+let min_group_size = 120       // groups smaller than this are ignored
+let min_line_count = 20        // lines with counts smaller than this are ignored
 
 let group_min_line_count = 4    // used when hough transorming individual groups
 let max_theta_diff: Double = 4  // degrees of difference allowed between lines
 let max_rho_diff: Double = 70   // pixels of line displacement allowed
 let max_number_of_lines = 8000  // don't process more lines than this per image
 
-let assume_airplane_size = 8000 // don't bother spending the time to fully process
-                             // groups larger than this, assume we should paint over them
+let assume_airplane_size = 300 // don't bother spending the time to fully process
+                            // groups larger than this, assume we should paint over them
 
+// how far in each direction do we go when doing final processing?
+let number_final_processing_neighbors_needed = 8 // in each direction
+
+let final_theta_diff: Double = 5       // how close in theta/rho outliers need to be between frames
+let final_rho_diff: Double = 70
 
 let test_paint = true           // write out a separate image sequence with colors indicating
                               // what was detected, and what was changed.  Helpful for debugging
