@@ -4,7 +4,6 @@ import Cocoa
 
 // this class holds the logic for removing airplanes from a single frame
 
-
 @available(macOS 10.15, *)
 class FrameAirplaneRemover {
     let width: Int
@@ -327,21 +326,19 @@ class FrameAirplaneRemover {
         }
     }
 
-    // this method first analyzises the outlier groups and then paints over them
-    // XXX break this up into smaller chunks, it's enormous
-    func paintOverAirplanes() {
-        let start_time = NSDate().timeIntervalSince1970
+    var should_paint: [String:Bool] = [:]
+    var group_min_x: [String:Int] = [:]
+    var group_min_y: [String:Int] = [:]
+    var group_max_x: [String:Int] = [:]
+    var group_max_y: [String:Int] = [:]
 
-        var should_paint: [String:Bool] = [:]
+    var group_amounts: [String: UInt64] = [:]
+
+    // record the extent of each group in the image, and also its brightness
+    func calculateGroupBoundsAndAmounts() {
+
         Log.i("frame \(frame_index) calculating outlier group bounds")
 
-        // XXX use a typealias to simplify this to one map
-        var group_min_x: [String:Int] = [:]
-        var group_min_y: [String:Int] = [:]
-        var group_max_x: [String:Int] = [:]
-        var group_max_y: [String:Int] = [:]
-
-        var group_amounts: [String: UInt64] = [:]
         
         // calculate the outer bounds of each outlier group
         for x in 0 ..< width {
@@ -394,9 +391,13 @@ class FrameAirplaneRemover {
                 group_amounts[group_name] = group_amount / group_size
             }
         }
-        
-        let time_1 = NSDate().timeIntervalSince1970
-        let interval1 = String(format: "%0.1f", time_1 - start_time)
+    }
+
+    
+    // this method first analyzises the outlier groups and then paints over them
+    // XXX break this up into smaller chunks, it's enormous
+    func paintOverAirplanes() {
+        let start_time = NSDate().timeIntervalSince1970
         
         Log.i("frame \(frame_index) running full outlier hough transform")
 
@@ -413,23 +414,17 @@ class FrameAirplaneRemover {
             }
         }
 
-        let time_2 = NSDate().timeIntervalSince1970
-        let interval2 = String(format: "%0.1f", time_2 - time_1)
-
+        let time_1 = NSDate().timeIntervalSince1970
+        let interval1 = String(format: "%0.1f", time_1 - start_time)
+        
         let lines = houghTransform.lines(min_count: min_line_count,
                                      number_of_lines_returned: max_number_of_lines)
 
         Log.d("frame \(frame_index) got \(lines.count) lines from the full outlier hough transform")
 
 
-        let time_3 = NSDate().timeIntervalSince1970
-        let interval3 = String(format: "%0.1f", time_3 - time_2)
-
-        // re-use the hough_data above for each group (make all false)
-        for i in 0 ..< width*height { houghTransform.input_data[i] = false }
-
-        let time_4 = NSDate().timeIntervalSince1970
-        let interval4 = String(format: "%0.1f", time_4 - time_3)
+        let time_2 = NSDate().timeIntervalSince1970
+        let interval2 = String(format: "%0.1f", time_2 - time_1)
 
         var processed_group_count = 0
 
@@ -714,9 +709,9 @@ class FrameAirplaneRemover {
             }
         }
         Log.d("frame \(frame_index) processed \(processed_group_count) groups")
-        let time_5 = NSDate().timeIntervalSince1970
-        let interval5 = String(format: "%0.1f", time_5 - time_4)
-        
+        let time_3 = NSDate().timeIntervalSince1970
+        let interval3 = String(format: "%0.1f", time_3 - time_2)
+
         Log.i("frame \(frame_index) painting airplane outlier groups")
 
         // paint over every outlier in the paint list with pixels from the adjecent frames
@@ -731,10 +726,10 @@ class FrameAirplaneRemover {
             }
         }
 
-        let time_6 = NSDate().timeIntervalSince1970
-        let interval6 = String(format: "%0.1f", time_6 - time_5)
+        let time_4 = NSDate().timeIntervalSince1970
+        let interval4 = String(format: "%0.1f", time_4 - time_3)
         
-        Log.i("frame \(frame_index) done painting \(interval6)s - \(interval5)s - \(interval4)s - \(interval3)s - \(interval2)s - \(interval1)s")
+        Log.i("frame \(frame_index) done painting \(interval4)s - \(interval3)s - \(interval2)s - \(interval1)s")
     }
 
     func writeTestFile() {

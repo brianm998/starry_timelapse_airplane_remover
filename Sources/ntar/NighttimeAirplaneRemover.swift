@@ -127,18 +127,24 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
         let time_4 = NSDate().timeIntervalSince1970
         let interval4 = String(format: "%0.1f", time_4 - time_3)
         Log.d("frame \(frame_index) painting over airplane streaks after \(interval4)s")
+
+        frame_plane_remover.calculateGroupBoundsAndAmounts()
+
+        let time_5 = NSDate().timeIntervalSince1970
+        let interval5 = String(format: "%0.1f", time_5 - time_4)
+        Log.d("frame \(frame_index) painting over airplanes after \(interval5)s")
         
         frame_plane_remover.paintOverAirplanes()
         
-        let time_5 = NSDate().timeIntervalSince1970
-        let interval5 = String(format: "%0.1f", time_5 - time_4)
-        Log.d("frame \(frame_index) creating final image \(filename) after \(interval5)s")
-
-        frame_plane_remover.writeTestFile()
         let time_6 = NSDate().timeIntervalSince1970
         let interval6 = String(format: "%0.1f", time_6 - time_5)
+        Log.d("frame \(frame_index) creating final image \(filename) after p\(interval6)s")
+
+        frame_plane_remover.writeTestFile()
+        let time_7 = NSDate().timeIntervalSince1970
+        let interval7 = String(format: "%0.1f", time_7 - time_6)
         
-        Log.d("frame \(frame_index) timing for frame render - \(interval6)s - \(interval5)s - \(interval4)s - \(interval3)s - \(interval2)s - \(interval1)s")
+        Log.d("frame \(frame_index) timing for frame render - \(interval7)s - \(interval6)s - \(interval5)s - \(interval4)s - \(interval3)s - \(interval2)s - \(interval1)s")
         Log.i("frame \(frame_index) complete")
 
         return frame_plane_remover.data
