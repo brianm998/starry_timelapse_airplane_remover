@@ -19,17 +19,18 @@ class FrameAirplaneRemover {
     let raw_pixel_size_bytes = 6
     
     var data: Data              // a mutable copy of the original data
-    var test_paint_data: Data?
+    var test_paint_data: Data?    // a copy of original data we test paint to 
+
+    var test_paint_filename: String = "" // the filename to write out test paint data to
+    var test_paint = false               // should we test paint?  helpful for debugging
 
     // one dimentional arrays indexed by y*width + x
     var outlier_amounts: [UInt32]  // amount difference of each outlier
     var outlier_groups: [String?]  // named outlier group for each outlier
     
     // populated by pruning
-    var neighbor_groups: [String: UInt64] = [:]
-    
-    var test_paint_filename: String = ""
-    var test_paint = false
+    var neighbor_groups: [String: UInt64] = [:] // keyed by group name, value is the size of each
+                                           // group, only groups larger than min_group_size
 
     let houghTransform: HoughTransform
 
@@ -99,7 +100,6 @@ class FrameAirplaneRemover {
 
     // this is still a slow part of the process, but is now about 10x faster than before
     func populateOutlierMap() {
-        let start_time = NSDate().timeIntervalSince1970
         // compare pixels at the same image location in adjecent frames
         // detect Outliers which are much more brighter than the adject frames
         let orig_data = image.raw_image_data
@@ -111,8 +111,6 @@ class FrameAirplaneRemover {
             other_data_2 = otherFrames[1].raw_image_data
             have_two_other_frames = true
         }
-        let time_1 = NSDate().timeIntervalSince1970
-        let interval1 = String(format: "%0.1f", time_1 - start_time)
 
         // most of the time is in this loop, although it's a lot faster now
         // ugly, but a lot faster
@@ -194,11 +192,9 @@ class FrameAirplaneRemover {
                 }
             }
         }
-        let end_time = NSDate().timeIntervalSince1970
-        let end_interval = String(format: "%0.1f", end_time - start_time)
-        Log.d("frame \(frame_index) took \(end_interval)s to populate the outlier map, \(interval1)s of which was getting the other frames")
     }
 
+    // this method groups outliers into groups of direct neighbors
     func prune() {
         Log.i("frame \(frame_index) pruning outliers")
         
@@ -303,7 +299,9 @@ class FrameAirplaneRemover {
                 }
             }
             //Log.d("group \(outlier_key) has \(group_size) members")
-            individual_group_counts[outlier_key] = group_size
+            if group_size > min_group_size { 
+                individual_group_counts[outlier_key] = group_size
+            }
         }
         self.neighbor_groups = individual_group_counts
     }    
@@ -405,11 +403,9 @@ class FrameAirplaneRemover {
         // mark potential lines in the hough_data by groups larger than some size
         for (index, group_name) in outlier_groups.enumerated() { // XXX heap corruption :(
             if let group_name = group_name,
-               let group_size = neighbor_groups[group_name]
+               let _ = neighbor_groups[group_name]
             {
-                if group_size > min_group_size { 
-                    houghTransform.input_data[index] = true
-                }
+                houghTransform.input_data[index] = true
             }
         }
 
@@ -420,11 +416,8 @@ class FrameAirplaneRemover {
         Log.d("frame \(frame_index) got \(lines_from_full_image.count) lines from the full outlier hough transform")
     }
                   
-                  
-    // this method first analyzises the outlier groups and then paints over them
-    // XXX break this up into smaller chunks, it's enormous
-    func paintOverAirplanes() {
-        let start_time = NSDate().timeIntervalSince1970
+    // this method analyzises the outlier groups to determine paintability
+    func outlierGroupPaintingAnalysis() {
         
         var processed_group_count = 0
 
@@ -433,8 +426,7 @@ class FrameAirplaneRemover {
         // look through all neighber groups greater than min_group_size
         // this is a lot faster now
         for (name, size) in neighbor_groups {
-            if size > min_group_size,         // make sure it's not too small
-               let min_x = group_min_x[name], // bounding box for this group
+            if let min_x = group_min_x[name], // bounding box for this group
                let min_y = group_min_y[name],
                let max_x = group_max_x[name],
                let max_y = group_max_y[name],
@@ -709,8 +701,9 @@ class FrameAirplaneRemover {
             }
         }
         Log.d("frame \(frame_index) processed \(processed_group_count) groups")
-        let time_1 = NSDate().timeIntervalSince1970
-        let interval1 = String(format: "%0.1f", time_1 - start_time)
+    }
+
+    func paintOverAirplanes() {
 
         Log.i("frame \(frame_index) painting airplane outlier groups")
 
@@ -725,11 +718,6 @@ class FrameAirplaneRemover {
                 paint(x: x, y: y)
             }
         }
-
-        let time_2 = NSDate().timeIntervalSince1970
-        let interval2 = String(format: "%0.1f", time_2 - time_1)
-
-        Log.i("frame \(frame_index) done painting - \(interval2)s - \(interval1)s")
     }
 
     func writeTestFile() {

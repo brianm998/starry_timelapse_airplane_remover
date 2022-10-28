@@ -50,8 +50,8 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
 
     // called by the superclass to process each frame
     override func processFrame(number index: Int,
-                               image: PixelatedImage,
-                               base_name: String) async -> Data?
+                            image: PixelatedImage,
+                            base_name: String) async -> Data?
     {
         //Log.e("full_image_path \(full_image_path)")
         // load images outside the main thread
@@ -126,7 +126,7 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
         
         let time_4 = NSDate().timeIntervalSince1970
         let interval4 = String(format: "%0.1f", time_4 - time_3)
-        Log.d("frame \(frame_index) painting over airplane streaks after \(interval4)s")
+        Log.d("frame \(frame_index) calculating group bounds \(interval4)s")
 
         frame_plane_remover.calculateGroupBoundsAndAmounts()
 
@@ -138,19 +138,26 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
 
         let time_6 = NSDate().timeIntervalSince1970
         let interval6 = String(format: "%0.1f", time_6 - time_5)
-        Log.d("frame \(frame_index) creating final image \(filename) after p\(interval6)s")
+        Log.d("frame \(frame_index) outlier group painting analysis after p\(interval6)s")
 
-        frame_plane_remover.paintOverAirplanes()
+        frame_plane_remover.outlierGroupPaintingAnalysis()
         
         let time_7 = NSDate().timeIntervalSince1970
         let interval7 = String(format: "%0.1f", time_7 - time_6)
+        Log.d("frame \(frame_index) painting over airplanes after p\(interval7)s")
+        
+        frame_plane_remover.paintOverAirplanes()
+        
+        let time_8 = NSDate().timeIntervalSince1970
+        let interval8 = String(format: "%0.1f", time_8 - time_7)
         Log.d("frame \(frame_index) creating final image \(filename) after p\(interval7)s")
 
         frame_plane_remover.writeTestFile()
-        let time_8 = NSDate().timeIntervalSince1970
-        let interval8 = String(format: "%0.1f", time_8 - time_7)
         
-        Log.d("frame \(frame_index) timing for frame render - \(interval8)s - \(interval7)s - \(interval6)s - \(interval5)s - \(interval4)s - \(interval3)s - \(interval2)s - \(interval1)s")
+        let time_9 = NSDate().timeIntervalSince1970
+        let interval9 = String(format: "%0.1f", time_9 - time_8)
+        
+        Log.d("frame \(frame_index) timing for frame render - \(interval9)s  - \(interval8)s - \(interval7)s - \(interval6)s - \(interval5)s - \(interval4)s - \(interval3)s - \(interval2)s - \(interval1)s")
         Log.i("frame \(frame_index) complete")
 
         return frame_plane_remover.data
