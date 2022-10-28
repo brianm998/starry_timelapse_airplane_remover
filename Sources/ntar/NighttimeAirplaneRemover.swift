@@ -4,36 +4,9 @@ import Cocoa
 
 
 
-@available(macOS 10.15, *) 
-class FinalProcessor {
-    var frames: [FrameAirplaneRemover?]
-    var current_frame_index = 0
-
-    
-    init(numberOfFrames frame_count: Int) {
-        frames = [FrameAirplaneRemover?](repeating: nil, count: frame_count)
-    }
-
-    func run() {
-        var done = false
-        while(!done) {
-            if let current_frame = frames[current_frame_index] {
-                current_frame.finish()
-                frames[current_frame_index] = nil
-                current_frame_index += 1
-            } else {
-                sleep(1)        // XXX hardcoded sleep amount
-            }
-            done = current_frame_index >= frames.count 
-        }
-    }
-}
-
-
-
 // this class handles removing airplanes from an entire sequence,
 // delegating each frame to an instance of FrameAirplaneRemover
-
+// and then using a FinalProcessor to finish processing
 
 @available(macOS 10.15, *) 
 class NighttimeAirplaneRemover : ImageSequenceProcessor {
@@ -74,12 +47,17 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
                    maxConcurrent: max_concurrent,
                    givenFilenames: given_filenames)
 
-        final_processor = FinalProcessor(numberOfFrames: self.image_sequence.filenames.count)
+        let processor = FinalProcessor(numberOfFrames: self.image_sequence.filenames.count)
+        
+        final_processor = processor
 
         dispatchGroup.enter()
+        // run the final processor as a single separate thread
         self.dispatchQueue.async {
-            self.final_processor?.run()
-            self.dispatchGroup.leave()
+            Task {
+                await processor.run()
+                self.dispatchGroup.leave()
+            }
         }
     }
 
@@ -129,8 +107,14 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
         // and processes sequentially through them as they are available, doing
         // analysis of the outlier groups between frames and making them look better
         // by doing further analysis and cleanup
-        
-        final_processor?.frames[index] = frame_plane_remover
+
+        if let final_processor = final_processor {
+            Task {
+                await final_processor.add(frame: frame_plane_remover, at: index)
+            }
+        } else {
+            fatalError("should not happen")
+        }
     }
     
     func prepareForAdjecentFrameAnalysis(fromImage image: PixelatedImage,
