@@ -341,10 +341,22 @@ class FrameAirplaneRemover {
         var group_max_x: [String:Int] = [:]
         var group_max_y: [String:Int] = [:]
 
+        var group_amounts: [String: UInt64] = [:]
+        
         // calculate the outer bounds of each outlier group
         for x in 0 ..< width {
             for y in 0 ..< height { // XXX heap corruption :(
-                if let group = outlier_groups[y*width+x] {
+                let index = y*width+x
+                if let group = outlier_groups[index]
+                {
+                    let amount = UInt64(outlier_amounts[index])
+                    if let group_amount = group_amounts[group] {
+                        group_amounts[group] = group_amount + amount
+                    } else {
+                        group_amounts[group] = amount
+                    }
+                    // first record amounts
+                    
                     if let min_x = group_min_x[group] {
                         if(x < min_x) {
                             group_min_x[group] = x
@@ -377,6 +389,12 @@ class FrameAirplaneRemover {
             }
         }
 
+        for (group_name, group_size) in neighbor_groups {
+            if let group_amount = group_amounts[group_name] {
+                group_amounts[group_name] = group_amount / group_size
+            }
+        }
+        
         let time_1 = NSDate().timeIntervalSince1970
         let interval1 = String(format: "%0.1f", time_1 - start_time)
         
@@ -420,11 +438,12 @@ class FrameAirplaneRemover {
         // look through all neighber groups greater than min_group_size
         // this is a lot faster now
         for (name, size) in neighbor_groups {
-            if size > min_group_size,
-               let min_x = group_min_x[name],
+            if size > min_group_size,         // make sure it's not too small
+               let min_x = group_min_x[name], // bounding box for this group
                let min_y = group_min_y[name],
                let max_x = group_max_x[name],
-               let max_y = group_max_y[name]
+               let max_y = group_max_y[name],
+               let group_value = group_amounts[name] // how bright is this group?
             {
                 // use assume_airplane_size to avoid doing extra processing on
                 // really big outlier groups
@@ -459,7 +478,7 @@ class FrameAirplaneRemover {
         
                 // get the theta and rho of just this outlier group
                 let group_lines = groupHoughTransform.lines(min_count: group_min_line_count,
-                                                       number_of_lines_returned: 1)
+                                                       number_of_lines_returned: 10)
                 if group_lines.count == 0 {
                     Log.w("frame \(frame_index) got no group lines for group \(name) of size \(size)")
                     // this should only happen when there is no data in the input and therefore output 
@@ -468,8 +487,38 @@ class FrameAirplaneRemover {
                 }
                 
                 // this is the most likely line from the outlier group
+                // useful data here could be other lines, and if there are any,
+                // and how far away they are from the most prominent one.
+                // i.e. detecting real lines vs the best line fit for a random blob
                 let (group_theta, group_rho, group_count) = group_lines[0]
 
+                Log.d("frame \(frame_index) group \(name) got \(group_lines.count) lines from group hough transform")
+                
+                Log.d("frame \(frame_index) group \(name) line at index 0 theta \(group_theta), rho \(group_rho), count \(group_count)")
+                
+                if group_lines.count > 1 {
+                    for i in 1 ..< group_lines.count {
+                        let (other_theta, other_rho, other_count) = group_lines[i]
+                        // XXX clean this up with below, it's a copy
+                        // o is the direct distance from the full screen origin
+                        // to the group transform origin
+                        let o = sqrt(Double(min_x * min_x) + Double(min_y * min_y))
+
+                        // theta_r is the angle from the full screen origin to the
+                        // to the group transform origin, in degrees
+                        let theta_r = acos(Double(min_x)/o)*180/Double.pi
+
+                        // theta_p is the angle between them in degrees
+                        let theta_p = group_theta - theta_r
+
+                        // add the calculated missing amount to the group_rho
+                        let adjusted_group_rho = other_rho + o * cos(theta_p * Double.pi/180)
+                        // XXX clean this up with below, it's a copy
+
+                        Log.d("frame \(frame_index) group \(name) line at index \(i) theta \(other_theta), rho \(adjusted_group_rho), count \(other_count)")
+                    }
+                }
+                
                 // convert the rho from the group hough transform to what
                 // it would have been if we had run the transformation full frame
                 // precision is not 100% due to hough transformation bucket size differences
@@ -498,7 +547,51 @@ class FrameAirplaneRemover {
                 var best_group_count: Int = 0
                 var best_score: Double = 0
 
-                var should_paint_this_one = false // assume not
+
+                var group_size_score: Double = 0 // size of the group in pixels
+
+                if size < 10 {  
+                    group_size_score = 0
+                } else if size < 50 {
+                    group_size_score = 25
+                } else if size < 100 {
+                    group_size_score = 40
+                } else if size < 150 {
+                    group_size_score = 50
+                } else if size < 200 {
+                    group_size_score = 60
+                } else if size < 300 {
+                    group_size_score = 70
+                } else if size < 500 {
+                    group_size_score = 80
+                } else {
+                    group_size_score = 100
+                }
+                
+                var group_value_score: Double = 0 // score of how bright this group was overall
+                if group_value < max_pixel_brightness_distance {
+                    group_value_score = 0
+                } else {
+                    let max = UInt64(max_pixel_brightness_distance)
+                    group_value_score = Double(group_value - max)/Double(max)*20
+                    if group_value_score > 100 {
+                        group_value_score = 100
+                    }
+                }
+                
+                var group_count_score: Double = 0 // score of the line from the group transform
+                if group_count < 10 {
+                    group_count_score = 0
+                } else if group_count < 30 {
+                    group_count_score = 20
+                } else if group_count < 50 {
+                    group_count_score = 50
+                } else if group_count < 80 {
+                    group_count_score = 80
+                } else {
+                    group_count_score = 100
+                }
+
                 for line in lines {
                     if line.count <= 10 /* min_line_count XXX */ { continue }
 
@@ -559,7 +652,7 @@ class FrameAirplaneRemover {
                         theta_score = 0
                     }
 
-                    var rho_score: Double = 0
+                    var rho_score: Double = 0 // score based upon how different the rho is
 
                     if rho_diff < 3 {
                         rho_score = 100
@@ -589,44 +682,11 @@ class FrameAirplaneRemover {
                         line_score = 100
                     }
                     
-                    var group_size_score: Double = 0
-
-                    if size < 10 {
-                        group_size_score = 0
-                    } else if size < 50 {
-                        group_size_score = 25
-                    } else if size < 100 {
-                        group_size_score = 40
-                    } else if size < 150 {
-                        group_size_score = 50
-                    } else if size < 200 {
-                        group_size_score = 60
-                    } else if size < 300 {
-                        group_size_score = 70
-                    } else if size < 500 {
-                        group_size_score = 80
-                    } else {
-                        group_size_score = 100
-                    }
-
-                    var group_count_score: Double = 0 // score of the line from the group transform
-                    if group_count < 10 {
-                        group_count_score = 0
-                    } else if group_count < 30 {
-                        group_count_score = 20
-                    } else if group_count < 50 {
-                        group_count_score = 50
-                    } else if group_count < 80 {
-                        group_count_score = 80
-                    } else {
-                        group_count_score = 100
-                    }
-                    
-                    let overall_score = (theta_score*line_score/100 + rho_score*line_score/100 + group_size_score + group_count_score) / 4
+                    let overall_score = (theta_score*line_score/100 + rho_score*line_score/100 + (group_size_score + group_count_score + group_value_score)/3) / 3
 
                     // record best comparison from all of them
                     if overall_score > best_score {
-                        Log.d("frame \(frame_index) (theta_score \(theta_score) rho_score \(rho_score) line_score \(line_score) group_size_score \(group_size_score)) group_count \(group_count) overall_score \(overall_score)")
+                        Log.d("frame \(frame_index) (theta_score \(theta_score) rho_score \(rho_score) line_score \(line_score) group_size_score \(group_size_score)) group_count_score \(group_count_score) group_value_score \(group_value_score) overall_score \(overall_score)")
 
                         best_score = overall_score
                         min_theta_diff = theta_diff
@@ -636,7 +696,7 @@ class FrameAirplaneRemover {
                     }
                 }
 
-                Log.d("frame \(frame_index) final best match for group \(name) of size \(size) width \(group_width) height \(group_height) - theta_diff \(min_theta_diff) rho_diff \(min_rho_diff) line_count \(best_choice_line_count) group_count \(group_count) best_score \(best_score)")
+                Log.d("frame \(frame_index) final best match for group \(name) of size \(size) value \(group_value) width \(group_width) height \(group_height) - theta_diff \(min_theta_diff) rho_diff \(min_rho_diff) line_count \(best_choice_line_count) group_count \(best_group_count) group_value \(group_value) best_score \(best_score)")
                 
                 if best_score > 50 {
                     should_paint[name] = true
@@ -667,7 +727,7 @@ class FrameAirplaneRemover {
             {
                 let x = index % width;
                 let y = index / width;
-                paint(x: x, y: y, amount: outlier_amounts[index])
+                paint(x: x, y: y)
             }
         }
 
@@ -686,7 +746,7 @@ class FrameAirplaneRemover {
     }
 
     // paint over a selected outlier with data from pixels from adjecent frames
-    func paint(x: Int, y: Int, amount: UInt32) {
+    func paint(x: Int, y: Int) {
         var pixels_to_paint_with: [Pixel] = []
         
         // grab the pixels from the same image spot from adject frames
@@ -705,7 +765,7 @@ class FrameAirplaneRemover {
         
         // actually paint over that airplane like thing in the image data
         data.replaceSubrange(offset ..< offset+raw_pixel_size_bytes,
-                             with: &paint_value, count: raw_pixel_size_bytes)
+                          with: &paint_value, count: raw_pixel_size_bytes)
         
         // for testing, colors changed pixels
         if test_paint { // XXX
@@ -715,8 +775,8 @@ class FrameAirplaneRemover {
         if test_paint {
             var test_paint_value = paint_pixel.value
             test_paint_data?.replaceSubrange(offset ..< offset+raw_pixel_size_bytes,
-                                             with: &test_paint_value,
-                                             count: raw_pixel_size_bytes)
+                                         with: &test_paint_value,
+                                         count: raw_pixel_size_bytes)
         }
     }
 }
