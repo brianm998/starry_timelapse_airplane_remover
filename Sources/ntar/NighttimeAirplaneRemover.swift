@@ -92,8 +92,8 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
         // by doing further analysis and cleanup
         
         //dispatchGroup.leave()
-        
-        finish(frame_plane_remover)
+
+        frame_plane_remover.finish() 
     }
 
     func prepareForAdjecentFrameAnalysis(fromImage image: PixelatedImage,
@@ -171,29 +171,5 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
         return frame_plane_remover
    }        
 
-   func finish(_ frame_plane_remover: FrameAirplaneRemover) {
-        Log.i("frame \(frame_plane_remover.frame_index) finishing")
-
-        Log.d("frame \(frame_plane_remover.frame_index) painting over airplanes")
-                  
-        frame_plane_remover.paintOverAirplanes()
-        
-//        let time_8 = NSDate().timeIntervalSince1970
-//        let interval8 = String(format: "%0.1f", time_8 - time_7)
-//        Log.d("frame \(frame_index) creating final image \(filename) after p\(interval7)s")
-
-        Log.d("frame \(frame_plane_remover.frame_index) writing output files")
-        frame_plane_remover.writeTestFile()
-        
-//        let time_9 = NSDate().timeIntervalSince1970
-//        let interval9 = String(format: "%0.1f", time_9 - time_8)
-        
-//        Log.d("frame \(frame_index) timing for frame render - \(interval9)s  - \(interval8)s - \(interval7)s - \(interval6)s - \(interval5)s - \(interval4)s - \(interval3)s - \(interval2)s - \(interval1)s")
-        Log.i("frame \(frame_plane_remover.frame_index) complete")
-
-        // write frame out as a tiff file after processing it
-        frame_plane_remover.image.writeTIFFEncoding(ofData: frame_plane_remover.data,
-                                              toFilename: frame_plane_remover.output_filename)
-    }
 }
               

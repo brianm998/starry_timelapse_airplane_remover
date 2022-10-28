@@ -770,5 +770,29 @@ class FrameAirplaneRemover {
                                          count: raw_pixel_size_bytes)
         }
     }
+
+    func finish() {
+        Log.i("frame \(self.frame_index) finishing")
+
+        Log.d("frame \(self.frame_index) painting over airplanes")
+                  
+        self.paintOverAirplanes()
+        
+//        let time_8 = NSDate().timeIntervalSince1970
+//        let interval8 = String(format: "%0.1f", time_8 - time_7)
+//        Log.d("frame \(frame_index) creating final image \(filename) after p\(interval7)s")
+
+        Log.d("frame \(self.frame_index) writing output files")
+        self.writeTestFile()
+        
+//        let time_9 = NSDate().timeIntervalSince1970
+//        let interval9 = String(format: "%0.1f", time_9 - time_8)
+        
+//        Log.d("frame \(frame_index) timing for frame render - \(interval9)s  - \(interval8)s - \(interval7)s - \(interval6)s - \(interval5)s - \(interval4)s - \(interval3)s - \(interval2)s - \(interval1)s")
+        Log.i("frame \(self.frame_index) complete")
+
+        // write frame out as a tiff file after processing it
+        self.image.writeTIFFEncoding(ofData: self.data,  toFilename: self.output_filename)
+    }
 }
 
