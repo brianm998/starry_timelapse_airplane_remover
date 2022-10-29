@@ -46,9 +46,6 @@ class FrameAirplaneRemover: Equatable {
     // populated by pruning
     var neighbor_groups: [String: UInt64] = [:] // keyed by group name, value is the size of each
                                            // group, only groups larger than min_group_size
-
-    let houghTransform: HoughTransform
-
     var lines_from_full_image: [Line] = [] // lines from all large enough outliers
 
     var should_paint: [String:WillPaint] = [:] // keyed by group name, should be paint it?
@@ -82,8 +79,6 @@ class FrameAirplaneRemover: Equatable {
         self.width = image.width
         self.height = image.height
 
-        self.houghTransform = HoughTransform(data_width: width, data_height: height)
-        
         self.bytesPerPixel = image.bytesPerPixel
         self.bytesPerRow = width*bytesPerPixel
         self.max_pixel_distance = max_pixel_distance
@@ -345,10 +340,10 @@ class FrameAirplaneRemover: Equatable {
                         if !will_paint {
                             switch why {
                             case .badScore:
-                                nextPixel.green = 0xFFFF
+                                nextPixel.green = 0xFFFF // cyan
                                 nextPixel.blue = 0xFFFF
                             case .adjecentOverlap:
-                                nextPixel.blue = 0xFFFF
+                                nextPixel.blue = 0xFFFF // blue
                             default:
                                 fatalError("should not happen")
                             }
@@ -427,9 +422,13 @@ class FrameAirplaneRemover: Equatable {
         }
     }
 
+    var houghTransform_rmax: Double = 0
+
     // this method runs a hough transform on the full resolution image that
     // contains only large enough outliers
     func fullHoughTransform() {
+        let houghTransform = HoughTransform(data_width: width, data_height: height)
+        houghTransform_rmax = houghTransform.rmax
         Log.i("frame \(frame_index) running full outlier hough transform")
 
         // do a hough transform and compare leading outlier groups to lines in the image
@@ -564,7 +563,7 @@ class FrameAirplaneRemover: Equatable {
                 let adjusted_group_rho = group_rho + o * cos(theta_p * Double.pi/180)
 
                 let inital_min_theta_diff: Double = 360             // theta is in degrees
-                let inital_min_rho_diff: Double = houghTransform.rmax // max rho value possible
+                let inital_min_rho_diff: Double = houghTransform_rmax // max rho value possible
                 
                 var min_theta_diff = inital_min_theta_diff
                 var min_rho_diff = inital_min_rho_diff
@@ -793,12 +792,12 @@ class FrameAirplaneRemover: Equatable {
         if test_paint { // XXX
             switch why {
             case .assumed:
-                paint_pixel.red = 0xFFFF
+                paint_pixel.red = 0xFFFF // red
             case .goodScore:
                 paint_pixel.red = 0xFFFF // yellow
                 paint_pixel.green = 0xFFFF
             case .adjecentLine:
-                paint_pixel.red = 0xFFFF // purple
+                paint_pixel.red = 0xFFFF // magenta
                 paint_pixel.blue = 0xFFFF
             default:
                 fatalError("should not happen")
