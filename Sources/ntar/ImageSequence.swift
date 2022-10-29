@@ -47,6 +47,7 @@ actor ImageSequence {
             return image
         }
         do {
+            Log.d("loading \(filename)")
             if let pixelatedImage = try PixelatedImage(fromFile: filename) {
                 images[filename] = WeakRef(value: pixelatedImage)
                 return pixelatedImage

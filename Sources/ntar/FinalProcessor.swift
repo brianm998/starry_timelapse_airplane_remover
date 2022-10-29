@@ -18,7 +18,8 @@ actor FinalProcessor {
     var frames: [FrameAirplaneRemover?]
     var current_frame_index = 0
     let frame_count: Int
-
+    let dispatch_group: DispatchGroup
+    
     // concurrent dispatch queue so we can process frames in parallel
     let dispatchQueue = DispatchQueue(label: "image_sequence_final_processor",
                                   qos: .unspecified,
@@ -26,9 +27,10 @@ actor FinalProcessor {
                                   autoreleaseFrequency: .inherit,
                                   target: nil)
     
-    init(numberOfFrames frame_count: Int) {
+    init(numberOfFrames frame_count: Int, dispatchGroup dispatch_group: DispatchGroup) {
         frames = [FrameAirplaneRemover?](repeating: nil, count: frame_count)
         self.frame_count = frame_count
+        self.dispatch_group = dispatch_group
     }
 
     func add(frame: FrameAirplaneRemover, at index: Int) {
@@ -50,8 +52,10 @@ actor FinalProcessor {
     func finishAll() {
         for frame in frames {
             if let frame = frame {
+                self.dispatch_group.enter()
                 self.dispatchQueue.async {
                     frame.finish()
+                    self.dispatch_group.leave()
                 }
             }
         }
@@ -91,8 +95,10 @@ actor FinalProcessor {
                     if let frame_to_finish = await self.frame(at: start_index - 1) {
                         Log.i("finishing frame")
                         
+                        self.dispatch_group.enter()
                         self.dispatchQueue.async {
                             frame_to_finish.finish()
+                            self.dispatch_group.leave()
                         }
                         await self.clearFrame(at: start_index - 1)
                     }
@@ -131,6 +137,14 @@ actor FinalProcessor {
         return false
     }
     
+    // this method does a final pass on a group of frames, using
+    // the angle of outlier groups that don't overlap between frames
+    // to add a layer of airplane detection.
+    // if two outlier groups are found in different frames, with close
+    // to the same theta and rho, and they don't overlap, then they are
+    // likely adject airplane tracks.
+    // otherwise, if they do overlap, then it's more likely a cloud or 
+    // a bright star or planet, leave them as is.  
     nonisolated func handle(frames: [FrameAirplaneRemover]) {
         Log.i("handle \(frames.count) frames")
         for frame in frames {
