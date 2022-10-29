@@ -14,9 +14,6 @@ class ImageSequenceProcessor {
     // the max number of frames to process at one time
     let max_concurrent_renders: UInt
 
-    // used for testing
-    var process_only_this_index: Int?
-    
     // the following properties get included into the output videoname
     
     // actors
@@ -32,6 +29,9 @@ class ImageSequenceProcessor {
                                   target: nil)
     
     let dispatchGroup = DispatchGroup()
+    
+    var should_process: [Bool] = []       // indexed by frame number
+    var existing_output_files: [Bool] = [] // indexed by frame number
     
     init(imageSequenceDirname image_sequence_dirname: String,
          outputDirname output_dirname: String,
@@ -67,42 +67,70 @@ class ImageSequenceProcessor {
     }
 
     func assembleMethodList() async {
-        for (index, image_filename) in image_sequence.filenames.enumerated() {
-            var skip = false
-            if let process_only_this_index = process_only_this_index,
-               process_only_this_index != index
-            {
-                Log.w("skipping index \(index)")
-                skip = true
-            }
-            // XXX add ability to skip all but a single index (#1) for the tester
+        /*
+           read all existing output files 
+           sort them into frame order
+           remove ones within number_final_processing_neighbors_needed frames of holes
+           make sure these re-runs done't bork on existing file later
+           only process below based upon this info
+        */
 
-            if !skip {
-                let filename = image_sequence.filenames[index]
-                let basename = remove_path(fromString: filename)
-                let output_filename = "\(output_dirname)/\(basename)"
-                if FileManager.default.fileExists(atPath: output_filename) {
-                    Log.i("skipping already existing file \(filename)")
-                } else {
-                    self.dispatchGroup.enter() 
-                    Log.d("loading \(image_filename)")
-                    await method_list.add(atIndex: index, method: {
-                        if let image = await self.image_sequence.getImage(withName: image_filename) {
-                            await self.processFrame(number: index,
-                                                 image: image,
-                                                 output_filename: output_filename,
-                                                 base_name: basename)
-                            await self.number_running.decrement()
-                            self.dispatchGroup.leave()
-                        } else {
-                            Log.w("could't get image for \(image_filename)")
-                        }
-                    })
+        should_process = [Bool](repeating: false, count: image_sequence.filenames.count)
+        existing_output_files = [Bool](repeating: false, count: image_sequence.filenames.count)
+        for (index, image_filename) in image_sequence.filenames.enumerated() {
+            let basename = remove_path(fromString: image_filename)
+            let output_filename = "\(output_dirname)/\(basename)"
+            if FileManager.default.fileExists(atPath: output_filename) {
+                existing_output_files[index] = true
+            }                                  
+        }
+
+        for (index, output_file_already_exists) in existing_output_files.enumerated() {
+            if !output_file_already_exists {
+                var start_idx = index - number_final_processing_neighbors_needed
+                var end_idx = index + number_final_processing_neighbors_needed
+                if start_idx < 0 { start_idx = 0 }
+                if end_idx >= existing_output_files.count {
+                    end_idx = existing_output_files.count - 1
                 }
+                for i in start_idx ... end_idx {
+                    should_process[i] = true
+                }
+            }
+        }
+
+        for (index, image_filename) in image_sequence.filenames.enumerated() {
+            let filename = image_sequence.filenames[index]
+            let basename = remove_path(fromString: filename)
+            let output_filename = "\(output_dirname)/\(basename)"
+            if should_process[index] {
+                self.dispatchGroup.enter() 
+                await method_list.add(atIndex: index, method: {
+                    Log.d("loading \(image_filename)")
+                    if let image = await self.image_sequence.getImage(withName: image_filename) {
+                        await self.processFrame(number: index,
+                                             image: image,
+                                             output_filename: output_filename,
+                                             base_name: basename)
+                        await self.number_running.decrement()
+                        self.dispatchGroup.leave()
+                    } else {
+                        Log.w("could't get image for \(image_filename)")
+                    }
+                })
+            } else {
+                Log.i("not processing existing file \(filename)")
+                // XXX we need to load number_final_processing_neighbors_needed number
+                // of existing files to be able to re-start existing work
+                // XXX what needs to happen to be able to restart is:
             }
         }
     }
 
+    func method_list_hook() {
+        // can be overridden
+    }
+    
     func startup_hook() {
         // can be overridden
     }
@@ -122,6 +150,8 @@ class ImageSequenceProcessor {
             // each of these methods removes the airplanes from a particular frame
             await assembleMethodList()
             Log.d("we have \(await method_list.list.count) total frames")
+            
+            method_list_hook()
             
             Log.d("running")
             // atually run it

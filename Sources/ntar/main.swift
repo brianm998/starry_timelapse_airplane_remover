@@ -33,14 +33,16 @@ todo:
    too much noise?  may make separated segments record better lines
    maybe just try reducing the min_group_size when generating the hough data?
 
- - restarting after a crash is now not going to work because of the new FinalProcessor logic
-   need to re-compute the FrameAirlaneRemover for number_final_processing_neighbors_needed frames
-   back, even though those files still exits XXX DO THIS XXX
+ - track down false positives better in the final processor, maybe more padding?
+
+ - add thread # limits on asyncs in final processing
+ - separate out saving of image files into a separate single thread, after painting in parallel.
+   (works in parallel, but seems to be system crunch when writing lots at once.
 */
 
 
 // XXX here are some random global constants that maybe should be exposed somehow
-let max_concurrent_frames: UInt = 30  // number of frames to process in parallel about 1 per cpu core
+let max_concurrent_frames: UInt = 34  // number of frames to process in parallel about 1 per cpu core
 let max_pixel_brightness_distance: UInt16 = 7200 // distance in brightness to be considered an outlier
 
 let min_group_size = 120       // groups smaller than this are ignored
@@ -59,6 +61,8 @@ let number_final_processing_neighbors_needed = 8 // in each direction
 
 let final_theta_diff: Double = 5       // how close in theta/rho outliers need to be between frames
 let final_rho_diff: Double = 70
+
+let final_group_boundary_amt = 3  // how much we pad the overlap amounts on the final pass
 
 let test_paint = true           // write out a separate image sequence with colors indicating
                               // what was detected, and what was changed.  Helpful for debugging

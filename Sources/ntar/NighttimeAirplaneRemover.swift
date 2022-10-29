@@ -51,15 +51,6 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
                                    dispatchGroup: dispatchGroup)
         
         final_processor = processor
-
-        // run the final processor as a single separate thread
-        dispatchGroup.enter()
-        self.dispatchQueue.async {
-            Task {
-                await processor.run()
-                self.dispatchGroup.leave()
-            }
-        }
     }
 
     // called by the superclass at startup
@@ -119,7 +110,29 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
             fatalError("should not happen")
         }
     }
-    
+
+    // called after the list of already existing output files is known
+    override func method_list_hook() {
+        var should_process = [Bool](repeating: false, count: self.existing_output_files.count)
+        for (index, output_file_exists) in self.existing_output_files.enumerated() {
+            should_process[index] = !output_file_exists
+        }
+        let immutable_should_process = should_process
+        if let final_processor = final_processor {
+            dispatchGroup.enter()
+            self.dispatchQueue.async {
+                Task {
+                    // run the final processor as a single separate thread
+                    await final_processor.run(shouldProcess: immutable_should_process)
+                    self.dispatchGroup.leave()
+                }
+            }
+        } else {
+            Log.e("should have a processor")
+            fatalError("no processor")
+        }
+    }
+
     func prepareForAdjecentFrameAnalysis(fromImage image: PixelatedImage,
                                      atIndex frame_index: Int,
                                      otherFrames: [PixelatedImage],

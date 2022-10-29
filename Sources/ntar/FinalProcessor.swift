@@ -27,7 +27,9 @@ actor FinalProcessor {
                                   autoreleaseFrequency: .inherit,
                                   target: nil)
     
-    init(numberOfFrames frame_count: Int, dispatchGroup dispatch_group: DispatchGroup) {
+    init(numberOfFrames frame_count: Int,
+         dispatchGroup dispatch_group: DispatchGroup)
+    {
         frames = [FrameAirplaneRemover?](repeating: nil, count: frame_count)
         self.frame_count = frame_count
         self.dispatch_group = dispatch_group
@@ -61,11 +63,15 @@ actor FinalProcessor {
         }
     }
 
-    nonisolated func run() async {
+    nonisolated func run(shouldProcess: [Bool]) async {
         var done = false
         while(!done) {
             let index_to_process = await current_frame_index
-
+            if !shouldProcess[index_to_process] {
+                await self.incrementCurrentFrameIndex()
+                continue
+            }
+            
             var images_to_process: [FrameAirplaneRemover] = []
             
             var start_index = index_to_process - number_final_processing_neighbors_needed
@@ -76,7 +82,7 @@ actor FinalProcessor {
             if end_index >= frame_count {
                 end_index = frame_count - 1
             }
-
+            
             var bad = false
             for i in start_index ... end_index {
                 if let next_frame = await self.frame(at: i) {
@@ -90,7 +96,7 @@ actor FinalProcessor {
                 Log.i("processing frame index \(images_to_process.count) frames")
                 self.handle(frames: images_to_process)
                 await self.incrementCurrentFrameIndex()
-
+                
                 if start_index > 0 {
                     if let frame_to_finish = await self.frame(at: start_index - 1) {
                         Log.i("finishing frame")
@@ -178,15 +184,15 @@ actor FinalProcessor {
                                    let other_line_max_y = other_frame.group_max_y[og_name],
                                    let other_group_size = other_frame.neighbor_groups[og_name]
                                 {
-                                    let boundary_amt = 2 // XXX yet another hardcoded constant
-                                    if do_overlap(min_1_x: line_min_x - boundary_amt,
-                                                 min_1_y: line_min_y - boundary_amt,
-                                                 max_1_x: line_max_x + boundary_amt,
-                                                 max_1_y: line_max_y + boundary_amt,
-                                                 min_2_x: other_line_min_x - boundary_amt,
-                                                 min_2_y: other_line_min_y - boundary_amt,
-                                                 max_2_x: other_line_max_x + boundary_amt,
-                                                 max_2_y: other_line_max_y + boundary_amt)
+                                    let amt = final_group_boundary_amt
+                                    if do_overlap(min_1_x: line_min_x - amt,
+                                                 min_1_y: line_min_y - amt,
+                                                 max_1_x: line_max_x + amt,
+                                                 max_1_y: line_max_y + amt,
+                                                 min_2_x: other_line_min_x - amt,
+                                                 min_2_y: other_line_min_y - amt,
+                                                 max_2_x: other_line_max_x + amt,
+                                                 max_2_y: other_line_max_y + amt)
                                     {
                                         if group_size < 200, // XXX hardcoded constant
                                            other_group_size < 200

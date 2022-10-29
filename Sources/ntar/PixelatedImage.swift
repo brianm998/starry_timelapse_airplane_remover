@@ -72,6 +72,12 @@ class PixelatedImage {
     // write out the given image data as a 16 bit tiff file to the given filename
     // used when modifying the invariant original image data, and saying the edits to a file
     func writeTIFFEncoding(ofData image_data: Data, toFilename image_filename: String) {
+
+        if FileManager.default.fileExists(atPath: image_filename) {
+            Log.w("not writing to already existing filename \(image_filename)")
+            return
+        }
+        
         // create a CGImage from the data we just changed
         let colorSpace = CGColorSpaceCreateDeviceRGB()
         if let dataProvider = CGDataProvider(data: image_data as CFData),
