@@ -18,7 +18,19 @@ typealias WillPaint = (
     shouldPaint: Bool,          // paint over this group or not
     why: PaintReason            // why?
 )
+/*
 
+test paint colors:
+
+ red - painted over because of large size only
+ yellow - painted over because of good frame-only score
+ magenta - painted over because of inter-frame line alignment
+
+ blue - not painted over because of inter-frame overlap
+ cyan - not painted over because of bad frame-only score
+ bright green - outlier group that was not painted over for some reason
+ light green - outlier, but not part of a big enough group
+*/
 @available(macOS 10.15, *)
 class FrameAirplaneRemover: Equatable {
     let width: Int
@@ -328,14 +340,13 @@ class FrameAirplaneRemover: Equatable {
             let x = index % width;
             let y = index / width;
 
-            if outlier_amount > max_pixel_distance,
-               let group_name = outlier_groups[index],
-               let group_size = neighbor_groups[group_name]
-            {
+            if outlier_amount > max_pixel_distance {
                 let offset = (Int(y) * bytesPerRow) + (Int(x) * bytesPerPixel)
                 
                 var nextPixel = Pixel()
-                if (group_size > min_group_size) {
+                if let group_name = outlier_groups[index],
+                   let group_size = neighbor_groups[group_name]
+                {
                     if let (will_paint, why) = should_paint[group_name] {
                         if !will_paint {
                             switch why {
@@ -352,11 +363,11 @@ class FrameAirplaneRemover: Equatable {
                         nextPixel.green = 0xFFFF // groups that can be chosen to paint
                     }
                 } else {
+                    // no group
                     nextPixel.green = 0x8888 // groups that are too small to paint
                 }
-                        
                 var nextValue = nextPixel.value
-
+                
                 test_paint_data?.replaceSubrange(offset ..< offset+raw_pixel_size_bytes, // XXX error here sometimes
                                                  with: &nextValue, count: raw_pixel_size_bytes)
             }
