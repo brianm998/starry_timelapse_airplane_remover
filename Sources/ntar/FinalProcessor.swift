@@ -106,10 +106,10 @@ actor FinalProcessor {
                 
                 if start_index > 0 {
                     if let frame_to_finish = await self.frame(at: start_index - 1) {
-                        Log.i("finishing frame")
                         
                         self.dispatch_group.enter()
                         await self.final_queue.add(atIndex: frame_to_finish.frame_index) {
+                            Log.i("frame \(frame_to_finish.frame_index) finishing")
                             frame_to_finish.finish()
                             self.dispatch_group.leave()
                         }
@@ -120,6 +120,7 @@ actor FinalProcessor {
                 sleep(1)        // XXX hardcoded sleep amount
             }
         }
+        await final_queue.stop()
     }
 
     nonisolated func do_overlap(min_1_x: Int, min_1_y: Int,

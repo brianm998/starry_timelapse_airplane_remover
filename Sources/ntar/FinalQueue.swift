@@ -1,6 +1,9 @@
 import Foundation
 import Cocoa
 
+// this class runs the queue of processes that finishes each frame
+// it exists mainly to limit the concurrent number of processes running
+
 @available(macOS 10.15, *)
 actor FinalQueue {
     // actors
@@ -8,6 +11,8 @@ actor FinalQueue {
     let number_running = NumberRunning() // how many methods are running right now
     let max_concurrent: UInt
     var should_run = true
+
+    let dispatchGroup = DispatchGroup()
     
     // concurrent dispatch queue so we can process frames in parallel
     let dispatchQueue = DispatchQueue(label: "image_sequence_final_processor",
@@ -36,13 +41,29 @@ actor FinalQueue {
         self.dispatchQueue.async {
             Task { 
                 while(await self.should_run) {
-                    if let next_key = await self.method_list.nextKey,
-                       let method = await self.method_list.list[next_key]
-                    {
-                        await method()
-                        await self.method_list.removeValue(forKey: next_key)
+
+                    let current_running = await self.number_running.currentValue()
+                    if(current_running < self.max_concurrent) {
+                        
+                        if let next_key = await self.method_list.nextKey,
+                           let method = await self.method_list.list[next_key]
+                        {
+                            
+                            await self.number_running.increment()
+                            await self.method_list.removeValue(forKey: next_key)
+                            self.dispatchGroup.enter()
+                            self.dispatchQueue.async {
+                                Task {
+                                    await method()
+                                    await self.number_running.decrement()
+                                    self.dispatchGroup.leave()
+                                }
+                            }
+                        } else {
+                            sleep(1)        // XXX hardcoded constant
+                        }
                     } else {
-                        sleep(1)        // XXX hardcoded constant
+                        _ = self.dispatchGroup.wait(timeout: DispatchTime.now().advanced(by: .seconds(1)))
                     }
                 }
             }

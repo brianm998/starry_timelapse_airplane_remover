@@ -21,12 +21,14 @@ todo:
 
  - using too much memory problems :(
    better, but still uses lots of ram
+
+ - make a better config system than the hardcoded constants below
 */
 
 
 // XXX here are some random global constants that maybe should be exposed somehow
 let max_concurrent_frames: UInt = 34  // number of frames to process in parallel about 1 per cpu core
-let max_concurrent_finishes: UInt = 10 // number of frame finishes to do in parallel
+let max_concurrent_finishes: UInt = 20 // number of frame finishes to do in parallel
 let max_pixel_brightness_distance: UInt16 = 7200 // distance in brightness to be considered an outlier
 
 let min_group_size = 120       // groups smaller than this are ignored
