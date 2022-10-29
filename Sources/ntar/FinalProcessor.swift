@@ -2,6 +2,8 @@ import Foundation
 import CoreGraphics
 import Cocoa
 
+
+
 // this class handles the final processing of every frame
 // it observes its frames array, and is tasked with finishing
 // each frame.  This means adjusting each frame's should_paint map
@@ -19,13 +21,7 @@ actor FinalProcessor {
     var current_frame_index = 0
     let frame_count: Int
     let dispatch_group: DispatchGroup
-    
-    // concurrent dispatch queue so we can process frames in parallel
-    let dispatchQueue = DispatchQueue(label: "image_sequence_final_processor",
-                                  qos: .unspecified,
-                                  attributes: [.concurrent],
-                                  autoreleaseFrequency: .inherit,
-                                  target: nil)
+    let final_queue: FinalQueue
     
     init(numberOfFrames frame_count: Int,
          dispatchGroup dispatch_group: DispatchGroup)
@@ -33,6 +29,7 @@ actor FinalProcessor {
         frames = [FrameAirplaneRemover?](repeating: nil, count: frame_count)
         self.frame_count = frame_count
         self.dispatch_group = dispatch_group
+        self.final_queue = FinalQueue(max_concurrent: max_concurrent_finishes)
     }
 
     func add(frame: FrameAirplaneRemover, at index: Int) {
@@ -51,11 +48,11 @@ actor FinalProcessor {
         return frames[index]
     }
 
-    func finishAll() {
+    func finishAll() async {
         for frame in frames {
             if let frame = frame {
                 self.dispatch_group.enter()
-                self.dispatchQueue.async {
+                await self.final_queue.add(atIndex: frame.frame_index) {
                     frame.finish()
                     self.dispatch_group.leave()
                 }
@@ -64,6 +61,9 @@ actor FinalProcessor {
     }
 
     nonisolated func run(shouldProcess: [Bool]) async {
+
+        await final_queue.start()
+        
         var done = false
         while(!done) {
             done = await current_frame_index >= frames.count 
@@ -109,7 +109,7 @@ actor FinalProcessor {
                         Log.i("finishing frame")
                         
                         self.dispatch_group.enter()
-                        self.dispatchQueue.async {
+                        await self.final_queue.add(atIndex: frame_to_finish.frame_index) {
                             frame_to_finish.finish()
                             self.dispatch_group.leave()
                         }
@@ -237,11 +237,14 @@ actor FinalProcessor {
                                         }
                                         
                                         if do_it {
+                                            // XXX perhaps keep a record of all matches
+                                            // and vote?
+                                            
                                             // mark as should paint
-                                            Log.d("frame \(frame.frame_index) should_paint[\(group_name)] = (true, .adjecentLine)")
+                                            //Log.d("frame \(frame.frame_index) should_paint[\(group_name)] = (true, .adjecentLine)")
                                             frame.should_paint[group_name] = (shouldPaint: true, why: .adjecentLine)
-
-                                            Log.d("frame \(other_frame.frame_index) should_paint[\(og_name)] = (true, .adjecentLine)")
+                                            
+                                            //Log.d("frame \(other_frame.frame_index) should_paint[\(og_name)] = (true, .adjecentLine)")
                                             other_frame.should_paint[og_name] = (shouldPaint: true, why: .adjecentLine)
                                         }
                                     }

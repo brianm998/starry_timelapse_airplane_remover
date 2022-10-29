@@ -6,7 +6,7 @@ import Cocoa
 todo:
 
  - try image blending
- - make it faster (can always be faster)
+ - make it faster (can always be faster) 
  - still crashes (thankfully not often, and re-start can fix it)
  - make crash detection perl script better
  - add scripts to allow video to processed video in one command
@@ -16,37 +16,17 @@ todo:
    - remove image sequence dir
  - fix bug where '/' at the end of the command line arg isn't handled well
  - detect idle cpu % and use max cpu% instead of max % of frames
- - maybe just always comare against a single frame? (faster, not much difference?
  - use the number of groups that have fallen into the same line group to boost its painting
- - add more descriptive coloring to test paint
-   - show all outliers
-   - make groups of the right size different color
-   - somehow color not chosen outliers to say why
  - output dirs are created even when intput filename is not existant
- - exclude outlier groups with minimum bounding box sizes
-   most of the non-painted larger outlier groups are nearly square
-   lines have a larger aspect ratio
- - get logging to have 'ntar-' at the front (current name is too generic)
- - be alble to name log file after first arg
- - identify is outlier group is a line by the size of the group vs the count of the highest line?
- - allow tracking of detected lines across multiple frames, and use that to keep them out
- - try smaller min_group_size to get more satelites.
- - try populating the full outlier hough data with all outliers, not just larger ones
-   too much noise?  may make separated segments record better lines
-   maybe just try reducing the min_group_size when generating the hough data?
-
- - track down false positives better in the final processor, maybe more padding?
-
- - add thread # limits on asyncs in final processing
- - separate out saving of image files into a separate single thread, after painting in parallel.
-   (works in parallel, but seems to be system crunch when writing lots at once.
 
  - using too much memory problems :(
+   better, but still uses lots of ram
 */
 
 
 // XXX here are some random global constants that maybe should be exposed somehow
 let max_concurrent_frames: UInt = 34  // number of frames to process in parallel about 1 per cpu core
+let max_concurrent_finishes: UInt = 10 // number of frame finishes to do in parallel
 let max_pixel_brightness_distance: UInt16 = 7200 // distance in brightness to be considered an outlier
 
 let min_group_size = 120       // groups smaller than this are ignored
@@ -57,7 +37,7 @@ let max_theta_diff: Double = 4  // degrees of difference allowed between lines
 let max_rho_diff: Double = 70   // pixels of line displacement allowed
 let max_number_of_lines = 8000  // don't process more lines than this per image
 
-let assume_airplane_size = 300 // don't bother spending the time to fully process
+let assume_airplane_size = 700 // don't bother spending the time to fully process
                             // groups larger than this, assume we should paint over them
 
 // how far in each direction do we go when doing final processing?
@@ -66,7 +46,7 @@ let number_final_processing_neighbors_needed = 4 // in each direction
 let final_theta_diff: Double = 5       // how close in theta/rho outliers need to be between frames
 let final_rho_diff: Double = 70
 
-let final_group_boundary_amt = 10  // how much we pad the overlap amounts on the final pass
+let final_group_boundary_amt = 8  // how much we pad the overlap amounts on the final pass
 
 let final_overlapping_group_size = 200 // XXX document this more
 
