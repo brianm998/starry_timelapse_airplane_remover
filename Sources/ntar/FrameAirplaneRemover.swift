@@ -4,6 +4,21 @@ import Cocoa
 
 // this class holds the logic for removing airplanes from a single frame
 
+enum PaintReason {
+  case assumed
+  case goodScore
+  case adjecentLine
+
+  case badScore
+  case adjecentOverlap
+}
+
+// polar coordinates for right angle intersection with line from origin
+typealias WillPaint = (                 
+    shouldPaint: Bool,          // paint over this group or not
+    why: PaintReason            // why?
+)
+
 @available(macOS 10.15, *)
 class FrameAirplaneRemover: Equatable {
     let width: Int
@@ -36,7 +51,7 @@ class FrameAirplaneRemover: Equatable {
 
     var lines_from_full_image: [Line] = [] // lines from all large enough outliers
 
-    var should_paint: [String:Bool] = [:] // keyed by group name, should be paint it?
+    var should_paint: [String:WillPaint] = [:] // keyed by group name, should be paint it?
     var group_min_x: [String:Int] = [:]   // keyed by group name, image bounds of each group
     var group_min_y: [String:Int] = [:]
     var group_max_x: [String:Int] = [:]
@@ -326,7 +341,19 @@ class FrameAirplaneRemover: Equatable {
                 
                 var nextPixel = Pixel()
                 if (group_size > min_group_size) {
-                    nextPixel.green = 0xFFFF // groups that can be chosen to paint
+                    if let (will_paint, why) = should_paint[group_name] {
+                        switch why {
+                        case .badScore:
+                            nextPixel.green = 0xFFFF
+                            nextPixel.blue = 0xFFFF
+                        case .adjecentOverlap:
+                            nextPixel.blue = 0xFFFF
+                        default:
+                            fatalError("should not happen")
+                        }
+                    } else {
+                        nextPixel.green = 0xFFFF // groups that can be chosen to paint
+                    }
                 } else {
                     nextPixel.green = 0x8888 // groups that are too small to paint
                 }
@@ -441,7 +468,8 @@ class FrameAirplaneRemover: Equatable {
                 // really big outlier groups
                 if size > assume_airplane_size {
                     Log.d("frame \(frame_index) assuming group \(name) of size \(size) (> \(assume_airplane_size)) is an airplane, will paint over it")
-                    should_paint[name] = true
+                    Log.d("frame \(frame_index) should_paint[\(name)] = (true, .assumed)")
+                    should_paint[name] = (shouldPaint: true, why: .assumed)
                     continue
                 }
 
@@ -694,10 +722,11 @@ class FrameAirplaneRemover: Equatable {
                 Log.d("frame \(frame_index) final best match for group \(name) of size \(size) value \(group_value) width \(group_width) height \(group_height) - theta_diff \(min_theta_diff) rho_diff \(min_rho_diff) line_count \(best_choice_line_count) group_count \(best_group_count) group_value \(group_value) best_score \(best_score)")
                 
                 if best_score > 50 {
-                    should_paint[name] = true
-                    Log.i("frame \(frame_index) will paint group \(name)")
+                    Log.d("frame \(frame_index) should_paint[\(name)] = (true, .goodScore)")
+                    should_paint[name] = (shouldPaint: true, why: .goodScore)
                 } else {
-                    should_paint[name] = false
+                    should_paint[name] = (shouldPaint: false, why: .badScore)
+                    Log.d("frame \(frame_index) should_paint[\(name)] = (false, .badScore)")
                     if min_theta_diff == inital_min_theta_diff ||
                          min_rho_diff == inital_min_rho_diff
                     {
@@ -718,12 +747,12 @@ class FrameAirplaneRemover: Equatable {
         // paint over every outlier in the paint list with pixels from the adjecent frames
         for (index, group_name) in outlier_groups.enumerated() {
             if let group_name = group_name,
-               let will_paint = should_paint[group_name],
+               let (will_paint, why) = should_paint[group_name],
                will_paint
             {
                 let x = index % width;
                 let y = index / width;
-                paint(x: x, y: y)
+                paint(x: x, y: y, why: why)
             }
         }
     }
@@ -737,7 +766,7 @@ class FrameAirplaneRemover: Equatable {
     }
 
     // paint over a selected outlier with data from pixels from adjecent frames
-    func paint(x: Int, y: Int) {
+    func paint(x: Int, y: Int, why: PaintReason) {
         var pixels_to_paint_with: [Pixel] = []
         
         // grab the pixels from the same image spot from adject frames
@@ -760,10 +789,19 @@ class FrameAirplaneRemover: Equatable {
         
         // for testing, colors changed pixels
         if test_paint { // XXX
-            paint_pixel.red = 0xFFFF // for changed area
-        }
-        
-        if test_paint {
+            switch why {
+            case .assumed:
+                paint_pixel.red = 0xFFFF
+            case .goodScore:
+                paint_pixel.red = 0xFFFF // yellow
+                paint_pixel.green = 0xFFFF
+            case .adjecentLine:
+                paint_pixel.red = 0xFFFF // purple
+                paint_pixel.blue = 0xFFFF
+            default:
+                fatalError("should not happen")
+            }
+            
             var test_paint_value = paint_pixel.value
             test_paint_data?.replaceSubrange(offset ..< offset+raw_pixel_size_bytes,
                                          with: &test_paint_value,
@@ -776,6 +814,10 @@ class FrameAirplaneRemover: Equatable {
     func finish() {
         Log.i("frame \(self.frame_index) finishing")
 
+        if(test_paint) {
+            self.testPaintOutliers()
+        }
+        
         Log.d("frame \(self.frame_index) painting over airplanes")
                   
         self.paintOverAirplanes()

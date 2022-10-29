@@ -17,9 +17,6 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
     
     // difference between same pixels on different frames to consider an outlier
     let max_pixel_distance: UInt16
-
-    // paint green on the outliers above the threshold for testing, that are not overwritten
-    let test_paint_outliers: Bool
     
     let test_paint: Bool
 
@@ -32,13 +29,15 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
          givenFilenames given_filenames: [String]? = nil)
     {
         self.max_pixel_distance = max_pixel_distance
-        self.test_paint_outliers = testPaint
         self.test_paint = testPaint
 
         let formatted_theta_diff = String(format: "%0.1f", max_theta_diff)
         let formatted_rho_diff = String(format: "%0.1f", max_rho_diff)
         
-        var basename = "\(image_sequence_dirname)-no-planes-\(max_pixel_distance)-\(min_group_size)-\(min_line_count)-\(group_min_line_count)-\(formatted_theta_diff)-\(formatted_rho_diff)-\(max_number_of_lines)-\(assume_airplane_size)"
+        let formatted_final_theta_diff = String(format: "%0.1f", final_theta_diff)
+        let formatted_final_rho_diff = String(format: "%0.1f", final_rho_diff)
+        
+        var basename = "\(image_sequence_dirname)-no-planes-\(max_pixel_distance)-\(min_group_size)-\(min_line_count)-\(group_min_line_count)-\(formatted_theta_diff)-\(formatted_rho_diff)-\(max_number_of_lines)-\(assume_airplane_size)-\(number_final_processing_neighbors_needed)-\(formatted_final_theta_diff)-\(formatted_final_rho_diff)-\(final_group_boundary_amt)"
         basename = basename.replacingOccurrences(of: ".", with: "_")
         test_paint_output_dirname = "\(basename)-test-paint"
         let output_dirname = basename
@@ -174,10 +173,6 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
         Log.d("frame \(frame_index) done processing the outlier map after \(interval3)s")
         // paint green on the outliers above the threshold for testing
 
-        if(test_paint_outliers) {
-            frame_plane_remover.testPaintOutliers()
-        }
-        
         let time_4 = NSDate().timeIntervalSince1970
         let interval4 = String(format: "%0.1f", time_4 - time_3)
         Log.d("frame \(frame_index) calculating group bounds \(interval4)s")

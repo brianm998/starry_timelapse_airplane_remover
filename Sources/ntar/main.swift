@@ -7,6 +7,8 @@ todo:
 
  - try image blending
  - make it faster (can always be faster)
+ - still crashes (thankfully not often, and re-start can fix it)
+ - make crash detection perl script better
  - add scripts to allow video to processed video in one command
    - decompress existing video w/ ffmpeg (and note exactly how it was compressed)
    - process image sequence with ntar
@@ -38,6 +40,8 @@ todo:
  - add thread # limits on asyncs in final processing
  - separate out saving of image files into a separate single thread, after painting in parallel.
    (works in parallel, but seems to be system crunch when writing lots at once.
+
+ - using too much memory problems :(
 */
 
 
@@ -57,12 +61,15 @@ let assume_airplane_size = 300 // don't bother spending the time to fully proces
                             // groups larger than this, assume we should paint over them
 
 // how far in each direction do we go when doing final processing?
-let number_final_processing_neighbors_needed = 8 // in each direction
+let number_final_processing_neighbors_needed = 4 // in each direction
 
 let final_theta_diff: Double = 5       // how close in theta/rho outliers need to be between frames
 let final_rho_diff: Double = 70
 
-let final_group_boundary_amt = 3  // how much we pad the overlap amounts on the final pass
+let final_group_boundary_amt = 10  // how much we pad the overlap amounts on the final pass
+
+let final_overlapping_group_size = 200 // XXX document this more
+
 
 let test_paint = true           // write out a separate image sequence with colors indicating
                               // what was detected, and what was changed.  Helpful for debugging

@@ -6,7 +6,7 @@ import Cocoa
 class PixelatedImage {
     let width: Int
     let height: Int
-    let image: CGImage
+    //let image: CGImage
     
     let raw_image_data: Data
     
@@ -32,7 +32,8 @@ class PixelatedImage {
     
     init?(_ image: CGImage) {
         assert(image.colorSpace?.model == .rgb)
-        self.image = image // perhaps keeping the image around can help keep the raw data around?
+        //self.image = image // perhaps keeping the image around can help keep the raw data around?
+        // doesn't seem so, still crashes :(
         self.width = image.width
         self.height = image.height
         self.bitsPerPixel = image.bitsPerPixel

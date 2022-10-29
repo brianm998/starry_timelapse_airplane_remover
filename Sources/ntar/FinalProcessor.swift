@@ -194,18 +194,25 @@ actor FinalProcessor {
                                                  max_2_x: other_line_max_x + amt,
                                                  max_2_y: other_line_max_y + amt)
                                     {
-                                        if group_size < 200, // XXX hardcoded constant
-                                           other_group_size < 200
+                                        if group_size < final_overlapping_group_size,
+                                           other_group_size < final_overlapping_group_size
                                         {
                                             // two somewhat small overlapping groups
                                             // shouldn't be painted over
-                                            frame.should_paint[group_name] = false
-                                            other_frame.should_paint[og_name] = false
+                                            frame.should_paint[group_name] =
+                                                (shouldPaint: false, why: .adjecentOverlap)
+                                            other_frame.should_paint[og_name] =
+                                                (shouldPaint: false, why: .adjecentOverlap)
+                                            Log.d("frame \(frame.frame_index) should_paint[\(group_name)] = (false, .adjecentOverlap)")
+                                            Log.d("frame \(other_frame.frame_index) should_paint[\(og_name)] = (false, .adjecentOverlap)")
                                         }
                                     } else {
                                         // mark as should paint
-                                        frame.should_paint[group_name] = true
-                                        other_frame.should_paint[og_name] = true
+                                        Log.d("frame \(frame.frame_index) should_paint[\(group_name)] = (true, .adjecentLine)")
+                                        frame.should_paint[group_name] = (shouldPaint: true, why: .adjecentLine)
+
+                                        Log.d("frame \(other_frame.frame_index) should_paint[\(og_name)] = (true, .adjecentLine)")
+                                        other_frame.should_paint[og_name] = (shouldPaint: true, why: .adjecentLine)
                                     }
                                 }
                             }
