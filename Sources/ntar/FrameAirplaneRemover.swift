@@ -342,14 +342,16 @@ class FrameAirplaneRemover: Equatable {
                 var nextPixel = Pixel()
                 if (group_size > min_group_size) {
                     if let (will_paint, why) = should_paint[group_name] {
-                        switch why {
-                        case .badScore:
-                            nextPixel.green = 0xFFFF
-                            nextPixel.blue = 0xFFFF
-                        case .adjecentOverlap:
-                            nextPixel.blue = 0xFFFF
-                        default:
-                            fatalError("should not happen")
+                        if !will_paint {
+                            switch why {
+                            case .badScore:
+                                nextPixel.green = 0xFFFF
+                                nextPixel.blue = 0xFFFF
+                            case .adjecentOverlap:
+                                nextPixel.blue = 0xFFFF
+                            default:
+                                fatalError("should not happen")
+                            }
                         }
                     } else {
                         nextPixel.green = 0xFFFF // groups that can be chosen to paint

@@ -66,6 +66,13 @@ actor FinalProcessor {
     nonisolated func run(shouldProcess: [Bool]) async {
         var done = false
         while(!done) {
+            done = await current_frame_index >= frames.count 
+            if done {
+                Log.i("finishing all remaining frames")
+                await self.finishAll()
+                continue
+            }
+            
             let index_to_process = await current_frame_index
             if !shouldProcess[index_to_process] {
                 await self.incrementCurrentFrameIndex()
@@ -108,11 +115,6 @@ actor FinalProcessor {
                         }
                         await self.clearFrame(at: start_index - 1)
                     }
-                }
-                done = await current_frame_index >= frames.count 
-                if done {
-                    Log.i("finishing all remaining frames")
-                    await self.finishAll()
                 }
             } else {
                 sleep(1)        // XXX hardcoded sleep amount

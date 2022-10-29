@@ -171,7 +171,6 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
         let interval3 = String(format: "%0.1f", time_3 - time_2)
         
         Log.d("frame \(frame_index) done processing the outlier map after \(interval3)s")
-        // paint green on the outliers above the threshold for testing
 
         let time_4 = NSDate().timeIntervalSince1970
         let interval4 = String(format: "%0.1f", time_4 - time_3)
