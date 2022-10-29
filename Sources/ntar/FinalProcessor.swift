@@ -186,7 +186,11 @@ actor FinalProcessor {
                                    let other_line_max_y = other_frame.group_max_y[og_name],
                                    let other_group_size = other_frame.neighbor_groups[og_name]
                                 {
-                                    let amt = final_group_boundary_amt
+                                    let mult = abs(frame.frame_index - other_frame.frame_index)
+                                    // multiply the constant by how far the frames are away
+                                    // from eachother in the sequence
+                                    let amt = final_group_boundary_amt * mult
+                                    // increate overlap amt by frame index difference
                                     if do_overlap(min_1_x: line_min_x - amt,
                                                  min_1_y: line_min_y - amt,
                                                  max_1_x: line_max_x + amt,
@@ -209,12 +213,37 @@ actor FinalProcessor {
                                             Log.d("frame \(other_frame.frame_index) should_paint[\(og_name)] = (false, .adjecentOverlap)")
                                         }
                                     } else {
-                                        // mark as should paint
-                                        Log.d("frame \(frame.frame_index) should_paint[\(group_name)] = (true, .adjecentLine)")
-                                        frame.should_paint[group_name] = (shouldPaint: true, why: .adjecentLine)
+                                        // don't overwrite adjecent overlaps
+                                        var do_it = true
+                                        
+                                        if let (frame_should_paint, frame_why) =
+                                               frame.should_paint[group_name]
+                                        {
+                                            if !frame_should_paint,
+                                               frame_why == .adjecentOverlap
+                                            {
+                                                do_it = false
+                                            }
+                                        }
 
-                                        Log.d("frame \(other_frame.frame_index) should_paint[\(og_name)] = (true, .adjecentLine)")
-                                        other_frame.should_paint[og_name] = (shouldPaint: true, why: .adjecentLine)
+                                        if let (other_should_paint, other_why) = 
+                                               other_frame.should_paint[og_name]
+                                        {
+                                            if !other_should_paint,
+                                               other_why == .adjecentOverlap
+                                            {
+                                                do_it = false
+                                            }
+                                        }
+                                        
+                                        if do_it {
+                                            // mark as should paint
+                                            Log.d("frame \(frame.frame_index) should_paint[\(group_name)] = (true, .adjecentLine)")
+                                            frame.should_paint[group_name] = (shouldPaint: true, why: .adjecentLine)
+
+                                            Log.d("frame \(other_frame.frame_index) should_paint[\(og_name)] = (true, .adjecentLine)")
+                                            other_frame.should_paint[og_name] = (shouldPaint: true, why: .adjecentLine)
+                                        }
                                     }
                                 }
                             }
