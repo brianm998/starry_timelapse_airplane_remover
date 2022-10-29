@@ -52,8 +52,8 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
         
         final_processor = processor
 
-        dispatchGroup.enter()
         // run the final processor as a single separate thread
+        dispatchGroup.enter()
         self.dispatchQueue.async {
             Task {
                 await processor.run()
@@ -102,7 +102,7 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
                                              test_paint_filename: test_paint_filename)
 
         
-        // XXX next step is to add this frame_plane_remover to an array of optionals
+        // next step is to add this frame_plane_remover to an array of optionals
         // indexed by frame number
         // then create a new class that uses the diapatchGroup to keep the process alive
         // and processes sequentially through them as they are available, doing
@@ -110,8 +110,10 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
         // by doing further analysis and cleanup
 
         if let final_processor = final_processor {
+            dispatchGroup.enter()
             Task {
                 await final_processor.add(frame: frame_plane_remover, at: index)
+                self.dispatchGroup.leave()
             }
         } else {
             fatalError("should not happen")

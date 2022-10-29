@@ -139,9 +139,11 @@ class ImageSequenceProcessor {
                     {
                         await method_list.removeValue(forKey: next_method_key)
                         await self.number_running.increment()
+                        self.dispatchGroup.enter()
                         self.dispatchQueue.async {
                             Task {
                                 await next_method()
+                                self.dispatchGroup.leave()
                             }
                         }
                     } else {
