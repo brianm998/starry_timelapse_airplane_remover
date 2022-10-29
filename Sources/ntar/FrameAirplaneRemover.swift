@@ -45,9 +45,6 @@ class FrameAirplaneRemover: Equatable {
     // only 16 bit RGB images are supported
     let raw_pixel_size_bytes = 6
     
-    var data: Data              // a mutable copy of the original data
-    var test_paint_data: Data?    // a copy of original data we test paint to 
-
     var test_paint_filename: String = "" // the filename to write out test paint data to
     var test_paint = false               // should we test paint?  helpful for debugging
 
@@ -96,32 +93,10 @@ class FrameAirplaneRemover: Equatable {
         self.max_pixel_distance = max_pixel_distance
         self.outlier_amounts = [UInt32](repeating: 0, count: width*height)
         self.outlier_groups = [String?](repeating: nil, count: width*height)
-    
-        let _data = image.raw_image_data
-        
-        // copy the original image data as adjecent frames need
-        // to access the original unmodified version
-        guard let _mut_data = CFDataCreateMutableCopy(kCFAllocatorDefault,
-                                                      CFDataGetLength(_data as CFData),
-                                                      _data as CFData) as? Data else { return nil }
 
-        self.data = _mut_data
+
+        // XXX maybe allocate these later
               
-        if test_paint {
-            guard var test_data = CFDataCreateMutableCopy(kCFAllocatorDefault,
-                                                          CFDataGetLength(_data as CFData),
-                                                          _data as CFData) as? Data else { return nil }
-
-            let paint_it_black = false      
-
-            if paint_it_black { // gets rid of the other image data
-                for i in 0 ..< CFDataGetLength(_data as CFData)/8 {
-                    var nextValue: UInt64 = 0x0000000000000000
-                    test_data.replaceSubrange(i*8 ..< (i*8)+8, with: &nextValue, count: 8)
-                }
-            }
-            self.test_paint_data = test_data
-        }
         Log.d("frame \(frame_index) got image data")
     }
 
@@ -333,7 +308,7 @@ class FrameAirplaneRemover: Equatable {
         self.neighbor_groups = individual_group_counts
     }    
                   
-    func testPaintOutliers() {
+    func testPaintOutliers(toData test_paint_data: inout Data) {
         Log.d("frame \(frame_index) painting outliers green")
 
         for (index, outlier_amount) in outlier_amounts.enumerated() {
@@ -368,7 +343,7 @@ class FrameAirplaneRemover: Equatable {
                 }
                 var nextValue = nextPixel.value
                 
-                test_paint_data?.replaceSubrange(offset ..< offset+raw_pixel_size_bytes, // XXX error here sometimes
+                test_paint_data.replaceSubrange(offset ..< offset+raw_pixel_size_bytes, // XXX error here sometimes
                                                  with: &nextValue, count: raw_pixel_size_bytes)
             }
         }
@@ -752,7 +727,7 @@ class FrameAirplaneRemover: Equatable {
         Log.d("frame \(frame_index) processed \(processed_group_count) groups")
     }
 
-    func paintOverAirplanes() {
+    func paintOverAirplanes(toData data: inout Data, testData test_paint_data: inout Data) {
 
         Log.i("frame \(frame_index) painting airplane outlier groups")
 
@@ -764,21 +739,21 @@ class FrameAirplaneRemover: Equatable {
             {
                 let x = index % width;
                 let y = index / width;
-                paint(x: x, y: y, why: why)
+                paint(x: x, y: y, why: why,
+                     toData: &data, testData: &test_paint_data)
             }
         }
     }
 
-    func writeTestFile() {
-        if test_paint,
-           let test_paint_data = test_paint_data
-        {
-            image.writeTIFFEncoding(ofData: test_paint_data, toFilename: test_paint_filename)
-        }
+    func writeTestFile(withData data: Data) {
+        image.writeTIFFEncoding(ofData: data, toFilename: test_paint_filename)
     }
 
     // paint over a selected outlier with data from pixels from adjecent frames
-    func paint(x: Int, y: Int, why: PaintReason) {
+    func paint(x: Int, y: Int,
+               why: PaintReason,
+               toData data: inout Data,
+               testData test_paint_data: inout Data) {
         var pixels_to_paint_with: [Pixel] = []
         
         // grab the pixels from the same image spot from adject frames
@@ -800,7 +775,7 @@ class FrameAirplaneRemover: Equatable {
                           with: &paint_value, count: raw_pixel_size_bytes)
         
         // for testing, colors changed pixels
-        if test_paint { // XXX
+        if test_paint {
             switch why {
             case .assumed:
                 paint_pixel.red = 0xFFFF // red
@@ -815,9 +790,9 @@ class FrameAirplaneRemover: Equatable {
             }
             
             var test_paint_value = paint_pixel.value
-            test_paint_data?.replaceSubrange(offset ..< offset+raw_pixel_size_bytes,
-                                         with: &test_paint_value,
-                                         count: raw_pixel_size_bytes)
+            test_paint_data.replaceSubrange(offset ..< offset+raw_pixel_size_bytes,
+                                        with: &test_paint_value,
+                                        count: raw_pixel_size_bytes)
         }
     }
 
@@ -826,29 +801,43 @@ class FrameAirplaneRemover: Equatable {
     func finish() {
         Log.i("frame \(self.frame_index) finishing")
 
-        if(test_paint) {
-            self.testPaintOutliers()
+        
+        let _data = image.raw_image_data
+
+        // copy the original image data as adjecent frames need
+        // to access the original unmodified version
+        guard let _mut_data = CFDataCreateMutableCopy(kCFAllocatorDefault,
+                                                      CFDataGetLength(_data as CFData),
+                                                      _data as CFData) as? Data else {
+            Log.e("couldn't copy image data")
+            fatalError("couldn't copy image data")
+        }
+        var output_data = _mut_data
+
+        var test_paint_data: Data = Data()
+        if test_paint {
+            guard let foobar = CFDataCreateMutableCopy(kCFAllocatorDefault,
+                                                      CFDataGetLength(_data as CFData),
+                                                      _data as CFData) as? Data else {
+                Log.e("couldn't copy image data")
+                fatalError("couldn't copy image data")
+            }
+            test_paint_data = foobar
+            self.testPaintOutliers(toData: &test_paint_data)
         }
         
         Log.d("frame \(self.frame_index) painting over airplanes")
                   
-        self.paintOverAirplanes()
+        self.paintOverAirplanes(toData: &output_data, testData: &test_paint_data)
         
-//        let time_8 = NSDate().timeIntervalSince1970
-//        let interval8 = String(format: "%0.1f", time_8 - time_7)
-//        Log.d("frame \(frame_index) creating final image \(filename) after p\(interval7)s")
-
         Log.d("frame \(self.frame_index) writing output files")
-        self.writeTestFile()
-        
-//        let time_9 = NSDate().timeIntervalSince1970
-//        let interval9 = String(format: "%0.1f", time_9 - time_8)
-        
-//        Log.d("frame \(frame_index) timing for frame render - \(interval9)s  - \(interval8)s - \(interval7)s - \(interval6)s - \(interval5)s - \(interval4)s - \(interval3)s - \(interval2)s - \(interval1)s")
+
+        self.writeTestFile(withData: test_paint_data)
+
         Log.i("frame \(self.frame_index) complete")
 
         // write frame out as a tiff file after processing it
-        self.image.writeTIFFEncoding(ofData: self.data,  toFilename: self.output_filename)
+        self.image.writeTIFFEncoding(ofData: output_data,  toFilename: self.output_filename)
     }
 
     public static func == (lhs: FrameAirplaneRemover, rhs: FrameAirplaneRemover) -> Bool {
@@ -857,3 +846,4 @@ class FrameAirplaneRemover: Equatable {
 
 }
 
+                  
