@@ -319,9 +319,7 @@ class FrameAirplaneRemover: Equatable {
                 let offset = (Int(y) * bytesPerRow) + (Int(x) * bytesPerPixel)
                 
                 var nextPixel = Pixel()
-                if let group_name = outlier_groups[index],
-                   let group_size = neighbor_groups[group_name]
-                {
+                if let group_name = outlier_groups[index] {
                     if let (will_paint, why) = should_paint[group_name] {
                         if !will_paint {
                             switch why {
@@ -505,7 +503,8 @@ class FrameAirplaneRemover: Equatable {
                 Log.d("frame \(frame_index) group \(name) got \(lines_from_this_group.count) lines from group hough transform")
                 
                 Log.d("frame \(frame_index) group \(name) line at index 0 theta \(group_theta), rho \(group_rho), count \(group_count)")
-                
+
+                /*
                 if lines_from_this_group.count > 1 {
                     for i in 1 ..< lines_from_this_group.count {
                         let (other_theta, other_rho, other_count) = lines_from_this_group[i]
@@ -525,9 +524,9 @@ class FrameAirplaneRemover: Equatable {
                         let adjusted_group_rho = other_rho + o * cos(theta_p * Double.pi/180)
                         // XXX clean this up with below, it's a copy
 
-                        Log.d("frame \(frame_index) group \(name) line at index \(i) theta \(other_theta), rho \(adjusted_group_rho), count \(other_count)")
+                        //Log.d("frame \(frame_index) group \(name) line at index \(i) theta \(other_theta), rho \(adjusted_group_rho), count \(other_count)")
                     }
-                }
+                }*/
                 
                 // convert the rho from the group hough transform to what
                 // it would have been if we had run the transformation full frame
@@ -800,7 +799,6 @@ class FrameAirplaneRemover: Equatable {
     // does the final painting and then writes out the output files
     func finish() {
         Log.i("frame \(self.frame_index) finishing")
-
         
         let _data = image.raw_image_data
 

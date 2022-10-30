@@ -110,6 +110,23 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
         }
     }
 
+    // balance the total number of active processes, and favor the end of the process
+    // so that we don't experience backup and overload memory
+    override func maxConcurrentRenders() async -> UInt {
+        var ret = max_concurrent_renders
+        if let final_processor = final_processor {
+            let final_queue_size = await final_processor.final_queue.number_running.currentValue()
+            Log.d("final_queue_size \(final_queue_size)")
+            if final_queue_size > max_concurrent_renders {
+                ret = 0
+            } else {
+                ret = max_concurrent_renders - final_queue_size
+            }
+        }
+        Log.d("max_concurrent_renders \(ret)")
+        return ret
+    }
+    
     // called after the list of already existing output files is known
     override func method_list_hook() {
         var should_process = [Bool](repeating: false, count: self.existing_output_files.count)
@@ -119,7 +136,7 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
         let immutable_should_process = should_process
         if let final_processor = final_processor {
             dispatchGroup.enter()
-            self.dispatchQueue.async {
+            dispatchQueue.async {
                 Task {
                     // run the final processor as a single separate thread
                     await final_processor.run(shouldProcess: immutable_should_process)
@@ -203,4 +220,5 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
    }        
 
 }
+              
               

@@ -2,6 +2,14 @@ import Foundation
 import CoreGraphics
 import Cocoa
 
+
+    let dispatchQueue = DispatchQueue(label: "image_sequence_processor",
+                                  qos: .unspecified,
+                                  attributes: [.concurrent],
+                                  autoreleaseFrequency: .inherit,
+                                  target: nil)
+    
+
 @available(macOS 10.15, *) 
 class ImageSequenceProcessor {
 
@@ -22,11 +30,6 @@ class ImageSequenceProcessor {
     var image_sequence: ImageSequence    // the sequence of images that we're processing
 
     // concurrent dispatch queue so we can process frames in parallel
-    let dispatchQueue = DispatchQueue(label: "image_sequence_processor",
-                                  qos: .unspecified,
-                                  attributes: [.concurrent],
-                                  autoreleaseFrequency: .inherit,
-                                  target: nil)
     
     let dispatchGroup = DispatchGroup()
     
@@ -43,6 +46,10 @@ class ImageSequenceProcessor {
         self.output_dirname = output_dirname
         self.image_sequence = ImageSequence(dirname: image_sequence_dirname,
                                             givenFilenames: given_filenames)
+    }
+
+    func maxConcurrentRenders() async -> UInt {
+        return max_concurrent_renders
     }
     
     func mkdir(_ path: String) {
@@ -158,7 +165,10 @@ class ImageSequenceProcessor {
             
             while(await method_list.list.count > 0) {
                 let current_running = await self.number_running.currentValue()
-                if(current_running < self.max_concurrent_renders) {
+                let current_max_concurrent = await self.maxConcurrentRenders()
+                let fuck = await method_list.list.count
+                Log.d("current_running \(current_running) max concurrent \(current_max_concurrent) method_list.count \(fuck)")
+                if current_running < current_max_concurrent {
                     Log.d("\(current_running) frames currently processing")
                     Log.d("we have \(await method_list.list.count) more frames to process")
                     Log.d("processing new frame")
@@ -170,7 +180,7 @@ class ImageSequenceProcessor {
                         await method_list.removeValue(forKey: next_method_key)
                         await self.number_running.increment()
                         self.dispatchGroup.enter()
-                        self.dispatchQueue.async {
+                        dispatchQueue.async {
                             Task {
                                 await next_method()
                                 self.dispatchGroup.leave()
@@ -184,10 +194,11 @@ class ImageSequenceProcessor {
                     _ = self.dispatchGroup.wait(timeout: DispatchTime.now().advanced(by: .seconds(1)))
                 }
             }
-            
+            Log.d("finished hook")
             self.finished_hook()
             self.dispatchGroup.leave()
         }
+        Log.d("waiting to finish")
         self.dispatchGroup.wait() // SIGKILL?
         Log.d("done")
     }

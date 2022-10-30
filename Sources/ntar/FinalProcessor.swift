@@ -29,11 +29,12 @@ actor FinalProcessor {
         frames = [FrameAirplaneRemover?](repeating: nil, count: frame_count)
         self.frame_count = frame_count
         self.dispatch_group = dispatch_group
-        self.final_queue = FinalQueue(max_concurrent: max_concurrent_finishes)
+        self.final_queue = FinalQueue(max_concurrent: max_concurrent_frames,
+                                   dispatchGroup: dispatch_group)
     }
 
     func add(frame: FrameAirplaneRemover, at index: Int) {
-        Log.i("add frame at index \(index)")
+        Log.i("frame \(index) added")
         frames[index] = frame
     }
 
@@ -49,15 +50,19 @@ actor FinalProcessor {
     }
 
     func finishAll() async {
+        var count = 0
         for frame in frames {
             if let frame = frame {
+                count += 1
                 self.dispatch_group.enter()
-                await self.final_queue.add(atIndex: frame.frame_index) {
+                await self.final_queue.method_list.add(atIndex: frame.frame_index) {
                     frame.finish()
                     self.dispatch_group.leave()
                 }
             }
         }
+        let method_list_count = await self.final_queue.method_list.count
+        Log.d("add all \(count) remaining frames to method list of count \(method_list_count)")
     }
 
     nonisolated func run(shouldProcess: [Bool]) async {
@@ -66,12 +71,9 @@ actor FinalProcessor {
         
         var done = false
         while(!done) {
-            done = await current_frame_index >= frames.count 
-            if done {
-                Log.i("finishing all remaining frames")
-                await self.finishAll()
-                continue
-            }
+            done = await current_frame_index >= frames.count
+            Log.d("done \(done)")
+            if done { continue }
             
             let index_to_process = await current_frame_index
             if !shouldProcess[index_to_process] {
@@ -105,22 +107,35 @@ actor FinalProcessor {
                 await self.incrementCurrentFrameIndex()
                 
                 if start_index > 0 {
-                    if let frame_to_finish = await self.frame(at: start_index - 1) {
-                        
-                        self.dispatch_group.enter()
-                        await self.final_queue.add(atIndex: frame_to_finish.frame_index) {
-                            Log.i("frame \(frame_to_finish.frame_index) finishing")
-                            frame_to_finish.finish()
-                            self.dispatch_group.leave()
+                    let immutable_start = start_index
+                    dispatchQueue.async {
+                        Task {
+                            if let frame_to_finish = await self.frame(at: immutable_start - 1) {
+                                self.dispatch_group.enter()
+                                // XXX async here
+                                Log.d("frame \(frame_to_finish.frame_index) adding at index ")
+                                await self.final_queue.method_list.add(atIndex: frame_to_finish.frame_index) {
+                                    Log.i("frame \(frame_to_finish.frame_index) finishing")
+                                    frame_to_finish.finish()
+                                    self.dispatch_group.leave()
+                                }
+                                Log.d("frame \(frame_to_finish.frame_index) done adding to index ")
+                            }
+                            await self.clearFrame(at: immutable_start - 1)
                         }
-                        await self.clearFrame(at: start_index - 1)
                     }
                 }
             } else {
                 sleep(1)        // XXX hardcoded sleep amount
             }
+            //sleep(1)
         }
-        await final_queue.stop()
+
+        Log.i("finishing all remaining frames")
+        await self.finishAll()
+        Log.d("check")
+        await final_queue.finish()
+        Log.d("done")
     }
 
     nonisolated func do_overlap(min_1_x: Int, min_1_y: Int,
@@ -210,8 +225,8 @@ actor FinalProcessor {
                                                 (shouldPaint: false, why: .adjecentOverlap)
                                             other_frame.should_paint[og_name] =
                                                 (shouldPaint: false, why: .adjecentOverlap)
-                                            Log.d("frame \(frame.frame_index) should_paint[\(group_name)] = (false, .adjecentOverlap)")
-                                            Log.d("frame \(other_frame.frame_index) should_paint[\(og_name)] = (false, .adjecentOverlap)")
+                                            //Log.d("frame \(frame.frame_index) should_paint[\(group_name)] = (false, .adjecentOverlap)")
+                                            //Log.d("frame \(other_frame.frame_index) should_paint[\(og_name)] = (false, .adjecentOverlap)")
                                         }
                                     } else {
                                         // don't overwrite adjecent overlaps

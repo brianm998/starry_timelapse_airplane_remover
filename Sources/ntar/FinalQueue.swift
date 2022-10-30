@@ -12,61 +12,69 @@ actor FinalQueue {
     let max_concurrent: UInt
     var should_run = true
 
-    let dispatchGroup = DispatchGroup()
-    
-    // concurrent dispatch queue so we can process frames in parallel
-    let dispatchQueue = DispatchQueue(label: "image_sequence_final_processor",
-                                  qos: .unspecified,
-                                  attributes: [.concurrent],
-                                  autoreleaseFrequency: .inherit,
-                                  target: nil)
+    let dispatch_group: DispatchGroup
 
-    init(max_concurrent: UInt = 8) {
+    init(max_concurrent: UInt = 8, dispatchGroup dispatch_group: DispatchGroup) {
         self.max_concurrent = max_concurrent
+        self.dispatch_group = dispatch_group
     }
 
-    func stop() {
+    func finish() {
         should_run = false
     }
-    
-    func add(atIndex index: Int, method: @escaping () async -> Void) async {
-        await method_list.add(atIndex: index, method: method)
+
+    func should_run() async -> Bool {
+        let number_running = await self.number_running.currentValue()
+        let count = await method_list.count
+        //Log.d("should run \(should_run) && \(number_running) > 0")
+        return should_run || number_running > 0 || count > 0
     }
 
     func removeValue(forKey key: Int) async {
+        Log.d("removeValue(forKey: \(key))")
         await method_list.removeValue(forKey: key)
     }
 
-    nonisolated func start() async {
-        self.dispatchQueue.async {
-            Task { 
-                while(await self.should_run) {
 
-                    let current_running = await self.number_running.currentValue()
-                    if(current_running < self.max_concurrent) {
-                        
-                        if let next_key = await self.method_list.nextKey,
-                           let method = await self.method_list.list[next_key]
-                        {
-                            
-                            await self.number_running.increment()
-                            await self.method_list.removeValue(forKey: next_key)
-                            self.dispatchGroup.enter()
-                            self.dispatchQueue.async {
-                                Task {
-                                    await method()
-                                    await self.number_running.decrement()
-                                    self.dispatchGroup.leave()
-                                }
+    /*
+
+     small size test runs still seem to be single threaded in this queue.
+
+     longer running tasks seem find
+
+     try using task groups to fix it?
+
+    */
+    nonisolated func start() async {
+        self.dispatch_group.enter()
+        Task { 
+            while(await self.should_run()) {
+                let current_running = await self.number_running.currentValue()
+                Log.d("current_running \(current_running)")
+                if(current_running < self.max_concurrent) {
+                    let fu1 = await self.method_list.nextKey
+                    if let next_key = fu1,
+                       let method = await self.method_list.list[next_key]
+                    {
+                        self.dispatch_group.enter()
+                        await self.method_list.removeValue(forKey: next_key)
+                        await self.number_running.increment()
+                        dispatchQueue.async {
+                            Task {
+                                await method()
+                                await self.number_running.decrement()
+                                self.dispatch_group.leave()
                             }
-                        } else {
-                            sleep(1)        // XXX hardcoded constant
                         }
                     } else {
-                        _ = self.dispatchGroup.wait(timeout: DispatchTime.now().advanced(by: .seconds(1)))
+                        sleep(1)        // XXX hardcoded constant
                     }
+                } else {
+                    _ = self.dispatch_group.wait(timeout: DispatchTime.now().advanced(by: .seconds(1)))
                 }
             }
+            Log.d("done")
+            self.dispatch_group.leave()
         }
     }
 }
