@@ -152,7 +152,7 @@ class HoughTransform {
         let time_3 = NSDate().timeIntervalSince1970
         let interval3 = String(format: "%0.1f", time_3 - time_2)
 
-        Log.i("done with hough transform - \(interval3)s - \(interval2)s - \(interval1)s")
+        Log.d("done with hough transform - \(interval3)s - \(interval2)s - \(interval1)s")
         
         //Log.d("lines \(small_set_lines)")
         /*

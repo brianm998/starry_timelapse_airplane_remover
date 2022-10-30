@@ -4,13 +4,61 @@ import Cocoa
 
 // this class holds the logic for removing airplanes from a single frame
 
-enum PaintReason {
-  case assumed
-  case goodScore
-  case adjecentLine
+enum PaintReason: Equatable {
+   case assumed
+   case goodScore(Double)            // percent score
+   case adjecentLine(Double, Double)     // theta and rho diffs
 
-  case badScore
-  case adjecentOverlap
+   case badScore(Double)        // percent score
+   case adjecentOverlap(Double) // overlap distance
+   case tooBlobby(Double, Double) // first_diff, lowest_diff  XXX more info here
+        
+   public static func == (lhs: PaintReason, rhs: PaintReason) -> Bool {
+      switch lhs {
+      case assumed:
+          switch rhs {
+          case assumed:
+              return true
+          default:
+              return false
+          }
+      case goodScore:
+          switch rhs {
+          case goodScore:
+              return true
+          default:
+              return false
+          }
+      case adjecentLine:
+          switch rhs {
+          case adjecentLine:
+              return true
+          default:
+              return false
+          }
+      case badScore:
+          switch rhs {
+          case badScore:
+              return true
+          default:
+              return false
+          }
+      case adjecentOverlap:
+          switch rhs {
+          case adjecentOverlap:
+              return true
+          default:
+              return false
+          }
+      case tooBlobby: 
+          switch rhs {
+          case tooBlobby:
+              return true
+          default:
+              return false
+          }
+      }
+   }    
 }
 
 // polar coordinates for right angle intersection with line from origin
@@ -221,7 +269,7 @@ class FrameAirplaneRemover: Equatable {
             
             let outlier_groupname = outlier_groups[index]
             if outlier_groupname != nil { continue }
-
+            
             // not part of a group yet
             var group_size: UInt64 = 0
             // tag this virgin outlier with its own key
@@ -328,6 +376,8 @@ class FrameAirplaneRemover: Equatable {
                                 nextPixel.blue = 0xFFFF
                             case .adjecentOverlap:
                                 nextPixel.blue = 0xFFFF // blue
+                            case .tooBlobby:
+                                nextPixel.blue = 0x8FFF // less blue
                             default:
                                 fatalError("should not happen")
                             }
@@ -503,31 +553,53 @@ class FrameAirplaneRemover: Equatable {
                 Log.d("frame \(frame_index) group \(name) got \(lines_from_this_group.count) lines from group hough transform")
                 
                 Log.d("frame \(frame_index) group \(name) line at index 0 theta \(group_theta), rho \(group_rho), count \(group_count)")
-
-                /*
+                var lowest_count = group_count
+                var first_count_drop = -111111111
+                
                 if lines_from_this_group.count > 1 {
+                    let (_, _, first_count) = lines_from_this_group[1]
+                    first_count_drop = group_count - first_count
                     for i in 1 ..< lines_from_this_group.count {
                         let (other_theta, other_rho, other_count) = lines_from_this_group[i]
+
+                        if other_count < lowest_count {
+                            lowest_count = other_count
+                        }
                         // XXX clean this up with below, it's a copy
                         // o is the direct distance from the full screen origin
                         // to the group transform origin
-                        let o = sqrt(Double(min_x * min_x) + Double(min_y * min_y))
-
+                        //let o = sqrt(Double(min_x * min_x) + Double(min_y * min_y))
+                        
                         // theta_r is the angle from the full screen origin to the
                         // to the group transform origin, in degrees
-                        let theta_r = acos(Double(min_x)/o)*180/Double.pi
+                        //let theta_r = acos(Double(min_x)/o)*180/Double.pi
 
                         // theta_p is the angle between them in degrees
-                        let theta_p = group_theta - theta_r
+                        //let theta_p = group_theta - theta_r
 
                         // add the calculated missing amount to the group_rho
-                        let adjusted_group_rho = other_rho + o * cos(theta_p * Double.pi/180)
+                        //let adjusted_group_rho = other_rho + o * cos(theta_p * Double.pi/180)
                         // XXX clean this up with below, it's a copy
 
                         //Log.d("frame \(frame_index) group \(name) line at index \(i) theta \(other_theta), rho \(adjusted_group_rho), count \(other_count)")
                     }
-                }*/
+                }
                 
+                if first_count_drop != -111111111 {
+                    // we have information about other lines for this group
+                    Log.d("frame \(frame_index) group \(name) group_count \(group_count) first_count_drop \(first_count_drop) lowest_count \(lowest_count)")
+
+                    let lowest_diff = Double(group_count-lowest_count)/Double(group_count)
+                    let first_diff = Double(first_count_drop)/Double(group_count)
+                    Log.d("frame \(frame_index) group \(name) lowest_diff \(lowest_diff) first_diff \(first_diff)")
+                    if(lowest_diff < 0.20 && first_diff < 0.1) { // XXX hardcoded constants
+                        should_paint[name] = (shouldPaint: false, why: .tooBlobby(first_diff, lowest_diff))
+                        continue
+                    }
+                } else {
+                    fatalError("FUCK YOU")
+                }
+
                 // convert the rho from the group hough transform to what
                 // it would have been if we had run the transformation full frame
                 // precision is not 100% due to hough transformation bucket size differences
@@ -708,17 +780,17 @@ class FrameAirplaneRemover: Equatable {
                 Log.d("frame \(frame_index) final best match for group \(name) of size \(size) value \(group_value) width \(group_width) height \(group_height) - theta_diff \(min_theta_diff) rho_diff \(min_rho_diff) line_count \(best_choice_line_count) group_count \(best_group_count) group_value \(group_value) best_score \(best_score)")
                 
                 if best_score > 50 {
-                    Log.d("frame \(frame_index) should_paint[\(name)] = (true, .goodScore)")
-                    should_paint[name] = (shouldPaint: true, why: .goodScore)
+                    Log.d("frame \(frame_index) should_paint[\(name)] = (true, .goodScore(\(best_score))")
+                    should_paint[name] = (shouldPaint: true, why: .goodScore(best_score))
                 } else {
-                    should_paint[name] = (shouldPaint: false, why: .badScore)
-                    Log.d("frame \(frame_index) should_paint[\(name)] = (false, .badScore)")
+                    should_paint[name] = (shouldPaint: false, why: .badScore(best_score))
+                    Log.d("frame \(frame_index) should_paint[\(name)] = (false, .badScore(\(best_score))")
                     if min_theta_diff == inital_min_theta_diff ||
                          min_rho_diff == inital_min_rho_diff
                     {
                         Log.w("frame \(frame_index) will NOT paint group \(name) no hough transform lines were found")
                     } else {
-                        Log.i("frame \(frame_index) will NOT paint group \(name)")
+                        Log.d("frame \(frame_index) will NOT paint group \(name)")
                     }
                 }
             }
@@ -736,6 +808,7 @@ class FrameAirplaneRemover: Equatable {
                let (will_paint, why) = should_paint[group_name],
                will_paint
             {
+//                /*if group_name == "1996,230" { */Log.d("frame \(frame_index) will paint \(group_name) why \(why)") /*}*/
                 let x = index % width;
                 let y = index / width;
                 paint(x: x, y: y, why: why,
