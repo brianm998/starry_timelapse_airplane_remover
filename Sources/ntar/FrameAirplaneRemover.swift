@@ -592,9 +592,10 @@ class FrameAirplaneRemover: Equatable {
                     let lowest_diff = Double(group_count-lowest_count)/Double(group_count)
                     let first_diff = Double(first_count_drop)/Double(group_count)
                     Log.d("frame \(frame_index) group \(name) lowest_diff \(lowest_diff) first_diff \(first_diff)")
-                    if(lowest_diff < 0.20 && first_diff < 0.1) { // XXX hardcoded constants
-                        should_paint[name] = (shouldPaint: false, why: .tooBlobby(first_diff, lowest_diff))
-                        continue
+                    if(lowest_diff < 0.90 && first_diff < 0.1) { // XXX hardcoded constants
+//                        should_paint[name] = (shouldPaint: false, why: .tooBlobby(first_diff, lowest_diff))
+                        //                        continue
+                        // XXX not sure about this
                     }
                 } else {
                     fatalError("FUCK YOU")
