@@ -321,7 +321,7 @@ class FrameAirplaneRemover: Equatable {
                         }
                     }
                     
-                    if outlier_y < 0 { // add top neighbor
+                    if outlier_y > 0 { // add top neighbor
                         let top_neighbor_index = (outlier_y - 1) * width + outlier_x
                         if outlier_amounts[top_neighbor_index] > max_pixel_distance,
                            outlier_groups[top_neighbor_index] == nil
@@ -809,7 +809,6 @@ class FrameAirplaneRemover: Equatable {
                let (will_paint, why) = should_paint[group_name],
                will_paint
             {
-//                /*if group_name == "1996,230" { */Log.d("frame \(frame_index) will paint \(group_name) why \(why)") /*}*/
                 let x = index % width;
                 let y = index / width;
                 paint(x: x, y: y, why: why,
