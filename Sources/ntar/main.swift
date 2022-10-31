@@ -3,6 +3,18 @@ import CoreGraphics
 import Cocoa
 
 /*
+
+This file is part of the Nightime Timelapse Airplane Remover (ntar).
+
+ntar is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
+
+ntar is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with ntar. If not, see <https://www.gnu.org/licenses/>.
+
+*/
+
+/*
 todo:
 
  - try image blending
@@ -22,7 +34,12 @@ todo:
  - using too much memory problems :(
    better, but still uses lots of ram
 
+ - specific out of memory issue with initial processing queue overloading the single final processing thread
+   use some tool like this to avoid forcing a reboot:
+   https://stackoverflow.com/questions/71209362/how-to-check-system-memory-usage-with-swift
+
  - make a better config system than the hardcoded constants below
+
 */
 
 
@@ -30,7 +47,7 @@ todo:
 
 // 34 concurrent frames maxes out around 60 gigs of ram usage for 24 mega pixel images
 
-let max_concurrent_frames: UInt = 34  // number of frames to process in parallel about 1 per cpu core
+let max_concurrent_frames: UInt = 36  // number of frames to process in parallel about 1 per cpu core
 let max_pixel_brightness_distance: UInt16 = 7200 // distance in brightness to be considered an outlier
 
 let min_group_size = 120       // groups smaller than this are ignored
@@ -57,6 +74,32 @@ let test_paint = true           // write out a separate image sequence with colo
                               // what was detected, and what was changed.  Helpful for debugging
 
 let hough_test = false
+
+
+let machine = sysctl(name: "hw.machine")
+let memsize = sysctl(name: "hw.memsize")
+let foobar = sysctl(name: "hw.ncpu")
+
+Log.d("machine \(machine)")
+Log.d("memsize \(memsize)")
+Log.d("foobar \(foobar)")
+
+
+func sysctl(name: String) -> String {
+    var size = 0
+    sysctlbyname(name, nil, &size, nil, 0)
+    var memsize = [CChar](repeating: 0,  count: size)
+    sysctlbyname(name, &memsize, &size, nil, 0)
+    return String(cString: memsize)
+}
+
+func getMemSize() -> String {
+    var size = 0
+    sysctlbyname("hw.machine", nil, &size, nil, 0)
+    var memsize = [CChar](repeating: 0,  count: size)
+    sysctlbyname("hw.machine", &memsize, &size, nil, 0)
+    return String(cString: memsize)
+}
 
 if hough_test {
     // this is for doing direct hough_tests outside the rest of the code

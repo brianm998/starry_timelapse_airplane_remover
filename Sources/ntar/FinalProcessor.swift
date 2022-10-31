@@ -2,6 +2,17 @@ import Foundation
 import CoreGraphics
 import Cocoa
 
+/*
+
+This file is part of the Nightime Timelapse Airplane Remover (ntar).
+
+ntar is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
+
+ntar is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with ntar. If not, see <https://www.gnu.org/licenses/>.
+
+*/
 
 
 // this class handles the final processing of every frame
@@ -121,15 +132,17 @@ actor FinalProcessor {
                 } else {
                     bad = true
                     // XXX bad
+                    //Log.d("FINAL THREAD bad")
                 }
             }
             if !bad {
                 Log.i("frame \(index_to_process) doing inter-frame analysis with \(images_to_process.count) frames")
                 self.handle(frames: images_to_process)
+                Log.d("frame \(index_to_process) done with inter-frame analysis")
                 await self.incrementCurrentFrameIndex()
-                
                 if start_index > 0 {
                     let immutable_start = start_index
+                    //Log.d("FINAL THREAD frame \(index_to_process) queueing into final queue")
                     dispatchQueue.async {
                         Task {
                             if let frame_to_finish = await self.frame(at: immutable_start - 1) {
@@ -146,20 +159,23 @@ actor FinalProcessor {
                             await self.clearFrame(at: immutable_start - 1)
                         }
                     }
+                    //Log.d("FINAL THREAD frame \(index_to_process) done queueing into final queue")
                 }
             } else {
+                //Log.d("FINAL THREAD sleeping")
                 await self.setAsleep(to: true)
                 sleep(1)        // XXX hardcoded sleep amount
+                //Log.d("FINAL THREAD waking up")
                 await self.setAsleep(to: false)
             }
             //sleep(1)
         }
 
-        Log.i("finishing all remaining frames")
+        Log.i("FINAL THREAD finishing all remaining frames")
         await self.finishAll()
-        Log.d("check")
+        Log.d("FINAL THREAD check")
         await final_queue.finish()
-        Log.d("done")
+        Log.d("FINAL THREAD done")
     }
     
     nonisolated func do_overlap(min_1_x: Int, min_1_y: Int,
@@ -232,7 +248,7 @@ actor FinalProcessor {
     nonisolated func handle(frames: [FrameAirplaneRemover]) {
         Log.d("final pass on \(frames.count) frames")
         for frame in frames {
-            Log.d("frame.group_lines.count \(frame.group_lines.count)")
+            //Log.d("frame.group_lines.count \(frame.group_lines.count)")
             for (group_name, group_line) in frame.group_lines {
                 // look for
 
@@ -247,7 +263,7 @@ actor FinalProcessor {
                 {
                     for other_frame in frames {
                         if other_frame == frame { continue }
-                        Log.d("other frame.group_lines.count \(other_frame.group_lines.count)")
+                        //Log.d("other frame.group_lines.count \(other_frame.group_lines.count)")
 
                         for (og_name, og_line) in other_frame.group_lines {
                             let other_line_theta = og_line.theta
@@ -262,7 +278,7 @@ actor FinalProcessor {
                                let other_line_max_y = other_frame.group_max_y[og_name],
                                let other_group_size = other_frame.neighbor_groups[og_name]
                             {
-                                Log.d("frame \(frame.frame_index) group 1 \(group_name) of size \(group_size) (\(line_min_x) \(line_min_y)),  (\(line_max_x) \(line_max_y)) other frame \(other_frame.frame_index) group 2 \(og_name) of size \(group_size) (\(other_line_min_x) \(other_line_min_y)),  (\(other_line_max_x) \(other_line_max_y))")
+                                //Log.d("frame \(frame.frame_index) group 1 \(group_name) of size \(group_size) (\(line_min_x) \(line_min_y)),  (\(line_max_x) \(line_max_y)) other frame \(other_frame.frame_index) group 2 \(og_name) of size \(group_size) (\(other_line_min_x) \(other_line_min_y)),  (\(other_line_max_x) \(other_line_max_y))")
                                 
                                 let mult = abs(frame.frame_index - other_frame.frame_index)
                                 // multiply the constant by how far the frames are away
@@ -277,7 +293,7 @@ actor FinalProcessor {
                                                                     min_2_y: other_line_min_y,
                                                                     max_2_x: other_line_max_x,
                                                                     max_2_y: other_line_max_y)
-                                Log.d("overlap_amount \(overlap_amount) amt \(amt)")
+                                //Log.d("overlap_amount \(overlap_amount) amt \(amt)")
                                 if overlap_amount < amt {
                                     // two overlapping groups
                                     // shouldn't be painted over
@@ -285,8 +301,8 @@ actor FinalProcessor {
                                         (shouldPaint: false, why: .adjecentOverlap(-overlap_amount))
                                     other_frame.should_paint[og_name] =
                                         (shouldPaint: false, why: .adjecentOverlap(-overlap_amount))
-                                    Log.d("frame \(frame.frame_index) should_paint[\(group_name)] = (false, .adjecentOverlap)")
-                                    Log.d("frame \(other_frame.frame_index) should_paint[\(og_name)] = (false, .adjecentOverlap)")
+                                    //Log.d("frame \(frame.frame_index) should_paint[\(group_name)] = (false, .adjecentOverlap)")
+                                    //Log.d("frame \(other_frame.frame_index) should_paint[\(og_name)] = (false, .adjecentOverlap)")
                                     
                                 } else if theta_diff < final_theta_diff && rho_diff < final_rho_diff {
                                         
@@ -320,11 +336,11 @@ actor FinalProcessor {
                                         // and vote?
                                         
                                         // mark as should paint
-                                        Log.d("frame \(frame.frame_index) should_paint[\(group_name)] = (true, .adjecentLine(\(theta_diff), \(rho_diff))) overlap_amount \(overlap_amount) amt \(amt)")
+                                        //Log.d("frame \(frame.frame_index) should_paint[\(group_name)] = (true, .adjecentLine(\(theta_diff), \(rho_diff))) overlap_amount \(overlap_amount) amt \(amt)")
                                         frame.should_paint[group_name] = (shouldPaint: true,
                                                                           why: .adjecentLine(theta_diff, rho_diff)) // XXX -1
                                         
-                                        Log.d("frame \(other_frame.frame_index) should_paint[\(og_name)] = (true, .adjecentLine(\(theta_diff), \(rho_diff))) overlap_amount \(overlap_amount) \(amt)")
+                                        //Log.d("frame \(other_frame.frame_index) should_paint[\(og_name)] = (true, .adjecentLine(\(theta_diff), \(rho_diff))) overlap_amount \(overlap_amount) \(amt)")
                                         other_frame.should_paint[og_name] = (shouldPaint: true,
                                                                              why: .adjecentLine(theta_diff, rho_diff)) // XXX -1
                                     }

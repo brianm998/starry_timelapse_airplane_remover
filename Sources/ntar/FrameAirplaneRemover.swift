@@ -2,6 +2,18 @@ import Foundation
 import CoreGraphics
 import Cocoa
 
+/*
+
+This file is part of the Nightime Timelapse Airplane Remover (ntar).
+
+ntar is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
+
+ntar is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with ntar. If not, see <https://www.gnu.org/licenses/>.
+
+*/
+
 // this class holds the logic for removing airplanes from a single frame
 
 enum PaintReason: Equatable {
@@ -768,7 +780,7 @@ class FrameAirplaneRemover: Equatable {
 
                     // record best comparison from all of them
                     if overall_score > best_score {
-                        Log.d("frame \(frame_index) (theta_score \(theta_score) rho_score \(rho_score) line_score \(line_score) group_size_score \(group_size_score)) group_count_score \(group_count_score) group_value_score \(group_value_score) overall_score \(overall_score)")
+                        //Log.d("frame \(frame_index) (theta_score \(theta_score) rho_score \(rho_score) line_score \(line_score) group_size_score \(group_size_score)) group_count_score \(group_count_score) group_value_score \(group_value_score) overall_score \(overall_score)")
 
                         best_score = overall_score
                         min_theta_diff = theta_diff
