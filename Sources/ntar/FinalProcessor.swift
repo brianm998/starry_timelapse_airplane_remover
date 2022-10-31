@@ -230,8 +230,9 @@ actor FinalProcessor {
     // otherwise, if they do overlap, then it's more likely a cloud or 
     // a bright star or planet, leave them as is.  
     nonisolated func handle(frames: [FrameAirplaneRemover]) {
-        Log.d("handle \(frames.count) frames")
+        Log.d("final pass on \(frames.count) frames")
         for frame in frames {
+            Log.d("frame.group_lines.count \(frame.group_lines.count)")
             for (group_name, group_line) in frame.group_lines {
                 // look for
 
@@ -246,6 +247,7 @@ actor FinalProcessor {
                 {
                     for other_frame in frames {
                         if other_frame == frame { continue }
+                        Log.d("other frame.group_lines.count \(other_frame.group_lines.count)")
 
                         for (og_name, og_line) in other_frame.group_lines {
                             let other_line_theta = og_line.theta
@@ -254,79 +256,77 @@ actor FinalProcessor {
                             let theta_diff = abs(line_theta-other_line_theta)
                             let rho_diff = abs(line_rho-other_line_rho)
                             
-                            if theta_diff < final_theta_diff && rho_diff < final_rho_diff {
-
-                                if let other_line_min_x = other_frame.group_min_x[og_name],
-                                   let other_line_min_y = other_frame.group_min_y[og_name],
-                                   let other_line_max_x = other_frame.group_max_x[og_name],
-                                   let other_line_max_y = other_frame.group_max_y[og_name],
-                                   let other_group_size = other_frame.neighbor_groups[og_name]
-                                {
-                                    let mult = abs(frame.frame_index - other_frame.frame_index)
-                                    // multiply the constant by how far the frames are away
-                                    // from eachother in the sequence
-                                    let amt = Double(final_group_boundary_amt * mult)
-                                    // increate overlap amt by frame index difference
-                                    let overlap_amount = overlap_amount(min_1_x: line_min_x,
-                                                                        min_1_y: line_min_y,
-                                                                        max_1_x: line_max_x,
-                                                                        max_1_y: line_max_y,
-                                                                        min_2_x: other_line_min_x,
-                                                                        min_2_y: other_line_min_y,
-                                                                        max_2_x: other_line_max_x,
-                                                                        max_2_y: other_line_max_y)
-                                    if overlap_amount < amt {
-                                        if group_size < final_overlapping_group_size,
-                                           other_group_size < final_overlapping_group_size
-                                        {
-                                            // two somewhat small overlapping groups
-                                            // shouldn't be painted over
-                                            frame.should_paint[group_name] =
-                                                (shouldPaint: false, why: .adjecentOverlap(-overlap_amount))
-                                            other_frame.should_paint[og_name] =
-                                                (shouldPaint: false, why: .adjecentOverlap(-overlap_amount))
-                                            Log.d("frame \(frame.frame_index) should_paint[\(group_name)] = (false, .adjecentOverlap)")
-                                            Log.d("frame \(other_frame.frame_index) should_paint[\(og_name)] = (false, .adjecentOverlap)")
-                                        }
-                                    } else {
-                                        // don't overwrite adjecent overlaps
-                                        var do_it = true
+                            if let other_line_min_x = other_frame.group_min_x[og_name],
+                               let other_line_min_y = other_frame.group_min_y[og_name],
+                               let other_line_max_x = other_frame.group_max_x[og_name],
+                               let other_line_max_y = other_frame.group_max_y[og_name],
+                               let other_group_size = other_frame.neighbor_groups[og_name]
+                            {
+                                Log.d("frame \(frame.frame_index) group 1 \(group_name) of size \(group_size) (\(line_min_x) \(line_min_y)),  (\(line_max_x) \(line_max_y)) other frame \(other_frame.frame_index) group 2 \(og_name) of size \(group_size) (\(other_line_min_x) \(other_line_min_y)),  (\(other_line_max_x) \(other_line_max_y))")
+                                
+                                let mult = abs(frame.frame_index - other_frame.frame_index)
+                                // multiply the constant by how far the frames are away
+                                // from eachother in the sequence
+                                let amt = Double(final_group_boundary_amt * mult)
+                                // increate overlap amt by frame index difference
+                                let overlap_amount = overlap_amount(min_1_x: line_min_x,
+                                                                    min_1_y: line_min_y,
+                                                                    max_1_x: line_max_x,
+                                                                    max_1_y: line_max_y,
+                                                                    min_2_x: other_line_min_x,
+                                                                    min_2_y: other_line_min_y,
+                                                                    max_2_x: other_line_max_x,
+                                                                    max_2_y: other_line_max_y)
+                                Log.d("overlap_amount \(overlap_amount) amt \(amt)")
+                                if overlap_amount < amt {
+                                    // two overlapping groups
+                                    // shouldn't be painted over
+                                    frame.should_paint[group_name] =
+                                        (shouldPaint: false, why: .adjecentOverlap(-overlap_amount))
+                                    other_frame.should_paint[og_name] =
+                                        (shouldPaint: false, why: .adjecentOverlap(-overlap_amount))
+                                    Log.d("frame \(frame.frame_index) should_paint[\(group_name)] = (false, .adjecentOverlap)")
+                                    Log.d("frame \(other_frame.frame_index) should_paint[\(og_name)] = (false, .adjecentOverlap)")
+                                    
+                                } else if theta_diff < final_theta_diff && rho_diff < final_rho_diff {
                                         
-                                        if let (frame_should_paint, frame_why) =
-                                               frame.should_paint[group_name]
-                                        {
-                                            if !frame_should_paint &&
-                                               (frame_why == .adjecentOverlap(-1) ||
+                                    // don't overwrite adjecent overlaps
+                                    var do_it = true
+                                        
+                                    if let (frame_should_paint, frame_why) =
+                                           frame.should_paint[group_name]
+                                    {
+                                        if !frame_should_paint &&
+                                             (frame_why == .adjecentOverlap(-1) ||
                                                 frame_why == .tooBlobby(0,0)) // XXX -1
-                                            {
-                                                do_it = false
-                                            }
-                                        }
-
-                                        if let (other_should_paint, other_why) = 
-                                               other_frame.should_paint[og_name]
                                         {
-                                            if !other_should_paint &&
-                                               (other_why == .adjecentOverlap(-1) || 
+                                            do_it = false
+                                        }
+                                    }
+                                    
+                                    if let (other_should_paint, other_why) = 
+                                           other_frame.should_paint[og_name]
+                                    {
+                                        if !other_should_paint &&
+                                             (other_why == .adjecentOverlap(-1) || 
                                                 other_why == .tooBlobby(0,0))  // XXX -1
-                                            {
-                                                do_it = false
-                                            }
+                                        {
+                                            do_it = false
                                         }
+                                    }
+                                    
+                                    if do_it {
+                                        // XXX perhaps keep a record of all matches
+                                        // and vote?
                                         
-                                        if do_it {
-                                            // XXX perhaps keep a record of all matches
-                                            // and vote?
-                                            
-                                            // mark as should paint
-                                            Log.d("frame \(frame.frame_index) should_paint[\(group_name)] = (true, .adjecentLine(\(theta_diff), \(rho_diff))) overlap_amount \(overlap_amount) amt \(amt)")
-                                            frame.should_paint[group_name] = (shouldPaint: true,
+                                        // mark as should paint
+                                        Log.d("frame \(frame.frame_index) should_paint[\(group_name)] = (true, .adjecentLine(\(theta_diff), \(rho_diff))) overlap_amount \(overlap_amount) amt \(amt)")
+                                        frame.should_paint[group_name] = (shouldPaint: true,
                                                                           why: .adjecentLine(theta_diff, rho_diff)) // XXX -1
-                                            
-                                            Log.d("frame \(other_frame.frame_index) should_paint[\(og_name)] = (true, .adjecentLine(\(theta_diff), \(rho_diff))) overlap_amount \(overlap_amount) \(amt)")
-                                            other_frame.should_paint[og_name] = (shouldPaint: true,
+                                        
+                                        Log.d("frame \(other_frame.frame_index) should_paint[\(og_name)] = (true, .adjecentLine(\(theta_diff), \(rho_diff))) overlap_amount \(overlap_amount) \(amt)")
+                                        other_frame.should_paint[og_name] = (shouldPaint: true,
                                                                              why: .adjecentLine(theta_diff, rho_diff)) // XXX -1
-                                        }
                                     }
                                 }
                             }

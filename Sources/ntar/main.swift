@@ -27,6 +27,9 @@ todo:
 
 
 // XXX here are some random global constants that maybe should be exposed somehow
+
+// 34 concurrent frames maxes out around 60 gigs of ram usage for 24 mega pixel images
+
 let max_concurrent_frames: UInt = 34  // number of frames to process in parallel about 1 per cpu core
 let max_pixel_brightness_distance: UInt16 = 7200 // distance in brightness to be considered an outlier
 
@@ -48,8 +51,6 @@ let final_theta_diff: Double = 5       // how close in theta/rho outliers need t
 let final_rho_diff: Double = 70
 
 let final_group_boundary_amt = 8  // how much we pad the overlap amounts on the final pass
-
-let final_overlapping_group_size = 200 // XXX document this more
 
 
 let test_paint = true           // write out a separate image sequence with colors indicating

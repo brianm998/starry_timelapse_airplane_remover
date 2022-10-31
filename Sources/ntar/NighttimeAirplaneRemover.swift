@@ -118,8 +118,8 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
             let final_is_working = await final_processor.isWorking
             let final_frames_unprocessed = await final_processor.framesBetween
             let final_queue_size = await final_processor.final_queue.number_running.currentValue()
+            let current_running = await self.number_running.currentValue()
             if final_is_working || final_frames_unprocessed > final_group_boundary_amt*2 {
-                let current_running = await self.number_running.currentValue()
                 let signed_ret: Int = (Int(max_concurrent_renders) - Int(final_queue_size))-final_frames_unprocessed
                 if signed_ret < 0 {
                     ret = 0
@@ -129,7 +129,7 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
             } else /*if final_queue_size > max_concurrent_renders*/ {
                 ret = max_concurrent_renders - final_queue_size
             }
-            Log.d("final_is_working \(final_is_working) final_queue_size \(final_queue_size) final_frames_unprocessed \(final_frames_unprocessed) max_renders \(max_concurrent_renders) ret \(ret)")
+            Log.d("final_is_working \(final_is_working) current_running \(current_running) final_queue_size \(final_queue_size) final_frames_unprocessed \(final_frames_unprocessed) max_renders \(ret)")
         }
         //Log.d("max_concurrent_renders \(ret)")
         return ret
