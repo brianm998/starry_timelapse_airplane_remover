@@ -31,7 +31,7 @@ class ImageSequenceProcessor {
 
     // concurrent dispatch queue so we can process frames in parallel
     
-    let dispatchGroup = DispatchGroup()
+    let dispatchGroup: DispatchHandler = DispatchHandlerTest()
     
     var should_process: [Bool] = []       // indexed by frame number
     var existing_output_files: [Bool] = [] // indexed by frame number
@@ -111,7 +111,8 @@ class ImageSequenceProcessor {
             let basename = remove_path(fromString: filename)
             let output_filename = "\(output_dirname)/\(basename)"
             if should_process[index] {
-                self.dispatchGroup.enter() 
+                let name = "image sequence processor foobar \(index)"
+                self.dispatchGroup.enter(name) 
                 await method_list.add(atIndex: index, method: {
                     Log.d("loading \(image_filename)")
                     if let image = await self.image_sequence.getImage(withName: image_filename) {
@@ -120,7 +121,7 @@ class ImageSequenceProcessor {
                                              output_filename: output_filename,
                                              base_name: basename)
                         await self.number_running.decrement()
-                        self.dispatchGroup.leave()
+                        self.dispatchGroup.leave(name)
                     } else {
                         Log.w("could't get image for \(image_filename)")
                     }
@@ -147,11 +148,13 @@ class ImageSequenceProcessor {
     }
     
     func run() {
+        Log.d("run")
         startup_hook()
 
         mkdir(output_dirname)
-        // enter the dispatch group so we can wait for it at the end 
-        self.dispatchGroup.enter()
+        // enter the dispatch group so we can wait for it at the end
+        let run_dispatch_group_name = "image sequence processor runloop"
+        self.dispatchGroup.enter(run_dispatch_group_name)
         
         Task {
             // each of these methods removes the airplanes from a particular frame
@@ -179,11 +182,12 @@ class ImageSequenceProcessor {
                     {
                         await method_list.removeValue(forKey: next_method_key)
                         await self.number_running.increment()
-                        self.dispatchGroup.enter()
+                        let name = "image sequence processor foobaz \(next_method_key)"
+                        self.dispatchGroup.enter(name)
                         dispatchQueue.async {
                             Task {
                                 await next_method()
-                                self.dispatchGroup.leave()
+                                self.dispatchGroup.leave(name)
                             }
                         }
                     } else {
@@ -191,12 +195,13 @@ class ImageSequenceProcessor {
                         fatalError("FUCK")
                     }
                 } else {
-                    _ = self.dispatchGroup.wait(timeout: DispatchTime.now().advanced(by: .seconds(1)))
+                    sleep(1)
+                    //_ = self.dispatchGroup.wait(timeout: DispatchTime.now().advanced(by: .seconds(1)))
                 }
             }
             Log.d("finished hook")
             self.finished_hook()
-            self.dispatchGroup.leave()
+            self.dispatchGroup.leave(run_dispatch_group_name)
         }
         Log.d("waiting to finish")
         self.dispatchGroup.wait() // SIGKILL?

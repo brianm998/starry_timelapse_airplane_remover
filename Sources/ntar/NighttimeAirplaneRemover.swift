@@ -58,7 +58,7 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
                    givenFilenames: given_filenames)
 
         let processor = FinalProcessor(numberOfFrames: self.image_sequence.filenames.count, 
-                                   dispatchGroup: dispatchGroup)
+                                       dispatchGroup: dispatchGroup)
         
         final_processor = processor
     }
@@ -110,10 +110,11 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
         // by doing further analysis and cleanup
 
         if let final_processor = final_processor {
-            dispatchGroup.enter()
+            let name = "final processor add at \(index)"
+            dispatchGroup.enter(name)
             Task {
                 await final_processor.add(frame: frame_plane_remover, at: index)
-                self.dispatchGroup.leave()
+                self.dispatchGroup.leave(name)
             }
         } else {
             fatalError("should not happen")
@@ -154,12 +155,13 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
         }
         let immutable_should_process = should_process
         if let final_processor = final_processor {
-            dispatchGroup.enter()
+            let name = "final processor run" 
+            dispatchGroup.enter(name)
             dispatchQueue.async {
                 Task {
                     // run the final processor as a single separate thread
                     await final_processor.run(shouldProcess: immutable_should_process)
-                    self.dispatchGroup.leave()
+                    self.dispatchGroup.leave(name)
                 }
             }
         } else {

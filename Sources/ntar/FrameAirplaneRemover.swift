@@ -470,6 +470,9 @@ class FrameAirplaneRemover: Equatable {
 
     var houghTransform_rmax: Double = 0
 
+    // XXX heap corruption during the full hough transform of lots of images
+    // XXX likely a write/read conflict, but where?
+    
     // this method runs a hough transform on the full resolution image that
     // contains only large enough outliers
     func fullHoughTransform() {
@@ -917,10 +920,10 @@ class FrameAirplaneRemover: Equatable {
 
         self.writeTestFile(withData: test_paint_data)
 
-        Log.i("frame \(self.frame_index) complete")
-
         // write frame out as a tiff file after processing it
         self.image.writeTIFFEncoding(ofData: output_data,  toFilename: self.output_filename)
+
+        Log.i("frame \(self.frame_index) complete")
     }
 
     public static func == (lhs: FrameAirplaneRemover, rhs: FrameAirplaneRemover) -> Bool {

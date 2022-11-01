@@ -32,23 +32,23 @@ actor FinalProcessor {
     var current_frame_index = 0
     var max_added_index = 0
     let frame_count: Int
-    let dispatch_group: DispatchGroup
+    let dispatch_group: DispatchHandler
     let final_queue: FinalQueue
 
     var is_asleep = false
     
     init(numberOfFrames frame_count: Int,
-         dispatchGroup dispatch_group: DispatchGroup)
+         dispatchGroup dispatch_group: DispatchHandler)
     {
         frames = [FrameAirplaneRemover?](repeating: nil, count: frame_count)
         self.frame_count = frame_count
         self.dispatch_group = dispatch_group
         self.final_queue = FinalQueue(max_concurrent: max_concurrent_frames,
-                                   dispatchGroup: dispatch_group)
+                                      dispatchGroup: dispatch_group)
     }
 
     func add(frame: FrameAirplaneRemover, at index: Int) {
-        Log.i("frame \(index) added for final inter-frame analysis")
+        Log.i("FINAL THREAD frame \(index) added for final inter-frame analysis")
         if index > max_added_index {
             max_added_index = index
         }
@@ -86,11 +86,12 @@ actor FinalProcessor {
         var count = 0
         for frame in frames {
             if let frame = frame {
+                let name = "finishAll \(count)"
+                self.dispatch_group.enter(name)
                 count += 1
-                self.dispatch_group.enter()
                 await self.final_queue.method_list.add(atIndex: frame.frame_index) {
                     frame.finish()
-                    self.dispatch_group.leave()
+                    self.dispatch_group.leave(name)
                 }
             }
         }
@@ -101,6 +102,7 @@ actor FinalProcessor {
     nonisolated func run(shouldProcess: [Bool]) async {
 
         await final_queue.start()
+        let frame_count = await frames.count
         
         var done = false
         while(!done) {
@@ -136,25 +138,29 @@ actor FinalProcessor {
                 }
             }
             if !bad {
-                Log.i("frame \(index_to_process) doing inter-frame analysis with \(images_to_process.count) frames")
+                Log.i("FINAL THREAD frame \(index_to_process) doing inter-frame analysis with \(images_to_process.count) frames")
                 self.handle(frames: images_to_process)
-                Log.d("frame \(index_to_process) done with inter-frame analysis")
+                Log.d("FINAL THREAD frame \(index_to_process) done with inter-frame analysis")
                 await self.incrementCurrentFrameIndex()
-                if start_index > 0 {
+                if start_index > 0 && index_to_process < frame_count - number_final_processing_neighbors_needed - 1 {
+                    // maybe finish a previous frame
+                    // leave the ones at the end to finishAll()
                     let immutable_start = start_index
                     //Log.d("FINAL THREAD frame \(index_to_process) queueing into final queue")
                     dispatchQueue.async {
                         Task {
                             if let frame_to_finish = await self.frame(at: immutable_start - 1) {
-                                self.dispatch_group.enter()
+                                let final_frame_group_name = "final frame \(frame_to_finish.frame_index)"
+                                self.dispatch_group.enter(final_frame_group_name)
                                 // XXX async here
                                 Log.d("frame \(frame_to_finish.frame_index) adding at index ")
                                 await self.final_queue.method_list.add(atIndex: frame_to_finish.frame_index) {
                                     Log.i("frame \(frame_to_finish.frame_index) finishing")
                                     frame_to_finish.finish()
-                                    self.dispatch_group.leave()
+                                    Log.i("frame \(frame_to_finish.frame_index) finished")
+                                    self.dispatch_group.leave(final_frame_group_name)
                                 }
-                                Log.d("frame \(frame_to_finish.frame_index) done adding to index ")
+                                //Log.d("frame \(frame_to_finish.frame_index) done adding to index ")
                             }
                             await self.clearFrame(at: immutable_start - 1)
                         }
@@ -295,6 +301,8 @@ actor FinalProcessor {
                                                                     max_2_y: other_line_max_y)
                                 //Log.d("overlap_amount \(overlap_amount) amt \(amt)")
                                 if overlap_amount < amt {
+                                    // XXX This is wrong for frame 1058 in 09_24_2022-a9-2
+                                    
                                     // two overlapping groups
                                     // shouldn't be painted over
                                     frame.should_paint[group_name] =

@@ -24,9 +24,9 @@ actor FinalQueue {
     let max_concurrent: UInt
     var should_run = true
 
-    let dispatch_group: DispatchGroup
+    let dispatch_group: DispatchHandler
 
-    init(max_concurrent: UInt = 8, dispatchGroup dispatch_group: DispatchGroup) {
+    init(max_concurrent: UInt = 8, dispatchGroup dispatch_group: DispatchHandler) {
         self.max_concurrent = max_concurrent
         self.dispatch_group = dispatch_group
     }
@@ -58,7 +58,8 @@ actor FinalQueue {
 
     */
     nonisolated func start() async {
-        self.dispatch_group.enter()
+        let name = "final queue running"
+        self.dispatch_group.enter(name)
         Task { 
             while(await self.should_run()) {
                 let current_running = await self.number_running.currentValue()
@@ -68,25 +69,27 @@ actor FinalQueue {
                     if let next_key = fu1,
                        let method = await self.method_list.list[next_key]
                     {
-                        self.dispatch_group.enter()
+                        let dispatch_name = "final queue frame \(next_key)"
+                        self.dispatch_group.enter(dispatch_name)
                         await self.method_list.removeValue(forKey: next_key)
                         await self.number_running.increment()
                         dispatchQueue.async {
                             Task {
                                 await method()
                                 await self.number_running.decrement()
-                                self.dispatch_group.leave()
+                                self.dispatch_group.leave(dispatch_name)
                             }
                         }
                     } else {
                         sleep(1)        // XXX hardcoded constant
                     }
                 } else {
-                    _ = self.dispatch_group.wait(timeout: DispatchTime.now().advanced(by: .seconds(1)))
+                    //_ = self.dispatch_group.wait(timeout: DispatchTime.now().advanced(by: .seconds(1)))
+                    sleep(1)    // XXX hardcoded constant
                 }
             }
             Log.d("done")
-            self.dispatch_group.leave()
+            self.dispatch_group.leave(name)
         }
     }
 }
