@@ -69,10 +69,11 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
     }
     
     // called by the superclass to process each frame
+    // called async check access to shared data
     override func processFrame(number index: Int,
-                            image: PixelatedImage,
-                            output_filename: String,
-                            base_name: String) async
+                               image: PixelatedImage,
+                               output_filename: String,
+                               base_name: String) async
     {
         //Log.e("full_image_path \(full_image_path)")
         // load images outside the main thread
@@ -96,10 +97,10 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
         // the other frames that we use to detect outliers and repaint from
         let frame_plane_remover =
             self.prepareForAdjecentFrameAnalysis(fromImage: image,
-                                             atIndex: index,
-                                             otherFrames: otherFrames,
-                                             output_filename: "\(self.output_dirname)/\(base_name)",
-                                             test_paint_filename: test_paint_filename)
+                                                 atIndex: index,
+                                                 otherFrames: otherFrames,
+                                                 output_filename: "\(self.output_dirname)/\(base_name)",
+                                                 test_paint_filename: test_paint_filename)
 
         
         // next step is to add this frame_plane_remover to an array of optionals
@@ -110,12 +111,7 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
         // by doing further analysis and cleanup
 
         if let final_processor = final_processor {
-            let name = "final processor add at \(index)"
-            dispatchGroup.enter(name)
-            Task {
-                await final_processor.add(frame: frame_plane_remover, at: index)
-                self.dispatchGroup.leave(name)
-            }
+            await final_processor.add(frame: frame_plane_remover, at: index)
         } else {
             fatalError("should not happen")
         }
@@ -138,7 +134,7 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
                 } else {
                     ret = UInt(signed_ret)
                 }
-            } else /*if final_queue_size > max_concurrent_renders*/ {
+            } else {
                 ret = max_concurrent_renders - final_queue_size
             }
             Log.d("final_is_working \(final_is_working) current_running \(current_running) final_queue_size \(final_queue_size) final_frames_unprocessed \(final_frames_unprocessed) max_renders \(ret)")
@@ -170,20 +166,21 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
         }
     }
 
+    // called async, check for access to shared data 
     func prepareForAdjecentFrameAnalysis(fromImage image: PixelatedImage,
-                                     atIndex frame_index: Int,
-                                     otherFrames: [PixelatedImage],
-                                     output_filename: String,
-                                     test_paint_filename tpfo: String?) -> FrameAirplaneRemover
+                                         atIndex frame_index: Int,
+                                         otherFrames: [PixelatedImage],
+                                         output_filename: String,
+                                         test_paint_filename tpfo: String?) -> FrameAirplaneRemover
     {
         let start_time = NSDate().timeIntervalSince1970
         
         guard let frame_plane_remover = FrameAirplaneRemover(fromImage: image,
-                                                       atIndex: frame_index,
-                                                       otherFrames: otherFrames,
-                                                       output_filename: output_filename,
-                                                       test_paint_filename: tpfo,
-                                                       max_pixel_distance: max_pixel_distance)
+                                                             atIndex: frame_index,
+                                                             otherFrames: otherFrames,
+                                                             output_filename: output_filename,
+                                                             test_paint_filename: tpfo,
+                                                             max_pixel_distance: max_pixel_distance)
         else {
             Log.d("DOH")
             fatalError("FAILED")
