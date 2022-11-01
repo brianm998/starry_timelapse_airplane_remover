@@ -1,7 +1,3 @@
-import Foundation
-import CoreGraphics
-import Cocoa
-
 /*
 
 This file is part of the Nightime Timelapse Airplane Remover (ntar).
@@ -13,6 +9,10 @@ ntar is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY
 You should have received a copy of the GNU General Public License along with ntar. If not, see <https://www.gnu.org/licenses/>.
 
 */
+
+import Foundation
+import CoreGraphics
+import Cocoa
 
 
 // this class handles the final processing of every frame
@@ -147,22 +147,22 @@ actor FinalProcessor {
                     // leave the ones at the end to finishAll()
                     let immutable_start = start_index
                     //Log.d("FINAL THREAD frame \(index_to_process) queueing into final queue")
-                    dispatchQueue.async {
-                        Task {
-                            if let frame_to_finish = await self.frame(at: immutable_start - 1) {
-                                let final_frame_group_name = "final frame \(frame_to_finish.frame_index)"
-                                self.dispatch_group.enter(final_frame_group_name)
+                    if let frame_to_finish = await self.frame(at: immutable_start - 1) {
+                        let final_frame_group_name = "final frame \(frame_to_finish.frame_index)"
+                        self.dispatch_group.enter(final_frame_group_name)
+                        dispatchQueue.async {
+                            Task {
                                 // XXX async here
                                 Log.d("frame \(frame_to_finish.frame_index) adding at index ")
                                 await self.final_queue.method_list.add(atIndex: frame_to_finish.frame_index) {
                                     Log.i("frame \(frame_to_finish.frame_index) finishing")
                                     await frame_to_finish.finish()
                                     Log.i("frame \(frame_to_finish.frame_index) finished")
-                                    self.dispatch_group.leave(final_frame_group_name)
                                 }
                                 //Log.d("frame \(frame_to_finish.frame_index) done adding to index ")
+                                await self.clearFrame(at: immutable_start - 1)
+                                self.dispatch_group.leave(final_frame_group_name)
                             }
-                            await self.clearFrame(at: immutable_start - 1)
                         }
                     }
                     //Log.d("FINAL THREAD frame \(index_to_process) done queueing into final queue")
