@@ -30,7 +30,7 @@ test paint colors:
  light green - outlier, but not part of a big enough group
 */
 @available(macOS 10.15, *)
-class FrameAirplaneRemover: Equatable {
+actor FrameAirplaneRemover: Equatable { 
     let width: Int
     let height: Int
     let bytesPerPixel: Int
@@ -65,6 +65,10 @@ class FrameAirplaneRemover: Equatable {
 
     var group_lines: [String:Line] = [:] // keyed by group name, the best line found for each group
 
+    func setShouldPaint(group group_name: String, toShouldPaint will_paint: Bool, why: PaintReason) {
+        self.should_paint[group_name] = (shouldPaint: will_paint, why: why)
+    }
+    
     let output_filename: String
     
     init?(fromImage image: PixelatedImage,
@@ -308,7 +312,7 @@ class FrameAirplaneRemover: Equatable {
                   
     func testPaintOutliers(toData test_paint_data: inout Data) {
         Log.d("frame \(frame_index) painting outliers green")
-
+        
         for (index, outlier_amount) in outlier_amounts.enumerated() {
             let x = index % width;
             let y = index / width;

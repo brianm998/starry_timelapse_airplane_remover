@@ -96,11 +96,11 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
         
         // the other frames that we use to detect outliers and repaint from
         let frame_plane_remover =
-            self.prepareForAdjecentFrameAnalysis(fromImage: image,
-                                                 atIndex: index,
-                                                 otherFrames: otherFrames,
-                                                 output_filename: "\(self.output_dirname)/\(base_name)",
-                                                 test_paint_filename: test_paint_filename)
+            await self.prepareForAdjecentFrameAnalysis(fromImage: image,
+                                                       atIndex: index,
+                                                       otherFrames: otherFrames,
+                                                       output_filename: "\(self.output_dirname)/\(base_name)",
+                                                       test_paint_filename: test_paint_filename)
 
         
         // next step is to add this frame_plane_remover to an array of optionals
@@ -171,7 +171,7 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
                                          atIndex frame_index: Int,
                                          otherFrames: [PixelatedImage],
                                          output_filename: String,
-                                         test_paint_filename tpfo: String?) -> FrameAirplaneRemover
+                                         test_paint_filename tpfo: String?) async -> FrameAirplaneRemover
     {
         let start_time = NSDate().timeIntervalSince1970
         
@@ -192,7 +192,7 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
         Log.d("frame \(frame_index) populating the outlier map")
 
         // find outlying bright pixels between frames
-        frame_plane_remover.populateOutlierMap() 
+        await frame_plane_remover.populateOutlierMap() 
 
         let time_2 = NSDate().timeIntervalSince1970
         let interval2 = String(format: "%0.1f", time_2 - time_1)
@@ -200,7 +200,7 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
         Log.d("frame \(frame_index) pruning after \(interval2)s")
 
         // group neighboring outlying pixels into groups
-        frame_plane_remover.prune()
+        await frame_plane_remover.prune()
 
         let time_3 = NSDate().timeIntervalSince1970
         let interval3 = String(format: "%0.1f", time_3 - time_2)
@@ -212,21 +212,21 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
         Log.d("frame \(frame_index) calculating group bounds \(interval4)s")
 
         // figure out what part of the image each outlier group lies in
-        frame_plane_remover.calculateGroupBoundsAndAmounts()
+        await frame_plane_remover.calculateGroupBoundsAndAmounts()
 
         let time_5 = NSDate().timeIntervalSince1970
         let interval5 = String(format: "%0.1f", time_5 - time_4)
         Log.d("frame \(frame_index) running full hough transform after \(interval5)s")
 
         // run a hough transform on large enough outliers only
-        frame_plane_remover.fullHoughTransform()
+        await frame_plane_remover.fullHoughTransform()
 
         let time_6 = NSDate().timeIntervalSince1970
         let interval6 = String(format: "%0.1f", time_6 - time_5)
         Log.d("frame \(frame_index) outlier group painting analysis after p\(interval6)s")
 
         // do a lot of analysis to determine what outlier groups we should paint over
-        frame_plane_remover.outlierGroupPaintingAnalysis()
+        await frame_plane_remover.outlierGroupPaintingAnalysis()
         
         let time_7 = NSDate().timeIntervalSince1970
         let interval7 = String(format: "%0.1f", time_7 - time_6)
