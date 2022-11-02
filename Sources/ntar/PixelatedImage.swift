@@ -1,7 +1,3 @@
-import Foundation
-import CoreGraphics
-import Cocoa
-
 /*
 
 This file is part of the Nightime Timelapse Airplane Remover (ntar).
@@ -13,6 +9,10 @@ ntar is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY
 You should have received a copy of the GNU General Public License along with ntar. If not, see <https://www.gnu.org/licenses/>.
 
 */
+
+import Foundation
+import CoreGraphics
+import Cocoa
 
 @available(macOS 10.15, *) 
 class PixelatedImage {

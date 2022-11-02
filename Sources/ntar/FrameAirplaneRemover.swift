@@ -774,15 +774,16 @@ actor FrameAirplaneRemover: Equatable {
         }
     }
 
-    func writeTestFile(withData data: Data) {
+    private func writeTestFile(withData data: Data) {
         image.writeTIFFEncoding(ofData: data, toFilename: test_paint_filename)
     }
 
     // paint over a selected outlier with data from pixels from adjecent frames
-    func paint(x: Int, y: Int,
-               why: PaintReason,
-               toData data: inout Data,
-               testData test_paint_data: inout Data) {
+    private func paint(x: Int, y: Int,
+                       why: PaintReason,
+                       toData data: inout Data,
+                       testData test_paint_data: inout Data)
+    {
         var pixels_to_paint_with: [Pixel] = []
         
         // grab the pixels from the same image spot from adject frames

@@ -31,7 +31,7 @@ class ImageSequenceProcessor {
 
     // concurrent dispatch queue so we can process frames in parallel
     
-    let dispatchGroup/*: DispatchHandler*/ = DispatchHandler()
+    let dispatchGroup = DispatchHandler()
     
     var should_process: [Bool] = []       // indexed by frame number
     var existing_output_files: [Bool] = [] // indexed by frame number

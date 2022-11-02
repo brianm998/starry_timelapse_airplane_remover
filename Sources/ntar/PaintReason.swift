@@ -10,7 +10,7 @@ typealias WillPaint = (
 enum PaintReason: Equatable {
    case assumed                      // large groups are assumed to be airplanes
    case goodScore(Double)            // percent score
-   case adjecentLine(Double, Double)     // theta and rho diffs
+   case adjecentLine(Double, Double, Int)     // theta and rho diffs, plus count
 
    case badScore(Double)        // percent score
    case adjecentOverlap(Int) // overlap distance
