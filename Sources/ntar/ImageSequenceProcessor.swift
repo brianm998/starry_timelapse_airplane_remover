@@ -31,7 +31,7 @@ class ImageSequenceProcessor {
 
     // concurrent dispatch queue so we can process frames in parallel
     
-    let dispatchGroup: DispatchHandler = DispatchHandlerTest()
+    let dispatchGroup/*: DispatchHandler*/ = DispatchHandler()
     
     var should_process: [Bool] = []       // indexed by frame number
     var existing_output_files: [Bool] = [] // indexed by frame number
@@ -112,16 +112,17 @@ class ImageSequenceProcessor {
             let output_filename = "\(output_dirname)/\(basename)"
             if should_process[index] {
                 let name = "image sequence processor foobar \(index)"
-                self.dispatchGroup.enter(name) 
+                await self.dispatchGroup.enter(name) 
                 await method_list.add(atIndex: index, method: {
+                    // this method is run async later                                           
                     Log.d("loading \(image_filename)")
                     if let image = await self.image_sequence.getImage(withName: image_filename) {
                         await self.processFrame(number: index,
-                                             image: image,
-                                             output_filename: output_filename,
-                                             base_name: basename)
+                                                image: image,
+                                                output_filename: output_filename,
+                                                base_name: basename)
                         await self.number_running.decrement()
-                        self.dispatchGroup.leave(name)
+                        await self.dispatchGroup.leave(name)
                     } else {
                         Log.w("could't get image for \(image_filename)")
                     }
@@ -135,7 +136,7 @@ class ImageSequenceProcessor {
         }
     }
 
-    func method_list_hook() {
+    func method_list_hook() async {
         // can be overridden
     }
     
@@ -152,16 +153,17 @@ class ImageSequenceProcessor {
         startup_hook()
 
         mkdir(output_dirname)
-        // enter the dispatch group so we can wait for it at the end
-        let run_dispatch_group_name = "image sequence processor runloop"
-        self.dispatchGroup.enter(run_dispatch_group_name)
+
+        // this dispatch group is only used for this task
+        let local_dispatch_group = DispatchGroup()
+        local_dispatch_group.enter()
         
         Task {
             // each of these methods removes the airplanes from a particular frame
             await assembleMethodList()
             Log.d("we have \(await method_list.list.count) total frames")
             
-            method_list_hook()
+            await method_list_hook()
             
             Log.d("running")
             // atually run it
@@ -183,15 +185,15 @@ class ImageSequenceProcessor {
                         await method_list.removeValue(forKey: next_method_key)
                         await self.number_running.increment()
                         let name = "image sequence processor foobaz \(next_method_key)"
-                        self.dispatchGroup.enter(name)
+                        await self.dispatchGroup.enter(name)
                         dispatchQueue.async {
                             Task {
                                 await next_method()
-                                self.dispatchGroup.leave(name)
+                                await self.dispatchGroup.leave(name)
                             }
                         }
                     } else {
-                        Log.e("FUCK")
+                        Log.e("FUCK") 
                         fatalError("FUCK")
                     }
                 } else {
@@ -201,10 +203,19 @@ class ImageSequenceProcessor {
             }
             Log.d("finished hook")
             self.finished_hook()
-            self.dispatchGroup.leave(run_dispatch_group_name)
+            let rename_me = await self.dispatchGroup.dispatch_group
+            while (rename_me.wait(timeout: DispatchTime.now().advanced(by: .seconds(3))) == .timedOut) {
+                let count = await self.dispatchGroup.count
+                if count < 8 {      // XXX hardcoded constant
+                    for (name, _) in await self.dispatchGroup.running {
+                        Log.d("waiting on \(name)")
+                    }
+                }
+             }
+            local_dispatch_group.leave()
         }
         Log.d("waiting to finish")
-        self.dispatchGroup.wait() // SIGKILL?
+        local_dispatch_group.wait() // SIGKILL?
         Log.d("done")
     }
 }

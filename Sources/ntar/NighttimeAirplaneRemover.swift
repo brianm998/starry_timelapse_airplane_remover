@@ -144,7 +144,7 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
     }
     
     // called after the list of already existing output files is known
-    override func method_list_hook() {
+    override func method_list_hook() async {
         var should_process = [Bool](repeating: false, count: self.existing_output_files.count)
         for (index, output_file_exists) in self.existing_output_files.enumerated() {
             should_process[index] = !output_file_exists
@@ -152,12 +152,12 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
         let immutable_should_process = should_process
         if let final_processor = final_processor {
             let name = "final processor run" 
-            dispatchGroup.enter(name)
+            await dispatchGroup.enter(name)
             dispatchQueue.async {
                 Task {
                     // run the final processor as a single separate thread
                     await final_processor.run(shouldProcess: immutable_should_process)
-                    self.dispatchGroup.leave(name)
+                    await self.dispatchGroup.leave(name)
                 }
             }
         } else {

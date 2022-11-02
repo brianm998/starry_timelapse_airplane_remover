@@ -48,48 +48,40 @@ actor FinalQueue {
     }
 
 
-    /*
-
-     small size test runs still seem to be single threaded in this queue.
-
-     longer running tasks seem find
-
-     try using task groups to fix it?
-
-    */
     nonisolated func start() async {
         let name = "final queue running"
-        self.dispatch_group.enter(name)
+        await self.dispatch_group.enter(name)
         Task { 
             while(await self.should_run()) {
                 let current_running = await self.number_running.currentValue()
-                Log.d("current_running \(current_running)")
+                //Log.d("current_running \(current_running)")
                 if(current_running < self.max_concurrent) {
                     let fu1 = await self.method_list.nextKey
                     if let next_key = fu1,
                        let method = await self.method_list.list[next_key]
                     {
                         let dispatch_name = "final queue frame \(next_key)"
-                        self.dispatch_group.enter(dispatch_name)
+                        await self.dispatch_group.enter(dispatch_name)
                         await self.method_list.removeValue(forKey: next_key)
                         await self.number_running.increment()
                         dispatchQueue.async {
                             Task {
                                 await method()
                                 await self.number_running.decrement()
-                                self.dispatch_group.leave(dispatch_name)
+                                await self.dispatch_group.leave(dispatch_name)
                             }
                         }
                     } else {
-                        sleep(1)        // XXX hardcoded constant
+                        // waiting for more work
+                        sleep(1) // XXX hardcoded constant
                     }
                 } else {
-                    //_ = self.dispatch_group.wait(timeout: DispatchTime.now().advanced(by: .seconds(1)))
+                    // too many running, wait a bit
                     sleep(1)    // XXX hardcoded constant
                 }
             }
             Log.d("done")
-            self.dispatch_group.leave(name)
+            await self.dispatch_group.leave(name)
         }
     }
 }

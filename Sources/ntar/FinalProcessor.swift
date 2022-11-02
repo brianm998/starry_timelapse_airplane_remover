@@ -87,11 +87,11 @@ actor FinalProcessor {
         for frame in frames {
             if let frame = frame {
                 let name = "finishAll \(count)"
-                self.dispatch_group.enter(name)
+                await self.dispatch_group.enter(name)
                 count += 1
                 await self.final_queue.method_list.add(atIndex: frame.frame_index) {
                     await frame.finish()
-                    self.dispatch_group.leave(name)
+                    await self.dispatch_group.leave(name)
                 }
             }
         }
@@ -149,7 +149,7 @@ actor FinalProcessor {
                     //Log.d("FINAL THREAD frame \(index_to_process) queueing into final queue")
                     if let frame_to_finish = await self.frame(at: immutable_start - 1) {
                         let final_frame_group_name = "final frame \(frame_to_finish.frame_index)"
-                        self.dispatch_group.enter(final_frame_group_name)
+                        await self.dispatch_group.enter(final_frame_group_name)
                         dispatchQueue.async {
                             Task {
                                 // XXX async here
@@ -161,7 +161,7 @@ actor FinalProcessor {
                                 }
                                 //Log.d("frame \(frame_to_finish.frame_index) done adding to index ")
                                 await self.clearFrame(at: immutable_start - 1)
-                                self.dispatch_group.leave(final_frame_group_name)
+                                await self.dispatch_group.leave(final_frame_group_name)
                             }
                         }
                     }
