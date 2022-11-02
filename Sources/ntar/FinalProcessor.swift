@@ -83,6 +83,7 @@ actor FinalProcessor {
     }
     
     func finishAll() async {
+        Log.d("finishing all")
         var count = 0
         for frame in frames {
             if let frame = frame {
@@ -106,8 +107,9 @@ actor FinalProcessor {
         
         var done = false
         while(!done) {
-            done = await current_frame_index >= frames.count
-            //Log.d("done \(done)")
+            let (cfi, frames_count) = await (current_frame_index, frames.count)
+            done = cfi >= frames_count
+            Log.d("done \(done) current_frame_index \(cfi) frames.count \(frames_count)")
             if done { continue }
             
             let index_to_process = await current_frame_index
@@ -128,9 +130,15 @@ actor FinalProcessor {
             }
             
             var bad = false
+            var index_in_images_to_process_of_main_frame = 0
+            var index_in_images_to_process = 0
             for i in start_index ... end_index {
                 if let next_frame = await self.frame(at: i) {
                     images_to_process.append(next_frame)
+                    if i == index_to_process {
+                        index_in_images_to_process_of_main_frame = index_in_images_to_process
+                    }
+                    index_in_images_to_process += 1
                 } else {
                     bad = true
                     // XXX bad
@@ -139,7 +147,8 @@ actor FinalProcessor {
             }
             if !bad {
                 Log.i("FINAL THREAD frame \(index_to_process) doing inter-frame analysis with \(images_to_process.count) frames")
-                await run_final_pass(frames: images_to_process)
+                await run_final_pass(frames: images_to_process,
+                                     mainIndex: index_in_images_to_process_of_main_frame)
                 Log.d("FINAL THREAD frame \(index_to_process) done with inter-frame analysis")
                 await self.incrementCurrentFrameIndex()
                 if start_index > 0 && index_to_process < frame_count - number_final_processing_neighbors_needed - 1 {
@@ -152,7 +161,6 @@ actor FinalProcessor {
                         await self.dispatch_group.enter(final_frame_group_name)
                         dispatchQueue.async {
                             Task {
-                                // XXX async here
                                 Log.d("frame \(frame_to_finish.frame_index) adding at index ")
                                 await self.final_queue.method_list.add(atIndex: frame_to_finish.frame_index) {
                                     Log.i("frame \(frame_to_finish.frame_index) finishing")
@@ -196,7 +204,7 @@ actor FinalProcessor {
 // otherwise, if they do overlap, then it's more likely a cloud or 
 // a bright star or planet, leave them as is.  
 @available(macOS 10.15, *)
-fileprivate func run_final_pass(frames: [FrameAirplaneRemover]) async {
+fileprivate func run_final_pass(frames: [FrameAirplaneRemover], mainIndex main_index: Int) async {
     Log.d("final pass on \(frames.count) frames")
     for frame in frames {
         //Log.d("frame.group_lines.count \(frame.group_lines.count)")
@@ -254,61 +262,105 @@ fileprivate func run_final_pass(frames: [FrameAirplaneRemover]) async {
                                                         max_2_x: other_line_max_x + amt,
                                                         max_2_y: other_line_max_y + amt)
                             //Log.d("overlap_amount \(overlap_amount) amt \(amt)")
-                            if do_overlap {
-                                // XXX This is wrong for frame 1058 in 09_24_2022-a9-2
-                                
-                                // two overlapping groups
-                                // shouldn't be painted over
-                                await frame.setShouldPaint(group: group_name,
-                                                           toShouldPaint: false,
-                                                           why: .adjecentOverlap(amt))
-                                await other_frame.setShouldPaint(group: og_name,
+                            if theta_diff < final_theta_diff && rho_diff < final_rho_diff {                            
+                                if do_overlap {
+                                    // XXX This is wrong for frame 1058 in 09_24_2022-a9-2
+                                    
+                                    // two overlapping groups
+                                    // shouldn't be painted over
+                                    let _ = await (
+                                            frame.setShouldPaint(group: group_name,
                                                                  toShouldPaint: false,
-                                                                 why: .adjecentOverlap(amt))
-                                //Log.d("frame \(frame.frame_index) should_paint[\(group_name)] = (false, .adjecentOverlap)")
-                                //Log.d("frame \(other_frame.frame_index) should_paint[\(og_name)] = (false, .adjecentOverlap)")
-                                
-                            } else if theta_diff < final_theta_diff && rho_diff < final_rho_diff {
-                                
-                                // don't overwrite adjecent overlaps
-                                var do_it = true
-                                
-                                if let (frame_should_paint, frame_why) =
-                                       await frame.should_paint[group_name]
-                                {
-                                    if !frame_should_paint &&
-                                         (frame_why == .adjecentOverlap(-1) ||
-                                            frame_why == .tooBlobby(0,0)) // XXX -1
-                                    {
-                                        do_it = false
-                                    }
-                                }
-                                
-                                if let (other_should_paint, other_why) = 
-                                       await other_frame.should_paint[og_name]
-                                {
-                                    if !other_should_paint &&
-                                         (other_why == .adjecentOverlap(-1) || 
-                                            other_why == .tooBlobby(0,0))  // XXX -1
-                                    {
-                                        do_it = false
-                                    }
-                                }
-                                
-                                if do_it {
-                                    // XXX perhaps keep a record of all matches
-                                    // and vote?
+                                                                 why: .adjecentOverlap(amt)),
+                                            other_frame.setShouldPaint(group: og_name,
+                                                                       toShouldPaint: false,
+                                                                       why: .adjecentOverlap(amt)))
+
+                                    //Log.d("frame \(frame.frame_index) should_paint[\(group_name)] = (false, .adjecentOverlap)")
+                                    //Log.d("frame \(other_frame.frame_index) should_paint[\(og_name)] = (false, .adjecentOverlap)")
                                     
-                                    // mark as should paint
-                                    //Log.d("frame \(frame.frame_index) should_paint[\(group_name)] = (true, .adjecentLine(\(theta_diff), \(rho_diff))) overlap_amount \(overlap_amount) amt \(amt)")
-                                    await frame.setShouldPaint(group: group_name,
-                                                               toShouldPaint: true,
-                                                               why: .adjecentLine(theta_diff, rho_diff))
+                                } else {
+                                
+                                    // don't overwrite adjecent overlaps
+                                    var do_it = true
                                     
-                                    //Log.d("frame \(other_frame.frame_index) should_paint[\(og_name)] = (true, .adjecentLine(\(theta_diff), \(rho_diff))) overlap_amount \(overlap_amount) \(amt)")
-                                    await other_frame.setShouldPaint(group: og_name,
-                                                                     toShouldPaint: true,
-                                                                     why: .adjecentLine(theta_diff, rho_diff))
+                                    if let (frame_should_paint, frame_why) =
+                                           await frame.should_paint[group_name]
+                                    {
+                                        if !frame_should_paint &&
+                                             (frame_why == .adjecentOverlap(-1) ||
+                                                frame_why == .tooBlobby(0,0)) // XXX -1
+                                        {
+                                            do_it = false
+                                        }
+                                    }
+                                    
+                                    if let (other_should_paint, other_why) = 
+                                           await other_frame.should_paint[og_name]
+                                    {
+                                        if !other_should_paint &&
+                                             (other_why == .adjecentOverlap(-1) || 
+                                                other_why == .tooBlobby(0,0))  // XXX -1
+                                        {
+                                            do_it = false
+                                        }
+                                    }
+                                    // XXX iterate over all of the lines_from_full_image
+                                    // from all of the images here, and make sure this
+                                    // line shows up in at least some of them
+                                    // this is to avoid noisy false positives
+
+                                    if !do_it { continue }
+                                    // XXX wierd logic XXX
+                                    do_it = false
+
+                                    // XXX this is slow, maybe only on the central frame
+                                    let main_frame = frames[main_index]
+                                    var matching_line_count = 0
+                                    for full_image_line in await main_frame.lines_from_full_image {
+                                        let line_1_theta_diff = abs(full_image_line.theta -
+                                                                      line_theta)
+                                        let line_1_rho_diff = abs(full_image_line.rho -
+                                                                    line_rho)
+                                        
+                                        let line_2_theta_diff = abs(full_image_line.theta -
+                                                                      other_line_theta)
+                                        let line_2_rho_diff = abs(full_image_line.rho -
+                                                                    other_line_rho)
+
+                                        if line_1_theta_diff < final_theta_diff &&
+                                           line_1_rho_diff < final_rho_diff &&
+                                           line_2_theta_diff < final_theta_diff &&
+                                           line_2_rho_diff < final_rho_diff
+                                        {
+                                            matching_line_count += full_image_line.count
+                                        }
+                                    }
+
+                                    if matching_line_count > 50 { // XXX constant XXX
+                                        Log.d("matching_line_count \(matching_line_count)")
+                                    }
+                                    
+                                    if matching_line_count > 400 { // XXX constant XXX
+                                        Log.d("matching_line_count \(matching_line_count)")
+                                        do_it = true // XXX maybe keep score based upon line count?
+                                    }
+
+                                    if do_it {
+                                        // XXX perhaps keep a record of all matches
+                                        // and vote?
+                                        
+                                        // mark as should paint
+                                        //Log.d("frame \(frame.frame_index) should_paint[\(group_name)] = (true, .adjecentLine(\(theta_diff), \(rho_diff))) amt \(amt)")
+                                        _ = await (frame.setShouldPaint(group: group_name,
+                                                                   toShouldPaint: true,
+                                                                   why: .adjecentLine(theta_diff, rho_diff, matching_line_count)),
+                                        
+                                        //Log.d("frame \(other_frame.frame_index) should_paint[\(og_name)] = (true, .adjecentLine(\(theta_diff), \(rho_diff))) amt \(amt)")
+                                                other_frame.setShouldPaint(group: og_name,
+                                                                         toShouldPaint: true,
+                                                                         why: .adjecentLine(theta_diff, rho_diff, matching_line_count)))
+                                    }
                                 }
                             }
                         }
@@ -318,7 +370,6 @@ fileprivate func run_final_pass(frames: [FrameAirplaneRemover]) async {
         }
     }
 }
-
 
 fileprivate func do_overlap(min_1_x: Int, min_1_y: Int,
                             max_1_x: Int, max_1_y: Int,
