@@ -13,7 +13,7 @@ enum PaintReason: Equatable {
    case adjecentLine(Double, Double)     // theta and rho diffs
 
    case badScore(Double)        // percent score
-   case adjecentOverlap(Double) // overlap distance
+   case adjecentOverlap(Int) // overlap distance
    case tooBlobby(Double, Double) // first_diff, lowest_diff  XXX more info here
         
    public static func == (lhs: PaintReason, rhs: PaintReason) -> Bool {

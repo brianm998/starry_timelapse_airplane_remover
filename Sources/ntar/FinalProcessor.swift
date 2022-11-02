@@ -234,28 +234,37 @@ fileprivate func run_final_pass(frames: [FrameAirplaneRemover]) async {
                             let mult = abs(frame.frame_index - other_frame.frame_index)
                             // multiply the constant by how far the frames are away
                             // from eachother in the sequence
-                            let amt = Double(final_group_boundary_amt * mult)
+                            var amt: Int  = final_group_boundary_amt * mult
+                            if mult == 1 {
+                                // directly adjecent frames
+                                amt = -2 // allow for a very small overlap on directly adjecent frames
+                                // XXX hardcoded constant
+                            } else {
+                                // on more distant frames allow for less overlap
+                                amt = final_group_boundary_amt * mult
+                            }
+                            
                             // increate overlap amt by frame index difference
-                            let overlap_amount = overlap_amount(min_1_x: line_min_x,
-                                                                min_1_y: line_min_y,
-                                                                max_1_x: line_max_x,
-                                                                max_1_y: line_max_y,
-                                                                min_2_x: other_line_min_x,
-                                                                min_2_y: other_line_min_y,
-                                                                max_2_x: other_line_max_x,
-                                                                max_2_y: other_line_max_y)
+                            let do_overlap = do_overlap(min_1_x: line_min_x - amt,
+                                                        min_1_y: line_min_y - amt,
+                                                        max_1_x: line_max_x + amt,
+                                                        max_1_y: line_max_y + amt,
+                                                        min_2_x: other_line_min_x - amt,
+                                                        min_2_y: other_line_min_y - amt,
+                                                        max_2_x: other_line_max_x + amt,
+                                                        max_2_y: other_line_max_y + amt)
                             //Log.d("overlap_amount \(overlap_amount) amt \(amt)")
-                            if overlap_amount < amt {
+                            if do_overlap {
                                 // XXX This is wrong for frame 1058 in 09_24_2022-a9-2
                                 
                                 // two overlapping groups
                                 // shouldn't be painted over
                                 await frame.setShouldPaint(group: group_name,
                                                            toShouldPaint: false,
-                                                           why: .adjecentOverlap(-overlap_amount))
+                                                           why: .adjecentOverlap(amt))
                                 await other_frame.setShouldPaint(group: og_name,
                                                                  toShouldPaint: false,
-                                                                 why: .adjecentOverlap(-overlap_amount))
+                                                                 why: .adjecentOverlap(amt))
                                 //Log.d("frame \(frame.frame_index) should_paint[\(group_name)] = (false, .adjecentOverlap)")
                                 //Log.d("frame \(other_frame.frame_index) should_paint[\(og_name)] = (false, .adjecentOverlap)")
                                 
@@ -310,39 +319,52 @@ fileprivate func run_final_pass(frames: [FrameAirplaneRemover]) async {
     }
 }
 
-fileprivate func overlap_amount(min_1_x: Int, min_1_y: Int,
-                        max_1_x: Int, max_1_y: Int,
-                        min_2_x: Int, min_2_y: Int,
-                        max_2_x: Int, max_2_y: Int) -> Double
-{                               // XXX this method isn't always right
-    let half_width_1 = (max_1_x - min_1_x)/2
-    let half_height_1 = (max_1_y - min_1_y)/2
-    
-    let half_width_2 = (max_2_x - min_2_x)/2
-    let half_height_2 = (max_2_y - min_2_y)/2
-    
-    let center_1_x = min_1_x + half_width_1
-    let center_1_y = min_1_y + half_height_1
 
-    let center_2_x = min_2_x + half_width_2
-    let center_2_y = min_2_y + half_height_2
-
-    let center_distance_x = abs(center_1_x - center_2_x)
-    let center_distance_y = abs(center_1_y - center_2_y)
-
-    let overlap_x = center_distance_x - half_width_1 - half_width_2
-    let overlap_y = center_distance_y - half_height_1 - half_height_2
-
-    let do_overlap = overlap_x < 0 && overlap_y < 0
-
-    let double_overlap_x = Double(overlap_x)
-    let double_overlap_y = Double(overlap_y)
-    let overlap_amount = sqrt(double_overlap_x * double_overlap_x + double_overlap_y * double_overlap_y)
-
-    if do_overlap {
-        return -overlap_amount // negative value means they do overlap
-    } else {
-        return overlap_amount
+fileprivate func do_overlap(min_1_x: Int, min_1_y: Int,
+                            max_1_x: Int, max_1_y: Int,
+                            min_2_x: Int, min_2_y: Int,
+                            max_2_x: Int, max_2_y: Int) -> Bool
+{
+    if min_1_x < min_2_x {
+        if max_1_x < min_2_x {
+            // frame 1 is entirely to the left of frame 2, they cannot intersect
+            return false
+        } else { // max_1_x >= min_2_x
+            // some small overlap in x, check y
+            return do_overlap_y(min_1_y: min_1_y, max_1_y: max_1_y,
+                                min_2_y: min_2_y, max_2_y: max_2_y)
+        }
+    } else { // min_1_x >= min_2_x
+        if min_1_x <= max_2_x {
+            // some small overlap in x, check y
+            return do_overlap_y(min_1_y: min_1_y, max_1_y: max_1_y,
+                                min_2_y: min_2_y, max_2_y: max_2_y)
+            
+        } else { // min_1_x > max_2_x
+            // frame 1 is entirely to the right of frame 2, they cannot intersect
+            return false
+        }
     }
 }
 
+fileprivate func do_overlap_y(min_1_y: Int, max_1_y: Int, min_2_y: Int, max_2_y: Int) -> Bool
+{
+    if min_1_y < min_2_y {
+        if max_1_y < min_2_y {
+            // frame 1 is entirely above frame 2, they cannot intersect
+            return false
+        } else {
+            // some small overlap in y
+            return true
+        }
+    } else { // min_1_y >= min_2_y
+        if min_1_y <= max_2_y {
+            // some small overlap in y
+            return true
+            
+        } else { // min_1_y > max_2_y
+            // frame 1 is entirely below frame 2, they cannot intersect
+            return false
+        }
+    }
+}
