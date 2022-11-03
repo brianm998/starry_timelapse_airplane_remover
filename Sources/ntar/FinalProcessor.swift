@@ -252,28 +252,51 @@ fileprivate func run_final_pass(frames: [FrameAirplaneRemover], mainIndex main_i
                                 let mult = abs(frame.frame_index - other_frame.frame_index)
                                 // multiply the constant by how far the frames are away
                                 // from eachother in the sequence
-                                var amt = Double(final_group_boundary_amt * mult)
+                                var edge_amt = Double(final_group_boundary_amt * mult)
+                                var center_amt = Double(final_group_boundary_amt*8 * mult) // XXX constant
                                 if mult == 1 {
                                     // directly adjecent frames
-                                    amt = -2 // allow for a very small overlap on directly adjecent frames
+                                    // -2 isn't enough
+                                    // -8 is
+                                    edge_amt = -2 // may not need this?
+                                    //amt = -2 // allow for a very small overlap on directly adjecent frames
                                     // XXX hardcoded constant
                                     // XXX maybe only if they are in alignment?
                                 }
+
+                                // XXX include both distance between edges as below,
+                                // and also add distance between centers.
+                                // if the center hardly moves, then reject
                                 
                                 // the amount of the line between their center points that
                                 // is not covered by either one of them
+                                // this is negative when they overlap
                                 let distance_bewteen_groups =
-                                    distance(min_1_x: line_min_x,
-                                             min_1_y: line_min_y,
-                                             max_1_x: line_max_x,
-                                             max_1_y: line_max_y,
-                                             min_2_x: other_line_min_x,
-                                             min_2_y: other_line_min_y,
-                                             max_2_x: other_line_max_x,
-                                             max_2_y: other_line_max_y)
-                                Log.d("distance_bewteen_groups \(distance_bewteen_groups) \(group_name) \(og_name) amt \(amt)")
-                                if distance_bewteen_groups < amt {
+                                    edge_distance(min_1_x: line_min_x,
+                                                  min_1_y: line_min_y,
+                                                  max_1_x: line_max_x,
+                                                  max_1_y: line_max_y,
+                                                  min_2_x: other_line_min_x,
+                                                  min_2_y: other_line_min_y,
+                                                  max_2_x: other_line_max_x,
+                                                  max_2_y: other_line_max_y)
 
+                                // the length of the line between the center points
+                                // of the groups
+                                let center_distance_bewteen_groups =
+                                    center_distance(min_1_x: line_min_x,
+                                                  min_1_y: line_min_y,
+                                                  max_1_x: line_max_x,
+                                                  max_1_y: line_max_y,
+                                                  min_2_x: other_line_min_x,
+                                                  min_2_y: other_line_min_y,
+                                                  max_2_x: other_line_max_x,
+                                                  max_2_y: other_line_max_y)
+
+                                Log.d("frame \(frame.frame_index) edge_distance_bewteen_groups \(distance_bewteen_groups) center_distance \(center_distance_bewteen_groups) \(group_name) \(og_name) edge_amt \(edge_amt) center_amt \(center_amt)")
+                                if distance_bewteen_groups < edge_amt &&
+                                   center_distance_bewteen_groups < center_amt
+                                {
                                     var do_it = true
 
                                     // do paint over objects that look like lines
@@ -441,10 +464,10 @@ fileprivate func run_final_pass(frames: [FrameAirplaneRemover], mainIndex main_i
 
                                     //Log.d("theta \(theta_from_centers*180/Double.pi) rho \(rho_from_centers) eq \(sin(theta_from_centers)) fu \(center_line_slope) cos \(cos(theta_from_centers)) slope \(center_line_slope) intercept \(center_line_y_intercept) [\(center_1_x), \(center_1_y)] => [\(center_2_x), \(center_2_y)]")
                                     
-                                    if center_line_theta_diff_1 < final_theta_diff*4,
-//                                       center_line_rho_diff_1 < final_rho_diff*3,
-                                       center_line_theta_diff_2 < final_theta_diff*4
-  //                                     center_line_rho_diff_2 < final_rho_diff*3
+                                    if center_line_theta_diff_1 < final_theta_diff,
+                                       center_line_rho_diff_1 < final_rho_diff,
+                                       center_line_theta_diff_2 < final_theta_diff,
+                                       center_line_rho_diff_2 < final_rho_diff
 
                                        // XXX tomorrow figure out why this center_line_rho is so wrong
                                        // also dig into why sometimes real lines get missed
@@ -454,8 +477,9 @@ fileprivate func run_final_pass(frames: [FrameAirplaneRemover], mainIndex main_i
                                         // and vote?
                                         
                                         // mark as should paint
-                                        Log.d("frame \(frame.frame_index) should_paint[\(group_name)] = (true, .adjecentLine(\(theta_diff), \(rho_diff))) distance_bewteen_groups \(distance_bewteen_groups) matching_line_count \(matching_line_count) amt \(amt)")
-                                        Log.d("frame \(other_frame.frame_index) should_paint[\(og_name)] = (true, .adjecentLine(\(theta_diff), \(rho_diff))) distance_bewteen_groups \(distance_bewteen_groups) matching_line_count \(matching_line_count) amt \(amt)")
+                                        //Log.d("frame \(frame.frame_index) should_paint[\(group_name)] = (true, .adjecentLine(\(theta_diff), \(rho_diff))) distance_bewteen_groups \(distance_bewteen_groups) matching_line_count \(matching_line_count) amt \(amt)")
+                                        //Log.d("frame \(other_frame.frame_index) should_paint[\(og_name)] = (true, .adjecentLine(\(theta_diff), \(rho_diff))) distance_bewteen_groups \(distance_bewteen_groups) matching_line_count \(matching_line_count) amt \(amt)")
+                                        /*
                                         _ = await (frame.setShouldPaint(group: group_name,
                                                                         toShouldPaint: true,
                                                                         why: .adjecentLine(theta_diff,
@@ -470,7 +494,10 @@ fileprivate func run_final_pass(frames: [FrameAirplaneRemover], mainIndex main_i
                                                                                        rho_diff,
                                                                                        matching_line_count,
                                                                                        distance_bewteen_groups)))
+*/
                                     } else {
+
+                                        /*
                                         Log.d("DO NOT PAINT theta \(theta_from_centers*180/Double.pi) rho \(rho_from_centers) eq \(sin(theta_from_centers)) fu \(center_line_slope) cos \(cos(theta_from_centers)) slope \(center_line_slope) intercept \(center_line_y_intercept) center_line_theta_diff_1 \(center_line_theta_diff_1) center_line_rho_diff_1 \(center_line_rho_diff_1) center_line_theta_diff_2 \(center_line_theta_diff_2) center_line_rho_diff_2 \(center_line_rho_diff_2)")
 
                                         
@@ -483,6 +510,7 @@ fileprivate func run_final_pass(frames: [FrameAirplaneRemover], mainIndex main_i
                                                    other_frame.setShouldPaint(group: og_name,
                                                                               toShouldPaint: false,
                                                                               why: .centerLineMismatch))
+*/
                                     }
                                 }
                             }
@@ -550,10 +578,34 @@ func distance_on(min_x: Int, min_y: Int, max_x: Int, max_y: Int,
     return hypotenuse_length
 }
 
-func distance(min_1_x: Int, min_1_y: Int,
-              max_1_x: Int, max_1_y: Int,
-              min_2_x: Int, min_2_y: Int,
-              max_2_x: Int, max_2_y: Int)
+func center_distance(min_1_x: Int, min_1_y: Int,
+                   max_1_x: Int, max_1_y: Int,
+                   min_2_x: Int, min_2_y: Int,
+                   max_2_x: Int, max_2_y: Int)
+    -> Double // positive if they don't overlap, negative if they do
+{
+    let half_width_1 = Double(max_1_x - min_1_x)/2
+    let half_height_1 = Double(max_1_y - min_1_y)/2
+    
+    let half_width_2 = Double(max_2_x - min_2_x)/2
+    let half_height_2 = Double(max_2_y - min_2_y)/2
+
+    let center_1_x = Double(min_1_x) + half_width_1
+    let center_1_y = Double(min_1_y) + half_height_1
+
+    let center_2_x = Double(min_2_x) + half_width_2
+    let center_2_y = Double(min_2_y) + half_height_2
+
+    let width = abs(center_1_x - center_2_x)
+    let height = abs(center_1_y - center_2_y)
+
+    return sqrt(width*width + height*height)
+}
+
+func edge_distance(min_1_x: Int, min_1_y: Int,
+                 max_1_x: Int, max_1_y: Int,
+                 min_2_x: Int, min_2_y: Int,
+                 max_2_x: Int, max_2_y: Int)
     -> Double // positive if they don't overlap, negative if they do
 {
     let half_width_1 = Double(max_1_x - min_1_x)/2

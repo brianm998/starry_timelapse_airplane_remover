@@ -20,10 +20,10 @@ You should have received a copy of the GNU General Public License along with nta
 
 test paint colors:
 
- red - painted over because of large size only
+ red - looks like a line
+ purple - painted over because of large size only
  yellow - painted over because of good frame-only score
  magenta - painted over because of inter-frame line alignment
- pinker magenta - looks like a line
 
  blue - not painted over because of inter-frame overlap
  cyan - not painted over because of bad frame-only score
@@ -323,20 +323,28 @@ actor FrameAirplaneRemover: Equatable {
                 let offset = (Int(y) * bytesPerRow) + (Int(x) * bytesPerPixel)
                 
                 var nextPixel = Pixel()
-                if let group_name = outlier_groups[index] {
+                if let group_name = outlier_groups[index],
+                   let group_size = neighbor_groups[group_name]
+                {
                     if let (will_paint, why) = should_paint[group_name] {
                         if !will_paint {
                             switch why {
                             case .badScore:
                                 nextPixel.green = 0xFFFF // cyan
                                 nextPixel.blue = 0xFFFF
+                                nextPixel.red = 0x0000
                             case .adjecentOverlap:
+                                nextPixel.red = 0x0000
                                 nextPixel.blue = 0xFFFF // blue
+                                nextPixel.green = 0x0000
                             case .tooBlobby:
+                                nextPixel.red = 0x0000
                                 nextPixel.blue = 0x8FFF // less blue
+                                nextPixel.green = 0x0000
                             case .centerLineMismatch:
                                 nextPixel.green = 0x8FFF // less cyan
                                 nextPixel.blue = 0x8FFF
+                                nextPixel.red = 0x0000
                             default:
                                 fatalError("should not happen")
                             }
@@ -344,14 +352,16 @@ actor FrameAirplaneRemover: Equatable {
                     } else {
                         nextPixel.green = 0xFFFF // groups that can be chosen to paint
                     }
-                } else {
-                    // no group
-                    nextPixel.green = 0x8888 // groups that are too small to paint
+
+                    var nextValue = nextPixel.value
+                    
+                    test_paint_data.replaceSubrange(offset ..< offset+raw_pixel_size_bytes, // XXX error here sometimes
+                                                    with: &nextValue, count: raw_pixel_size_bytes)
+                //} //else {
+                // no group or group too small 
+                //nextPixel.green = 0x8888 // groups that are too small to paint
                 }
-                var nextValue = nextPixel.value
-                
-                test_paint_data.replaceSubrange(offset ..< offset+raw_pixel_size_bytes, // XXX error here sometimes
-                                                 with: &nextValue, count: raw_pixel_size_bytes)
+
             }
         }
     }
@@ -516,11 +526,11 @@ actor FrameAirplaneRemover: Equatable {
                 
                 Log.d("frame \(frame_index) group \(name) line at index 0 theta \(group_theta), rho \(group_rho), count \(group_count)")
                 var lowest_count = group_count
-                var first_count_drop = -111111111
+                var first_count = -111111111
                 
                 if lines_from_this_group.count > 1 {
-                    let (_, _, first_count) = lines_from_this_group[1]
-                    first_count_drop = group_count - first_count
+                    let (_, _, _first_count) = lines_from_this_group[1]
+                    first_count = _first_count
                     for i in 1 ..< lines_from_this_group.count {
                         let (other_theta, other_rho, other_count) = lines_from_this_group[i]
 
@@ -547,15 +557,15 @@ actor FrameAirplaneRemover: Equatable {
                     }
                 }
                 
-                if first_count_drop != -111111111 {
+                if first_count != -111111111 {
                     // we have information about other lines for this group
-                    Log.d("frame \(frame_index) group \(name) group_count \(group_count) first_count_drop \(first_count_drop) lowest_count \(lowest_count)")
+                    //Log.d("frame \(frame_index) group \(name) group_count \(group_count) first_count \(first_count) lowest_count \(lowest_count)")
 
-                    let lowest_diff = Double(group_count-lowest_count)/Double(group_count)
-                    let first_diff = Double(first_count_drop)/Double(group_count)
-                    Log.d("frame \(frame_index) group \(name) lowest_diff \(lowest_diff) first_diff \(first_diff)")
-                    if(Double(first_count_drop)/Double(group_count) > 0.1 && // XXX hardcoded constants
-                       Double(lowest_count)/Double(group_count) < 0.5)
+                    //let lowest_diff = Double(lowest_count)/Double(group_count)
+                    //let first_diff = Double(first_count)/Double(group_count)
+                    //Log.d("frame \(frame_index) group \(name) first_diff \(first_diff)")
+                    if(/*Double(first_count)/Double(group_count) < looks_like_a_line_first_group_drop &&*/
+                       Double(lowest_count)/Double(group_count) < looks_like_a_line_lowest_count_reduction)
                     {
                         // the line counts for the hough transform here drop off quickly
                         // from the highest value, which indicates a higher probability that
@@ -563,14 +573,16 @@ actor FrameAirplaneRemover: Equatable {
                         should_paint[name] = (shouldPaint: true, why: .looksLikeALine) // XXX put some data in here
                         Log.d("frame \(frame_index) will paint group \(name) because it looks like a line from the group hough transform")
                         continue
+                    } else {
+                        Log.d("frame \(frame_index) group \(name) doesn't look like a line group_count \(group_count) first_count \(first_count) lowest_count \(lowest_count)")
                     }
 
                     
-                    if(lowest_diff < 0.90 && first_diff < 0.1) { // XXX hardcoded constants
+                    //if(lowest_diff < 0.90 && first_diff < 0.1) { // XXX hardcoded constants
 //                        should_paint[name] = (shouldPaint: false, why: .tooBlobby(first_diff, lowest_diff))
                         //                        continue
                         // XXX not sure about this
-                    }
+//                    }
                 } else {
                     fatalError("FUCK YOU")
                 }
@@ -825,25 +837,29 @@ actor FrameAirplaneRemover: Equatable {
         if test_paint {
             switch why {
             case .assumed:
-                paint_pixel.red = 0xFFFF // red
+                paint_pixel.red = 0xBFFF // purple
+                paint_pixel.green = 0x3888
+                paint_pixel.blue = 0xA888
             case .goodScore:
                 paint_pixel.red = 0xFFFF // yellow
                 paint_pixel.green = 0xFFFF
+                paint_pixel.blue = 0x0000
             case .adjecentLine:
                 paint_pixel.red = 0xFFFF // magenta
                 paint_pixel.blue = 0xFFFF
+                paint_pixel.green = 0x0000
             case .looksLikeALine:
-                paint_pixel.red = 0xFFFF // pinker magenta
-                paint_pixel.green = 0x2888
-                paint_pixel.blue = 0x8888
+                paint_pixel.red = 0xFFFF // red
+                paint_pixel.green = 0x0000
+                paint_pixel.blue = 0x0000
             default:
                 fatalError("should not happen")
             }
             
             var test_paint_value = paint_pixel.value
             test_paint_data.replaceSubrange(offset ..< offset+raw_pixel_size_bytes,
-                                        with: &test_paint_value,
-                                        count: raw_pixel_size_bytes)
+                                            with: &test_paint_value,
+                                            count: raw_pixel_size_bytes)
         }
     }
 
