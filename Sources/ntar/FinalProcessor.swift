@@ -209,8 +209,16 @@ fileprivate func run_final_pass(frames: [FrameAirplaneRemover], mainIndex main_i
     for frame in frames {
         //Log.d("frame.group_lines.count \(frame.group_lines.count)")
         for (group_name, group_line) in await frame.group_lines {
-            // look for
+            // look for more data to act upon
 
+            if let (frame_should_paint, frame_why) = await frame.should_paint[group_name],
+               frame_should_paint && (frame_why == .looksLikeALine)
+            {
+                Log.i("frame \(frame.frame_index) skipping group \(group_name) of size \(group_name) because it .looksLikeALine") // XXX would be nice to have more data in this log line
+                continue
+            }
+            
+            
             let line_theta = group_line.theta
             let line_rho = group_line.rho
 
@@ -230,67 +238,49 @@ fileprivate func run_final_pass(frames: [FrameAirplaneRemover], mainIndex main_i
 
                         let theta_diff = abs(line_theta-other_line_theta)
                         let rho_diff = abs(line_rho-other_line_rho)
-                        
-                        if let other_line_min_x = await other_frame.group_min_x[og_name],
-                           let other_line_min_y = await other_frame.group_min_y[og_name],
-                           let other_line_max_x = await other_frame.group_max_x[og_name],
-                           let other_line_max_y = await other_frame.group_max_y[og_name],
-                           let other_group_size = await other_frame.neighbor_groups[og_name]
-                        {
-                            //Log.d("frame \(frame.frame_index) group 1 \(group_name) of size \(group_size) (\(line_min_x) \(line_min_y)),  (\(line_max_x) \(line_max_y)) other frame \(other_frame.frame_index) group 2 \(og_name) of size \(group_size) (\(other_line_min_x) \(other_line_min_y)),  (\(other_line_max_x) \(other_line_max_y))")
-                            
-                            let mult = abs(frame.frame_index - other_frame.frame_index)
-                            // multiply the constant by how far the frames are away
-                            // from eachother in the sequence
-                            var amt: Int  = final_group_boundary_amt * mult
-                            if mult == 1 {
-                                // directly adjecent frames
-                                amt = -2 // allow for a very small overlap on directly adjecent frames
-                                // XXX hardcoded constant
-                            } else {
-                                // on more distant frames allow for less overlap
-                                amt = final_group_boundary_amt * mult
-                            }
-                            
-                            // increate overlap amt by frame index difference
-                            let do_overlap = do_overlap(min_1_x: line_min_x - amt,
-                                                        min_1_y: line_min_y - amt,
-                                                        max_1_x: line_max_x + amt,
-                                                        max_1_y: line_max_y + amt,
-                                                        min_2_x: other_line_min_x - amt,
-                                                        min_2_y: other_line_min_y - amt,
-                                                        max_2_x: other_line_max_x + amt,
-                                                        max_2_y: other_line_max_y + amt)
-                            //Log.d("overlap_amount \(overlap_amount) amt \(amt)")
-                            if theta_diff < final_theta_diff && rho_diff < final_rho_diff {                            
-                                if do_overlap {
-                                    // XXX This is wrong for frame 1058 in 09_24_2022-a9-2
-                                    
-                                    // two overlapping groups
-                                    // shouldn't be painted over
-                                    let _ = await (
-                                            frame.setShouldPaint(group: group_name,
-                                                                 toShouldPaint: false,
-                                                                 why: .adjecentOverlap(amt)),
-                                            other_frame.setShouldPaint(group: og_name,
-                                                                       toShouldPaint: false,
-                                                                       why: .adjecentOverlap(amt)))
+                        //Log.d("overlap_amount \(overlap_amount) amt \(amt)")
+                        if theta_diff < final_theta_diff && rho_diff < final_rho_diff {
+                            if let other_line_min_x = await other_frame.group_min_x[og_name],
+                               let other_line_min_y = await other_frame.group_min_y[og_name],
+                               let other_line_max_x = await other_frame.group_max_x[og_name],
+                               let other_line_max_y = await other_frame.group_max_y[og_name],
+                               let other_group_size = await other_frame.neighbor_groups[og_name]
+                            {
 
-                                    //Log.d("frame \(frame.frame_index) should_paint[\(group_name)] = (false, .adjecentOverlap)")
-                                    //Log.d("frame \(other_frame.frame_index) should_paint[\(og_name)] = (false, .adjecentOverlap)")
-                                    
-                                } else {
+                                Log.d("frame \(frame.frame_index) group 1 \(group_name) of size \(group_size) (\(line_min_x) \(line_min_y)),  (\(line_max_x) \(line_max_y)) other frame \(other_frame.frame_index) group 2 \(og_name) of size \(group_size) (\(other_line_min_x) \(other_line_min_y)),  (\(other_line_max_x) \(other_line_max_y))")
+
+                                let mult = abs(frame.frame_index - other_frame.frame_index)
+                                // multiply the constant by how far the frames are away
+                                // from eachother in the sequence
+                                var amt = Double(final_group_boundary_amt * mult)
+                                if mult == 1 {
+                                    // directly adjecent frames
+                                    amt = -2 // allow for a very small overlap on directly adjecent frames
+                                    // XXX hardcoded constant
+                                    // XXX maybe only if they are in alignment?
+                                }
                                 
-                                    // don't overwrite adjecent overlaps
+                                // the amount of the line between their center points that
+                                // is not covered by either one of them
+                                let distance_bewteen_groups =
+                                    distance(min_1_x: line_min_x,
+                                             min_1_y: line_min_y,
+                                             max_1_x: line_max_x,
+                                             max_1_y: line_max_y,
+                                             min_2_x: other_line_min_x,
+                                             min_2_y: other_line_min_y,
+                                             max_2_x: other_line_max_x,
+                                             max_2_y: other_line_max_y)
+                                Log.d("distance_bewteen_groups \(distance_bewteen_groups) \(group_name) \(og_name) amt \(amt)")
+                                if distance_bewteen_groups < amt {
+
                                     var do_it = true
-                                    
+
+                                    // do paint over objects that look like lines
                                     if let (frame_should_paint, frame_why) =
                                            await frame.should_paint[group_name]
                                     {
-                                        if !frame_should_paint &&
-                                             (frame_why == .adjecentOverlap(-1) ||
-                                                frame_why == .tooBlobby(0,0)) // XXX -1
-                                        {
+                                        if frame_should_paint && frame_why == .looksLikeALine {
                                             do_it = false
                                         }
                                     }
@@ -298,11 +288,58 @@ fileprivate func run_final_pass(frames: [FrameAirplaneRemover], mainIndex main_i
                                     if let (other_should_paint, other_why) = 
                                            await other_frame.should_paint[og_name]
                                     {
+                                        if other_should_paint && other_why == .looksLikeALine {
+                                            do_it = false
+                                        }
+                                    }
+                                    
+                                    if do_it {
+                                        // two overlapping groups
+                                        // shouldn't be painted over
+                                        let _ = await (
+                                                frame.setShouldPaint(group: group_name,
+                                                                     toShouldPaint: false,
+                                                                     why: .adjecentOverlap(-distance_bewteen_groups)),
+                                                other_frame.setShouldPaint(group: og_name,
+                                                                           toShouldPaint: false,
+                                                                           why: .adjecentOverlap(-distance_bewteen_groups)))
+                                        
+                                        Log.d("frame \(frame.frame_index) should_paint[\(group_name)] = (false, .adjecentOverlap(\(-distance_bewteen_groups))")
+                                        Log.d("frame \(other_frame.frame_index) should_paint[\(og_name)] = (false, .adjecentOverlap(\(-distance_bewteen_groups))")
+                                    }
+                                } else /*if distance_bewteen_groups < Double(400*mult)*/ { // XXX hardcoded constant
+                                    // don't overwrite adjecent overlaps
+                                    var do_it = true
+                                    
+                                    if let (frame_should_paint, frame_why) =
+                                           await frame.should_paint[group_name]
+                                    {
+                                        // don't paint for these reasons
+                                        if !frame_should_paint &&
+                                             (frame_why == .adjecentOverlap(-1) ||
+                                                frame_why == .tooBlobby(0,0)) // XXX -1
+                                        {
+                                            do_it = false
+                                        }
+                                        // still paint, but keep this state
+                                        if frame_should_paint && frame_why == .looksLikeALine {
+                                            do_it = false
+                                        }
+                                    }
+                                    
+                                    if let (other_should_paint, other_why) = 
+                                           await other_frame.should_paint[og_name]
+                                    {
+                                        // don't paint for these reasons
                                         if !other_should_paint &&
                                              (other_why == .adjecentOverlap(-1) || 
                                                 other_why == .tooBlobby(0,0))  // XXX -1
                                         {
                                             do_it = false
+                                        }
+                                        // still paint, but keep this state
+                                        if other_should_paint && other_why == .looksLikeALine {
+                                            do_it = false 
                                         }
                                     }
                                     // XXX iterate over all of the lines_from_full_image
@@ -311,12 +348,16 @@ fileprivate func run_final_pass(frames: [FrameAirplaneRemover], mainIndex main_i
                                     // this is to avoid noisy false positives
 
                                     if !do_it { continue }
+
+                                    var matching_line_count = 0
+                                    /*
+                                    // XXX this logic may not be necessary
                                     // XXX wierd logic XXX
                                     do_it = false
 
                                     // XXX this is slow, maybe only on the central frame
+                                    
                                     let main_frame = frames[main_index]
-                                    var matching_line_count = 0
                                     for full_image_line in await main_frame.lines_from_full_image {
                                         let line_1_theta_diff = abs(full_image_line.theta -
                                                                       line_theta)
@@ -337,29 +378,111 @@ fileprivate func run_final_pass(frames: [FrameAirplaneRemover], mainIndex main_i
                                         }
                                     }
 
-                                    if matching_line_count > 50 { // XXX constant XXX
+                                    if matching_line_count > 30 { // XXX constant XXX
                                         Log.d("matching_line_count \(matching_line_count)")
                                     }
-                                    
-                                    if matching_line_count > 400 { // XXX constant XXX
+
+                                    // XXX at 400, almost nothing gets matched
+                                    if matching_line_count > 10 { // XXX constant XXX
                                         Log.d("matching_line_count \(matching_line_count)")
                                         do_it = true // XXX maybe keep score based upon line count?
                                     }
+                                    */                                              
+                                    /*
+                                       so we have two groups, with a known line affinity.
 
-                                    if do_it {
+                                       do their centers move on (or close to) the same line?
+
+                                       if so, paint them
+                                       if not, no paint
+
+                                       first, find polar line equation for line through the centers
+                                       of each group,
+
+                                       then compare that to the theta and rho for each group,
+                                       they should be close.
+                                    */
+
+                                    let half_width_1 = Double(line_max_x - line_min_x)/2
+                                    let half_height_1 = Double(line_max_y - line_min_y)/2
+
+                                    let half_width_2 = Double(other_line_max_x - other_line_min_x)/2
+                                    let half_height_2 = Double(other_line_max_y - other_line_min_y)/2
+                                    
+                                    //Log.d("2 half size [\(half_width_2), \(half_height_2)]")
+
+                                    let center_1_x = Double(line_min_x) + half_width_1
+                                    let center_1_y = Double(line_min_y) + half_height_1
+
+                                    //Log.d("1 center [\(center_1_x), \(center_1_y)]")
+                                    
+                                    let center_2_x = Double(other_line_min_x) + half_width_2
+                                    let center_2_y = Double(other_line_min_y) + half_height_2
+                                    
+                                    var theta_from_centers = atan(abs(center_1_y - center_2_y)/abs(center_1_x - center_2_x))
+
+                                    let center_line_slope = Double(center_1_y - center_2_y)/Double(center_1_x - center_2_x)
+    // base the y_intercept on the center 1 coordinates
+                                    let center_line_y_intercept = Double(center_1_y) - center_line_slope * Double(center_1_x)
+                                    if center_line_y_intercept < 0 {
+                                        theta_from_centers = 2*Double.pi - theta_from_centers
+                                    }
+
+                                    let rho_from_centers = center_line_y_intercept /
+                                                           (sin(theta_from_centers) -
+                                                              center_line_slope * cos(theta_from_centers))
+
+                                    
+                                    let center_line_theta_diff_1 = abs(theta_from_centers*180/Double.pi-line_theta)
+                                    let center_line_rho_diff_1 = abs(rho_from_centers-line_rho)
+
+                                    let center_line_theta_diff_2 = abs(theta_from_centers*180/Double.pi-other_line_theta)
+                                    let center_line_rho_diff_2 = abs(rho_from_centers-other_line_rho)
+
+                                    //Log.d("theta \(theta_from_centers*180/Double.pi) rho \(rho_from_centers) eq \(sin(theta_from_centers)) fu \(center_line_slope) cos \(cos(theta_from_centers)) slope \(center_line_slope) intercept \(center_line_y_intercept) [\(center_1_x), \(center_1_y)] => [\(center_2_x), \(center_2_y)]")
+                                    
+                                    if center_line_theta_diff_1 < final_theta_diff*4,
+//                                       center_line_rho_diff_1 < final_rho_diff*3,
+                                       center_line_theta_diff_2 < final_theta_diff*4
+  //                                     center_line_rho_diff_2 < final_rho_diff*3
+
+                                       // XXX tomorrow figure out why this center_line_rho is so wrong
+                                       // also dig into why sometimes real lines get missed
+                                    {
+                                    //if do_it {
                                         // XXX perhaps keep a record of all matches
                                         // and vote?
                                         
                                         // mark as should paint
-                                        //Log.d("frame \(frame.frame_index) should_paint[\(group_name)] = (true, .adjecentLine(\(theta_diff), \(rho_diff))) amt \(amt)")
+                                        Log.d("frame \(frame.frame_index) should_paint[\(group_name)] = (true, .adjecentLine(\(theta_diff), \(rho_diff))) distance_bewteen_groups \(distance_bewteen_groups) matching_line_count \(matching_line_count) amt \(amt)")
+                                        Log.d("frame \(other_frame.frame_index) should_paint[\(og_name)] = (true, .adjecentLine(\(theta_diff), \(rho_diff))) distance_bewteen_groups \(distance_bewteen_groups) matching_line_count \(matching_line_count) amt \(amt)")
                                         _ = await (frame.setShouldPaint(group: group_name,
-                                                                   toShouldPaint: true,
-                                                                   why: .adjecentLine(theta_diff, rho_diff, matching_line_count)),
+                                                                        toShouldPaint: true,
+                                                                        why: .adjecentLine(theta_diff,
+                                                                                           rho_diff,
+                                                                                           matching_line_count,
+                                                                                           distance_bewteen_groups)),
                                         
-                                        //Log.d("frame \(other_frame.frame_index) should_paint[\(og_name)] = (true, .adjecentLine(\(theta_diff), \(rho_diff))) amt \(amt)")
-                                                other_frame.setShouldPaint(group: og_name,
-                                                                         toShouldPaint: true,
-                                                                         why: .adjecentLine(theta_diff, rho_diff, matching_line_count)))
+                                                   other_frame.setShouldPaint(group: og_name,
+                                                                              toShouldPaint: true,
+                                                                              why: .adjecentLine(
+                                                                                       theta_diff,
+                                                                                       rho_diff,
+                                                                                       matching_line_count,
+                                                                                       distance_bewteen_groups)))
+                                    } else {
+                                        Log.d("DO NOT PAINT theta \(theta_from_centers*180/Double.pi) rho \(rho_from_centers) eq \(sin(theta_from_centers)) fu \(center_line_slope) cos \(cos(theta_from_centers)) slope \(center_line_slope) intercept \(center_line_y_intercept) center_line_theta_diff_1 \(center_line_theta_diff_1) center_line_rho_diff_1 \(center_line_rho_diff_1) center_line_theta_diff_2 \(center_line_theta_diff_2) center_line_rho_diff_2 \(center_line_rho_diff_2)")
+
+                                        
+                                        Log.d("frame \(frame.frame_index) should_paint[\(group_name)] = (false, .centerLineMismatch(\(theta_diff), \(rho_diff))) distance_bewteen_groups \(distance_bewteen_groups) matching_line_count \(matching_line_count) amt \(amt)")
+                                        Log.d("frame \(other_frame.frame_index) should_paint[\(og_name)] = (false, .centerLineMismatch(\(theta_diff), \(rho_diff))) distance_bewteen_groups \(distance_bewteen_groups) matching_line_count \(matching_line_count) amt \(amt)")
+
+                                        _ = await (frame.setShouldPaint(group: group_name,
+                                                                        toShouldPaint: false,
+                                                                        why: .centerLineMismatch),
+                                                   other_frame.setShouldPaint(group: og_name,
+                                                                              toShouldPaint: false,
+                                                                              why: .centerLineMismatch))
                                     }
                                 }
                             }
@@ -371,51 +494,141 @@ fileprivate func run_final_pass(frames: [FrameAirplaneRemover], mainIndex main_i
     }
 }
 
-fileprivate func do_overlap(min_1_x: Int, min_1_y: Int,
-                            max_1_x: Int, max_1_y: Int,
-                            min_2_x: Int, min_2_y: Int,
-                            max_2_x: Int, max_2_y: Int) -> Bool
-{
-    if min_1_x < min_2_x {
-        if max_1_x < min_2_x {
-            // frame 1 is entirely to the left of frame 2, they cannot intersect
-            return false
-        } else { // max_1_x >= min_2_x
-            // some small overlap in x, check y
-            return do_overlap_y(min_1_y: min_1_y, max_1_y: max_1_y,
-                                min_2_y: min_2_y, max_2_y: max_2_y)
-        }
-    } else { // min_1_x >= min_2_x
-        if min_1_x <= max_2_x {
-            // some small overlap in x, check y
-            return do_overlap_y(min_1_y: min_1_y, max_1_y: max_1_y,
-                                min_2_y: min_2_y, max_2_y: max_2_y)
-            
-        } else { // min_1_x > max_2_x
-            // frame 1 is entirely to the right of frame 2, they cannot intersect
-            return false
-        }
-    }
+enum Edge {
+    case vertical
+    case horizontal
 }
 
-fileprivate func do_overlap_y(min_1_y: Int, max_1_y: Int, min_2_y: Int, max_2_y: Int) -> Bool
+// the distance between the center point of the box described and the exit of the line from it
+func distance_on(min_x: Int, min_y: Int, max_x: Int, max_y: Int,
+                 slope: Double, y_intercept: Double, theta: Double) -> Double
 {
-    if min_1_y < min_2_y {
-        if max_1_y < min_2_y {
-            // frame 1 is entirely above frame 2, they cannot intersect
-            return false
-        } else {
-            // some small overlap in y
-            return true
-        }
-    } else { // min_1_y >= min_2_y
-        if min_1_y <= max_2_y {
-            // some small overlap in y
-            return true
-            
-        } else { // min_1_y > max_2_y
-            // frame 1 is entirely below frame 2, they cannot intersect
-            return false
-        }
+    var edge: Edge = .horizontal
+    let y_max_value = Double(max_x)*slope + Double(y_intercept)
+    let x_max_value = Double(max_y)-y_intercept/slope
+    let y_min_value = Double(min_x)*slope + Double(y_intercept)
+    let x_min_value = Double(min_y)-y_intercept/slope
+
+    // there is an error introduced by integer to floating point conversions
+    let math_accuracy_error: Double = 3
+    
+    if Double(min_y) - math_accuracy_error <= y_max_value && y_max_value <= Double(max_y) + math_accuracy_error {
+        //Log.d("vertical")
+        edge = .vertical
+    } else if Double(min_x) - math_accuracy_error <= x_max_value && x_max_value <= Double(max_x) + math_accuracy_error {
+        //Log.d("horizontal")
+        edge = .horizontal
+    } else {
+        Log.d("slope \(slope) y_intercept \(y_intercept) theta \(theta)")
+        Log.d("min_x \(min_x) x_max_value \(x_max_value) max_x \(max_x)")
+        Log.d("min_y \(min_y) y_max_value \(y_max_value) max_y \(max_y)")
+        Log.d("min_x \(min_x) x_min_value \(x_min_value) max_x \(max_x)")
+        Log.d("min_y \(min_y) y_min_value \(y_min_value) max_y \(max_y)")
+        // this means that the line generated from the given slope and line
+        // does not intersect the rectangle given 
+
+        // can happen for situations of overlapping areas like this:
+        //(1119 124),  (1160 153)
+        //(1122 141),  (1156 160)        
+        Log.w("the line generated from the given slope and line does not intersect the rectangle given")
     }
+
+    var hypotenuse_length: Double = 0
+    
+    switch edge {
+    case .vertical:
+        let half_width = Double(max_x - min_x)/2
+        //Log.d("vertical half_width \(half_width)")
+        hypotenuse_length = half_width / cos((90/180*Double.pi)-theta)
+        
+    case .horizontal:
+        let half_height = Double(max_y - min_y)/2
+        //Log.d("horizontal half_height \(half_height)")
+        hypotenuse_length = half_height / cos(theta)
+    }
+    
+    return hypotenuse_length
 }
+
+func distance(min_1_x: Int, min_1_y: Int,
+              max_1_x: Int, max_1_y: Int,
+              min_2_x: Int, min_2_y: Int,
+              max_2_x: Int, max_2_y: Int)
+    -> Double // positive if they don't overlap, negative if they do
+{
+    let half_width_1 = Double(max_1_x - min_1_x)/2
+    let half_height_1 = Double(max_1_y - min_1_y)/2
+
+    //Log.d("1 half size [\(half_width_1), \(half_height_1)]")
+    
+    let half_width_2 = Double(max_2_x - min_2_x)/2
+    let half_height_2 = Double(max_2_y - min_2_y)/2
+    
+    //Log.d("2 half size [\(half_width_2), \(half_height_2)]")
+
+    let center_1_x = Double(min_1_x) + half_width_1
+    let center_1_y = Double(min_1_y) + half_height_1
+
+    //Log.d("1 center [\(center_1_x), \(center_1_y)]")
+    
+    let center_2_x = Double(min_2_x) + half_width_2
+    let center_2_y = Double(min_2_y) + half_height_2
+    
+
+    //Log.d("2 center [\(center_2_x), \(center_2_y)]")
+
+    if center_1_y == center_2_y {
+        // special case horizontal alignment
+        // return the distance between their centers minus half of each of their widths
+        return Double(abs(center_1_x - center_2_x) - half_width_1 - half_width_2)
+    }
+
+    if center_1_x == center_2_x {
+        // special case vertical alignment
+        // return the distance between their centers minus half of each of their heights
+        return Double(abs(center_1_y - center_2_y) - half_height_1 - half_height_2)
+    }
+
+    // calculate slope and b for the line between the center points
+    // y = slope * x + y_intercept
+    let slope = Double(center_1_y - center_2_y)/Double(center_1_x - center_2_x)
+
+    // base the y_intercept on the center 1 coordinates
+    let y_intercept = Double(center_1_y) - slope * Double(center_1_x)
+
+    //Log.d("slope \(slope) y_intercept \(y_intercept)")
+    
+    let theta = atan(Double(abs(center_1_x - center_2_x))/Double(abs(center_1_y - center_2_y)))
+
+    //Log.d("theta \(theta*180/Double.pi) degrees")
+    
+    // the distance along the line between the center points that lies within group 1
+    let dist_1 = distance_on(min_x: min_1_x, min_y: min_1_y, max_x: max_1_x, max_y: max_1_y,
+                             slope: slope, y_intercept: y_intercept, theta: theta)
+    //Log.d("dist_1 \(dist_1)")
+    
+    // the distance along the line between the center points that lies within group 2
+    let dist_2 = distance_on(min_x: min_2_x, min_y: min_2_y, max_x: max_2_x, max_y: max_2_y,
+                             slope: slope, y_intercept: y_intercept, theta: theta)
+
+    //Log.d("dist_2 \(dist_2)")
+
+    // width between center points
+    let x_size = Double(center_1_x - center_2_x)
+
+    // width between center points
+    let y_size = Double(center_1_y - center_2_y)
+
+    // the direct distance bewteen the two centers
+    let center_distance = sqrt(x_size * x_size + y_size * y_size)
+
+    //Log.d("center_distance \(center_distance)")
+    
+    // return the distance between their centers minus the amount of the line which is within each group
+    // will be positive if the distance is separation
+    // will be negative if they overlap
+    let ret = center_distance - dist_1 - dist_2
+    //Log.d("returning \(ret)")
+    return ret
+}
+

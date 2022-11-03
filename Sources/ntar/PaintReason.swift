@@ -10,17 +10,26 @@ typealias WillPaint = (
 enum PaintReason: Equatable {
    case assumed                      // large groups are assumed to be airplanes
    case goodScore(Double)            // percent score
-   case adjecentLine(Double, Double, Int)     // theta and rho diffs, plus count
+   case adjecentLine(Double, Double, Int, Double)     // theta and rho diffs, plus count and distance
+   case looksLikeALine
 
    case badScore(Double)        // percent score
-   case adjecentOverlap(Int) // overlap distance
+   case adjecentOverlap(Double) // overlap distance
    case tooBlobby(Double, Double) // first_diff, lowest_diff  XXX more info here
+   case centerLineMismatch
         
    public static func == (lhs: PaintReason, rhs: PaintReason) -> Bool {
       switch lhs {
       case assumed:
           switch rhs {
           case assumed:
+              return true
+          default:
+              return false
+          }
+      case looksLikeALine:
+          switch rhs {
+          case looksLikeALine:
               return true
           default:
               return false
@@ -56,6 +65,13 @@ enum PaintReason: Equatable {
       case tooBlobby: 
           switch rhs {
           case tooBlobby:
+              return true
+          default:
+              return false
+          }
+      case centerLineMismatch:
+          switch rhs {
+          case centerLineMismatch:
               return true
           default:
               return false

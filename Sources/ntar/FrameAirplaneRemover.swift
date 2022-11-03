@@ -23,11 +23,13 @@ test paint colors:
  red - painted over because of large size only
  yellow - painted over because of good frame-only score
  magenta - painted over because of inter-frame line alignment
+ pinker magenta - looks like a line
 
  blue - not painted over because of inter-frame overlap
  cyan - not painted over because of bad frame-only score
  bright green - outlier group that was not painted over for some reason
  light green - outlier, but not part of a big enough group
+ less cyan - centerLineMismatch
 */
 @available(macOS 10.15, *)
 actor FrameAirplaneRemover: Equatable { 
@@ -332,6 +334,9 @@ actor FrameAirplaneRemover: Equatable {
                                 nextPixel.blue = 0xFFFF // blue
                             case .tooBlobby:
                                 nextPixel.blue = 0x8FFF // less blue
+                            case .centerLineMismatch:
+                                nextPixel.green = 0x8FFF // less cyan
+                                nextPixel.blue = 0x8FFF
                             default:
                                 fatalError("should not happen")
                             }
@@ -549,6 +554,18 @@ actor FrameAirplaneRemover: Equatable {
                     let lowest_diff = Double(group_count-lowest_count)/Double(group_count)
                     let first_diff = Double(first_count_drop)/Double(group_count)
                     Log.d("frame \(frame_index) group \(name) lowest_diff \(lowest_diff) first_diff \(first_diff)")
+                    if(Double(first_count_drop)/Double(group_count) > 0.1 && // XXX hardcoded constants
+                       Double(lowest_count)/Double(group_count) < 0.5)
+                    {
+                        // the line counts for the hough transform here drop off quickly
+                        // from the highest value, which indicates a higher probability that
+                        // this group is close to being all in a line
+                        should_paint[name] = (shouldPaint: true, why: .looksLikeALine) // XXX put some data in here
+                        Log.d("frame \(frame_index) will paint group \(name) because it looks like a line from the group hough transform")
+                        continue
+                    }
+
+                    
                     if(lowest_diff < 0.90 && first_diff < 0.1) { // XXX hardcoded constants
 //                        should_paint[name] = (shouldPaint: false, why: .tooBlobby(first_diff, lowest_diff))
                         //                        continue
@@ -815,6 +832,10 @@ actor FrameAirplaneRemover: Equatable {
             case .adjecentLine:
                 paint_pixel.red = 0xFFFF // magenta
                 paint_pixel.blue = 0xFFFF
+            case .looksLikeALine:
+                paint_pixel.red = 0xFFFF // pinker magenta
+                paint_pixel.green = 0x2888
+                paint_pixel.blue = 0x8888
             default:
                 fatalError("should not happen")
             }
