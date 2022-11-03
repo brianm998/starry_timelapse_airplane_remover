@@ -257,9 +257,7 @@ fileprivate func run_final_pass(frames: [FrameAirplaneRemover], mainIndex main_i
                                 if mult == 1 {
                                     // directly adjecent frames
                                     // -2 isn't enough
-                                    // -8 is
                                     edge_amt = -2 // may not need this?
-                                    //amt = -2 // allow for a very small overlap on directly adjecent frames
                                     // XXX hardcoded constant
                                     // XXX maybe only if they are in alignment?
                                 }
@@ -330,189 +328,7 @@ fileprivate func run_final_pass(frames: [FrameAirplaneRemover], mainIndex main_i
                                         Log.d("frame \(frame.frame_index) should_paint[\(group_name)] = (false, .adjecentOverlap(\(-distance_bewteen_groups))")
                                         Log.d("frame \(other_frame.frame_index) should_paint[\(og_name)] = (false, .adjecentOverlap(\(-distance_bewteen_groups))")
                                     }
-                                } else /*if distance_bewteen_groups < Double(400*mult)*/ { // XXX hardcoded constant
-                                    // don't overwrite adjecent overlaps
-                                    var do_it = true
-                                    
-                                    if let (frame_should_paint, frame_why) =
-                                           await frame.should_paint[group_name]
-                                    {
-                                        // don't paint for these reasons
-                                        if !frame_should_paint &&
-                                             (frame_why == .adjecentOverlap(-1) ||
-                                                frame_why == .tooBlobby(0,0)) // XXX -1
-                                        {
-                                            do_it = false
-                                        }
-                                        // still paint, but keep this state
-                                        if frame_should_paint && frame_why == .looksLikeALine {
-                                            do_it = false
-                                        }
-                                    }
-                                    
-                                    if let (other_should_paint, other_why) = 
-                                           await other_frame.should_paint[og_name]
-                                    {
-                                        // don't paint for these reasons
-                                        if !other_should_paint &&
-                                             (other_why == .adjecentOverlap(-1) || 
-                                                other_why == .tooBlobby(0,0))  // XXX -1
-                                        {
-                                            do_it = false
-                                        }
-                                        // still paint, but keep this state
-                                        if other_should_paint && other_why == .looksLikeALine {
-                                            do_it = false 
-                                        }
-                                    }
-                                    // XXX iterate over all of the lines_from_full_image
-                                    // from all of the images here, and make sure this
-                                    // line shows up in at least some of them
-                                    // this is to avoid noisy false positives
-
-                                    if !do_it { continue }
-
-                                    var matching_line_count = 0
-                                    /*
-                                    // XXX this logic may not be necessary
-                                    // XXX wierd logic XXX
-                                    do_it = false
-
-                                    // XXX this is slow, maybe only on the central frame
-                                    
-                                    let main_frame = frames[main_index]
-                                    for full_image_line in await main_frame.lines_from_full_image {
-                                        let line_1_theta_diff = abs(full_image_line.theta -
-                                                                      line_theta)
-                                        let line_1_rho_diff = abs(full_image_line.rho -
-                                                                    line_rho)
-                                        
-                                        let line_2_theta_diff = abs(full_image_line.theta -
-                                                                      other_line_theta)
-                                        let line_2_rho_diff = abs(full_image_line.rho -
-                                                                    other_line_rho)
-
-                                        if line_1_theta_diff < final_theta_diff &&
-                                           line_1_rho_diff < final_rho_diff &&
-                                           line_2_theta_diff < final_theta_diff &&
-                                           line_2_rho_diff < final_rho_diff
-                                        {
-                                            matching_line_count += full_image_line.count
-                                        }
-                                    }
-
-                                    if matching_line_count > 30 { // XXX constant XXX
-                                        Log.d("matching_line_count \(matching_line_count)")
-                                    }
-
-                                    // XXX at 400, almost nothing gets matched
-                                    if matching_line_count > 10 { // XXX constant XXX
-                                        Log.d("matching_line_count \(matching_line_count)")
-                                        do_it = true // XXX maybe keep score based upon line count?
-                                    }
-                                    */                                              
-                                    /*
-                                       so we have two groups, with a known line affinity.
-
-                                       do their centers move on (or close to) the same line?
-
-                                       if so, paint them
-                                       if not, no paint
-
-                                       first, find polar line equation for line through the centers
-                                       of each group,
-
-                                       then compare that to the theta and rho for each group,
-                                       they should be close.
-                                    */
-
-                                    let half_width_1 = Double(line_max_x - line_min_x)/2
-                                    let half_height_1 = Double(line_max_y - line_min_y)/2
-
-                                    let half_width_2 = Double(other_line_max_x - other_line_min_x)/2
-                                    let half_height_2 = Double(other_line_max_y - other_line_min_y)/2
-                                    
-                                    //Log.d("2 half size [\(half_width_2), \(half_height_2)]")
-
-                                    let center_1_x = Double(line_min_x) + half_width_1
-                                    let center_1_y = Double(line_min_y) + half_height_1
-
-                                    //Log.d("1 center [\(center_1_x), \(center_1_y)]")
-                                    
-                                    let center_2_x = Double(other_line_min_x) + half_width_2
-                                    let center_2_y = Double(other_line_min_y) + half_height_2
-                                    
-                                    var theta_from_centers = atan(abs(center_1_y - center_2_y)/abs(center_1_x - center_2_x))
-
-                                    let center_line_slope = Double(center_1_y - center_2_y)/Double(center_1_x - center_2_x)
-    // base the y_intercept on the center 1 coordinates
-                                    let center_line_y_intercept = Double(center_1_y) - center_line_slope * Double(center_1_x)
-                                    if center_line_y_intercept < 0 {
-                                        theta_from_centers = 2*Double.pi - theta_from_centers
-                                    }
-
-                                    let rho_from_centers = center_line_y_intercept /
-                                                           (sin(theta_from_centers) -
-                                                              center_line_slope * cos(theta_from_centers))
-
-                                    
-                                    let center_line_theta_diff_1 = abs(theta_from_centers*180/Double.pi-line_theta)
-                                    let center_line_rho_diff_1 = abs(rho_from_centers-line_rho)
-
-                                    let center_line_theta_diff_2 = abs(theta_from_centers*180/Double.pi-other_line_theta)
-                                    let center_line_rho_diff_2 = abs(rho_from_centers-other_line_rho)
-
-                                    //Log.d("theta \(theta_from_centers*180/Double.pi) rho \(rho_from_centers) eq \(sin(theta_from_centers)) fu \(center_line_slope) cos \(cos(theta_from_centers)) slope \(center_line_slope) intercept \(center_line_y_intercept) [\(center_1_x), \(center_1_y)] => [\(center_2_x), \(center_2_y)]")
-                                    
-                                    if center_line_theta_diff_1 < final_theta_diff,
-                                       center_line_rho_diff_1 < final_rho_diff,
-                                       center_line_theta_diff_2 < final_theta_diff,
-                                       center_line_rho_diff_2 < final_rho_diff
-
-                                       // XXX tomorrow figure out why this center_line_rho is so wrong
-                                       // also dig into why sometimes real lines get missed
-                                    {
-                                    //if do_it {
-                                        // XXX perhaps keep a record of all matches
-                                        // and vote?
-                                        
-                                        // mark as should paint
-                                        //Log.d("frame \(frame.frame_index) should_paint[\(group_name)] = (true, .adjecentLine(\(theta_diff), \(rho_diff))) distance_bewteen_groups \(distance_bewteen_groups) matching_line_count \(matching_line_count) amt \(amt)")
-                                        //Log.d("frame \(other_frame.frame_index) should_paint[\(og_name)] = (true, .adjecentLine(\(theta_diff), \(rho_diff))) distance_bewteen_groups \(distance_bewteen_groups) matching_line_count \(matching_line_count) amt \(amt)")
-                                        /*
-                                        _ = await (frame.setShouldPaint(group: group_name,
-                                                                        toShouldPaint: true,
-                                                                        why: .adjecentLine(theta_diff,
-                                                                                           rho_diff,
-                                                                                           matching_line_count,
-                                                                                           distance_bewteen_groups)),
-                                        
-                                                   other_frame.setShouldPaint(group: og_name,
-                                                                              toShouldPaint: true,
-                                                                              why: .adjecentLine(
-                                                                                       theta_diff,
-                                                                                       rho_diff,
-                                                                                       matching_line_count,
-                                                                                       distance_bewteen_groups)))
-*/
-                                    } else {
-
-                                        /*
-                                        Log.d("DO NOT PAINT theta \(theta_from_centers*180/Double.pi) rho \(rho_from_centers) eq \(sin(theta_from_centers)) fu \(center_line_slope) cos \(cos(theta_from_centers)) slope \(center_line_slope) intercept \(center_line_y_intercept) center_line_theta_diff_1 \(center_line_theta_diff_1) center_line_rho_diff_1 \(center_line_rho_diff_1) center_line_theta_diff_2 \(center_line_theta_diff_2) center_line_rho_diff_2 \(center_line_rho_diff_2)")
-
-                                        
-                                        Log.d("frame \(frame.frame_index) should_paint[\(group_name)] = (false, .centerLineMismatch(\(theta_diff), \(rho_diff))) distance_bewteen_groups \(distance_bewteen_groups) matching_line_count \(matching_line_count) amt \(amt)")
-                                        Log.d("frame \(other_frame.frame_index) should_paint[\(og_name)] = (false, .centerLineMismatch(\(theta_diff), \(rho_diff))) distance_bewteen_groups \(distance_bewteen_groups) matching_line_count \(matching_line_count) amt \(amt)")
-
-                                        _ = await (frame.setShouldPaint(group: group_name,
-                                                                        toShouldPaint: false,
-                                                                        why: .centerLineMismatch),
-                                                   other_frame.setShouldPaint(group: og_name,
-                                                                              toShouldPaint: false,
-                                                                              why: .centerLineMismatch))
-*/
-                                    }
-                                }
+                                } 
                             }
                         }
                     }
@@ -641,7 +457,7 @@ func edge_distance(min_1_x: Int, min_1_y: Int,
         return Double(abs(center_1_y - center_2_y) - half_height_1 - half_height_2)
     }
 
-    // calculate slope and b for the line between the center points
+    // calculate slope and y intercept for the line between the center points
     // y = slope * x + y_intercept
     let slope = Double(center_1_y - center_2_y)/Double(center_1_x - center_2_x)
 

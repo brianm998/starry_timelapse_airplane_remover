@@ -506,7 +506,7 @@ actor FrameAirplaneRemover: Equatable {
                 // get the theta and rho of just this outlier group
                 let lines_from_this_group =
                     groupHoughTransform.lines(min_count: group_min_line_count,
-                                           number_of_lines_returned: 10)
+                                           number_of_lines_returned: group_number_of_hough_lines)
                 if lines_from_this_group.count == 0 {
                     Log.w("frame \(frame_index) got no group lines for group \(name) of size \(size)")
                     // this should only happen when there is no data in the input and therefore output 
@@ -537,54 +537,21 @@ actor FrameAirplaneRemover: Equatable {
                         if other_count < lowest_count {
                             lowest_count = other_count
                         }
-                        // XXX clean this up with below, it's a copy
-                        // o is the direct distance from the full screen origin
-                        // to the group transform origin
-                        //let o = sqrt(Double(min_x * min_x) + Double(min_y * min_y))
-                        
-                        // theta_r is the angle from the full screen origin to the
-                        // to the group transform origin, in degrees
-                        //let theta_r = acos(Double(min_x)/o)*180/Double.pi
-
-                        // theta_p is the angle between them in degrees
-                        //let theta_p = group_theta - theta_r
-
-                        // add the calculated missing amount to the group_rho
-                        //let adjusted_group_rho = other_rho + o * cos(theta_p * Double.pi/180)
-                        // XXX clean this up with below, it's a copy
-
-                        //Log.d("frame \(frame_index) group \(name) line at index \(i) theta \(other_theta), rho \(adjusted_group_rho), count \(other_count)")
                     }
                 }
                 
                 if first_count != -111111111 {
-                    // we have information about other lines for this group
-                    //Log.d("frame \(frame_index) group \(name) group_count \(group_count) first_count \(first_count) lowest_count \(lowest_count)")
+                    // the line counts for the hough transform here drop off quickly
+                    // from the highest value, which indicates a higher probability that
+                    // this group is close to being all in a line
 
-                    //let lowest_diff = Double(lowest_count)/Double(group_count)
-                    //let first_diff = Double(first_count)/Double(group_count)
-                    //Log.d("frame \(frame_index) group \(name) first_diff \(first_diff)")
-                    if(/*Double(first_count)/Double(group_count) < looks_like_a_line_first_group_drop &&*/
-                       Double(lowest_count)/Double(group_count) < looks_like_a_line_lowest_count_reduction)
-                    {
-                        // the line counts for the hough transform here drop off quickly
-                        // from the highest value, which indicates a higher probability that
-                        // this group is close to being all in a line
+                    if(Double(lowest_count)/Double(group_count) < looks_like_a_line_lowest_count_reduction) {
                         should_paint[name] = (shouldPaint: true, why: .looksLikeALine) // XXX put some data in here
                         Log.d("frame \(frame_index) will paint group \(name) because it looks like a line from the group hough transform")
                         continue
                     } else {
                         Log.d("frame \(frame_index) group \(name) doesn't look like a line group_count \(group_count) first_count \(first_count) lowest_count \(lowest_count)")
                     }
-
-                    
-                    //if(lowest_diff < 0.90 && first_diff < 0.1) { // XXX hardcoded constants
-//                        should_paint[name] = (shouldPaint: false, why: .tooBlobby(first_diff, lowest_diff))
-                        //                        continue
-                        // XXX not sure about this
-//                    }
-                } else {
-                    fatalError("FUCK YOU")
                 }
 
                 // convert the rho from the group hough transform to what

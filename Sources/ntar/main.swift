@@ -89,7 +89,6 @@ todo:
 let max_concurrent_frames: UInt = 32  // number of frames to process in parallel about 1 per cpu core
 let max_pixel_brightness_distance: UInt16 = 8500 // distance in brightness to be considered an outlier
 
-// try increasing this VVV to 200 XXX now that groups are more properly detected was 120
 let min_group_size = 150       // groups smaller than this are ignored
 let min_line_count = 20        // lines with counts smaller than this are ignored
 
@@ -102,24 +101,17 @@ let assume_airplane_size = 1000 // don't bother spending the time to fully proce
                             // groups larger than this, assume we should paint over them
 
 // how far in each direction do we go when doing final processing?
-// XXX try reducing this VVV to 2 (i.e. we check 5 frames each time instead of 9)
 let number_final_processing_neighbors_needed = 2 // in each direction
 
 let final_theta_diff: Double = 5       // how close in theta/rho outliers need to be between frames
 let final_rho_diff: Double = 70
 
-// XXX try reducing this VVV to 4
 let final_group_boundary_amt = 1  // how much we pad the overlap amounts on the final pass
 
-//let looks_like_a_line_first_group_drop: Double = 0.4 // 40% drop expected after first hough line
-//let looks_like_a_line_lowest_count_reduction: Double = 0.7 // at least 70% drop from first line count to last
+let group_number_of_hough_lines = 10
 
-// works, but misses some obvious lines
-//let looks_like_a_line_first_group_drop: Double = 0.9 // 10% drop expected after first hough line
-//let looks_like_a_line_lowest_count_reduction: Double = 0.6 // 40% drop expected by the end
-
-//let looks_like_a_line_first_group_drop: Double = 0.9 // 10% drop expected after first hough line
-let looks_like_a_line_lowest_count_reduction: Double = 0.5 // 40% drop expected by the end
+// 0.5 gets lots of lines and no false positives
+let looks_like_a_line_lowest_count_reduction: Double = 0.55 // 0-1 percentage of decrease on group_number_of_hough_lines count
 
 let test_paint = true           // write out a separate image sequence with colors indicating
                               // what was detected, and what was changed.  Helpful for debugging
