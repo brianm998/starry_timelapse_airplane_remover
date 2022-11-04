@@ -11,6 +11,7 @@ You should have received a copy of the GNU General Public License along with nta
 */
 
 import Foundation
+import ArgumentParser
 
 /*
 
@@ -131,7 +132,12 @@ public class Log {
     public static var name: String = "log"
     public static var nameSuffix: String?
     
-    public enum Level: String, CustomStringConvertible, CaseIterable {
+    public enum Level: String,
+                     CustomStringConvertible,
+                     CaseIterable,
+                     ExpressibleByArgument,
+                     Decodable
+    {
         case debug
         case info
         case warn

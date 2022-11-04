@@ -82,8 +82,9 @@ todo:
 
  - have a method to write out each outlier group as a small b/w image for training purposes
 
- - use https://github.com/apple/swift-argument-parser
-
+ - track ntar version somehow and report that with a command line option
+   (ideally put this in the output dirname instead of the cluster of params now)
+ 
  - airplanes have:
    - a real line
    - often close but not too far from aligning line in adjecent frames
@@ -99,7 +100,6 @@ todo:
    - unlikely to have matching aligned groups in adjecent frames
    - same approx fill amount regardless of aspect ratio
 */
-
 
 // XXX here are some random global constants that maybe should be exposed somehow
 
@@ -136,9 +136,8 @@ let final_center_distance_multiplier = 8 // document this
 let looks_like_a_line_lowest_count_reduction: Double = 0.5 // 0-1 percentage of decrease on group_number_of_hough_lines count
 
 let supported_image_file_types = [".tif", ".tiff"] // XXX move this out
-    
-let test_paint = true           // write out a separate image sequence with colors indicating
-                              // what was detected, and what was changed.  Helpful for debugging
+
+let nvar_version = "0.0.1"
 
 @main
 struct Ntar: ParsableCommand {
@@ -149,16 +148,23 @@ One per cpu works good.
 May need to be reduced to a lower value:
  - when processing large images (>24mp)
  - on a machine without gobs of ram (<128g)
-
 """)
-    var numConcurrentRenders: Int     // XXX default this to n-cpu
+    var numConcurrentRenders: Int = 4     // XXX default this to n-cpu
 
-
-    @Flag(name: .shortAndLong, help:"""
+    @Option(name: [.short, .customLong("file-log")], help:"""
+If present, ntar will output a file log at the given level.
+""")
+    var fileLogLevel: Log.Level?
+    
+    @Option(name: [.customShort("o"), .customLong("output")], help:"""
+The logging level that ntar will output directly to the terminal.
+""")
+    var terminalLogLevel: Log.Level = .info
+    
+    @Flag(name: [.short, .customLong("test-paint")], help:"""
 Write out a separate image sequence with colors indicating
 what was detected, and what was changed.
 Shows what changes have been made to each frame.
-
 """)
     var test_paint = false
 
@@ -176,12 +182,11 @@ Should include a sequence of 16 bit tiff files, sortable by name.
     
         Log.name = "ntar-log"
         Log.nameSuffix = input_image_sequence_dirname
-        
-        Log.handlers = 
-        [
-          .console: ConsoleLogHandler(at: .debug),
-          .file: FileLogHandler(at: .debug)
-        ]
+
+        Log.handlers[.console] = ConsoleLogHandler(at: terminalLogLevel)
+        if let fileLogLevel = fileLogLevel {
+            Log.handlers[.file] = FileLogHandler(at: fileLogLevel)
+        }
     
         // XXX maybe check to make sure this is a directory
         Log.d("will process \(input_image_sequence_dirname) on path \(path)")
@@ -200,7 +205,7 @@ Should include a sequence of 16 bit tiff files, sortable by name.
                                                   
             eraser.run()
         } else {
-            Log.d("cannot run :(")
+            Log.e("cannot run :(") // XXX make this better
         }
     }
 }

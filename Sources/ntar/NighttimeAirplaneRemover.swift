@@ -48,7 +48,7 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
         let formatted_final_theta_diff = String(format: "%0.1f", final_theta_diff)
         let formatted_final_rho_diff = String(format: "%0.1f", final_rho_diff)
         
-        var basename = "\(image_sequence_dirname)-no-planes-\(max_pixel_distance)-\(min_group_size)-\(min_line_count)-\(group_min_line_count)-\(formatted_theta_diff)-\(formatted_rho_diff)-\(max_number_of_lines)-\(assume_airplane_size)-\(number_final_processing_neighbors_needed)-\(formatted_final_theta_diff)-\(formatted_final_rho_diff)-\(final_group_boundary_amt)"
+        var basename = "\(image_sequence_dirname)-no-planes-ntar-v-\(nvar_version)"
         basename = basename.replacingOccurrences(of: ".", with: "_")
         test_paint_output_dirname = "\(basename)-test-paint"
         let output_dirname = basename
