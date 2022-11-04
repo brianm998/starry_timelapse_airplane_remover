@@ -79,6 +79,8 @@ todo:
    use the group hough transforms with more advanced analysis of the data
    look a things like how solid the groups are as well (i.e. no holes)
 
+ - have a method to write out each outlier group as a small b/w image for training purposes
+
  - use https://github.com/apple/swift-argument-parser
 
  - airplanes have:
@@ -254,7 +256,8 @@ if hough_test {
     let executable_name = remove_path(fromString: CommandLine.arguments[0])
     let first_command_line_arg = CommandLine.arguments[1]
     // this is the main path
-        
+
+    // XXX don't assume the arg is in cwd
     let path = FileManager.default.currentDirectoryPath
     let input_image_sequence_dirname = first_command_line_arg
 
