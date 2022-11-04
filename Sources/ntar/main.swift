@@ -47,13 +47,6 @@ todo:
 
  - XXX this mofo needs to be run in the same dir as the first passed arg :(  FIX THAT
 
- - group distance calculation isn't right, can cause errors with slow moving objects
-
- - fix false positive airplanes (causes stars to twinkle)
-
- - detect outliers across more than 3 frames?
-   take average across all adjecent frames, and compare that with value at processing frame
-
  - try some kind of processing of individual groups that classifies them as plane or not
    either a hough transform to detect that it's cloas to a line, or detecting holes in them?
    i.e. the percentage of neighbors found, or the percentage without empty neighbors
@@ -63,7 +56,30 @@ todo:
  - use distance between frames when calculating positive final pass too.
    i.e. they shouldn't overlap, but shouldn't be too far away either
 
- - maybe a bug where last frame is identical to the previous frame for some reason
+ - expand group hough transform analysis for looksLikeALine to beyond first vs last count value
+   currently works remarkedly well considering how crude it is.
+   airplanes have a fast drop off after the first few lines, with more lines for larger groups
+   non-airplanes have a smoother distribution across the first set of lines
+
+ - expand final processing to identify nearby groups that should be painted
+   for example one frame has a known line, and next frame has another group
+   w/ similar theta/rho that is not painted, but is the same object
+
+ - perhaps identify smaller groups that are airplanes by % of solidness?
+   i.e. no missing pixels in the middle
+   oftentimes airplane streaks close to the horizon don't register as lines via hough transform
+   because they are too wide and not long enough.  But they are usually solid.
+
+ - false positives are lower now, but still occur sometimes
+   try fixing PaintReason.goodScore cases
+   perhaps better single group hough transform analysis?
+   look at more lines and the distribution of them
+   
+ - try re-writing the logic that uses the full hough transform to not need it
+   use the group hough transforms with more advanced analysis of the data
+   look a things like how solid the groups are as well (i.e. no holes)
+
+ - use https://github.com/apple/swift-argument-parser
 
  - airplanes have:
    - a real line

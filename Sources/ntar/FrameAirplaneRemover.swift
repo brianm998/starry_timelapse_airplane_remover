@@ -16,19 +16,6 @@ You should have received a copy of the GNU General Public License along with nta
 
 // this class holds the logic for removing airplanes from a single frame
 
-/*
-
-test paint colors:
-
- red - looks like a line
- purple - painted over because of large size only
- yellow - painted over because of good frame-only score
-
- blue - not painted over because of inter-frame overlap
- cyan - not painted over because of bad frame-only score
- green - outlier group that was not painted over for some reason
- light green - outlier, but not part of a big enough group
-*/
 @available(macOS 10.15, *)
 actor FrameAirplaneRemover: Equatable { 
     let width: Int

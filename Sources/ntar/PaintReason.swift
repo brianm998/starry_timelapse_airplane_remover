@@ -15,30 +15,31 @@ enum PaintReason: Equatable {
    case badScore(Double)        // percent score
    case adjecentOverlap(Double) // overlap distance
 
+   // colors used to test paint to show why
    public var testPaintPixel: Pixel {
        get {
            var pixel = Pixel()
            switch self {
            case .assumed:
-               pixel.red = 0xBFFF // purple
+               pixel.red = 0xBFFF // purple / magenta
                pixel.green = 0x3888
                pixel.blue = 0xA888
            case .goodScore:
-                pixel.red = 0xFFFF // yellow
-                pixel.green = 0xFFFF
-                pixel.blue = 0x0000
+               pixel.red = 0xFFFF // yellow
+               pixel.green = 0xFFFF
+               pixel.blue = 0x0000
            case .looksLikeALine:
-                pixel.red = 0xFFFF // red
-                pixel.green = 0x0000
-                pixel.blue = 0x0000
+               pixel.red = 0xFFFF // red
+               pixel.green = 0x0000
+               pixel.blue = 0x0000
            case .badScore:
-                pixel.green = 0xFFFF // cyan
-                pixel.blue = 0xFFFF
-                pixel.red = 0x0000
+               pixel.green = 0xFFFF // cyan
+               pixel.blue = 0xFFFF
+               pixel.red = 0x0000
            case .adjecentOverlap:
-                pixel.red = 0x0000
-                pixel.blue = 0xFFFF // blue
-                pixel.green = 0x0000
+               pixel.red = 0x0000
+               pixel.blue = 0xFFFF // blue
+               pixel.green = 0x0000
            }
            return pixel
        }
@@ -46,37 +47,37 @@ enum PaintReason: Equatable {
         
    public static func == (lhs: PaintReason, rhs: PaintReason) -> Bool {
       switch lhs {
-      case assumed:
+      case .assumed:
           switch rhs {
-          case assumed:
+          case .assumed:
               return true
           default:
               return false
           }
-      case looksLikeALine:
+      case .looksLikeALine:
           switch rhs {
-          case looksLikeALine:
+          case .looksLikeALine:
               return true
           default:
               return false
           }
-      case goodScore:
+      case .goodScore:
           switch rhs {
-          case goodScore:
+          case .goodScore:
               return true
           default:
               return false
           }
-      case badScore:
+      case .badScore:
           switch rhs {
-          case badScore:
+          case .badScore:
               return true
           default:
               return false
           }
-      case adjecentOverlap:
+      case .adjecentOverlap:
           switch rhs {
-          case adjecentOverlap:
+          case .adjecentOverlap:
               return true
           default:
               return false
