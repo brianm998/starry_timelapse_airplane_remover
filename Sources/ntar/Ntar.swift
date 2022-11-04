@@ -1,4 +1,5 @@
 import Foundation
+import ArgumentParser
 import CoreGraphics
 import Cocoa
 
@@ -104,7 +105,6 @@ todo:
 
 // 34 concurrent frames maxes out around 60 gigs of ram usage for 24 mega pixel images
 
-let max_concurrent_frames: UInt = 22  // number of frames to process in parallel about 1 per cpu core
 let max_pixel_brightness_distance: UInt16 = 8500 // distance in brightness to be considered an outlier
 
 let min_group_size = 150       // groups smaller than this are ignored
@@ -133,160 +133,57 @@ let final_adjecent_edge_amount: Double = -2 // the spacing allowed between group
 let final_center_distance_multiplier = 8 // document this
 
 // 0.5 gets lots of lines and no false positives
-let looks_like_a_line_lowest_count_reduction: Double = 0.55 // 0-1 percentage of decrease on group_number_of_hough_lines count
+let looks_like_a_line_lowest_count_reduction: Double = 0.5 // 0-1 percentage of decrease on group_number_of_hough_lines count
 
+let supported_image_file_types = [".tif", ".tiff"] // XXX move this out
+    
 let test_paint = true           // write out a separate image sequence with colors indicating
                               // what was detected, and what was changed.  Helpful for debugging
 
-let hough_test = false
-
-let distance_test = false
-
-if distance_test {
-
-    // (1523 1764),  (1611 1780)
-
-    // (2004 1850),  (2126 1879)
-    let distance_bewteen_groups =
-        edge_distance(min_1_x: 1523,
-                 min_1_y: 1764,
-                 max_1_x: 1611,
-                 max_1_y: 1780,
-                 min_2_x: 2004,
-                 min_2_y: 1850,
-                 max_2_x: 2126,
-                 max_2_y: 1879)
-    Log.d("distance_bewteen_groups \(distance_bewteen_groups)")
-
-    // (1770 1805),  (1959 1842)
-    // (2004 1850),  (2126 1879)
-    let distance_bewteen_groups_1 =
-        edge_distance(min_1_x: 1770,
-                 min_1_y: 1805,
-                 max_1_x: 1959,
-                 max_1_y: 1842,
-                 min_2_x: 2004,
-                 min_2_y: 1850,
-                 max_2_x: 2126,
-                 max_2_y: 1879)
-    Log.d("distance_bewteen_groups_1 \(distance_bewteen_groups_1)")
-
-    // (3036 881),  (3143 996)
-    // (2837 664),  (2933 765)
-    let distance_bewteen_groups_2 =
-        edge_distance(min_1_x: 3036,
-                 min_1_y: 881,
-                 max_1_x: 3143,
-                 max_1_y: 996,
-                 min_2_x: 2837,
-                 min_2_y: 664,
-                 max_2_x: 2933,
-                 max_2_y: 765)
-
-    Log.d("distance_bewteen_groups_2 \(distance_bewteen_groups_2)")
-
-    // these two do slightly overlap in y, but not in x
-    //(1859 1842),  (1979 1887)
-    //(1753 1885),  (1858 1925)
-    let distance_bewteen_groups_3 =
-        edge_distance(min_1_x: 1859,
-                 min_1_y: 1842,
-                 max_1_x: 1979, 
-                 max_1_y: 1887,
-                 min_2_x: 1753,
-                 min_2_y: 1885,
-                 max_2_x: 1858,
-                 max_2_y: 1925)
-
-    Log.d("distance_bewteen_groups_3 \(distance_bewteen_groups_3)")
-
-    //(1339 2055),  (1390 2075)
-    //(2853 1441),  (2906 1470)
-    let distance_bewteen_groups_4 =
-        edge_distance(min_1_x: 1339,
-                 min_1_y: 2055,
-                 max_1_x: 1390,
-                 max_1_y: 2075,
-                 min_2_x: 2853,
-                 min_2_y: 1441,
-                 max_2_x: 2906,
-                 max_2_y: 1470)
-
-    Log.d("distance_bewteen_groups_4 \(distance_bewteen_groups_4)")
-    fatalError("test")
-}
+@main
+struct Ntar: ParsableCommand {
 
 
-let machine = sysctl(name: "hw.machine")
-let memsize = sysctl(name: "hw.memsize") // returns empty string :(
-let foobar = sysctl(name: "hw.ncpu")
-
-Log.d("machine \(machine)")
-Log.d("memsize \(memsize)")
-Log.d("foobar \(foobar)")
-
-
-func sysctl(name: String) -> String {
-    var size = 0
-    sysctlbyname(name, nil, &size, nil, 0)
-    var memsize = [CChar](repeating: 0,  count: size)
-    sysctlbyname(name, &memsize, &size, nil, 0)
-    return String(cString: memsize)
-}
-
-if hough_test {
-    // this is for doing direct hough_tests outside the rest of the code
-    // convert line between two points on screen into polar coords
-    // [276, 0] => [416, 163]
-    let (theta, rho) = polar_coords(point1: (x: 276, y: 0),
-                                 point2: (x: 416, y: 163))
-   
-    Log.d("theta \(theta) rho \(rho)")
-
-    let filename = "hough_test_image.tif"
-    let output_filename = "hough_background.tif"
-
-    hough_test(filename: filename, output_filename: output_filename)
+    @Flag(name: .shortAndLong, help: "Max Number of frames to process at once.\nOne per cpu works good.\nMay need to be reduced to a lower value:\n - when processing large images (>24mp)\n - on a machine without gobs of ram (<128g)\n")
+    var maxConcurrentFrames: Int     // XXX get this from n-cpu
     
-} else if CommandLine.arguments.count < 2 {
+    @Argument(help: "Image sequence dirname to process.\nShould include a sequence of 16 bit tiff files, sortable by name.")
+    var image_sequence_dirname: String
 
-    Log.d("need more args!")    // XXX make this better
-} else {
-
-    let executable_name = remove_path(fromString: CommandLine.arguments[0])
-    let first_command_line_arg = CommandLine.arguments[1]
-    // this is the main path
-
-    // XXX don't assume the arg is in cwd
-    let path = FileManager.default.currentDirectoryPath
-    let input_image_sequence_dirname = first_command_line_arg
-
-    Log.name = "\(executable_name)-log"
-    Log.nameSuffix = input_image_sequence_dirname
+    mutating func run() throws {
     
-    Log.handlers = 
-    [
-      .console: ConsoleLogHandler(at: .debug),
-      .file: FileLogHandler(at: .debug)
-    ]
-
-    // XXX maybe check to make sure this is a directory
-    Log.d("will process \(input_image_sequence_dirname) on path \(path)")
-
-    Log.d("running with min_group_size \(min_group_size) min_line_count \(min_line_count)")
-    Log.d("group_min_line_count \(group_min_line_count) max_theta_diff \(max_theta_diff) max_rho_diff \(max_rho_diff)")
-    Log.d("max_number_of_lines \(max_number_of_lines) assume_airplane_size \(assume_airplane_size)")
-    Log.d("max_concurrent_frames \(max_concurrent_frames) max_pixel_brightness_distance \(max_pixel_brightness_distance)")
+        // XXX don't assume the arg is in cwd
+        let path = FileManager.default.currentDirectoryPath
+        let input_image_sequence_dirname = image_sequence_dirname
     
-    if #available(macOS 10.15, *) {
-        let dirname = "\(path)/\(input_image_sequence_dirname)"
-        let eraser = NighttimeAirplaneRemover(imageSequenceDirname: dirname,
-                                              maxConcurrent: max_concurrent_frames,
+        Log.name = "ntar-log"
+        Log.nameSuffix = input_image_sequence_dirname
+        
+        Log.handlers = 
+        [
+          .console: ConsoleLogHandler(at: .debug),
+          .file: FileLogHandler(at: .debug)
+        ]
+    
+        // XXX maybe check to make sure this is a directory
+        Log.d("will process \(input_image_sequence_dirname) on path \(path)")
+    
+        Log.d("running with min_group_size \(min_group_size) min_line_count \(min_line_count)")
+        Log.d("group_min_line_count \(group_min_line_count) max_theta_diff \(max_theta_diff) max_rho_diff \(max_rho_diff)")
+        Log.d("max_number_of_lines \(max_number_of_lines) assume_airplane_size \(assume_airplane_size)")
+        //Log.d("max_concurrent_frames \(max_concurrent_frames) max_pixel_brightness_distance \(max_pixel_brightness_distance)")
+        
+        if #available(macOS 10.15, *) {
+            let dirname = "\(path)/\(input_image_sequence_dirname)"
+            let eraser = NighttimeAirplaneRemover(imageSequenceDirname: dirname,
+                                              maxConcurrent: UInt(maxConcurrentFrames),
                                               maxPixelDistance: max_pixel_brightness_distance, 
                                               testPaint: test_paint)
-        eraser.run()
-    } else {
-        Log.d("cannot run :(")
+                                                  
+            eraser.run()
+        } else {
+            Log.d("cannot run :(")
+        }
     }
 }
 

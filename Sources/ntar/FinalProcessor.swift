@@ -34,17 +34,20 @@ actor FinalProcessor {
     let frame_count: Int
     let dispatch_group: DispatchHandler
     let final_queue: FinalQueue
+    let max_concurrent: UInt
 
     var is_asleep = false
     
     init(numberOfFrames frame_count: Int,
+         maxConcurrent max_concurrent: UInt,
          dispatchGroup dispatch_group: DispatchHandler)
     {
         frames = [FrameAirplaneRemover?](repeating: nil, count: frame_count)
+        self.max_concurrent = max_concurrent
         self.frame_count = frame_count
         self.dispatch_group = dispatch_group
-        self.final_queue = FinalQueue(max_concurrent: max_concurrent_frames,
-                                      dispatchGroup: dispatch_group)
+        self.final_queue = FinalQueue(max_concurrent: max_concurrent,
+                                   dispatchGroup: dispatch_group)
     }
 
     func add(frame: FrameAirplaneRemover, at index: Int) {

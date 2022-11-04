@@ -14,8 +14,6 @@ You should have received a copy of the GNU General Public License along with nta
 
 */
 
-let supported_image_file_types = [".tif", ".tiff"] // XXX move this out
-    
 // support lazy loading of images from the sequence using reference counting
 @available(macOS 10.15, *)
 actor ImageSequence {

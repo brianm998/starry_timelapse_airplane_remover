@@ -57,8 +57,9 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
                    maxConcurrent: max_concurrent,
                    givenFilenames: given_filenames)
 
-        let processor = FinalProcessor(numberOfFrames: self.image_sequence.filenames.count, 
-                                       dispatchGroup: dispatchGroup)
+        let processor = FinalProcessor(numberOfFrames: self.image_sequence.filenames.count,
+                                    maxConcurrent: max_concurrent_renders,
+                                    dispatchGroup: dispatchGroup)
         
         final_processor = processor
     }
