@@ -86,7 +86,7 @@ todo:
 
 // 34 concurrent frames maxes out around 60 gigs of ram usage for 24 mega pixel images
 
-let max_concurrent_frames: UInt = 32  // number of frames to process in parallel about 1 per cpu core
+let max_concurrent_frames: UInt = 22  // number of frames to process in parallel about 1 per cpu core
 let max_pixel_brightness_distance: UInt16 = 8500 // distance in brightness to be considered an outlier
 
 let min_group_size = 150       // groups smaller than this are ignored
@@ -108,7 +108,11 @@ let final_rho_diff: Double = 70
 
 let final_group_boundary_amt = 1  // how much we pad the overlap amounts on the final pass
 
-let group_number_of_hough_lines = 10
+let group_number_of_hough_lines = 10 // document this
+
+let final_adjecent_edge_amount: Double = -2 // the spacing allowed between groups in adjecent frames
+
+let final_center_distance_multiplier = 8 // document this
 
 // 0.5 gets lots of lines and no false positives
 let looks_like_a_line_lowest_count_reduction: Double = 0.55 // 0-1 percentage of decrease on group_number_of_hough_lines count

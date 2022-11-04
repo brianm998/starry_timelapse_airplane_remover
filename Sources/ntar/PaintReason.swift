@@ -10,13 +10,39 @@ typealias WillPaint = (
 enum PaintReason: Equatable {
    case assumed                      // large groups are assumed to be airplanes
    case goodScore(Double)            // percent score
-   case adjecentLine(Double, Double, Int, Double)     // theta and rho diffs, plus count and distance
    case looksLikeALine
 
    case badScore(Double)        // percent score
    case adjecentOverlap(Double) // overlap distance
-   case tooBlobby(Double, Double) // first_diff, lowest_diff  XXX more info here
-   case centerLineMismatch
+
+   public var testPaintPixel: Pixel {
+       get {
+           var pixel = Pixel()
+           switch self {
+           case .assumed:
+               pixel.red = 0xBFFF // purple
+               pixel.green = 0x3888
+               pixel.blue = 0xA888
+           case .goodScore:
+                pixel.red = 0xFFFF // yellow
+                pixel.green = 0xFFFF
+                pixel.blue = 0x0000
+           case .looksLikeALine:
+                pixel.red = 0xFFFF // red
+                pixel.green = 0x0000
+                pixel.blue = 0x0000
+           case .badScore:
+                pixel.green = 0xFFFF // cyan
+                pixel.blue = 0xFFFF
+                pixel.red = 0x0000
+           case .adjecentOverlap:
+                pixel.red = 0x0000
+                pixel.blue = 0xFFFF // blue
+                pixel.green = 0x0000
+           }
+           return pixel
+       }
+   }
         
    public static func == (lhs: PaintReason, rhs: PaintReason) -> Bool {
       switch lhs {
@@ -41,13 +67,6 @@ enum PaintReason: Equatable {
           default:
               return false
           }
-      case adjecentLine:
-          switch rhs {
-          case adjecentLine:
-              return true
-          default:
-              return false
-          }
       case badScore:
           switch rhs {
           case badScore:
@@ -58,20 +77,6 @@ enum PaintReason: Equatable {
       case adjecentOverlap:
           switch rhs {
           case adjecentOverlap:
-              return true
-          default:
-              return false
-          }
-      case tooBlobby: 
-          switch rhs {
-          case tooBlobby:
-              return true
-          default:
-              return false
-          }
-      case centerLineMismatch:
-          switch rhs {
-          case centerLineMismatch:
               return true
           default:
               return false

@@ -23,13 +23,11 @@ test paint colors:
  red - looks like a line
  purple - painted over because of large size only
  yellow - painted over because of good frame-only score
- magenta - painted over because of inter-frame line alignment
 
  blue - not painted over because of inter-frame overlap
  cyan - not painted over because of bad frame-only score
- bright green - outlier group that was not painted over for some reason
+ green - outlier group that was not painted over for some reason
  light green - outlier, but not part of a big enough group
- less cyan - centerLineMismatch
 */
 @available(macOS 10.15, *)
 actor FrameAirplaneRemover: Equatable { 
@@ -328,26 +326,7 @@ actor FrameAirplaneRemover: Equatable {
                 {
                     if let (will_paint, why) = should_paint[group_name] {
                         if !will_paint {
-                            switch why {
-                            case .badScore:
-                                nextPixel.green = 0xFFFF // cyan
-                                nextPixel.blue = 0xFFFF
-                                nextPixel.red = 0x0000
-                            case .adjecentOverlap:
-                                nextPixel.red = 0x0000
-                                nextPixel.blue = 0xFFFF // blue
-                                nextPixel.green = 0x0000
-                            case .tooBlobby:
-                                nextPixel.red = 0x0000
-                                nextPixel.blue = 0x8FFF // less blue
-                                nextPixel.green = 0x0000
-                            case .centerLineMismatch:
-                                nextPixel.green = 0x8FFF // less cyan
-                                nextPixel.blue = 0x8FFF
-                                nextPixel.red = 0x0000
-                            default:
-                                fatalError("should not happen")
-                            }
+                            nextPixel.value = why.testPaintPixel.value
                         }
                     } else {
                         nextPixel.green = 0xFFFF // groups that can be chosen to paint
@@ -527,7 +506,7 @@ actor FrameAirplaneRemover: Equatable {
                 Log.d("frame \(frame_index) group \(name) line at index 0 theta \(group_theta), rho \(group_rho), count \(group_count)")
                 var lowest_count = group_count
                 var first_count = -111111111
-                
+
                 if lines_from_this_group.count > 1 {
                     let (_, _, _first_count) = lines_from_this_group[1]
                     first_count = _first_count
@@ -545,6 +524,7 @@ actor FrameAirplaneRemover: Equatable {
                     // from the highest value, which indicates a higher probability that
                     // this group is close to being all in a line
 
+                    // XXX this logic could do more than just check the count of the last line
                     if(Double(lowest_count)/Double(group_count) < looks_like_a_line_lowest_count_reduction) {
                         should_paint[name] = (shouldPaint: true, why: .looksLikeALine) // XXX put some data in here
                         Log.d("frame \(frame_index) will paint group \(name) because it looks like a line from the group hough transform")
@@ -802,28 +782,7 @@ actor FrameAirplaneRemover: Equatable {
         
         // for testing, colors changed pixels
         if test_paint {
-            switch why {
-            case .assumed:
-                paint_pixel.red = 0xBFFF // purple
-                paint_pixel.green = 0x3888
-                paint_pixel.blue = 0xA888
-            case .goodScore:
-                paint_pixel.red = 0xFFFF // yellow
-                paint_pixel.green = 0xFFFF
-                paint_pixel.blue = 0x0000
-            case .adjecentLine:
-                paint_pixel.red = 0xFFFF // magenta
-                paint_pixel.blue = 0xFFFF
-                paint_pixel.green = 0x0000
-            case .looksLikeALine:
-                paint_pixel.red = 0xFFFF // red
-                paint_pixel.green = 0x0000
-                paint_pixel.blue = 0x0000
-            default:
-                fatalError("should not happen")
-            }
-            
-            var test_paint_value = paint_pixel.value
+            var test_paint_value = why.testPaintPixel.value
             test_paint_data.replaceSubrange(offset ..< offset+raw_pixel_size_bytes,
                                             with: &test_paint_value,
                                             count: raw_pixel_size_bytes)

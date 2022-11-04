@@ -203,7 +203,7 @@ class ImageSequenceProcessor {
             }
             Log.d("finished hook")
             self.finished_hook()
-            let rename_me = await self.dispatchGroup.dispatch_group
+            let rename_me = self.dispatchGroup.dispatch_group
             while (rename_me.wait(timeout: DispatchTime.now().advanced(by: .seconds(3))) == .timedOut) {
                 let count = await self.dispatchGroup.count
                 if count < 8 {      // XXX hardcoded constant

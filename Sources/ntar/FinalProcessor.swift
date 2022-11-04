@@ -253,12 +253,11 @@ fileprivate func run_final_pass(frames: [FrameAirplaneRemover], mainIndex main_i
                                 // multiply the constant by how far the frames are away
                                 // from eachother in the sequence
                                 var edge_amt = Double(final_group_boundary_amt * mult)
-                                var center_amt = Double(final_group_boundary_amt*8 * mult) // XXX constant
+                                var center_amt = Double(final_group_boundary_amt*final_center_distance_multiplier * mult)
                                 if mult == 1 {
                                     // directly adjecent frames
                                     // -2 isn't enough
-                                    edge_amt = -2 // may not need this?
-                                    // XXX hardcoded constant
+                                    edge_amt = final_adjecent_edge_amount // may not need this?
                                     // XXX maybe only if they are in alignment?
                                 }
 
