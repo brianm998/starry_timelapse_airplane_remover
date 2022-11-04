@@ -143,11 +143,29 @@ let test_paint = true           // write out a separate image sequence with colo
 @main
 struct Ntar: ParsableCommand {
 
+    @Option(name: .shortAndLong, help: """
+Max Number of frames to process at once.
+One per cpu works good.
+May need to be reduced to a lower value:
+ - when processing large images (>24mp)
+ - on a machine without gobs of ram (<128g)
 
-    @Flag(name: .shortAndLong, help: "Max Number of frames to process at once.\nOne per cpu works good.\nMay need to be reduced to a lower value:\n - when processing large images (>24mp)\n - on a machine without gobs of ram (<128g)\n")
-    var maxConcurrentFrames: Int     // XXX get this from n-cpu
-    
-    @Argument(help: "Image sequence dirname to process.\nShould include a sequence of 16 bit tiff files, sortable by name.")
+""")
+    var numConcurrentRenders: Int     // XXX default this to n-cpu
+
+
+    @Flag(name: .shortAndLong, help:"""
+Write out a separate image sequence with colors indicating
+what was detected, and what was changed.
+Shows what changes have been made to each frame.
+
+""")
+    var test_paint = false
+
+    @Argument(help: """
+Image sequence dirname to process.
+Should include a sequence of 16 bit tiff files, sortable by name.
+""")
     var image_sequence_dirname: String
 
     mutating func run() throws {
@@ -176,7 +194,7 @@ struct Ntar: ParsableCommand {
         if #available(macOS 10.15, *) {
             let dirname = "\(path)/\(input_image_sequence_dirname)"
             let eraser = NighttimeAirplaneRemover(imageSequenceDirname: dirname,
-                                              maxConcurrent: UInt(maxConcurrentFrames),
+                                              maxConcurrent: UInt(numConcurrentRenders),
                                               maxPixelDistance: max_pixel_brightness_distance, 
                                               testPaint: test_paint)
                                                   
