@@ -33,6 +33,8 @@ actor FrameAirplaneRemover: Equatable {
     var test_paint_filename: String = "" // the filename to write out test paint data to
     var test_paint = false               // should we test paint?  helpful for debugging
 
+    let outlier_output_dirname: String?
+    
     // one dimentional arrays indexed by y*width + x
     var outlier_amounts: [UInt32]  // amount difference of each outlier
     var outlier_groups: [String?]  // named outlier group for each outlier
@@ -63,6 +65,7 @@ actor FrameAirplaneRemover: Equatable {
           otherFrames: [PixelatedImage],
           output_filename: String,
           test_paint_filename tpfo: String?,
+          outlier_output_dirname: String?,
           max_pixel_distance: UInt16
          )
     {
@@ -74,6 +77,8 @@ actor FrameAirplaneRemover: Equatable {
             self.test_paint = true
             self.test_paint_filename = tp_filename
         }
+
+        self.outlier_output_dirname = outlier_output_dirname
         self.width = image.width
         self.height = image.height
 
@@ -829,6 +834,51 @@ actor FrameAirplaneRemover: Equatable {
         return lhs.frame_index == rhs.frame_index
     }    
 
+    func writeOutlierGroupImages() {
+        Log.e("writing outlier group images")              
+        for (group_name, _) in self.neighbor_groups {
+            Log.w("writing text file for group \(group_name)")
+
+            if let min_x = group_min_x[group_name],
+               let min_y = group_min_y[group_name],
+               let max_x = group_max_x[group_name],
+               let max_y = group_max_y[group_name],
+               let output_dirname = outlier_output_dirname
+            {
+                let filename = "\(frame_index)_outlier_\(group_name).txt".replacingOccurrences(of: ",", with: "_")
+
+                let full_path = "\(output_dirname)/\(filename)"
+                if FileManager.default.fileExists(atPath: full_path) {
+                    Log.w("cannot write to \(full_path), it already exists")
+                } else {
+                    Log.e("creating \(full_path)")                      
+                    var line = ""
+
+                    for y in min_y ... max_y {
+                        for x in min_x ... max_x {
+                            let index = y*width+x
+                            if let new_group_name = outlier_groups[index],
+                               new_group_name == group_name
+                            {
+                                line += "*" // outlier spot
+                            } else {
+                                line += " "
+                            }
+                        }
+                        line += "\n"
+                    }
+                    if let data = line.data(using: .utf8) {
+                        FileManager.default.createFile(atPath: full_path, contents: data, attributes: nil)
+                        Log.i("wrote \(full_path)")
+                    } else {
+                        Log.e("cannot create data?")
+                    }
+                }
+            } else {
+                Log.w("cannot write image for group \(group_name)")
+            }
+        }
+    }
 }
 
                   

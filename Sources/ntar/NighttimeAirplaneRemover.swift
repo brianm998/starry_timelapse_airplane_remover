@@ -24,23 +24,31 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
     
     let test_paint_output_dirname: String
 
+    let outlier_output_dirname: String
+
     // the following properties get included into the output videoname
     
     // difference between same pixels on different frames to consider an outlier
     let max_pixel_distance: UInt16
-    
+
+    // write out test paint images
     let test_paint: Bool
 
+    // write out individual outlier group images
+    let should_write_outlier_group_images: Bool
+    
     var final_processor: FinalProcessor?    
 
     init(imageSequenceDirname image_sequence_dirname: String,
          maxConcurrent max_concurrent: UInt = 5,
          maxPixelDistance max_pixel_distance: UInt16 = 10000,
          testPaint: Bool = false,
+         writeOutlierGroupImages: Bool = false,
          givenFilenames given_filenames: [String]? = nil)
     {
         self.max_pixel_distance = max_pixel_distance
         self.test_paint = testPaint
+        self.should_write_outlier_group_images = writeOutlierGroupImages
 
         let formatted_theta_diff = String(format: "%0.1f", max_theta_diff)
         let formatted_rho_diff = String(format: "%0.1f", max_rho_diff)
@@ -51,6 +59,7 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
         var basename = "\(image_sequence_dirname)-no-planes-ntar-v-\(ntar_version)"
         basename = basename.replacingOccurrences(of: ".", with: "_")
         test_paint_output_dirname = "\(basename)-test-paint"
+        outlier_output_dirname = "\(basename)-outliers"
         let output_dirname = basename
         super.init(imageSequenceDirname: image_sequence_dirname,
                    outputDirname: output_dirname,
@@ -58,8 +67,8 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
                    givenFilenames: given_filenames)
 
         let processor = FinalProcessor(numberOfFrames: self.image_sequence.filenames.count,
-                                    maxConcurrent: max_concurrent_renders,
-                                    dispatchGroup: dispatchGroup)
+                                       maxConcurrent: max_concurrent_renders,
+                                       dispatchGroup: dispatchGroup)
         
         final_processor = processor
     }
@@ -67,6 +76,9 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
     // called by the superclass at startup
     override func startup_hook() {
         if test_paint { mkdir(test_paint_output_dirname) }
+        if should_write_outlier_group_images {
+            mkdir(outlier_output_dirname)
+        }
     }
     
     // called by the superclass to process each frame
@@ -181,6 +193,7 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
                                                              otherFrames: otherFrames,
                                                              output_filename: output_filename,
                                                              test_paint_filename: tpfo,
+                                                             outlier_output_dirname: outlier_output_dirname,
                                                              max_pixel_distance: max_pixel_distance)
         else {
             Log.d("DOH")
@@ -207,7 +220,7 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
         let interval3 = String(format: "%0.1f", time_3 - time_2)
         
         Log.d("frame \(frame_index) done processing the outlier map after \(interval3)s")
-
+        
         let time_4 = NSDate().timeIntervalSince1970
         let interval4 = String(format: "%0.1f", time_4 - time_3)
         Log.d("frame \(frame_index) calculating group bounds \(interval4)s")
@@ -215,6 +228,13 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
         // figure out what part of the image each outlier group lies in
         await frame_plane_remover.calculateGroupBoundsAndAmounts()
 
+        if should_write_outlier_group_images {
+            await frame_plane_remover.writeOutlierGroupImages()
+        } else {
+            Log.e("WTF")
+            fatalError("FUCK YOU")
+        }
+        
         let time_5 = NSDate().timeIntervalSince1970
         let interval5 = String(format: "%0.1f", time_5 - time_4)
         Log.d("frame \(frame_index) running full hough transform after \(interval5)s")

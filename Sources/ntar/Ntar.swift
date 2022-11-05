@@ -182,21 +182,21 @@ Shows what changes have been made to each frame.
 """)
     var test_paint = false
 
-    @Flag(help:"""
-Print out what the test paint colors mean
-""")
+    @Flag(help:"Print out what the test paint colors mean")
     var show_test_paint_colors = false
     
     @Argument(help: """
-Image sequence dirname to process.
+Image sequence dirname to process. 
 Should include a sequence of 16 bit tiff files, sortable by name.
 """)
     var image_sequence_dirname: String?
 
-    @Flag(name: .shortAndLong, help:"""
-Show version number
-""")
+    @Flag(name: .shortAndLong, help:"Show version number")
     var version = false
+
+    @Flag(name: .customLong("write-outlier-group-images"),
+          help:"Write individual outlier group image files")
+    var should_write_outlier_group_images = false
     
     mutating func run() throws {
 
@@ -257,7 +257,8 @@ And each larger outlier group that is not painted over in the normal output is p
                 let eraser = NighttimeAirplaneRemover(imageSequenceDirname: dirname,
                                                       maxConcurrent: UInt(numConcurrentRenders),
                                                       maxPixelDistance: max_pixel_brightness_distance, 
-                                                      testPaint: test_paint)
+                                                      testPaint: test_paint,
+                                                      writeOutlierGroupImages: should_write_outlier_group_images)
                 
                 eraser.run()
             } else {
