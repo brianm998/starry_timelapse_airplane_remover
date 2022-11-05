@@ -84,7 +84,9 @@ todo:
 
  - track ntar version somehow and report that with a command line option
    (ideally put this in the output dirname instead of the cluster of params now)
- 
+
+ - make command line option to print out test paint colors
+
  - airplanes have:
    - a real line
    - often close but not too far from aligning line in adjecent frames
@@ -132,10 +134,14 @@ let final_adjecent_edge_amount: Double = -2 // the spacing allowed between group
 
 let final_center_distance_multiplier = 8 // document this
 
-// 0.5 gets lots of lines and no false positives
+// 0.5 gets lots of lines and few false positives
 let looks_like_a_line_lowest_count_reduction: Double = 0.5 // 0-1 percentage of decrease on group_number_of_hough_lines count
 
 let supported_image_file_types = [".tif", ".tiff"] // XXX move this out
+
+
+
+
 
 let nvar_version = "0.0.1"
 
@@ -151,12 +157,12 @@ May need to be reduced to a lower value:
 """)
     var numConcurrentRenders: Int = 4     // XXX default this to n-cpu
 
-    @Option(name: [.short, .customLong("file-log")], help:"""
+    @Option(name: [.short, .customLong("file-log-level")], help:"""
 If present, ntar will output a file log at the given level.
 """)
     var fileLogLevel: Log.Level?
     
-    @Option(name: [.customShort("o"), .customLong("output")], help:"""
+    @Option(name: [.customShort("c"), .customLong("console-log-level")], help:"""
 The logging level that ntar will output directly to the terminal.
 """)
     var terminalLogLevel: Log.Level = .info
@@ -168,14 +174,44 @@ Shows what changes have been made to each frame.
 """)
     var test_paint = false
 
+    @Flag(help:"""
+Print out what the test paint colors mean
+""")
+    var show_test_paint_colors = false
+    
     @Argument(help: """
 Image sequence dirname to process.
 Should include a sequence of 16 bit tiff files, sortable by name.
 """)
-    var image_sequence_dirname: String
+    var image_sequence_dirname: String?
 
     mutating func run() throws {
-    
+
+        if show_test_paint_colors {
+            print("""
+
+When called with -t or --test-paint, ntar will output two sequences of images.
+The first will be the normal output with airplanes removed.
+The second will the the 'test paint' version,
+where each outlier group larger than \(min_group_size) pixels that will be painted over is painted:
+
+""")
+            for willPaintReason in PaintReason.shouldPaintCases {
+                print("   "+willPaintReason.BasicColor+"- "+willPaintReason.BasicColor.name()+": "+willPaintReason.name+BasicColor.reset+"\n     \(willPaintReason.description)")
+            }
+            print("""
+
+And each larger outlier group that is not painted over in the normal output is painted:
+
+""")
+            
+            for willPaintReason in PaintReason.shouldNotPaintCases {
+                print("   "+willPaintReason.BasicColor+"- "+willPaintReason.BasicColor.name()+": "+willPaintReason.name+BasicColor.reset+"\n     \(willPaintReason.description)")
+            }
+            print("\n")
+            return
+        } 
+        
         // XXX don't assume the arg is in cwd
         let path = FileManager.default.currentDirectoryPath
         let input_image_sequence_dirname = image_sequence_dirname

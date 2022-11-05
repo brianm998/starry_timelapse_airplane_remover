@@ -7,7 +7,7 @@ It operates upon a still image sequence, and outputs a modified sequence which c
 
 It attempts to identify objects such as airplane trails and remove them from the video.  Low flying airplanes that leave big streaks are easily detected.  High flying planes, even close to the horizon are more difficult.  Some sattelites may be detected, but many are not.  Be aware that incoming meteor trails will be caught as well, best to re-introduce those from the original video in post currently.
 
-It is written in swift, and uses only the Foundation, CoreGraphics and Cocoa frameworks.  Any swift installation that has these frameworks should be able to compile and run this software.
+It is written in swift, and uses only the Foundation, CoreGraphics and Cocoa frameworks.  Any swift installation that has these frameworks should be able to compile and run this software.  I've developed it on macos, and can provide binaries for any desktop mac architecture.  It _might_ compile on windows and or linux.  
 
 Each video frame is compared to the frames immediately before and after it.  For the first and last frame, this means there is only one other frame to compare to.  Based upon a provided brightness threshold, a number of 'outlier' pixels are identified in the frame being processed.  These pixels are brighter than those at the same image position in the adjecent frames.  The brightness level used is a max of the total brightness level and each of the r,g,b channels. 
 
@@ -25,6 +25,9 @@ This identified each line in the outlier data set, and was able to identify catc
 
 The next iteration was to classify the theta and rho (polar line coordinates) for each outlier group separately.  This requires running the hough transform separately on each outlier group, but is able to properly distinguish if there is any line orientiation in each group of outliers.
 
-Future iterations could involve testing and tweaking some constants more, as well as implementing some speed improvements in the many many hough transforms needed.
+The last major change before version 0.0.1 was to classify individual groups as looking like a line based upon the overal results of the group hough transform.  The hough transform returns many possible lines that may intersect with the given data, each with an individual count.  Given the 3x3 best of approach of gathering lines from the hough transform, the closer the input is to a line, the quicker the count on each of the subsequent lines returned by the hough transform will be.  For 0.0.1, each group has the line count from the best line compared to the tenth line after it in decending order.  If the difference is more than 50%, then it looks like a line.  This is remarkedly affective, if simple.
+
+A further iteration could look at the distribution of hough transform lines across a wider range.  For narrow lines, the hough transform finds less than 10 good matches.  For really big (1000+ pixels) lines in the sky, the houhg transform can match many lines with very similar high counts.  These streaks are currently handled by the assume_airplane_size global variable, which just paints them regardless of anything but size.
 
 Under development, feel free to reach out to me if you have any questions.
+

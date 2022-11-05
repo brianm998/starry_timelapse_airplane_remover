@@ -7,7 +7,7 @@ typealias WillPaint = (
 )
 
 // why we are or are not painting a group
-enum PaintReason: Equatable {
+enum PaintReason: Equatable, CaseIterable {
    case assumed                      // large groups are assumed to be airplanes
    case goodScore(Double)            // percent score
    case looksLikeALine
@@ -15,35 +15,88 @@ enum PaintReason: Equatable {
    case badScore(Double)        // percent score
    case adjecentOverlap(Double) // overlap distance
 
-   // colors used to test paint to show why
-   public var testPaintPixel: Pixel {
-       get {
-           var pixel = Pixel()
-           switch self {
-           case .assumed:
-               pixel.red = 0xBFFF // purple / magenta
-               pixel.green = 0x3888
-               pixel.blue = 0xA888
-           case .goodScore:
-               pixel.red = 0xFFFF // yellow
-               pixel.green = 0xFFFF
-               pixel.blue = 0x0000
-           case .looksLikeALine:
-               pixel.red = 0xFFFF // red
-               pixel.green = 0x0000
-               pixel.blue = 0x0000
-           case .badScore:
-               pixel.green = 0xFFFF // cyan
-               pixel.blue = 0xFFFF
-               pixel.red = 0x0000
-           case .adjecentOverlap:
-               pixel.red = 0x0000
-               pixel.blue = 0xFFFF // blue
-               pixel.green = 0x0000
-           }
-           return pixel
-       }
+   public var BasicColor: BasicColor {
+        get {
+            switch self {
+            case .assumed:
+                return .magenta
+            case .goodScore:
+                return .yellow
+            case .looksLikeALine:
+                return .red
+            case .badScore:
+                return .cyan
+            case .adjecentOverlap:
+                return .blue
+            }
+        }
    }
+
+   public var name: String {
+        get {
+            switch self {
+            case .assumed:         return "assumed"
+            case .goodScore:       return "good score"
+            case .looksLikeALine:  return "looks like a line"
+            case .badScore:        return "bad score"
+            case .adjecentOverlap: return "adjecent overlap"
+            }
+        }
+   }
+
+   public var description: String {
+        get {
+            switch self {
+            case .assumed:
+                return """
+These outlier groups are painted over because they are larger than \(assume_airplane_size) pixels in size.
+"""
+            case .goodScore:
+                return """
+These outlier groups are painted over because of a good score analyzing the outliers in a single frame.
+"""
+            case .looksLikeALine:
+                return """
+These outlier groups are painted over because they look like a line based upon hough transform data.
+"""
+            case .badScore:
+                return """
+These outlier groups are not painted over because of a bad score analyzing the outliers in a single frame.
+"""
+            case .adjecentOverlap:
+                return """
+These outlier groups are not painted over because it overlaps with a similar outlier group in an adjecent frame.
+"""
+            }
+        }
+   }
+
+   public var shouldPaint: Bool {
+        get {
+            switch self {
+            case .assumed:         return true
+            case .goodScore:       return true
+            case .looksLikeALine:  return true
+            case .badScore:        return false
+            case .adjecentOverlap: return false
+            }
+        }
+   }
+
+   static var shouldPaintCases: [PaintReason] {
+       return PaintReason.allCases.filter { $0.shouldPaint }
+   }
+
+   static var shouldNotPaintCases: [PaintReason] {
+       return PaintReason.allCases.filter { !$0.shouldPaint }
+   }
+
+   static var allCases: [PaintReason] {
+       return [.assumed, .looksLikeALine, .goodScore(0), .badScore(0), .adjecentOverlap(0)]
+   }
+                         
+   // colors used to test paint to show why
+   public var testPaintPixel: Pixel { self.BasicColor.pixel }
         
    public static func == (lhs: PaintReason, rhs: PaintReason) -> Bool {
       switch lhs {
