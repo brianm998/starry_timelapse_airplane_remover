@@ -214,8 +214,8 @@ fileprivate func run_final_pass(frames: [FrameAirplaneRemover], mainIndex main_i
         for (group_name, group_line) in await frame.group_lines {
             // look for more data to act upon
 
-            if let (frame_should_paint, frame_why) = await frame.should_paint[group_name],
-               frame_should_paint && (frame_why == .looksLikeALine)
+            if let reason = await frame.should_paint[group_name],
+               reason.willPaint && (reason == .looksLikeALine)
             {
                 Log.i("frame \(frame.frame_index) skipping group \(group_name) of size \(group_name) because it .looksLikeALine") // XXX would be nice to have more data in this log line
                 continue
@@ -300,18 +300,16 @@ fileprivate func run_final_pass(frames: [FrameAirplaneRemover], mainIndex main_i
                                     var do_it = true
 
                                     // do paint over objects that look like lines
-                                    if let (frame_should_paint, frame_why) =
-                                           await frame.should_paint[group_name]
+                                    if let frame_reason = await frame.should_paint[group_name]
                                     {
-                                        if frame_should_paint && frame_why == .looksLikeALine {
+                                        if frame_reason.willPaint && frame_reason == .looksLikeALine {
                                             do_it = false
                                         }
                                     }
                                     
-                                    if let (other_should_paint, other_why) = 
-                                           await other_frame.should_paint[og_name]
+                                    if let other_reason = await other_frame.should_paint[og_name]
                                     {
-                                        if other_should_paint && other_why == .looksLikeALine {
+                                        if other_reason.willPaint && other_reason == .looksLikeALine {
                                             do_it = false
                                         }
                                     }
@@ -321,10 +319,8 @@ fileprivate func run_final_pass(frames: [FrameAirplaneRemover], mainIndex main_i
                                         // shouldn't be painted over
                                         let _ = await (
                                                 frame.setShouldPaint(group: group_name,
-                                                                     toShouldPaint: false,
                                                                      why: .adjecentOverlap(-distance_bewteen_groups)),
                                                 other_frame.setShouldPaint(group: og_name,
-                                                                           toShouldPaint: false,
                                                                            why: .adjecentOverlap(-distance_bewteen_groups)))
                                         
                                         Log.d("frame \(frame.frame_index) should_paint[\(group_name)] = (false, .adjecentOverlap(\(-distance_bewteen_groups))")

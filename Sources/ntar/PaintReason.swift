@@ -1,11 +1,5 @@
 import Foundation
 
-// will we paint a group or not, and why
-typealias WillPaint = (                 
-    shouldPaint: Bool,          // paint over this group or not
-    why: PaintReason            // why?
-)
-
 // why we are or are not painting a group
 enum PaintReason: Equatable, CaseIterable {
    case assumed                      // large groups are assumed to be airplanes
@@ -71,7 +65,7 @@ These outlier groups are not painted over because it overlaps with a similar out
         }
    }
 
-   public var shouldPaint: Bool {
+   public var willPaint: Bool {
         get {
             switch self {
             case .assumed:         return true
@@ -84,11 +78,11 @@ These outlier groups are not painted over because it overlaps with a similar out
    }
 
    static var shouldPaintCases: [PaintReason] {
-       return PaintReason.allCases.filter { $0.shouldPaint }
+       return PaintReason.allCases.filter { $0.willPaint }
    }
 
    static var shouldNotPaintCases: [PaintReason] {
-       return PaintReason.allCases.filter { !$0.shouldPaint }
+       return PaintReason.allCases.filter { !$0.willPaint }
    }
 
    static var allCases: [PaintReason] {

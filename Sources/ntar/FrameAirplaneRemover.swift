@@ -42,7 +42,7 @@ actor FrameAirplaneRemover: Equatable {
                                            // group, only groups larger than min_group_size
     var lines_from_full_image: [Line] = [] // lines from all large enough outliers
 
-    var should_paint: [String:WillPaint] = [:] // keyed by group name, should be paint it?
+    var should_paint: [String:PaintReason] = [:] // keyed by group name, should be paint it?
     var group_min_x: [String:Int] = [:]   // keyed by group name, image bounds of each group
     var group_min_y: [String:Int] = [:]
     var group_max_x: [String:Int] = [:]
@@ -52,8 +52,8 @@ actor FrameAirplaneRemover: Equatable {
 
     var group_lines: [String:Line] = [:] // keyed by group name, the best line found for each group
 
-    func setShouldPaint(group group_name: String, toShouldPaint will_paint: Bool, why: PaintReason) {
-        self.should_paint[group_name] = (shouldPaint: will_paint, why: why)
+    func setShouldPaint(group group_name: String, why: PaintReason) {
+        self.should_paint[group_name] = why
     }
     
     let output_filename: String
@@ -311,9 +311,9 @@ actor FrameAirplaneRemover: Equatable {
                 if let group_name = outlier_groups[index],
                    let group_size = neighbor_groups[group_name]
                 {
-                    if let (will_paint, why) = should_paint[group_name] {
-                        if !will_paint {
-                            nextPixel.value = why.testPaintPixel.value
+                    if let reason = should_paint[group_name] {
+                        if !reason.willPaint {
+                            nextPixel.value = reason.testPaintPixel.value
                         }
                     } else {
                         nextPixel.green = 0xFFFF // groups that can be chosen to paint
@@ -442,7 +442,7 @@ actor FrameAirplaneRemover: Equatable {
                 if size > assume_airplane_size {
                     Log.d("frame \(frame_index) assuming group \(name) of size \(size) (> \(assume_airplane_size)) is an airplane, will paint over it")
                     Log.d("frame \(frame_index) should_paint[\(name)] = (true, .assumed)")
-                    should_paint[name] = (shouldPaint: true, why: .assumed)
+                    should_paint[name] = .assumed
                     continue
                 }
 
@@ -513,7 +513,7 @@ actor FrameAirplaneRemover: Equatable {
 
                     // XXX this logic could do more than just check the count of the last line
                     if(Double(lowest_count)/Double(group_count) < looks_like_a_line_lowest_count_reduction) {
-                        should_paint[name] = (shouldPaint: true, why: .looksLikeALine) // XXX put some data in here
+                        should_paint[name] = .looksLikeALine // XXX put some data in here
                         Log.d("frame \(frame_index) will paint group \(name) because it looks like a line from the group hough transform")
                         continue
                     } else {
@@ -702,9 +702,9 @@ actor FrameAirplaneRemover: Equatable {
                 
                 if best_score > 50 {
                     Log.d("frame \(frame_index) should_paint[\(name)] = (true, .goodScore(\(best_score))")
-                    should_paint[name] = (shouldPaint: true, why: .goodScore(best_score))
+                    should_paint[name] = .goodScore(best_score)
                 } else {
-                    should_paint[name] = (shouldPaint: false, why: .badScore(best_score))
+                    should_paint[name] = .badScore(best_score)
                     Log.d("frame \(frame_index) should_paint[\(name)] = (false, .badScore(\(best_score))")
                     if min_theta_diff == inital_min_theta_diff ||
                          min_rho_diff == inital_min_rho_diff
@@ -726,12 +726,12 @@ actor FrameAirplaneRemover: Equatable {
         // paint over every outlier in the paint list with pixels from the adjecent frames
         for (index, group_name) in outlier_groups.enumerated() {
             if let group_name = group_name,
-               let (will_paint, why) = should_paint[group_name],
-               will_paint
+               let reason = should_paint[group_name],
+               reason.willPaint
             {
                 let x = index % width;
                 let y = index / width;
-                paint(x: x, y: y, why: why,
+                paint(x: x, y: y, why: reason,
                      toData: &data, testData: &test_paint_data)
             }
         }

@@ -214,34 +214,37 @@ And each larger outlier group that is not painted over in the normal output is p
         
         // XXX don't assume the arg is in cwd
         let path = FileManager.default.currentDirectoryPath
-        let input_image_sequence_dirname = image_sequence_dirname
+        if let input_image_sequence_dirname = image_sequence_dirname {
     
-        Log.name = "ntar-log"
-        Log.nameSuffix = input_image_sequence_dirname
+            Log.name = "ntar-log"
+            Log.nameSuffix = input_image_sequence_dirname
 
-        Log.handlers[.console] = ConsoleLogHandler(at: terminalLogLevel)
-        if let fileLogLevel = fileLogLevel {
-            Log.handlers[.file] = FileLogHandler(at: fileLogLevel)
-        }
-    
-        // XXX maybe check to make sure this is a directory
-        Log.d("will process \(input_image_sequence_dirname) on path \(path)")
-    
-        Log.d("running with min_group_size \(min_group_size) min_line_count \(min_line_count)")
-        Log.d("group_min_line_count \(group_min_line_count) max_theta_diff \(max_theta_diff) max_rho_diff \(max_rho_diff)")
-        Log.d("max_number_of_lines \(max_number_of_lines) assume_airplane_size \(assume_airplane_size)")
-        //Log.d("max_concurrent_frames \(max_concurrent_frames) max_pixel_brightness_distance \(max_pixel_brightness_distance)")
-        
-        if #available(macOS 10.15, *) {
-            let dirname = "\(path)/\(input_image_sequence_dirname)"
-            let eraser = NighttimeAirplaneRemover(imageSequenceDirname: dirname,
-                                              maxConcurrent: UInt(numConcurrentRenders),
-                                              maxPixelDistance: max_pixel_brightness_distance, 
-                                              testPaint: test_paint)
-                                                  
-            eraser.run()
+            Log.handlers[.console] = ConsoleLogHandler(at: terminalLogLevel)
+            if let fileLogLevel = fileLogLevel {
+                Log.handlers[.file] = FileLogHandler(at: fileLogLevel)
+            }
+            
+            // XXX maybe check to make sure this is a directory
+            Log.d("will process \(input_image_sequence_dirname) on path \(path)")
+            
+            Log.d("running with min_group_size \(min_group_size) min_line_count \(min_line_count)")
+            Log.d("group_min_line_count \(group_min_line_count) max_theta_diff \(max_theta_diff) max_rho_diff \(max_rho_diff)")
+            Log.d("max_number_of_lines \(max_number_of_lines) assume_airplane_size \(assume_airplane_size)")
+            //Log.d("max_concurrent_frames \(max_concurrent_frames) max_pixel_brightness_distance \(max_pixel_brightness_distance)")
+            
+            if #available(macOS 10.15, *) {
+                let dirname = "\(path)/\(input_image_sequence_dirname)"
+                let eraser = NighttimeAirplaneRemover(imageSequenceDirname: dirname,
+                                                      maxConcurrent: UInt(numConcurrentRenders),
+                                                      maxPixelDistance: max_pixel_brightness_distance, 
+                                                      testPaint: test_paint)
+                
+                eraser.run()
+            } else {
+                Log.e("cannot run :(") // XXX make this better
+            }
         } else {
-            Log.e("cannot run :(") // XXX make this better
+            Log.w("need to provide input") // XXX make this better
         }
     }
 }
