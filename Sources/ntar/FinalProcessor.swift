@@ -215,9 +215,9 @@ fileprivate func run_final_pass(frames: [FrameAirplaneRemover], mainIndex main_i
             // look for more data to act upon
 
             if let reason = await frame.should_paint[group_name],
-               reason.willPaint && (reason == .looksLikeALine)
+               reason.willPaint && reason == .looksLikeALine
             {
-                Log.i("frame \(frame.frame_index) skipping group \(group_name) of size \(group_name) because it .looksLikeALine") // XXX would be nice to have more data in this log line
+                Log.i("frame \(frame.frame_index) skipping group \(group_name) because it .looksLikeALine") // XXX would be nice to have more data in this log line
                 continue
             }
             

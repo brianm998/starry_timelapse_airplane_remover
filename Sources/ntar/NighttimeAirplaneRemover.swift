@@ -48,7 +48,7 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
         let formatted_final_theta_diff = String(format: "%0.1f", final_theta_diff)
         let formatted_final_rho_diff = String(format: "%0.1f", final_rho_diff)
         
-        var basename = "\(image_sequence_dirname)-no-planes-ntar-v-\(nvar_version)"
+        var basename = "\(image_sequence_dirname)-no-planes-ntar-v-\(ntar_version)"
         basename = basename.replacingOccurrences(of: ".", with: "_")
         test_paint_output_dirname = "\(basename)-test-paint"
         let output_dirname = basename

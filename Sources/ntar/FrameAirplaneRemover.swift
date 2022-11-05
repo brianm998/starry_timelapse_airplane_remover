@@ -750,9 +750,15 @@ actor FrameAirplaneRemover: Equatable {
         var pixels_to_paint_with: [Pixel] = []
         
         // grab the pixels from the same image spot from adject frames
-        for i in 0 ..< otherFrames.count {
-            pixels_to_paint_with.append(otherFrames[i].readPixel(atX: x, andY: y))
-        }
+//        for i in 0 ..< otherFrames.count {
+//            pixels_to_paint_with.append(otherFrames[i].readPixel(atX: x, andY: y))
+//        }
+
+        // XXX blending both adjecent frames can make the painted airlane streak darker
+        // then it was before because the bright stars are dimmed 50% due to them moving across
+        // two frames.  try just using one frame and see how that works.  make an option?
+        
+        pixels_to_paint_with.append(otherFrames[0].readPixel(atX: x, andY: y))
         
         // blend the pixels from the adjecent frames
         var paint_pixel = Pixel(merging: pixels_to_paint_with)

@@ -21,7 +21,8 @@ todo:
 
  - try image blending
  - make it faster (can always be faster) 
- - make sure it doesn't still crash (after last actor refactor it hasn't yet)
+ - make sure it doesn't still crash - after last actor refactor it has only crashed twice :(
+   look into actor access to properties, should those be wrapped in methods and not exposed?
  - make crash detection perl script better
  - add scripts to allow video to processed video in one command
    - decompress existing video w/ ffmpeg (and note exactly how it was compressed)
@@ -85,7 +86,7 @@ todo:
  - track ntar version somehow and report that with a command line option
    (ideally put this in the output dirname instead of the cluster of params now)
 
- - make command line option to print out test paint colors
+ - make the info logging better
 
  - airplanes have:
    - a real line
@@ -101,6 +102,13 @@ todo:
    - many holes in the structure
    - unlikely to have matching aligned groups in adjecent frames
    - same approx fill amount regardless of aspect ratio
+
+ - next steps for improving airplane detection:
+   - make mode which outputs images for each outlier group with name by frame#/outlier_group_name
+   - visually distinguish into ( airplane / non airplane / not sure ) and relocate each image
+   - use this large blob of data to help train a better group analyzer using more hough data
+
+ 
 */
 
 // XXX here are some random global constants that maybe should be exposed somehow
@@ -143,7 +151,7 @@ let supported_image_file_types = [".tif", ".tiff"] // XXX move this out
 
 
 
-let nvar_version = "0.0.1"
+let ntar_version = "0.0.1"
 
 @main
 struct Ntar: ParsableCommand {
@@ -185,8 +193,20 @@ Should include a sequence of 16 bit tiff files, sortable by name.
 """)
     var image_sequence_dirname: String?
 
+    @Flag(name: .shortAndLong, help:"""
+Show version number
+""")
+    var version = false
+    
     mutating func run() throws {
 
+        if version {
+            print("""
+Nighttime Timelapse Airplane Remover (ntar) version \(ntar_version)
+""")
+            return
+        }
+        
         if show_test_paint_colors {
             print("""
 
@@ -244,7 +264,7 @@ And each larger outlier group that is not painted over in the normal output is p
                 Log.e("cannot run :(") // XXX make this better
             }
         } else {
-            Log.w("need to provide input") // XXX make this better
+            throw ValidationError("need to provide input")
         }
     }
 }
