@@ -117,10 +117,10 @@ todo:
 
 let max_pixel_brightness_distance: UInt16 = 8500 // distance in brightness to be considered an outlier
 
-let min_group_size = 150       // groups smaller than this are ignored
+let min_group_size = 80        // groups smaller than this are ignored
 let min_line_count = 20        // lines with counts smaller than this are ignored
 
-let group_min_line_count = 4    // used when hough transorming individual groups
+let group_min_line_count = 1    // used when hough transorming individual groups
 let max_theta_diff: Double = 4  // degrees of difference allowed between lines
 let max_rho_diff: Double = 70   // pixels of line displacement allowed
 let max_number_of_lines = 500  // don't process more lines than this per image
@@ -136,7 +136,7 @@ let final_rho_diff: Double = 70
 
 let final_group_boundary_amt = 1  // how much we pad the overlap amounts on the final pass
 
-let group_number_of_hough_lines = 10 // document this
+//let group_number_of_hough_lines = 10 // document this
 
 let final_adjecent_edge_amount: Double = -2 // the spacing allowed between groups in adjecent frames
 

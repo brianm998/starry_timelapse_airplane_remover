@@ -17,8 +17,8 @@ func should_paint_based_upon(lines: [Line]) -> Bool {
     }
     let counts_over_lines = Double(line_counts.count) / Double(lines.count)
     if let mid_value = mid_value {
-        if counts_over_lines < 0.0857533004592227,
-	   mid_value < 0.26536245503914
+        if counts_over_lines < 0.0855806273192255,
+	   mid_value < 0.267967978407067
 	{
 	    return true
         }

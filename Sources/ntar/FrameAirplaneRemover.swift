@@ -475,9 +475,7 @@ actor FrameAirplaneRemover: Equatable {
                 }
         
                 // get the theta and rho of just this outlier group
-                let lines_from_this_group =
-                    groupHoughTransform.lines(min_count: 1/*group_min_line_count*/,
-                                           number_of_lines_returned: 10000000/*group_number_of_hough_lines*/)
+                let lines_from_this_group = groupHoughTransform.lines(min_count: group_min_line_count)
                 if lines_from_this_group.count == 0 {
                     Log.w("frame \(frame_index) got no group lines for group \(name) of size \(size)")
                     // this should only happen when there is no data in the input and therefore output 

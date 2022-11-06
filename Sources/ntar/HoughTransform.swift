@@ -64,7 +64,7 @@ class HoughTransform {
     }
     
     func lines(min_count: Int = 5, // lines with less counts than this aren't returned
-              number_of_lines_returned: Int = 20) -> [Line]
+              number_of_lines_returned: Int? = nil) -> [Line]
     {
         let start_time = NSDate().timeIntervalSince1970
 
@@ -156,10 +156,15 @@ class HoughTransform {
         let interval2 = String(format: "%0.1f", time_2 - time_1)
         
         let sortedLines = lines.sorted() { a, b in
-            return a.count < b.count
+            return a.count > b.count
         }
 
-        let small_set_lines = Array<Line>(sortedLines.suffix(number_of_lines_returned).reversed())
+        var small_set_lines: Array<Line> = []
+        if let number_of_lines_returned = number_of_lines_returned {
+            small_set_lines = Array<Line>(sortedLines.suffix(number_of_lines_returned))
+        } else {
+            small_set_lines = Array<Line>(sortedLines)
+        }
 
         let time_3 = NSDate().timeIntervalSince1970
         let interval3 = String(format: "%0.1f", time_3 - time_2)
