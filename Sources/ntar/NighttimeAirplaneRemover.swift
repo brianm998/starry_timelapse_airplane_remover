@@ -50,11 +50,11 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
         self.test_paint = testPaint
         self.should_write_outlier_group_files = writeOutlierGroupFiles
 
-        let formatted_theta_diff = String(format: "%0.1f", max_theta_diff)
-        let formatted_rho_diff = String(format: "%0.1f", max_rho_diff)
+        //let formatted_theta_diff = String(format: "%0.1f", max_theta_diff)
+        //let formatted_rho_diff = String(format: "%0.1f", max_rho_diff)
         
-        let formatted_final_theta_diff = String(format: "%0.1f", final_theta_diff)
-        let formatted_final_rho_diff = String(format: "%0.1f", final_rho_diff)
+        //let formatted_final_theta_diff = String(format: "%0.1f", final_theta_diff)
+        //let formatted_final_rho_diff = String(format: "%0.1f", final_rho_diff)
         
         var basename = "\(image_sequence_dirname)-no-planes-ntar-v-\(ntar_version)"
         basename = basename.replacingOccurrences(of: ".", with: "_")
@@ -203,7 +203,7 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
         let time_1 = NSDate().timeIntervalSince1970
         let interval1 = String(format: "%0.1f", time_1 - start_time)
         
-        Log.d("frame \(frame_index) populating the outlier map")
+        Log.i("frame \(frame_index) populating the outlier map")
 
         // find outlying bright pixels between frames
         await frame_plane_remover.populateOutlierMap() 
@@ -234,10 +234,10 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
         
         let time_5 = NSDate().timeIntervalSince1970
         let interval5 = String(format: "%0.1f", time_5 - time_4)
-        Log.d("frame \(frame_index) running full hough transform after \(interval5)s")
+        //Log.d("frame \(frame_index) running full hough transform after \(interval5)s")
 
         // run a hough transform on large enough outliers only
-        await frame_plane_remover.fullHoughTransform()
+        //await frame_plane_remover.fullHoughTransform()
 
         let time_6 = NSDate().timeIntervalSince1970
         let interval6 = String(format: "%0.1f", time_6 - time_5)

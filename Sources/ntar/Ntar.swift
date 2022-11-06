@@ -117,7 +117,7 @@ todo:
 
 let max_pixel_brightness_distance: UInt16 = 8500 // distance in brightness to be considered an outlier
 
-let min_group_size = 80        // groups smaller than this are ignored
+let min_group_size = 100        // groups smaller than this are ignored
 let min_line_count = 20        // lines with counts smaller than this are ignored
 
 let group_min_line_count = 1    // used when hough transorming individual groups

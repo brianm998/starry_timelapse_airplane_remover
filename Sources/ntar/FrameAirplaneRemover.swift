@@ -88,10 +88,7 @@ actor FrameAirplaneRemover: Equatable {
         self.outlier_amounts = [UInt32](repeating: 0, count: width*height)
         self.outlier_groups = [String?](repeating: nil, count: width*height)
 
-
-        // XXX maybe allocate these later
-              
-        Log.d("frame \(frame_index) got image data")
+        Log.i("frame \(frame_index) starting processing")
     }
 
     // this is still a slow part of the process, but is now about 10x faster than before
@@ -483,10 +480,17 @@ actor FrameAirplaneRemover: Equatable {
                     continue
                 }
 
+                var was_close_to_line = false
+                
                 if should_paint_based_upon(lines: lines_from_this_group) {
-                    should_paint[name] = .looksLikeALine
                     Log.d("frame \(frame_index) will paint group \(name) because it looks like a line from the group hough transform")
-                    continue
+                    if size < 300 { // XXX constant XXX
+                        // don't assume small ones are lines
+                        was_close_to_line = true
+                    } else {
+                        should_paint[name] = .looksLikeALine
+                        continue
+                    }
                 }
                 
                 // this is the most likely line from the outlier group
@@ -524,11 +528,9 @@ actor FrameAirplaneRemover: Equatable {
                 let inital_min_theta_diff: Double = 360             // theta is in degrees
                 let inital_min_rho_diff: Double = houghTransform_rmax // max rho value possible
                 
-                var min_theta_diff = inital_min_theta_diff
-                var min_rho_diff = inital_min_rho_diff
-                var best_choice_line_count: Int = 0
-                var best_group_count: Int = 0
-                var best_score: Double = 0
+                //var min_theta_diff = inital_min_theta_diff
+                //var min_rho_diff = inital_min_rho_diff
+                //var best_choice_line_count: Int = 0
 
 
                 var group_size_score: Double = 0 // size of the group in pixels
@@ -575,125 +577,19 @@ actor FrameAirplaneRemover: Equatable {
                     group_count_score = 100
                 }
 
-                for line in lines_from_full_image {
-                    if line.count <= 10 /* min_line_count XXX */ { continue }
+                var overall_score = group_size_score + group_count_score + group_value_score
 
-                    /*
-                     proposal:
-
-                     make a score based upon theta, rho and both line count and group size.
-
-                     theta 0 == high score
-                     theta 1 == medium
-                     theta 2 == medium
-                     theta 4 == less
-                     theta 5 == less
-                     theta 6 == unlikley
-
-                     rho should be more flexable, allowing for up to 100 or more, but
-                     less likely.  linear probability?
-
-                     count should also matter
-                     what is max count?
-
-                     larger group sizes are preferred
-                     smaller group sizes need to meet higher criteria
-
-                     how to rank this score into a decision?
-
-                     on each iteration of this list, calculate a score, and if it's best,
-                     keep track of the values used to calculate it.
-
-                     at the end, if the score is above some magical threshold, then paint
-                     */
-
-                    
-                    let theta_diff = abs(line.theta-group_theta) // degrees
-                    let rho_diff = abs(line.rho-adjusted_group_rho)       // pixels
-
-                    var theta_score: Double = 0
-                    
-                    if theta_diff == 0 {
-                        theta_score = 100
-                    } else if theta_diff < 1 {
-                        theta_score = 90
-                    } else if theta_diff < 2 {
-                        theta_score = 80
-                    } else if theta_diff < 3 {
-                        theta_score = 60
-                    } else if theta_diff < 4 {
-                        theta_score = 40
-                    } else if theta_diff < 5 {
-                        theta_score = 30
-                    } else if theta_diff < 6 {
-                        theta_score = 20
-                    } else if theta_diff < 7 {
-                        theta_score = 10
-                    } else if theta_diff < 8 {
-                        theta_score = 5
-                    } else {
-                        theta_score = 0
-                    }
-
-                    var rho_score: Double = 0 // score based upon how different the rho is
-
-                    if rho_diff < 3 {
-                        rho_score = 100
-                    } else if rho_diff < 5 {
-                        rho_score = 80
-                    } else if rho_diff < 10 {
-                        rho_score = 50
-                    } else if rho_diff < 100 {
-                        rho_score = 30
-                    } else {
-                        rho_score = 0
-                    }
-                    
-                    var line_score: Double = 0 // score of the line from the full hough transform
-
-                    if line.count < 30 {
-                        line_score = 0
-                    } else if line.count < 35 {
-                        line_score = 10
-                    } else if line.count < 100 {
-                        line_score = 50
-                    } else if line.count < 200 {
-                        line_score = 70
-                    } else if line.count < 500 {
-                        line_score = 90
-                    } else if line.count < 1000 {
-                        line_score = 100
-                    }
-                    
-                    let overall_score = (theta_score*line_score/100 + rho_score*line_score/100 + (group_size_score + group_count_score + group_value_score)/3) / 3
-
-                    // record best comparison from all of them
-                    if overall_score > best_score {
-                        //Log.d("frame \(frame_index) (theta_score \(theta_score) rho_score \(rho_score) line_score \(line_score) group_size_score \(group_size_score)) group_count_score \(group_count_score) group_value_score \(group_value_score) overall_score \(overall_score)")
-
-                        best_score = overall_score
-                        min_theta_diff = theta_diff
-                        min_rho_diff = rho_diff
-                        best_choice_line_count = line.count
-                        best_group_count = group_count
-                    }
+                if was_close_to_line {
+                    overall_score += 80
                 }
-
-                Log.d("frame \(frame_index) final best match for group \(name) of size \(size) value \(group_value) width \(group_width) height \(group_height) - theta_diff \(min_theta_diff) rho_diff \(min_rho_diff) line_count \(best_choice_line_count) group_count \(best_group_count) group_value \(group_value) best_score \(best_score)")
+                overall_score /= 4
                 
-                if best_score > 50 {
-                    Log.d("frame \(frame_index) should_paint[\(name)] = (true, .goodScore(\(best_score))")
-                    should_paint[name] = .goodScore(best_score)
+                if overall_score > 50 {
+                    Log.d("frame \(frame_index) should_paint[\(name)] = (true, .goodScore(\(overall_score))")
+                    should_paint[name] = .goodScore(overall_score)
                 } else {
-                    should_paint[name] = .badScore(best_score)
-                    Log.d("frame \(frame_index) should_paint[\(name)] = (false, .badScore(\(best_score))")
-                    if min_theta_diff == inital_min_theta_diff ||
-                         min_rho_diff == inital_min_rho_diff
-                    {
-                        Log.w("frame \(frame_index) will NOT paint group \(name) no hough transform lines were found")
-                    } else {
-                        Log.d("frame \(frame_index) will NOT paint group \(name)")
-                    }
+                    should_paint[name] = .badScore(overall_score)
+                    Log.d("frame \(frame_index) should_paint[\(name)] = (false, .badScore(\(overall_score))")
                 }
             }
         }

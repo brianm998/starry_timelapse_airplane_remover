@@ -371,8 +371,10 @@ func distance_on(min_x: Int, min_y: Int, max_x: Int, max_y: Int,
 
         // can happen for situations of overlapping areas like this:
         //(1119 124),  (1160 153)
-        //(1122 141),  (1156 160)        
-        Log.w("the line generated from the given slope and line does not intersect the rectangle given")
+        //(1122 141),  (1156 160)
+
+        // is this really a problem? not sure
+        Log.d("the line generated from the given slope and line does not intersect the rectangle given")
     }
 
     var hypotenuse_length: Double = 0
