@@ -236,19 +236,15 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
         let interval5 = String(format: "%0.1f", time_5 - time_4)
         //Log.d("frame \(frame_index) running full hough transform after \(interval5)s")
 
-        // run a hough transform on large enough outliers only
-        //await frame_plane_remover.fullHoughTransform()
-
-        let time_6 = NSDate().timeIntervalSince1970
-        let interval6 = String(format: "%0.1f", time_6 - time_5)
         Log.d("frame \(frame_index) outlier group painting analysis after p\(interval6)s")
 
         // do a lot of analysis to determine what outlier groups we should paint over
         await frame_plane_remover.outlierGroupPaintingAnalysis()
         
-        let time_7 = NSDate().timeIntervalSince1970
-        let interval7 = String(format: "%0.1f", time_7 - time_6)
-        Log.d("frame \(frame_index) timing for frame render - \(interval7)s - \(interval6)s - \(interval5)s - \(interval4)s - \(interval3)s - \(interval2)s - \(interval1)s")
+        let time_6 = NSDate().timeIntervalSince1970
+        let interval6 = String(format: "%0.1f", time_6 - time_5)
+
+        Log.d("frame \(frame_index) timing for frame render - \(interval6)s - \(interval5)s - \(interval4)s - \(interval3)s - \(interval2)s - \(interval1)s")
 
         Log.i("frame \(frame_index) ready for analysis with groups in adjecent frames")
         

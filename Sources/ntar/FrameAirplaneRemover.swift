@@ -298,7 +298,8 @@ actor FrameAirplaneRemover: Equatable {
         }
         self.neighbor_groups = individual_group_counts
     }    
-                  
+
+    // XXX rewrite this to not use outlier_amounts so we can let the memory be deallocated
     func testPaintOutliers(toData test_paint_data: inout Data) {
         Log.d("frame \(frame_index) painting outliers green")
         
@@ -306,7 +307,7 @@ actor FrameAirplaneRemover: Equatable {
             let x = index % width;
             let y = index / width;
 
-            if outlier_amount > max_pixel_distance {
+            if outlier_amount > max_pixel_distance { // XXX always this way
                 let offset = (Int(y) * bytesPerRow) + (Int(x) * bytesPerPixel)
                 
                 var nextPixel = Pixel()
@@ -393,36 +394,6 @@ actor FrameAirplaneRemover: Equatable {
         }
     }
 
-    var houghTransform_rmax: Double = 0
-
-    // XXX heap corruption during the full hough transform of lots of images
-    // XXX likely a write/read conflict, but where?
-    
-    // this method runs a hough transform on the full resolution image that
-    // contains only large enough outliers
-    func fullHoughTransform() {
-        let houghTransform = HoughTransform(data_width: width, data_height: height)
-        houghTransform_rmax = houghTransform.rmax
-        Log.i("frame \(frame_index) running full outlier hough transform")
-
-        // do a hough transform and compare leading outlier groups to lines in the image
-        
-        // mark potential lines in the hough_data by groups larger than some size
-        for (index, group_name) in outlier_groups.enumerated() { // XXX heap corruption :(
-            if let group_name = group_name,
-               let _ = neighbor_groups[group_name]
-            {
-                houghTransform.input_data[index] = true
-            }
-        }
-
-        lines_from_full_image =
-            houghTransform.lines(min_count: min_line_count,
-                              number_of_lines_returned: max_number_of_lines)
-
-        Log.d("frame \(frame_index) got \(lines_from_full_image.count) lines from the full outlier hough transform")
-    }
-                  
     // this method analyzises the outlier groups to determine paintability
     func outlierGroupPaintingAnalysis() {
         
@@ -504,34 +475,6 @@ actor FrameAirplaneRemover: Equatable {
                 Log.d("frame \(frame_index) group \(name) got \(lines_from_this_group.count) lines from group hough transform")
                 
                 Log.d("frame \(frame_index) group \(name) line at index 0 theta \(group_theta), rho \(group_rho), count \(group_count)")
-
-
-                // convert the rho from the group hough transform to what
-                // it would have been if we had run the transformation full frame
-                // precision is not 100% due to hough transformation bucket size differences
-                // but that's what speeds this up :)
-
-                // o is the direct distance from the full screen origin
-                // to the group transform origin
-                let o = sqrt(Double(min_x * min_x) + Double(min_y * min_y))
-
-                // theta_r is the angle from the full screen origin to the
-                // to the group transform origin, in degrees
-                let theta_r = acos(Double(min_x)/o)*180/Double.pi
-
-                // theta_p is the angle between them in degrees
-                let theta_p = group_theta - theta_r
-
-                // add the calculated missing amount to the group_rho
-                let adjusted_group_rho = group_rho + o * cos(theta_p * Double.pi/180)
-
-                let inital_min_theta_diff: Double = 360             // theta is in degrees
-                let inital_min_rho_diff: Double = houghTransform_rmax // max rho value possible
-                
-                //var min_theta_diff = inital_min_theta_diff
-                //var min_rho_diff = inital_min_rho_diff
-                //var best_choice_line_count: Int = 0
-
 
                 var group_size_score: Double = 0 // size of the group in pixels
 
