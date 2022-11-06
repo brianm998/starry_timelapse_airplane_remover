@@ -27,7 +27,7 @@ actor ImageSequence {
             }
         } else {
             do {
-                let contents = try FileManager.default.contentsOfDirectory(atPath: dirname)
+                let contents = try file_manager.contentsOfDirectory(atPath: dirname)
                 contents.forEach { file in
                     supported_image_file_types.forEach { type in
                         if file.hasSuffix(type) {

@@ -53,9 +53,9 @@ class ImageSequenceProcessor {
     }
     
     func mkdir(_ path: String) {
-        if !FileManager.default.fileExists(atPath: path) {
+        if !file_manager.fileExists(atPath: path) {
             do {
-                try FileManager.default.createDirectory(atPath: path,
+                try file_manager.createDirectory(atPath: path,
                                                         withIntermediateDirectories: false,
                                                         attributes: nil)
             } catch let error as NSError {
@@ -87,7 +87,7 @@ class ImageSequenceProcessor {
         for (index, image_filename) in image_sequence.filenames.enumerated() {
             let basename = remove_path(fromString: image_filename)
             let output_filename = "\(output_dirname)/\(basename)"
-            if FileManager.default.fileExists(atPath: output_filename) {
+            if file_manager.fileExists(atPath: output_filename) {
                 existing_output_files[index] = true
             }                                  
         }

@@ -197,6 +197,11 @@ Should include a sequence of 16 bit tiff files, sortable by name.
     @Flag(name: .customLong("write-outlier-group-images"),
           help:"Write individual outlier group image files")
     var should_write_outlier_group_images = false
+
+    @Flag(name: .customShort("q"),
+          help:"process individual outlier group image files")
+    var process_outlier_group_images = false
+
     
     mutating func run() throws {
 
@@ -231,9 +236,20 @@ And each larger outlier group that is not painted over in the normal output is p
             print("\n")
             return
         } 
+
+
+        if process_outlier_group_images {
+            let airplanes_group = "outlier_data/airplanes"
+            let non_airplanes_group = "outlier_data/non_airplanes"
+
+            process_outlier_groups(dirname: airplanes_group)
+            process_outlier_groups(dirname: non_airplanes_group)
+            
+            return
+        }
         
         // XXX don't assume the arg is in cwd
-        let path = FileManager.default.currentDirectoryPath
+        let path = file_manager.currentDirectoryPath
         if let input_image_sequence_dirname = image_sequence_dirname {
     
             Log.name = "ntar-log"
@@ -270,3 +286,56 @@ And each larger outlier group that is not painted over in the normal output is p
     }
 }
 
+
+func process_outlier_groups(dirname: String) {
+    do {
+        let dispatchGroup = DispatchGroup()
+        let contents = try file_manager.contentsOfDirectory(atPath: dirname) 
+        try contents.forEach { file in
+            if file.hasSuffix("txt") {
+
+                let base = (file as NSString).deletingPathExtension
+                let csv_filename = "\(dirname)/\(base).csv"
+
+                if !file_manager.fileExists(atPath: csv_filename) {
+                    dispatchGroup.enter()
+                    dispatchQueue.async {
+                        do {
+                            let contents = try String(contentsOfFile: "\(dirname)/\(file)")
+                            let rows = contents.components(separatedBy: "\n")
+                            let height = rows.count
+                            let width = rows[0].count
+                            let houghTransform = HoughTransform(data_width: width, data_height: height)
+                            Log.d("size [\(width), \(height)]")
+                            for y in 0 ..< height {
+                                for (x, char) in rows[y].enumerated() {
+                                    if char == "*" {
+                                        houghTransform.input_data[y*width + x] = true
+                                    }
+                                }
+                            }
+                            let lines = houghTransform.lines(min_count: 1,
+                                                             number_of_lines_returned: 100000)
+                            var csv_line_data: String = "";
+                            lines.forEach { line in
+                                csv_line_data += "\(line.theta),\(line.rho),\(line.count)\n"
+                            }
+                            if let data = csv_line_data.data(using: .utf8) {
+                                file_manager.createFile(atPath: csv_filename, contents: data, attributes: nil)
+                            }
+                        } catch {
+                            Log.e(error)
+                        }
+                        dispatchGroup.leave()
+                    } 
+                }
+            } 
+        }
+        dispatchGroup.wait()
+    } catch {
+        Log.e(error)
+    }
+}
+
+
+let file_manager = FileManager.default

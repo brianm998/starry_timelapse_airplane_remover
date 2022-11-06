@@ -848,7 +848,7 @@ actor FrameAirplaneRemover: Equatable {
                 let filename = "\(frame_index)_outlier_\(group_name).txt".replacingOccurrences(of: ",", with: "_")
 
                 let full_path = "\(output_dirname)/\(filename)"
-                if FileManager.default.fileExists(atPath: full_path) {
+                if file_manager.fileExists(atPath: full_path) {
                     Log.w("cannot write to \(full_path), it already exists")
                 } else {
                     Log.e("creating \(full_path)")                      
@@ -868,7 +868,7 @@ actor FrameAirplaneRemover: Equatable {
                         line += "\n"
                     }
                     if let data = line.data(using: .utf8) {
-                        FileManager.default.createFile(atPath: full_path, contents: data, attributes: nil)
+                        file_manager.createFile(atPath: full_path, contents: data, attributes: nil)
                         Log.i("wrote \(full_path)")
                     } else {
                         Log.e("cannot create data?")
