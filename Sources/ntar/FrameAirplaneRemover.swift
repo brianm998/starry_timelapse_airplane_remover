@@ -476,12 +476,18 @@ actor FrameAirplaneRemover: Equatable {
         
                 // get the theta and rho of just this outlier group
                 let lines_from_this_group =
-                    groupHoughTransform.lines(min_count: group_min_line_count,
-                                           number_of_lines_returned: group_number_of_hough_lines)
+                    groupHoughTransform.lines(min_count: 1/*group_min_line_count*/,
+                                           number_of_lines_returned: 10000000/*group_number_of_hough_lines*/)
                 if lines_from_this_group.count == 0 {
                     Log.w("frame \(frame_index) got no group lines for group \(name) of size \(size)")
                     // this should only happen when there is no data in the input and therefore output 
                     //fatalError("bad input data")
+                    continue
+                }
+
+                if should_paint_based_upon(lines: lines_from_this_group) {
+                    should_paint[name] = .looksLikeALine
+                    Log.d("frame \(frame_index) will paint group \(name) because it looks like a line from the group hough transform")
                     continue
                 }
                 
@@ -496,35 +502,7 @@ actor FrameAirplaneRemover: Equatable {
                 Log.d("frame \(frame_index) group \(name) got \(lines_from_this_group.count) lines from group hough transform")
                 
                 Log.d("frame \(frame_index) group \(name) line at index 0 theta \(group_theta), rho \(group_rho), count \(group_count)")
-                var lowest_count = group_count
-                var first_count = -111111111
 
-                if lines_from_this_group.count > 1 {
-                    let (_, _, _first_count) = lines_from_this_group[1]
-                    first_count = _first_count
-                    for i in 1 ..< lines_from_this_group.count {
-                        let (other_theta, other_rho, other_count) = lines_from_this_group[i]
-
-                        if other_count < lowest_count {
-                            lowest_count = other_count
-                        }
-                    }
-                }
-                
-                if first_count != -111111111 {
-                    // the line counts for the hough transform here drop off quickly
-                    // from the highest value, which indicates a higher probability that
-                    // this group is close to being all in a line
-
-                    // XXX this logic could do more than just check the count of the last line
-                    if(Double(lowest_count)/Double(group_count) < looks_like_a_line_lowest_count_reduction) {
-                        should_paint[name] = .looksLikeALine // XXX put some data in here
-                        Log.d("frame \(frame_index) will paint group \(name) because it looks like a line from the group hough transform")
-                        continue
-                    } else {
-                        Log.d("frame \(frame_index) group \(name) doesn't look like a line group_count \(group_count) first_count \(first_count) lowest_count \(lowest_count)")
-                    }
-                }
 
                 // convert the rho from the group hough transform to what
                 // it would have been if we had run the transformation full frame
@@ -834,7 +812,7 @@ actor FrameAirplaneRemover: Equatable {
         return lhs.frame_index == rhs.frame_index
     }    
 
-    func writeOutlierGroupImages() {
+    func writeOutlierGroupFiles() {
         Log.e("writing outlier group images")              
         for (group_name, _) in self.neighbor_groups {
             Log.w("writing text file for group \(group_name)")

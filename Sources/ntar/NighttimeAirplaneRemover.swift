@@ -35,7 +35,7 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
     let test_paint: Bool
 
     // write out individual outlier group images
-    let should_write_outlier_group_images: Bool
+    let should_write_outlier_group_files: Bool
     
     var final_processor: FinalProcessor?    
 
@@ -43,12 +43,12 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
          maxConcurrent max_concurrent: UInt = 5,
          maxPixelDistance max_pixel_distance: UInt16 = 10000,
          testPaint: Bool = false,
-         writeOutlierGroupImages: Bool = false,
+         writeOutlierGroupFiles: Bool = false,
          givenFilenames given_filenames: [String]? = nil)
     {
         self.max_pixel_distance = max_pixel_distance
         self.test_paint = testPaint
-        self.should_write_outlier_group_images = writeOutlierGroupImages
+        self.should_write_outlier_group_files = writeOutlierGroupFiles
 
         let formatted_theta_diff = String(format: "%0.1f", max_theta_diff)
         let formatted_rho_diff = String(format: "%0.1f", max_rho_diff)
@@ -76,7 +76,7 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
     // called by the superclass at startup
     override func startup_hook() {
         if test_paint { mkdir(test_paint_output_dirname) }
-        if should_write_outlier_group_images {
+        if should_write_outlier_group_files {
             mkdir(outlier_output_dirname)
         }
     }
@@ -228,8 +228,8 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
         // figure out what part of the image each outlier group lies in
         await frame_plane_remover.calculateGroupBoundsAndAmounts()
 
-        if should_write_outlier_group_images {
-            await frame_plane_remover.writeOutlierGroupImages()
+        if should_write_outlier_group_files {
+            await frame_plane_remover.writeOutlierGroupFiles()
         } else {
             Log.e("WTF")
             fatalError("FUCK YOU")

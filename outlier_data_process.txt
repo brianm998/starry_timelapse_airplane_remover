@@ -1,0 +1,18 @@
+
+outlier group data processing process
+
+First, run ntar against an image sequence with the command line arg --write-outlier-group-files set.
+
+This will output a directory next to the image sequence with '-outliers' appended to it.
+
+Once these files are generated, copy them to outlier_data/unsorted in the source dir
+
+Then run
+
+outlier_check.pl outlier_data/unsorted
+
+which will prompt the user to identify each outlier group
+
+afterwards, run ntar -q to generate hough transform csv files
+
+then run outlier_analysis.pl, which will regenrate ShouldPaint.swift with the updated data

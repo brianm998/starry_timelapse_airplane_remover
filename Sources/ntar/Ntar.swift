@@ -151,7 +151,9 @@ let supported_image_file_types = [".tif", ".tiff"] // XXX move this out
 
 
 
-let ntar_version = "0.0.1"
+let ntar_version = "0.0.2"
+
+// 0.0.2 added more detail group hough transormation analysis
 
 @main
 struct Ntar: ParsableCommand {
@@ -194,9 +196,9 @@ Should include a sequence of 16 bit tiff files, sortable by name.
     @Flag(name: .shortAndLong, help:"Show version number")
     var version = false
 
-    @Flag(name: .customLong("write-outlier-group-images"),
+    @Flag(name: .customLong("write-outlier-group-files"),
           help:"Write individual outlier group image files")
-    var should_write_outlier_group_images = false
+    var should_write_outlier_group_files = false
 
     @Flag(name: .customShort("q"),
           help:"process individual outlier group image files")
@@ -274,7 +276,7 @@ And each larger outlier group that is not painted over in the normal output is p
                                                       maxConcurrent: UInt(numConcurrentRenders),
                                                       maxPixelDistance: max_pixel_brightness_distance, 
                                                       testPaint: test_paint,
-                                                      writeOutlierGroupImages: should_write_outlier_group_images)
+                                                      writeOutlierGroupFiles: should_write_outlier_group_files)
                 
                 eraser.run()
             } else {
@@ -286,7 +288,8 @@ And each larger outlier group that is not painted over in the normal output is p
     }
 }
 
-
+// this method reads all the outlier group text files
+// and (if missing) generates a csv file with the hough transform data from it
 func process_outlier_groups(dirname: String) {
     do {
         let dispatchGroup = DispatchGroup()
