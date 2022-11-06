@@ -230,9 +230,6 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
 
         if should_write_outlier_group_files {
             await frame_plane_remover.writeOutlierGroupFiles()
-        } else {
-            Log.e("WTF")
-            fatalError("FUCK YOU")
         }
         
         let time_5 = NSDate().timeIntervalSince1970
