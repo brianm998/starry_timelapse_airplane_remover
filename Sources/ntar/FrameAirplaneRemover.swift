@@ -302,35 +302,37 @@ actor FrameAirplaneRemover: Equatable {
     // XXX rewrite this to not use outlier_amounts so we can let the memory be deallocated
     func testPaintOutliers(toData test_paint_data: inout Data) {
         Log.d("frame \(frame_index) painting outliers green")
-        
-        for (index, outlier_amount) in outlier_amounts.enumerated() {
-            let x = index % width;
-            let y = index / width;
 
-            if outlier_amount > max_pixel_distance { // XXX always this way
-                let offset = (Int(y) * bytesPerRow) + (Int(x) * bytesPerPixel)
-                
-                var nextPixel = Pixel()
-                if let group_name = outlier_groups[index],
-                   let group_size = neighbor_groups[group_name]
-                {
-                    if let reason = should_paint[group_name] {
-                        if !reason.willPaint {
-                            nextPixel.value = reason.testPaintPixel.value
+        for (name, size) in neighbor_groups {
+            if let min_x = group_min_x[name], // bounding box for this group
+               let min_y = group_min_y[name],
+               let max_x = group_max_x[name],
+               let max_y = group_max_y[name]
+            {
+                for x in min_x ... max_x {
+                    for y in min_y ... max_y {
+                        let index = y*width + x
+                        if let group_name = outlier_groups[index],
+                           group_name == name
+                        {
+                            var nextPixel = Pixel()
+                            if let reason = should_paint[group_name] {
+                                if !reason.willPaint {
+                                    nextPixel.value = reason.testPaintPixel.value
+                                }
+                            } else {
+                                nextPixel.green = 0xFFFF // groups that can be chosen to paint
+                            }
+
+                            var nextValue = nextPixel.value
+                            let offset = (Int(y) * bytesPerRow) + (Int(x) * bytesPerPixel)
+                            
+                            test_paint_data.replaceSubrange(offset ..< offset+raw_pixel_size_bytes,
+                                                            with: &nextValue,
+                                                            count: raw_pixel_size_bytes)
                         }
-                    } else {
-                        nextPixel.green = 0xFFFF // groups that can be chosen to paint
                     }
-
-                    var nextValue = nextPixel.value
-                    
-                    test_paint_data.replaceSubrange(offset ..< offset+raw_pixel_size_bytes, // XXX error here sometimes
-                                                    with: &nextValue, count: raw_pixel_size_bytes)
-                //} //else {
-                // no group or group too small 
-                //nextPixel.green = 0x8888 // groups that are too small to paint
                 }
-
             }
         }
     }
@@ -392,6 +394,7 @@ actor FrameAirplaneRemover: Equatable {
                 group_amounts[group_name] = group_amount / group_size
             }
         }
+        self.outlier_amounts = [] // not used after here, try to save memory
     }
 
     // this method analyzises the outlier groups to determine paintability

@@ -234,9 +234,8 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
         
         let time_5 = NSDate().timeIntervalSince1970
         let interval5 = String(format: "%0.1f", time_5 - time_4)
-        //Log.d("frame \(frame_index) running full hough transform after \(interval5)s")
 
-        Log.d("frame \(frame_index) outlier group painting analysis after p\(interval6)s")
+        Log.d("frame \(frame_index) outlier group painting analysis after p\(interval5)s")
 
         // do a lot of analysis to determine what outlier groups we should paint over
         await frame_plane_remover.outlierGroupPaintingAnalysis()
