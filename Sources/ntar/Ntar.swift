@@ -108,7 +108,6 @@ todo:
    - visually distinguish into ( airplane / non airplane / not sure ) and relocate each image
    - use this large blob of data to help train a better group analyzer using more hough data
 
- 
 */
 
 // XXX here are some random global constants that maybe should be exposed somehow
@@ -121,9 +120,6 @@ let min_group_size = 100        // groups smaller than this are ignored
 let min_line_count = 20        // lines with counts smaller than this are ignored
 
 let group_min_line_count = 1    // used when hough transorming individual groups
-let max_theta_diff: Double = 4  // degrees of difference allowed between lines
-let max_rho_diff: Double = 70   // pixels of line displacement allowed
-let max_number_of_lines = 500  // don't process more lines than this per image
 
 let assume_airplane_size = 1000 // don't bother spending the time to fully process
                             // groups larger than this, assume we should paint over them
@@ -135,8 +131,6 @@ let final_theta_diff: Double = 5       // how close in theta/rho outliers need t
 let final_rho_diff: Double = 70
 
 let final_group_boundary_amt = 1  // how much we pad the overlap amounts on the final pass
-
-//let group_number_of_hough_lines = 10 // document this
 
 let final_adjecent_edge_amount: Double = -2 // the spacing allowed between groups in adjecent frames
 
@@ -159,38 +153,41 @@ let ntar_version = "0.0.2"
 struct Ntar: ParsableCommand {
 
     @Option(name: .shortAndLong, help: """
-Max Number of frames to process at once.
-One per cpu works good.
-May need to be reduced to a lower value:
- - when processing large images (>24mp)
- - on a machine without gobs of ram (<128g)
-""")
+        Max Number of frames to process at once.
+        One per cpu works good.
+        May need to be reduced to a lower value:
+         - when processing large images (>24mp)
+         - on a machine without gobs of ram (<128g)
+        """)
     var numConcurrentRenders: Int = 4     // XXX default this to n-cpu
+    // 42 megapixel images 15 concurrent renders = approx 100-110 gigs of ram usage
+    // 24 megapixel images 35 concurrent renders = approx 60-80 gigs of ram usage
 
+    
     @Option(name: [.short, .customLong("file-log-level")], help:"""
-If present, ntar will output a file log at the given level.
-""")
+        If present, ntar will output a file log at the given level.
+        """)
     var fileLogLevel: Log.Level?
     
     @Option(name: [.customShort("c"), .customLong("console-log-level")], help:"""
-The logging level that ntar will output directly to the terminal.
-""")
+        The logging level that ntar will output directly to the terminal.
+        """)
     var terminalLogLevel: Log.Level = .info
     
     @Flag(name: [.short, .customLong("test-paint")], help:"""
-Write out a separate image sequence with colors indicating
-what was detected, and what was changed.
-Shows what changes have been made to each frame.
-""")
+        Write out a separate image sequence with colors indicating
+        what was detected, and what was changed.
+        Shows what changes have been made to each frame.
+        """)
     var test_paint = false
 
     @Flag(help:"Print out what the test paint colors mean")
     var show_test_paint_colors = false
     
     @Argument(help: """
-Image sequence dirname to process. 
-Should include a sequence of 16 bit tiff files, sortable by name.
-""")
+        Image sequence dirname to process. 
+        Should include a sequence of 16 bit tiff files, sortable by name.
+        """)
     var image_sequence_dirname: String?
 
     @Flag(name: .shortAndLong, help:"Show version number")
@@ -209,29 +206,27 @@ Should include a sequence of 16 bit tiff files, sortable by name.
 
         if version {
             print("""
-Nighttime Timelapse Airplane Remover (ntar) version \(ntar_version)
-""")
+                  Nighttime Timelapse Airplane Remover (ntar) version \(ntar_version)
+                  """)
             return
         }
         
         if show_test_paint_colors {
             print("""
-
-When called with -t or --test-paint, ntar will output two sequences of images.
-The first will be the normal output with airplanes removed.
-The second will the the 'test paint' version,
-where each outlier group larger than \(min_group_size) pixels that will be painted over is painted:
-
-""")
+                  When called with -t or --test-paint, ntar will output two sequences of images.
+                  The first will be the normal output with airplanes removed.
+                  The second will the the 'test paint' version,
+                  where each outlier group larger than \(min_group_size) pixels that will be painted over is painted:
+                                    
+                  """)
             for willPaintReason in PaintReason.shouldPaintCases {
                 print("   "+willPaintReason.BasicColor+"- "+willPaintReason.BasicColor.name()+": "+willPaintReason.name+BasicColor.reset+"\n     \(willPaintReason.description)")
             }
             print("""
 
-And each larger outlier group that is not painted over in the normal output is painted:
+                  And each larger outlier group that is not painted over in the normal output is painted:
 
-""")
-            
+                  """)
             for willPaintReason in PaintReason.shouldNotPaintCases {
                 print("   "+willPaintReason.BasicColor+"- "+willPaintReason.BasicColor.name()+": "+willPaintReason.name+BasicColor.reset+"\n     \(willPaintReason.description)")
             }
@@ -243,7 +238,7 @@ And each larger outlier group that is not painted over in the normal output is p
         if process_outlier_group_images {
             let airplanes_group = "outlier_data/airplanes"
             let non_airplanes_group = "outlier_data/non_airplanes"
-
+            
             process_outlier_groups(dirname: airplanes_group)
             process_outlier_groups(dirname: non_airplanes_group)
             
@@ -266,8 +261,8 @@ And each larger outlier group that is not painted over in the normal output is p
             Log.d("will process \(input_image_sequence_dirname) on path \(path)")
             
             Log.d("running with min_group_size \(min_group_size) min_line_count \(min_line_count)")
-            Log.d("group_min_line_count \(group_min_line_count) max_theta_diff \(max_theta_diff) max_rho_diff \(max_rho_diff)")
-            Log.d("max_number_of_lines \(max_number_of_lines) assume_airplane_size \(assume_airplane_size)")
+            Log.d("group_min_line_count \(group_min_line_count)")
+            Log.d("assume_airplane_size \(assume_airplane_size)")
             //Log.d("max_concurrent_frames \(max_concurrent_frames) max_pixel_brightness_distance \(max_pixel_brightness_distance)")
             
             if #available(macOS 10.15, *) {
@@ -294,7 +289,7 @@ func process_outlier_groups(dirname: String) {
     do {
         let dispatchGroup = DispatchGroup()
         let contents = try file_manager.contentsOfDirectory(atPath: dirname) 
-        try contents.forEach { file in
+        contents.forEach { file in
             if file.hasSuffix("txt") {
 
                 let base = (file as NSString).deletingPathExtension

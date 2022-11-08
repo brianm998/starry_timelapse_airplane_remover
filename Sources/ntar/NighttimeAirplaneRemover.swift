@@ -134,7 +134,6 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
     // so that we don't experience backup and overload memory
     override func maxConcurrentRenders() async -> UInt {
         var ret = max_concurrent_renders
-        // XXX this needs to take into account the final processor more
         if let final_processor = final_processor {
             let final_is_working = await final_processor.isWorking
             let final_frames_unprocessed = await final_processor.framesBetween
@@ -146,7 +145,6 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
                     ret = 0
                 } else if signed_ret / 2 > 0 {
                     ret = UInt(signed_ret / 2)
-                    //ret = UInt(signed_ret)
                 } else {
                     ret = 1
                 }

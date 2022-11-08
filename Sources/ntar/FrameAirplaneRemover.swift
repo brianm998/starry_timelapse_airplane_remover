@@ -44,7 +44,7 @@ actor FrameAirplaneRemover: Equatable {
                                            // group, only groups larger than min_group_size
     var lines_from_full_image: [Line] = [] // lines from all large enough outliers
 
-    var should_paint: [String:PaintReason] = [:] // keyed by group name, should be paint it?
+    var should_paint: [String:PaintReason] = [:] // keyed by group name, should we paint it?
     var group_min_x: [String:Int] = [:]   // keyed by group name, image bounds of each group
     var group_min_y: [String:Int] = [:]
     var group_max_x: [String:Int] = [:]
@@ -187,7 +187,8 @@ actor FrameAirplaneRemover: Equatable {
         }
     }
 
-    // this method groups outliers into groups of direct neighbors
+    // this method groups outliers into groups of direct neighbors,
+    // treating smaller groups of outliers as noise and pruning them
     func prune() {
         Log.i("frame \(frame_index) pruning outliers")
         
@@ -299,7 +300,7 @@ actor FrameAirplaneRemover: Equatable {
         self.neighbor_groups = individual_group_counts
     }    
 
-    // XXX rewrite this to not use outlier_amounts so we can let the memory be deallocated
+    // paint the outliers that we decided not to paint, to enable debuging
     func testPaintOutliers(toData test_paint_data: inout Data) {
         Log.d("frame \(frame_index) painting outliers green")
 
@@ -341,7 +342,6 @@ actor FrameAirplaneRemover: Equatable {
     func calculateGroupBoundsAndAmounts() {
 
         Log.i("frame \(frame_index) calculating outlier group bounds")
-
         
         // calculate the outer bounds of each outlier group
         for x in 0 ..< width {
@@ -542,8 +542,9 @@ actor FrameAirplaneRemover: Equatable {
         Log.d("frame \(frame_index) processed \(processed_group_count) groups")
     }
 
+    // actually paint over outlier groups that have been selected as airplane tracks
     func paintOverAirplanes(toData data: inout Data, testData test_paint_data: inout Data) {
-
+        
         Log.i("frame \(frame_index) painting airplane outlier groups")
 
         // paint over every outlier in the paint list with pixels from the adjecent frames
@@ -564,7 +565,7 @@ actor FrameAirplaneRemover: Equatable {
         image.writeTIFFEncoding(ofData: data, toFilename: test_paint_filename)
     }
 
-    // paint over a selected outlier with data from pixels from adjecent frames
+    // paint over a selected outlier pixel with data from pixels from adjecent frames
     private func paint(x: Int, y: Int,
                        why: PaintReason,
                        toData data: inout Data,
@@ -579,12 +580,12 @@ actor FrameAirplaneRemover: Equatable {
 
         // XXX blending both adjecent frames can make the painted airlane streak darker
         // then it was before because the bright stars are dimmed 50% due to them moving across
-        // two frames.  try just using one frame and see how that works.  make an option?
+        // two frames.  try just using one frame and see how that works.  maybe make it an option?
         
         pixels_to_paint_with.append(otherFrames[0].readPixel(atX: x, andY: y))
         
         // blend the pixels from the adjecent frames
-        var paint_pixel = Pixel(merging: pixels_to_paint_with)
+        let paint_pixel = Pixel(merging: pixels_to_paint_with)
         
         // this is the numeric value we need to write out to paint over the airplane
         var paint_value = paint_pixel.value
@@ -604,47 +605,49 @@ actor FrameAirplaneRemover: Equatable {
                                             count: raw_pixel_size_bytes)
         }
     }
-
+    
     // run after should_paint has been set for each group, 
     // does the final painting and then writes out the output files
     func finish() {
         Log.i("frame \(self.frame_index) finishing")
         
         let _data = image.raw_image_data
-
+        
         // copy the original image data as adjecent frames need
         // to access the original unmodified version
         guard let _mut_data = CFDataCreateMutableCopy(kCFAllocatorDefault,
                                                       CFDataGetLength(_data as CFData),
-                                                      _data as CFData) as? Data else {
+                                                      _data as CFData) as? Data
+        else {
             Log.e("couldn't copy image data")
             fatalError("couldn't copy image data")
         }
         var output_data = _mut_data
-
+        
         var test_paint_data: Data = Data()
         if test_paint {
             guard let foobar = CFDataCreateMutableCopy(kCFAllocatorDefault,
-                                                      CFDataGetLength(_data as CFData),
-                                                      _data as CFData) as? Data else {
+                                                       CFDataGetLength(_data as CFData),
+                                                       _data as CFData) as? Data
+            else {
                 Log.e("couldn't copy image data")
                 fatalError("couldn't copy image data")
             }
             test_paint_data = foobar
             self.testPaintOutliers(toData: &test_paint_data)
         }
-        
+                  
         Log.d("frame \(self.frame_index) painting over airplanes")
                   
         self.paintOverAirplanes(toData: &output_data, testData: &test_paint_data)
         
         Log.d("frame \(self.frame_index) writing output files")
-
+        
         self.writeTestFile(withData: test_paint_data)
-
+        
         // write frame out as a tiff file after processing it
         self.image.writeTIFFEncoding(ofData: output_data,  toFilename: self.output_filename)
-
+        
         Log.i("frame \(self.frame_index) complete")
     }
 
@@ -652,11 +655,12 @@ actor FrameAirplaneRemover: Equatable {
         return lhs.frame_index == rhs.frame_index
     }    
 
+                  
     func writeOutlierGroupFiles() {
         Log.e("writing outlier group images")              
         for (group_name, _) in self.neighbor_groups {
             Log.w("writing text file for group \(group_name)")
-
+            
             if let min_x = group_min_x[group_name],
                let min_y = group_min_y[group_name],
                let max_x = group_max_x[group_name],
@@ -664,14 +668,14 @@ actor FrameAirplaneRemover: Equatable {
                let output_dirname = outlier_output_dirname
             {
                 let filename = "\(frame_index)_outlier_\(group_name).txt".replacingOccurrences(of: ",", with: "_")
-
+                
                 let full_path = "\(output_dirname)/\(filename)"
                 if file_manager.fileExists(atPath: full_path) {
                     Log.w("cannot write to \(full_path), it already exists")
                 } else {
                     Log.e("creating \(full_path)")                      
                     var line = ""
-
+                    
                     for y in min_y ... max_y {
                         for x in min_x ... max_x {
                             let index = y*width+x
@@ -698,5 +702,3 @@ actor FrameAirplaneRemover: Equatable {
         }
     }
 }
-
-                  
