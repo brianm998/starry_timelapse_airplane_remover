@@ -66,7 +66,7 @@ class HoughTransform {
     func lines(min_count: Int = 5, // lines with less counts than this aren't returned
               number_of_lines_returned: Int? = nil) -> [Line]
     {
-        let start_time = NSDate().timeIntervalSince1970
+        //let start_time = NSDate().timeIntervalSince1970
 
         // accumulate the hough transform data in counts from the input data
         // this can take a long time when there are lots of input points
@@ -86,8 +86,8 @@ class HoughTransform {
             }
         }
 
-        let time_1 = NSDate().timeIntervalSince1970
-        let interval1 = String(format: "%0.1f", time_1 - start_time)
+        //let time_1 = NSDate().timeIntervalSince1970
+        //let interval1 = String(format: "%0.1f", time_1 - start_time)
         
         var lines: [Line] = []
         
@@ -152,8 +152,8 @@ class HoughTransform {
             }
         }
 
-        let time_2 = NSDate().timeIntervalSince1970
-        let interval2 = String(format: "%0.1f", time_2 - time_1)
+        //let time_2 = NSDate().timeIntervalSince1970
+        //let interval2 = String(format: "%0.1f", time_2 - time_1)
         
         let sortedLines = lines.sorted() { a, b in
             return a.count > b.count
@@ -166,10 +166,10 @@ class HoughTransform {
             small_set_lines = Array<Line>(sortedLines)
         }
 
-        let time_3 = NSDate().timeIntervalSince1970
-        let interval3 = String(format: "%0.1f", time_3 - time_2)
+        //let time_3 = NSDate().timeIntervalSince1970
+        //let interval3 = String(format: "%0.1f", time_3 - time_2)
 
-        Log.d("done with hough transform - \(interval3)s - \(interval2)s - \(interval1)s")
+        //Log.d("done with hough transform - \(interval3)s - \(interval2)s - \(interval1)s")
         
         //Log.d("lines \(small_set_lines)")
         /*
