@@ -250,7 +250,7 @@ fileprivate func run_final_pass(frames: [FrameAirplaneRemover], mainIndex main_i
                                let other_group_size = await other_frame.neighbor_groups[og_name]
                             {
 
-                                Log.d("frame \(frame.frame_index) group 1 \(group_name) of size \(group_size) (\(line_min_x) \(line_min_y)),  (\(line_max_x) \(line_max_y)) other frame \(other_frame.frame_index) group 2 \(og_name) of size \(group_size) (\(other_line_min_x) \(other_line_min_y)),  (\(other_line_max_x) \(other_line_max_y))")
+                                //Log.d("frame \(frame.frame_index) group 1 \(group_name) of size \(group_size) (\(line_min_x) \(line_min_y)),  (\(line_max_x) \(line_max_y)) other frame \(other_frame.frame_index) group 2 \(og_name) of size \(group_size) (\(other_line_min_x) \(other_line_min_y)),  (\(other_line_max_x) \(other_line_max_y))")
 
                                 let mult = abs(frame.frame_index - other_frame.frame_index)
                                 // multiply the constant by how far the frames are away
@@ -293,7 +293,7 @@ fileprivate func run_final_pass(frames: [FrameAirplaneRemover], mainIndex main_i
                                                   max_2_x: other_line_max_x,
                                                   max_2_y: other_line_max_y)
 
-                                Log.d("frame \(frame.frame_index) edge_distance_bewteen_groups \(distance_bewteen_groups) center_distance \(center_distance_bewteen_groups) \(group_name) \(og_name) edge_amt \(edge_amt) center_amt \(center_amt)")
+                                //Log.d("frame \(frame.frame_index) edge_distance_bewteen_groups \(distance_bewteen_groups) center_distance \(center_distance_bewteen_groups) \(group_name) \(og_name) edge_amt \(edge_amt) center_amt \(center_amt)")
                                 if distance_bewteen_groups < edge_amt &&
                                    center_distance_bewteen_groups < center_amt
                                 {
@@ -323,8 +323,8 @@ fileprivate func run_final_pass(frames: [FrameAirplaneRemover], mainIndex main_i
                                                 other_frame.setShouldPaint(group: og_name,
                                                                            why: .adjecentOverlap(-distance_bewteen_groups)))
                                         
-                                        Log.d("frame \(frame.frame_index) should_paint[\(group_name)] = (false, .adjecentOverlap(\(-distance_bewteen_groups))")
-                                        Log.d("frame \(other_frame.frame_index) should_paint[\(og_name)] = (false, .adjecentOverlap(\(-distance_bewteen_groups))")
+                                        //Log.d("frame \(frame.frame_index) should_paint[\(group_name)] = (false, .adjecentOverlap(\(-distance_bewteen_groups))")
+                                        //Log.d("frame \(other_frame.frame_index) should_paint[\(og_name)] = (false, .adjecentOverlap(\(-distance_bewteen_groups))")
                                     }
                                 } 
                             }
@@ -361,11 +361,11 @@ func distance_on(min_x: Int, min_y: Int, max_x: Int, max_y: Int,
         //Log.d("horizontal")
         edge = .horizontal
     } else {
-        Log.d("slope \(slope) y_intercept \(y_intercept) theta \(theta)")
-        Log.d("min_x \(min_x) x_max_value \(x_max_value) max_x \(max_x)")
-        Log.d("min_y \(min_y) y_max_value \(y_max_value) max_y \(max_y)")
-        Log.d("min_x \(min_x) x_min_value \(x_min_value) max_x \(max_x)")
-        Log.d("min_y \(min_y) y_min_value \(y_min_value) max_y \(max_y)")
+        //Log.d("slope \(slope) y_intercept \(y_intercept) theta \(theta)")
+        //Log.d("min_x \(min_x) x_max_value \(x_max_value) max_x \(max_x)")
+        //Log.d("min_y \(min_y) y_max_value \(y_max_value) max_y \(max_y)")
+        //Log.d("min_x \(min_x) x_min_value \(x_min_value) max_x \(max_x)")
+        //Log.d("min_y \(min_y) y_min_value \(y_min_value) max_y \(max_y)")
         // this means that the line generated from the given slope and line
         // does not intersect the rectangle given 
 
@@ -374,7 +374,7 @@ func distance_on(min_x: Int, min_y: Int, max_x: Int, max_y: Int,
         //(1122 141),  (1156 160)
 
         // is this really a problem? not sure
-        Log.d("the line generated from the given slope and line does not intersect the rectangle given")
+        //Log.d("the line generated from the given slope and line does not intersect the rectangle given")
     }
 
     var hypotenuse_length: Double = 0
