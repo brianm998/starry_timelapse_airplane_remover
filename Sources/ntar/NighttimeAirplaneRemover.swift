@@ -140,12 +140,15 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
             let final_frames_unprocessed = await final_processor.framesBetween
             let final_queue_size = await final_processor.final_queue.number_running.currentValue()
             let current_running = await self.number_running.currentValue()
-            if final_is_working || final_frames_unprocessed > final_group_boundary_amt*2 {
+            if final_frames_unprocessed - number_final_processing_neighbors_needed > 0 {
                 let signed_ret: Int = (Int(max_concurrent_renders) - Int(final_queue_size))-final_frames_unprocessed
                 if signed_ret < 0 {
                     ret = 0
+                } else if signed_ret / 2 > 0 {
+                    ret = UInt(signed_ret / 2)
+                    //ret = UInt(signed_ret)
                 } else {
-                    ret = UInt(signed_ret)
+                    ret = 1
                 }
             } else {
                 ret = max_concurrent_renders - final_queue_size
