@@ -475,9 +475,9 @@ actor FrameAirplaneRemover: Equatable {
 
                 group_lines[name] = lines_from_this_group[0] // keep this for later analysis
                 
-                Log.d("frame \(frame_index) group \(name) got \(lines_from_this_group.count) lines from group hough transform")
+                //Log.d("frame \(frame_index) group \(name) got \(lines_from_this_group.count) lines from group hough transform")
                 
-                Log.d("frame \(frame_index) group \(name) line at index 0 theta \(group_theta), rho \(group_rho), count \(group_count)")
+                //Log.d("frame \(frame_index) group \(name) line at index 0 theta \(group_theta), rho \(group_rho), count \(group_count)")
 
                 var group_size_score: Double = 0 // size of the group in pixels
 
@@ -531,11 +531,11 @@ actor FrameAirplaneRemover: Equatable {
                 overall_score /= 4
                 
                 if overall_score > 50 {
-                    Log.d("frame \(frame_index) should_paint[\(name)] = (true, .goodScore(\(overall_score))")
+                    //Log.d("frame \(frame_index) should_paint[\(name)] = (true, .goodScore(\(overall_score))")
                     should_paint[name] = .goodScore(overall_score)
                 } else {
                     should_paint[name] = .badScore(overall_score)
-                    Log.d("frame \(frame_index) should_paint[\(name)] = (false, .badScore(\(overall_score))")
+                    //Log.d("frame \(frame_index) should_paint[\(name)] = (false, .badScore(\(overall_score))")
                 }
             }
         }
