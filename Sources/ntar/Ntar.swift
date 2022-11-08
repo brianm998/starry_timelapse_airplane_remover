@@ -142,27 +142,22 @@ let looks_like_a_line_lowest_count_reduction: Double = 0.5 // 0-1 percentage of 
 let supported_image_file_types = [".tif", ".tiff"] // XXX move this out
 
 
-
-
-
 let ntar_version = "0.0.2"
 
-// 0.0.2 added more detail group hough transormation analysis
+// 0.0.2 added more detail group hough transormation analysis, based upon a data set
 
 @main
 struct Ntar: ParsableCommand {
 
     @Option(name: .shortAndLong, help: """
         Max Number of frames to process at once.
-        One per cpu works good.
-        May need to be reduced to a lower value:
-         - when processing large images (>24mp)
-         - on a machine without gobs of ram (<128g)
+        The default of all cpus but one works good in most cases.
+        May need to be reduced to a lower value if ram consumption is problematic.
         """)
-    var numConcurrentRenders: Int = 4     // XXX default this to n-cpu
-    // 42 megapixel images 15 concurrent renders = approx 100-110 gigs of ram usage
-    // 24 megapixel images 35 concurrent renders = approx 60-80 gigs of ram usage
+    var numConcurrentRenders: Int = ProcessInfo.processInfo.activeProcessorCount-1
 
+    let memory_size_bytes = ProcessInfo.processInfo.physicalMemory
+    let memory_size_gigs = ProcessInfo.processInfo.physicalMemory/(1024*1024*1024)
     
     @Option(name: [.short, .customLong("file-log-level")], help:"""
         If present, ntar will output a file log at the given level.
@@ -217,7 +212,7 @@ struct Ntar: ParsableCommand {
                   The first will be the normal output with airplanes removed.
                   The second will the the 'test paint' version,
                   where each outlier group larger than \(min_group_size) pixels that will be painted over is painted:
-                                    
+
                   """)
             for willPaintReason in PaintReason.shouldPaintCases {
                 print("   "+willPaintReason.BasicColor+"- "+willPaintReason.BasicColor.name()+": "+willPaintReason.name+BasicColor.reset+"\n     \(willPaintReason.description)")
@@ -256,6 +251,8 @@ struct Ntar: ParsableCommand {
             if let fileLogLevel = fileLogLevel {
                 Log.handlers[.file] = FileLogHandler(at: fileLogLevel)
             }
+
+            
             
             // XXX maybe check to make sure this is a directory
             Log.d("will process \(input_image_sequence_dirname) on path \(path)")
