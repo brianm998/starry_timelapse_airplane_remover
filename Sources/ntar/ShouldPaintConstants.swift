@@ -4,12 +4,20 @@ import Foundation
 // from 6882 airplane outlier group records
 // and 4446 airplane outlier group records
 
-let airplane_keys_over_lines_avg = 0.0454918527758866
-let airplane_mid_value_avg = 0.0177131601425053
+// OAS == Outlier Analysis Score
 
-let non_airplane_keys_over_lines_avg = 0.127064383162395
-let non_airplane_mid_value_avg = 0.529693555417884
+// keys over lines is the number of unique line counts over the number of lines
+// in the hough transform.  Lines tend towards fewer unique line counts.
+let OAS_AIRPLANE_KEYS_OVER_LINES_AVG = 0.0454918527758866
+let OAS_NON_AIRPLANE_KEYS_OVER_LINES_AVG = 0.127064383162395
 
-let keys_over_lines_avg = 0.0862781179691407
-let mid_index_avg = 0.273703357780195
+// the mid value is the index of the line in the sorted list that has the
+// same value as the average of the highest line count and lowest line count
+// the closer this is to the start, the more likely this is a line.
+let OAS_AIRPLANE_MID_VALUE_AVG = 0.0177131601425053
+let OAS_NON_AIRPLANE_MID_VALUE_AVG = 0.529693555417884
+
+// an average of the two values for both lines and not lines
+let OAS_KEYS_OVER_LINES_AVG = 0.0862781179691407
+let OAS_MID_INDEX_AVG = 0.273703357780195
 

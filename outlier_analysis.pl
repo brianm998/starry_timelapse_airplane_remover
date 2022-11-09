@@ -26,14 +26,22 @@ import Foundation
 // from $airplane_count airplane outlier group records
 // and $non_airplane_count airplane outlier group records
 
-let airplane_keys_over_lines_avg = $airplane_value
-let airplane_mid_value_avg = $airplane_mid_value
+// OAS == Outlier Analysis Score
 
-let non_airplane_keys_over_lines_avg = $non_airplane_value
-let non_airplane_mid_value_avg = $non_airplane_mid_value
+// keys over lines is the number of unique line counts over the number of lines
+// in the hough transform.  Lines tend towards fewer unique line counts.
+let OAS_AIRPLANE_KEYS_OVER_LINES_AVG = $airplane_value
+let OAS_NON_AIRPLANE_KEYS_OVER_LINES_AVG = $non_airplane_value
 
-let keys_over_lines_avg = $keys_over_lines_avg
-let mid_index_avg = $mid_index_avg
+// the mid value is the index of the line in the sorted list that has the
+// same value as the average of the highest line count and lowest line count
+// the closer this is to the start, the more likely this is a line.
+let OAS_AIRPLANE_MID_VALUE_AVG = $airplane_mid_value
+let OAS_NON_AIRPLANE_MID_VALUE_AVG = $non_airplane_mid_value
+
+// an average of the two values for both lines and not lines
+let OAS_KEYS_OVER_LINES_AVG = $keys_over_lines_avg
+let OAS_MID_INDEX_AVG = $mid_index_avg
 
 END
 ;
@@ -63,6 +71,7 @@ sub process_csv_dir($) {
 
       open my $txt_file, "<$dirname/$first_part.txt";
       my $group_size = 0;
+      # XXX aso get width, height, and fill amount
       while(<$txt_file>) {
 	my $count = $_ =~ tr/[*]//;
 	$group_size += $count;
