@@ -10,15 +10,15 @@ my $non_airplane_dir = "/Users/brian/git/nighttime_timelapse_airplane_eraser/out
 my $airplane_scores = process_csv_dir($airplane_dir);
 my $non_airplane_scores = process_csv_dir($non_airplane_dir);
 
-my ($airplane_value,     $airplane_mid_value,
+my ($airplane_value,     $airplane_center_line_count_position,
     $airplane_count,     $airplane_average_group_size,
     $airplane_average_fill_amount) = 
-my ($non_airplane_value, $non_airplane_mid_value,
+my ($non_airplane_value, $non_airplane_center_line_count_position,
     $non_airplane_count, $non_airplane_average_group_size,
     $non_airplane_average_fill_amount) = 
 
 print ("keysOverLines: airplane $airplane_scores->{avg_keys_over_lines} non airplane $non_airplane_scores->{avg_keys_over_lines}\n");
-print ("midIndex:      airplane $airplane_scores->{avg_mid_value} non airplane $non_airplane_scores->{avg_mid_value}\n");
+print ("midIndex:      airplane $airplane_scores->{avg_center_line_count_position} non airplane $non_airplane_scores->{avg_center_line_count_position}\n");
 
 open my $output, ">Sources/ntar/ShouldPaintConstants.swift";
 
@@ -41,8 +41,8 @@ let OAS_NON_AIRPLANE_KEYS_OVER_LINES_AVG = $non_airplane_scores->{avg_keys_over_
 // same value as the average of the highest line count and lowest line count
 // the closer this is to the start, the more likely this is a line.
 // each index is divided by the total number of lines so this number is between 0 and 1
-let OAS_AIRPLANE_MID_VALUE_AVG = $airplane_scores->{avg_mid_value}
-let OAS_NON_AIRPLANE_MID_VALUE_AVG = $non_airplane_scores->{avg_mid_value}
+let OAS_AIRPLANE_CENTER_LINE_COUNT_POSITION_AVG = $airplane_scores->{avg_center_line_count_position}
+let OAS_NON_AIRPLANE_CENTER_LINE_COUNT_POSITION_AVG = $non_airplane_scores->{avg_center_line_count_position}
 
 // the average size for each group type.  Larger is more likely to be an airplane streak
 // value in in pixels
@@ -68,22 +68,22 @@ close $output;
 # subs #
 ########
 
+my $histogram_size = 10;	# XXX expose this
+
 sub process_csv_dir($) {
   my ($dirname) = @_;
 
   opendir my $dir, $dirname or die "cannot open source dir: $!\n";
 
-  my $total_keys_over_lines;
   my $total_csv_count = 0;
-  my $airplane_count = 0;
-  my $old_airplane_count = 0;
+  my $center_line_count_position_count = 0;
 
-  my $average_mid_value = 0;
-  my $mid_value_count = 0;
-
+  my $total_keys_over_lines = 0;
+  my $total_center_line_count_position = 0;
   my $total_group_size = 0;
   my $total_fill_amount = 0;
   my $total_aspect_ratio = 0;
+
 
   foreach my $filename (readdir $dir) {
     if ($filename =~ /^(.*)[.]csv$/) {
@@ -132,14 +132,14 @@ sub process_csv_dir($) {
 	my $mid_count = ($first_count - $last_count) / 2;
 
 	my $mid_index = undef;
-	my $mid_value = undef;
+	my $center_line_count_position = undef;
 
 	for (my $i = 0 ; $i < scalar(@lines) ; $i++) {
 	  if ($lines[$i] <= $mid_count) {
 	    $mid_index = $i;
-	    $mid_value = $mid_index / scalar(@lines);
-	    $average_mid_value += $mid_value;
-	    $mid_value_count++;
+	    $center_line_count_position = $mid_index / scalar(@lines);
+	    $total_center_line_count_position += $center_line_count_position;
+	    $center_line_count_position_count++;
 	    last;
 	  }
 	}
@@ -151,16 +151,6 @@ sub process_csv_dir($) {
 
 	$total_keys_over_lines += $keys_over_lines;
 
-	my $median = (0.019093043175072 + 0.511631866903208) / 2;
-
-	my $median2 = (0.0459842606145003 + 0.125522340303945) / 2;
-
-	if (($mid_value < $median && $keys_over_lines < $median2)) {
-	  $airplane_count++;
-	}
-	if($lines[9]/$lines[0] < 0.5) {
-	  $old_airplane_count++;
-	}
       }
 
 #      print "$filename has $line_count lines and $key_count keys $first_count first count $keys_over_lines percentage\n";
@@ -173,21 +163,16 @@ sub process_csv_dir($) {
     $total_fill_amount /= $total_csv_count;
     $total_aspect_ratio /= $total_csv_count;
   }
-  if ($mid_value_count > 0) {
-    $average_mid_value /= $mid_value_count;
+  if ($center_line_count_position_count > 0) {
+    $total_center_line_count_position /= $center_line_count_position_count;
   }
   closedir $dir;
 
-  my $percentage_airplanes = $airplane_count/$total_csv_count*100;
-  my $percentage_old_airplanes = $old_airplane_count/$total_csv_count*100;
-  
-  print "we found $airplane_count airlines in data of size $total_csv_count $percentage_airplanes% correct ($percentage_old_airplanes% old correct)\n";
-
-  #print "we found $average_mid_value average mid value\n";
+  #print "we found $total_center_line_count_position average mid value\n";
 
   return {
 	  avg_keys_over_lines => $total_keys_over_lines,
-	  avg_mid_value => $average_mid_value,
+	  avg_center_line_count_position => $total_center_line_count_position,
 	  avg_group_size => $total_group_size,
 	  avg_fill_amount => $total_fill_amount,
 	  avg_aspect_ratio => $total_aspect_ratio,

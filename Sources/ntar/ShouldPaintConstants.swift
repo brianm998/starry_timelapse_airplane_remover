@@ -16,8 +16,8 @@ let OAS_NON_AIRPLANE_KEYS_OVER_LINES_AVG = 0.127064383162395
 // same value as the average of the highest line count and lowest line count
 // the closer this is to the start, the more likely this is a line.
 // each index is divided by the total number of lines so this number is between 0 and 1
-let OAS_AIRPLANE_MID_VALUE_AVG = 0.0177131601425053
-let OAS_NON_AIRPLANE_MID_VALUE_AVG = 0.529693555417884
+let OAS_AIRPLANE_CENTER_LINE_COUNT_POSITION_AVG = 0.0177131601425053
+let OAS_NON_AIRPLANE_CENTER_LINE_COUNT_POSITION_AVG = 0.529693555417884
 
 // the average size for each group type.  Larger is more likely to be an airplane streak
 // value in in pixels
