@@ -143,8 +143,8 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
                 let signed_ret: Int = (Int(max_concurrent_renders) - Int(final_queue_size))-final_frames_unprocessed
                 if signed_ret < 0 {
                     ret = 0
-                } else if signed_ret / 2 > 0 {
-                    ret = UInt(signed_ret / 2)
+                } else if signed_ret > 0 {
+                    ret = UInt(signed_ret)
                 } else {
                     ret = 1
                 }
