@@ -118,57 +118,57 @@ let OAS_AIRPLANE_ASPECT_RATIO_AVG = $airplane_scores->{avg_aspect_ratio}
 let OAS_NON_AIRPLANE_ASPECT_RATIO_AVG = $non_airplane_scores->{avg_aspect_ratio}
 
 let OAS_AIRPLANES_KEYS_OVER_LINES_HISTOGRAM = $airplanes_keys_over_lines_histogram
-let OAS_AIRPLANES_MIN_KEYS_OVER_LINES = $airplane_scores->{min_keys_over_lines}
-let OAS_AIRPLANES_MAX_KEYS_OVER_LINES = $airplane_scores->{max_keys_over_lines}
-let OAS_AIRPLANES_KEYS_OVER_LINES_STEP_SIZE = $airplanes_keys_over_lines_step_size
+let OAS_AIRPLANES_MIN_KEYS_OVER_LINES: Double = $airplane_scores->{min_keys_over_lines}
+let OAS_AIRPLANES_MAX_KEYS_OVER_LINES: Double = $airplane_scores->{max_keys_over_lines}
+let OAS_AIRPLANES_KEYS_OVER_LINES_STEP_SIZE: Double = $airplanes_keys_over_lines_step_size
 
 let OAS_NON_AIRPLANES_KEYS_OVER_LINES_HISTOGRAM = $non_airplanes_keys_over_lines_histogram
-let OAS_NON_AIRPLANES_MIN_KEYS_OVER_LINES = $non_airplane_scores->{min_keys_over_lines}
-let OAS_NON_AIRPLANES_MAX_KEYS_OVER_LINES = $non_airplane_scores->{max_keys_over_lines}
-let OAS_NON_AIRPLANES_KEYS_OVER_LINES_STEP_SIZE = $non_airplanes_keys_over_lines_step_size
+let OAS_NON_AIRPLANES_MIN_KEYS_OVER_LINES: Double = $non_airplane_scores->{min_keys_over_lines}
+let OAS_NON_AIRPLANES_MAX_KEYS_OVER_LINES: Double = $non_airplane_scores->{max_keys_over_lines}
+let OAS_NON_AIRPLANES_KEYS_OVER_LINES_STEP_SIZE: Double = $non_airplanes_keys_over_lines_step_size
 
 let OAS_AIRPLANES_CENTER_LINE_COUNT_POSITION_HISTOGRAM = $airplanes_center_line_count_position_histogram
-let OAS_AIRPLANES_MIN_CENTER_LINE_COUNT_POSITION = $airplane_scores->{min_center_line_count_position}
-let OAS_AIRPLANES_MAX_CENTER_LINE_COUNT_POSITION = $airplane_scores->{max_center_line_count_position}
-let OAS_AIRPLANES_CENTER_LINE_COUNT_POSITION_STEP_SIZE = $airplanes_center_line_count_position_step_size
+let OAS_AIRPLANES_MIN_CENTER_LINE_COUNT_POSITION: Double = $airplane_scores->{min_center_line_count_position}
+let OAS_AIRPLANES_MAX_CENTER_LINE_COUNT_POSITION: Double = $airplane_scores->{max_center_line_count_position}
+let OAS_AIRPLANES_CENTER_LINE_COUNT_POSITION_STEP_SIZE: Double = $airplanes_center_line_count_position_step_size
 
 let OAS_NON_AIRPLANES_CENTER_LINE_COUNT_POSITION_HISTOGRAM = $non_airplanes_center_line_count_position_histogram
-let OAS_NON_AIRPLANES_MIN_CENTER_LINE_COUNT_POSITION = $non_airplane_scores->{min_center_line_count_position}
-let OAS_NON_AIRPLANES_MAX_CENTER_LINE_COUNT_POSITION = $non_airplane_scores->{max_center_line_count_position}
-let OAS_NON_AIRPLANES_CENTER_LINE_COUNT_POSITION_STEP_SIZE = $non_airplanes_center_line_count_position_step_size
+let OAS_NON_AIRPLANES_MIN_CENTER_LINE_COUNT_POSITION: Double = $non_airplane_scores->{min_center_line_count_position}
+let OAS_NON_AIRPLANES_MAX_CENTER_LINE_COUNT_POSITION: Double = $non_airplane_scores->{max_center_line_count_position}
+let OAS_NON_AIRPLANES_CENTER_LINE_COUNT_POSITION_STEP_SIZE: Double = $non_airplanes_center_line_count_position_step_size
 
 
 let OAS_AIRPLANES_GROUP_SIZE_HISTOGRAM = $airplanes_group_size_histogram
-let OAS_AIRPLANES_MIN_GROUP_SIZE = $airplane_scores->{min_group_size}
-let OAS_AIRPLANES_MAX_GROUP_SIZE = $airplane_scores->{max_group_size}
-let OAS_AIRPLANES_GROUP_SIZE_STEP_SIZE = $airplanes_group_size_step_size
+let OAS_AIRPLANES_MIN_GROUP_SIZE: Double = $airplane_scores->{min_group_size}
+let OAS_AIRPLANES_MAX_GROUP_SIZE: Double = $airplane_scores->{max_group_size}
+let OAS_AIRPLANES_GROUP_SIZE_STEP_SIZE: Double = $airplanes_group_size_step_size
 
 let OAS_NON_AIRPLANES_GROUP_SIZE_HISTOGRAM = $non_airplanes_group_size_histogram
-let OAS_NON_AIRPLANES_MIN_GROUP_SIZE = $non_airplane_scores->{min_group_size}
-let OAS_NON_AIRPLANES_MAX_GROUP_SIZE = $non_airplane_scores->{max_group_size}
-let OAS_NON_AIRPLANES_GROUP_SIZE_STEP_SIZE = $non_airplanes_group_size_step_size
+let OAS_NON_AIRPLANES_MIN_GROUP_SIZE: Double = $non_airplane_scores->{min_group_size}
+let OAS_NON_AIRPLANES_MAX_GROUP_SIZE: Double = $non_airplane_scores->{max_group_size}
+let OAS_NON_AIRPLANES_GROUP_SIZE_STEP_SIZE: Double = $non_airplanes_group_size_step_size
 
 
 let OAS_AIRPLANES_FILL_AMOUNT_HISTOGRAM = $airplanes_fill_amount_histogram
-let OAS_AIRPLANES_MIN_FILL_AMOUNT = $airplane_scores->{min_fill_amount}
-let OAS_AIRPLANES_MAX_FILL_AMOUNT = $airplane_scores->{max_fill_amount}
-let OAS_AIRPLANES_FILL_AMOUNT_STEP_SIZE = $airplanes_fill_amount_step_size
+let OAS_AIRPLANES_MIN_FILL_AMOUNT: Double = $airplane_scores->{min_fill_amount}
+let OAS_AIRPLANES_MAX_FILL_AMOUNT: Double = $airplane_scores->{max_fill_amount}
+let OAS_AIRPLANES_FILL_AMOUNT_STEP_SIZE: Double = $airplanes_fill_amount_step_size
 
 let OAS_NON_AIRPLANES_FILL_AMOUNT_HISTOGRAM = $non_airplanes_fill_amount_histogram
-let OAS_NON_AIRPLANES_MIN_FILL_AMOUNT = $non_airplane_scores->{min_fill_amount}
-let OAS_NON_AIRPLANES_MAX_FILL_AMOUNT = $non_airplane_scores->{max_fill_amount}
-let OAS_NON_AIRPLANES_FILL_AMOUNT_STEP_SIZE = $non_airplanes_fill_amount_step_size
+let OAS_NON_AIRPLANES_MIN_FILL_AMOUNT: Double = $non_airplane_scores->{min_fill_amount}
+let OAS_NON_AIRPLANES_MAX_FILL_AMOUNT: Double = $non_airplane_scores->{max_fill_amount}
+let OAS_NON_AIRPLANES_FILL_AMOUNT_STEP_SIZE: Double = $non_airplanes_fill_amount_step_size
 
 
 let OAS_AIRPLANES_ASPECT_RATIO_HISTOGRAM = $airplanes_aspect_ratio_histogram
-let OAS_AIRPLANES_MIN_ASPECT_RATIO = $airplane_scores->{min_aspect_ratio}
-let OAS_AIRPLANES_MAX_ASPECT_RATIO = $airplane_scores->{max_aspect_ratio}
-let OAS_AIRPLANES_ASPECT_RATIO_STEP_SIZE = $airplanes_aspect_ratio_step_size
+let OAS_AIRPLANES_MIN_ASPECT_RATIO: Double = $airplane_scores->{min_aspect_ratio}
+let OAS_AIRPLANES_MAX_ASPECT_RATIO: Double = $airplane_scores->{max_aspect_ratio}
+let OAS_AIRPLANES_ASPECT_RATIO_STEP_SIZE: Double = $airplanes_aspect_ratio_step_size
 
 let OAS_NON_AIRPLANES_ASPECT_RATIO_HISTOGRAM = $non_airplanes_aspect_ratio_histogram
-let OAS_NON_AIRPLANES_MIN_ASPECT_RATIO = $non_airplane_scores->{min_aspect_ratio}
-let OAS_NON_AIRPLANES_MAX_ASPECT_RATIO = $non_airplane_scores->{max_aspect_ratio}
-let OAS_NON_AIRPLANES_ASPECT_RATIO_STEP_SIZE = $non_airplanes_aspect_ratio_step_size
+let OAS_NON_AIRPLANES_MIN_ASPECT_RATIO: Double = $non_airplane_scores->{min_aspect_ratio}
+let OAS_NON_AIRPLANES_MAX_ASPECT_RATIO: Double = $non_airplane_scores->{max_aspect_ratio}
+let OAS_NON_AIRPLANES_ASPECT_RATIO_STEP_SIZE: Double = $non_airplanes_aspect_ratio_step_size
 
 let OAS_HISTOGRAM_SIZE = $histogram_size
 

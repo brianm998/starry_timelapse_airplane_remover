@@ -17,24 +17,50 @@ func paint_score_from(lines: [Line]) -> Double { // greater than 0.5 means paint
     if let center_line_count_position = center_line_count_position {
         var keys_over_lines_score: Double = 0
         var center_line_count_position_score: Double = 0
-        if counts_over_lines < OAS_AIRPLANE_KEYS_OVER_LINES_AVG {
+        if counts_over_lines < OAS_AIRPLANES_MIN_KEYS_OVER_LINES {
             keys_over_lines_score = 1
-        } else if counts_over_lines > OAS_NON_AIRPLANE_KEYS_OVER_LINES_AVG {
+        } else if counts_over_lines > OAS_NON_AIRPLANES_MAX_KEYS_OVER_LINES {
             keys_over_lines_score = 0
         } else {
-            keys_over_lines_score = (counts_over_lines - OAS_AIRPLANE_KEYS_OVER_LINES_AVG) /
-                       (OAS_NON_AIRPLANE_KEYS_OVER_LINES_AVG-OAS_AIRPLANE_KEYS_OVER_LINES_AVG)
+            let value = Double(counts_over_lines)
+            let airplane_score =
+              histogram_lookup(ofValue: value,
+                               minValue: OAS_AIRPLANES_MIN_KEYS_OVER_LINES, 
+                               maxValue: OAS_AIRPLANES_MAX_KEYS_OVER_LINES,
+                               stepSize: OAS_AIRPLANES_KEYS_OVER_LINES_STEP_SIZE,
+                               histogramValues: OAS_AIRPLANES_KEYS_OVER_LINES_HISTOGRAM) ?? 0
+
+            let non_airplane_score =
+              histogram_lookup(ofValue: value,
+                               minValue: OAS_NON_AIRPLANES_MIN_KEYS_OVER_LINES, 
+                               maxValue: OAS_NON_AIRPLANES_MAX_KEYS_OVER_LINES,
+                               stepSize: OAS_NON_AIRPLANES_KEYS_OVER_LINES_STEP_SIZE,
+                               histogramValues: OAS_NON_AIRPLANES_KEYS_OVER_LINES_HISTOGRAM) ?? 0
+
+            keys_over_lines_score = airplane_score / (non_airplane_score+airplane_score)
         }
 
-        if center_line_count_position < OAS_AIRPLANE_CENTER_LINE_COUNT_POSITION_AVG {
+        if center_line_count_position < OAS_AIRPLANES_MIN_CENTER_LINE_COUNT_POSITION {
             center_line_count_position_score = 1
-        } else if center_line_count_position > OAS_NON_AIRPLANE_CENTER_LINE_COUNT_POSITION_AVG {
+        } else if center_line_count_position > OAS_NON_AIRPLANES_MAX_CENTER_LINE_COUNT_POSITION {
             center_line_count_position_score = 0
         } else {
-            center_line_count_position_score =
-              (center_line_count_position - OAS_AIRPLANE_CENTER_LINE_COUNT_POSITION_AVG) /
-              (OAS_NON_AIRPLANE_CENTER_LINE_COUNT_POSITION_AVG -
-               OAS_AIRPLANE_CENTER_LINE_COUNT_POSITION_AVG)
+            let value = Double(center_line_count_position)
+            let airplane_score =
+              histogram_lookup(ofValue: value,
+                               minValue: OAS_AIRPLANES_MIN_CENTER_LINE_COUNT_POSITION, 
+                               maxValue: OAS_AIRPLANES_MAX_CENTER_LINE_COUNT_POSITION,
+                               stepSize: OAS_AIRPLANES_CENTER_LINE_COUNT_POSITION_STEP_SIZE,
+                               histogramValues: OAS_AIRPLANES_CENTER_LINE_COUNT_POSITION_HISTOGRAM) ?? 0
+
+            let non_airplane_score =
+              histogram_lookup(ofValue: value,
+                               minValue: OAS_NON_AIRPLANES_MIN_CENTER_LINE_COUNT_POSITION, 
+                               maxValue: OAS_NON_AIRPLANES_MAX_CENTER_LINE_COUNT_POSITION,
+                               stepSize: OAS_NON_AIRPLANES_CENTER_LINE_COUNT_POSITION_STEP_SIZE,
+                               histogramValues: OAS_NON_AIRPLANES_CENTER_LINE_COUNT_POSITION_HISTOGRAM) ?? 0
+
+            center_line_count_position_score = airplane_score / (non_airplane_score+airplane_score)
         }
         return (keys_over_lines_score + center_line_count_position_score)/2
 
@@ -42,24 +68,83 @@ func paint_score_from(lines: [Line]) -> Double { // greater than 0.5 means paint
     return 0
 }
 
+// bigger groups are more likely to be airplanes
 func paint_score_from(groupSize group_size: UInt64) -> Double { // returns values between 0 and 1
-    if group_size < UInt64(OAS_NON_AIRPLANE_GROUP_SIZE_AVG) { return 0 }
-    if group_size > UInt64(OAS_AIRPLANE_GROUP_SIZE_AVG)     { return 1 }
-    return Double(group_size) - OAS_NON_AIRPLANE_GROUP_SIZE_AVG /
-      (OAS_AIRPLANE_GROUP_SIZE_AVG - OAS_NON_AIRPLANE_GROUP_SIZE_AVG)
+    if group_size < UInt64(OAS_NON_AIRPLANES_MIN_GROUP_SIZE) { return 0 }
+    if group_size > UInt64(OAS_AIRPLANES_MAX_GROUP_SIZE)     { return 1 }
+
+    let airplane_score =
+      histogram_lookup(ofValue: Double(group_size),
+                       minValue: OAS_AIRPLANES_MIN_GROUP_SIZE, 
+                       maxValue: OAS_AIRPLANES_MAX_GROUP_SIZE,
+                       stepSize: OAS_AIRPLANES_GROUP_SIZE_STEP_SIZE,
+                       histogramValues: OAS_AIRPLANES_GROUP_SIZE_HISTOGRAM) ?? 0
+
+    let non_airplane_score =
+      histogram_lookup(ofValue: Double(group_size),
+                       minValue: OAS_NON_AIRPLANES_MIN_GROUP_SIZE, 
+                       maxValue: OAS_NON_AIRPLANES_MAX_GROUP_SIZE,
+                       stepSize: OAS_NON_AIRPLANES_GROUP_SIZE_STEP_SIZE,
+                       histogramValues: OAS_NON_AIRPLANES_GROUP_SIZE_HISTOGRAM) ?? 0
+
+    return airplane_score / (non_airplane_score+airplane_score)
 }
 
 
+// groups with larger fill amounts are less likely to be airplanes
 func paint_score_from(fillAmount fill_amount: Double) -> Double { // returns values between 0 and 1
-    if fill_amount > OAS_NON_AIRPLANE_FILL_AMOUNT_AVG { return 1 }
-    if fill_amount < OAS_AIRPLANE_FILL_AMOUNT_AVG     { return 0 }
-    return fill_amount - OAS_AIRPLANE_FILL_AMOUNT_AVG /
-      (OAS_NON_AIRPLANE_FILL_AMOUNT_AVG - OAS_AIRPLANE_FILL_AMOUNT_AVG)
+    if fill_amount < OAS_AIRPLANES_MIN_FILL_AMOUNT     { return 1 }
+    if fill_amount > OAS_NON_AIRPLANES_MAX_FILL_AMOUNT { return 0 }
+
+    let airplane_score =
+      histogram_lookup(ofValue: Double(fill_amount),
+                       minValue: OAS_AIRPLANES_MIN_FILL_AMOUNT, 
+                       maxValue: OAS_AIRPLANES_MAX_FILL_AMOUNT,
+                       stepSize: OAS_AIRPLANES_FILL_AMOUNT_STEP_SIZE,
+                       histogramValues: OAS_AIRPLANES_FILL_AMOUNT_HISTOGRAM) ?? 0
+
+    let non_airplane_score =
+      histogram_lookup(ofValue: Double(fill_amount),
+                       minValue: OAS_NON_AIRPLANES_MIN_FILL_AMOUNT, 
+                       maxValue: OAS_NON_AIRPLANES_MAX_FILL_AMOUNT,
+                       stepSize: OAS_NON_AIRPLANES_FILL_AMOUNT_STEP_SIZE,
+                       histogramValues: OAS_NON_AIRPLANES_FILL_AMOUNT_HISTOGRAM) ?? 0
+
+    return airplane_score / (non_airplane_score+airplane_score)
 }
 
+// smaller aspect ratios are more likely to be airplanes
 func paint_score_from(aspectRatio aspect_ratio: Double) -> Double { // returns values between 0 and 1
-    if aspect_ratio > OAS_NON_AIRPLANE_ASPECT_RATIO_AVG { return 0 }
-    if aspect_ratio < OAS_AIRPLANE_ASPECT_RATIO_AVG     { return 1 }
-    return aspect_ratio - OAS_NON_AIRPLANE_ASPECT_RATIO_AVG /
-      (OAS_NON_AIRPLANE_ASPECT_RATIO_AVG - OAS_AIRPLANE_ASPECT_RATIO_AVG)
+    if aspect_ratio < OAS_AIRPLANES_MIN_ASPECT_RATIO     { return 1 }
+    if aspect_ratio > OAS_NON_AIRPLANES_MAX_ASPECT_RATIO { return 0 }
+
+    let airplane_score =
+      histogram_lookup(ofValue: Double(aspect_ratio),
+                       minValue: OAS_AIRPLANES_MIN_ASPECT_RATIO, 
+                       maxValue: OAS_AIRPLANES_MAX_ASPECT_RATIO,
+                       stepSize: OAS_AIRPLANES_ASPECT_RATIO_STEP_SIZE,
+                       histogramValues: OAS_AIRPLANES_ASPECT_RATIO_HISTOGRAM) ?? 0
+
+    let non_airplane_score =
+      histogram_lookup(ofValue: Double(aspect_ratio),
+                       minValue: OAS_NON_AIRPLANES_MIN_ASPECT_RATIO, 
+                       maxValue: OAS_NON_AIRPLANES_MAX_ASPECT_RATIO,
+                       stepSize: OAS_NON_AIRPLANES_ASPECT_RATIO_STEP_SIZE,
+                       histogramValues: OAS_NON_AIRPLANES_ASPECT_RATIO_HISTOGRAM) ?? 0
+
+    return airplane_score / (non_airplane_score+airplane_score)
+}
+
+func histogram_lookup(ofValue value: Double,
+                      minValue min_value: Double,
+                      maxValue max_value: Double,
+                      stepSize step_size: Double,
+                      histogramValues histogram_values: [Double]) -> Double?
+{
+    if value < min_value { return nil }
+    if value > max_value { return nil }
+
+    let index = Int((value - min_value)/step_size)
+
+    return histogram_values[index]
 }

@@ -104,10 +104,8 @@ todo:
    - same approx fill amount regardless of aspect ratio
 
  - next steps for improving airplane detection:
-   - make mode which outputs images for each outlier group with name by frame#/outlier_group_name
-   - visually distinguish into ( airplane / non airplane / not sure ) and relocate each image
-   - use this large blob of data to help train a better group analyzer using more hough data
-
+   - false positive airplanes on stars in (largely in corners is a problem)
+     they're yellow, not sure why the overlap detection didn't get them (theta/rho mismatch?).
 */
 
 // XXX here are some random global constants that maybe should be exposed somehow
@@ -121,8 +119,8 @@ let min_line_count = 20        // lines with counts smaller than this are ignore
 
 let group_min_line_count = 1    // used when hough transorming individual groups
 
-let assume_airplane_size = 1000 // don't bother spending the time to fully process
-                            // groups larger than this, assume we should paint over them
+let assume_airplane_size = 5000 // don't bother spending the time to fully process
+                                // groups larger than this, assume we should paint over them
 
 // how far in each direction do we go when doing final processing?
 let number_final_processing_neighbors_needed = 2 // in each direction
@@ -142,9 +140,10 @@ let looks_like_a_line_lowest_count_reduction: Double = 0.5 // 0-1 percentage of 
 let supported_image_file_types = [".tif", ".tiff"] // XXX move this out
 
 
-let ntar_version = "0.0.2"
+let ntar_version = "0.0.3"
 
 // 0.0.2 added more detail group hough transormation analysis, based upon a data set
+// 0.0.3 included the data set analysis to include group size and fill, and to use histograms
 
 @main
 struct Ntar: ParsableCommand {
@@ -215,7 +214,9 @@ struct Ntar: ParsableCommand {
 
                   """)
             for willPaintReason in PaintReason.shouldPaintCases {
-                print("   "+willPaintReason.BasicColor+"- "+willPaintReason.BasicColor.name()+": "+willPaintReason.name+BasicColor.reset+"\n     \(willPaintReason.description)")
+                print("   "+willPaintReason.BasicColor+"- "+willPaintReason.BasicColor.name() +
+                      ": "+willPaintReason.name+BasicColor.reset +
+                      "\n     \(willPaintReason.description)")
             }
             print("""
 
@@ -223,7 +224,9 @@ struct Ntar: ParsableCommand {
 
                   """)
             for willPaintReason in PaintReason.shouldNotPaintCases {
-                print("   "+willPaintReason.BasicColor+"- "+willPaintReason.BasicColor.name()+": "+willPaintReason.name+BasicColor.reset+"\n     \(willPaintReason.description)")
+                print("   "+willPaintReason.BasicColor+"- "+willPaintReason.BasicColor.name() +
+                      ": "+willPaintReason.name+BasicColor.reset +
+                      "\n     \(willPaintReason.description)")
             }
             print("\n")
             return
