@@ -10,12 +10,70 @@ my $non_airplane_dir = "/Users/brian/git/nighttime_timelapse_airplane_eraser/out
 my $airplane_scores = process_csv_dir($airplane_dir);
 my $non_airplane_scores = process_csv_dir($non_airplane_dir);
 
-my ($airplane_value,     $airplane_center_line_count_position,
-    $airplane_count,     $airplane_average_group_size,
-    $airplane_average_fill_amount) = 
-my ($non_airplane_value, $non_airplane_center_line_count_position,
-    $non_airplane_count, $non_airplane_average_group_size,
-    $non_airplane_average_fill_amount) = 
+my $histogram_size = 100;	# XXX expose this
+
+my ($airplanes_keys_over_lines_histogram, $airplanes_keys_over_lines_step_size) =
+  make_histogram($histogram_size,
+		 $airplane_scores->{min_keys_over_lines},
+		 $airplane_scores->{max_keys_over_lines},
+		 $airplane_scores->{all_keys_over_lines});
+
+my ($non_airplanes_keys_over_lines_histogram, $non_airplanes_keys_over_lines_step_size) =
+  make_histogram($histogram_size,
+		 $non_airplane_scores->{min_keys_over_lines},
+		 $non_airplane_scores->{max_keys_over_lines},
+		 $non_airplane_scores->{all_keys_over_lines});
+
+
+my ($airplanes_center_line_count_position_histogram,
+    $airplanes_center_line_count_position_step_size) =
+  make_histogram($histogram_size,
+		 $airplane_scores->{min_center_line_count_position},
+		 $airplane_scores->{max_center_line_count_position},
+		 $airplane_scores->{all_center_line_count_position});
+
+my ($non_airplanes_center_line_count_position_histogram,
+    $non_airplanes_center_line_count_position_step_size) =
+  make_histogram($histogram_size,
+		 $non_airplane_scores->{min_center_line_count_position},
+		 $non_airplane_scores->{max_center_line_count_position},
+		 $non_airplane_scores->{all_center_line_count_position});
+
+my ($airplanes_group_size_histogram, $airplanes_group_size_step_size) =
+  make_histogram($histogram_size,
+		 $airplane_scores->{min_group_size},
+		 $airplane_scores->{max_group_size},
+		 $airplane_scores->{all_group_size});
+
+my ($non_airplanes_group_size_histogram, $non_airplanes_group_size_step_size)  =
+  make_histogram($histogram_size,
+		 $non_airplane_scores->{min_group_size},
+		 $non_airplane_scores->{max_group_size},
+		 $non_airplane_scores->{all_group_size});
+
+my ($airplanes_fill_amount_histogram, $airplanes_fill_amount_step_size) =
+  make_histogram($histogram_size,
+		 $airplane_scores->{min_fill_amount},
+		 $airplane_scores->{max_fill_amount},
+		 $airplane_scores->{all_fill_amount});
+
+my ($non_airplanes_fill_amount_histogram, $non_airplanes_fill_amount_step_size) =
+  make_histogram($histogram_size,
+		 $non_airplane_scores->{min_fill_amount},
+		 $non_airplane_scores->{max_fill_amount},
+		 $non_airplane_scores->{all_fill_amount});
+
+my ($airplanes_aspect_ratio_histogram, $airplanes_aspect_ratio_step_size) =
+  make_histogram($histogram_size,
+		 $airplane_scores->{min_aspect_ratio},
+		 $airplane_scores->{max_aspect_ratio},
+		 $airplane_scores->{all_aspect_ratio});
+
+my ($non_airplanes_aspect_ratio_histogram, $non_airplanes_aspect_ratio_step_size) =
+  make_histogram($histogram_size,
+		 $non_airplane_scores->{min_aspect_ratio},
+		 $non_airplane_scores->{max_aspect_ratio},
+		 $non_airplane_scores->{all_aspect_ratio});
 
 print ("keysOverLines: airplane $airplane_scores->{avg_keys_over_lines} non airplane $non_airplane_scores->{avg_keys_over_lines}\n");
 print ("midIndex:      airplane $airplane_scores->{avg_center_line_count_position} non airplane $non_airplane_scores->{avg_center_line_count_position}\n");
@@ -59,6 +117,61 @@ let OAS_NON_AIRPLANE_FILL_AMOUNT_AVG = $non_airplane_scores->{avg_fill_amount}
 let OAS_AIRPLANE_ASPECT_RATIO_AVG = $airplane_scores->{avg_aspect_ratio}
 let OAS_NON_AIRPLANE_ASPECT_RATIO_AVG = $non_airplane_scores->{avg_aspect_ratio}
 
+let OAS_AIRPLANES_KEYS_OVER_LINES_HISTOGRAM = $airplanes_keys_over_lines_histogram
+let OAS_AIRPLANES_MIN_KEYS_OVER_LINES = $airplane_scores->{min_keys_over_lines}
+let OAS_AIRPLANES_MAX_KEYS_OVER_LINES = $airplane_scores->{max_keys_over_lines}
+let OAS_AIRPLANES_KEYS_OVER_LINES_STEP_SIZE = $airplanes_keys_over_lines_step_size
+
+let OAS_NON_AIRPLANES_KEYS_OVER_LINES_HISTOGRAM = $non_airplanes_keys_over_lines_histogram
+let OAS_NON_AIRPLANES_MIN_KEYS_OVER_LINES = $non_airplane_scores->{min_keys_over_lines}
+let OAS_NON_AIRPLANES_MAX_KEYS_OVER_LINES = $non_airplane_scores->{max_keys_over_lines}
+let OAS_NON_AIRPLANES_KEYS_OVER_LINES_STEP_SIZE = $non_airplanes_keys_over_lines_step_size
+
+let OAS_AIRPLANES_CENTER_LINE_COUNT_POSITION_HISTOGRAM = $airplanes_center_line_count_position_histogram
+let OAS_AIRPLANES_MIN_CENTER_LINE_COUNT_POSITION = $airplane_scores->{min_center_line_count_position}
+let OAS_AIRPLANES_MAX_CENTER_LINE_COUNT_POSITION = $airplane_scores->{max_center_line_count_position}
+let OAS_AIRPLANES_CENTER_LINE_COUNT_POSITION_STEP_SIZE = $airplanes_center_line_count_position_step_size
+
+let OAS_NON_AIRPLANES_CENTER_LINE_COUNT_POSITION_HISTOGRAM = $non_airplanes_center_line_count_position_histogram
+let OAS_NON_AIRPLANES_MIN_CENTER_LINE_COUNT_POSITION = $non_airplane_scores->{min_center_line_count_position}
+let OAS_NON_AIRPLANES_MAX_CENTER_LINE_COUNT_POSITION = $non_airplane_scores->{max_center_line_count_position}
+let OAS_NON_AIRPLANES_CENTER_LINE_COUNT_POSITION_STEP_SIZE = $non_airplanes_center_line_count_position_step_size
+
+
+let OAS_AIRPLANES_GROUP_SIZE_HISTOGRAM = $airplanes_group_size_histogram
+let OAS_AIRPLANES_MIN_GROUP_SIZE = $airplane_scores->{min_group_size}
+let OAS_AIRPLANES_MAX_GROUP_SIZE = $airplane_scores->{max_group_size}
+let OAS_AIRPLANES_GROUP_SIZE_STEP_SIZE = $airplanes_group_size_step_size
+
+let OAS_NON_AIRPLANES_GROUP_SIZE_HISTOGRAM = $non_airplanes_group_size_histogram
+let OAS_NON_AIRPLANES_MIN_GROUP_SIZE = $non_airplane_scores->{min_group_size}
+let OAS_NON_AIRPLANES_MAX_GROUP_SIZE = $non_airplane_scores->{max_group_size}
+let OAS_NON_AIRPLANES_GROUP_SIZE_STEP_SIZE = $non_airplanes_group_size_step_size
+
+
+let OAS_AIRPLANES_FILL_AMOUNT_HISTOGRAM = $airplanes_fill_amount_histogram
+let OAS_AIRPLANES_MIN_FILL_AMOUNT = $airplane_scores->{min_fill_amount}
+let OAS_AIRPLANES_MAX_FILL_AMOUNT = $airplane_scores->{max_fill_amount}
+let OAS_AIRPLANES_FILL_AMOUNT_STEP_SIZE = $airplanes_fill_amount_step_size
+
+let OAS_NON_AIRPLANES_FILL_AMOUNT_HISTOGRAM = $non_airplanes_fill_amount_histogram
+let OAS_NON_AIRPLANES_MIN_FILL_AMOUNT = $non_airplane_scores->{min_fill_amount}
+let OAS_NON_AIRPLANES_MAX_FILL_AMOUNT = $non_airplane_scores->{max_fill_amount}
+let OAS_NON_AIRPLANES_FILL_AMOUNT_STEP_SIZE = $non_airplanes_fill_amount_step_size
+
+
+let OAS_AIRPLANES_ASPECT_RATIO_HISTOGRAM = $airplanes_aspect_ratio_histogram
+let OAS_AIRPLANES_MIN_ASPECT_RATIO = $airplane_scores->{min_aspect_ratio}
+let OAS_AIRPLANES_MAX_ASPECT_RATIO = $airplane_scores->{max_aspect_ratio}
+let OAS_AIRPLANES_ASPECT_RATIO_STEP_SIZE = $airplanes_aspect_ratio_step_size
+
+let OAS_NON_AIRPLANES_ASPECT_RATIO_HISTOGRAM = $non_airplanes_aspect_ratio_histogram
+let OAS_NON_AIRPLANES_MIN_ASPECT_RATIO = $non_airplane_scores->{min_aspect_ratio}
+let OAS_NON_AIRPLANES_MAX_ASPECT_RATIO = $non_airplane_scores->{max_aspect_ratio}
+let OAS_NON_AIRPLANES_ASPECT_RATIO_STEP_SIZE = $non_airplanes_aspect_ratio_step_size
+
+let OAS_HISTOGRAM_SIZE = $histogram_size
+
 END
 ;
 
@@ -68,7 +181,32 @@ close $output;
 # subs #
 ########
 
-my $histogram_size = 10;	# XXX expose this
+# XXX we need a logarithmic histogram for some of these
+sub make_histogram($$$) {
+  my ($histogram_size, $min_value, $max_value, $all_values) = @_;
+
+  my @histogram = ();
+  my $step_size = ($max_value - $min_value)/$histogram_size;
+  my $current_step = $min_value;
+
+  for(my $i = 0 ; $i < $histogram_size ; $i++) {
+    $histogram[$i] = 0;
+    foreach my $value (@$all_values) {
+      $histogram[$i]++ if($current_step <= $value && $value <= $current_step + $step_size);
+    }
+    $current_step += $step_size;
+  }
+  my $max_count = undef;
+  for(my $i = 0 ; $i < $histogram_size ; $i++) {
+    $max_count = $histogram[$i] unless defined $max_count;
+    $max_count = $histogram[$i] if $max_count < $histogram[$i];
+  }
+  for(my $i = 0 ; $i < $histogram_size ; $i++) {
+    $histogram[$i] /= $max_count;
+  }
+
+  return ("[\n    ".join(",\n    ", @histogram)."\n]\n", $step_size);
+}
 
 sub process_csv_dir($) {
   my ($dirname) = @_;
@@ -79,11 +217,29 @@ sub process_csv_dir($) {
   my $center_line_count_position_count = 0;
 
   my $total_keys_over_lines = 0;
-  my $total_center_line_count_position = 0;
-  my $total_group_size = 0;
-  my $total_fill_amount = 0;
-  my $total_aspect_ratio = 0;
+  my $min_keys_over_lines = undef;
+  my $max_keys_over_lines = undef;
+  my $all_keys_over_lines = [];
 
+  my $total_center_line_count_position = 0;
+  my $min_center_line_count_position = undef;
+  my $max_center_line_count_position = undef;
+  my $all_center_line_count_position = [];
+
+  my $total_group_size = 0;
+  my $min_group_size = undef;
+  my $max_group_size = undef;
+  my $all_group_size = [];
+
+  my $total_fill_amount = 0;
+  my $min_fill_amount = undef;
+  my $max_fill_amount = undef;
+  my $all_fill_amount = [];
+
+  my $total_aspect_ratio = 0;
+  my $min_aspect_ratio = undef;
+  my $max_aspect_ratio = undef;
+  my $all_aspect_ratio = [];
 
   foreach my $filename (readdir $dir) {
     if ($filename =~ /^(.*)[.]csv$/) {
@@ -99,9 +255,39 @@ sub process_csv_dir($) {
 	my $count = $_ =~ tr/[*]//;
 	$group_size += $count;
       }
-      $total_aspect_ratio += $group_width/$group_height;
+      my $aspect_ratio = $group_width/$group_height;
+      my $fill_amount = $group_size / ($group_width * $group_height);
+
+      # make sure min and max values are set
+      $min_group_size = $group_size unless defined $min_group_size;
+      $max_group_size = $group_size unless defined $max_group_size;
+
+      $min_fill_amount = $fill_amount unless defined $min_fill_amount;
+      $max_fill_amount = $fill_amount unless defined $max_fill_amount;
+
+      $min_aspect_ratio = $aspect_ratio unless defined $min_aspect_ratio;
+      $max_aspect_ratio = $aspect_ratio unless defined $max_aspect_ratio;
+
+      # set min and maxes
+      $min_group_size = $group_size if $min_group_size > $group_size;
+      $max_group_size = $group_size if $max_group_size < $group_size;
+
+      $min_fill_amount = $fill_amount if $min_fill_amount > $fill_amount;
+      $max_fill_amount = $fill_amount if $max_fill_amount < $fill_amount;
+
+      $min_aspect_ratio = $aspect_ratio if $min_aspect_ratio > $aspect_ratio;
+      $max_aspect_ratio = $aspect_ratio if $max_aspect_ratio < $aspect_ratio;
+
+      # add to totals
+      $total_aspect_ratio += $aspect_ratio;
       $total_group_size += $group_size;
-      $total_fill_amount += $group_size / ($group_width * $group_height);
+      $total_fill_amount += $fill_amount;
+
+      # record individual values
+      push @$all_group_size, $group_size;
+      push @$all_aspect_ratio, $aspect_ratio;
+      push @$all_fill_amount, $fill_amount;
+
       close $txt_file;
 
       open my $fh, "<$dirname/$filename";
@@ -139,6 +325,20 @@ sub process_csv_dir($) {
 	    $mid_index = $i;
 	    $center_line_count_position = $mid_index / scalar(@lines);
 	    $total_center_line_count_position += $center_line_count_position;
+
+	    # make sure min and max values are set
+	    $min_center_line_count_position = $center_line_count_position
+	      unless defined $min_center_line_count_position;
+	    $max_center_line_count_position = $center_line_count_position
+	      unless defined $max_center_line_count_position;
+
+	    # set min and maxes
+	    $min_center_line_count_position = $center_line_count_position
+	      if $min_center_line_count_position > $center_line_count_position;
+	    $max_center_line_count_position = $center_line_count_position
+	      if $max_center_line_count_position < $center_line_count_position;
+
+	    push @$all_center_line_count_position, $center_line_count_position;
 	    $center_line_count_position_count++;
 	    last;
 	  }
@@ -150,7 +350,15 @@ sub process_csv_dir($) {
 	my $keys_over_lines = $key_count / $line_count;
 
 	$total_keys_over_lines += $keys_over_lines;
+	push @$all_keys_over_lines, $keys_over_lines;
 
+	# make sure min and max values are set
+	$min_keys_over_lines = $keys_over_lines unless defined $min_keys_over_lines;
+	$max_keys_over_lines = $keys_over_lines unless defined $max_keys_over_lines;
+
+	# set min and maxes
+	$min_keys_over_lines = $keys_over_lines if $min_keys_over_lines > $keys_over_lines;
+	$max_keys_over_lines = $keys_over_lines if $max_keys_over_lines < $keys_over_lines;
       }
 
 #      print "$filename has $line_count lines and $key_count keys $first_count first count $keys_over_lines percentage\n";
@@ -165,6 +373,7 @@ sub process_csv_dir($) {
   }
   if ($center_line_count_position_count > 0) {
     $total_center_line_count_position /= $center_line_count_position_count;
+
   }
   closedir $dir;
 
@@ -172,10 +381,30 @@ sub process_csv_dir($) {
 
   return {
 	  avg_keys_over_lines => $total_keys_over_lines,
+	  min_keys_over_lines => $min_keys_over_lines,
+	  max_keys_over_lines => $max_keys_over_lines,
+	  all_keys_over_lines => $all_keys_over_lines,
+
 	  avg_center_line_count_position => $total_center_line_count_position,
+	  min_center_line_count_position => $min_center_line_count_position,
+	  max_center_line_count_position => $max_center_line_count_position,
+	  all_center_line_count_position => $all_center_line_count_position,
+
 	  avg_group_size => $total_group_size,
+	  min_group_size => $min_group_size,
+	  max_group_size => $max_group_size,
+	  all_group_size => $all_group_size,
+
 	  avg_fill_amount => $total_fill_amount,
+	  min_fill_amount => $min_fill_amount,
+	  max_fill_amount => $max_fill_amount,
+	  all_fill_amount => $all_fill_amount,
+
 	  avg_aspect_ratio => $total_aspect_ratio,
+	  min_aspect_ratio => $min_aspect_ratio,
+	  max_aspect_ratio => $max_aspect_ratio,
+	  all_aspect_ratio => $all_aspect_ratio,
+
 	  size => $total_csv_count,
 	 };
 }
