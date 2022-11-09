@@ -8,16 +8,14 @@ import Foundation
 
 // keys over lines is the number of unique line counts over the number of lines
 // in the hough transform.  Lines tend towards fewer unique line counts.
+// There cannot be more keys than lines so this number is betwen 0 and 1
 let OAS_AIRPLANE_KEYS_OVER_LINES_AVG = 0.0454918527758866
 let OAS_NON_AIRPLANE_KEYS_OVER_LINES_AVG = 0.127064383162395
 
 // the mid value is the index of the line in the sorted list that has the
 // same value as the average of the highest line count and lowest line count
 // the closer this is to the start, the more likely this is a line.
+// each index is divided by the total number of lines so this number is between 0 and 1
 let OAS_AIRPLANE_MID_VALUE_AVG = 0.0177131601425053
 let OAS_NON_AIRPLANE_MID_VALUE_AVG = 0.529693555417884
-
-// an average of the two values for both lines and not lines
-let OAS_KEYS_OVER_LINES_AVG = 0.0862781179691407
-let OAS_MID_INDEX_AVG = 0.273703357780195
 

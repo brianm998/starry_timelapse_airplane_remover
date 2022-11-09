@@ -14,9 +14,6 @@ my ($non_airplane_value, $non_airplane_mid_value, $non_airplane_count) =
 print ("keysOverLines: airplane $airplane_value non airplane $non_airplane_value\n");
 print ("midIndex:      airplane $airplane_mid_value non airplane $non_airplane_mid_value\n");
 
-my $keys_over_lines_avg = ($airplane_value + $non_airplane_value) / 2;
-my $mid_index_avg = ($airplane_mid_value + $non_airplane_mid_value) / 2;
-
 open my $output, ">Sources/ntar/ShouldPaintConstants.swift";
 
 print $output <<END
@@ -30,18 +27,16 @@ import Foundation
 
 // keys over lines is the number of unique line counts over the number of lines
 // in the hough transform.  Lines tend towards fewer unique line counts.
+// There cannot be more keys than lines so this number is betwen 0 and 1
 let OAS_AIRPLANE_KEYS_OVER_LINES_AVG = $airplane_value
 let OAS_NON_AIRPLANE_KEYS_OVER_LINES_AVG = $non_airplane_value
 
 // the mid value is the index of the line in the sorted list that has the
 // same value as the average of the highest line count and lowest line count
 // the closer this is to the start, the more likely this is a line.
+// each index is divided by the total number of lines so this number is between 0 and 1
 let OAS_AIRPLANE_MID_VALUE_AVG = $airplane_mid_value
 let OAS_NON_AIRPLANE_MID_VALUE_AVG = $non_airplane_mid_value
-
-// an average of the two values for both lines and not lines
-let OAS_KEYS_OVER_LINES_AVG = $keys_over_lines_avg
-let OAS_MID_INDEX_AVG = $mid_index_avg
 
 END
 ;
