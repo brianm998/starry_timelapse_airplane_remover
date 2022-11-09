@@ -91,11 +91,9 @@ actor FinalProcessor {
         for frame in frames {
             if let frame = frame {
                 let name = "finishAll \(count)"
-                await self.dispatch_group.enter(name)
                 count += 1
                 await self.final_queue.method_list.add(atIndex: frame.frame_index) {
                     await frame.finish()
-                    await self.dispatch_group.leave(name)
                 }
             }
         }
