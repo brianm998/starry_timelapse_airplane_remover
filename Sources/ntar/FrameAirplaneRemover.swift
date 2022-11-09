@@ -454,14 +454,12 @@ actor FrameAirplaneRemover: Equatable {
                     continue
                 }
 
-                var was_close_to_line = false
-                
-                if should_paint_based_upon(lines: lines_from_this_group) {
-                    Log.d("frame \(frame_index) will paint group \(name) because it looks like a line from the group hough transform")
+                let paint_score_from_lines = paint_score_from(lines: lines_from_this_group)
+                if paint_score_from_lines > 0.5 {
                     if size < 300 { // XXX constant XXX
-                        // don't assume small ones are lines
-                        was_close_to_line = true
+    7                    // don't assume small ones are lines
                     } else {
+                        Log.d("frame \(frame_index) will paint group \(name) because it looks like a line from the group hough transform")
                         should_paint[name] = .looksLikeALine
                         continue
                     }
@@ -523,11 +521,9 @@ actor FrameAirplaneRemover: Equatable {
                     group_count_score = 100
                 }
 
-                var overall_score = group_size_score + group_count_score + group_value_score
+                var overall_score = group_size_score + group_count_score +
+                                    group_value_score + paint_score_from_lines
 
-                if was_close_to_line {
-                    overall_score += 80
-                }
                 overall_score /= 4
                 
                 if overall_score > 50 {
