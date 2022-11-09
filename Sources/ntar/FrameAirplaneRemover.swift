@@ -424,6 +424,7 @@ actor FrameAirplaneRemover: Equatable {
 
                 let group_width = max_x - min_x + 1
                 let group_height = max_y - min_y + 1
+                let group_aspect_ratio = Double(group_width) / Double(group_height)
                 // creating a smaller HoughTransform is a lot faster,
                 // but looses a small amount of precision
                 let groupHoughTransform = HoughTransform(data_width: group_width,
@@ -457,7 +458,7 @@ actor FrameAirplaneRemover: Equatable {
                 let paint_score_from_lines = paint_score_from(lines: lines_from_this_group)
                 if paint_score_from_lines > 0.5 {
                     if size < 300 { // XXX constant XXX
-    7                    // don't assume small ones are lines
+                        // don't assume small ones are lines
                     } else {
                         Log.d("frame \(frame_index) will paint group \(name) because it looks like a line from the group hough transform")
                         should_paint[name] = .looksLikeALine
@@ -477,25 +478,11 @@ actor FrameAirplaneRemover: Equatable {
                 
                 //Log.d("frame \(frame_index) group \(name) line at index 0 theta \(group_theta), rho \(group_rho), count \(group_count)")
 
-                var group_size_score: Double = 0 // size of the group in pixels
-
-                if size < 10 {  
-                    group_size_score = 0
-                } else if size < 50 {
-                    group_size_score = 25
-                } else if size < 100 {
-                    group_size_score = 40
-                } else if size < 150 {
-                    group_size_score = 50
-                } else if size < 200 {
-                    group_size_score = 60
-                } else if size < 300 {
-                    group_size_score = 70
-                } else if size < 500 {
-                    group_size_score = 80
-                } else {
-                    group_size_score = 100
-                }
+                var group_size_score = paint_score_from(groupSize: size)
+                let group_fill_amount = Double(size)/(Double(group_width)*Double(group_height))
+                //Log.d("should_paint group_size \(size) group_fill_amount \(group_fill_amount) group_aspect_ratio \(group_aspect_ratio)")
+                var group_fill_amount_score = paint_score_from(fillAmount: group_fill_amount)
+                var group_aspect_ratio_score = paint_score_from(aspectRatio: group_aspect_ratio)
                 
                 var group_value_score: Double = 0 // score of how bright this group was overall
                 if group_value < max_pixel_brightness_distance {
@@ -508,25 +495,22 @@ actor FrameAirplaneRemover: Equatable {
                     }
                 }
                 
-                var group_count_score: Double = 0 // score of the line from the group transform
-                if group_count < 10 {
-                    group_count_score = 0
-                } else if group_count < 30 {
-                    group_count_score = 20
-                } else if group_count < 50 {
-                    group_count_score = 50
-                } else if group_count < 80 {
-                    group_count_score = 80
-                } else {
-                    group_count_score = 100
-                }
+                var overall_score = group_size_score + group_fill_amount_score +
+                                    group_aspect_ratio_score + 
+                                    (group_value_score/100) + paint_score_from_lines
 
-                var overall_score = group_size_score + group_count_score +
-                                    group_value_score + paint_score_from_lines
+                //Log.d("frame \(frame_index) should_paint group_size_score \(group_size_score) group_fill_amount_score \(group_fill_amount_score) group_aspect_ratio_score \(group_aspect_ratio_score) group_aspect_ratio_score \(group_aspect_ratio_score) group_value_score \(group_value_score/100) + paint_score_from_lines \(paint_score_from_lines)")
 
-                overall_score /= 4
+                // XXX this still isn't right
+                // XXX this still isn't right
+                // XXX this still isn't right
+                // XXX this still isn't right
+                // XXX this still isn't right
+                // XXX this still isn't right
                 
-                if overall_score > 50 {
+                overall_score /= 5
+                
+                if overall_score > 0.5 {
                     //Log.d("frame \(frame_index) should_paint[\(name)] = (true, .goodScore(\(overall_score))")
                     should_paint[name] = .goodScore(overall_score)
                 } else {

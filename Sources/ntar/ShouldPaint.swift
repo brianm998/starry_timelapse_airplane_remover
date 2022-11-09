@@ -40,3 +40,24 @@ func paint_score_from(lines: [Line]) -> Double { // greater than 0.5 means paint
     return 0
 }
 
+func paint_score_from(groupSize group_size: UInt64) -> Double { // returns values between 0 and 1
+    if group_size < UInt64(OAS_NON_AIRPLANE_GROUP_SIZE_AVG) { return 0 }
+    if group_size > UInt64(OAS_AIRPLANE_GROUP_SIZE_AVG)     { return 1 }
+    return Double(group_size) - OAS_NON_AIRPLANE_GROUP_SIZE_AVG /
+      (OAS_AIRPLANE_GROUP_SIZE_AVG - OAS_NON_AIRPLANE_GROUP_SIZE_AVG)
+}
+
+
+func paint_score_from(fillAmount fill_amount: Double) -> Double { // returns values between 0 and 1
+    if fill_amount > OAS_NON_AIRPLANE_FILL_AMOUNT_AVG { return 1 }
+    if fill_amount < OAS_AIRPLANE_FILL_AMOUNT_AVG     { return 0 }
+    return fill_amount - OAS_AIRPLANE_FILL_AMOUNT_AVG /
+      (OAS_NON_AIRPLANE_FILL_AMOUNT_AVG - OAS_AIRPLANE_FILL_AMOUNT_AVG)
+}
+
+func paint_score_from(aspectRatio aspect_ratio: Double) -> Double { // returns values between 0 and 1
+    if aspect_ratio > OAS_NON_AIRPLANE_ASPECT_RATIO_AVG { return 0 }
+    if aspect_ratio < OAS_AIRPLANE_ASPECT_RATIO_AVG     { return 1 }
+    return aspect_ratio - OAS_NON_AIRPLANE_ASPECT_RATIO_AVG /
+      (OAS_NON_AIRPLANE_ASPECT_RATIO_AVG - OAS_AIRPLANE_ASPECT_RATIO_AVG)
+}

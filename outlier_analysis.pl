@@ -55,6 +55,10 @@ let OAS_NON_AIRPLANE_GROUP_SIZE_AVG = $non_airplane_scores->{avg_group_size}
 let OAS_AIRPLANE_FILL_AMOUNT_AVG = $airplane_scores->{avg_fill_amount}
 let OAS_NON_AIRPLANE_FILL_AMOUNT_AVG = $non_airplane_scores->{avg_fill_amount}
 
+// the average aspect ratio for each group type.  average group width/height.
+let OAS_AIRPLANE_ASPECT_RATIO_AVG = $airplane_scores->{avg_aspect_ratio}
+let OAS_NON_AIRPLANE_ASPECT_RATIO_AVG = $non_airplane_scores->{avg_aspect_ratio}
+
 END
 ;
 
@@ -79,6 +83,7 @@ sub process_csv_dir($) {
 
   my $total_group_size = 0;
   my $total_fill_amount = 0;
+  my $total_aspect_ratio = 0;
 
   foreach my $filename (readdir $dir) {
     if ($filename =~ /^(.*)[.]csv$/) {
@@ -86,7 +91,6 @@ sub process_csv_dir($) {
 
       open my $txt_file, "<$dirname/$first_part.txt";
       my $group_size = 0;
-      # XXX aso get width, height, aspect ratio and fill amount
       my $group_width = undef;
       my $group_height = 0;
       while(<$txt_file>) {
@@ -95,6 +99,7 @@ sub process_csv_dir($) {
 	my $count = $_ =~ tr/[*]//;
 	$group_size += $count;
       }
+      $total_aspect_ratio += $group_width/$group_height;
       $total_group_size += $group_size;
       $total_fill_amount += $group_size / ($group_width * $group_height);
       close $txt_file;
@@ -166,6 +171,7 @@ sub process_csv_dir($) {
     $total_keys_over_lines /= $total_csv_count;
     $total_group_size /= $total_csv_count;
     $total_fill_amount /= $total_csv_count;
+    $total_aspect_ratio /= $total_csv_count;
   }
   if ($mid_value_count > 0) {
     $average_mid_value /= $mid_value_count;
@@ -184,6 +190,7 @@ sub process_csv_dir($) {
 	  avg_mid_value => $average_mid_value,
 	  avg_group_size => $total_group_size,
 	  avg_fill_amount => $total_fill_amount,
+	  avg_aspect_ratio => $total_aspect_ratio,
 	  size => $total_csv_count,
 	 };
 }
