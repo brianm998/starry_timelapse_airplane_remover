@@ -20,6 +20,13 @@ let OAS_AIRPLANE_MID_VALUE_AVG = 0.0177131601425053
 let OAS_NON_AIRPLANE_MID_VALUE_AVG = 0.529693555417884
 
 // the average size for each group type.  Larger is more likely to be an airplane streak
+// value in in pixels
 let OAS_AIRPLANE_GROUP_SIZE_AVG = 803.661871548968
 let OAS_NON_AIRPLANE_GROUP_SIZE_AVG = 388.132028789924
+
+// Average fill amount for each group type.  The fill amount is the amount
+// of the outlier group's bounding box which is filled by the outlier.
+// A fully filled in box is a retangle.  Values between 0 and 1.
+let OAS_AIRPLANE_FILL_AMOUNT_AVG = 0.084397936347982
+let OAS_NON_AIRPLANE_FILL_AMOUNT_AVG = 0.43954400441806
 
