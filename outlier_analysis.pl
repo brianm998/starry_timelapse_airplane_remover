@@ -7,9 +7,10 @@ use strict;
 my $airplane_dir = "/Users/brian/git/nighttime_timelapse_airplane_eraser/outlier_data/airplanes";
 my $non_airplane_dir = "/Users/brian/git/nighttime_timelapse_airplane_eraser/outlier_data/non_airplanes";
 
-my ($airplane_value, $airplane_mid_value, $airplane_count) = process_csv_dir($airplane_dir);
-my ($non_airplane_value, $non_airplane_mid_value, $non_airplane_count) =
-  process_csv_dir($non_airplane_dir);
+my ($airplane_value,     $airplane_mid_value,
+    $airplane_count,     $airplane_average_group_size) = process_csv_dir($airplane_dir);
+my ($non_airplane_value, $non_airplane_mid_value,
+    $non_airplane_count, $non_airplane_average_group_size) = process_csv_dir($non_airplane_dir);
 
 print ("keysOverLines: airplane $airplane_value non airplane $non_airplane_value\n");
 print ("midIndex:      airplane $airplane_mid_value non airplane $non_airplane_mid_value\n");
@@ -38,6 +39,10 @@ let OAS_NON_AIRPLANE_KEYS_OVER_LINES_AVG = $non_airplane_value
 let OAS_AIRPLANE_MID_VALUE_AVG = $airplane_mid_value
 let OAS_NON_AIRPLANE_MID_VALUE_AVG = $non_airplane_mid_value
 
+// the average size for each group type.  Larger is more likely to be an airplane streak
+let OAS_AIRPLANE_GROUP_SIZE_AVG = $airplane_average_group_size
+let OAS_NON_AIRPLANE_GROUP_SIZE_AVG = $non_airplane_average_group_size
+
 END
 ;
 
@@ -60,6 +65,8 @@ sub process_csv_dir($) {
   my $average_mid_value = 0;
   my $mid_value_count = 0;
 
+  my $total_group_size = 0;
+
   foreach my $filename (readdir $dir) {
     if ($filename =~ /^(.*)[.]csv$/) {
       my $first_part = $1;
@@ -71,6 +78,7 @@ sub process_csv_dir($) {
 	my $count = $_ =~ tr/[*]//;
 	$group_size += $count;
       }
+      $total_group_size += $group_size;
       close $txt_file;
 
       open my $fh, "<$dirname/$filename";
@@ -138,6 +146,7 @@ sub process_csv_dir($) {
   if ($total_csv_count > 0) {
     #print("dividing $total_keys_over_lines by $total_csv_count\n");
     $total_keys_over_lines /= $total_csv_count;
+    $total_group_size /= $total_csv_count;
   }
   if ($mid_value_count > 0) {
     $average_mid_value /= $mid_value_count;
@@ -146,10 +155,10 @@ sub process_csv_dir($) {
 
   my $percentage_airplanes = $airplane_count/$total_csv_count*100;
   my $percentage_old_airplanes = $old_airplane_count/$total_csv_count*100;
-
+  
   print "we found $airplane_count airlines in data of size $total_csv_count $percentage_airplanes% correct ($percentage_old_airplanes% old correct)\n";
 
   #print "we found $average_mid_value average mid value\n";
 
-  return ($total_keys_over_lines, $average_mid_value, $total_csv_count);
+  return ($total_keys_over_lines, $average_mid_value, $total_csv_count, $total_group_size);
 }
