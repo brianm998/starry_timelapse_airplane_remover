@@ -15,7 +15,7 @@ which will prompt the user to identify each outlier group
 
 afterwards, run ntar -q to generate hough transform csv files
 
-then run outlier_analysis.pl, which will regenrate ShouldPaint.swift with the updated data
+then run outlier_analysis.pl, which will regenrate ShouldPaintConstants.swift with the updated data
 
 
 
