@@ -90,6 +90,9 @@ todo:
      they're yellow, not sure why the overlap detection didn't get them (theta/rho mismatch?).
 
  - make outlier output text files be separated by airplane / not airplane
+
+ - figure out how distribution works
+   - a .dmg file with a command line installer?  any swift command line installer examples?
 */
 
 // XXX here are some random global constants that maybe should be exposed somehow
@@ -161,7 +164,7 @@ struct Ntar: ParsableCommand {
         """)
     var test_paint = false
 
-    @Flag(help:"Print out what the test paint colors mean")
+    @Flag(name: [.customLong("show-test-paint-colors")], help:"Print out what the test paint colors mean")
     var show_test_paint_colors = false
     
     @Argument(help: """
@@ -217,7 +220,6 @@ struct Ntar: ParsableCommand {
             print("\n")
             return
         } 
-
 
         if process_outlier_group_images {
             let airplanes_group = "outlier_data/airplanes"
