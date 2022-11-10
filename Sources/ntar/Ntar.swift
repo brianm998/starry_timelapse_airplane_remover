@@ -29,8 +29,6 @@ todo:
    - process image sequence with ntar
    - recompress processed image sequence w/ ffmpeg with same parameters as before
    - remove image sequence dir
- - fix bug where '/' at the end of the command line arg isn't handled well
- - detect idle cpu % and use max cpu% instead of max % of frames
  - use the number of groups that have fallen into the same line group to boost its painting
  - output dirs are created even when intput filename is not existant
 
@@ -47,8 +45,6 @@ todo:
    minor help when restarting after a crash, frames that need to be re-calculated but already exist
    number_final_processing_neighbors_needed before the last existing one.
 
- - XXX this mofo needs to be run in the same dir as the first passed arg :(  FIX THAT
-
  - try some kind of processing of individual groups that classifies them as plane or not
    either a hough transform to detect that it's cloas to a line, or detecting holes in them?
    i.e. the percentage of neighbors found, or the percentage without empty neighbors
@@ -57,11 +53,6 @@ todo:
 
  - use distance between frames when calculating positive final pass too.
    i.e. they shouldn't overlap, but shouldn't be too far away either
-
- - expand group hough transform analysis for looksLikeALine to beyond first vs last count value
-   currently works remarkedly well considering how crude it is.
-   airplanes have a fast drop off after the first few lines, with more lines for larger groups
-   non-airplanes have a smoother distribution across the first set of lines
 
  - expand final processing to identify nearby groups that should be painted
    for example one frame has a known line, and next frame has another group
@@ -77,15 +68,6 @@ todo:
    perhaps better single group hough transform analysis?
    look at more lines and the distribution of them
    
- - try re-writing the logic that uses the full hough transform to not need it
-   use the group hough transforms with more advanced analysis of the data
-   look a things like how solid the groups are as well (i.e. no holes)
-
- - have a method to write out each outlier group as a small b/w image for training purposes
-
- - track ntar version somehow and report that with a command line option
-   (ideally put this in the output dirname instead of the cluster of params now)
-
  - make the info logging better
 
  - airplanes have:
@@ -106,6 +88,8 @@ todo:
  - next steps for improving airplane detection:
    - false positive airplanes on stars in (largely in corners is a problem)
      they're yellow, not sure why the overlap detection didn't get them (theta/rho mismatch?).
+
+ - make outlier output text files be separated by airplane / not airplane
 */
 
 // XXX here are some random global constants that maybe should be exposed somehow
@@ -243,10 +227,15 @@ struct Ntar: ParsableCommand {
             return
         }
         
-        // XXX don't assume the arg is in cwd
-        let path = file_manager.currentDirectoryPath
-        if let input_image_sequence_dirname = image_sequence_dirname {
-    
+        if var input_image_sequence_dirname = image_sequence_dirname {
+
+            while input_image_sequence_dirname.hasSuffix("/") {
+                // remove any trailing '/' chars,
+                // otherwise our created output dir(s) will end up inside this dir,
+                // not alongside it
+                _ = input_image_sequence_dirname.removeLast()
+            }
+            
             Log.name = "ntar-log"
             Log.nameSuffix = input_image_sequence_dirname
 
@@ -254,11 +243,9 @@ struct Ntar: ParsableCommand {
             if let fileLogLevel = fileLogLevel {
                 Log.handlers[.file] = FileLogHandler(at: fileLogLevel)
             }
-
-            
             
             // XXX maybe check to make sure this is a directory
-            Log.d("will process \(input_image_sequence_dirname) on path \(path)")
+            Log.d("will process \(input_image_sequence_dirname)")
             
             Log.d("running with min_group_size \(min_group_size) min_line_count \(min_line_count)")
             Log.d("group_min_line_count \(group_min_line_count)")
@@ -266,8 +253,7 @@ struct Ntar: ParsableCommand {
             //Log.d("max_concurrent_frames \(max_concurrent_frames) max_pixel_brightness_distance \(max_pixel_brightness_distance)")
             
             if #available(macOS 10.15, *) {
-                let dirname = "\(path)/\(input_image_sequence_dirname)"
-                let eraser = NighttimeAirplaneRemover(imageSequenceDirname: dirname,
+                let eraser = NighttimeAirplaneRemover(imageSequenceDirname: input_image_sequence_dirname,
                                                       maxConcurrent: UInt(numConcurrentRenders),
                                                       maxPixelDistance: max_pixel_brightness_distance, 
                                                       testPaint: test_paint,

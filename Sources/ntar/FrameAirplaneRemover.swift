@@ -632,7 +632,7 @@ actor FrameAirplaneRemover: Equatable {
     func writeOutlierGroupFiles() {
         Log.e("writing outlier group images")              
         for (group_name, _) in self.neighbor_groups {
-            Log.w("writing text file for group \(group_name)")
+            Log.i("writing text file for group \(group_name)")
             
             if let min_x = group_min_x[group_name],
                let min_y = group_min_y[group_name],
@@ -646,7 +646,7 @@ actor FrameAirplaneRemover: Equatable {
                 if file_manager.fileExists(atPath: full_path) {
                     Log.w("cannot write to \(full_path), it already exists")
                 } else {
-                    Log.e("creating \(full_path)")                      
+                    Log.i("creating \(full_path)")                      
                     var line = ""
                     
                     for y in min_y ... max_y {
