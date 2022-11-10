@@ -304,7 +304,7 @@ actor FrameAirplaneRemover: Equatable {
     func testPaintOutliers(toData test_paint_data: inout Data) {
         Log.d("frame \(frame_index) painting outliers green")
 
-        for (name, size) in neighbor_groups {
+        for (name, _) in neighbor_groups {
             if let min_x = group_min_x[name], // bounding box for this group
                let min_y = group_min_y[name],
                let max_x = group_max_x[name],
@@ -470,19 +470,17 @@ actor FrameAirplaneRemover: Equatable {
                 // useful data here could be other lines, and if there are any,
                 // and how far away they are from the most prominent one.
                 // i.e. detecting real lines vs the best line fit for a random blob
-                let (group_theta, group_rho, group_count) = lines_from_this_group[0]
-
                 group_lines[name] = lines_from_this_group[0] // keep this for later analysis
                 
                 //Log.d("frame \(frame_index) group \(name) got \(lines_from_this_group.count) lines from group hough transform")
                 
                 //Log.d("frame \(frame_index) group \(name) line at index 0 theta \(group_theta), rho \(group_rho), count \(group_count)")
 
-                var group_size_score = paint_score_from(groupSize: size)
+                let group_size_score = paint_score_from(groupSize: size)
                 let group_fill_amount = Double(size)/(Double(group_width)*Double(group_height))
                 //Log.d("should_paint group_size \(size) group_fill_amount \(group_fill_amount) group_aspect_ratio \(group_aspect_ratio)")
-                var group_fill_amount_score = paint_score_from(fillAmount: group_fill_amount)
-                var group_aspect_ratio_score = paint_score_from(aspectRatio: group_aspect_ratio)
+                let group_fill_amount_score = paint_score_from(fillAmount: group_fill_amount)
+                let group_aspect_ratio_score = paint_score_from(aspectRatio: group_aspect_ratio)
                 
                 var group_value_score: Double = 0 // score of how bright this group was overall
                 if group_value < max_pixel_brightness_distance {

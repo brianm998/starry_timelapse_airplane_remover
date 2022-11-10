@@ -90,7 +90,6 @@ actor FinalProcessor {
         var count = 0
         for frame in frames {
             if let frame = frame {
-                let name = "finishAll \(count)"
                 count += 1
                 await self.final_queue.method_list.add(atIndex: frame.frame_index) {
                     await frame.finish()
@@ -226,8 +225,8 @@ fileprivate func run_final_pass(frames: [FrameAirplaneRemover], mainIndex main_i
             if let line_min_x = await frame.group_min_x[group_name],
                let line_min_y = await frame.group_min_y[group_name],
                let line_max_x = await frame.group_max_x[group_name],
-               let line_max_y = await frame.group_max_y[group_name],
-               let group_size = await frame.neighbor_groups[group_name]
+               let line_max_y = await frame.group_max_y[group_name]/*,
+               let group_size = await frame.neighbor_groups[group_name]*/
             {
                 for other_frame in frames {
                     if other_frame == frame { continue }
@@ -244,8 +243,8 @@ fileprivate func run_final_pass(frames: [FrameAirplaneRemover], mainIndex main_i
                             if let other_line_min_x = await other_frame.group_min_x[og_name],
                                let other_line_min_y = await other_frame.group_min_y[og_name],
                                let other_line_max_x = await other_frame.group_max_x[og_name],
-                               let other_line_max_y = await other_frame.group_max_y[og_name],
-                               let other_group_size = await other_frame.neighbor_groups[og_name]
+                               let other_line_max_y = await other_frame.group_max_y[og_name]/*,
+                               let other_group_size = await other_frame.neighbor_groups[og_name]*/
                             {
 
                                 //Log.d("frame \(frame.frame_index) group 1 \(group_name) of size \(group_size) (\(line_min_x) \(line_min_y)),  (\(line_max_x) \(line_max_y)) other frame \(other_frame.frame_index) group 2 \(og_name) of size \(group_size) (\(other_line_min_x) \(other_line_min_y)),  (\(other_line_max_x) \(other_line_max_y))")
@@ -254,7 +253,7 @@ fileprivate func run_final_pass(frames: [FrameAirplaneRemover], mainIndex main_i
                                 // multiply the constant by how far the frames are away
                                 // from eachother in the sequence
                                 var edge_amt = Double(final_group_boundary_amt * mult)
-                                var center_amt = Double(final_group_boundary_amt*final_center_distance_multiplier * mult)
+                                let center_amt = Double(final_group_boundary_amt*final_center_distance_multiplier * mult)
                                 if mult == 1 {
                                     // directly adjecent frames
                                     // -2 isn't enough
@@ -346,8 +345,8 @@ func distance_on(min_x: Int, min_y: Int, max_x: Int, max_y: Int,
     var edge: Edge = .horizontal
     let y_max_value = Double(max_x)*slope + Double(y_intercept)
     let x_max_value = Double(max_y)-y_intercept/slope
-    let y_min_value = Double(min_x)*slope + Double(y_intercept)
-    let x_min_value = Double(min_y)-y_intercept/slope
+    //let y_min_value = Double(min_x)*slope + Double(y_intercept)
+    //let x_min_value = Double(min_y)-y_intercept/slope
 
     // there is an error introduced by integer to floating point conversions
     let math_accuracy_error: Double = 3

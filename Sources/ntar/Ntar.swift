@@ -123,6 +123,11 @@ let looks_like_a_line_lowest_count_reduction: Double = 0.5 // 0-1 percentage of 
 
 let supported_image_file_types = [".tif", ".tiff"] // XXX move this out
 
+// XXX use this to try to avoid running out of memory somehow
+// maybe determine megapixels of images, and guestimate usage and
+// avoid spawaning too many threads?
+let memory_size_bytes = ProcessInfo.processInfo.physicalMemory
+let memory_size_gigs = ProcessInfo.processInfo.physicalMemory/(1024*1024*1024)
 
 let ntar_version = "0.0.3"
 
@@ -139,9 +144,6 @@ struct Ntar: ParsableCommand {
         """)
     var numConcurrentRenders: Int = ProcessInfo.processInfo.activeProcessorCount-1
 
-    let memory_size_bytes = ProcessInfo.processInfo.physicalMemory
-    let memory_size_gigs = ProcessInfo.processInfo.physicalMemory/(1024*1024*1024)
-    
     @Option(name: [.short, .customLong("file-log-level")], help:"""
         If present, ntar will output a file log at the given level.
         """)
