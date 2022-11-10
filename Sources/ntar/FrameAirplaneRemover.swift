@@ -500,13 +500,6 @@ actor FrameAirplaneRemover: Equatable {
                                     (group_value_score/100) + paint_score_from_lines
 
                 //Log.d("frame \(frame_index) should_paint group_size_score \(group_size_score) group_fill_amount_score \(group_fill_amount_score) group_aspect_ratio_score \(group_aspect_ratio_score) group_aspect_ratio_score \(group_aspect_ratio_score) group_value_score \(group_value_score/100) + paint_score_from_lines \(paint_score_from_lines)")
-
-                // XXX this still isn't right
-                // XXX this still isn't right
-                // XXX this still isn't right
-                // XXX this still isn't right
-                // XXX this still isn't right
-                // XXX this still isn't right
                 
                 overall_score /= 5
                 

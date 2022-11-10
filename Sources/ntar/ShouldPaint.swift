@@ -145,6 +145,7 @@ func histogram_lookup(ofValue value: Double,
     if value > max_value { return nil }
 
     let index = Int((value - min_value)/step_size)
-
+    if index < 0 { return nil }
+    if index >= histogram_values.count { return nil }
     return histogram_values[index]
 }
