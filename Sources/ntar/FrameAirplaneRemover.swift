@@ -506,15 +506,15 @@ actor FrameAirplaneRemover: Equatable {
 //                }
                 
                 
-                Log.d("frame \(frame_index) should_paint group_size_score \(group_size_score) group_fill_amount_score \(group_fill_amount_score) group_aspect_ratio_score \(group_aspect_ratio_score) group_value_score \(group_value_score/100) + paint_score_from_lines \(paint_score_from_lines)")
+                    //Log.d("frame \(frame_index) should_paint group_size_score \(group_size_score) group_fill_amount_score \(group_fill_amount_score) group_aspect_ratio_score \(group_aspect_ratio_score) group_value_score \(group_value_score/100) + paint_score_from_lines \(paint_score_from_lines)")
                 
                 
                 if overall_score > 0.5 {
-                    Log.d("frame \(frame_index) should_paint[\(name)] = (true, .goodScore(\(overall_score))")
+                    //Log.d("frame \(frame_index) should_paint[\(name)] = (true, .goodScore(\(overall_score))")
                     should_paint[name] = .goodScore(overall_score)
                 } else {
+                    //Log.d("frame \(frame_index) should_paint[\(name)] = (false, .badScore(\(overall_score))")
                     should_paint[name] = .badScore(overall_score)
-                    Log.d("frame \(frame_index) should_paint[\(name)] = (false, .badScore(\(overall_score))")
                 }
             }
         }

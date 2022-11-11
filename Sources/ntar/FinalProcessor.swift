@@ -22,9 +22,8 @@ import Cocoa
 // at this point each frame has been processed to have a good idea of 
 // what outlier groups to paint and not to paint.
 // this process puts the final touches on the should_paint map of each
-// frame and then calls finish() on it, which paints based upon the
-// should_paint map, and then saves the output file(s).
-
+// frame and then sticks into the final queue to which calls finish() on it,
+// which paints based upon the should_paint map, and then saves the output file(s).
 
 @available(macOS 10.15, *)
 actor FinalProcessor {
@@ -238,7 +237,9 @@ fileprivate func run_final_pass(frames: [FrameAirplaneRemover], mainIndex main_i
                         let theta_diff = abs(line_theta-other_line_theta)
                         let rho_diff = abs(line_rho-other_line_rho)
                         //Log.d("overlap_amount \(overlap_amount) amt \(amt)")
-                        if theta_diff < final_theta_diff && rho_diff < final_rho_diff {
+                        if (theta_diff < final_theta_diff || abs(theta_diff - 180) < final_theta_diff) &&
+                            rho_diff < final_rho_diff
+                        {
                             if let other_line_min_x = await other_frame.group_min_x[og_name],
                                let other_line_min_y = await other_frame.group_min_y[og_name],
                                let other_line_max_x = await other_frame.group_max_x[og_name],
@@ -364,7 +365,7 @@ fileprivate func run_final_pass(frames: [FrameAirplaneRemover], mainIndex main_i
                    let first_max_x = await frame.group_max_x[group_name],
                    let first_max_y = await frame.group_max_y[group_name]
                 {
-
+                    //Log.d("frame \(frame_index) looking for streak for group \(group_name)")
                     // search neighboring frames looking for potential tracks
                     if let streak = 
                          await streak_starting_from(groupName: group_name,
@@ -376,7 +377,10 @@ fileprivate func run_final_pass(frames: [FrameAirplaneRemover], mainIndex main_i
                                                     frames: frames,
                                                     startingIndex: frame_index+1)
                     {
+                        //Log.i("frame \(frame_index) found streak for group \(group_name)")
                         airplane_streaks.append(streak)
+                    } else {
+                        //Log.d("frame \(frame_index) DID NOT find streak for group \(group_name)")
                     }
                 }
             }
@@ -384,10 +388,11 @@ fileprivate func run_final_pass(frames: [FrameAirplaneRemover], mainIndex main_i
     }
 
     // XXX go through and mark all of airplane_streaks to paint
+    //Log.i("analyzing \(airplane_streaks.count) streaks")
     for airplane_streak in airplane_streaks {
-
+        //Log.i("analyzing streak with \(airplane_streak.count) members")
         // XXX perhaps reject small streaks?
-        if airplane_streak.count < 3 { continue } 
+        //if airplane_streak.count < 3 { continue } 
         var verbotten = false
         var was_already_paintable = false
         for streak_member in airplane_streak {
@@ -398,8 +403,10 @@ fileprivate func run_final_pass(frames: [FrameAirplaneRemover], mainIndex main_i
             }
         }
         if verbotten || !was_already_paintable { continue }
+        //Log.i("painting over streak with \(airplane_streak.count) members")
         for streak_member in airplane_streak {
             let frame = frames[streak_member.frame_index]
+            //Log.d("frame \(frame.frame_index) will paint group \(streak_member.group_name) is .inStreak")
             await frame.setShouldPaint(group: streak_member.group_name, why: .inStreak)
         }
     }
@@ -426,10 +433,29 @@ func streak_starting_from(groupName group_name: String,
     var last_max_y = max_y
     var last_group_line = group_line
 
+    var best_min_x = min_x
+    var best_min_y = min_y
+    var best_max_x = max_x
+    var best_max_y = max_y
+    var best_index = 0
+    var best_group_name = group_name
+    var best_group_line = group_line
+    
     var count = 1
+
+    let min_distance: Double = 400      // XXX constant
+/*
+    Log.d("streak:")
+    for index in starting_index ..< frames.count {
+        let frame = frames[index]
+        Log.d("streak index \(index) frame \(frame.frame_index)")
+    }
+  */  
     for index in starting_index ..< frames.count {
         let frame = frames[index]
         count += 1
+        var best_distance = min_distance
+        //Log.d("looking at frame \(frame.frame_index)")
         for (other_group_name, other_group_line) in await frame.group_lines {
             if let group_min_x = await frame.group_min_x[other_group_name],
                let group_min_y = await frame.group_min_y[other_group_name],
@@ -443,21 +469,32 @@ func streak_starting_from(groupName group_name: String,
                 let theta_diff = abs(last_group_line.theta-other_group_line.theta)
                 let rho_diff = abs(last_group_line.rho-other_group_line.rho)
 
-                // maybe find all and choose the closest?
-                // XXX contant VV
-                if distance < 100 && theta_diff < final_theta_diff && rho_diff < final_rho_diff {
-                    potential_streak.append((index, other_group_name, other_group_line))
-                    last_min_x = group_min_x
-                    last_min_y = group_min_y
-                    last_max_x = group_max_x
-                    last_max_y = group_max_y
-                    last_group_line = other_group_line
-                    break
+                if distance < best_distance &&
+                  (theta_diff < final_theta_diff || abs(theta_diff - 180) < final_theta_diff) &&
+                   rho_diff < final_rho_diff
+                {
+                    best_min_x = group_min_x
+                    best_min_y = group_min_y
+                    best_max_x = group_max_x
+                    best_max_y = group_max_y
+                    best_group_name = other_group_name
+                    best_group_line = other_group_line
+                    best_distance = distance
+                    best_index = index
+                } else {
+                    //Log.d("frame \(frame.frame_index) group \(other_group_name) doesn't match group \(group_name) theta_diff \(theta_diff) rho_diff \(rho_diff)")
                 }
             }
         }
-        if count != potential_streak.count {
-            break
+        if best_distance == min_distance {
+            break               // no more streak
+        } else {
+            last_min_x = best_min_x
+            last_min_y = best_min_y
+            last_max_x = best_max_x
+            last_max_y = best_max_y
+            last_group_line = best_group_line
+            potential_streak.append((best_index, best_group_name, best_group_line))
         }
     }
     if potential_streak.count == 1 {
