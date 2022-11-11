@@ -418,6 +418,11 @@ typealias AirplaneStreakMember = (
   line: Line
 )
 
+typealias BoundingBox = (
+  min: Coord,
+  max: Coord
+)
+
 // see if there is a streak of airplane tracks starting from the given group
 // a 'streak' is a set of outliers with simlar theta and rho, that are
 // close enough to eachother, and that are moving in close enough to the same
@@ -425,18 +430,21 @@ typealias AirplaneStreakMember = (
 @available(macOS 10.15, *)
 func streak_starting_from(groupName group_name: String,
                           groupLine group_line: Line,
+//                          groupBounds group_bounds: BoundingBox
                           min_x: Int, min_y: Int, max_x: Int, max_y: Int,
                           frames: [FrameAirplaneRemover],
                           startingIndex starting_index: Int) async -> [AirplaneStreakMember]?
 {
     var potential_streak: [AirplaneStreakMember] = [(starting_index-1, group_name, group_line)]
 
+    // the bounding box of the last element of the streak
     var last_min_x = min_x
     var last_min_y = min_y
     var last_max_x = max_x
     var last_max_y = max_y
     var last_group_line = group_line
 
+    // the best match found so far for a possible streak etension
     var best_min_x = min_x
     var best_min_y = min_y
     var best_max_x = max_x
@@ -447,7 +455,6 @@ func streak_starting_from(groupName group_name: String,
     
     var count = 1
 
-    let min_distance: Double = 100      // XXX constant
 /*
     Log.d("streak:")
     for index in starting_index ..< frames.count {
@@ -458,6 +465,14 @@ func streak_starting_from(groupName group_name: String,
     for index in starting_index ..< frames.count {
         let frame = frames[index]
         count += 1
+
+        let last_width = Double(last_max_x - last_min_x)
+        let last_height = Double(last_max_y - last_min_y)
+        let last_hypo = sqrt(last_width*last_width + last_height*last_height)
+
+        // calculate min distance from hypotenuse of last bounding box
+        let min_distance: Double = last_hypo * 1.5
+        
         var best_distance = min_distance
         //Log.d("looking at frame \(frame.frame_index)")
         for (other_group_name, other_group_line) in await frame.group_lines {
