@@ -223,8 +223,8 @@ fileprivate func run_final_pass(frames: [FrameAirplaneRemover], mainIndex main_i
             if let line_min_x = await frame.group_min_x[group_name],
                let line_min_y = await frame.group_min_y[group_name],
                let line_max_x = await frame.group_max_x[group_name],
-               let line_max_y = await frame.group_max_y[group_name]/*,
-               let group_size = await frame.neighbor_groups[group_name]*/
+               let line_max_y = await frame.group_max_y[group_name],
+               let group_size = await frame.neighbor_groups[group_name]
             {
                 for other_frame in frames {
                     if other_frame == frame { continue }
@@ -236,15 +236,14 @@ fileprivate func run_final_pass(frames: [FrameAirplaneRemover], mainIndex main_i
 
                         let theta_diff = abs(line_theta-other_line_theta)
                         let rho_diff = abs(line_rho-other_line_rho)
-                        //Log.d("overlap_amount \(overlap_amount) amt \(amt)")
                         if (theta_diff < final_theta_diff || abs(theta_diff - 180) < final_theta_diff) &&
                             rho_diff < final_rho_diff
                         {
                             if let other_line_min_x = await other_frame.group_min_x[og_name],
                                let other_line_min_y = await other_frame.group_min_y[og_name],
                                let other_line_max_x = await other_frame.group_max_x[og_name],
-                               let other_line_max_y = await other_frame.group_max_y[og_name]/*,
-                               let other_group_size = await other_frame.neighbor_groups[og_name]*/
+                               let other_line_max_y = await other_frame.group_max_y[og_name],
+                               let other_group_size = await other_frame.neighbor_groups[og_name]
                             {
 
                                 //Log.d("frame \(frame.frame_index) group 1 \(group_name) of size \(group_size) (\(line_min_x) \(line_min_y)),  (\(line_max_x) \(line_max_y)) other frame \(other_frame.frame_index) group 2 \(og_name) of size \(group_size) (\(other_line_min_x) \(other_line_min_y)),  (\(other_line_max_x) \(other_line_max_y))")
@@ -291,8 +290,9 @@ fileprivate func run_final_pass(frames: [FrameAirplaneRemover], mainIndex main_i
                                                   max_2_y: other_line_max_y)
 
                                 //Log.d("frame \(frame.frame_index) edge_distance_bewteen_groups \(distance_bewteen_groups) center_distance \(center_distance_bewteen_groups) \(group_name) \(og_name) edge_amt \(edge_amt) center_amt \(center_amt)")
-                                if distance_bewteen_groups < edge_amt &&
-                                   center_distance_bewteen_groups < center_amt
+                                if (distance_bewteen_groups < edge_amt &&
+                                     center_distance_bewteen_groups < center_amt) ||
+                                     distance_bewteen_groups < 0 // direct overlap
                                 {
                                     var do_it = true
 
@@ -322,6 +322,9 @@ fileprivate func run_final_pass(frames: [FrameAirplaneRemover], mainIndex main_i
                                         
                                         //Log.d("frame \(frame.frame_index) should_paint[\(group_name)] = (false, .adjecentOverlap(\(-distance_bewteen_groups))")
                                         //Log.d("frame \(other_frame.frame_index) should_paint[\(og_name)] = (false, .adjecentOverlap(\(-distance_bewteen_groups))")
+                                    } else {
+                                        //Log.d("frame \(frame.frame_index) \(group_name) left untouched because of distance between group \(distance_bewteen_groups)")
+                                        //Log.d("frame \(other_frame.frame_index) \(og_name) left untouched because of distance between group \(distance_bewteen_groups)")
                                     }
                                 } 
                             }
