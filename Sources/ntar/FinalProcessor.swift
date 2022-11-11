@@ -418,6 +418,10 @@ typealias AirplaneStreakMember = (
   line: Line
 )
 
+// see if there is a streak of airplane tracks starting from the given group
+// a 'streak' is a set of outliers with simlar theta and rho, that are
+// close enough to eachother, and that are moving in close enough to the same
+// direction as the lines that describe them.
 @available(macOS 10.15, *)
 func streak_starting_from(groupName group_name: String,
                           groupLine group_line: Line,
@@ -472,32 +476,22 @@ func streak_starting_from(groupName group_name: String,
                                                      min_2_x: group_min_x, min_2_y: group_min_y,
                                                      max_2_x: group_max_x, max_2_y: group_max_y)
 
-                // XXX there is likely a trigonomitric error here 
-                //let center_line_theta_90 = 90 - center_line_theta + 90
-                
                 let theta_diff = abs(last_group_line.theta-other_group_line.theta)
                 let rho_diff = abs(last_group_line.rho-other_group_line.rho)
 
                 let center_line_theta_diff_1 = abs(center_line_theta-other_group_line.theta)
                 let center_line_theta_diff_2 = abs(center_line_theta-last_group_line.theta)
-                
-                //let center_line_theta_90_diff_1 = abs(center_line_theta_90-other_group_line.theta)
-                //let center_line_theta_90_diff_2 = abs(center_line_theta_90-last_group_line.theta)
+
+                let center_line_theta_diff = final_theta_diff*2 // XXX hardcoded constant
                 
                 if distance < best_distance &&
                   (theta_diff < final_theta_diff || abs(theta_diff - 180) < final_theta_diff) &&
-                  ((center_line_theta_diff_1 < final_theta_diff*2 ||
-                     abs(center_line_theta_diff_1 - 180) < final_theta_diff * 2) ||
-                  (center_line_theta_diff_2 < final_theta_diff*2 ||
-                     abs(center_line_theta_diff_2 - 180) < final_theta_diff * 2) /*||
-                  (center_line_theta_90_diff_1 < final_theta_diff ||
-                     abs(center_line_theta_90_diff_1 - 180) < final_theta_diff * 2) ||
-                  (center_line_theta_90_diff_2 < final_theta_diff ||
-                  abs(center_line_theta_90_diff_2 - 180) < final_theta_diff * 2)*/) &&
+                  ((center_line_theta_diff_1 < center_line_theta_diff ||
+                     abs(center_line_theta_diff_1 - 180) < center_line_theta_diff) ||
+                  (center_line_theta_diff_2 < center_line_theta_diff ||
+                     abs(center_line_theta_diff_2 - 180) < center_line_theta_diff)) &&
                    rho_diff < final_rho_diff
                 {
-                    // XXX also check theta and rho of the line between their center points
-                    
                     best_min_x = group_min_x
                     best_min_y = group_min_y
                     best_max_x = group_max_x
@@ -507,13 +501,14 @@ func streak_starting_from(groupName group_name: String,
                     best_distance = distance
                     best_index = index
                 } else {
-                    Log.d("frame \(frame.frame_index) group \(other_group_name) doesn't match group \(group_name) theta_diff \(theta_diff) rho_diff \(rho_diff) center_line_theta_diff_1 \(center_line_theta_diff_1) center_line_theta_diff_2 \(center_line_theta_diff_2) center_line_theta \(center_line_theta) last \(last_group_line.theta) other \(other_group_line.theta)")
+                    //Log.d("frame \(frame.frame_index) group \(other_group_name) doesn't match group \(group_name) theta_diff \(theta_diff) rho_diff \(rho_diff) center_line_theta_diff_1 \(center_line_theta_diff_1) center_line_theta_diff_2 \(center_line_theta_diff_2) center_line_theta \(center_line_theta) last \(last_group_line.theta) other \(other_group_line.theta)")
                 }
             }
         }
         if best_distance == min_distance {
             break               // no more streak
         } else {
+            // streak on
             last_min_x = best_min_x
             last_min_y = best_min_y
             last_max_x = best_max_x
@@ -617,27 +612,27 @@ func center_theta(min_1_x: Int, min_1_y: Int,
                   min_2_x: Int, min_2_y: Int,
                   max_2_x: Int, max_2_y: Int) -> Double
 {
-    Log.d("center_theta(min_1_x: \(min_1_x), min_1_y: \(min_1_y), max_1_x: \(max_1_x), max_1_y: \(max_1_y), min_2_x: \(min_2_x), min_2_y: \(min_2_y), max_2_x: \(max_2_x), max_2_y: \(max_2_y)")
+    //Log.d("center_theta(min_1_x: \(min_1_x), min_1_y: \(min_1_y), max_1_x: \(max_1_x), max_1_y: \(max_1_y), min_2_x: \(min_2_x), min_2_y: \(min_2_y), max_2_x: \(max_2_x), max_2_y: \(max_2_y)")
     let half_width_1 = Double(max_1_x - min_1_x)/2
     let half_height_1 = Double(max_1_y - min_1_y)/2
 
-    Log.d("1 half size [\(half_width_1), \(half_height_1)]")
+    //Log.d("1 half size [\(half_width_1), \(half_height_1)]")
     
     let half_width_2 = Double(max_2_x - min_2_x)/2
     let half_height_2 = Double(max_2_y - min_2_y)/2
     
-    Log.d("2 half size [\(half_width_2), \(half_height_2)]")
+    //Log.d("2 half size [\(half_width_2), \(half_height_2)]")
 
     let center_1_x = Double(min_1_x) + half_width_1
     let center_1_y = Double(min_1_y) + half_height_1
 
-    Log.d("1 center [\(center_1_x), \(center_1_y)]")
+    //Log.d("1 center [\(center_1_x), \(center_1_y)]")
     
     let center_2_x = Double(min_2_x) + half_width_2
     let center_2_y = Double(min_2_y) + half_height_2
     
 
-    Log.d("2 center [\(center_2_x), \(center_2_y)]")
+    //Log.d("2 center [\(center_2_x), \(center_2_y)]")
 
     if center_1_y == center_2_y {
         // special case horizontal alignment, theta 0 degrees
@@ -677,7 +672,7 @@ func center_theta(min_1_x: Int, min_1_y: Int,
 
     // XXX what about rho?
     let theta_degrees = theta*180/Double.pi
-    Log.d("theta_degrees \(theta_degrees)")
+    //Log.d("theta_degrees \(theta_degrees)")
     return  theta_degrees // convert from radians to degrees
 }
 
