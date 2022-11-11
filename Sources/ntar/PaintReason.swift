@@ -5,6 +5,7 @@ enum PaintReason: Equatable, CaseIterable {
    case assumed                      // large groups are assumed to be airplanes
    case goodScore(Double)            // percent score
    case looksLikeALine
+   case inStreak
 
    case badScore(Double)        // percent score
    case adjecentOverlap(Double) // overlap distance
@@ -13,15 +14,17 @@ enum PaintReason: Equatable, CaseIterable {
         get {
             switch self {
             case .assumed:
-                return .magenta
+                return .brightMagenta
             case .goodScore:
                 return .yellow
             case .looksLikeALine:
                 return .red
+            case .inStreak:
+                return .brightRed
             case .badScore:
-                return .cyan
+                return .brightCyan
             case .adjecentOverlap:
-                return .blue
+                return .brightBlue
             }
         }
    }
@@ -32,6 +35,7 @@ enum PaintReason: Equatable, CaseIterable {
             case .assumed:         return "assumed"
             case .goodScore:       return "good score"
             case .looksLikeALine:  return "looks like a line"
+            case .inStreak:        return "in a streak"
             case .badScore:        return "bad score"
             case .adjecentOverlap: return "adjecent overlap"
             }
@@ -61,6 +65,11 @@ These outlier groups are not painted over because of a bad score analyzing the o
                 return """
 These outlier groups are not painted over because it overlaps with a similar outlier group in an adjecent frame.
 """
+            case .inStreak:
+                return """
+These outlier groups were found to be in a streak across frames.
+"""
+                
             }
         }
    }
@@ -71,6 +80,7 @@ These outlier groups are not painted over because it overlaps with a similar out
             case .assumed:         return true
             case .goodScore:       return true
             case .looksLikeALine:  return true
+            case .inStreak:        return true
             case .badScore:        return false
             case .adjecentOverlap: return false
             }
@@ -86,7 +96,7 @@ These outlier groups are not painted over because it overlaps with a similar out
    }
 
    static var allCases: [PaintReason] {
-       return [.assumed, .looksLikeALine, .goodScore(0), .badScore(0), .adjecentOverlap(0)]
+       return [.assumed, .looksLikeALine, .goodScore(0), .inStreak, .badScore(0), .adjecentOverlap(0)]
    }
                          
    // colors used to test paint to show why
@@ -111,6 +121,13 @@ These outlier groups are not painted over because it overlaps with a similar out
       case .goodScore:
           switch rhs {
           case .goodScore:
+              return true
+          default:
+              return false
+          }
+      case .inStreak:
+          switch rhs {
+          case .inStreak:
               return true
           default:
               return false
