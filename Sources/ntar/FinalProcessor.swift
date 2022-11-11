@@ -345,7 +345,7 @@ fileprivate func run_final_pass(frames: [FrameAirplaneRemover], mainIndex main_i
 
             if let reason = await frame.should_paint[group_name] {
                 if reason == .adjecentOverlap(0) {
-                    Log.d("frame \(frame.frame_index) skipping group \(group_name) because it has .adjecentOverlap")
+                    //Log.d("frame \(frame.frame_index) skipping group \(group_name) because it has .adjecentOverlap")
                     continue
                 }
 
@@ -443,7 +443,7 @@ func streak_starting_from(groupName group_name: String,
     
     var count = 1
 
-    let min_distance: Double = 400      // XXX constant
+    let min_distance: Double = 100      // XXX constant
 /*
     Log.d("streak:")
     for index in starting_index ..< frames.count {
@@ -466,13 +466,38 @@ func streak_starting_from(groupName group_name: String,
                                              max_1_x: last_max_x, max_1_y: last_max_y,
                                              min_2_x: group_min_x, min_2_y: group_min_y,
                                              max_2_x: group_max_x, max_2_y: group_max_y)
+
+                let center_line_theta = center_theta(min_1_x: last_min_x, min_1_y: last_min_y,
+                                                     max_1_x: last_max_x, max_1_y: last_max_y,
+                                                     min_2_x: group_min_x, min_2_y: group_min_y,
+                                                     max_2_x: group_max_x, max_2_y: group_max_y)
+
+                // XXX there is likely a trigonomitric error here 
+                //let center_line_theta_90 = 90 - center_line_theta + 90
+                
                 let theta_diff = abs(last_group_line.theta-other_group_line.theta)
                 let rho_diff = abs(last_group_line.rho-other_group_line.rho)
 
+                let center_line_theta_diff_1 = abs(center_line_theta-other_group_line.theta)
+                let center_line_theta_diff_2 = abs(center_line_theta-last_group_line.theta)
+                
+                //let center_line_theta_90_diff_1 = abs(center_line_theta_90-other_group_line.theta)
+                //let center_line_theta_90_diff_2 = abs(center_line_theta_90-last_group_line.theta)
+                
                 if distance < best_distance &&
                   (theta_diff < final_theta_diff || abs(theta_diff - 180) < final_theta_diff) &&
+                  ((center_line_theta_diff_1 < final_theta_diff*2 ||
+                     abs(center_line_theta_diff_1 - 180) < final_theta_diff * 2) ||
+                  (center_line_theta_diff_2 < final_theta_diff*2 ||
+                     abs(center_line_theta_diff_2 - 180) < final_theta_diff * 2) /*||
+                  (center_line_theta_90_diff_1 < final_theta_diff ||
+                     abs(center_line_theta_90_diff_1 - 180) < final_theta_diff * 2) ||
+                  (center_line_theta_90_diff_2 < final_theta_diff ||
+                  abs(center_line_theta_90_diff_2 - 180) < final_theta_diff * 2)*/) &&
                    rho_diff < final_rho_diff
                 {
+                    // XXX also check theta and rho of the line between their center points
+                    
                     best_min_x = group_min_x
                     best_min_y = group_min_y
                     best_max_x = group_max_x
@@ -482,7 +507,7 @@ func streak_starting_from(groupName group_name: String,
                     best_distance = distance
                     best_index = index
                 } else {
-                    //Log.d("frame \(frame.frame_index) group \(other_group_name) doesn't match group \(group_name) theta_diff \(theta_diff) rho_diff \(rho_diff)")
+                    Log.d("frame \(frame.frame_index) group \(other_group_name) doesn't match group \(group_name) theta_diff \(theta_diff) rho_diff \(rho_diff) center_line_theta_diff_1 \(center_line_theta_diff_1) center_line_theta_diff_2 \(center_line_theta_diff_2) center_line_theta \(center_line_theta) last \(last_group_line.theta) other \(other_group_line.theta)")
                 }
             }
         }
@@ -587,6 +612,75 @@ func center_distance(min_1_x: Int, min_1_y: Int,
     return sqrt(width*width + height*height)
 }
 
+func center_theta(min_1_x: Int, min_1_y: Int,
+                  max_1_x: Int, max_1_y: Int,
+                  min_2_x: Int, min_2_y: Int,
+                  max_2_x: Int, max_2_y: Int) -> Double
+{
+    Log.d("center_theta(min_1_x: \(min_1_x), min_1_y: \(min_1_y), max_1_x: \(max_1_x), max_1_y: \(max_1_y), min_2_x: \(min_2_x), min_2_y: \(min_2_y), max_2_x: \(max_2_x), max_2_y: \(max_2_y)")
+    let half_width_1 = Double(max_1_x - min_1_x)/2
+    let half_height_1 = Double(max_1_y - min_1_y)/2
+
+    Log.d("1 half size [\(half_width_1), \(half_height_1)]")
+    
+    let half_width_2 = Double(max_2_x - min_2_x)/2
+    let half_height_2 = Double(max_2_y - min_2_y)/2
+    
+    Log.d("2 half size [\(half_width_2), \(half_height_2)]")
+
+    let center_1_x = Double(min_1_x) + half_width_1
+    let center_1_y = Double(min_1_y) + half_height_1
+
+    Log.d("1 center [\(center_1_x), \(center_1_y)]")
+    
+    let center_2_x = Double(min_2_x) + half_width_2
+    let center_2_y = Double(min_2_y) + half_height_2
+    
+
+    Log.d("2 center [\(center_2_x), \(center_2_y)]")
+
+    if center_1_y == center_2_y {
+        // special case horizontal alignment, theta 0 degrees
+        return 0
+    }
+
+    if center_1_x == center_2_x {
+        // special case vertical alignment, theta 90 degrees
+        return 90
+    }
+
+    var theta: Double = 0 //atan(Double(abs(center_1_x - center_2_x))/Double(abs(center_1_y - center_2_y)))
+
+
+    let width = Double(abs(center_1_x - center_2_x))
+    let height = Double(abs(center_1_y - center_2_y))
+
+    let ninety_degrees_in_radians = 90 * Double.pi/180
+    
+    if center_1_x < center_2_x {
+        if center_1_y < center_2_y {
+            // 90 + case
+            theta = ninety_degrees_in_radians + atan(height/width)
+        } else { // center_1_y > center_2_y
+            // 0 - 90 case
+            theta = atan(width/height)
+        }
+    } else { // center_1_x > center_2_x
+        if center_1_y < center_2_y {
+            // 0 - 90 case
+            theta = atan(width/height)
+        } else { // center_1_y > center_2_y
+            // 90 + case
+            theta = ninety_degrees_in_radians + atan(height/width)
+        }
+    }
+
+    // XXX what about rho?
+    let theta_degrees = theta*180/Double.pi
+    Log.d("theta_degrees \(theta_degrees)")
+    return  theta_degrees // convert from radians to degrees
+}
+
 func edge_distance(min_1_x: Int, min_1_y: Int,
                    max_1_x: Int, max_1_y: Int,
                    min_2_x: Int, min_2_y: Int,
@@ -635,7 +729,34 @@ func edge_distance(min_1_x: Int, min_1_y: Int,
 
     //Log.d("slope \(slope) y_intercept \(y_intercept)")
     
-    let theta = atan(Double(abs(center_1_x - center_2_x))/Double(abs(center_1_y - center_2_y)))
+
+    var theta: Double = 0
+
+    // width between center points
+    let width = Double(abs(center_1_x - center_2_x))
+
+    // height between center points
+    let height = Double(abs(center_1_y - center_2_y))
+
+    let ninety_degrees_in_radians = 90 * Double.pi/180
+
+    if center_1_x < center_2_x {
+        if center_1_y < center_2_y {
+            // 90 + case
+            theta = ninety_degrees_in_radians + atan(height/width)
+        } else { // center_1_y > center_2_y
+            // 0 - 90 case
+            theta = atan(width/height)
+        }
+    } else { // center_1_x > center_2_x
+        if center_1_y < center_2_y {
+            // 0 - 90 case
+            theta = atan(width/height)
+        } else { // center_1_y > center_2_y
+            // 90 + case
+            theta = ninety_degrees_in_radians + atan(height/width)
+        }
+    }
 
     //Log.d("theta \(theta*180/Double.pi) degrees")
     
@@ -650,14 +771,8 @@ func edge_distance(min_1_x: Int, min_1_y: Int,
 
     //Log.d("dist_2 \(dist_2)")
 
-    // width between center points
-    let x_size = Double(center_1_x - center_2_x)
-
-    // width between center points
-    let y_size = Double(center_1_y - center_2_y)
-
     // the direct distance bewteen the two centers
-    let center_distance = sqrt(x_size * x_size + y_size * y_size)
+    let center_distance = sqrt(width * width + height * height)
 
     //Log.d("center_distance \(center_distance)")
     
