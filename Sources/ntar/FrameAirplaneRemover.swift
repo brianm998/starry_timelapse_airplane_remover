@@ -493,20 +493,28 @@ actor FrameAirplaneRemover: Equatable {
                     }
                 }
                 
-                var overall_score = group_size_score + group_fill_amount_score +
+                var overall_score = group_size_score +
+                                  //group_fill_amount_score +
                                     group_aspect_ratio_score + 
-                                    (group_value_score/100) + paint_score_from_lines
+                                    (group_value_score/100)
 
-                //Log.d("frame \(frame_index) should_paint group_size_score \(group_size_score) group_fill_amount_score \(group_fill_amount_score) group_aspect_ratio_score \(group_aspect_ratio_score) group_aspect_ratio_score \(group_aspect_ratio_score) group_value_score \(group_value_score/100) + paint_score_from_lines \(paint_score_from_lines)")
+//                if size > 300 { // XXX constant
+                    overall_score += paint_score_from_lines
+                    overall_score /= 4//5
+//                } else {
+//                    overall_score /= 3
+//                }
                 
-                overall_score /= 5
+                
+                Log.d("frame \(frame_index) should_paint group_size_score \(group_size_score) group_fill_amount_score \(group_fill_amount_score) group_aspect_ratio_score \(group_aspect_ratio_score) group_value_score \(group_value_score/100) + paint_score_from_lines \(paint_score_from_lines)")
+                
                 
                 if overall_score > 0.5 {
-                    //Log.d("frame \(frame_index) should_paint[\(name)] = (true, .goodScore(\(overall_score))")
+                    Log.d("frame \(frame_index) should_paint[\(name)] = (true, .goodScore(\(overall_score))")
                     should_paint[name] = .goodScore(overall_score)
                 } else {
                     should_paint[name] = .badScore(overall_score)
-                    //Log.d("frame \(frame_index) should_paint[\(name)] = (false, .badScore(\(overall_score))")
+                    Log.d("frame \(frame_index) should_paint[\(name)] = (false, .badScore(\(overall_score))")
                 }
             }
         }
@@ -626,7 +634,8 @@ actor FrameAirplaneRemover: Equatable {
         return lhs.frame_index == rhs.frame_index
     }    
 
-                  
+    // write out a set of text files that desribe each outlier group
+    // these are the initial step of data generation
     func writeOutlierGroupFiles() {
         Log.e("writing outlier group images")              
         for (group_name, _) in self.neighbor_groups {
@@ -638,6 +647,9 @@ actor FrameAirplaneRemover: Equatable {
                let max_y = group_max_y[group_name],
                let output_dirname = outlier_output_dirname
             {
+                // XXX check the determined paintability of each group and write them
+                // out to different output dirnames
+                
                 let filename = "\(frame_index)_outlier_\(group_name).txt".replacingOccurrences(of: ",", with: "_")
                 
                 let full_path = "\(output_dirname)/\(filename)"
