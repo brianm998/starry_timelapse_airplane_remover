@@ -47,7 +47,7 @@ actor FinalProcessor {
         self.frame_count = frame_count
         self.dispatch_group = dispatch_group
         self.final_queue = FinalQueue(max_concurrent: max_concurrent,
-                                   dispatchGroup: dispatch_group)
+                                      dispatchGroup: dispatch_group)
     }
 
     func add(frame: FrameAirplaneRemover, at index: Int) {
@@ -128,7 +128,7 @@ actor FinalProcessor {
             if end_index >= frame_count {
                 end_index = frame_count - 1
             }
-            
+
             var bad = false
             var index_in_images_to_process_of_main_frame = 0
             var index_in_images_to_process = 0
@@ -217,7 +217,6 @@ fileprivate func run_final_pass(frames: [FrameAirplaneRemover], mainIndex main_i
                 Log.i("frame \(frame.frame_index) skipping group \(group_name) because it .looksLikeALine") // XXX would be nice to have more data in this log line
                 continue
             }
-            
             
             let line_theta = group_line.theta
             let line_rho = group_line.rho
@@ -331,7 +330,143 @@ fileprivate func run_final_pass(frames: [FrameAirplaneRemover], mainIndex main_i
             }
         }
     }
+
+    // identify airplane trails
+    var airplane_streaks: [[AirplaneStreakMember]] = [] 
+    
+    for (frame_index, frame) in frames.enumerated() {
+        //Log.d("frame.group_lines.count \(frame.group_lines.count)")
+
+        if frame_index + 1 == frames.count { continue } // the last frame can be ignored here
+
+        for (group_name, group_line) in await frame.group_lines {
+            // look for more data to act upon
+
+            if let reason = await frame.should_paint[group_name] {
+                if reason == .adjecentOverlap(0) {
+                    Log.d("frame \(frame.frame_index) skipping group \(group_name) because it has .adjecentOverlap")
+                    continue
+                }
+
+                // make sure we're not in a streak already
+                for airplane_streak in airplane_streaks {
+                    for streak_member in airplane_streak {
+                        if frame_index == streak_member.frame_index &&
+                             group_name == streak_member.group_name
+                        {
+                            continue
+                        }
+                    }
+                }
+
+                if let first_min_x = await frame.group_min_x[group_name],
+                   let first_min_y = await frame.group_min_y[group_name],
+                   let first_max_x = await frame.group_max_x[group_name],
+                   let first_max_y = await frame.group_max_y[group_name]
+                {
+
+                    // search neighboring frames looking for potential tracks
+                    if let streak = 
+                         await streak_starting_from(groupName: group_name,
+                                                    groupLine: group_line,
+                                                    min_x: first_min_x,
+                                                    min_y: first_min_y,
+                                                    max_x: first_max_x,
+                                                    max_y: first_max_y,
+                                                    frames: frames,
+                                                    startingIndex: frame_index+1)
+                    {
+                        airplane_streaks.append(streak)
+                    }
+                }
+            }
+        }
+    }
+
+    // XXX go through and mark all of airplane_streaks to paint
+    for airplane_streak in airplane_streaks {
+
+        // XXX perhaps reject small streaks?
+        if airplane_streak.count < 3 { continue } 
+        var verbotten = false
+        var was_already_paintable = false
+        for streak_member in airplane_streak {
+            let frame = frames[streak_member.frame_index]
+            if let should_paint = await frame.should_paint[streak_member.group_name] {
+                if should_paint == .adjecentOverlap(0) { verbotten = true }
+                if should_paint.willPaint { was_already_paintable = true }
+            }
+        }
+        if verbotten || !was_already_paintable { continue }
+        for streak_member in airplane_streak {
+            let frame = frames[streak_member.frame_index]
+            await frame.setShouldPaint(group: streak_member.group_name, why: .inStreak)
+        }
+    }
 }
+
+typealias AirplaneStreakMember = (
+  frame_index: Int,
+  group_name: String,
+  line: Line
+)
+
+@available(macOS 10.15, *)
+func streak_starting_from(groupName group_name: String,
+                          groupLine group_line: Line,
+                          min_x: Int, min_y: Int, max_x: Int, max_y: Int,
+                          frames: [FrameAirplaneRemover],
+                          startingIndex starting_index: Int) async -> [AirplaneStreakMember]?
+{
+    var potential_streak: [AirplaneStreakMember] = [(starting_index-1, group_name, group_line)]
+
+    var last_min_x = min_x
+    var last_min_y = min_y
+    var last_max_x = max_x
+    var last_max_y = max_y
+    var last_group_line = group_line
+
+    var count = 1
+    for index in starting_index ..< frames.count {
+        let frame = frames[index]
+        count += 1
+        for (other_group_name, other_group_line) in await frame.group_lines {
+            if let group_min_x = await frame.group_min_x[other_group_name],
+               let group_min_y = await frame.group_min_y[other_group_name],
+               let group_max_x = await frame.group_max_x[other_group_name],
+               let group_max_y = await frame.group_max_y[other_group_name]
+            {
+                let distance = edge_distance(min_1_x: last_min_x, min_1_y: last_min_y,
+                                             max_1_x: last_max_x, max_1_y: last_max_y,
+                                             min_2_x: group_min_x, min_2_y: group_min_y,
+                                             max_2_x: group_max_x, max_2_y: group_max_y)
+                let theta_diff = abs(last_group_line.theta-other_group_line.theta)
+                let rho_diff = abs(last_group_line.rho-other_group_line.rho)
+
+                // maybe find all and choose the closest?
+                // XXX contant VV
+                if distance < 100 && theta_diff < final_theta_diff && rho_diff < final_rho_diff {
+                    potential_streak.append((index, other_group_name, other_group_line))
+                    last_min_x = group_min_x
+                    last_min_y = group_min_y
+                    last_max_x = group_max_x
+                    last_max_y = group_max_y
+                    last_group_line = other_group_line
+                    break
+                }
+            }
+        }
+        if count != potential_streak.count {
+            break
+        }
+    }
+    if potential_streak.count == 1 {
+        return nil              // nothing added
+    } else {
+        return potential_streak
+    }
+}
+
 
 enum Edge {
     case vertical
@@ -392,9 +527,9 @@ func distance_on(min_x: Int, min_y: Int, max_x: Int, max_y: Int,
 }
 
 func center_distance(min_1_x: Int, min_1_y: Int,
-                   max_1_x: Int, max_1_y: Int,
-                   min_2_x: Int, min_2_y: Int,
-                   max_2_x: Int, max_2_y: Int)
+                     max_1_x: Int, max_1_y: Int,
+                     min_2_x: Int, min_2_y: Int,
+                     max_2_x: Int, max_2_y: Int)
     -> Double // positive if they don't overlap, negative if they do
 {
     let half_width_1 = Double(max_1_x - min_1_x)/2
@@ -416,9 +551,9 @@ func center_distance(min_1_x: Int, min_1_y: Int,
 }
 
 func edge_distance(min_1_x: Int, min_1_y: Int,
-                 max_1_x: Int, max_1_y: Int,
-                 min_2_x: Int, min_2_y: Int,
-                 max_2_x: Int, max_2_y: Int)
+                   max_1_x: Int, max_1_y: Int,
+                   min_2_x: Int, min_2_y: Int,
+                   max_2_x: Int, max_2_y: Int)
     -> Double // positive if they don't overlap, negative if they do
 {
     let half_width_1 = Double(max_1_x - min_1_x)/2

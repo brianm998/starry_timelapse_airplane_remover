@@ -103,14 +103,13 @@ let max_pixel_brightness_distance: UInt16 = 8500 // distance in brightness to be
 
 let min_group_size = 100        // groups smaller than this are ignored
 let min_line_count = 20        // lines with counts smaller than this are ignored
-
 let group_min_line_count = 1    // used when hough transorming individual groups
 
 let assume_airplane_size = 5000 // don't bother spending the time to fully process
                                 // groups larger than this, assume we should paint over them
 
 // how far in each direction do we go when doing final processing?
-let number_final_processing_neighbors_needed = 2 // in each direction
+let number_final_processing_neighbors_needed = 5 // in each direction
 
 let final_theta_diff: Double = 5       // how close in theta/rho outliers need to be between frames
 let final_rho_diff: Double = 70
@@ -119,10 +118,7 @@ let final_group_boundary_amt = 1  // how much we pad the overlap amounts on the 
 
 let final_adjecent_edge_amount: Double = -2 // the spacing allowed between groups in adjecent frames
 
-let final_center_distance_multiplier = 8 // document this
-
-// 0.5 gets lots of lines and few false positives
-let looks_like_a_line_lowest_count_reduction: Double = 0.5 // 0-1 percentage of decrease on group_number_of_hough_lines count
+let final_center_distance_multiplier = 4 // document this
 
 let supported_image_file_types = [".tif", ".tiff"] // XXX move this out
 
@@ -132,10 +128,11 @@ let supported_image_file_types = [".tif", ".tiff"] // XXX move this out
 let memory_size_bytes = ProcessInfo.processInfo.physicalMemory
 let memory_size_gigs = ProcessInfo.processInfo.physicalMemory/(1024*1024*1024)
 
-let ntar_version = "0.0.3"
+let ntar_version = "0.0.4"
 
 // 0.0.2 added more detail group hough transormation analysis, based upon a data set
 // 0.0.3 included the data set analysis to include group size and fill, and to use histograms
+// 0.0.4 included .inStreak final processing
 
 @main
 struct Ntar: ParsableCommand {
