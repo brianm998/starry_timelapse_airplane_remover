@@ -25,6 +25,15 @@ enum BasicColor: String {
     case cyan = "\u{001B}[0;36m"
     case white = "\u{001B}[0;37m"
     case reset = "\u{001B}[0;0m"
+
+    case brightBlack = "\u{001b}[30;1m"
+    case brightRed = "\u{001b}[31;1m"
+    case brightGreen = "\u{001b}[32;1m"
+    case brightYellow = "\u{001b}[33;1m"
+    case brightBlue = "\u{001b}[34;1m"
+    case brightMagenta = "\u{001b}[35;1m"
+    case brightCyan = "\u{001b}[36;1m"
+    case brightWhite = "\u{001b}[37;1m"
     
     func name() -> String {
         switch self {
@@ -37,6 +46,14 @@ enum BasicColor: String {
         case .cyan: return "Cyan"
         case .white: return "White"
         case .reset: return "Reset"
+        case .brightBlack: return "Bright Black"
+        case .brightRed: return "Bright Red"
+        case .brightGreen: return "Bright Green"
+        case .brightYellow: return "Bright Yellow"
+        case .brightBlue: return "Bright Blue"
+        case .brightMagenta: return "Bright Magenta"
+        case .brightCyan: return "Bright Cyan"
+        case .brightWhite: return "Bright White"
         }
     }
 
@@ -49,37 +66,70 @@ enum BasicColor: String {
                pixel.green = 0x0000
                pixel.blue = 0x0000
             case .red:
-               pixel.red = 0xFFFF 
+               pixel.red = 0xBBBB 
                pixel.green = 0x0000
                pixel.blue = 0x0000
             case .green:
                pixel.red = 0x0000 
-               pixel.green = 0xFFFF
+               pixel.green = 0xBBBB
                pixel.blue = 0x0000
             case .yellow:
-               pixel.red = 0xFFFF 
-               pixel.green = 0xFFFF
+               pixel.red = 0xBBBB 
+               pixel.green = 0xBBBB
                pixel.blue = 0x0000
             case .blue: 
                pixel.red = 0x0000 
                pixel.green = 0x0000
-               pixel.blue = 0xFFFF
+               pixel.blue = 0xBBBB
             case .magenta:
-               pixel.red = 0xFFFF 
+               pixel.red = 0xBBBB 
                pixel.green = 0x0000
-               pixel.blue = 0xFFFF
+               pixel.blue = 0xBBBB
             case .cyan:
                pixel.red = 0x0000 
-               pixel.green = 0xFFFF
-               pixel.blue = 0xFFFF
+               pixel.green = 0xBBBB
+               pixel.blue = 0xBBBB
             case .white:
-               pixel.red = 0xFFFF 
-               pixel.green = 0xFFFF
-               pixel.blue = 0xFFFF
+               pixel.red = 0xBBBB 
+               pixel.green = 0xBBBB
+               pixel.blue = 0xBBBB
             case .reset:
                pixel.red = 0x0000 
                pixel.green = 0x0000
                pixel.blue = 0x0000
+
+            case .brightBlack:
+               pixel.red = 0x3333
+               pixel.green = 0x3333
+               pixel.blue = 0x3333
+            case .brightRed:
+               pixel.red = 0xFFFF 
+               pixel.green = 0x0000
+               pixel.blue = 0x0000
+            case .brightGreen:
+               pixel.red = 0x0000 
+               pixel.green = 0xFFFF
+               pixel.blue = 0x0000
+            case .brightYellow:
+               pixel.red = 0xFFFF 
+               pixel.green = 0xFFFF
+               pixel.blue = 0x0000
+            case .brightBlue:
+               pixel.red = 0x0000 
+               pixel.green = 0x0000
+               pixel.blue = 0xFFFF
+            case .brightMagenta:
+               pixel.red = 0xFFFF 
+               pixel.green = 0x0000
+               pixel.blue = 0xFFFF
+            case .brightCyan:
+               pixel.red = 0x0000 
+               pixel.green = 0xFFFF
+               pixel.blue = 0xFFFF
+            case .brightWhite:
+               pixel.red = 0xFFFF 
+               pixel.green = 0xFFFF
+               pixel.blue = 0xFFFF
             }
             return pixel
         }
