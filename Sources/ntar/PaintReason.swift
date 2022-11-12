@@ -5,7 +5,7 @@ enum PaintReason: Equatable, CaseIterable {
    case assumed                      // large groups are assumed to be airplanes
    case goodScore(Double)            // percent score
    case looksLikeALine
-   case inStreak
+   case inStreak(Int)           // size
 
    case badScore(Double)        // percent score
    case adjecentOverlap(Double) // overlap distance
@@ -96,7 +96,7 @@ These outlier groups were found to be in a streak across frames.
    }
 
    static var allCases: [PaintReason] {
-       return [.assumed, .looksLikeALine, .goodScore(0), .inStreak, .badScore(0), .adjecentOverlap(0)]
+       return [.assumed, .looksLikeALine, .goodScore(0), .inStreak(0), .badScore(0), .adjecentOverlap(0)]
    }
                          
    // colors used to test paint to show why

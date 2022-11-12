@@ -201,20 +201,42 @@ actor FinalProcessor {
 // to the same theta and rho, and they don't overlap, then they are
 // likely adject airplane tracks.
 // otherwise, if they do overlap, then it's more likely a cloud or 
-// a bright star or planet, leave them as is.  
+// a bright star or planet, leave them as is.
 @available(macOS 10.15, *)
 fileprivate func run_final_pass(frames: [FrameAirplaneRemover], mainIndex main_index: Int) async {
     Log.d("final pass on \(frames.count) frames")
+
+    await run_final_streak_pass(frames: frames, mainIndex: main_index)
+    await run_final_overlap_pass(frames: frames, mainIndex: main_index)
+}
+
+
+
+
+
+@available(macOS 10.15, *)
+fileprivate func run_final_overlap_pass(frames: [FrameAirplaneRemover], mainIndex main_index: Int) async {
     for frame in frames {
         //Log.d("frame.group_lines.count \(frame.group_lines.count)")
         for (group_name, group_line) in await frame.group_lines {
             // look for more data to act upon
 
             if let reason = await frame.should_paint[group_name],
-               reason.willPaint && reason == .looksLikeALine
+               reason.willPaint
             {
-                Log.i("frame \(frame.frame_index) skipping group \(group_name) because it .looksLikeALine") // XXX would be nice to have more data in this log line
-                continue
+                switch reason {
+                case .looksLikeALine:
+                    Log.i("frame \(frame.frame_index) skipping group \(group_name) because of \(reason)") 
+                    continue
+                case .inStreak(let size):
+                    if size > 2 {
+                        Log.i("frame \(frame.frame_index) skipping group \(group_name) because of \(reason)") 
+                        // XXX this skips streaks that it shouldn't
+                    }
+                    continue
+                default:
+                    break
+                }
             }
             
             let line_theta = group_line.theta
@@ -291,8 +313,11 @@ fileprivate func run_final_pass(frames: [FrameAirplaneRemover], mainIndex main_i
 
                                 //Log.d("frame \(frame.frame_index) edge_distance_bewteen_groups \(distance_bewteen_groups) center_distance \(center_distance_bewteen_groups) \(group_name) \(og_name) edge_amt \(edge_amt) center_amt \(center_amt)")
                                 if (distance_bewteen_groups < edge_amt &&
-                                     center_distance_bewteen_groups < center_amt) ||
-                                     distance_bewteen_groups < 0 // direct overlap
+                                     center_distance_bewteen_groups < center_amt)
+                                  || distance_bewteen_groups < -2 // direct overlap
+                                // XXX detect number of overlapping pixels instead
+                                // use a ratio of number of pixels in group to size of it
+                                // some airplane streaks overlap a small amount at the ends
                                 {
                                     var do_it = true
 
@@ -334,8 +359,12 @@ fileprivate func run_final_pass(frames: [FrameAirplaneRemover], mainIndex main_i
             }
         }
     }
+}
 
-    // identify airplane trails
+@available(macOS 10.15, *)
+fileprivate func run_final_streak_pass(frames: [FrameAirplaneRemover], mainIndex main_index: Int) async {
+
+        // identify airplane trails
     var airplane_streaks: [[AirplaneStreakMember]] = [] 
     
     for (frame_index, frame) in frames.enumerated() {
@@ -347,10 +376,10 @@ fileprivate func run_final_pass(frames: [FrameAirplaneRemover], mainIndex main_i
             // look for more data to act upon
 
             if let reason = await frame.should_paint[group_name] {
-                if reason == .adjecentOverlap(0) {
+//                if reason == .adjecentOverlap(0) {
                     //Log.d("frame \(frame.frame_index) skipping group \(group_name) because it has .adjecentOverlap")
-                    continue
-                }
+//                    continue
+//                }
 
                 // make sure we're not in a streak already
                 for airplane_streak in airplane_streaks {
@@ -401,18 +430,19 @@ fileprivate func run_final_pass(frames: [FrameAirplaneRemover], mainIndex main_i
         for streak_member in airplane_streak {
             let frame = frames[streak_member.frame_index]
             if let should_paint = await frame.should_paint[streak_member.group_name] {
-                if should_paint == .adjecentOverlap(0) { verbotten = true }
-                if should_paint.willPaint { was_already_paintable = true }
+//                if should_paint == .adjecentOverlap(0) { verbotten = true }
+//                if should_paint.willPaint { was_already_paintable = true }
             }
         }
-        if verbotten || !was_already_paintable { continue }
+//        if verbotten || !was_already_paintable { continue }
         //Log.i("painting over streak with \(airplane_streak.count) members")
         for streak_member in airplane_streak {
             let frame = frames[streak_member.frame_index]
             //Log.d("frame \(frame.frame_index) will paint group \(streak_member.group_name) is .inStreak")
-            await frame.setShouldPaint(group: streak_member.group_name, why: .inStreak)
+            await frame.setShouldPaint(group: streak_member.group_name, why: .inStreak(airplane_streak.count))
         }
     }
+
 }
 
 typealias AirplaneStreakMember = (
@@ -500,7 +530,7 @@ func streak_starting_from(groupName group_name: String,
                 let center_line_theta_diff_1 = abs(center_line_theta-other_group_line.theta)
                 let center_line_theta_diff_2 = abs(center_line_theta-last_group_line.theta)
 
-                let center_line_theta_diff = final_theta_diff*2 // XXX hardcoded constant
+                let center_line_theta_diff = final_theta_diff * 5 // XXX hardcoded constant
                 
                 if distance < best_distance &&
                   (theta_diff < final_theta_diff || abs(theta_diff - 180) < final_theta_diff) &&
