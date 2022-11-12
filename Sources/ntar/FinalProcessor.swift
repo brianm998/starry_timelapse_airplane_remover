@@ -248,10 +248,7 @@ fileprivate func run_final_overlap_pass(frames: [FrameAirplaneRemover]) async {
             let line_theta = group_line.theta
             let line_rho = group_line.rho
 
-            if let line_min_x = await frame.group_min_x[group_name],
-               let line_min_y = await frame.group_min_y[group_name],
-               let line_max_x = await frame.group_max_x[group_name],
-               let line_max_y = await frame.group_max_y[group_name],
+            if let group_bounds = await frame.group_bounding_boxes[group_name],
                let group_size = await frame.neighbor_groups[group_name]
             {
                 for other_frame in frames {
@@ -267,23 +264,14 @@ fileprivate func run_final_overlap_pass(frames: [FrameAirplaneRemover]) async {
                         if (theta_diff < final_theta_diff || abs(theta_diff - 180) < final_theta_diff) &&
                             rho_diff < final_rho_diff
                         {
-                            if let other_line_min_x = await other_frame.group_min_x[og_name],
-                               let other_line_min_y = await other_frame.group_min_y[og_name],
-                               let other_line_max_x = await other_frame.group_max_x[og_name],
-                               let other_line_max_y = await other_frame.group_max_y[og_name],
+                            if let other_group_bounds = await frame.group_bounding_boxes[og_name],
                                let other_group_size = await other_frame.neighbor_groups[og_name]
                             {
                                 let pixel_overlap_amount =
-                                  await pixel_overlap(min_1_x: line_min_x,
-                                                      min_1_y: line_min_y,
-                                                      max_1_x: line_max_x,
-                                                      max_1_y: line_max_y,
+                                  await pixel_overlap(box_1: group_bounds,
                                                       group_1_name: group_name,
                                                       group_1_frame: frame,
-                                                      min_2_x: other_line_min_x,
-                                                      min_2_y: other_line_min_y,
-                                                      max_2_x: other_line_max_x,
-                                                      max_2_y: other_line_max_y,
+                                                      box_2: other_group_bounds,
                                                       group_2_name: og_name,
                                                       group_2_frame: other_frame)
 
@@ -422,11 +410,7 @@ fileprivate func run_final_streak_pass(frames: [FrameAirplaneRemover]) async {
                     }
                 }
 
-                if let first_min_x = await frame.group_min_x[group_name],
-                   let first_min_y = await frame.group_min_y[group_name],
-                   let first_max_x = await frame.group_max_x[group_name],
-                   let first_max_y = await frame.group_max_y[group_name]
-                {
+                if let group_bounds = await frame.group_bounding_boxes[group_name] {
                     Log.d("frame \(frame_index) looking for streak for group \(group_name)")
                     // search neighboring frames looking for potential tracks
 
@@ -447,10 +431,7 @@ fileprivate func run_final_streak_pass(frames: [FrameAirplaneRemover]) async {
                     if let streak = 
                          await streak_starting_from(groupName: group_name,
                                                     groupLine: group_line,
-                                                    min_x: first_min_x,
-                                                    min_y: first_min_y,
-                                                    max_x: first_max_x,
-                                                    max_y: first_max_y,
+                                                    groupBounds: group_bounds,
                                                     frames: frames,
                                                     startingIndex: batch_index+1,
                                                     potentialStreak: &potential_streak)
@@ -525,8 +506,7 @@ typealias BoundingBox = (
 @available(macOS 10.15, *)
 func streak_starting_from(groupName group_name: String,
                           groupLine group_line: Line,
-//                          groupBounds group_bounds: BoundingBox
-                          min_x: Int, min_y: Int, max_x: Int, max_y: Int,
+                          groupBounds group_bounds: BoundingBox,
                           frames: [FrameAirplaneRemover],
                           startingIndex starting_index: Int,
                           potentialStreak potential_streak: inout [AirplaneStreakMember])
@@ -536,17 +516,11 @@ func streak_starting_from(groupName group_name: String,
     Log.d("trying to find streak starting at \(group_name)")
     
     // the bounding box of the last element of the streak
-    var last_min_x = min_x
-    var last_min_y = min_y
-    var last_max_x = max_x
-    var last_max_y = max_y
+    var last_bounds = group_bounds
     var last_group_line = group_line
 
     // the best match found so far for a possible streak etension
-    var best_min_x = min_x
-    var best_min_y = min_y
-    var best_max_x = max_x
-    var best_max_y = max_y
+    var best_bounds = group_bounds
     var best_frame_index = 0
     var best_group_name = group_name
     var best_group_line = group_line
@@ -565,8 +539,8 @@ func streak_starting_from(groupName group_name: String,
         let frame_index = frame.frame_index
         count += 1
 
-        let last_width = Double(last_max_x - last_min_x)
-        let last_height = Double(last_max_y - last_min_y)
+        let last_width = Double(last_bounds.max.x - last_bounds.min.x)
+        let last_height = Double(last_bounds.max.y - last_bounds.min.y)
         let last_hypo = sqrt(last_width*last_width + last_height*last_height)
 
         // calculate min distance from hypotenuse of last bounding box
@@ -575,23 +549,14 @@ func streak_starting_from(groupName group_name: String,
         var best_distance = min_distance
         Log.d("looking at frame \(frame.frame_index)")
         for (other_group_name, other_group_line) in await frame.group_lines {
-            if let group_min_x = await frame.group_min_x[other_group_name],
-               let group_min_y = await frame.group_min_y[other_group_name],
-               let group_max_x = await frame.group_max_x[other_group_name],
-               let group_max_y = await frame.group_max_y[other_group_name]
+            if let group_bounds = await frame.group_bounding_boxes[other_group_name]
             {
                 // XXX not sure this value is right
                 // really we want the distance between the nearest pixels of each group
                 // this isn't close enough for real
-                let distance = edge_distance(min_1_x: last_min_x, min_1_y: last_min_y,
-                                             max_1_x: last_max_x, max_1_y: last_max_y,
-                                             min_2_x: group_min_x, min_2_y: group_min_y,
-                                             max_2_x: group_max_x, max_2_y: group_max_y)
+                let distance = edge_distance(from: last_bounds, to: group_bounds)
 
-                let center_line_theta = center_theta(min_1_x: last_min_x, min_1_y: last_min_y,
-                                                     max_1_x: last_max_x, max_1_y: last_max_y,
-                                                     min_2_x: group_min_x, min_2_y: group_min_y,
-                                                     max_2_x: group_max_x, max_2_y: group_max_y)
+                let center_line_theta = center_theta(from: last_bounds, to: group_bounds)
 
                 let theta_diff = abs(last_group_line.theta-other_group_line.theta)
                 let rho_diff = abs(last_group_line.rho-other_group_line.rho)
@@ -607,10 +572,7 @@ func streak_starting_from(groupName group_name: String,
                      abs(center_line_theta_diff_2 - 180) < center_line_theta_diff)) &&
                    rho_diff < final_rho_diff
                 {
-                    best_min_x = group_min_x
-                    best_min_y = group_min_y
-                    best_max_x = group_max_x
-                    best_max_y = group_max_y
+                    best_bounds = group_bounds
                     best_group_name = other_group_name
                     best_group_line = other_group_line
                     best_distance = distance
@@ -629,10 +591,7 @@ func streak_starting_from(groupName group_name: String,
                    best_frame_index > last_streak_item.frame_index
                 {
                     // streak on
-                    last_min_x = best_min_x
-                    last_min_y = best_min_y
-                    last_max_x = best_max_x
-                    last_max_y = best_max_y
+                    last_bounds = best_bounds
                     last_group_line = best_group_line
                     Log.d("frame \(frame.frame_index) adding group \(best_group_name) to streak")
                     potential_streak.append((best_frame_index, best_group_name, best_group_line))
@@ -657,30 +616,30 @@ enum Edge {
 }
 
 // the distance between the center point of the box described and the exit of the line from it
-func distance_on(min_x: Int, min_y: Int, max_x: Int, max_y: Int,
+func distance_on(box bounding_box: BoundingBox,
                  slope: Double, y_intercept: Double, theta: Double) -> Double
 {
     var edge: Edge = .horizontal
-    let y_max_value = Double(max_x)*slope + Double(y_intercept)
-    let x_max_value = Double(max_y)-y_intercept/slope
+    let y_max_value = Double(bounding_box.max.x)*slope + Double(y_intercept)
+    let x_max_value = Double(bounding_box.max.y)-y_intercept/slope
     //let y_min_value = Double(min_x)*slope + Double(y_intercept)
-    //let x_min_value = Double(min_y)-y_intercept/slope
+    //let x_min_value = Double(bounding_box.min.y)-y_intercept/slope
 
     // there is an error introduced by integer to floating point conversions
     let math_accuracy_error: Double = 3
     
-    if Double(min_y) - math_accuracy_error <= y_max_value && y_max_value <= Double(max_y) + math_accuracy_error {
+    if Double(bounding_box.min.y) - math_accuracy_error <= y_max_value && y_max_value <= Double(bounding_box.max.y) + math_accuracy_error {
         //Log.d("vertical")
         edge = .vertical
-    } else if Double(min_x) - math_accuracy_error <= x_max_value && x_max_value <= Double(max_x) + math_accuracy_error {
+    } else if Double(bounding_box.min.x) - math_accuracy_error <= x_max_value && x_max_value <= Double(bounding_box.max.x) + math_accuracy_error {
         //Log.d("horizontal")
         edge = .horizontal
     } else {
         //Log.d("slope \(slope) y_intercept \(y_intercept) theta \(theta)")
-        //Log.d("min_x \(min_x) x_max_value \(x_max_value) max_x \(max_x)")
-        //Log.d("min_y \(min_y) y_max_value \(y_max_value) max_y \(max_y)")
-        //Log.d("min_x \(min_x) x_min_value \(x_min_value) max_x \(max_x)")
-        //Log.d("min_y \(min_y) y_min_value \(y_min_value) max_y \(max_y)")
+        //Log.d("min_x \(min_x) x_max_value \(x_max_value) bounding_box.max.x \(bounding_box.max.x)")
+        //Log.d("bounding_box.min.y \(bounding_box.min.y) y_max_value \(y_max_value) bounding_box.max.y \(bounding_box.max.y)")
+        //Log.d("min_x \(min_x) x_min_value \(x_min_value) bounding_box.max.x \(bounding_box.max.x)")
+        //Log.d("bounding_box.min.y \(bounding_box.min.y) y_min_value \(y_min_value) bounding_box.max.y \(bounding_box.max.y)")
         // this means that the line generated from the given slope and line
         // does not intersect the rectangle given 
 
@@ -696,12 +655,12 @@ func distance_on(min_x: Int, min_y: Int, max_x: Int, max_y: Int,
     
     switch edge {
     case .vertical:
-        let half_width = Double(max_x - min_x)/2
+        let half_width = Double(bounding_box.max.x - bounding_box.min.x)/2
         //Log.d("vertical half_width \(half_width)")
         hypotenuse_length = half_width / cos((90/180*Double.pi)-theta)
         
     case .horizontal:
-        let half_height = Double(max_y - min_y)/2
+        let half_height = Double(bounding_box.max.y - bounding_box.min.y)/2
         //Log.d("horizontal half_height \(half_height)")
         hypotenuse_length = half_height / cos(theta)
     }
@@ -733,29 +692,25 @@ func center_distance(min_1_x: Int, min_1_y: Int,
     return sqrt(width*width + height*height)
 }
 */
-func center_theta(min_1_x: Int, min_1_y: Int,
-                  max_1_x: Int, max_1_y: Int,
-                  min_2_x: Int, min_2_y: Int,
-                  max_2_x: Int, max_2_y: Int) -> Double
-{
-    //Log.d("center_theta(min_1_x: \(min_1_x), min_1_y: \(min_1_y), max_1_x: \(max_1_x), max_1_y: \(max_1_y), min_2_x: \(min_2_x), min_2_y: \(min_2_y), max_2_x: \(max_2_x), max_2_y: \(max_2_y)")
-    let half_width_1 = Double(max_1_x - min_1_x)/2
-    let half_height_1 = Double(max_1_y - min_1_y)/2
+func center_theta(from box_1: BoundingBox, to box_2: BoundingBox) -> Double {
+    //Log.d("center_theta(box_1.min.x: \(box_1.min.x), box_1.min.y: \(box_1.min.y), box_1.max.x: \(box_1.max.x), box_1.max.y: \(box_1.max.y), min_2_x: \(min_2_x), min_2_y: \(min_2_y), max_2_x: \(max_2_x), box_2.max.y: \(box_2.max.y)")
+    let half_width_1 = Double(box_1.max.x - box_1.min.x)/2
+    let half_height_1 = Double(box_1.max.y - box_1.min.y)/2
 
     //Log.d("1 half size [\(half_width_1), \(half_height_1)]")
     
-    let half_width_2 = Double(max_2_x - min_2_x)/2
-    let half_height_2 = Double(max_2_y - min_2_y)/2
+    let half_width_2 = Double(box_2.max.x - box_2.min.x)/2
+    let half_height_2 = Double(box_2.max.y - box_2.min.y)/2
     
     //Log.d("2 half size [\(half_width_2), \(half_height_2)]")
 
-    let center_1_x = Double(min_1_x) + half_width_1
-    let center_1_y = Double(min_1_y) + half_height_1
+    let center_1_x = Double(box_1.min.x) + half_width_1
+    let center_1_y = Double(box_1.min.y) + half_height_1
 
     //Log.d("1 center [\(center_1_x), \(center_1_y)]")
     
-    let center_2_x = Double(min_2_x) + half_width_2
-    let center_2_y = Double(min_2_y) + half_height_2
+    let center_2_x = Double(box_2.min.x) + half_width_2
+    let center_2_y = Double(box_2.min.y) + half_height_2
     
 
     //Log.d("2 center [\(center_2_x), \(center_2_y)]")
@@ -804,33 +759,27 @@ func center_theta(min_1_x: Int, min_1_y: Int,
 
 // how many pixels actually overlap between the groups ?  returns 0-1 value of overlap amount
 @available(macOS 10.15, *)
-func pixel_overlap(min_1_x: Int,
-                   min_1_y: Int,
-                   max_1_x: Int,
-                   max_1_y: Int,
+func pixel_overlap(box_1: BoundingBox,
                    group_1_name: String,
                    group_1_frame: FrameAirplaneRemover,
-                   min_2_x: Int,
-                   min_2_y: Int,
-                   max_2_x: Int,
-                   max_2_y: Int,
+                   box_2: BoundingBox,
                    group_2_name: String,
                    group_2_frame: FrameAirplaneRemover) async -> Double // 1 means total overlap, 0 means none
 {
     // throw out non-overlapping frames, do any slip through?
-    if min_1_x > max_2_x || min_1_y > max_2_y { return 0 }
-    if min_2_x > max_1_x || min_2_y > max_1_y { return 0 }
+    if box_1.min.x > box_2.max.x || box_1.min.y > box_2.max.y { return 0 }
+    if box_2.min.x > box_1.max.x || box_2.min.y > box_1.max.y { return 0 }
 
-    var min_x = min_1_x
-    var min_y = min_1_y
-    var max_x = max_1_x
-    var max_y = max_1_y
+    var min_x = box_1.min.x
+    var min_y = box_1.min.y
+    var max_x = box_1.max.x
+    var max_y = box_1.max.y
     
-    if min_2_x < min_x { min_x = min_2_x }
-    if min_2_y < min_y { min_y = min_2_y }
+    if box_2.min.x < min_x { min_x = box_2.min.x }
+    if box_2.min.y < min_y { min_y = box_2.min.y }
     
-    if max_2_x > max_x { max_x = max_2_x }
-    if max_2_y > max_y { max_y = max_2_y }
+    if box_2.max.x > max_x { max_x = box_2.max.x }
+    if box_2.max.y > max_y { max_y = box_2.max.y }
     
     // XXX could search a smaller space probably
 
@@ -866,31 +815,26 @@ func pixel_overlap(min_1_x: Int,
     return 0
 }
 
+ // positive if they don't overlap, negative if they do
+func edge_distance(from box_1: BoundingBox, to box_2: BoundingBox) -> Double {
 
-
-func edge_distance(min_1_x: Int, min_1_y: Int,
-                   max_1_x: Int, max_1_y: Int,
-                   min_2_x: Int, min_2_y: Int,
-                   max_2_x: Int, max_2_y: Int)
-    -> Double // positive if they don't overlap, negative if they do
-{
-    let half_width_1 = Double(max_1_x - min_1_x)/2
-    let half_height_1 = Double(max_1_y - min_1_y)/2
+    let half_width_1 = Double(box_1.max.x - box_1.min.x)/2
+    let half_height_1 = Double(box_1.max.y - box_1.min.y)/2
 
     //Log.d("1 half size [\(half_width_1), \(half_height_1)]")
     
-    let half_width_2 = Double(max_2_x - min_2_x)/2
-    let half_height_2 = Double(max_2_y - min_2_y)/2
+    let half_width_2 = Double(box_2.max.x - box_2.min.x)/2
+    let half_height_2 = Double(box_2.max.y - box_2.min.y)/2
     
     //Log.d("2 half size [\(half_width_2), \(half_height_2)]")
 
-    let center_1_x = Double(min_1_x) + half_width_1
-    let center_1_y = Double(min_1_y) + half_height_1
+    let center_1_x = Double(box_1.min.x) + half_width_1
+    let center_1_y = Double(box_1.min.y) + half_height_1
 
     //Log.d("1 center [\(center_1_x), \(center_1_y)]")
     
-    let center_2_x = Double(min_2_x) + half_width_2
-    let center_2_y = Double(min_2_y) + half_height_2
+    let center_2_x = Double(box_2.min.x) + half_width_2
+    let center_2_y = Double(box_2.min.y) + half_height_2
     
 
     //Log.d("2 center [\(center_2_x), \(center_2_y)]")
@@ -948,13 +892,11 @@ func edge_distance(min_1_x: Int, min_1_y: Int,
     //Log.d("theta \(theta*180/Double.pi) degrees")
     
     // the distance along the line between the center points that lies within group 1
-    let dist_1 = distance_on(min_x: min_1_x, min_y: min_1_y, max_x: max_1_x, max_y: max_1_y,
-                             slope: slope, y_intercept: y_intercept, theta: theta)
+    let dist_1 = distance_on(box: box_1, slope: slope, y_intercept: y_intercept, theta: theta)
     //Log.d("dist_1 \(dist_1)")
     
     // the distance along the line between the center points that lies within group 2
-    let dist_2 = distance_on(min_x: min_2_x, min_y: min_2_y, max_x: max_2_x, max_y: max_2_y,
-                             slope: slope, y_intercept: y_intercept, theta: theta)
+    let dist_2 = distance_on(box: box_2, slope: slope, y_intercept: y_intercept, theta: theta)
 
     //Log.d("dist_2 \(dist_2)")
 

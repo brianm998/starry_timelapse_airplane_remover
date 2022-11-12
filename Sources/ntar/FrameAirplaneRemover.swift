@@ -45,11 +45,8 @@ actor FrameAirplaneRemover: Equatable {
     var lines_from_full_image: [Line] = [] // lines from all large enough outliers
 
     var should_paint: [String:PaintReason] = [:] // keyed by group name, should we paint it?
-    var group_min_x: [String:Int] = [:]   // keyed by group name, image bounds of each group
-    var group_min_y: [String:Int] = [:]
-    var group_max_x: [String:Int] = [:]
-    var group_max_y: [String:Int] = [:]
-
+    var group_bounding_boxes: [String: BoundingBox] = [:] // bounding boxes for each group
+    
     var group_amounts: [String: UInt64] = [:] // keyed by group name, average brightness of each group
 
     var group_lines: [String:Line] = [:] // keyed by group name, the best line found for each group
@@ -267,7 +264,7 @@ actor FrameAirplaneRemover: Equatable {
                     
                     if outlier_y > 0 { // add top neighbor
                         let top_neighbor_index = (outlier_y - 1) * width + outlier_x
-                        if outlier_amounts[top_neighbor_index] > max_pixel_distance,
+                        if outlier_amounts[top_neighbor_index] > max_pixel_distance &&
                            outlier_groups[top_neighbor_index] == nil
                         {
                             pending_outliers[pending_outlier_insert_index] = top_neighbor_index
@@ -305,13 +302,9 @@ actor FrameAirplaneRemover: Equatable {
         Log.d("frame \(frame_index) painting outliers green")
 
         for (name, _) in neighbor_groups {
-            if let min_x = group_min_x[name], // bounding box for this group
-               let min_y = group_min_y[name],
-               let max_x = group_max_x[name],
-               let max_y = group_max_y[name]
-            {
-                for x in min_x ... max_x {
-                    for y in min_y ... max_y {
+            if let group_bounds = group_bounding_boxes[name] {
+                for x in group_bounds.min.x ... group_bounds.max.x {
+                    for y in group_bounds.min.y ... group_bounds.max.y {
                         let index = y*width + x
                         if let group_name = outlier_groups[index],
                            group_name == name
@@ -342,6 +335,10 @@ actor FrameAirplaneRemover: Equatable {
     func calculateGroupBoundsAndAmounts() {
 
         Log.i("frame \(frame_index) calculating outlier group bounds")
+        var group_min_x: [String:Int] = [:]   // keyed by group name, image bounds of each group
+        var group_min_y: [String:Int] = [:]
+        var group_max_x: [String:Int] = [:]
+        var group_max_y: [String:Int] = [:]
         
         // calculate the outer bounds of each outlier group
         for x in 0 ..< width {
@@ -390,6 +387,16 @@ actor FrameAirplaneRemover: Equatable {
         }
 
         for (group_name, group_size) in neighbor_groups {
+            if let min_x = group_min_x[group_name],
+               let min_y = group_min_y[group_name],
+               let max_x = group_max_x[group_name],
+               let max_y = group_max_y[group_name]
+            {
+                let bounding_box = BoundingBox(min: Coord(x: min_x, y: min_y),
+                                               max: Coord(x: max_x, y: max_y))
+                group_bounding_boxes[group_name] = bounding_box
+            }
+            
             if let group_amount = group_amounts[group_name] {
                 group_amounts[group_name] = group_amount / group_size
             }
@@ -407,10 +414,7 @@ actor FrameAirplaneRemover: Equatable {
         // look through all neighber groups greater than min_group_size
         // this is a lot faster now
         for (name, size) in neighbor_groups {
-            if let min_x = group_min_x[name], // bounding box for this group
-               let min_y = group_min_y[name],
-               let max_x = group_max_x[name],
-               let max_y = group_max_y[name],
+            if let group_bounds = group_bounding_boxes[name], // bounding box for this group
                let group_value = group_amounts[name] // how bright is this group?
             {
                 // use assume_airplane_size to avoid doing extra processing on
@@ -422,8 +426,8 @@ actor FrameAirplaneRemover: Equatable {
                     continue
                 }
 
-                let group_width = max_x - min_x + 1
-                let group_height = max_y - min_y + 1
+                let group_width = group_bounds.max.x - group_bounds.min.x + 1
+                let group_height = group_bounds.max.y - group_bounds.min.y + 1
                 let group_aspect_ratio = Double(group_width) / Double(group_height)
                 // creating a smaller HoughTransform is a lot faster,
                 // but looses a small amount of precision
@@ -434,10 +438,10 @@ actor FrameAirplaneRemover: Equatable {
                 
                 // first do a hough transform on just this outlier group
                 // set all pixels of this group to true in the hough data
-                for x in min_x ... max_x {
-                    for y in min_y ... max_y {
+                for x in group_bounds.min.x ... group_bounds.max.x {
+                    for y in group_bounds.min.y ... group_bounds.max.y {
                         let index = y * width + x
-                        let group_index = (y-min_y) * group_width + (x-min_x)
+                        let group_index = (y-group_bounds.min.y) * group_width + (x-group_bounds.min.x)
                         if let group_name = outlier_groups[index],
                            name == group_name
                         {
@@ -506,14 +510,14 @@ actor FrameAirplaneRemover: Equatable {
 //                }
                 
                 
-                    //Log.d("frame \(frame_index) should_paint group_size_score \(group_size_score) group_fill_amount_score \(group_fill_amount_score) group_aspect_ratio_score \(group_aspect_ratio_score) group_value_score \(group_value_score/100) + paint_score_from_lines \(paint_score_from_lines)")
+                    Log.d("frame \(frame_index) should_paint group_size_score \(group_size_score) group_fill_amount_score \(group_fill_amount_score) group_aspect_ratio_score \(group_aspect_ratio_score) group_value_score \(group_value_score/100) + paint_score_from_lines \(paint_score_from_lines)")
                 
                 
                 if overall_score > 0.5 {
-                    //Log.d("frame \(frame_index) should_paint[\(name)] = (true, .goodScore(\(overall_score))")
+                    Log.d("frame \(frame_index) should_paint[\(name)] = (true, .goodScore(\(overall_score))")
                     should_paint[name] = .goodScore(overall_score)
                 } else {
-                    //Log.d("frame \(frame_index) should_paint[\(name)] = (false, .badScore(\(overall_score))")
+                    Log.d("frame \(frame_index) should_paint[\(name)] = (false, .badScore(\(overall_score))")
                     should_paint[name] = .badScore(overall_score)
                 }
             }
@@ -532,6 +536,7 @@ actor FrameAirplaneRemover: Equatable {
                let reason = should_paint[group_name],
                reason.willPaint
             {
+                Log.d("frame \(frame_index) painting over group \(group_name) for reason \(reason)")
                 let x = index % width;
                 let y = index / width;
                 paint(x: x, y: y, why: reason,
@@ -641,10 +646,7 @@ actor FrameAirplaneRemover: Equatable {
         for (group_name, _) in self.neighbor_groups {
             Log.i("writing text file for group \(group_name)")
             
-            if let min_x = group_min_x[group_name],
-               let min_y = group_min_y[group_name],
-               let max_x = group_max_x[group_name],
-               let max_y = group_max_y[group_name],
+            if let group_bounds = group_bounding_boxes[group_name],
                let output_dirname = outlier_output_dirname
             {
                 // XXX check the determined paintability of each group and write them
@@ -659,8 +661,8 @@ actor FrameAirplaneRemover: Equatable {
                     Log.i("creating \(full_path)")                      
                     var line = ""
                     
-                    for y in min_y ... max_y {
-                        for x in min_x ... max_x {
+                    for y in group_bounds.min.y ... group_bounds.max.y {
+                        for x in group_bounds.min.x ... group_bounds.max.x {
                             let index = y*width+x
                             if let new_group_name = outlier_groups[index],
                                new_group_name == group_name
