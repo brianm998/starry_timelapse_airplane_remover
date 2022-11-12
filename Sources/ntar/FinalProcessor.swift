@@ -129,15 +129,15 @@ actor FinalProcessor {
             }
 
             var bad = false
-            var index_in_images_to_process_of_main_frame = 0
-            var index_in_images_to_process = 0
+            //var index_in_images_to_process_of_main_frame = 0
+            //var index_in_images_to_process = 0
             for i in start_index ... end_index {
                 if let next_frame = await self.frame(at: i) {
                     images_to_process.append(next_frame)
-                    if i == index_to_process {
-                        index_in_images_to_process_of_main_frame = index_in_images_to_process
-                    }
-                    index_in_images_to_process += 1
+                    //if i == index_to_process {
+                        //index_in_images_to_process_of_main_frame = index_in_images_to_process
+                //}
+                    //index_in_images_to_process += 1
                 } else {
                     bad = true
                     // XXX bad
@@ -149,12 +149,22 @@ actor FinalProcessor {
                 await run_final_pass(frames: images_to_process)
                 Log.d("FINAL THREAD frame \(index_to_process) done with inter-frame analysis")
                 await self.incrementCurrentFrameIndex()
+
+
                 if start_index > 0 && index_to_process < frame_count - number_final_processing_neighbors_needed - 1 {
                     // maybe finish a previous frame
                     // leave the ones at the end to finishAll()
                     let immutable_start = start_index
                     //Log.d("FINAL THREAD frame \(index_to_process) queueing into final queue")
                     if let frame_to_finish = await self.frame(at: immutable_start - 1) {
+
+                        really_final_streak_processing(onFrame: frame_to_finish)
+// add a outlier streak validation step right before a frame is handed to the final queue for finalizing.
+// identify all existing streaks with length of only 2
+// try to find other nearby streaks, if not found, then skip for new not paint reason
+                
+
+                        
                         let final_frame_group_name = "final frame \(frame_to_finish.frame_index)"
                         await self.dispatch_group.enter(final_frame_group_name)
                         dispatchQueue.async {
@@ -208,16 +218,6 @@ fileprivate func run_final_pass(frames: [FrameAirplaneRemover]) async {
     await run_final_overlap_pass(frames: frames)
     await run_final_streak_pass(frames: frames)
 }
-
-
-/*
-
-
- in morning, figure out why frame 9 1447,2 is causing frame 8 1463,22 to become a streak
-
- 
- 
- */
 
 
 @available(macOS 10.15, *)
@@ -337,6 +337,51 @@ fileprivate func run_final_overlap_pass(frames: [FrameAirplaneRemover]) async {
 // identified airplane trails XXX why is this a global?  put this in the class and make these funcs part of it
 var airplane_streaks: [String:[AirplaneStreakMember]] = [:] // XXX make this a map
 // XXX may need to prune this eventually, for memory concerns
+
+// add a outlier streak validation step right before a frame is handed to the final queue for finalizing.
+// identify all existing streaks with length of only 2
+// try to find other nearby streaks, if not found, then skip for new not paint reason
+@available(macOS 10.15, *)
+func really_final_streak_processing(onFrame frame: FrameAirplaneRemover) {
+    // at this point, all frames before the given frame have been processed fully.
+    // number_final_processing_neighbors_needed more neighbors have already had their
+    // outlier group data added to the airplane_streaks map
+
+    // look through all streaks
+    // if the last member's frame index is less than here - 1, then discard it
+    // if the streak has only two members, then:
+    //   - look through all other streaks, and see if any of them might match up to it
+    //     for both position and rough alignment of their members
+
+    for (streak_name, airplane_streak) in airplane_streaks {
+        if let last_member = airplane_streak.last {
+            if last_member.frame_index < frame.frame_index - 1 {
+                // delete the older streak we don't need anymore
+                airplane_streaks.removeValue(forKey: streak_name)
+            }
+        }
+    }
+
+    for (streak_name, airplane_streak) in airplane_streaks {
+        if airplane_streak.count == 2 {
+            let first_member = airplane_streak[0]
+            let last_member = airplane_streak[1]
+            if last_member.frame_index == frame.frame_index || 
+               first_member.frame_index == frame.frame_index
+            {
+                // this is a two member airplane streak that is on our frame
+                // look for other streaks that might match up to it on either side
+                // if neither found, then 
+
+                for (other_streak_name, other_airplane_streak) in airplane_streaks {
+                    if other_streak_name == streak_name { continue }
+
+                    // XXX need the bounding box here, let's f'ing refactor this crap
+                }
+            }
+        }
+    }
+}
 
 // 
 @available(macOS 10.15, *)
@@ -580,8 +625,9 @@ func streak_starting_from(groupName group_name: String,
         } else {
             if best_frame_index == frame.frame_index {
 
-                let last_streak_item = potential_streak[potential_streak.count-1]
-                if best_frame_index > last_streak_item.frame_index {
+                if let last_streak_item = potential_streak.last,//[potential_streak.count-1] {
+                   best_frame_index > last_streak_item.frame_index
+                {
                     // streak on
                     last_min_x = best_min_x
                     last_min_y = best_min_y
