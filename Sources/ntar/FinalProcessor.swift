@@ -206,8 +206,8 @@ actor FinalProcessor {
 fileprivate func run_final_pass(frames: [FrameAirplaneRemover], mainIndex main_index: Int) async {
     Log.d("final pass on \(frames.count) frames")
 
-    await run_final_streak_pass(frames: frames, mainIndex: main_index)
     await run_final_overlap_pass(frames: frames, mainIndex: main_index)
+    await run_final_streak_pass(frames: frames, mainIndex: main_index)
 }
 
 
@@ -233,7 +233,7 @@ fileprivate func run_final_overlap_pass(frames: [FrameAirplaneRemover], mainInde
                         Log.i("frame \(frame.frame_index) skipping group \(group_name) because of \(reason)") 
                         // XXX this skips streaks that it shouldn't
                     }
-                    continue
+                    //continue
                 default:
                     break
                 }
@@ -267,58 +267,24 @@ fileprivate func run_final_overlap_pass(frames: [FrameAirplaneRemover], mainInde
                                let other_line_max_y = await other_frame.group_max_y[og_name],
                                let other_group_size = await other_frame.neighbor_groups[og_name]
                             {
-
-                                //Log.d("frame \(frame.frame_index) group 1 \(group_name) of size \(group_size) (\(line_min_x) \(line_min_y)),  (\(line_max_x) \(line_max_y)) other frame \(other_frame.frame_index) group 2 \(og_name) of size \(group_size) (\(other_line_min_x) \(other_line_min_y)),  (\(other_line_max_x) \(other_line_max_y))")
-
-                                let mult = abs(frame.frame_index - other_frame.frame_index)
-                                // multiply the constant by how far the frames are away
-                                // from eachother in the sequence
-                                var edge_amt = Double(final_group_boundary_amt * mult)
-                                let center_amt = Double(final_group_boundary_amt*final_center_distance_multiplier * mult)
-                                if mult == 1 {
-                                    // directly adjecent frames
-                                    // -2 isn't enough
-                                    edge_amt = final_adjecent_edge_amount // may not need this?
-                                    // XXX maybe only if they are in alignment?
-                                }
-
-                                // XXX include both distance between edges as below,
-                                // and also add distance between centers.
-                                // if the center hardly moves, then reject
-                                
-                                // the amount of the line between their center points that
-                                // is not covered by either one of them
-                                // this is negative when they overlap
-                                let distance_bewteen_groups =
-                                    edge_distance(min_1_x: line_min_x,
-                                                  min_1_y: line_min_y,
-                                                  max_1_x: line_max_x,
-                                                  max_1_y: line_max_y,
-                                                  min_2_x: other_line_min_x,
-                                                  min_2_y: other_line_min_y,
-                                                  max_2_x: other_line_max_x,
-                                                  max_2_y: other_line_max_y)
-
-                                // the length of the line between the center points
-                                // of the groups
-                                let center_distance_bewteen_groups =
-                                    center_distance(min_1_x: line_min_x,
-                                                  min_1_y: line_min_y,
-                                                  max_1_x: line_max_x,
-                                                  max_1_y: line_max_y,
-                                                  min_2_x: other_line_min_x,
-                                                  min_2_y: other_line_min_y,
-                                                  max_2_x: other_line_max_x,
-                                                  max_2_y: other_line_max_y)
+                                let pixel_overlap_amount =
+                                  await pixel_overlap(min_1_x: line_min_x,
+                                                      min_1_y: line_min_y,
+                                                      max_1_x: line_max_x,
+                                                      max_1_y: line_max_y,
+                                                      group_1_name: group_name,
+                                                      group_1_frame: frame,
+                                                      min_2_x: other_line_min_x,
+                                                      min_2_y: other_line_min_y,
+                                                      max_2_x: other_line_max_x,
+                                                      max_2_y: other_line_max_y,
+                                                      group_2_name: og_name,
+                                                      group_2_frame: other_frame)
 
                                 //Log.d("frame \(frame.frame_index) edge_distance_bewteen_groups \(distance_bewteen_groups) center_distance \(center_distance_bewteen_groups) \(group_name) \(og_name) edge_amt \(edge_amt) center_amt \(center_amt)")
-                                if (distance_bewteen_groups < edge_amt &&
-                                     center_distance_bewteen_groups < center_amt)
-                                  || distance_bewteen_groups < -2 // direct overlap
-                                // XXX detect number of overlapping pixels instead
-                                // use a ratio of number of pixels in group to size of it
-                                // some airplane streaks overlap a small amount at the ends
-                                {
+
+                                if pixel_overlap_amount > 0.05 { // XXX hardcoded constant
+                                
                                     var do_it = true
 
                                     // do paint over objects that look like lines
@@ -341,9 +307,9 @@ fileprivate func run_final_overlap_pass(frames: [FrameAirplaneRemover], mainInde
                                         // shouldn't be painted over
                                         let _ = await (
                                                 frame.setShouldPaint(group: group_name,
-                                                                     why: .adjecentOverlap(-distance_bewteen_groups)),
+                                                                     why: .adjecentOverlap(pixel_overlap_amount)),
                                                 other_frame.setShouldPaint(group: og_name,
-                                                                           why: .adjecentOverlap(-distance_bewteen_groups)))
+                                                                           why: .adjecentOverlap(pixel_overlap_amount)))
                                         
                                         //Log.d("frame \(frame.frame_index) should_paint[\(group_name)] = (false, .adjecentOverlap(\(-distance_bewteen_groups))")
                                         //Log.d("frame \(other_frame.frame_index) should_paint[\(og_name)] = (false, .adjecentOverlap(\(-distance_bewteen_groups))")
@@ -376,10 +342,10 @@ fileprivate func run_final_streak_pass(frames: [FrameAirplaneRemover], mainIndex
             // look for more data to act upon
 
             if let reason = await frame.should_paint[group_name] {
-//                if reason == .adjecentOverlap(0) {
+                if reason == .adjecentOverlap(0) {
                     //Log.d("frame \(frame.frame_index) skipping group \(group_name) because it has .adjecentOverlap")
-//                    continue
-//                }
+                    continue
+                }
 
                 // make sure we're not in a streak already
                 for airplane_streak in airplane_streaks {
@@ -419,7 +385,7 @@ fileprivate func run_final_streak_pass(frames: [FrameAirplaneRemover], mainIndex
         }
     }
 
-    // XXX go through and mark all of airplane_streaks to paint
+    // go through and mark all of airplane_streaks to paint
     //Log.i("analyzing \(airplane_streaks.count) streaks")
     for airplane_streak in airplane_streaks {
         //Log.i("analyzing streak with \(airplane_streak.count) members")
@@ -430,15 +396,17 @@ fileprivate func run_final_streak_pass(frames: [FrameAirplaneRemover], mainIndex
         for streak_member in airplane_streak {
             let frame = frames[streak_member.frame_index]
             if let should_paint = await frame.should_paint[streak_member.group_name] {
-//                if should_paint == .adjecentOverlap(0) { verbotten = true }
+                if should_paint == .adjecentOverlap(0) { verbotten = true }
 //                if should_paint.willPaint { was_already_paintable = true }
             }
         }
-//        if verbotten || !was_already_paintable { continue }
+        if verbotten/* || !was_already_paintable*/ { continue }
         //Log.i("painting over streak with \(airplane_streak.count) members")
         for streak_member in airplane_streak {
             let frame = frames[streak_member.frame_index]
             //Log.d("frame \(frame.frame_index) will paint group \(streak_member.group_name) is .inStreak")
+
+            // XXX check to see if this is already .inStreak with higher count
             await frame.setShouldPaint(group: streak_member.group_name, why: .inStreak(airplane_streak.count))
         }
     }
@@ -514,6 +482,7 @@ func streak_starting_from(groupName group_name: String,
                let group_max_x = await frame.group_max_x[other_group_name],
                let group_max_y = await frame.group_max_y[other_group_name]
             {
+                // XXX use pixel_overlap instead 
                 let distance = edge_distance(min_1_x: last_min_x, min_1_y: last_min_y,
                                              max_1_x: last_max_x, max_1_y: last_max_y,
                                              min_2_x: group_min_x, min_2_y: group_min_y,
@@ -530,7 +499,7 @@ func streak_starting_from(groupName group_name: String,
                 let center_line_theta_diff_1 = abs(center_line_theta-other_group_line.theta)
                 let center_line_theta_diff_2 = abs(center_line_theta-last_group_line.theta)
 
-                let center_line_theta_diff = final_theta_diff * 5 // XXX hardcoded constant
+                let center_line_theta_diff: Double = 25 // XXX hardcoded constant
                 
                 if distance < best_distance &&
                   (theta_diff < final_theta_diff || abs(theta_diff - 180) < final_theta_diff) &&
@@ -630,7 +599,7 @@ func distance_on(min_x: Int, min_y: Int, max_x: Int, max_y: Int,
     
     return hypotenuse_length
 }
-
+/*
 func center_distance(min_1_x: Int, min_1_y: Int,
                      max_1_x: Int, max_1_y: Int,
                      min_2_x: Int, min_2_y: Int,
@@ -654,7 +623,7 @@ func center_distance(min_1_x: Int, min_1_y: Int,
 
     return sqrt(width*width + height*height)
 }
-
+*/
 func center_theta(min_1_x: Int, min_1_y: Int,
                   max_1_x: Int, max_1_y: Int,
                   min_2_x: Int, min_2_y: Int,
@@ -723,6 +692,72 @@ func center_theta(min_1_x: Int, min_1_y: Int,
     //Log.d("theta_degrees \(theta_degrees)")
     return  theta_degrees // convert from radians to degrees
 }
+
+// how many pixels actually overlap between the groups ?  returns 0-1 value of overlap amount
+@available(macOS 10.15, *)
+func pixel_overlap(min_1_x: Int,
+                   min_1_y: Int,
+                   max_1_x: Int,
+                   max_1_y: Int,
+                   group_1_name: String,
+                   group_1_frame: FrameAirplaneRemover,
+                   min_2_x: Int,
+                   min_2_y: Int,
+                   max_2_x: Int,
+                   max_2_y: Int,
+                   group_2_name: String,
+                   group_2_frame: FrameAirplaneRemover) async -> Double // 1 means total overlap, 0 means none
+{
+    // throw out non-overlapping frames, do any slip through?
+    if min_1_x > max_2_x || min_1_y > max_2_y { return 0 }
+    if min_2_x > max_1_x || min_2_y > max_1_y { return 0 }
+
+    var min_x = min_1_x
+    var min_y = min_1_y
+    var max_x = max_1_x
+    var max_y = max_1_y
+    
+    if min_2_x < min_x { min_x = min_2_x }
+    if min_2_y < min_y { min_y = min_2_y }
+    
+    if max_2_x > max_x { max_x = max_2_x }
+    if max_2_y > max_y { max_y = max_2_y }
+    
+    // XXX could search a smaller space probably
+
+    var overlap_pixel_amount = 0;
+    
+    let outlier_groups_1 = await group_1_frame.outlier_groups
+    let outlier_groups_2 = await group_2_frame.outlier_groups
+    let width = group_1_frame.width // they better be the same :)
+    for x in min_x ... max_x {
+        for y in min_y ... max_y {
+            let index = y * width + x
+            if let pixel_1_group = outlier_groups_1[index],
+               let pixel_2_group = outlier_groups_2[index],
+               pixel_1_group == group_1_name,
+               pixel_2_group == group_2_name
+            {
+                overlap_pixel_amount += 1
+            }
+        }
+    }
+
+    if overlap_pixel_amount > 0 {
+        if let group_1_size = await group_1_frame.neighbor_groups[group_1_name],
+           let group_2_size = await group_2_frame.neighbor_groups[group_2_name]
+        {
+            let avg_group_size = (Double(group_1_size) + Double(group_2_size)) / 2
+            return Double(overlap_pixel_amount)/avg_group_size
+        } else {
+            fatalError("should have sizes, WTF?")
+        }
+    }
+    
+    return 0
+}
+
+
 
 func edge_distance(min_1_x: Int, min_1_y: Int,
                    max_1_x: Int, max_1_y: Int,

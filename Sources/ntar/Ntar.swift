@@ -91,6 +91,8 @@ todo:
 
  - make outlier output text files be separated by airplane / not airplane
 
+ - apply the same center theta outlier logic to outliers within the same frame
+ 
  - figure out how distribution works
    - a .dmg file with a command line installer?  any swift command line installer examples?
 */
@@ -102,21 +104,18 @@ todo:
 let max_pixel_brightness_distance: UInt16 = 8500 // distance in brightness to be considered an outlier
 
 let min_group_size = 100        // groups smaller than this are ignored
-let min_line_count = 20        // lines with counts smaller than this are ignored
 let group_min_line_count = 1    // used when hough transorming individual groups
 
 let assume_airplane_size = 5000 // don't bother spending the time to fully process
                                 // groups larger than this, assume we should paint over them
 
 // how far in each direction do we go when doing final processing?
-let number_final_processing_neighbors_needed = 5 // in each direction
+let number_final_processing_neighbors_needed = 4 // in each direction
 
 let final_theta_diff: Double = 5       // how close in theta/rho outliers need to be between frames
-let final_rho_diff: Double = 70
+let final_rho_diff: Double = 10        // 20 works
 
 let final_group_boundary_amt = 1  // how much we pad the overlap amounts on the final pass
-
-let final_adjecent_edge_amount: Double = -2 // the spacing allowed between groups in adjecent frames
 
 let final_center_distance_multiplier = 4 // document this
 
@@ -128,11 +127,12 @@ let supported_image_file_types = [".tif", ".tiff"] // XXX move this out
 let memory_size_bytes = ProcessInfo.processInfo.physicalMemory
 let memory_size_gigs = ProcessInfo.processInfo.physicalMemory/(1024*1024*1024)
 
-let ntar_version = "0.0.4"
+let ntar_version = "0.0.5"
 
 // 0.0.2 added more detail group hough transormation analysis, based upon a data set
 // 0.0.3 included the data set analysis to include group size and fill, and to use histograms
 // 0.0.4 included .inStreak final processing
+// 0.0.5 added pixel overlap between outlier groups
 
 @main
 struct Ntar: ParsableCommand {
@@ -248,7 +248,7 @@ struct Ntar: ParsableCommand {
             // XXX maybe check to make sure this is a directory
             Log.d("will process \(input_image_sequence_dirname)")
             
-            Log.d("running with min_group_size \(min_group_size) min_line_count \(min_line_count)")
+//            Log.d("running with min_group_size \(min_group_size) min_line_count \(min_line_count)")
             Log.d("group_min_line_count \(group_min_line_count)")
             Log.d("assume_airplane_size \(assume_airplane_size)")
             //Log.d("max_concurrent_frames \(max_concurrent_frames) max_pixel_brightness_distance \(max_pixel_brightness_distance)")
