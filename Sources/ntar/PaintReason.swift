@@ -10,6 +10,8 @@ enum PaintReason: Equatable, CaseIterable {
    case badScore(Double)        // percent score
    case adjecentOverlap(Double) // overlap distance
 
+   case isolatedTwoStreak       // an isolated two member streak
+
    public var BasicColor: BasicColor {
         get {
             switch self {
@@ -25,6 +27,8 @@ enum PaintReason: Equatable, CaseIterable {
                 return .brightCyan
             case .adjecentOverlap:
                 return .brightBlue
+            case .isolatedTwoStreak:
+                return .black   // XXX find better color
             }
         }
    }
@@ -32,12 +36,13 @@ enum PaintReason: Equatable, CaseIterable {
    public var name: String {
         get {
             switch self {
-            case .assumed:         return "assumed"
-            case .goodScore:       return "good score"
-            case .looksLikeALine:  return "looks like a line"
-            case .inStreak:        return "in a streak"
-            case .badScore:        return "bad score"
-            case .adjecentOverlap: return "adjecent overlap"
+            case .assumed:           return "assumed"
+            case .goodScore:         return "good score"
+            case .looksLikeALine:    return "looks like a line"
+            case .inStreak:          return "in a streak"
+            case .badScore:          return "bad score"
+            case .adjecentOverlap:   return "adjecent overlap"
+            case .isolatedTwoStreak: return "isolated two streak"
             }
         }
    }
@@ -69,7 +74,10 @@ These outlier groups are not painted over because it overlaps with a similar out
                 return """
 These outlier groups were found to be in a streak across frames.
 """
-                
+            case .isolatedTwoStreak:               
+                return """
+These outlier groupse were small streaks by themselves
+"""
             }
         }
    }
@@ -77,12 +85,13 @@ These outlier groups were found to be in a streak across frames.
    public var willPaint: Bool {
         get {
             switch self {
-            case .assumed:         return true
-            case .goodScore:       return true
-            case .looksLikeALine:  return true
-            case .inStreak:        return true
-            case .badScore:        return false
-            case .adjecentOverlap: return false
+            case .assumed:           return true
+            case .goodScore:         return true
+            case .looksLikeALine:    return true
+            case .inStreak:          return true
+            case .badScore:          return false
+            case .adjecentOverlap:   return false
+            case .isolatedTwoStreak: return false
             }
         }
    }
@@ -96,7 +105,8 @@ These outlier groups were found to be in a streak across frames.
    }
 
    static var allCases: [PaintReason] {
-       return [.assumed, .looksLikeALine, .goodScore(0), .inStreak(0), .badScore(0), .adjecentOverlap(0)]
+       return [.assumed, .looksLikeALine, .goodScore(0),
+               .isolatedTwoStreak, .inStreak(0), .badScore(0), .adjecentOverlap(0)]
    }
                          
    // colors used to test paint to show why
@@ -142,6 +152,13 @@ These outlier groups were found to be in a streak across frames.
       case .adjecentOverlap:
           switch rhs {
           case .adjecentOverlap:
+              return true
+          default:
+              return false
+          }
+      case .isolatedTwoStreak:
+          switch rhs {
+          case .isolatedTwoStreak:
               return true
           default:
               return false

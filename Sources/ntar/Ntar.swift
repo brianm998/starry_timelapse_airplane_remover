@@ -103,7 +103,7 @@ todo:
 
 let max_pixel_brightness_distance: UInt16 = 8500 // distance in brightness to be considered an outlier
 
-let min_group_size = 100        // groups smaller than this are ignored
+let min_group_size = 130        // groups smaller than this are ignored
 let group_min_line_count = 1    // used when hough transorming individual groups
 
 let assume_airplane_size = 5000 // don't bother spending the time to fully process
@@ -130,12 +130,22 @@ let supported_image_file_types = [".tif", ".tiff"] // XXX move this out
 let memory_size_bytes = ProcessInfo.processInfo.physicalMemory
 let memory_size_gigs = ProcessInfo.processInfo.physicalMemory/(1024*1024*1024)
 
-let ntar_version = "0.0.5"
+let ntar_version = "0.0.6"
 
 // 0.0.2 added more detail group hough transormation analysis, based upon a data set
 // 0.0.3 included the data set analysis to include group size and fill, and to use histograms
 // 0.0.4 included .inStreak final processing
 // 0.0.5 added pixel overlap between outlier groups
+// 0.0.6 fixed streak processing and added another layer afterwards
+
+/*
+ next step:
+
+ add a outlier streak validation step right before a frame is handed to the final queue for finalizing.
+ identify all existing streaks with length of only 2
+ try to find other nearby streaks, if not found, then skip for new not paint reason
+ 
+ */
 
 @main
 struct Ntar: ParsableCommand {
