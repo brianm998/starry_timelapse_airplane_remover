@@ -112,12 +112,15 @@ let assume_airplane_size = 5000 // don't bother spending the time to fully proce
 // how far in each direction do we go when doing final processing?
 let number_final_processing_neighbors_needed = 4 // in each direction
 
-let final_theta_diff: Double = 5       // how close in theta/rho outliers need to be between frames
-let final_rho_diff: Double = 10        // 20 works
+let final_theta_diff: Double = 10       // how close in theta/rho outliers need to be between frames
+let final_rho_diff: Double = 20        // 20 works
 
 let final_group_boundary_amt = 1  // how much we pad the overlap amounts on the final pass
 
 let final_center_distance_multiplier = 4 // document this
+
+let center_line_theta_diff: Double = 25 // used in outlier streak detection 
+                
 
 let supported_image_file_types = [".tif", ".tiff"] // XXX move this out
 
