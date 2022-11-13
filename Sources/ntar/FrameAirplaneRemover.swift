@@ -58,15 +58,14 @@ actor FrameAirplaneRemover: Equatable {
     
     let output_filename: String
     
-    init?(fromImage image: PixelatedImage,
-          atIndex frame_index: Int,
-          otherFrames: [PixelatedImage],
-          outputFilename output_filename: String,
-          testPaintFilename tpfo: String?,
-          outlierOutputDirname outlier_output_dirname: String?,
-          maxPixelDistance max_pixel_distance: UInt16,
-          minGroupSize min_group_size: Int
-         )
+    init(fromImage image: PixelatedImage,
+         atIndex frame_index: Int,
+         otherFrames: [PixelatedImage],
+         outputFilename output_filename: String,
+         testPaintFilename tpfo: String?,
+         outlierOutputDirname outlier_output_dirname: String?,
+         maxPixelDistance max_pixel_distance: UInt16,
+         minGroupSize min_group_size: Int)
     {
         self.frame_index = frame_index // frame index in the image sequence
         self.image = image
@@ -454,7 +453,7 @@ actor FrameAirplaneRemover: Equatable {
                 }
         
                 // get the theta and rho of just this outlier group
-                let lines_from_this_group = groupHoughTransform.lines(min_count: group_min_line_count)
+                let lines_from_this_group = groupHoughTransform.lines(min_count: 1)
                 if lines_from_this_group.count == 0 {
                     Log.w("frame \(frame_index) got no group lines for group \(name) of size \(size)")
                     // this should only happen when there is no data in the input and therefore output 
@@ -484,7 +483,7 @@ actor FrameAirplaneRemover: Equatable {
                 //Log.d("frame \(frame_index) group \(name) line at index 0 theta \(group_theta), rho \(group_rho), count \(group_count)")
 
                 let group_size_score = paint_score_from(groupSize: size)
-                let group_fill_amount = Double(size)/(Double(group_width)*Double(group_height))
+                //let group_fill_amount = Double(size)/(Double(group_width)*Double(group_height))
                 //Log.d("should_paint group_size \(size) group_fill_amount \(group_fill_amount) group_aspect_ratio \(group_aspect_ratio)")
                 //let group_fill_amount_score = paint_score_from(fillAmount: group_fill_amount)
                 let group_aspect_ratio_score = paint_score_from(aspectRatio: group_aspect_ratio)

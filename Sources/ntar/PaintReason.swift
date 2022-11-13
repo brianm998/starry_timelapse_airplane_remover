@@ -28,7 +28,7 @@ enum PaintReason: Equatable, CaseIterable {
             case .adjecentOverlap:
                 return .brightBlue
             case .isolatedTwoStreak:
-                return .black   // XXX find better color
+                return .cyan
             }
         }
    }
@@ -76,7 +76,7 @@ These outlier groups were found to be in a streak across frames.
 """
             case .isolatedTwoStreak:               
                 return """
-These outlier groupse were small streaks by themselves
+These outlier groups were small streaks by themselves
 """
             }
         }

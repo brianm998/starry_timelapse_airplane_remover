@@ -19,4 +19,6 @@ This set of data about each outlier group is then ranked based upon histograms g
 
 Each frame can be processed in parallel until this point.  There is a single thread which compares frames with eachother, after the outlier groups have been identified and initially categorized.  This thread looks at each frame and some number of adjecent frames, comparing the outlier groups and potentially making changes based upon how the frames relate to eachother.
 
+Write about Streak Detection.
+
 After the final paintability of each outlier group has been decided for a particular frame, it is then put into a final queue which handles painting over the identified airplane streaks, and saving the output file. 

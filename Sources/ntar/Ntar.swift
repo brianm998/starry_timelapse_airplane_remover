@@ -99,11 +99,8 @@ todo:
 
 // XXX here are some random global constants that maybe should be exposed somehow
 
+// this is here so that PaintReason can see it
 var assume_airplane_size: Int = 5000 // don't bother spending the time to fully process
-
-let group_min_line_count = 1    // used when hough transorming individual groups
-
-                                // groups larger than this, assume we should paint over them
 
 // how far in each direction do we go when doing final processing?
 let number_final_processing_neighbors_needed = 4 // in each direction
@@ -111,12 +108,7 @@ let number_final_processing_neighbors_needed = 4 // in each direction
 let final_theta_diff: Double = 10       // how close in theta/rho outliers need to be between frames
 let final_rho_diff: Double = 20        // 20 works
 
-let final_group_boundary_amt = 1  // how much we pad the overlap amounts on the final pass
-
-let final_center_distance_multiplier = 4 // document this
-
 let center_line_theta_diff: Double = 25 // used in outlier streak detection 
-                
 
 let supported_image_file_types = [".tif", ".tiff"] // XXX move this out
 
@@ -134,14 +126,6 @@ let ntar_version = "0.0.6"
 // 0.0.5 added pixel overlap between outlier groups
 // 0.0.6 fixed streak processing and added another layer afterwards
 
-/*
- next step:
-
- add a outlier streak validation step right before a frame is handed to the final queue for finalizing.
- identify all existing streaks with length of only 2
- try to find other nearby streaks, if not found, then skip for new not paint reason
- 
- */
 
 @main
 struct Ntar: ParsableCommand {
@@ -282,7 +266,6 @@ struct Ntar: ParsableCommand {
             Log.d("will process \(input_image_sequence_dirname)")
             
             //Log.d("running with min_group_size \(self.minGroupSize) min_line_count \(min_line_count)")
-            Log.d("group_min_line_count \(group_min_line_count)")
             Log.d("assume_airplane_size \(assume_airplane_size)")
             //Log.d("max_concurrent_frames \(max_concurrent_frames) outlier_brightness_gap \(outlier_brightness_gap)")
             

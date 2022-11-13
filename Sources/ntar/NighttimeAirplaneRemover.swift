@@ -60,11 +60,6 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
         self.should_write_outlier_group_files = writeOutlierGroupFiles
         self.min_group_size = minGroupSize
         self.assume_airplane_size = assumeAirplaneSize
-        //let formatted_theta_diff = String(format: "%0.1f", max_theta_diff)
-        //let formatted_rho_diff = String(format: "%0.1f", max_rho_diff)
-        
-        //let formatted_final_theta_diff = String(format: "%0.1f", final_theta_diff)
-        //let formatted_final_rho_diff = String(format: "%0.1f", final_rho_diff)
 
         let formatted_pixel_distance = String(format: "%0.1f", max_pixel_percent)        
         
@@ -192,7 +187,11 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
         }
     }
 
-    // called async, check for access to shared data 
+    // called async, check for access to shared data
+    // this method does the first step of processing on each frame.
+    // outlier pixel detection, outlier group detection and analysis
+    // after running this method, each frame will have a good idea
+    // of what outliers is has, and whether or not should paint over them.
     func prepareForAdjecentFrameAnalysis(fromImage image: PixelatedImage,
                                          atIndex frame_index: Int,
                                          otherFrames: [PixelatedImage],
@@ -201,18 +200,14 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
     {
         let start_time = NSDate().timeIntervalSince1970
         
-        guard let frame_plane_remover = FrameAirplaneRemover(fromImage: image,
-                                                             atIndex: frame_index,
-                                                             otherFrames: otherFrames,
-                                                             outputFilename: output_filename,
-                                                             testPaintFilename: tpfo,
-                                                             outlierOutputDirname: outlier_output_dirname,
-                                                             maxPixelDistance: max_pixel_distance,
-                                                             minGroupSize: min_group_size)
-        else {
-            Log.d("DOH")
-            fatalError("FAILED")
-        }
+        let frame_plane_remover = FrameAirplaneRemover(fromImage: image,
+                                                       atIndex: frame_index,
+                                                       otherFrames: otherFrames,
+                                                       outputFilename: output_filename,
+                                                       testPaintFilename: tpfo,
+                                                       outlierOutputDirname: outlier_output_dirname,
+                                                       maxPixelDistance: max_pixel_distance,
+                                                       minGroupSize: min_group_size)
 
         let time_1 = NSDate().timeIntervalSince1970
         let interval1 = String(format: "%0.1f", time_1 - start_time)

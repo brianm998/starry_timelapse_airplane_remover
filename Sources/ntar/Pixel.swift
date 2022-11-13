@@ -12,6 +12,8 @@ You should have received a copy of the GNU General Public License along with nta
 
 */
 
+
+// represents a 16 bit per component RGB pixel
 public struct Pixel {
     public var value: UInt64
 
