@@ -15,13 +15,6 @@ You should have received a copy of the GNU General Public License along with nta
 */
 
 
-// polar coordinates for right angle intersection with line from origin
-typealias Line = (                 
-    theta: Double,                 // angle in degrees
-    rho: Double,                   // distance in pixels
-    count: Int                     // higher count is better fit for line
-)
-
 // this class does a hough transform on the input_data var into the counts var
 // input_data is rows of a matrix of data_width and data_height
 // users should input their data into input_data before calling the lines method.
@@ -182,11 +175,6 @@ class HoughTransform {
         return small_set_lines
     }        
 }
-
-typealias Coord = (
-    x: Int,
-    y: Int
-)
 
 // this method returns the polar coords for a line that runs through the two given points
 // not used anymore in the current implementation

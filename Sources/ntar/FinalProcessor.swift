@@ -562,24 +562,6 @@ fileprivate func run_final_streak_pass(frames: [FrameAirplaneRemover]) async {
 
 }
 
-typealias AirplaneStreakMember = (
-  frame_index: Int,
-  group_name: String,
-  bounds: BoundingBox,
-  line: Line
-)
-
-struct BoundingBox {
-    let min: Coord
-    let max: Coord
-
-    var hypotenuse: Double {
-        let width = Double(self.max.x - self.min.x)
-        let height = Double(self.max.y - self.min.y)
-        return sqrt(width*width + height*height)
-    }
-}
-
 
 // see if there is a streak of airplane tracks starting from the given group
 // a 'streak' is a set of outliers with simlar theta and rho, that are
@@ -735,78 +717,42 @@ func distance_on(box bounding_box: BoundingBox,
     
     switch edge {
     case .vertical:
-        let half_width = Double(bounding_box.max.x - bounding_box.min.x)/2
+        let half_width = Double(bounding_box.width)/2
         //Log.d("vertical half_width \(half_width)")
         hypotenuse_length = half_width / cos((90/180*Double.pi)-theta)
         
     case .horizontal:
-        let half_height = Double(bounding_box.max.y - bounding_box.min.y)/2
+        let half_height = Double(bounding_box.height)/2
         //Log.d("horizontal half_height \(half_height)")
         hypotenuse_length = half_height / cos(theta)
     }
     
     return hypotenuse_length
 }
-/*
-func center_distance(min_1_x: Int, min_1_y: Int,
-                     max_1_x: Int, max_1_y: Int,
-                     min_2_x: Int, min_2_y: Int,
-                     max_2_x: Int, max_2_y: Int)
-    -> Double // positive if they don't overlap, negative if they do
-{
-    let half_width_1 = Double(max_1_x - min_1_x)/2
-    let half_height_1 = Double(max_1_y - min_1_y)/2
-    
-    let half_width_2 = Double(max_2_x - min_2_x)/2
-    let half_height_2 = Double(max_2_y - min_2_y)/2
 
-    let center_1_x = Double(min_1_x) + half_width_1
-    let center_1_y = Double(min_1_y) + half_height_1
-
-    let center_2_x = Double(min_2_x) + half_width_2
-    let center_2_y = Double(min_2_y) + half_height_2
-
-    let width = abs(center_1_x - center_2_x)
-    let height = abs(center_1_y - center_2_y)
-
-    return sqrt(width*width + height*height)
-}
-*/
+// theta in degrees of the line between the centers of the two bounding boxes
 func center_theta(from box_1: BoundingBox, to box_2: BoundingBox) -> Double {
     //Log.d("center_theta(box_1.min.x: \(box_1.min.x), box_1.min.y: \(box_1.min.y), box_1.max.x: \(box_1.max.x), box_1.max.y: \(box_1.max.y), min_2_x: \(min_2_x), min_2_y: \(min_2_y), max_2_x: \(max_2_x), box_2.max.y: \(box_2.max.y)")
-    let half_width_1 = Double(box_1.max.x - box_1.min.x)/2
-    let half_height_1 = Double(box_1.max.y - box_1.min.y)/2
 
-    //Log.d("1 half size [\(half_width_1), \(half_height_1)]")
-    
-    let half_width_2 = Double(box_2.max.x - box_2.min.x)/2
-    let half_height_2 = Double(box_2.max.y - box_2.min.y)/2
-    
     //Log.d("2 half size [\(half_width_2), \(half_height_2)]")
 
-    let center_1_x = Double(box_1.min.x) + half_width_1
-    let center_1_y = Double(box_1.min.y) + half_height_1
+    let center_1_x = Double(box_1.min.x) + Double(box_1.width)/2
+    let center_1_y = Double(box_1.min.y) + Double(box_1.height)/2
 
     //Log.d("1 center [\(center_1_x), \(center_1_y)]")
     
-    let center_2_x = Double(box_2.min.x) + half_width_2
-    let center_2_y = Double(box_2.min.y) + half_height_2
+    let center_2_x = Double(box_2.min.x) + Double(box_2.width)/2
+    let center_2_y = Double(box_2.min.y) + Double(box_2.height)/2
     
-
     //Log.d("2 center [\(center_2_x), \(center_2_y)]")
 
-    if center_1_y == center_2_y {
-        // special case horizontal alignment, theta 0 degrees
-        return 0
-    }
+    // special case horizontal alignment, theta 0 degrees
+    if center_1_y == center_2_y { return 0 }
 
-    if center_1_x == center_2_x {
-        // special case vertical alignment, theta 90 degrees
-        return 90
-    }
+    // special case vertical alignment, theta 90 degrees
+    if center_1_x == center_2_x { return 90 }
 
-    var theta: Double = 0 //atan(Double(abs(center_1_x - center_2_x))/Double(abs(center_1_y - center_2_y)))
-
+    var theta: Double = 0
 
     let width = Double(abs(center_1_x - center_2_x))
     let height = Double(abs(center_1_y - center_2_y))
@@ -832,9 +778,9 @@ func center_theta(from box_1: BoundingBox, to box_2: BoundingBox) -> Double {
     }
 
     // XXX what about rho?
-    let theta_degrees = theta*180/Double.pi
+    let theta_degrees = theta*180/Double.pi // convert from radians to degrees
     //Log.d("theta_degrees \(theta_degrees)")
-    return  theta_degrees // convert from radians to degrees
+    return  theta_degrees
 }
 
 // how many pixels actually overlap between the groups ?  returns 0-1 value of overlap amount
@@ -898,13 +844,13 @@ func pixel_overlap(box_1: BoundingBox,
  // positive if they don't overlap, negative if they do
 func edge_distance(from box_1: BoundingBox, to box_2: BoundingBox) -> Double {
 
-    let half_width_1 = Double(box_1.max.x - box_1.min.x)/2
-    let half_height_1 = Double(box_1.max.y - box_1.min.y)/2
+    let half_width_1 = Double(box_1.width)/2
+    let half_height_1 = Double(box_1.height)/2
 
     //Log.d("1 half size [\(half_width_1), \(half_height_1)]")
     
-    let half_width_2 = Double(box_2.max.x - box_2.min.x)/2
-    let half_height_2 = Double(box_2.max.y - box_2.min.y)/2
+    let half_width_2 = Double(box_2.width)/2
+    let half_height_2 = Double(box_2.height)/2
     
     //Log.d("2 half size [\(half_width_2), \(half_height_2)]")
 
@@ -940,7 +886,6 @@ func edge_distance(from box_1: BoundingBox, to box_2: BoundingBox) -> Double {
 
     //Log.d("slope \(slope) y_intercept \(y_intercept)")
     
-
     var theta: Double = 0
 
     // width between center points
