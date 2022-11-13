@@ -25,6 +25,7 @@ actor FrameAirplaneRemover: Equatable {
     let image: PixelatedImage
     let otherFrames: [PixelatedImage]
     let max_pixel_distance: UInt16
+    let min_group_size: Int
     let frame_index: Int
     
     // only 16 bit RGB images are supported
@@ -60,16 +61,18 @@ actor FrameAirplaneRemover: Equatable {
     init?(fromImage image: PixelatedImage,
           atIndex frame_index: Int,
           otherFrames: [PixelatedImage],
-          output_filename: String,
-          test_paint_filename tpfo: String?,
-          outlier_output_dirname: String?,
-          max_pixel_distance: UInt16
+          outputFilename output_filename: String,
+          testPaintFilename tpfo: String?,
+          outlierOutputDirname outlier_output_dirname: String?,
+          maxPixelDistance max_pixel_distance: UInt16,
+          minGroupSize min_group_size: Int
          )
     {
         self.frame_index = frame_index // frame index in the image sequence
         self.image = image
         self.otherFrames = otherFrames
         self.output_filename = output_filename
+        self.min_group_size = min_group_size
         if let tp_filename = tpfo {
             self.test_paint = true
             self.test_paint_filename = tp_filename
@@ -483,14 +486,14 @@ actor FrameAirplaneRemover: Equatable {
                 let group_size_score = paint_score_from(groupSize: size)
                 let group_fill_amount = Double(size)/(Double(group_width)*Double(group_height))
                 //Log.d("should_paint group_size \(size) group_fill_amount \(group_fill_amount) group_aspect_ratio \(group_aspect_ratio)")
-                let group_fill_amount_score = paint_score_from(fillAmount: group_fill_amount)
+                //let group_fill_amount_score = paint_score_from(fillAmount: group_fill_amount)
                 let group_aspect_ratio_score = paint_score_from(aspectRatio: group_aspect_ratio)
                 
                 var group_value_score: Double = 0 // score of how bright this group was overall
-                if group_value < max_pixel_brightness_distance {
+                if group_value < max_pixel_distance {
                     group_value_score = 0
                 } else {
-                    let max = UInt64(max_pixel_brightness_distance)
+                    let max = UInt64(max_pixel_distance)
                     group_value_score = Double(group_value - max)/Double(max)*20
                     if group_value_score > 100 {
                         group_value_score = 100

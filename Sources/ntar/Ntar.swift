@@ -99,14 +99,10 @@ todo:
 
 // XXX here are some random global constants that maybe should be exposed somehow
 
-// 34 concurrent frames maxes out around 60 gigs of ram usage for 24 mega pixel images
+var assume_airplane_size: Int = 5000 // don't bother spending the time to fully process
 
-let max_pixel_brightness_distance: UInt16 = 8500 // distance in brightness to be considered an outlier
-
-let min_group_size = 130        // groups smaller than this are ignored
 let group_min_line_count = 1    // used when hough transorming individual groups
 
-let assume_airplane_size = 5000 // don't bother spending the time to fully process
                                 // groups larger than this, assume we should paint over them
 
 // how far in each direction do we go when doing final processing?
@@ -150,6 +146,38 @@ let ntar_version = "0.0.6"
 @main
 struct Ntar: ParsableCommand {
 
+    @Option(name: [.customShort("c"), .customLong("console-log-level")], help:"""
+        The logging level that ntar will output directly to the terminal.
+        """)
+    var terminalLogLevel: Log.Level = .info
+
+    @Option(name: [.short, .customLong("file-log-level")], help:"""
+        If present, ntar will output a file log at the given level.
+        """)
+    var fileLogLevel: Log.Level?
+    
+    @Option(name: [.customShort("b"), .long], help: """
+        The percentage in brightness increase necessary for a pixel to be considered an outlier.
+        Higher values the number and size of found outlier groups.
+        Lower values increase the size and number of outlier groups,
+        which may find more airplanes, but also may yield more false positives,
+        usually making stars twinkle.
+        """)
+    var outlierBrightnessThreshold: Double = 12.9
+
+
+    @Option(name: .shortAndLong, help: """
+        The minimum outlier group size.  Outlier groups smaller than this will be ignored.
+        Smaller values produce more groups, which may get more small airplane streaks,
+        but also might end with more twinkling stars.
+        """)
+    var minGroupSize: Int = 130        // groups smaller than this are ignored
+
+    @Option(name: .shortAndLong, help: """
+        Outlier groups larger than this are assumed to be airplanes, and painted over.
+        """)
+    var assumeAirplaneSize: Int = assume_airplane_size
+    
     @Option(name: .shortAndLong, help: """
         Max Number of frames to process at once.
         The default of all cpus but one works good in most cases.
@@ -157,16 +185,6 @@ struct Ntar: ParsableCommand {
         """)
     var numConcurrentRenders: Int = ProcessInfo.processInfo.activeProcessorCount-1
 
-    @Option(name: [.short, .customLong("file-log-level")], help:"""
-        If present, ntar will output a file log at the given level.
-        """)
-    var fileLogLevel: Log.Level?
-    
-    @Option(name: [.customShort("c"), .customLong("console-log-level")], help:"""
-        The logging level that ntar will output directly to the terminal.
-        """)
-    var terminalLogLevel: Log.Level = .info
-    
     @Flag(name: [.short, .customLong("test-paint")], help:"""
         Write out a separate image sequence with colors indicating
         what was detected, and what was changed.
@@ -174,29 +192,31 @@ struct Ntar: ParsableCommand {
         """)
     var test_paint = false
 
-    @Flag(name: [.customLong("show-test-paint-colors")], help:"Print out what the test paint colors mean")
+    @Flag(name: [.short, .customLong("show-test-paint-colors")],
+          help:"Print out what the test paint colors mean")
     var show_test_paint_colors = false
-    
+
+    @Flag(name: [.customShort("w"), .customLong("write-outlier-group-files")],
+          help:"Write individual outlier group image files")
+    var should_write_outlier_group_files = false
+
+    @Flag(name: .shortAndLong, help:"Show version number")
+    var version = false
+
+    @Flag(name: .customShort("q"),
+          help:"process individual outlier group image files")
+    var process_outlier_group_images = false
+
     @Argument(help: """
         Image sequence dirname to process. 
         Should include a sequence of 16 bit tiff files, sortable by name.
         """)
     var image_sequence_dirname: String?
 
-    @Flag(name: .shortAndLong, help:"Show version number")
-    var version = false
-
-    @Flag(name: .customLong("write-outlier-group-files"),
-          help:"Write individual outlier group image files")
-    var should_write_outlier_group_files = false
-
-    @Flag(name: .customShort("q"),
-          help:"process individual outlier group image files")
-    var process_outlier_group_images = false
-
-    
     mutating func run() throws {
 
+        assume_airplane_size = assumeAirplaneSize
+        
         if version {
             print("""
                   Nighttime Timelapse Airplane Remover (ntar) version \(ntar_version)
@@ -209,7 +229,7 @@ struct Ntar: ParsableCommand {
                   When called with -t or --test-paint, ntar will output two sequences of images.
                   The first will be the normal output with airplanes removed.
                   The second will the the 'test paint' version,
-                  where each outlier group larger than \(min_group_size) pixels that will be painted over is painted:
+                  where each outlier group larger than \(self.minGroupSize) pixels that will be painted over is painted:
 
                   """)
             for willPaintReason in PaintReason.shouldPaintCases {
@@ -261,15 +281,17 @@ struct Ntar: ParsableCommand {
             // XXX maybe check to make sure this is a directory
             Log.d("will process \(input_image_sequence_dirname)")
             
-//            Log.d("running with min_group_size \(min_group_size) min_line_count \(min_line_count)")
+            //Log.d("running with min_group_size \(self.minGroupSize) min_line_count \(min_line_count)")
             Log.d("group_min_line_count \(group_min_line_count)")
             Log.d("assume_airplane_size \(assume_airplane_size)")
-            //Log.d("max_concurrent_frames \(max_concurrent_frames) max_pixel_brightness_distance \(max_pixel_brightness_distance)")
+            //Log.d("max_concurrent_frames \(max_concurrent_frames) outlier_brightness_gap \(outlier_brightness_gap)")
             
             if #available(macOS 10.15, *) {
                 let eraser = NighttimeAirplaneRemover(imageSequenceDirname: input_image_sequence_dirname,
                                                       maxConcurrent: UInt(numConcurrentRenders),
-                                                      maxPixelDistance: max_pixel_brightness_distance, 
+                                                      maxPixelDistance: outlierBrightnessThreshold,
+                                                      minGroupSize: minGroupSize,
+                                                      assumeAirplaneSize: assume_airplane_size,
                                                       testPaint: test_paint,
                                                       writeOutlierGroupFiles: should_write_outlier_group_files)
                 

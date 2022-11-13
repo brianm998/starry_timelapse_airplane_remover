@@ -21,7 +21,7 @@ You should have received a copy of the GNU General Public License along with nta
 
 @available(macOS 10.15, *) 
 class NighttimeAirplaneRemover : ImageSequenceProcessor {
-    
+        
     let test_paint_output_dirname: String
 
     let outlier_output_dirname: String
@@ -31,6 +31,12 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
     // difference between same pixels on different frames to consider an outlier
     let max_pixel_distance: UInt16
 
+    // groups smaller than this are ignored
+    let min_group_size: Int
+
+    // groups larger than this are assumed to be airplanes and painted over
+    let assume_airplane_size: Int
+    
     // write out test paint images
     let test_paint: Bool
 
@@ -41,22 +47,28 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
 
     init(imageSequenceDirname image_sequence_dirname: String,
          maxConcurrent max_concurrent: UInt = 5,
-         maxPixelDistance max_pixel_distance: UInt16 = 10000,
+         maxPixelDistance max_pixel_percent: Double,
+         minGroupSize: Int,
+         assumeAirplaneSize: Int,
          testPaint: Bool = false,
          writeOutlierGroupFiles: Bool = false,
          givenFilenames given_filenames: [String]? = nil)
     {
-        self.max_pixel_distance = max_pixel_distance
+        
+        self.max_pixel_distance = UInt16(max_pixel_percent/100*0xFFFF)
         self.test_paint = testPaint
         self.should_write_outlier_group_files = writeOutlierGroupFiles
-
+        self.min_group_size = minGroupSize
+        self.assume_airplane_size = assumeAirplaneSize
         //let formatted_theta_diff = String(format: "%0.1f", max_theta_diff)
         //let formatted_rho_diff = String(format: "%0.1f", max_rho_diff)
         
         //let formatted_final_theta_diff = String(format: "%0.1f", final_theta_diff)
         //let formatted_final_rho_diff = String(format: "%0.1f", final_rho_diff)
+
+        let formatted_pixel_distance = String(format: "%0.1f", max_pixel_percent)        
         
-        var basename = "\(image_sequence_dirname)-no-planes-ntar-v-\(ntar_version)"
+        var basename = "\(image_sequence_dirname)-ntar-v-\(ntar_version)-\(formatted_pixel_distance)-\(minGroupSize)-\(assumeAirplaneSize)"
         basename = basename.replacingOccurrences(of: ".", with: "_")
         test_paint_output_dirname = "\(basename)-test-paint"
         outlier_output_dirname = "\(basename)-outliers"
@@ -192,10 +204,11 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
         guard let frame_plane_remover = FrameAirplaneRemover(fromImage: image,
                                                              atIndex: frame_index,
                                                              otherFrames: otherFrames,
-                                                             output_filename: output_filename,
-                                                             test_paint_filename: tpfo,
-                                                             outlier_output_dirname: outlier_output_dirname,
-                                                             max_pixel_distance: max_pixel_distance)
+                                                             outputFilename: output_filename,
+                                                             testPaintFilename: tpfo,
+                                                             outlierOutputDirname: outlier_output_dirname,
+                                                             maxPixelDistance: max_pixel_distance,
+                                                             minGroupSize: min_group_size)
         else {
             Log.d("DOH")
             fatalError("FAILED")
