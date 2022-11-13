@@ -13,6 +13,11 @@ typealias Line = (
     count: Int                     // higher count is better fit for line
 )
 
+enum Edge {
+    case vertical
+    case horizontal
+}
+
 // a member in an airplane streak across frames
 typealias AirplaneStreakMember = (
   frame_index: Int,

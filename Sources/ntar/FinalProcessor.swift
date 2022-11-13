@@ -26,9 +26,8 @@ import Cocoa
 // which paints based upon the should_paint map, and then saves the output file(s).
 
 
-    // identified airplane trails XXX why is this a global?  put this in the class and make these funcs part of it
-var airplane_streaks: [String:[AirplaneStreakMember]] = [:] // XXX make this a map
-// XXX may need to prune this eventually, for memory concerns
+// identified airplane trails XXX why is this a global?  put this in the class and make these funcs part of it
+var airplane_streaks: [String:[AirplaneStreakMember]] = [:]
 
 @available(macOS 10.15, *)
 actor FinalProcessor {
@@ -154,8 +153,8 @@ actor FinalProcessor {
                 await run_final_pass(frames: images_to_process)
                 Log.d("FINAL THREAD frame \(index_to_process) done with inter-frame analysis")
                 await self.incrementCurrentFrameIndex()
-
-
+                
+                
                 if start_index > 0 && index_to_process < frame_count - number_final_processing_neighbors_needed - 1 {
                     // maybe finish a previous frame
                     // leave the ones at the end to finishAll()
@@ -163,15 +162,13 @@ actor FinalProcessor {
                     //Log.d("FINAL THREAD frame \(index_to_process) queueing into final queue")
                     if let frame_to_finish = await self.frame(at: immutable_start - 1),
                        let next_frame = await self.frame(at: immutable_start)
-                       {
-
+                    {
+                        // identify all existing streaks with length of only 2
+                        // try to find other nearby streaks, if not found,
+                        //then skip for new not paint reason
+                        
                         await really_final_streak_processing(onFrame: frame_to_finish,
                                                              nextFrame: next_frame)
-// add a outlier streak validation step right before a frame is handed to the final queue for finalizing.
-// identify all existing streaks with length of only 2
-// try to find other nearby streaks, if not found, then skip for new not paint reason
-                
-
                         
                         let final_frame_group_name = "final frame \(frame_to_finish.frame_index)"
                         await self.dispatch_group.enter(final_frame_group_name)
@@ -198,7 +195,6 @@ actor FinalProcessor {
                 //Log.d("FINAL THREAD waking up")
                 await self.setAsleep(to: false)
             }
-            //sleep(1)
         }
 
         Log.i("FINAL THREAD finishing all remaining frames")
@@ -444,7 +440,7 @@ fileprivate func run_final_overlap_pass(frames: [FrameAirplaneRemover]) async {
 }
 
 
-// 
+// looks for airplane streaks across frames
 @available(macOS 10.15, *)
 fileprivate func run_final_streak_pass(frames: [FrameAirplaneRemover]) async {
 
@@ -672,11 +668,6 @@ func streak_starting_from(groupName group_name: String,
 }
 
 
-enum Edge {
-    case vertical
-    case horizontal
-}
-
 // the distance between the center point of the box described and the exit of the line from it
 func distance_on(box bounding_box: BoundingBox,
                  slope: Double, y_intercept: Double, theta: Double) -> Double
@@ -841,7 +832,10 @@ func pixel_overlap(box_1: BoundingBox,
     return 0
 }
 
- // positive if they don't overlap, negative if they do
+
+// XXX rewrite this method to find the nearest distance between two pixels in each group
+
+// positive if they don't overlap, negative if they do
 func edge_distance(from box_1: BoundingBox, to box_2: BoundingBox) -> Double {
 
     let half_width_1 = Double(box_1.width)/2
