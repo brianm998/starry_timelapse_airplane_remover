@@ -239,13 +239,7 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
 
         Log.d("frame \(frame_index) outlier group painting analysis after \(interval4)s")
 
-        // do a lot of analysis to determine what outlier groups we should paint over
-        await frame_plane_remover.outlierGroupPaintingAnalysis()
-        
-        let time_5 = NSDate().timeIntervalSince1970
-        let interval5 = String(format: "%0.1f", time_5 - time_4)
-
-        Log.d("frame \(frame_index) timing for frame render - \(interval5)s - \(interval4)s - \(interval3)s - \(interval2)s - \(interval1)s")
+        Log.d("frame \(frame_index) timing for frame render - \(interval4)s - \(interval3)s - \(interval2)s - \(interval1)s")
 
         Log.i("frame \(frame_index) ready for analysis with groups in adjecent frames")
         

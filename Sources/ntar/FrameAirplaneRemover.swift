@@ -186,8 +186,9 @@ actor FrameAirplaneRemover: Equatable {
 
     // this method groups outliers into groups of direct neighbors,
     // treating smaller groups of outliers as noise and pruning them out
-    // after pruning, the outlier_groups has been populated
-    func prune() {
+    // after pruning, the outlier_groups has been populated, and each
+    // outlier group has had basic paintability analysis done upon init
+    func prune() async {
         Log.i("frame \(frame_index) pruning outliers")
         
         // go through the outliers and link together all the outliers that are adject to eachother,
@@ -306,7 +307,7 @@ actor FrameAirplaneRemover: Equatable {
         
         // calculate the outer bounds of each outlier group
         for x in 0 ..< width {
-            for y in 0 ..< height { // XXX heap corruption :(
+            for y in 0 ..< height {
                 let index = y*width+x
                 if let group = outlier_group_list[index]
                 {
@@ -316,8 +317,6 @@ actor FrameAirplaneRemover: Equatable {
                     } else {
                         group_amounts[group] = amount
                     }
-                    // first record amounts
-                    
                     if let min_x = group_min_x[group] {
                         if(x < min_x) {
                             group_min_x[group] = x
@@ -362,11 +361,11 @@ actor FrameAirplaneRemover: Equatable {
                 let group_brightness = group_amount / group_size
                 
                 outlier_groups[group_name] =
-                  OutlierGroup(name: group_name,
-                               size: group_size,
-                               brightness: group_brightness,
-                               bounds: bounding_box,
-                               frame: self)
+                  await OutlierGroup(name: group_name,
+                                     size: group_size,
+                                     brightness: group_brightness,
+                                     bounds: bounding_box,
+                                     frame: self)
             }
         }
         self.outlier_amount_list = [] // not used after here, try to save memory
@@ -400,77 +399,6 @@ actor FrameAirplaneRemover: Equatable {
                 }
             }
         }
-    }
-
-    // this method analyzises the outlier groups to determine paintability
-    func outlierGroupPaintingAnalysis() async {
-        
-        var processed_group_count = 0
-
-        Log.i("frame \(frame_index) deciding paintability of \(outlier_groups.count) outlier groups")
-
-        // look through all neighber groups greater than min_group_size
-        // this is a lot faster now
-        for (name, group) in outlier_groups {
-            // use assume_airplane_size to avoid doing extra processing on
-            // really big outlier groups
-            if group.size > assume_airplane_size {
-                Log.d("frame \(frame_index) assuming group \(name) of size \(group.size) (> \(assume_airplane_size)) is an airplane, will paint over it")
-                Log.d("frame \(frame_index) should_paint[\(name)] = (true, .assumed)")
-                await group.shouldPaint(.assumed)
-                continue
-            }
-            
-            // creating a smaller HoughTransform is a lot faster,
-            // but looses a small amount of precision
-            let groupHoughTransform = HoughTransform(data_width: group.bounds.width,
-                                                     data_height: group.bounds.height)
-            
-            processed_group_count += 1
-            
-            // first do a hough transform on just this outlier group
-            // set all pixels of this group to true in the hough data
-            for x in group.bounds.min.x ... group.bounds.max.x {
-                for y in group.bounds.min.y ... group.bounds.max.y {
-                    let index = y * width + x
-                    let group_index = (y-group.bounds.min.y) * group.bounds.width + (x-group.bounds.min.x)
-                    if let group_name = outlier_group_list[index],
-                       name == group_name
-                    {
-                        groupHoughTransform.input_data[group_index] = true
-                    }
-                }
-            }
-            
-            // get the theta and rho of just this outlier group
-            await group.setLines(groupHoughTransform.lines(min_count: 1))
-            if await group.lines.count == 0 {
-                Log.w("frame \(frame_index) got no group lines for group \(name) of size \(group.size)")
-                // this should only happen when there is no data in the input and therefore output 
-                //fatalError("bad input data")
-                continue
-            }
-            
-            if await group.paint_score_from_lines > 0.5 {
-                if group.size < 300 { // XXX constant XXX
-                    // don't assume small ones are lines
-                } else {
-                    Log.d("frame \(frame_index) will paint group \(name) because it looks like a line from the group hough transform")
-                    await group.shouldPaint(.looksLikeALine(group.paint_score_from_lines))
-                    continue
-                }
-            }
-            
-            //Log.d("should_paint group_size \(size) group_fill_amount \(group_fill_amount) group_aspect_ratio \(group_aspect_ratio)")
-            //let group_fill_amount_score = paint_score_from(fillAmount: group_fill_amount)
-            
-            
-            //Log.d("frame \(frame_index) should_paint group_size_score \(group_size_score) group_fill_amount_score \(group_fill_amount_score) group_aspect_ratio_score \(group_aspect_ratio_score) group.value_score \(group.value_score/100) + paint_score_from_lines \(paint_score_from_lines)")
-
-            await group.setShouldPaintFromScore()
-
-        }
-        Log.d("frame \(frame_index) processed \(processed_group_count) groups")
     }
 
     // actually paint over outlier groups that have been selected as airplane tracks
