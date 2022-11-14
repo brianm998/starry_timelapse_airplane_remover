@@ -19,6 +19,7 @@ enum Edge {
 }
 
 // a member in an airplane streak across frames
+@available(macOS 10.15, *) 
 typealias AirplaneStreakMember = (
   frame_index: Int,
   group: OutlierGroup

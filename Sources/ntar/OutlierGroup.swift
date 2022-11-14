@@ -14,7 +14,8 @@ import Foundation
 //import CoreGraphics
 //import Cocoa
 
-class OutlierGroup {
+@available(macOS 10.15, *) 
+actor OutlierGroup {
     let name: String
     let size: UInt
     let bounds: BoundingBox
@@ -52,5 +53,33 @@ class OutlierGroup {
         
         overall_score /= 4
         return overall_score
+    }
+
+    func shouldPaint(_ should_paint: PaintReason) {
+        self.shouldPaint = should_paint
+    }
+
+    func canPaint() -> PaintReason? {
+        return self.shouldPaint
+    }
+
+    func setLines(_ lines: [Line]) {
+        self.lines = lines
+    }
+
+    func setPaintScoreFromLines(_ paint_score_from_lines: Double) {
+        self.paint_score_from_lines = paint_score_from_lines
+    }
+
+    func setSizeScore(_ size_score: Double) {
+        self.size_score = size_score
+    }
+
+    func setAspectRatioScore(_ aspect_ratio_score: Double) {
+        self.aspect_ratio_score = aspect_ratio_score
+    }
+
+    func setValueScore(_ value_score: Double) {
+        self.value_score = value_score
     }
 }

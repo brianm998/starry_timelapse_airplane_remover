@@ -95,6 +95,9 @@ todo:
 
  - attempt to reduce false positives by applying .looksLikeALine values to streaks
    i.e. don't trush the theta from hough transform when looksLikeALine score is low
+
+ - find some way to ignore groups on the horizon, it's a problem for moving timelapses,
+   can cause the background to skip badly
  
  - figure out how distribution works
    - a .dmg file with a command line installer?  any swift command line installer examples?

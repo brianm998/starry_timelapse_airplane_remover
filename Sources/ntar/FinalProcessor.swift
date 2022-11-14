@@ -27,6 +27,7 @@ import Cocoa
 
 
 // identified airplane trails XXX why is this a global?  put this in the class and make these funcs part of it
+@available(macOS 10.15, *)
 var airplane_streaks: [String:[AirplaneStreakMember]] = [:]
 
 @available(macOS 10.15, *)
@@ -259,8 +260,8 @@ func really_final_streak_processing(onFrame frame: FrameAirplaneRemover,
                             let distance = edge_distance(from: last_other_airplane_streak.group.bounds,
                                                          to: first_member.group.bounds)
 
-                            let theta_diff = abs(last_other_airplane_streak.group.line.theta -
-                                                   first_member.group.line.theta)
+                            let theta_diff = await abs(last_other_airplane_streak.group.line.theta -
+                                                         first_member.group.line.theta)
                             
                             let hypo_avg = (first_member.group.bounds.hypotenuse +
                                               last_other_airplane_streak.group.bounds.hypotenuse)/2
@@ -277,8 +278,8 @@ func really_final_streak_processing(onFrame frame: FrameAirplaneRemover,
                             let distance = edge_distance(from: last_member.group.bounds,
                                                          to: first_other_airplane_streak.group.bounds)
 
-                            let theta_diff = abs(first_other_airplane_streak.group.line.theta -
-                                                   last_member.group.line.theta)
+                            let theta_diff = await abs(first_other_airplane_streak.group.line.theta -
+                                                         last_member.group.line.theta)
 
                             let hypo_avg = (last_member.group.bounds.hypotenuse +
                                               first_other_airplane_streak.group.bounds.hypotenuse)/2
@@ -301,7 +302,7 @@ func really_final_streak_processing(onFrame frame: FrameAirplaneRemover,
                             Log.e("frame \(member_to_remove.frame_index) is already finalized, modifying it now won't change anythig :(")
                             fatalError("FUCK")
                         }
-                        member_to_remove.group.shouldPaint = .isolatedTwoStreak
+                        await member_to_remove.group.shouldPaint(.isolatedTwoStreak)
                     }
                 }
             }
@@ -333,7 +334,7 @@ fileprivate func run_final_overlap_pass(frames: [FrameAirplaneRemover]) async {
         for (group_name, group) in await frame.outlier_groups {
             // look for more data to act upon
 
-            if let reason = group.shouldPaint,
+            if let reason = await group.shouldPaint,
                reason.willPaint
             {
                 switch reason {
@@ -351,16 +352,16 @@ fileprivate func run_final_overlap_pass(frames: [FrameAirplaneRemover]) async {
                 }
             }
             
-            let line_theta = group.line.theta
-            let line_rho = group.line.rho
+            let line_theta = await group.line.theta
+            let line_rho = await group.line.rho
 
             if let group = await frame.outlier_groups[group.name] {
                 for other_frame in frames {
                     if other_frame == frame { continue }
                     
                     for (og_name, og) in await other_frame.outlier_groups {
-                        let other_line_theta = og.line.theta
-                        let other_line_rho = og.line.rho
+                        let other_line_theta = await og.line.theta
+                        let other_line_rho = await og.line.rho
                         
                         let theta_diff = abs(line_theta-other_line_theta)
                         let rho_diff = abs(line_rho-other_line_rho)
@@ -382,14 +383,14 @@ fileprivate func run_final_overlap_pass(frames: [FrameAirplaneRemover]) async {
                                 var do_it = true
                                 
                                 // do paint over objects that look like lines
-                                if let frame_reason = group.shouldPaint
+                                if let frame_reason = await group.shouldPaint
                                 {
                                     if frame_reason.willPaint && frame_reason == .looksLikeALine(0) {
                                         do_it = false
                                     }
                                 }
                                 
-                                if let other_reason = og.shouldPaint
+                                if let other_reason = await og.shouldPaint
                                 {
                                     if other_reason.willPaint && other_reason == .looksLikeALine(0) {
                                         do_it = false
@@ -400,10 +401,10 @@ fileprivate func run_final_overlap_pass(frames: [FrameAirplaneRemover]) async {
                                     // two overlapping groups
                                     // shouldn't be painted over
                                 //    let _ = await (
-                                    group.shouldPaint = .adjecentOverlap(pixel_overlap_amount)
+                                    await group.shouldPaint(.adjecentOverlap(pixel_overlap_amount))
                                     //                                      frame.setShouldPaint(group: group_name,
                                     //                                                         why: ),
-                                    og.shouldPaint = .adjecentOverlap(pixel_overlap_amount)
+                                    await og.shouldPaint(.adjecentOverlap(pixel_overlap_amount))
                                     //                                      other_frame.setShouldPaint(group: og.name,
                                     //                                                                 why: .adjecentOverlap(pixel_overlap_amount)))
                                     
@@ -437,7 +438,7 @@ fileprivate func run_final_streak_pass(frames: [FrameAirplaneRemover]) async {
         for (group_name, group) in await frame.outlier_groups {
             // look for more data to act upon
             
-            if let reason = group.shouldPaint {
+            if let reason = await group.shouldPaint {
                 if reason == .adjecentOverlap(0) {
                     Log.d("frame \(frame.frame_index) skipping group \(group_name) because it has .adjecentOverlap")
                     continue
@@ -512,7 +513,7 @@ fileprivate func run_final_streak_pass(frames: [FrameAirplaneRemover]) async {
                 // being processed right now,
             } else {
                 //let frame = frames[streak_member.frame_index - initial_frame_index]
-                if let should_paint = streak_member.group.shouldPaint{
+                if let should_paint = await streak_member.group.shouldPaint{
                     if should_paint == .adjecentOverlap(0) { verbotten = true }
                     //                if should_paint.willPaint { was_already_paintable = true }
                 }
@@ -530,7 +531,7 @@ fileprivate func run_final_streak_pass(frames: [FrameAirplaneRemover]) async {
                 Log.d("frame \(streak_member.frame_index) will paint group \(streak_member.group.name) is .inStreak")
 
                 // XXX check to see if this is already .inStreak with higher count
-                streak_member.group.shouldPaint = .inStreak(airplane_streak.count)
+                await streak_member.group.shouldPaint(.inStreak(airplane_streak.count))
                 //await frame.setShouldPaint(group: streak_member.group_name, why: )
             }
         }
@@ -588,11 +589,11 @@ func streak_starting_from(group: OutlierGroup,
 
             let center_line_theta = center_theta(from: last_group.bounds, to: group.bounds)
 
-            let theta_diff = abs(last_group.line.theta-other_group.line.theta)
-            let rho_diff = abs(last_group.line.rho-other_group.line.rho)
+            let theta_diff = await abs(last_group.line.theta-other_group.line.theta)
+            let rho_diff = await abs(last_group.line.rho-other_group.line.rho)
             
-            let center_line_theta_diff_1 = abs(center_line_theta-other_group.line.theta)
-            let center_line_theta_diff_2 = abs(center_line_theta-last_group.line.theta)
+            let center_line_theta_diff_1 = await abs(center_line_theta-other_group.line.theta)
+            let center_line_theta_diff_2 = await abs(center_line_theta-last_group.line.theta)
 
             if distance < best_distance &&
                  (theta_diff < final_theta_diff || abs(theta_diff - 180) < final_theta_diff) &&
