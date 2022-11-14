@@ -11,8 +11,6 @@ You should have received a copy of the GNU General Public License along with nta
 */
 
 import Foundation
-//import CoreGraphics
-//import Cocoa
 
 @available(macOS 10.15, *) 
 actor OutlierGroup {
@@ -20,6 +18,7 @@ actor OutlierGroup {
     let size: UInt
     let bounds: BoundingBox
     let brightness: UInt
+    let frame: FrameAirplaneRemover
 
     var shouldPaint: PaintReason?
 
@@ -30,20 +29,35 @@ actor OutlierGroup {
     var paint_score_from_lines: Double = 0
     var size_score: Double = 0
     var aspect_ratio_score: Double = 0
-    var value_score: Double = 0
 
     init(name: String,
          size: UInt,
          brightness: UInt,
-         bounds: BoundingBox)
-
+         bounds: BoundingBox,
+         frame: FrameAirplaneRemover)
     {
         self.name = name
         self.size = size
         self.brightness = brightness
         self.bounds = bounds
+        self.frame = frame
     }
     
+    var value_score: Double {
+        let mpd = frame.max_pixel_distance
+        if self.brightness < mpd {
+            return 0
+        } else {
+            let max = UInt(mpd)
+            let score = Double(self.brightness - max)/Double(max)*20
+            if score > 100 {
+                return 100
+            } else {
+                return score
+            }
+        }
+    }
+
     var score: Double {
         var overall_score =
           size_score +
@@ -59,6 +73,16 @@ actor OutlierGroup {
         self.shouldPaint = should_paint
     }
 
+    func setShouldPaintFromScore() async {
+        if score > 0.5 {
+            //Log.d("frame \(frame_index) should_paint[\(name)] = (true, .goodScore(\(overall_score))")
+            self.shouldPaint = .goodScore(score)
+        } else {
+            //Log.d("frame \(frame_index) should_paint[\(name)] = (false, .badScore(\(overall_score))")
+            self.shouldPaint = .badScore(score)
+        }
+    }
+    
     func canPaint() -> PaintReason? {
         return self.shouldPaint
     }
@@ -77,9 +101,5 @@ actor OutlierGroup {
 
     func setAspectRatioScore(_ aspect_ratio_score: Double) {
         self.aspect_ratio_score = aspect_ratio_score
-    }
-
-    func setValueScore(_ value_score: Double) {
-        self.value_score = value_score
     }
 }

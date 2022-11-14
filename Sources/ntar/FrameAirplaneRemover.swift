@@ -365,7 +365,8 @@ actor FrameAirplaneRemover: Equatable {
                   OutlierGroup(name: group_name,
                                size: group_size,
                                brightness: group_brightness,
-                               bounds: bounding_box)
+                               bounds: bounding_box,
+                               frame: self)
             }
         }
         self.outlier_amount_list = [] // not used after here, try to save memory
@@ -469,26 +470,11 @@ actor FrameAirplaneRemover: Equatable {
             //let group_fill_amount_score = paint_score_from(fillAmount: group_fill_amount)
             await group.setAspectRatioScore(paint_score_from(aspectRatio: group_aspect_ratio))
             
-            if group.brightness < max_pixel_distance {
-                await group.setValueScore(0)
-            } else {
-                let max = UInt(max_pixel_distance)
-                await group.setValueScore(Double(group.brightness - max)/Double(max)*20)
-                if await group.value_score > 100 {
-                    await group.setValueScore(100)
-                }
-            }
             
             //Log.d("frame \(frame_index) should_paint group_size_score \(group_size_score) group_fill_amount_score \(group_fill_amount_score) group_aspect_ratio_score \(group_aspect_ratio_score) group.value_score \(group.value_score/100) + paint_score_from_lines \(paint_score_from_lines)")
 
-            let score = await group.score
-            if score > 0.5 {
-                //Log.d("frame \(frame_index) should_paint[\(name)] = (true, .goodScore(\(overall_score))")
-                await group.shouldPaint(.goodScore(score))
-            } else {
-                //Log.d("frame \(frame_index) should_paint[\(name)] = (false, .badScore(\(overall_score))")
-                await group.shouldPaint(.badScore(score))
-            }
+            await group.setShouldPaintFromScore()
+
         }
         Log.d("frame \(frame_index) processed \(processed_group_count) groups")
     }
@@ -603,7 +589,7 @@ actor FrameAirplaneRemover: Equatable {
         
         Log.i("frame \(self.frame_index) complete")
     }
-
+    
     public static func == (lhs: FrameAirplaneRemover, rhs: FrameAirplaneRemover) -> Bool {
         return lhs.frame_index == rhs.frame_index
     }    
