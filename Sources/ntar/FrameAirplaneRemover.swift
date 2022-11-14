@@ -35,13 +35,13 @@ actor FrameAirplaneRemover: Equatable {
     var test_paint = false               // should we test paint?  helpful for debugging
 
     let outlier_output_dirname: String?
-    
+
     // one dimentional arrays mirroring pixels indexed by y*width + x
-    var outlier_amount_list: [UInt]  // amount difference of each outlier
+    private var outlier_amount_list: [UInt]  // amount difference of each outlier
     var outlier_group_list: [String?]  // named outlier group for each outlier
 
     // populated by pruning
-    var outlier_groups: [String: OutlierGroup] = [:] // keyed by group name
+    private var outlier_groups: [String: OutlierGroup] = [:] // keyed by group name
     
     let output_filename: String
     
@@ -77,6 +77,17 @@ actor FrameAirplaneRemover: Equatable {
         Log.i("frame \(frame_index) starting processing")
     }
 
+    func outlierGroup(named outlier_name: String) -> OutlierGroup? {
+        return outlier_groups[outlier_name]
+    }
+    
+    func foreachOutlierGroup(_ closure: (OutlierGroup)async->Bool) async {
+        for (_, group) in self.outlier_groups {
+            let result = await closure(group)
+            if !result { break }
+        }
+    }
+    
     // this is still a slow part of the process, but is now about 10x faster than before
     func populateOutlierMap() {
         // compare pixels at the same image location in adjecent frames
@@ -174,7 +185,8 @@ actor FrameAirplaneRemover: Equatable {
     }
 
     // this method groups outliers into groups of direct neighbors,
-    // treating smaller groups of outliers as noise and pruning them
+    // treating smaller groups of outliers as noise and pruning them out
+    // after pruning, the outlier_groups has been populated
     func prune() {
         Log.i("frame \(frame_index) pruning outliers")
         

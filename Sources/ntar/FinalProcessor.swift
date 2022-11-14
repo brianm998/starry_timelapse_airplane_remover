@@ -331,7 +331,7 @@ fileprivate func run_final_pass(frames: [FrameAirplaneRemover]) async {
 @available(macOS 10.15, *)
 fileprivate func run_final_overlap_pass(frames: [FrameAirplaneRemover]) async {
     for frame in frames {
-        for (group_name, group) in await frame.outlier_groups {
+        await frame.foreachOutlierGroup { group in
             // look for more data to act upon
 
             if let reason = await group.shouldPaint,
@@ -339,8 +339,8 @@ fileprivate func run_final_overlap_pass(frames: [FrameAirplaneRemover]) async {
             {
                 switch reason {
                 case .looksLikeALine(let amount):
-                    Log.i("frame \(frame.frame_index) skipping group \(group_name) because of \(reason)") 
-                    continue
+                    Log.i("frame \(frame.frame_index) skipping group \(group.name) because of \(reason)") 
+                    return true
                 case .inStreak(let size):
                     if size > 2 {
                         //Log.i("frame \(frame.frame_index) skipping group \(group_name) because of \(reason)") 
@@ -348,18 +348,18 @@ fileprivate func run_final_overlap_pass(frames: [FrameAirplaneRemover]) async {
                     }
                     //continue
                 default:
-                    break
+                    return false
                 }
             }
             
             let line_theta = await group.line.theta
             let line_rho = await group.line.rho
 
-            if let group = await frame.outlier_groups[group.name] {
+            if let group = await frame.outlierGroup(named: group.name) {
                 for other_frame in frames {
                     if other_frame == frame { continue }
-                    
-                    for (og_name, og) in await other_frame.outlier_groups {
+
+                    await other_frame.foreachOutlierGroup() { og in
                         let other_line_theta = await og.line.theta
                         let other_line_rho = await og.line.rho
                         
@@ -376,7 +376,7 @@ fileprivate func run_final_overlap_pass(frames: [FrameAirplaneRemover]) async {
                                                   group_2_frame: other_frame)
                             
                             
-                            //Log.d("frame \(frame.frame_index) \(group_name) \(og_name) pixel_overlap_amount \(pixel_overlap_amount)")
+                            //Log.d("frame \(frame.frame_index) \(group_name) \(og.name) pixel_overlap_amount \(pixel_overlap_amount)")
                             
                             if pixel_overlap_amount > 0.05 { // XXX hardcoded constant
                                 
@@ -409,16 +409,18 @@ fileprivate func run_final_overlap_pass(frames: [FrameAirplaneRemover]) async {
                                     //                                                                 why: .adjecentOverlap(pixel_overlap_amount)))
                                     
                                     //Log.d("frame \(frame.frame_index) should_paint[\(group_name)] = (false, .adjecentOverlap(\(pixel_overlap_amount))")
-                                    //Log.d("frame \(other_frame.frame_index) should_paint[\(og_name)] = (false, .adjecentOverlap(\(pixel_overlap_amount))")
+                                    //Log.d("frame \(other_frame.frame_index) should_paint[\(og.name)] = (false, .adjecentOverlap(\(pixel_overlap_amount))")
                                 } else {
                                     //Log.d("frame \(frame.frame_index) \(group_name) left untouched because of pixel overlap amount \(pixel_overlap_amount)")
-                                    //Log.d("frame \(other_frame.frame_index) \(og_name) left untouched because of pixel overlap amount \(pixel_overlap_amount)")
+                                    //Log.d("frame \(other_frame.frame_index) \(og.name) left untouched because of pixel overlap amount \(pixel_overlap_amount)")
                                 }
                             }
                         }
+                        return true
                     }
                 }
             }
+            return true
         }
     }
 }
@@ -434,14 +436,14 @@ fileprivate func run_final_streak_pass(frames: [FrameAirplaneRemover]) async {
         let frame_index = frame.frame_index
         Log.w("frame_index \(frame_index)")
         if batch_index + 1 == frames.count { continue } // the last frame can be ignored here
-        
-        for (group_name, group) in await frame.outlier_groups {
+
+        await frame.foreachOutlierGroup() { group in
             // look for more data to act upon
             
             if let reason = await group.shouldPaint {
                 if reason == .adjecentOverlap(0) {
-                    Log.d("frame \(frame.frame_index) skipping group \(group_name) because it has .adjecentOverlap")
-                    continue
+                    Log.d("frame \(frame.frame_index) skipping group \(group.name) because it has .adjecentOverlap")
+                    return true // continue
                 }
                 
                 // grab a streak that we might already be in
@@ -457,14 +459,14 @@ fileprivate func run_final_streak_pass(frames: [FrameAirplaneRemover]) async {
                         {
                             existing_streak = airplane_streak
                             existing_streak_name = streak_name
-                            Log.i("frame \(frame.frame_index) using existing streak for \(group_name)")
+                            Log.i("frame \(frame.frame_index) using existing streak for \(group.name)")
                             continue
                         }
                     }
                 }
                 
                 
-                Log.d("frame \(frame_index) looking for streak for group \(group_name)")
+                Log.d("frame \(frame_index) looking for streak for group \(group.name)")
                 // search neighboring frames looking for potential tracks
                 
                 // see if this group is already part of a streak, and pass that in
@@ -472,7 +474,7 @@ fileprivate func run_final_streak_pass(frames: [FrameAirplaneRemover]) async {
                 // if not, pass in the starting potential one frame streak
                 
                 var potential_streak: [AirplaneStreakMember] = [(frame_index, group)]
-                var potential_streak_name = "\(frame_index).\(group_name)"
+                var potential_streak_name = "\(frame_index).\(group.name)"
                 
                 if let existing_streak = existing_streak,
                    let existing_streak_name = existing_streak_name
@@ -487,12 +489,13 @@ fileprivate func run_final_streak_pass(frames: [FrameAirplaneRemover]) async {
                                                 startingIndex: batch_index+1,
                                                 potentialStreak: &potential_streak)
                 {
-                    Log.i("frame \(frame_index) found streak \(potential_streak_name) of size \(streak.count) for group \(group_name)")
+                    Log.i("frame \(frame_index) found streak \(potential_streak_name) of size \(streak.count) for group \(group.name)")
                     airplane_streaks[potential_streak_name] = streak
                 } else {
-                    Log.d("frame \(frame_index) DID NOT find streak for group \(group_name)")
+                    Log.d("frame \(frame_index) DID NOT find streak for group \(group.name)")
                 }
             }
+            return true
         }
     }
 
@@ -532,7 +535,7 @@ fileprivate func run_final_streak_pass(frames: [FrameAirplaneRemover]) async {
 
                 // XXX check to see if this is already .inStreak with higher count
                 await streak_member.group.shouldPaint(.inStreak(airplane_streak.count))
-                //await frame.setShouldPaint(group: streak_member.group_name, why: )
+                //await frame.setShouldPaint(group: streak_member.group.name, why: )
             }
         }
     }
@@ -552,7 +555,7 @@ func streak_starting_from(group: OutlierGroup,
   async -> [AirplaneStreakMember]?
 {
 
-    //Log.d("trying to find streak starting at \(group_name)")
+    //Log.d("trying to find streak starting at \(group.name)")
     
     // the bounding box of the last element of the streak
     var last_group = group
@@ -581,7 +584,8 @@ func streak_starting_from(group: OutlierGroup,
         
         var best_distance = min_distance
         //Log.d("looking at frame \(frame.frame_index)")
-        for (other_group_name, other_group) in await frame.outlier_groups {
+
+        await frame.foreachOutlierGroup() { other_group in
             // XXX not sure this value is right
             // really we want the distance between the nearest pixels of each group
             // this isn't close enough for real
@@ -607,8 +611,9 @@ func streak_starting_from(group: OutlierGroup,
                 best_distance = distance
                 best_frame_index = frame_index // XXX this WAS wrong
             } else {
-                //Log.d("frame \(frame.frame_index) group \(other_group_name) doesn't match group \(group_name) theta_diff \(theta_diff) rho_diff \(rho_diff) center_line_theta_diff_1 \(center_line_theta_diff_1) center_line_theta_diff_2 \(center_line_theta_diff_2) center_line_theta \(center_line_theta) last \(last_group_line.theta) other \(other_group_line.theta)")
+                //Log.d("frame \(frame.frame_index) group \(other_group.name) doesn't match group \(group_name) theta_diff \(theta_diff) rho_diff \(rho_diff) center_line_theta_diff_1 \(center_line_theta_diff_1) center_line_theta_diff_2 \(center_line_theta_diff_2) center_line_theta \(center_line_theta) last \(last_group_line.theta) other \(other_group_line.theta)")
             }
+            return true
         }
         if best_distance == min_distance {
             break               // no more streak
