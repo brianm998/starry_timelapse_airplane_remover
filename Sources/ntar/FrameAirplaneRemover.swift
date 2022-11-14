@@ -421,8 +421,6 @@ actor FrameAirplaneRemover: Equatable {
                 continue
             }
             
-            let group_aspect_ratio = Double(group.bounds.width) /
-              Double(group.bounds.height)
             // creating a smaller HoughTransform is a lot faster,
             // but looses a small amount of precision
             let groupHoughTransform = HoughTransform(data_width: group.bounds.width,
@@ -453,7 +451,6 @@ actor FrameAirplaneRemover: Equatable {
                 continue
             }
             
-            await group.setPaintScoreFromLines(paint_score_from(lines: group.lines))
             if await group.paint_score_from_lines > 0.5 {
                 if group.size < 300 { // XXX constant XXX
                     // don't assume small ones are lines
@@ -464,11 +461,8 @@ actor FrameAirplaneRemover: Equatable {
                 }
             }
             
-            await group.setSizeScore(paint_score_from(groupSize: group.size))
-            //let group_fill_amount = Double(size)/(Double(group_width)*Double(group_height))
             //Log.d("should_paint group_size \(size) group_fill_amount \(group_fill_amount) group_aspect_ratio \(group_aspect_ratio)")
             //let group_fill_amount_score = paint_score_from(fillAmount: group_fill_amount)
-            await group.setAspectRatioScore(paint_score_from(aspectRatio: group_aspect_ratio))
             
             
             //Log.d("frame \(frame_index) should_paint group_size_score \(group_size_score) group_fill_amount_score \(group_fill_amount_score) group_aspect_ratio_score \(group_aspect_ratio_score) group.value_score \(group.value_score/100) + paint_score_from_lines \(paint_score_from_lines)")
