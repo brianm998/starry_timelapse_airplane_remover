@@ -116,12 +116,11 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
         
         // the other frames that we use to detect outliers and repaint from
         let frame_plane_remover =
-            await self.prepareForAdjecentFrameAnalysis(fromImage: image,
-                                                       atIndex: index,
-                                                       otherFrames: otherFrames,
-                                                       output_filename: "\(self.output_dirname)/\(base_name)",
-                                                       test_paint_filename: test_paint_filename)
-
+            await self.createFrame(fromImage: image,
+                                   atIndex: index,
+                                   otherFrames: otherFrames,
+                                   output_filename: "\(self.output_dirname)/\(base_name)",
+                                   test_paint_filename: test_paint_filename)
         
         // next step is to add this frame_plane_remover to an array of optionals
         // indexed by frame number
@@ -192,58 +191,26 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
     // outlier pixel detection, outlier group detection and analysis
     // after running this method, each frame will have a good idea
     // of what outliers is has, and whether or not should paint over them.
-    func prepareForAdjecentFrameAnalysis(fromImage image: PixelatedImage,
-                                         atIndex frame_index: Int,
-                                         otherFrames: [PixelatedImage],
-                                         output_filename: String,
-                                         test_paint_filename tpfo: String?) async -> FrameAirplaneRemover
+    func createFrame(fromImage image: PixelatedImage,
+                     atIndex frame_index: Int,
+                     otherFrames: [PixelatedImage],
+                     output_filename: String,
+                     test_paint_filename tpfo: String?) async -> FrameAirplaneRemover
     {
-        let start_time = NSDate().timeIntervalSince1970
-        
-        let frame_plane_remover = FrameAirplaneRemover(fromImage: image,
-                                                       atIndex: frame_index,
-                                                       otherFrames: otherFrames,
-                                                       outputFilename: output_filename,
-                                                       testPaintFilename: tpfo,
-                                                       outlierOutputDirname: outlier_output_dirname,
-                                                       maxPixelDistance: max_pixel_distance,
-                                                       minGroupSize: min_group_size)
-
-        let time_1 = NSDate().timeIntervalSince1970
-        let interval1 = String(format: "%0.1f", time_1 - start_time)
-        
-        Log.i("frame \(frame_index) populating the outlier map")
-
-        // find outlying bright pixels between frames
-        await frame_plane_remover.populateOutlierMap() 
-
-        let time_2 = NSDate().timeIntervalSince1970
-        let interval2 = String(format: "%0.1f", time_2 - time_1)
-
-        Log.d("frame \(frame_index) pruning after \(interval2)s")
-
-        // group neighboring outlying pixels into groups
-        await frame_plane_remover.prune()
-
-        let time_3 = NSDate().timeIntervalSince1970
-        let interval3 = String(format: "%0.1f", time_3 - time_2)
-        
-        Log.d("frame \(frame_index) done processing the outlier map after \(interval3)s")
+        let frame = await FrameAirplaneRemover(fromImage: image,
+                                               atIndex: frame_index,
+                                               otherFrames: otherFrames,
+                                               outputFilename: output_filename,
+                                               testPaintFilename: tpfo,
+                                               outlierOutputDirname: outlier_output_dirname,
+                                               maxPixelDistance: max_pixel_distance,
+                                               minGroupSize: min_group_size)
         
         if should_write_outlier_group_files {
-            await frame_plane_remover.writeOutlierGroupFiles()
+            await frame.writeOutlierGroupFiles()
         }
         
-        let time_4 = NSDate().timeIntervalSince1970
-        let interval4 = String(format: "%0.1f", time_4 - time_3)
-
-        Log.d("frame \(frame_index) outlier group painting analysis after \(interval4)s")
-
-        Log.d("frame \(frame_index) timing for frame render - \(interval4)s - \(interval3)s - \(interval2)s - \(interval1)s")
-
-        Log.i("frame \(frame_index) ready for analysis with groups in adjecent frames")
-        
-        return frame_plane_remover
+        return frame
    }        
 
 }

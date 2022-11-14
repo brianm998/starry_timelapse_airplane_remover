@@ -52,7 +52,7 @@ actor FrameAirplaneRemover: Equatable {
          testPaintFilename tpfo: String?,
          outlierOutputDirname outlier_output_dirname: String?,
          maxPixelDistance max_pixel_distance: UInt16,
-         minGroupSize min_group_size: Int)
+         minGroupSize min_group_size: Int) async
     {
         self.frame_index = frame_index // frame index in the image sequence
         self.image = image
@@ -74,6 +74,11 @@ actor FrameAirplaneRemover: Equatable {
         self.outlier_amount_list = [UInt](repeating: 0, count: width*height)
         self.outlier_group_list = [String?](repeating: nil, count: width*height)
 
+        // find outlying bright pixels between frames
+        self.findOutliers()
+        // group neighboring outlying pixels into groups
+        await self.pruneOutliers()
+        
         Log.i("frame \(frame_index) starting processing")
     }
 
@@ -89,7 +94,7 @@ actor FrameAirplaneRemover: Equatable {
     }
     
     // this is still a slow part of the process, but is now about 10x faster than before
-    func populateOutlierMap() {
+    func findOutliers() {
         // compare pixels at the same image location in adjecent frames
         // detect Outliers which are much more brighter than the adject frames
         let orig_data = image.raw_image_data
@@ -188,7 +193,7 @@ actor FrameAirplaneRemover: Equatable {
     // treating smaller groups of outliers as noise and pruning them out
     // after pruning, the outlier_groups has been populated, and each
     // outlier group has had basic paintability analysis done upon init
-    func prune() async {
+    func pruneOutliers() async {
         Log.i("frame \(frame_index) pruning outliers")
         
         // go through the outliers and link together all the outliers that are adject to eachother,

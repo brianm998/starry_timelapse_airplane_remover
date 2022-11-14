@@ -59,7 +59,6 @@ actor OutlierGroup {
         
         self.lines = groupHoughTransform.lines(min_count: 1)
 
-
         // use assume_airplane_size to avoid doing extra processing on
         // really big outlier groups
         if size > assume_airplane_size {
@@ -117,9 +116,6 @@ actor OutlierGroup {
         self.shouldPaint = should_paint
     }
 
-    func setShouldPaintFromScore() {
-    }
-    
     func canPaint() -> PaintReason? {
         return self.shouldPaint
     }
