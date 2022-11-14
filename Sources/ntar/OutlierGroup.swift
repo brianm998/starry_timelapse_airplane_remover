@@ -12,12 +12,13 @@ You should have received a copy of the GNU General Public License along with nta
 
 import Foundation
 
+// represents a single outler group in a frame
 @available(macOS 10.15, *) 
 actor OutlierGroup {
     let name: String
     let size: UInt              // number of pixels in this outlier group
     let bounds: BoundingBox     // a bounding box on the image that contains this group
-    let brightness: UInt        // the average amount of brightness over the limit
+    let brightness: UInt        // the average amount per pixel of brightness over the limit 
     let lines: [Line] // sorted lines from the hough transform of this outlier group
     let frame: FrameAirplaneRemover
 
@@ -25,6 +26,10 @@ actor OutlierGroup {
     var shouldPaint: PaintReason? // should we paint this group, and why?
     
     var line: Line { return lines[0] } // returns the first, most likely line 
+    
+    func shouldPaint(_ should_paint: PaintReason) {
+        self.shouldPaint = should_paint
+    }
 
     init(name: String,
          size: UInt,
@@ -38,8 +43,7 @@ actor OutlierGroup {
         self.bounds = bounds
         self.frame = frame
 
-        let groupHoughTransform = HoughTransform(data_width: bounds.width,
-                                                 data_height: bounds.height)
+        let transform = HoughTransform(data_width: bounds.width, data_height: bounds.height)
         
         // do a hough transform on just this outlier group
         // set all pixels of this group to true in the hough data
@@ -52,12 +56,12 @@ actor OutlierGroup {
                 if let group_name = outlier_group_list[index],
                    name == group_name
                 {
-                    groupHoughTransform.input_data[group_index] = true
+                    transform.input_data[group_index] = true
                 }
             }
         }
         
-        self.lines = groupHoughTransform.lines(min_count: 1)
+        self.lines = transform.lines(min_count: 1)
 
         // use assume_airplane_size to avoid doing extra processing on
         // really big outlier groups
@@ -68,7 +72,6 @@ actor OutlierGroup {
             return
         }
             
-            
         if self.lines.count == 0 {
             Log.w("frame \(frame.frame_index) got no group lines for group \(name) of size \(size)")
             // this should only happen when there is no data in the input and therefore output 
@@ -76,12 +79,12 @@ actor OutlierGroup {
             return
         }
             
-        if self.paint_score_from_lines > 0.5 {
+        if self.paintScoreFromLines > 0.5 {
             if size < 300 { // XXX constant XXX
                 // don't assume small ones are lines
             } else {
                 Log.d("frame \(frame.frame_index) will paint group \(name) because it looks like a line from the group hough transform")
-                self.shouldPaint = .looksLikeALine(self.paint_score_from_lines)
+                self.shouldPaint = .looksLikeALine(self.paintScoreFromLines)
                 return
             }
         }
@@ -90,7 +93,9 @@ actor OutlierGroup {
             //let group_fill_amount_score = paint_score_from(fillAmount: group_fill_amount)
             
             
-            //Log.d("frame \(frame.frame_index) should_paint group_size_score \(group_size_score) group_fill_amount_score \(group_fill_amount_score) group_aspect_ratio_score \(group_aspect_ratio_score) group.value_score \(group.value_score/100) + paint_score_from_lines \(paint_score_from_lines)")
+            //Log.d("frame \(frame.frame_index) should_paint group_size_score \(group_size_score) group_fill_amount_score \(group_fill_amount_score) group_aspect_ratio_score \(group_aspect_ratio_score) group.value_score \(group.value_score/100) + paint_score_from_lines \(paintScoreFromLines)")
+
+        let score = (sizeScore + aspectRatioScore + (valueScore/100) + paintScoreFromLines)/4
 
         if score > 0.5 {
             //Log.d("frame \(frame.frame_index) should_paint[\(name)] = (true, .goodScore(\(overall_score))")
@@ -100,30 +105,11 @@ actor OutlierGroup {
             self.shouldPaint = .badScore(score)
         }
     }
-    
-    var score: Double {         // overall single frame score for this group 0...1
-        var overall_score =
-          size_score +
-          aspect_ratio_score + 
-          (value_score/100) + 
-          paint_score_from_lines
-        
-        overall_score /= 4
-        return overall_score
-    }
-
-    func shouldPaint(_ should_paint: PaintReason) {
-        self.shouldPaint = should_paint
-    }
-
-    func canPaint() -> PaintReason? {
-        return self.shouldPaint
-    }
 
     // used so we don't recompute on every access
     private var _paint_score_from_lines: Double?
     
-    var paint_score_from_lines: Double {
+    var paintScoreFromLines: Double {
         if let _paint_score_from_lines = _paint_score_from_lines {
             return _paint_score_from_lines
         }
@@ -197,7 +183,7 @@ actor OutlierGroup {
     }
 
     // groups with larger fill amounts are less likely to be airplanes
-    var fill_amount_score: Double {
+    var fillAmountScore: Double {
         let fill_amount = Double(size)/(Double(self.bounds.width)*Double(self.bounds.height))
         if fill_amount < OAS_AIRPLANES_MIN_FILL_AMOUNT     { return 1 }
         if fill_amount > OAS_NON_AIRPLANES_MAX_FILL_AMOUNT { return 0 }
@@ -219,7 +205,7 @@ actor OutlierGroup {
         return airplane_score / (non_airplane_score+airplane_score)
     }
     
-    var size_score: Double {
+    var sizeScore: Double {
         if self.size < UInt(OAS_NON_AIRPLANES_MIN_GROUP_SIZE) { return 0 }
         if self.size > UInt(OAS_AIRPLANES_MAX_GROUP_SIZE)     { return 1 }
 
@@ -241,7 +227,7 @@ actor OutlierGroup {
     }
 
     // smaller aspect ratios are more likely to be airplanes
-    var aspect_ratio_score: Double {
+    var aspectRatioScore: Double {
         let aspect_ratio = Double(self.bounds.width) / Double(self.bounds.height)
         if aspect_ratio < OAS_AIRPLANES_MIN_ASPECT_RATIO     { return 1 }
         if aspect_ratio > OAS_NON_AIRPLANES_MAX_ASPECT_RATIO { return 0 }
@@ -263,7 +249,7 @@ actor OutlierGroup {
         return airplane_score / (non_airplane_score+airplane_score)
     }
 
-    var value_score: Double {
+    var valueScore: Double {
         let mpd = frame.max_pixel_distance
         if self.brightness < mpd {
             return 0

@@ -16,6 +16,8 @@ You should have received a copy of the GNU General Public License along with nta
 
 // this class holds the logic for removing airplanes from a single frame
 
+// the first pass is done upon init, finding and pruning outlier groups
+
 @available(macOS 10.15, *)
 actor FrameAirplaneRemover: Equatable { 
     let width: Int
@@ -36,8 +38,7 @@ actor FrameAirplaneRemover: Equatable {
 
     let outlier_output_dirname: String?
 
-    // one dimentional arrays mirroring pixels indexed by y*width + x
-    private var outlier_amount_list: [UInt]  // amount difference of each outlier
+    // one dimentional array mirroring pixels indexed by y*width + x
     var outlier_group_list: [String?]  // named outlier group for each outlier
 
     // populated by pruning
@@ -71,13 +72,11 @@ actor FrameAirplaneRemover: Equatable {
         self.bytesPerPixel = image.bytesPerPixel
         self.bytesPerRow = width*bytesPerPixel
         self.max_pixel_distance = max_pixel_distance
-        self.outlier_amount_list = [UInt](repeating: 0, count: width*height)
         self.outlier_group_list = [String?](repeating: nil, count: width*height)
 
-        // find outlying bright pixels between frames
-        self.findOutliers()
+        // find outlying bright pixels between frames,
         // group neighboring outlying pixels into groups
-        await self.pruneOutliers()
+        await self.pruneOutliers(outlier_amount_list: self.findOutliers())
         
         Log.i("frame \(frame_index) starting processing")
     }
@@ -94,7 +93,8 @@ actor FrameAirplaneRemover: Equatable {
     }
     
     // this is still a slow part of the process, but is now about 10x faster than before
-    func findOutliers() {
+    func findOutliers() -> [UInt] {
+        var outlier_amount_list = [UInt](repeating: 0, count: width*height)
         // compare pixels at the same image location in adjecent frames
         // detect Outliers which are much more brighter than the adject frames
         let orig_data = image.raw_image_data
@@ -187,13 +187,14 @@ actor FrameAirplaneRemover: Equatable {
                 }
             }
         }
+        return outlier_amount_list        
     }
 
     // this method groups outliers into groups of direct neighbors,
     // treating smaller groups of outliers as noise and pruning them out
     // after pruning, the outlier_groups has been populated, and each
     // outlier group has had basic paintability analysis done upon init
-    func pruneOutliers() async {
+    func pruneOutliers(outlier_amount_list: [UInt]) async {
         Log.i("frame \(frame_index) pruning outliers")
         
         // go through the outliers and link together all the outliers that are adject to eachother,
@@ -354,6 +355,7 @@ actor FrameAirplaneRemover: Equatable {
             }
         }
 
+        // populate the outlier_groups
         for (group_name, group_size) in individual_group_counts {
             if let min_x = group_min_x[group_name],
                let min_y = group_min_y[group_name],
@@ -373,7 +375,6 @@ actor FrameAirplaneRemover: Equatable {
                                      frame: self)
             }
         }
-        self.outlier_amount_list = [] // not used after here, try to save memory
     }
 
     // paint the outliers that we decided not to paint, to enable debuging
@@ -388,7 +389,7 @@ actor FrameAirplaneRemover: Equatable {
                        group_name == name
                     {                    
                         var nextPixel = Pixel()
-                        if let reason = await group.canPaint(),
+                        if let reason = await group.shouldPaint,
                            !reason.willPaint
                         {
                             nextPixel.value = reason.testPaintPixel.value
