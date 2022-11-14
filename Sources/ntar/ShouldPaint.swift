@@ -69,9 +69,9 @@ func paint_score_from(lines: [Line]) -> Double { // greater than 0.5 means paint
 }
 
 // bigger groups are more likely to be airplanes
-func paint_score_from(groupSize group_size: UInt64) -> Double { // returns values between 0 and 1
-    if group_size < UInt64(OAS_NON_AIRPLANES_MIN_GROUP_SIZE) { return 0 }
-    if group_size > UInt64(OAS_AIRPLANES_MAX_GROUP_SIZE)     { return 1 }
+func paint_score_from(groupSize group_size: UInt) -> Double { // returns values between 0 and 1
+    if group_size < UInt(OAS_NON_AIRPLANES_MIN_GROUP_SIZE) { return 0 }
+    if group_size > UInt(OAS_AIRPLANES_MAX_GROUP_SIZE)     { return 1 }
 
     let airplane_score =
       histogram_lookup(ofValue: Double(group_size),

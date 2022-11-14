@@ -21,9 +21,7 @@ enum Edge {
 // a member in an airplane streak across frames
 typealias AirplaneStreakMember = (
   frame_index: Int,
-  group_name: String,
-  bounds: BoundingBox,
-  line: Line
+  group: OutlierGroup
 )
 
 // the bounding box of an outlier group

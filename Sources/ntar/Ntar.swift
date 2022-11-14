@@ -92,15 +92,19 @@ todo:
  - make outlier output text files be separated by airplane / not airplane
 
  - apply the same center theta outlier logic to outliers within the same frame
+
+ - attempt to reduce false positives by applying .looksLikeALine values to streaks
+   i.e. don't trush the theta from hough transform when looksLikeALine score is low
  
  - figure out how distribution works
    - a .dmg file with a command line installer?  any swift command line installer examples?
 */
 
-// XXX here are some random global constants that maybe should be exposed somehow
-
 // this is here so that PaintReason can see it
 var assume_airplane_size: Int = 5000 // don't bother spending the time to fully process
+
+// XXX here are some random global constants that maybe should be exposed somehow
+
 
 // how far in each direction do we go when doing final processing?
 let number_final_processing_neighbors_needed = 4 // in each direction

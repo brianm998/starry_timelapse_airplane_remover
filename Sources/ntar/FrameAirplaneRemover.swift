@@ -36,25 +36,12 @@ actor FrameAirplaneRemover: Equatable {
 
     let outlier_output_dirname: String?
     
-    // one dimentional arrays indexed by y*width + x
-    var outlier_amounts: [UInt32]  // amount difference of each outlier
-    var outlier_groups: [String?]  // named outlier group for each outlier
-    
+    // one dimentional arrays mirroring pixels indexed by y*width + x
+    var outlier_amount_list: [UInt]  // amount difference of each outlier
+    var outlier_group_list: [String?]  // named outlier group for each outlier
+
     // populated by pruning
-    var neighbor_groups: [String: UInt64] = [:] // keyed by group name, value is the size of each
-                                           // group, only groups larger than min_group_size
-    var lines_from_full_image: [Line] = [] // lines from all large enough outliers
-
-    var should_paint: [String:PaintReason] = [:] // keyed by group name, should we paint it?
-    var group_bounding_boxes: [String: BoundingBox] = [:] // bounding boxes for each group
-    
-    var group_amounts: [String: UInt64] = [:] // keyed by group name, average brightness of each group
-
-    var group_lines: [String:Line] = [:] // keyed by group name, the best line found for each group
-
-    func setShouldPaint(group group_name: String, why: PaintReason) {
-        self.should_paint[group_name] = why
-    }
+    var outlier_groups: [String: OutlierGroup] = [:] // keyed by group name
     
     let output_filename: String
     
@@ -84,8 +71,8 @@ actor FrameAirplaneRemover: Equatable {
         self.bytesPerPixel = image.bytesPerPixel
         self.bytesPerRow = width*bytesPerPixel
         self.max_pixel_distance = max_pixel_distance
-        self.outlier_amounts = [UInt32](repeating: 0, count: width*height)
-        self.outlier_groups = [String?](repeating: nil, count: width*height)
+        self.outlier_amount_list = [UInt](repeating: 0, count: width*height)
+        self.outlier_group_list = [String?](repeating: nil, count: width*height)
 
         Log.i("frame \(frame_index) starting processing")
     }
@@ -177,7 +164,7 @@ actor FrameAirplaneRemover: Equatable {
                             let amount_index = Int(y*width+x)
                             // mark this spot as an outlier if it's too bright
                             if total_difference > 0  {
-                                outlier_amounts[amount_index] = UInt32(total_difference)
+                                outlier_amount_list[amount_index] = UInt(total_difference)
                             }
                         }
                     }
@@ -194,7 +181,7 @@ actor FrameAirplaneRemover: Equatable {
         // go through the outliers and link together all the outliers that are adject to eachother,
         // outputting a mapping of group name to size
         
-        var individual_group_counts: [String: UInt64] = [:]
+        var individual_group_counts: [String: UInt] = [:]
 
         var pending_outliers: [Int]
         var pending_outlier_insert_index = 0;
@@ -206,20 +193,20 @@ actor FrameAirplaneRemover: Equatable {
         Log.d("frame \(frame_index) labeling adjecent outliers")
 
         // then label all adject outliers
-        for (index, outlier_amount) in outlier_amounts.enumerated() {
+        for (index, outlier_amount) in outlier_amount_list.enumerated() {
             
             if outlier_amount <= max_pixel_distance { continue }
             
-            let outlier_groupname = outlier_groups[index]
+            let outlier_groupname = outlier_group_list[index]
             if outlier_groupname != nil { continue }
             
             // not part of a group yet
-            var group_size: UInt64 = 0
+            var group_size: UInt = 0
             // tag this virgin outlier with its own key
             
             let outlier_key = "\(index % width),\(index / width)"; // arbitrary but needs to be unique
             //Log.d("initial index = \(index)")
-            outlier_groups[index] = outlier_key
+            outlier_group_list[index] = outlier_key
             pending_outliers[pending_outlier_insert_index] = index;
             pending_outlier_insert_index += 1
             
@@ -236,7 +223,7 @@ actor FrameAirplaneRemover: Equatable {
                 //Log.d("next_outlier_index \(next_outlier_index)")
                 
                 pending_outlier_access_index += 1
-                if let _ = outlier_groups[next_outlier_index] {
+                if let _ = outlier_group_list[next_outlier_index] {
                     group_size += 1
                     
                     let outlier_x = next_outlier_index % width;
@@ -244,44 +231,44 @@ actor FrameAirplaneRemover: Equatable {
                     
                     if outlier_x > 0 { // add left neighbor
                         let left_neighbor_index = outlier_y * width + outlier_x - 1
-                        if outlier_amounts[left_neighbor_index] > max_pixel_distance,
-                           outlier_groups[left_neighbor_index] == nil
+                        if outlier_amount_list[left_neighbor_index] > max_pixel_distance,
+                           outlier_group_list[left_neighbor_index] == nil
                         {
                             pending_outliers[pending_outlier_insert_index] = left_neighbor_index
-                            outlier_groups[left_neighbor_index] = outlier_key
+                            outlier_group_list[left_neighbor_index] = outlier_key
                             pending_outlier_insert_index += 1
                         }
                     }
                     
                     if outlier_x < width - 1 { // add right neighbor
                         let right_neighbor_index = outlier_y * width + outlier_x + 1
-                        if outlier_amounts[right_neighbor_index] > max_pixel_distance,
-                           outlier_groups[right_neighbor_index] == nil
+                        if outlier_amount_list[right_neighbor_index] > max_pixel_distance,
+                           outlier_group_list[right_neighbor_index] == nil
                         {
                             pending_outliers[pending_outlier_insert_index] = right_neighbor_index
-                            outlier_groups[right_neighbor_index] = outlier_key
+                            outlier_group_list[right_neighbor_index] = outlier_key
                             pending_outlier_insert_index += 1
                         }
                     }
                     
                     if outlier_y > 0 { // add top neighbor
                         let top_neighbor_index = (outlier_y - 1) * width + outlier_x
-                        if outlier_amounts[top_neighbor_index] > max_pixel_distance &&
-                           outlier_groups[top_neighbor_index] == nil
+                        if outlier_amount_list[top_neighbor_index] > max_pixel_distance &&
+                           outlier_group_list[top_neighbor_index] == nil
                         {
                             pending_outliers[pending_outlier_insert_index] = top_neighbor_index
-                            outlier_groups[top_neighbor_index] = outlier_key
+                            outlier_group_list[top_neighbor_index] = outlier_key
                             pending_outlier_insert_index += 1
                         }
                     }
                     
                     if outlier_y < height - 1 { // add bottom neighbor
                         let bottom_neighbor_index = (outlier_y + 1) * width + outlier_x
-                        if outlier_amounts[bottom_neighbor_index] > max_pixel_distance,
-                           outlier_groups[bottom_neighbor_index] == nil
+                        if outlier_amount_list[bottom_neighbor_index] > max_pixel_distance,
+                           outlier_group_list[bottom_neighbor_index] == nil
                         {
                             pending_outliers[pending_outlier_insert_index] = bottom_neighbor_index
-                            outlier_groups[bottom_neighbor_index] = outlier_key
+                            outlier_group_list[bottom_neighbor_index] = outlier_key
                             pending_outlier_insert_index += 1
                         }
                     }
@@ -296,45 +283,8 @@ actor FrameAirplaneRemover: Equatable {
                 individual_group_counts[outlier_key] = group_size
             }
         }
-        self.neighbor_groups = individual_group_counts
-    }    
 
-    // paint the outliers that we decided not to paint, to enable debuging
-    func testPaintOutliers(toData test_paint_data: inout Data) {
-        Log.d("frame \(frame_index) painting outliers green")
-
-        for (name, _) in neighbor_groups {
-            if let group_bounds = group_bounding_boxes[name] {
-                for x in group_bounds.min.x ... group_bounds.max.x {
-                    for y in group_bounds.min.y ... group_bounds.max.y {
-                        let index = y*width + x
-                        if let group_name = outlier_groups[index],
-                           group_name == name
-                        {
-                            var nextPixel = Pixel()
-                            if let reason = should_paint[group_name] {
-                                if !reason.willPaint {
-                                    nextPixel.value = reason.testPaintPixel.value
-                                }
-                            } else {
-                                nextPixel.green = 0xFFFF // groups that can be chosen to paint
-                            }
-
-                            var nextValue = nextPixel.value
-                            let offset = (Int(y) * bytesPerRow) + (Int(x) * bytesPerPixel)
-                            
-                            test_paint_data.replaceSubrange(offset ..< offset+raw_pixel_size_bytes,
-                                                            with: &nextValue,
-                                                            count: raw_pixel_size_bytes)
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    // record the extent of each group in the image, and also its brightness
-    func calculateGroupBoundsAndAmounts() {
+        var group_amounts: [String: UInt] = [:] // keyed by group name, average brightness of each group
 
         Log.i("frame \(frame_index) calculating outlier group bounds")
         var group_min_x: [String:Int] = [:]   // keyed by group name, image bounds of each group
@@ -346,9 +296,9 @@ actor FrameAirplaneRemover: Equatable {
         for x in 0 ..< width {
             for y in 0 ..< height { // XXX heap corruption :(
                 let index = y*width+x
-                if let group = outlier_groups[index]
+                if let group = outlier_group_list[index]
                 {
-                    let amount = UInt64(outlier_amounts[index])
+                    let amount = outlier_amount_list[index]
                     if let group_amount = group_amounts[group] {
                         group_amounts[group] = group_amount + amount
                     } else {
@@ -388,22 +338,55 @@ actor FrameAirplaneRemover: Equatable {
             }
         }
 
-        for (group_name, group_size) in neighbor_groups {
+        for (group_name, group_size) in individual_group_counts {
             if let min_x = group_min_x[group_name],
                let min_y = group_min_y[group_name],
                let max_x = group_max_x[group_name],
-               let max_y = group_max_y[group_name]
+               let max_y = group_max_y[group_name],
+               let group_amount = group_amounts[group_name]
             {
                 let bounding_box = BoundingBox(min: Coord(x: min_x, y: min_y),
                                                max: Coord(x: max_x, y: max_y))
-                group_bounding_boxes[group_name] = bounding_box
-            }
-            
-            if let group_amount = group_amounts[group_name] {
-                group_amounts[group_name] = group_amount / group_size
+                let group_brightness = group_amount / group_size
+                
+                outlier_groups[group_name] =
+                  OutlierGroup(name: group_name,
+                               size: group_size,
+                               brightness: group_brightness,
+                               bounds: bounding_box)
             }
         }
-        self.outlier_amounts = [] // not used after here, try to save memory
+        self.outlier_amount_list = [] // not used after here, try to save memory
+    }
+
+    // paint the outliers that we decided not to paint, to enable debuging
+    func testPaintOutliers(toData test_paint_data: inout Data) {
+        Log.d("frame \(frame_index) painting outliers green")
+
+        for (name, group) in outlier_groups {
+            for x in group.bounds.min.x ... group.bounds.max.x {
+                for y in group.bounds.min.y ... group.bounds.max.y {
+                    let index = y*width + x
+                    if let group_name = outlier_group_list[index],
+                       group_name == name
+                    {                    
+                        var nextPixel = Pixel()
+                        if let reason = group.shouldPaint,
+                           !reason.willPaint
+                        {
+                            nextPixel.value = reason.testPaintPixel.value
+                            
+                            var nextValue = nextPixel.value
+                            let offset = (Int(y) * bytesPerRow) + (Int(x) * bytesPerPixel)
+                            
+                            test_paint_data.replaceSubrange(offset ..< offset+raw_pixel_size_bytes,
+                                                            with: &nextValue,
+                                                            count: raw_pixel_size_bytes)
+                        }
+                    }
+                }
+            }
+        }
     }
 
     // this method analyzises the outlier groups to determine paintability
@@ -411,117 +394,88 @@ actor FrameAirplaneRemover: Equatable {
         
         var processed_group_count = 0
 
-        Log.i("frame \(frame_index) deciding paintability of \(neighbor_groups.count) outlier groups")
+        Log.i("frame \(frame_index) deciding paintability of \(outlier_groups.count) outlier groups")
 
         // look through all neighber groups greater than min_group_size
         // this is a lot faster now
-        for (name, size) in neighbor_groups {
-            if let group_bounds = group_bounding_boxes[name], // bounding box for this group
-               let group_value = group_amounts[name] // how bright is this group?
-            {
-                // use assume_airplane_size to avoid doing extra processing on
-                // really big outlier groups
-                if size > assume_airplane_size {
-                    Log.d("frame \(frame_index) assuming group \(name) of size \(size) (> \(assume_airplane_size)) is an airplane, will paint over it")
-                    Log.d("frame \(frame_index) should_paint[\(name)] = (true, .assumed)")
-                    should_paint[name] = .assumed
+        for (name, group) in outlier_groups {
+            // use assume_airplane_size to avoid doing extra processing on
+            // really big outlier groups
+            if group.size > assume_airplane_size {
+                Log.d("frame \(frame_index) assuming group \(name) of size \(group.size) (> \(assume_airplane_size)) is an airplane, will paint over it")
+                Log.d("frame \(frame_index) should_paint[\(name)] = (true, .assumed)")
+                group.shouldPaint = .assumed
+                continue
+            }
+            
+            let group_aspect_ratio = Double(group.bounds.width) /
+              Double(group.bounds.height)
+            // creating a smaller HoughTransform is a lot faster,
+            // but looses a small amount of precision
+            let groupHoughTransform = HoughTransform(data_width: group.bounds.width,
+                                                     data_height: group.bounds.height)
+            
+            processed_group_count += 1
+            
+            // first do a hough transform on just this outlier group
+            // set all pixels of this group to true in the hough data
+            for x in group.bounds.min.x ... group.bounds.max.x {
+                for y in group.bounds.min.y ... group.bounds.max.y {
+                    let index = y * width + x
+                    let group_index = (y-group.bounds.min.y) * group.bounds.width + (x-group.bounds.min.x)
+                    if let group_name = outlier_group_list[index],
+                       name == group_name
+                    {
+                        groupHoughTransform.input_data[group_index] = true
+                    }
+                }
+            }
+            
+            // get the theta and rho of just this outlier group
+            group.lines = groupHoughTransform.lines(min_count: 1)
+            if group.lines.count == 0 {
+                Log.w("frame \(frame_index) got no group lines for group \(name) of size \(group.size)")
+                // this should only happen when there is no data in the input and therefore output 
+                //fatalError("bad input data")
+                continue
+            }
+            
+            group.paint_score_from_lines = paint_score_from(lines: group.lines)
+            if group.paint_score_from_lines > 0.5 {
+                if group.size < 300 { // XXX constant XXX
+                    // don't assume small ones are lines
+                } else {
+                    Log.d("frame \(frame_index) will paint group \(name) because it looks like a line from the group hough transform")
+                    group.shouldPaint = .looksLikeALine(group.paint_score_from_lines)
                     continue
                 }
+            }
+            
+            group.size_score = paint_score_from(groupSize: group.size)
+            //let group_fill_amount = Double(size)/(Double(group_width)*Double(group_height))
+            //Log.d("should_paint group_size \(size) group_fill_amount \(group_fill_amount) group_aspect_ratio \(group_aspect_ratio)")
+            //let group_fill_amount_score = paint_score_from(fillAmount: group_fill_amount)
+            group.aspect_ratio_score = paint_score_from(aspectRatio: group_aspect_ratio)
+            
+            if group.brightness < max_pixel_distance {
+                group.value_score = 0
+            } else {
+                let max = UInt(max_pixel_distance)
+                group.value_score = Double(group.brightness - max)/Double(max)*20
+                if group.value_score > 100 {
+                    group.value_score = 100
+                }
+            }
+            
+            //Log.d("frame \(frame_index) should_paint group_size_score \(group_size_score) group_fill_amount_score \(group_fill_amount_score) group_aspect_ratio_score \(group_aspect_ratio_score) group.value_score \(group.value_score/100) + paint_score_from_lines \(paint_score_from_lines)")
 
-                let group_width = group_bounds.max.x - group_bounds.min.x + 1
-                let group_height = group_bounds.max.y - group_bounds.min.y + 1
-                let group_aspect_ratio = Double(group_width) / Double(group_height)
-                // creating a smaller HoughTransform is a lot faster,
-                // but looses a small amount of precision
-                let groupHoughTransform = HoughTransform(data_width: group_width,
-                                                    data_height: group_height)
-                
-                processed_group_count += 1
-                
-                // first do a hough transform on just this outlier group
-                // set all pixels of this group to true in the hough data
-                for x in group_bounds.min.x ... group_bounds.max.x {
-                    for y in group_bounds.min.y ... group_bounds.max.y {
-                        let index = y * width + x
-                        let group_index = (y-group_bounds.min.y) * group_width + (x-group_bounds.min.x)
-                        if let group_name = outlier_groups[index],
-                           name == group_name
-                        {
-                            groupHoughTransform.input_data[group_index] = true
-                        }
-                    }
-                }
-        
-                // get the theta and rho of just this outlier group
-                let lines_from_this_group = groupHoughTransform.lines(min_count: 1)
-                if lines_from_this_group.count == 0 {
-                    Log.w("frame \(frame_index) got no group lines for group \(name) of size \(size)")
-                    // this should only happen when there is no data in the input and therefore output 
-                    //fatalError("bad input data")
-                    continue
-                }
-
-                let paint_score_from_lines = paint_score_from(lines: lines_from_this_group)
-                if paint_score_from_lines > 0.5 {
-                    if size < 300 { // XXX constant XXX
-                        // don't assume small ones are lines
-                    } else {
-                        Log.d("frame \(frame_index) will paint group \(name) because it looks like a line from the group hough transform")
-                        should_paint[name] = .looksLikeALine
-                        continue
-                    }
-                }
-                
-                // this is the most likely line from the outlier group
-                // useful data here could be other lines, and if there are any,
-                // and how far away they are from the most prominent one.
-                // i.e. detecting real lines vs the best line fit for a random blob
-                group_lines[name] = lines_from_this_group[0] // keep this for later analysis
-                
-                //Log.d("frame \(frame_index) group \(name) got \(lines_from_this_group.count) lines from group hough transform")
-                
-                //Log.d("frame \(frame_index) group \(name) line at index 0 theta \(group_theta), rho \(group_rho), count \(group_count)")
-
-                let group_size_score = paint_score_from(groupSize: size)
-                //let group_fill_amount = Double(size)/(Double(group_width)*Double(group_height))
-                //Log.d("should_paint group_size \(size) group_fill_amount \(group_fill_amount) group_aspect_ratio \(group_aspect_ratio)")
-                //let group_fill_amount_score = paint_score_from(fillAmount: group_fill_amount)
-                let group_aspect_ratio_score = paint_score_from(aspectRatio: group_aspect_ratio)
-                
-                var group_value_score: Double = 0 // score of how bright this group was overall
-                if group_value < max_pixel_distance {
-                    group_value_score = 0
-                } else {
-                    let max = UInt64(max_pixel_distance)
-                    group_value_score = Double(group_value - max)/Double(max)*20
-                    if group_value_score > 100 {
-                        group_value_score = 100
-                    }
-                }
-                
-                var overall_score = group_size_score +
-                                  //group_fill_amount_score +
-                                    group_aspect_ratio_score + 
-                                    (group_value_score/100)
-
-//                if size > 300 { // XXX constant
-                    overall_score += paint_score_from_lines
-                    overall_score /= 4//5
-//                } else {
-//                    overall_score /= 3
-//                }
-                
-                    
-                    //Log.d("frame \(frame_index) should_paint group_size_score \(group_size_score) group_fill_amount_score \(group_fill_amount_score) group_aspect_ratio_score \(group_aspect_ratio_score) group_value_score \(group_value_score/100) + paint_score_from_lines \(paint_score_from_lines)")
-                
-                
-                if overall_score > 0.5 {
-                    //Log.d("frame \(frame_index) should_paint[\(name)] = (true, .goodScore(\(overall_score))")
-                    should_paint[name] = .goodScore(overall_score)
-                } else {
-                    //Log.d("frame \(frame_index) should_paint[\(name)] = (false, .badScore(\(overall_score))")
-                    should_paint[name] = .badScore(overall_score)
-                }
+            let score = group.score
+            if score > 0.5 {
+                //Log.d("frame \(frame_index) should_paint[\(name)] = (true, .goodScore(\(overall_score))")
+                group.shouldPaint = .goodScore(score)
+            } else {
+                //Log.d("frame \(frame_index) should_paint[\(name)] = (false, .badScore(\(overall_score))")
+                group.shouldPaint = .badScore(score)
             }
         }
         Log.d("frame \(frame_index) processed \(processed_group_count) groups")
@@ -533,16 +487,17 @@ actor FrameAirplaneRemover: Equatable {
         Log.i("frame \(frame_index) painting airplane outlier groups")
 
         // paint over every outlier in the paint list with pixels from the adjecent frames
-        for (index, group_name) in outlier_groups.enumerated() {
+        for (index, group_name) in outlier_group_list.enumerated() {
             if let group_name = group_name,
-               let reason = should_paint[group_name],
+               let group = outlier_groups[group_name],
+               let reason = group.shouldPaint,
                reason.willPaint
             {
                 //Log.d("frame \(frame_index) painting over group \(group_name) for reason \(reason)")
                 let x = index % width;
                 let y = index / width;
                 paint(x: x, y: y, why: reason,
-                     toData: &data, testData: &test_paint_data)
+                      toData: &data, testData: &test_paint_data)
             }
         }
     }
@@ -645,16 +600,15 @@ actor FrameAirplaneRemover: Equatable {
     // these are the initial step of data generation
     func writeOutlierGroupFiles() {
         Log.e("writing outlier group images")              
-        for (group_name, _) in self.neighbor_groups {
+        for (group_name, group) in self.outlier_groups {
             Log.i("writing text file for group \(group_name)")
             
-            if let group_bounds = group_bounding_boxes[group_name],
-               let output_dirname = outlier_output_dirname
+            if let output_dirname = outlier_output_dirname
             {
                 // XXX check the determined paintability of each group and write them
                 // out to different output dirnames
                 
-                let filename = "\(frame_index)_outlier_\(group_name).txt".replacingOccurrences(of: ",", with: "_")
+                let filename = "\(frame_index)_outlier_\(group.name).txt".replacingOccurrences(of: ",", with: "_")
                 
                 let full_path = "\(output_dirname)/\(filename)"
                 if file_manager.fileExists(atPath: full_path) {
@@ -663,11 +617,11 @@ actor FrameAirplaneRemover: Equatable {
                     Log.i("creating \(full_path)")                      
                     var line = ""
                     
-                    for y in group_bounds.min.y ... group_bounds.max.y {
-                        for x in group_bounds.min.x ... group_bounds.max.x {
+                    for y in group.bounds.min.y ... group.bounds.max.y {
+                        for x in group.bounds.min.x ... group.bounds.max.x {
                             let index = y*width+x
-                            if let new_group_name = outlier_groups[index],
-                               new_group_name == group_name
+                            if let new_group_name = outlier_group_list[index],
+                               new_group_name == group.name
                             {
                                 line += "*" // outlier spot
                             } else {

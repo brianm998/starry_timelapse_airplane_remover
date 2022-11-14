@@ -230,29 +230,22 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
         
         Log.d("frame \(frame_index) done processing the outlier map after \(interval3)s")
         
-        let time_4 = NSDate().timeIntervalSince1970
-        let interval4 = String(format: "%0.1f", time_4 - time_3)
-        Log.d("frame \(frame_index) calculating group bounds \(interval4)s")
-
-        // figure out what part of the image each outlier group lies in
-        await frame_plane_remover.calculateGroupBoundsAndAmounts()
-
         if should_write_outlier_group_files {
             await frame_plane_remover.writeOutlierGroupFiles()
         }
         
-        let time_5 = NSDate().timeIntervalSince1970
-        let interval5 = String(format: "%0.1f", time_5 - time_4)
+        let time_4 = NSDate().timeIntervalSince1970
+        let interval4 = String(format: "%0.1f", time_4 - time_3)
 
-        Log.d("frame \(frame_index) outlier group painting analysis after p\(interval5)s")
+        Log.d("frame \(frame_index) outlier group painting analysis after \(interval4)s")
 
         // do a lot of analysis to determine what outlier groups we should paint over
         await frame_plane_remover.outlierGroupPaintingAnalysis()
         
-        let time_6 = NSDate().timeIntervalSince1970
-        let interval6 = String(format: "%0.1f", time_6 - time_5)
+        let time_5 = NSDate().timeIntervalSince1970
+        let interval5 = String(format: "%0.1f", time_5 - time_4)
 
-        Log.d("frame \(frame_index) timing for frame render - \(interval6)s - \(interval5)s - \(interval4)s - \(interval3)s - \(interval2)s - \(interval1)s")
+        Log.d("frame \(frame_index) timing for frame render - \(interval5)s - \(interval4)s - \(interval3)s - \(interval2)s - \(interval1)s")
 
         Log.i("frame \(frame_index) ready for analysis with groups in adjecent frames")
         

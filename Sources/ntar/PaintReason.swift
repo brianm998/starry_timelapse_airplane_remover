@@ -4,7 +4,7 @@ import Foundation
 enum PaintReason: Equatable, CaseIterable {
    case assumed                      // large groups are assumed to be airplanes
    case goodScore(Double)            // percent score
-   case looksLikeALine
+   case looksLikeALine(Double)       
    case inStreak(Int)           // size
 
    case badScore(Double)        // percent score
@@ -105,7 +105,7 @@ These outlier groups were small streaks by themselves
    }
 
    static var allCases: [PaintReason] {
-       return [.assumed, .looksLikeALine, .goodScore(0),
+       return [.assumed, .looksLikeALine(0), .goodScore(0),
                .isolatedTwoStreak, .inStreak(0), .badScore(0), .adjecentOverlap(0)]
    }
                          
