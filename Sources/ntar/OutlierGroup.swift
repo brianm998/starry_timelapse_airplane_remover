@@ -23,7 +23,7 @@ enum PaintScoreType {
 
 // represents a single outler group in a frame
 @available(macOS 10.15, *) 
-actor OutlierGroup {
+actor OutlierGroup: CustomStringConvertible, Hashable, Equatable {
     let name: String
     let size: UInt              // number of pixels in this outlier group
     let bounds: BoundingBox     // a bounding box on the image that contains this group
@@ -35,8 +35,22 @@ actor OutlierGroup {
     var shouldPaint: PaintReason? // should we paint this group, and why?
     
     var line: Line { return lines[0] } // returns the first, most likely line 
+
+    public static func == (lhs: OutlierGroup, rhs: OutlierGroup) -> Bool {
+        return lhs.name == rhs.name && lhs.frame.frame_index == rhs.frame.frame_index
+    }
     
+    nonisolated var description: String {
+        "outlier group \(frame.frame_index).\(name) size \(size) "
+    }
+    
+    nonisolated func hash(into hasher: inout Hasher) {
+        hasher.combine(name)
+        hasher.combine(frame.frame_index)
+    }
+
     func shouldPaint(_ should_paint: PaintReason) {
+        Log.d("\(self) should paint \(should_paint)")
         self.shouldPaint = should_paint
     }
 
@@ -120,18 +134,100 @@ actor OutlierGroup {
             //let group_fill_amount_score = paint_score_from(fillAmount: group_fill_amount)
             
             
-            //Log.d("frame \(frame.frame_index) should_paint group_size_score \(group_size_score) group_fill_amount_score \(group_fill_amount_score) group_aspect_ratio_score \(group_aspect_ratio_score) group.value_score \(group.value_score/100) + paint_score_from_lines \(paintScoreFromHoughTransformLines)")
+        //Log.d("frame \(frame.frame_index) should_paint group_size_score \(group_size_score) group_fill_amount_score \(group_fill_amount_score) group_aspect_ratio_score \(group_aspect_ratio_score) group.value_score \(group.value_score/100) + paint_score_from_lines \(paintScoreFromHoughTransformLines)")
 
         let score = self.paintScore(from: .combined)
         if score > 0.5 {
-            //Log.d("frame \(frame.frame_index) should_paint[\(name)] = (true, .goodScore(\(overall_score))")
+            Log.d("frame \(frame.frame_index) should_paint[\(name)] = (true, .goodScore(\(score))")
             self.shouldPaint = .goodScore(score)
         } else {
-            //Log.d("frame \(frame.frame_index) should_paint[\(name)] = (false, .badScore(\(overall_score))")
+            Log.d("frame \(frame.frame_index) should_paint[\(name)] = (false, .badScore(\(score))")
             self.shouldPaint = .badScore(score)
         }
     }
 
+    func distance(to outlier: OutlierGroup, is distance: Double) {
+        pixel_distances[outlier] = distance
+    }
+    
+    private var pixel_distances: [OutlierGroup: Double] = [:]
+    
+    // SLOW, and not accurate ?
+    // returns the distance in pixels between two groups
+    // zero means they overlap somehow, positive values are how far apart the closest pixels are
+    // amount of overlap is not calculated here
+    @available(macOS 10.15, *)
+    func pixelDistance(to group2: OutlierGroup) async -> Double {
+        //Log.d("\(self).pixelDistance(to: \(group2))")
+        if self == group2 {
+            //Log.d("\(self).pixelDistance(to: \(group2)) IDENTITY")
+            return 0
+        }
+        if let distance = pixel_distances[group2] {
+            //Log.d("\(self).pixelDistance(to: \(group2)) cached \(distance)")
+            return distance
+        }
+
+        let group_1_outlier_pixels = await self.frame.outlier_group_list
+        let group_2_outlier_pixels = await group2.frame.outlier_group_list
+
+        let start_distance = Double(self.frame.width*self.frame.width + self.frame.height*self.frame.height)
+        var min_distance = start_distance
+
+        var hit1 = false
+        var hit2 = false
+
+        //Log.d("for x_1 in \(self.bounds.min.x) ... \(self.bounds.max.x) {")
+        
+        for x_1 in self.bounds.min.x ... self.bounds.max.x {
+            //Log.d("x_1 \(x_1)")
+            Log.d("for y_1 in \(self.bounds.min.y) ... \(self.bounds.max.y) {")
+            for y_1 in self.bounds.min.y ... self.bounds.max.y {
+                //Log.d("y_1 \(y_1)")
+                let index1 = y_1 * self.frame.width + x_1
+                if let my_name = group_1_outlier_pixels[index1] {
+                    //Log.d("\(index1) - \(my_name)")
+                    if my_name == self.name {
+                        //Log.d("\(my_name) == \(self.name)")
+                        hit1 = true
+                        for x_2 in group2.bounds.min.x ... group2.bounds.max.x {
+                            for y_2 in group2.bounds.min.y ... group2.bounds.max.y {
+                                let index2 = y_2 * group2.frame.width + x_2
+                                if let group2_name = group_2_outlier_pixels[index2],
+                                   group2_name == group2.name
+                                {
+                                    hit2 = true 
+                                    let wid = Double(x_2 - x_1)
+                                    let hei = Double(y_2 - y_1)
+                                    let dist = sqrt(wid*wid + hei*hei)
+                                    if(dist < min_distance) { min_distance = dist }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        if start_distance == min_distance {
+            // this means that no distances were found, i.e. looking at the wrong data
+            let fuck1 = await self.frame.outlierGroup(named: self.name)
+            let fuck2 = await group2.frame.outlierGroup(named: group2.name)
+            Log.e("FUCK hit1 \(hit1) hit2 \(hit2)")
+            Log.e("SHIT fuck1 \(fuck1) fuck2 \(fuck2)")
+            Log.e("FUCK hit1 \(hit1) hit2 \(hit2)")
+            LOG_ABORT()
+        }
+
+        Log.d("pixelDistance from \(self) to \(group2) is min_distance")
+        
+        pixel_distances[group2] = min_distance
+        await group2.distance(to: self, is: min_distance)
+        Log.d("\(self).pixelDistance(to: \(group2)) calculated \(min_distance)")
+        return min_distance
+    }
+    
+    
+    
     // used so we don't recompute on every access
     private var _paint_score_from_lines: Double?
     
