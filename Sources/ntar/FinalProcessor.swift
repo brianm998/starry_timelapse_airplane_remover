@@ -294,15 +294,27 @@ func really_final_streak_processing(onFrame frame: FrameAirplaneRemover,
                 }
                 
                 if remove_small_streak {
-                    airplane_streaks.removeValue(forKey: streak_name) // XXX mutating while iterating?
-                    
+
+                    var total_line_score: Double = 0
+                    // one last check on the line score
                     for member_to_remove in airplane_streak {
-                        // change should_paint to new value for the frame
-                        if member_to_remove.frame_index < frame.frame_index {
-                            Log.e("frame \(member_to_remove.frame_index) is already finalized, modifying it now won't change anythig :(")
-                            fatalError("FUCK")
+                        total_line_score += await member_to_remove.group.paintScore(from: .houghTransform)
+                    }
+                    total_line_score /= Double(airplane_streak.count)
+
+                    // only get rid of small streaks if they don't look like lines
+                    if total_line_score < 0.2 { // XXX constant
+                        
+                        airplane_streaks.removeValue(forKey: streak_name) // XXX mutating while iterating?
+                        
+                        for member_to_remove in airplane_streak {
+                            // change should_paint to new value for the frame
+                            if member_to_remove.frame_index < frame.frame_index {
+                                Log.e("frame \(member_to_remove.frame_index) is already finalized, modifying it now won't change anythig :(")
+                                fatalError("FUCK")
+                            }
+                            await member_to_remove.group.shouldPaint(.isolatedTwoStreak)
                         }
-                        await member_to_remove.group.shouldPaint(.isolatedTwoStreak)
                     }
                 }
             }
@@ -324,7 +336,7 @@ fileprivate func run_final_pass(frames: [FrameAirplaneRemover]) async {
     Log.d("final pass on \(frames.count) frames")
 
     await run_final_overlap_pass(frames: frames)
-    await run_final_streak_pass(frames: frames)
+    await run_final_streak_pass(frames: frames) // XXX not actually the final streak pass anymore..
 }
 
 
@@ -334,21 +346,24 @@ fileprivate func run_final_overlap_pass(frames: [FrameAirplaneRemover]) async {
         await frame.foreachOutlierGroup { group in
             // look for more data to act upon
 
+            let houghScore = await group.paintScore(from: .houghTransform)
+
+            if houghScore > medium_hough_line_score { return .continue }
+            
             if let reason = await group.shouldPaint,
                reason.willPaint
             {
                 switch reason {
                 case .looksLikeALine(let amount):
                     Log.i("frame \(frame.frame_index) skipping group \(group.name) because of \(reason)") 
-                    return true
+                    return .continue // continue
                 case .inStreak(let size):
                     if size > 2 {
                         //Log.i("frame \(frame.frame_index) skipping group \(group_name) because of \(reason)") 
                         // XXX this skips streaks that it shouldn't
                     }
-                    //continue
                 default:
-                    return false
+                    break
                 }
             }
             
@@ -416,11 +431,11 @@ fileprivate func run_final_overlap_pass(frames: [FrameAirplaneRemover]) async {
                                 }
                             }
                         }
-                        return true
+                        return .continue
                     }
                 }
             }
-            return true
+            return .continue
         }
     }
 }
@@ -443,7 +458,7 @@ fileprivate func run_final_streak_pass(frames: [FrameAirplaneRemover]) async {
             if let reason = await group.shouldPaint {
                 if reason == .adjecentOverlap(0) {
                     Log.d("frame \(frame.frame_index) skipping group \(group.name) because it has .adjecentOverlap")
-                    return true // continue
+                    return .continue
                 }
                 
                 // grab a streak that we might already be in
@@ -482,20 +497,24 @@ fileprivate func run_final_streak_pass(frames: [FrameAirplaneRemover]) async {
                     potential_streak = existing_streak
                     potential_streak_name = existing_streak_name
                 }
-                
-                if let streak = 
-                     await streak_starting_from(group: group,
-                                                frames: frames,
-                                                startingIndex: batch_index+1,
-                                                potentialStreak: &potential_streak)
-                {
-                    Log.i("frame \(frame_index) found streak \(potential_streak_name) of size \(streak.count) for group \(group.name)")
-                    airplane_streaks[potential_streak_name] = streak
-                } else {
-                    Log.d("frame \(frame_index) DID NOT find streak for group \(group.name)")
+
+                let houghScore = await group.paintScore(from: .houghTransform)
+
+                if houghScore > 0.3 { // XXX constant
+                    if let streak = 
+                         await streak_starting_from(group: group,
+                                                    frames: frames,
+                                                    startingIndex: batch_index+1,
+                                                    potentialStreak: &potential_streak)
+                    {
+                        Log.i("frame \(frame_index) found streak \(potential_streak_name) of size \(streak.count) for group \(group.name)")
+                        airplane_streaks[potential_streak_name] = streak
+                    } else {
+                        Log.d("frame \(frame_index) DID NOT find streak for group \(group.name)")
+                    }
                 }
             }
-            return true
+            return .continue
         }
     }
 
@@ -599,13 +618,16 @@ func streak_starting_from(group: OutlierGroup,
             let center_line_theta_diff_1 = await abs(center_line_theta-other_group.line.theta)
             let center_line_theta_diff_2 = await abs(center_line_theta-last_group.line.theta)
 
-            if distance < best_distance &&
+            let houghScore = await other_group.paintScore(from: .houghTransform)
+            
+            if houghScore > medium_hough_line_score &&
+                 distance < best_distance &&
                  (theta_diff < final_theta_diff || abs(theta_diff - 180) < final_theta_diff) &&
                  ((center_line_theta_diff_1 < center_line_theta_diff ||
                      abs(center_line_theta_diff_1 - 180) < center_line_theta_diff) ||
                     (center_line_theta_diff_2 < center_line_theta_diff ||
-                       abs(center_line_theta_diff_2 - 180) < center_line_theta_diff)) &&
-                 rho_diff < final_rho_diff
+                       abs(center_line_theta_diff_2 - 180) < center_line_theta_diff)) /*&&
+                 rho_diff < final_rho_diff*/
             {
                 best_group = other_group
                 best_distance = distance
@@ -613,7 +635,7 @@ func streak_starting_from(group: OutlierGroup,
             } else {
                 //Log.d("frame \(frame.frame_index) group \(other_group.name) doesn't match group \(group_name) theta_diff \(theta_diff) rho_diff \(rho_diff) center_line_theta_diff_1 \(center_line_theta_diff_1) center_line_theta_diff_2 \(center_line_theta_diff_2) center_line_theta \(center_line_theta) last \(last_group_line.theta) other \(other_group_line.theta)")
             }
-            return true
+            return .continue
         }
         if best_distance == min_distance {
             break               // no more streak

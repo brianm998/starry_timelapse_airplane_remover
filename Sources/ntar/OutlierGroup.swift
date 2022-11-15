@@ -12,6 +12,15 @@ You should have received a copy of the GNU General Public License along with nta
 
 import Foundation
 
+enum PaintScoreType {
+    case houghTransform // based upon the lines returned from a hough transform
+    case fillAmount     // based upon the amount of the bounding box that has pixels from this group
+    case groupSize      // based upon the number of pixels in this group
+    case aspectRatio    // based upon the aspect ratio of this groups bounding box
+    case brightness     // based upon the relative brightness of this group
+    case combined       // a combination, not using fillAmount
+}
+
 // represents a single outler group in a frame
 @available(macOS 10.15, *) 
 actor OutlierGroup {
@@ -19,7 +28,7 @@ actor OutlierGroup {
     let size: UInt              // number of pixels in this outlier group
     let bounds: BoundingBox     // a bounding box on the image that contains this group
     let brightness: UInt        // the average amount per pixel of brightness over the limit 
-    let lines: [Line] // sorted lines from the hough transform of this outlier group
+    let lines: [Line]           // sorted lines from the hough transform of this outlier group
     let frame: FrameAirplaneRemover
 
     // after init, shouldPaint is usually set to a base value based upon different statistics 
@@ -31,6 +40,24 @@ actor OutlierGroup {
         self.shouldPaint = should_paint
     }
 
+    func paintScore(from type: PaintScoreType) -> Double {
+        switch type {
+        case .houghTransform:
+            return self.paintScoreFromHoughTransformLines
+        case .groupSize:
+            return self.paintScoreFromGroupSize
+        case .aspectRatio:
+            return self.paintScoreFromAspectRatio
+        case .brightness:
+            return self.paintScoreFromBrightness
+        case .fillAmount:       // XXX not used right now
+            return self.paintScoreFromFillAmount
+        case .combined:
+            return (self.paintScoreFromGroupSize + self.paintScoreFromAspectRatio +
+                    self.paintScoreFromBrightness + self.paintScoreFromHoughTransformLines)/4
+        }
+    }
+    
     init(name: String,
          size: UInt,
          brightness: UInt,
@@ -79,12 +106,12 @@ actor OutlierGroup {
             return
         }
             
-        if self.paintScoreFromLines > 0.5 {
+        if self.paintScoreFromHoughTransformLines > 0.5 {
             if size < 300 { // XXX constant XXX
                 // don't assume small ones are lines
             } else {
                 Log.d("frame \(frame.frame_index) will paint group \(name) because it looks like a line from the group hough transform")
-                self.shouldPaint = .looksLikeALine(self.paintScoreFromLines)
+                self.shouldPaint = .looksLikeALine(self.paintScoreFromHoughTransformLines)
                 return
             }
         }
@@ -93,10 +120,9 @@ actor OutlierGroup {
             //let group_fill_amount_score = paint_score_from(fillAmount: group_fill_amount)
             
             
-            //Log.d("frame \(frame.frame_index) should_paint group_size_score \(group_size_score) group_fill_amount_score \(group_fill_amount_score) group_aspect_ratio_score \(group_aspect_ratio_score) group.value_score \(group.value_score/100) + paint_score_from_lines \(paintScoreFromLines)")
+            //Log.d("frame \(frame.frame_index) should_paint group_size_score \(group_size_score) group_fill_amount_score \(group_fill_amount_score) group_aspect_ratio_score \(group_aspect_ratio_score) group.value_score \(group.value_score/100) + paint_score_from_lines \(paintScoreFromHoughTransformLines)")
 
-        let score = (sizeScore + aspectRatioScore + (valueScore/100) + paintScoreFromLines)/4
-
+        let score = self.paintScore(from: .combined)
         if score > 0.5 {
             //Log.d("frame \(frame.frame_index) should_paint[\(name)] = (true, .goodScore(\(overall_score))")
             self.shouldPaint = .goodScore(score)
@@ -109,7 +135,7 @@ actor OutlierGroup {
     // used so we don't recompute on every access
     private var _paint_score_from_lines: Double?
     
-    var paintScoreFromLines: Double {
+    private var paintScoreFromHoughTransformLines: Double {
         if let _paint_score_from_lines = _paint_score_from_lines {
             return _paint_score_from_lines
         }
@@ -183,7 +209,7 @@ actor OutlierGroup {
     }
 
     // groups with larger fill amounts are less likely to be airplanes
-    var fillAmountScore: Double {
+    private var paintScoreFromFillAmount: Double {
         let fill_amount = Double(size)/(Double(self.bounds.width)*Double(self.bounds.height))
         if fill_amount < OAS_AIRPLANES_MIN_FILL_AMOUNT     { return 1 }
         if fill_amount > OAS_NON_AIRPLANES_MAX_FILL_AMOUNT { return 0 }
@@ -205,7 +231,7 @@ actor OutlierGroup {
         return airplane_score / (non_airplane_score+airplane_score)
     }
     
-    var sizeScore: Double {
+    private var paintScoreFromGroupSize: Double {
         if self.size < UInt(OAS_NON_AIRPLANES_MIN_GROUP_SIZE) { return 0 }
         if self.size > UInt(OAS_AIRPLANES_MAX_GROUP_SIZE)     { return 1 }
 
@@ -227,7 +253,7 @@ actor OutlierGroup {
     }
 
     // smaller aspect ratios are more likely to be airplanes
-    var aspectRatioScore: Double {
+    private var paintScoreFromAspectRatio: Double {
         let aspect_ratio = Double(self.bounds.width) / Double(self.bounds.height)
         if aspect_ratio < OAS_AIRPLANES_MIN_ASPECT_RATIO     { return 1 }
         if aspect_ratio > OAS_NON_AIRPLANES_MAX_ASPECT_RATIO { return 0 }
@@ -249,7 +275,7 @@ actor OutlierGroup {
         return airplane_score / (non_airplane_score+airplane_score)
     }
 
-    var valueScore: Double {
+    private var paintScoreFromBrightness: Double {
         let mpd = frame.max_pixel_distance
         if self.brightness < mpd {
             return 0
@@ -257,9 +283,9 @@ actor OutlierGroup {
             let max = UInt(mpd)
             let score = Double(self.brightness - max)/Double(max)*20
             if score > 100 {
-                return 100
+                return 1
             } else {
-                return score
+                return score/100
             }
         }
     }

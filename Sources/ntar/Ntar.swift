@@ -108,6 +108,7 @@ var assume_airplane_size: Int = 5000 // don't bother spending the time to fully 
 
 // XXX here are some random global constants that maybe should be exposed somehow
 
+let medium_hough_line_score: Double = 0.4 // close to being a line, not really far
 
 // how far in each direction do we go when doing final processing?
 let number_final_processing_neighbors_needed = 4 // in each direction

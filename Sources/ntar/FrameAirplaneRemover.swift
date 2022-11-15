@@ -18,6 +18,11 @@ You should have received a copy of the GNU General Public License along with nta
 
 // the first pass is done upon init, finding and pruning outlier groups
 
+enum LoopReturn {
+    case `continue`
+    case `break`
+}
+
 @available(macOS 10.15, *)
 actor FrameAirplaneRemover: Equatable { 
     let width: Int
@@ -75,8 +80,8 @@ actor FrameAirplaneRemover: Equatable {
         self.outlier_group_list = [String?](repeating: nil, count: width*height)
 
         // find outlying bright pixels between frames,
-        // group neighboring outlying pixels into groups
-        await self.pruneOutliers(outlier_amount_list: self.findOutliers())
+        // and group neighboring outlying pixels into groups
+        await self.pruneOutliers(self.findOutliers())
         
         Log.i("frame \(frame_index) starting processing")
     }
@@ -85,10 +90,10 @@ actor FrameAirplaneRemover: Equatable {
         return outlier_groups[outlier_name]
     }
     
-    func foreachOutlierGroup(_ closure: (OutlierGroup)async->Bool) async {
+    func foreachOutlierGroup(_ closure: (OutlierGroup)async->LoopReturn) async {
         for (_, group) in self.outlier_groups {
             let result = await closure(group)
-            if !result { break }
+            if result == .break { break }
         }
     }
     
@@ -194,7 +199,7 @@ actor FrameAirplaneRemover: Equatable {
     // treating smaller groups of outliers as noise and pruning them out
     // after pruning, the outlier_groups has been populated, and each
     // outlier group has had basic paintability analysis done upon init
-    func pruneOutliers(outlier_amount_list: [UInt]) async {
+    func pruneOutliers(_ outlier_amount_list: [UInt]) async {
         Log.i("frame \(frame_index) pruning outliers")
         
         // go through the outliers and link together all the outliers that are adject to eachother,
@@ -378,7 +383,7 @@ actor FrameAirplaneRemover: Equatable {
     }
 
     // paint the outliers that we decided not to paint, to enable debuging
-    func testPaintOutliers(toData test_paint_data: inout Data) async {
+    private func testPaintOutliers(toData test_paint_data: inout Data) async {
         Log.d("frame \(frame_index) painting outliers green")
 
         for (name, group) in outlier_groups {
@@ -408,7 +413,7 @@ actor FrameAirplaneRemover: Equatable {
     }
 
     // actually paint over outlier groups that have been selected as airplane tracks
-    func paintOverAirplanes(toData data: inout Data, testData test_paint_data: inout Data) async {
+    private func paintOverAirplanes(toData data: inout Data, testData test_paint_data: inout Data) async {
         
         Log.i("frame \(frame_index) painting airplane outlier groups")
 
