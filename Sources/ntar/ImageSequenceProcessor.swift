@@ -115,7 +115,7 @@ class ImageSequenceProcessor {
                 await self.dispatchGroup.enter(name) 
                 await method_list.add(atIndex: index, method: {
                     // this method is run async later                                           
-                    Log.d("loading \(image_filename)")
+                    Log.i("loading \(image_filename)")
                     if let image = await self.image_sequence.getImage(withName: image_filename) {
                         await self.processFrame(number: index,
                                                 image: image,
@@ -129,9 +129,6 @@ class ImageSequenceProcessor {
                 })
             } else {
                 Log.i("not processing existing file \(filename)")
-                // XXX we need to load number_final_processing_neighbors_needed number
-                // of existing files to be able to re-start existing work
-                // XXX what needs to happen to be able to restart is:
             }
         }
     }
@@ -161,7 +158,7 @@ class ImageSequenceProcessor {
         Task {
             // each of these methods removes the airplanes from a particular frame
             await assembleMethodList()
-            Log.d("we have \(await method_list.list.count) total frames")
+            Log.i("processing a total of \(await method_list.list.count) frames")
             
             await method_list_hook()
             

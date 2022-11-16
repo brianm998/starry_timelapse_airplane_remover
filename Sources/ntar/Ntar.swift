@@ -85,10 +85,6 @@ todo:
    - unlikely to have matching aligned groups in adjecent frames
    - same approx fill amount regardless of aspect ratio
 
- - next steps for improving airplane detection:
-   - false positive airplanes on stars in (largely in corners is a problem)
-     they're yellow, not sure why the overlap detection didn't get them (theta/rho mismatch?).
-
  - make outlier output text files be separated by airplane / not airplane
 
  - apply the same center theta outlier logic to outliers within the same frame
@@ -98,6 +94,8 @@ todo:
 
  - find some way to ignore groups on the horizon, it's a problem for moving timelapses,
    can cause the background to skip badly
+   perhaps detecting contrast changes on the edge?
+   i.e. notice when neighboring pixels of the group are brighter on one side than the other.
  
  - figure out how distribution works
    - a .dmg file with a command line installer?  any swift command line installer examples?
@@ -275,11 +273,7 @@ struct Ntar: ParsableCommand {
             }
             
             // XXX maybe check to make sure this is a directory
-            Log.d("will process \(input_image_sequence_dirname)")
-            
-            //Log.d("running with min_group_size \(self.minGroupSize) min_line_count \(min_line_count)")
-            Log.d("assume_airplane_size \(assume_airplane_size)")
-            //Log.d("max_concurrent_frames \(max_concurrent_frames) outlier_brightness_gap \(outlier_brightness_gap)")
+            Log.i("processing files in \(input_image_sequence_dirname)")
             
             if #available(macOS 10.15, *) {
                 let eraser = NighttimeAirplaneRemover(imageSequenceDirname: input_image_sequence_dirname,
