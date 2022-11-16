@@ -252,7 +252,7 @@ func really_final_streak_processing(onFrame frame: FrameAirplaneRemover,
                     if let last_other_airplane_streak = other_airplane_streak.last {
                         let first_other_airplane_streak = other_airplane_streak[0]
 
-                        let move_me_theta_diff: Double = 20      // XXX move me
+                        let move_me_theta_diff: Double = 10      // XXX move me
                         
                         if first_member.frame_index == last_other_airplane_streak.frame_index + 1 {
                             // found a streak that ended right before this one started
@@ -268,7 +268,6 @@ func really_final_streak_processing(onFrame frame: FrameAirplaneRemover,
 
                             let move_me_distance_limit = hypo_avg + 2 // XXX contstant
                             
-                            // XXX constant
                             if distance < move_me_distance_limit && theta_diff < move_me_theta_diff {
                                 remove_small_streak = false
                             }
@@ -502,7 +501,7 @@ fileprivate func run_final_streak_pass(frames: [FrameAirplaneRemover]) async {
 
                 if houghScore > 0.007 { // XXX constant
                     if let streak = 
-                         await streak_starting_from(group: group,
+                         await streak_starting_from(group: group, // XXX really start from ends of existing streak, not group, which could be in the middle
                                                     frames: frames,
                                                     startingIndex: batch_index+1,
                                                     potentialStreak: &potential_streak)
@@ -630,10 +629,10 @@ func streak_starting_from(group: OutlierGroup,
             if houghScore > 0.007/*medium_hough_line_score*/ &&
                  distance < best_distance &&
                  (theta_diff < final_theta_diff || abs(theta_diff - 180) < final_theta_diff) &&
-//                 ((center_line_theta_diff_1 < center_line_theta_diff ||
-//                     abs(center_line_theta_diff_1 - 180) < center_line_theta_diff) || // && ??
-//                    (center_line_theta_diff_2 < center_line_theta_diff ||
-//                       abs(center_line_theta_diff_2 - 180) < center_line_theta_diff)) &&
+                 ((center_line_theta_diff_1 < center_line_theta_diff ||
+                     abs(center_line_theta_diff_1 - 180) < center_line_theta_diff) || // && ??
+                    (center_line_theta_diff_2 < center_line_theta_diff ||
+                       abs(center_line_theta_diff_2 - 180) < center_line_theta_diff)) &&
                  rho_diff < final_rho_diff
             {
                 Log.d("frame \(frame.frame_index) \(other_group) is \(distance) away from \(last_group)")
@@ -641,7 +640,7 @@ func streak_starting_from(group: OutlierGroup,
                 best_distance = distance
                 best_frame_index = frame_index // XXX this WAS wrong
             } else {
-                Log.d("frame \(frame.frame_index) \(other_group) doesn't match \(group) houghScore \(houghScore) medium_hough_line_score \(medium_hough_line_score) distance \(distance) best_distance \(best_distance) theta_diff \(theta_diff) rho_diff \(rho_diff) center_line_theta_diff_1 \(center_line_theta_diff_1) center_line_theta_diff_2 \(center_line_theta_diff_2) center_line_theta \(center_line_theta) last \(last_group_line_theta) other \(other_group_line_theta)")
+                //Log.d("frame \(frame.frame_index) \(other_group) doesn't match \(group) houghScore \(houghScore) medium_hough_line_score \(medium_hough_line_score) distance \(distance) best_distance \(best_distance) theta_diff \(theta_diff) rho_diff \(rho_diff) center_line_theta_diff_1 \(center_line_theta_diff_1) center_line_theta_diff_2 \(center_line_theta_diff_2) center_line_theta \(center_line_theta) last \(last_group_line_theta) other \(other_group_line_theta)")
             }
             return .continue
         }
@@ -778,6 +777,10 @@ func pixel_overlap(group_1: OutlierGroup,
 
 @available(macOS 10.15, *) 
 func distance(from group1: OutlierGroup, to group2: OutlierGroup) async -> Double {
+
+    return edge_distance(from: group1.bounds, to: group2.bounds)
+/*
+
     let group1_hypo = group1.bounds.hypotenuse
     let group2_hypo = group2.bounds.hypotenuse
 
@@ -790,6 +793,155 @@ func distance(from group1: OutlierGroup, to group2: OutlierGroup) async -> Doubl
         // so try to avoid it until they are closer and the accuracy matters
         return await group1.pixelDistance(to: group2)
     }
+*/
 }
 
 
+// the distance between the center point of the box described and the exit of the line from it
+func distance_on(box bounding_box: BoundingBox,
+                slope: Double, y_intercept: Double, theta: Double) -> Double
+{
+    var edge: Edge = .horizontal
+    let y_max_value = Double(bounding_box.max.x)*slope + Double(y_intercept)
+    let x_max_value = Double(bounding_box.max.y)-y_intercept/slope
+    //let y_min_value = Double(min_x)*slope + Double(y_intercept)
+    //let x_min_value = Double(bounding_box.min.y)-y_intercept/slope
+
+    // there is an error introduced by integer to floating point conversions
+    let math_accuracy_error: Double = 3
+    
+    if Double(bounding_box.min.y) - math_accuracy_error <= y_max_value && y_max_value <= Double(bounding_box.max.y) + math_accuracy_error {
+        //Log.d("vertical")
+        edge = .vertical
+    } else if Double(bounding_box.min.x) - math_accuracy_error <= x_max_value && x_max_value <= Double(bounding_box.max.x) + math_accuracy_error {
+        //Log.d("horizontal")
+        edge = .horizontal
+    } else {
+        //Log.d("slope \(slope) y_intercept \(y_intercept) theta \(theta)")
+        //Log.d("min_x \(min_x) x_max_value \(x_max_value) bounding_box.max.x \(bounding_box.max.x)")
+        //Log.d("bounding_box.min.y \(bounding_box.min.y) y_max_value \(y_max_value) bounding_box.max.y \(bounding_box.max.y)")
+        //Log.d("min_x \(min_x) x_min_value \(x_min_value) bounding_box.max.x \(bounding_box.max.x)")
+        //Log.d("bounding_box.min.y \(bounding_box.min.y) y_min_value \(y_min_value) bounding_box.max.y \(bounding_box.max.y)")
+        // this means that the line generated from the given slope and line
+        // does not intersect the rectangle given 
+
+        // can happen for situations of overlapping areas like this:
+        //(1119 124),  (1160 153)
+        //(1122 141),  (1156 160)
+
+        // is this really a problem? not sure
+        //Log.d("the line generated from the given slope and line does not intersect the rectangle given")
+    }
+
+    var hypotenuse_length: Double = 0
+    
+    switch edge {
+    case .vertical:
+        let half_width = Double(bounding_box.width)/2
+        //Log.d("vertical half_width \(half_width)")
+        hypotenuse_length = half_width / cos((90/180*Double.pi)-theta)
+        
+    case .horizontal:
+        let half_height = Double(bounding_box.height)/2
+        //Log.d("horizontal half_height \(half_height)")
+        hypotenuse_length = half_height / cos(theta)
+    }
+    
+    return hypotenuse_length
+}
+// positive if they don't overlap, negative if they do
+func edge_distance(from box_1: BoundingBox, to box_2: BoundingBox) -> Double {
+    
+    let half_width_1 = Double(box_1.width)/2
+    let half_height_1 = Double(box_1.height)/2
+    
+    //Log.d("1 half size [\(half_width_1), \(half_height_1)]")
+    
+    let half_width_2 = Double(box_2.width)/2
+    let half_height_2 = Double(box_2.height)/2
+    
+    //Log.d("2 half size [\(half_width_2), \(half_height_2)]")
+
+    let center_1_x = Double(box_1.min.x) + half_width_1
+    let center_1_y = Double(box_1.min.y) + half_height_1
+
+    //Log.d("1 center [\(center_1_x), \(center_1_y)]")
+    
+    let center_2_x = Double(box_2.min.x) + half_width_2
+    let center_2_y = Double(box_2.min.y) + half_height_2
+    
+
+    //Log.d("2 center [\(center_2_x), \(center_2_y)]")
+
+    if center_1_y == center_2_y {
+        // special case horizontal alignment
+        // return the distance between their centers minus half of each of their widths
+        return Double(abs(center_1_x - center_2_x) - half_width_1 - half_width_2)
+    }
+
+    if center_1_x == center_2_x {
+        // special case vertical alignment
+        // return the distance between their centers minus half of each of their heights
+        return Double(abs(center_1_y - center_2_y) - half_height_1 - half_height_2)
+    }
+
+    // calculate slope and y intercept for the line between the center points
+    // y = slope * x + y_intercept
+    let slope = Double(center_1_y - center_2_y)/Double(center_1_x - center_2_x)
+
+    // base the y_intercept on the center 1 coordinates
+    let y_intercept = Double(center_1_y) - slope * Double(center_1_x)
+
+    //Log.d("slope \(slope) y_intercept \(y_intercept)")
+    
+    var theta: Double = 0
+
+    // width between center points
+    let width = Double(abs(center_1_x - center_2_x))
+
+    // height between center points
+    let height = Double(abs(center_1_y - center_2_y))
+
+    let ninety_degrees_in_radians = 90 * Double.pi/180
+
+    if center_1_x < center_2_x {
+        if center_1_y < center_2_y {
+            // 90 + case
+            theta = ninety_degrees_in_radians + atan(height/width)
+        } else { // center_1_y > center_2_y
+            // 0 - 90 case
+            theta = atan(width/height)
+        }
+    } else { // center_1_x > center_2_x
+        if center_1_y < center_2_y {
+            // 0 - 90 case
+            theta = atan(width/height)
+        } else { // center_1_y > center_2_y
+            // 90 + case
+            theta = ninety_degrees_in_radians + atan(height/width)
+        }
+    }
+
+    //Log.d("theta \(theta*180/Double.pi) degrees")
+    
+    // the distance along the line between the center points that lies within group 1
+    let dist_1 = distance_on(box: box_1, slope: slope, y_intercept: y_intercept, theta: theta)
+    //Log.d("dist_1 \(dist_1)")
+    
+    // the distance along the line between the center points that lies within group 2
+    let dist_2 = distance_on(box: box_2, slope: slope, y_intercept: y_intercept, theta: theta)
+
+    //Log.d("dist_2 \(dist_2)")
+
+    // the direct distance bewteen the two centers
+    let center_distance = sqrt(width * width + height * height)
+
+    //Log.d("center_distance \(center_distance)")
+    
+    // return the distance between their centers minus the amount of the line which is within each group
+    // will be positive if the distance is separation
+    // will be negative if they overlap
+    let ret = center_distance - dist_1 - dist_2
+    //Log.d("returning \(ret)")
+    return ret
+}
