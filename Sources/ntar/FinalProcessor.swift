@@ -501,10 +501,10 @@ fileprivate func run_final_streak_pass(frames: [FrameAirplaneRemover]) async {
 
                 if houghScore > 0.007 { // XXX constant
                     if let streak = 
-                         await streak_starting_from(group: group, // XXX really start from ends of existing streak, not group, which could be in the middle
-                                                    frames: frames,
-                                                    startingIndex: batch_index+1,
-                                                    potentialStreak: &potential_streak)
+                         await streak_from(group: group, // XXX really start from ends of existing streak, not group, which could be in the middle
+                                           frames: frames,
+                                           startingIndex: batch_index+1,
+                                           potentialStreak: &potential_streak)
                     {
                         Log.i("frame \(frame_index) found streak \(potential_streak_name) of size \(streak.count) for \(group)")
                         airplane_streaks[potential_streak_name] = streak
@@ -563,15 +563,46 @@ fileprivate func run_final_streak_pass(frames: [FrameAirplaneRemover]) async {
 }
 
 
+@available(macOS 10.15, *)
+func streak_from(streak: inout [AirplaneStreakMember],
+                 frames: [FrameAirplaneRemover],
+                 startingIndex starting_index: Int)
+  async -> [AirplaneStreakMember]?
+{
+    if streak.count == 1 {
+        return await streak_from(group: streak[0].group,
+                                 frames: frames,
+                                 startingIndex: starting_index,
+                                 potentialStreak: &streak)
+    } else {
+        if let new_streak = await streak_from(group: streak[0].group,
+                                              frames: frames,
+                                              startingIndex: starting_index,
+                                              potentialStreak: &streak)
+        {
+            return new_streak
+        } else if let last_streak_member = streak.last,
+                  let new_streak = await streak_from(group: last_streak_member.group,
+                                                     frames: frames,
+                                                     startingIndex: starting_index,
+                                                     potentialStreak: &streak)
+        {
+            return new_streak
+        }
+        return nil
+    }
+}
+
+
 // see if there is a streak of airplane tracks starting from the given group
 // a 'streak' is a set of outliers with simlar theta and rho, that are
 // close enough to eachother, and that are moving in close enough to the same
 // direction as the lines that describe them.
 @available(macOS 10.15, *)
-func streak_starting_from(group: OutlierGroup,
-                          frames: [FrameAirplaneRemover],
-                          startingIndex starting_index: Int,
-                          potentialStreak potential_streak: inout [AirplaneStreakMember])
+func streak_from(group: OutlierGroup,
+                 frames: [FrameAirplaneRemover],
+                 startingIndex starting_index: Int,
+                 potentialStreak potential_streak: inout [AirplaneStreakMember])
   async -> [AirplaneStreakMember]?
 {
 
@@ -625,8 +656,9 @@ func streak_starting_from(group: OutlierGroup,
             let center_line_theta_diff_2 = abs(center_line_theta-last_group_line_theta)
 
             let houghScore = await other_group.paintScore(from: .houghTransform)
-            
-            if houghScore > 0.007/*medium_hough_line_score*/ &&
+
+            // XXX constant  VVV 
+            if houghScore > 0.007 /*medium_hough_line_score*/ &&
                  distance < best_distance &&
                  (theta_diff < final_theta_diff || abs(theta_diff - 180) < final_theta_diff) &&
                  ((center_line_theta_diff_1 < center_line_theta_diff ||
