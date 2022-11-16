@@ -198,7 +198,7 @@ actor FrameAirplaneRemover: Equatable {
     // this method groups outliers into groups of direct neighbors,
     // treating smaller groups of outliers as noise and pruning them out
     // after pruning, the outlier_groups has been populated, and each
-    // outlier group has had basic paintability analysis done upon init
+    // outlier group has been analyzed for basic paintability
     func pruneOutliers(_ outlier_amount_list: [UInt]) async {
         Log.i("frame \(frame_index) pruning outliers")
         
