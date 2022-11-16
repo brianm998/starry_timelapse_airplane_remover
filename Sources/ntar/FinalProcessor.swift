@@ -525,7 +525,7 @@ fileprivate func run_final_streak_pass(frames: [FrameAirplaneRemover]) async {
         let first_member = airplane_streak[0]
         Log.i("analyzing streak \(streak_name) starting with group \(first_member.group) frame_index \(first_member.frame_index) with \(airplane_streak.count) members")
         // XXX perhaps reject small streaks?
-        //if airplane_streak.count < 3 { continue } 
+        if airplane_streak.count < 3 { continue } 
         var verbotten = false
         var was_already_paintable = false
         //let index_of_first_streak = airplane_streak[0].frame_index
