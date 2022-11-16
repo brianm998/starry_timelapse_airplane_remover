@@ -129,13 +129,14 @@ let supported_image_file_types = [".tif", ".tiff"] // XXX move this out
 let memory_size_bytes = ProcessInfo.processInfo.physicalMemory
 let memory_size_gigs = ProcessInfo.processInfo.physicalMemory/(1024*1024*1024)
 
-let ntar_version = "0.0.6"
+let ntar_version = "0.0.7"
 
 // 0.0.2 added more detail group hough transormation analysis, based upon a data set
 // 0.0.3 included the data set analysis to include group size and fill, and to use histograms
 // 0.0.4 included .inStreak final processing
 // 0.0.5 added pixel overlap between outlier groups
 // 0.0.6 fixed streak processing and added another layer afterwards
+// 0.0.7 really fixed streak processing and lots of refactoring
 
 
 @main
