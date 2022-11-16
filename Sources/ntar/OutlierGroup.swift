@@ -21,6 +21,13 @@ enum PaintScoreType {
     case combined       // a combination, not using fillAmount
 }
 
+var paintScoreWeights: [PaintScoreType:Double] = [
+  .houghTransform: 2,
+  .groupSize: 1,  
+  .aspectRatio: 1,
+  .brightness: 1
+]
+
 // represents a single outler group in a frame
 @available(macOS 10.15, *) 
 actor OutlierGroup: CustomStringConvertible, Hashable, Equatable {
@@ -67,8 +74,29 @@ actor OutlierGroup: CustomStringConvertible, Hashable, Equatable {
         case .fillAmount:       // XXX not used right now
             return self.paintScoreFromFillAmount
         case .combined:
-            return (self.paintScoreFromGroupSize + self.paintScoreFromAspectRatio +
-                    self.paintScoreFromBrightness + self.paintScoreFromHoughTransformLines)/4
+            var totalScore: Double = 0
+            var totalWeight: Double = 0
+
+            if let size_weight = paintScoreWeights[.groupSize] {
+                totalScore += self.paintScoreFromGroupSize * size_weight
+                totalWeight += size_weight
+            }
+
+            if let aspect_ratio_weight = paintScoreWeights[.aspectRatio] {
+                totalScore += self.paintScoreFromAspectRatio * aspect_ratio_weight
+                totalWeight += aspect_ratio_weight
+            }
+
+            if let brightness_weight = paintScoreWeights[.brightness] {
+                totalScore += self.paintScoreFromBrightness * brightness_weight
+                totalWeight += brightness_weight
+            }
+
+            if let hough_weight = paintScoreWeights[.houghTransform] {
+                totalScore += self.paintScoreFromHoughTransformLines * hough_weight
+                totalWeight += hough_weight
+            }
+            return totalScore / totalWeight
         }
     }
     
@@ -134,8 +162,6 @@ actor OutlierGroup: CustomStringConvertible, Hashable, Equatable {
             //let group_fill_amount_score = paint_score_from(fillAmount: group_fill_amount)
             
             
-        //Log.d("frame \(frame.frame_index) should_paint group_size_score \(group_size_score) group_fill_amount_score \(group_fill_amount_score) group_aspect_ratio_score \(group_aspect_ratio_score) group.value_score \(group.value_score/100) + paint_score_from_lines \(paintScoreFromHoughTransformLines)")
-
         let score = self.paintScore(from: .combined)
         if score > 0.5 {
             Log.d("frame \(frame.frame_index) should_paint[\(name)] = (true, .goodScore(\(score))")
@@ -144,6 +170,9 @@ actor OutlierGroup: CustomStringConvertible, Hashable, Equatable {
             Log.d("frame \(frame.frame_index) should_paint[\(name)] = (false, .badScore(\(score))")
             self.shouldPaint = .badScore(score)
         }
+
+        Log.d("frame \(frame.frame_index) group \(self) should_paint \(self.shouldPaint?.willPaint) reason \(String(describing: self.shouldPaint)) hough transform score \(paintScore(from: .houghTransform)) aspect ratio \(paintScore(from: .aspectRatio)) brightness score \(paintScore(from: .brightness)) size score \(paintScore(from: .groupSize)) combined \(paintScore(from: .combined)) ")
+
     }
 
     func distance(to outlier: OutlierGroup, is distance: Double) {
@@ -181,7 +210,7 @@ actor OutlierGroup: CustomStringConvertible, Hashable, Equatable {
         
         for x_1 in self.bounds.min.x ... self.bounds.max.x {
             //Log.d("x_1 \(x_1)")
-            Log.d("for y_1 in \(self.bounds.min.y) ... \(self.bounds.max.y) {")
+            //Log.d("for y_1 in \(self.bounds.min.y) ... \(self.bounds.max.y) {")
             for y_1 in self.bounds.min.y ... self.bounds.max.y {
                 //Log.d("y_1 \(y_1)")
                 let index1 = y_1 * self.frame.width + x_1
@@ -191,6 +220,7 @@ actor OutlierGroup: CustomStringConvertible, Hashable, Equatable {
                         //Log.d("\(my_name) == \(self.name)")
                         hit1 = true
                         for x_2 in group2.bounds.min.x ... group2.bounds.max.x {
+                            var last_y_dist: Double = start_distance
                             for y_2 in group2.bounds.min.y ... group2.bounds.max.y {
                                 let index2 = y_2 * group2.frame.width + x_2
                                 if let group2_name = group_2_outlier_pixels[index2],
@@ -200,7 +230,9 @@ actor OutlierGroup: CustomStringConvertible, Hashable, Equatable {
                                     let wid = Double(x_2 - x_1)
                                     let hei = Double(y_2 - y_1)
                                     let dist = sqrt(wid*wid + hei*hei)
-                                    if(dist < min_distance) { min_distance = dist }
+                                    if dist < min_distance { min_distance = dist }
+                                    if dist > last_y_dist { break } // don't go further in this direction 
+                                    last_y_dist = dist
                                 }
                             }
                         }
