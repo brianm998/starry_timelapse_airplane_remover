@@ -101,7 +101,10 @@ todo:
  
  - figure out how distribution works
    - a .dmg file with a command line installer?  any swift command line installer examples?
-*/
+
+ - there is a logging bug where both console and file need to be set to debug, otherwise the logfile
+   is not accurate (has some debug, but not all)
+ */
 
 // this is here so that PaintReason can see it
 var assume_airplane_size: Int = 5000 // don't bother spending the time to fully process
@@ -111,7 +114,7 @@ var assume_airplane_size: Int = 5000 // don't bother spending the time to fully 
 let medium_hough_line_score: Double = 0.4 // close to being a line, not really far
 
 // how far in each direction do we go when doing final processing?
-let number_final_processing_neighbors_needed = 4 // in each direction
+let number_final_processing_neighbors_needed = 3 // in each direction
 
 let final_theta_diff: Double = 10       // how close in theta/rho outliers need to be between frames
 let final_rho_diff: Double = 20        // 20 works
