@@ -200,20 +200,23 @@ class ImageSequenceProcessor {
             }
             Log.d("finished hook")
             self.finished_hook()
-            let rename_me = self.dispatchGroup.dispatch_group
-            while (rename_me.wait(timeout: DispatchTime.now().advanced(by: .seconds(3))) == .timedOut) {
+            local_dispatch_group.leave()
+        }
+
+        local_dispatch_group.wait()
+        let rename_me = self.dispatchGroup.dispatch_group
+        while (rename_me.wait(timeout: DispatchTime.now().advanced(by: .seconds(3))) == .timedOut) {
+            Task {
                 let count = await self.dispatchGroup.count
                 if count < 8 {      // XXX hardcoded constant
                     for (name, _) in await self.dispatchGroup.running {
                         Log.d("waiting on \(name)")
                     }
                 }
-             }
-            local_dispatch_group.leave()
+            } 
         }
-        Log.d("waiting to finish")
-        local_dispatch_group.wait() // SIGKILL?
-        Log.d("done")
+
+        Log.i("done")
     }
 }
 

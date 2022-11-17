@@ -448,7 +448,7 @@ fileprivate func run_final_streak_pass(frames: [FrameAirplaneRemover]) async {
     
     for (batch_index, frame) in frames.enumerated() {
         let frame_index = frame.frame_index
-        Log.w("frame_index \(frame_index)")
+        Log.d("frame_index \(frame_index)")
         if batch_index + 1 == frames.count { continue } // the last frame can be ignored here
 
         await frame.foreachOutlierGroup() { group in
