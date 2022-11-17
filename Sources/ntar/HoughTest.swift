@@ -48,7 +48,7 @@ func hough_test(filename: String, output_filename: String) {
                                                         output_image.raw_image_data as CFData) as? Data
               else { fatalError("fuck") }
 
-        image.read { pixels in 
+        try image.read { pixels in 
             var counts = [[UInt32]](repeating: [UInt32](repeating: 0, count: hough_height),
                                     count: Int(hough_width))
 
@@ -98,7 +98,7 @@ func hough_test(filename: String, output_filename: String) {
                 }
             }
 
-            output_image.writeTIFFEncoding(ofData: output_data, toFilename: "hough_transform.tif")
+            try output_image.writeTIFFEncoding(ofData: output_data, toFilename: "hough_transform.tif")
 
               /*
 

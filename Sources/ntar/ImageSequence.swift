@@ -18,7 +18,7 @@ You should have received a copy of the GNU General Public License along with nta
 @available(macOS 10.15, *)
 actor ImageSequence {
 
-    init(dirname: String, givenFilenames given_filenames: [String]? = nil) {
+    init(dirname: String, givenFilenames given_filenames: [String]? = nil) throws {
         var image_files: [String] = []
 
         if let given_filenames = given_filenames {
@@ -26,17 +26,13 @@ actor ImageSequence {
                 image_files.append("\(dirname)/\(filename)")
             }
         } else {
-            do {
-                let contents = try file_manager.contentsOfDirectory(atPath: dirname)
-                contents.forEach { file in
-                    supported_image_file_types.forEach { type in
-                        if file.hasSuffix(type) {
-                            image_files.append("\(dirname)/\(file)")
-                        } 
-                    }
+            let contents = try file_manager.contentsOfDirectory(atPath: dirname)
+            contents.forEach { file in
+                supported_image_file_types.forEach { type in
+                    if file.hasSuffix(type) {
+                        image_files.append("\(dirname)/\(file)")
+                    } 
                 }
-            } catch {
-                Log.d("OH FUCK \(error)")
             }
     
             image_files.sort { (lhs: String, rhs: String) -> Bool in
@@ -52,18 +48,14 @@ actor ImageSequence {
 
     private var images: [String: WeakRef<PixelatedImage>] = [:]
 
-    func getImage(withName filename: String) -> PixelatedImage? {
+    func getImage(withName filename: String) throws -> PixelatedImage? {
         if let image = images[filename]?.value {
             return image
         }
-        do {
-            Log.d("loading \(filename)")
-            if let pixelatedImage = try PixelatedImage(fromFile: filename) {
-                images[filename] = WeakRef(value: pixelatedImage)
-                return pixelatedImage
-            }
-        } catch {
-            Log.e(error)
+        Log.d("loading \(filename)")
+        if let pixelatedImage = try PixelatedImage(fromFile: filename) {
+            images[filename] = WeakRef(value: pixelatedImage)
+            return pixelatedImage
         }
         Log.w("could not getImage(withName: \(filename)), no image found")
         return nil

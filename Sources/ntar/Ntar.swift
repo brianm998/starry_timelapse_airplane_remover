@@ -252,8 +252,12 @@ struct Ntar: ParsableCommand {
             let non_airplanes_group = "outlier_data/non_airplanes"
             
             if #available(macOS 10.15, *) {
-                process_outlier_groups(dirname: airplanes_group)
-                process_outlier_groups(dirname: non_airplanes_group)
+                do {
+                    try process_outlier_groups(dirname: airplanes_group)
+                    try process_outlier_groups(dirname: non_airplanes_group)
+                } catch {
+                    Log.e(error)
+                }
             } else {
                 // XXX handle this better
             }
@@ -282,15 +286,19 @@ struct Ntar: ParsableCommand {
             Log.i("processing files in \(input_image_sequence_dirname)")
             
             if #available(macOS 10.15, *) {
-                let eraser = NighttimeAirplaneRemover(imageSequenceDirname: input_image_sequence_dirname,
-                                                      maxConcurrent: UInt(numConcurrentRenders),
-                                                      maxPixelDistance: outlierBrightnessThreshold,
-                                                      minGroupSize: minGroupSize,
-                                                      assumeAirplaneSize: assume_airplane_size,
-                                                      testPaint: test_paint,
-                                                      writeOutlierGroupFiles: should_write_outlier_group_files)
-                
-                eraser.run()
+                do {
+                    let eraser = try NighttimeAirplaneRemover(imageSequenceDirname: input_image_sequence_dirname,
+                                                              maxConcurrent: UInt(numConcurrentRenders),
+                                                              maxPixelDistance: outlierBrightnessThreshold,
+                                                              minGroupSize: minGroupSize,
+                                                              assumeAirplaneSize: assume_airplane_size,
+                                                              testPaint: test_paint,
+                                                              writeOutlierGroupFiles: should_write_outlier_group_files)
+                    
+                    try eraser.run()
+                } catch {
+                    Log.e(error)
+                }
             } else {
                 Log.e("cannot run :(") // XXX make this better
             }
@@ -303,8 +311,7 @@ struct Ntar: ParsableCommand {
 // this method reads all the outlier group text files
 // and (if missing) generates a csv file with the hough transform data from it
 @available(macOS 10.15, *)
-func process_outlier_groups(dirname: String) {
-    do {
+func process_outlier_groups(dirname: String) throws {
         let dispatchGroup = DispatchGroup()
         let contents = try file_manager.contentsOfDirectory(atPath: dirname)
 
@@ -354,9 +361,6 @@ func process_outlier_groups(dirname: String) {
             dispatchGroup.leave()
         }
         dispatchGroup.wait()
-    } catch {
-        Log.e(error)
-    }
 }
 
 

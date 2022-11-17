@@ -62,10 +62,10 @@ class PixelatedImage {
         }
     }
 
-    func read(_ closure: (UnsafeBufferPointer<UInt16>) -> Void) {
-        raw_image_data.withUnsafeBytes { unsafeRawPointer in 
+    func read(_ closure: (UnsafeBufferPointer<UInt16>) throws -> Void) throws {
+        try raw_image_data.withUnsafeBytes { unsafeRawPointer in 
             let typedPointer: UnsafeBufferPointer<UInt16> = unsafeRawPointer.bindMemory(to: UInt16.self)
-            closure(typedPointer)
+            try closure(typedPointer)
         }        
     }
     
@@ -84,7 +84,7 @@ class PixelatedImage {
 
     // write out the given image data as a 16 bit tiff file to the given filename
     // used when modifying the invariant original image data, and saying the edits to a file
-    func writeTIFFEncoding(ofData image_data: Data, toFilename image_filename: String) {
+    func writeTIFFEncoding(ofData image_data: Data, toFilename image_filename: String) throws {
 
         if file_manager.fileExists(atPath: image_filename) {
             Log.w("not writing to already existing filename \(image_filename)")
@@ -104,30 +104,27 @@ class PixelatedImage {
                                     provider: dataProvider,
                                     decode: nil,
                                     shouldInterpolate: false,
-                                    intent: .defaultIntent)
+                                    intent: .defaultIntent) 
         {
             // save it
             //Log.d("new_image \(new_image)")
-            do {
-                let context = CIContext()
-                let fileURL = NSURL(fileURLWithPath: image_filename, isDirectory: false) as URL
-                let options: [CIImageRepresentationOption: CGFloat] = [:]
-                if let colorSpace = CGColorSpace(name: CGColorSpace.sRGB) {
-                    let imgFormat = CIFormat.RGBA16
 
-                    try context.writeTIFFRepresentation(
-                        of: CIImage(cgImage: new_image),
-                        to: fileURL,
-                        format: imgFormat,
-                        colorSpace: colorSpace,
-                        options: options
-                    )
-                    Log.i("image written to \(image_filename)")
-                } else {
-                    Log.d("FUCK")
-                }
-            } catch {
-                Log.e(error)
+            let context = CIContext()
+            let fileURL = NSURL(fileURLWithPath: image_filename, isDirectory: false) as URL
+            let options: [CIImageRepresentationOption: CGFloat] = [:]
+            if let colorSpace = CGColorSpace(name: CGColorSpace.sRGB) {
+                let imgFormat = CIFormat.RGBA16
+
+                try context.writeTIFFRepresentation(
+                  of: CIImage(cgImage: new_image),
+                  to: fileURL,
+                  format: imgFormat,
+                  colorSpace: colorSpace,
+                  options: options
+                )
+                Log.i("image written to \(image_filename)")
+            } else {
+                Log.d("FUCK")
             }
         }
     }

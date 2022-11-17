@@ -434,8 +434,8 @@ actor FrameAirplaneRemover: Equatable {
         }
     }
 
-    private func writeTestFile(withData data: Data) {
-        image.writeTIFFEncoding(ofData: data, toFilename: test_paint_filename)
+    private func writeTestFile(withData data: Data) throws {
+        try image.writeTIFFEncoding(ofData: data, toFilename: test_paint_filename)
     }
 
     // paint over a selected outlier pixel with data from pixels from adjecent frames
@@ -515,11 +515,14 @@ actor FrameAirplaneRemover: Equatable {
         await self.paintOverAirplanes(toData: &output_data, testData: &test_paint_data)
         
         Log.d("frame \(self.frame_index) writing output files")
-        
-        self.writeTestFile(withData: test_paint_data)
-        
-        // write frame out as a tiff file after processing it
-        self.image.writeTIFFEncoding(ofData: output_data,  toFilename: self.output_filename)
+
+        do {
+            try self.writeTestFile(withData: test_paint_data)
+            // write frame out as a tiff file after processing it
+            try self.image.writeTIFFEncoding(ofData: output_data,  toFilename: self.output_filename)
+        } catch {
+            Log.e(error)
+        }
         
         Log.i("frame \(self.frame_index) complete")
     }

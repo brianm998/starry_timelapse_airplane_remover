@@ -31,41 +31,37 @@ class ImageSequenceProcessor<T> {
     init(imageSequenceDirname image_sequence_dirname: String,
          outputDirname output_dirname: String,
          maxConcurrent max_concurrent: UInt = 5,
-         givenFilenames given_filenames: [String]? = nil)
+         givenFilenames given_filenames: [String]? = nil) throws
     {
         self.max_concurrent_renders = max_concurrent
         self.image_sequence_dirname = image_sequence_dirname
         self.output_dirname = output_dirname
-        self.image_sequence = ImageSequence(dirname: image_sequence_dirname,
-                                            givenFilenames: given_filenames)
+        self.image_sequence = try ImageSequence(dirname: image_sequence_dirname,
+                                                givenFilenames: given_filenames)
     }
 
     func maxConcurrentRenders() async -> UInt {
         return max_concurrent_renders
     }
     
-    func mkdir(_ path: String) {
+    func mkdir(_ path: String) throws {
         if !file_manager.fileExists(atPath: path) {
-            do {
-                try file_manager.createDirectory(atPath: path,
-                                                        withIntermediateDirectories: false,
-                                                        attributes: nil)
-            } catch let error as NSError {
-                fatalError("Unable to create directory \(error.debugDescription)")
-            }
+            try file_manager.createDirectory(atPath: path,
+                                             withIntermediateDirectories: false,
+                                             attributes: nil)
         }
     }
 
     func processFrame(number index: Int,
                       image: PixelatedImage,
                       output_filename: String,
-                      base_name: String) async -> T? 
+                      base_name: String) async throws -> T? 
     {
         Log.e("should be overridden")
         fatalError("should be overridden")
     }
 
-    func assembleMethodList() async {
+    func assembleMethodList() async throws {
         /*
            read all existing output files 
            sort them into frame order
@@ -106,8 +102,8 @@ class ImageSequenceProcessor<T> {
                 await method_list.add(atIndex: index, method: {
                     // this method is run async later                                           
                     Log.i("loading \(image_filename)")
-                    if let image = await self.image_sequence.getImage(withName: image_filename) {
-                        if let result = await self.processFrame(number: index,
+                    if let image = try await self.image_sequence.getImage(withName: image_filename) {
+                        if let result = try await self.processFrame(number: index,
                                                                 image: image,
                                                                 output_filename: output_filename,
                                                                 base_name: basename) {
@@ -127,7 +123,7 @@ class ImageSequenceProcessor<T> {
         // can be overridden
     }
     
-    func startup_hook() {
+    func startup_hook() throws {
         // can be overridden
     }
     
@@ -139,11 +135,11 @@ class ImageSequenceProcessor<T> {
         // can be overridden
     }
     
-    func run() {
+    func run() throws {
         Log.d("run")
-        startup_hook()
+        try startup_hook()
 
-        mkdir(output_dirname)
+        try mkdir(output_dirname)
 
         // this dispatch group is only used for this task
         let local_dispatch_group = DispatchGroup()
@@ -154,7 +150,7 @@ class ImageSequenceProcessor<T> {
         
         Task {
             // each of these methods removes the airplanes from a particular frame
-            await assembleMethodList()
+            try await assembleMethodList()
             Log.i("processing a total of \(await method_list.list.count) frames")
             
             await method_list_hook()

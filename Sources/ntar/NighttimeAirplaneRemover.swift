@@ -52,7 +52,7 @@ class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemover> {
          assumeAirplaneSize: Int,
          testPaint: Bool = false,
          writeOutlierGroupFiles: Bool = false,
-         givenFilenames given_filenames: [String]? = nil)
+         givenFilenames given_filenames: [String]? = nil) throws
     {
         
         self.max_pixel_distance = UInt16(max_pixel_percent/100*0xFFFF)
@@ -68,10 +68,10 @@ class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemover> {
         test_paint_output_dirname = "\(basename)-test-paint"
         outlier_output_dirname = "\(basename)-outliers"
         let output_dirname = basename
-        super.init(imageSequenceDirname: image_sequence_dirname,
-                   outputDirname: output_dirname,
-                   maxConcurrent: max_concurrent,
-                   givenFilenames: given_filenames)
+        try super.init(imageSequenceDirname: image_sequence_dirname,
+                       outputDirname: output_dirname,
+                       maxConcurrent: max_concurrent,
+                       givenFilenames: given_filenames)
 
         let processor = FinalProcessor(numberOfFrames: self.image_sequence.filenames.count,
                                        maxConcurrent: max_concurrent_renders,
@@ -81,10 +81,10 @@ class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemover> {
     }
 
     // called by the superclass at startup
-    override func startup_hook() {
-        if test_paint { mkdir(test_paint_output_dirname) }
+    override func startup_hook() throws {
+        if test_paint { try mkdir(test_paint_output_dirname) }
         if should_write_outlier_group_files {
-            mkdir(outlier_output_dirname)
+            try mkdir(outlier_output_dirname)
         }
     }
     
@@ -93,7 +93,7 @@ class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemover> {
     override func processFrame(number index: Int,
                                image: PixelatedImage,
                                output_filename: String,
-                               base_name: String) async -> FrameAirplaneRemover
+                               base_name: String) async throws -> FrameAirplaneRemover
     {
         //Log.e("full_image_path \(full_image_path)")
         // load images outside the main thread
@@ -101,12 +101,12 @@ class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemover> {
         var otherFrames: [PixelatedImage] = []
         
         if index > 0,
-           let image = await image_sequence.getImage(withName: image_sequence.filenames[index-1])
+           let image = try await image_sequence.getImage(withName: image_sequence.filenames[index-1])
         {
             otherFrames.append(image)
         }
         if index < image_sequence.filenames.count - 1,
-           let image = await image_sequence.getImage(withName: image_sequence.filenames[index+1])
+           let image = try await image_sequence.getImage(withName: image_sequence.filenames[index+1])
         {
             otherFrames.append(image)
         }
@@ -126,7 +126,6 @@ class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemover> {
     }
 
     override func result_hook(with result: FrameAirplaneRemover) async {
-
 
         Log.d("result hook with result \(result)")
         
