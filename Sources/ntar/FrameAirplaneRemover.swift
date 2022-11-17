@@ -99,6 +99,7 @@ actor FrameAirplaneRemover: Equatable {
     
     // this is still a slow part of the process, but is now about 10x faster than before
     func findOutliers() -> [UInt] {
+        Log.i("frame \(frame_index) finding outliers")
         var outlier_amount_list = [UInt](repeating: 0, count: width*height)
         // compare pixels at the same image location in adjecent frames
         // detect Outliers which are much more brighter than the adject frames

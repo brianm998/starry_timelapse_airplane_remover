@@ -102,6 +102,9 @@ todo:
 
  - there is a logging bug where both console and file need to be set to debug, otherwise the logfile
    is not accurate (has some debug, but not all)
+
+ - update streak tracking to make sure the streak is moving in the right direction
+   latest batch of false positives are three member streaks that are in the wrong direction    
  */
 
 // this is here so that PaintReason can see it
