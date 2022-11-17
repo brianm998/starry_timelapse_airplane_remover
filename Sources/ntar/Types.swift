@@ -22,7 +22,8 @@ enum Edge {
 @available(macOS 10.15, *) 
 typealias AirplaneStreakMember = (
   frame_index: Int,
-  group: OutlierGroup
+  group: OutlierGroup,
+  distance: Double?      // the distance from this member to the previous one, nil if first member
 )
 
 // the bounding box of an outlier group

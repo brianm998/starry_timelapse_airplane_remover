@@ -487,7 +487,7 @@ fileprivate func run_final_streak_pass(frames: [FrameAirplaneRemover]) async {
                 
                 // if not, pass in the starting potential one frame streak
                 
-                var potential_streak: [AirplaneStreakMember] = [(frame_index, group)]
+                var potential_streak: [AirplaneStreakMember] = [(frame_index, group, nil)]
                 var potential_streak_name = "\(frame_index).\(group.name)"
                 
                 if let existing_streak = existing_streak,
@@ -543,7 +543,9 @@ fileprivate func run_final_streak_pass(frames: [FrameAirplaneRemover]) async {
             }
         }
         if verbotten/* || !was_already_paintable*/ { continue }
-        Log.i("painting over streak with \(airplane_streak.count) members")
+        if airplane_streak[0].group.bounds.max.y < 1000 {
+            Log.w("painting over airplane streak \(airplane_streak)")
+        }
         for streak_member in airplane_streak {
             if streak_member.frame_index - initial_frame_index < 0 ||
                streak_member.frame_index - initial_frame_index >= frames.count {
@@ -559,7 +561,6 @@ fileprivate func run_final_streak_pass(frames: [FrameAirplaneRemover]) async {
             }
         }
     }
-
 }
 
 
@@ -609,6 +610,7 @@ func streak_from(group: OutlierGroup,
     Log.d("trying to find streak starting at \(group)")
     
     // the bounding box of the last element of the streak
+
     var last_group = group
 
     // the best match found so far for a possible streak etension
@@ -667,7 +669,7 @@ func streak_from(group: OutlierGroup,
                        abs(center_line_theta_diff_2 - 180) < center_line_theta_diff)) &&
                  rho_diff < final_rho_diff
             {
-                Log.d("frame \(frame.frame_index) \(other_group) is \(distance) away from \(last_group)")
+                Log.d("frame \(frame.frame_index) \(other_group) is \(distance) away from \(last_group) other_group_line_theta \(other_group_line_theta) last_group_line_theta \(last_group_line_theta) center_line_theta \(center_line_theta)")
                 best_group = other_group
                 best_distance = distance
                 best_frame_index = frame_index // XXX this WAS wrong
@@ -680,14 +682,51 @@ func streak_from(group: OutlierGroup,
             break               // no more streak
         } else {
             if best_frame_index == frame.frame_index {
-
                 if let last_streak_item = potential_streak.last,//[potential_streak.count-1] {
                    best_frame_index > last_streak_item.frame_index
                 {
-                    // streak on
-                    last_group = best_group
-                    Log.d("frame \(frame.frame_index) adding group \(best_group) to streak best_distance \(best_distance)")
-                    potential_streak.append((best_frame_index, best_group))
+                    // streak on (maybe)
+                    var do_it = true
+                    
+                    // check here to make sure the distance between best_group
+                    // and the potentel_streak - 2 are in line
+                    if potential_streak.count > 1 {
+                        let prev_index = potential_streak.count - 1
+                        let member_one_back = potential_streak[prev_index]
+                        let member_two_back = potential_streak[prev_index-1]
+
+                        if let member_one_back_distance = member_one_back.distance {
+                            let distance_two_back = await distance(from: best_group, to: member_two_back.group)
+                            if distance_two_back < member_one_back_distance {
+                                // this new potential member is actually closer to the member two back
+                                // than the one in the middle. skip it.
+                                Log.d("not adding \(best_group) to streak because it's not going in the right direction")
+                                do_it = false
+                            }
+                        }
+
+                        // also check if the center line theta between the three points are close enough
+                        // i.e. the center line theta should not be too far off between this new group
+                        // and the ones before it
+
+                        let center_theta_one_back = center_theta(from: best_group.bounds,
+                                                                 to: member_one_back.group.bounds)
+                        let center_theta_two_back = center_theta(from: best_group.bounds,
+                                                                 to: member_two_back.group.bounds)
+
+                        if(abs(center_theta_one_back - center_theta_two_back) > 20) {// XXX constant (could be larger?)
+                            Log.d("not adding \(best_group) to streak because \(center_theta_one_back) - \(center_theta_two_back) > 20")
+                            do_it = false
+                        }
+                    }
+
+                    if do_it {
+                        // set previous last group here for comparison later
+                        last_group = best_group
+                        
+                        Log.d("frame \(frame.frame_index) adding group \(best_group) to streak best_distance \(best_distance)")
+                        potential_streak.append((best_frame_index, best_group, best_distance))
+                    }
                 }
             } else {
                 break           // no more streak
