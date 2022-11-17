@@ -21,13 +21,6 @@ enum PaintScoreType {
     case combined       // a combination, not using fillAmount
 }
 
-var paintScoreWeights: [PaintScoreType:Double] = [
-  .houghTransform: 2,
-  .groupSize: 1,  
-  .aspectRatio: 1,
-  .brightness: 1
-]
-
 // represents a single outler group in a frame
 @available(macOS 10.15, *) 
 actor OutlierGroup: CustomStringConvertible, Hashable, Equatable {
@@ -77,25 +70,17 @@ actor OutlierGroup: CustomStringConvertible, Hashable, Equatable {
             var totalScore: Double = 0
             var totalWeight: Double = 0
 
-            if let size_weight = paintScoreWeights[.groupSize] {
-                totalScore += self.paintScoreFromGroupSize * size_weight
-                totalWeight += size_weight
-            }
+            let weights: [PaintScoreType: Double]
+              = [.houghTransform: 2,
+                 .groupSize:      1,
+                 .aspectRatio:    1,
+                 .brightness:     1]
 
-            if let aspect_ratio_weight = paintScoreWeights[.aspectRatio] {
-                totalScore += self.paintScoreFromAspectRatio * aspect_ratio_weight
-                totalWeight += aspect_ratio_weight
+            for (type, weight) in weights {
+                totalScore += self.paintScore(from: type) * weight
+                totalWeight += weight
             }
-
-            if let brightness_weight = paintScoreWeights[.brightness] {
-                totalScore += self.paintScoreFromBrightness * brightness_weight
-                totalWeight += brightness_weight
-            }
-
-            if let hough_weight = paintScoreWeights[.houghTransform] {
-                totalScore += self.paintScoreFromHoughTransformLines * hough_weight
-                totalWeight += hough_weight
-            }
+            
             return totalScore / totalWeight
         }
     }
@@ -138,30 +123,25 @@ actor OutlierGroup: CustomStringConvertible, Hashable, Equatable {
             Log.d("frame \(frame.frame_index) assuming group \(name) of size \(size) (> \(assume_airplane_size)) is an airplane, will paint over it")
             Log.d("frame \(frame.frame_index) should_paint[\(name)] = (true, .assumed)")
             self.shouldPaint = .assumed
-            return
         }
             
-        if self.lines.count == 0 {
-            Log.w("frame \(frame.frame_index) got no group lines for group \(name) of size \(size)")
-            // this should only happen when there is no data in the input and therefore output 
-            //fatalError("bad input data")
-            return
-        }
-            
-        if self.paintScoreFromHoughTransformLines > 0.5 {
+        if self.shouldPaint == nil,
+           self.paintScoreFromHoughTransformLines > 0.5
+        {
             if size < 300 { // XXX constant XXX
                 // don't assume small ones are lines
             } else {
                 Log.d("frame \(frame.frame_index) will paint group \(name) because it looks like a line from the group hough transform")
                 self.shouldPaint = .looksLikeALine(self.paintScoreFromHoughTransformLines)
-                return
             }
         }
             
-            //Log.d("should_paint group_size \(size) group_fill_amount \(group_fill_amount) group_aspect_ratio \(group_aspect_ratio)")
-            //let group_fill_amount_score = paint_score_from(fillAmount: group_fill_amount)
-            
-            
+        if self.shouldPaint == nil { setShouldPaintFromCombinedScore() }
+
+        Log.d("frame \(frame.frame_index) group \(self) bounds \(bounds) should_paint \(self.shouldPaint?.willPaint) reason \(String(describing: self.shouldPaint)) hough transform score \(paintScore(from: .houghTransform)) aspect ratio \(paintScore(from: .aspectRatio)) brightness score \(paintScore(from: .brightness)) size score \(paintScore(from: .groupSize)) combined \(paintScore(from: .combined)) ")
+    }
+
+    func setShouldPaintFromCombinedScore() {
         let score = self.paintScore(from: .combined)
         if score > 0.5 {
             Log.d("frame \(frame.frame_index) should_paint[\(name)] = (true, .goodScore(\(score))")
@@ -170,11 +150,8 @@ actor OutlierGroup: CustomStringConvertible, Hashable, Equatable {
             Log.d("frame \(frame.frame_index) should_paint[\(name)] = (false, .badScore(\(score))")
             self.shouldPaint = .badScore(score)
         }
-
-        Log.d("frame \(frame.frame_index) group \(self) bounds \(bounds) should_paint \(self.shouldPaint?.willPaint) reason \(String(describing: self.shouldPaint)) hough transform score \(paintScore(from: .houghTransform)) aspect ratio \(paintScore(from: .aspectRatio)) brightness score \(paintScore(from: .brightness)) size score \(paintScore(from: .groupSize)) combined \(paintScore(from: .combined)) ")
-
     }
-
+    
     func distance(to outlier: OutlierGroup, is distance: Double) {
         pixel_distances[outlier] = distance
     }

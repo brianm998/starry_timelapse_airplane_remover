@@ -10,8 +10,6 @@ enum PaintReason: Equatable, CaseIterable {
    case badScore(Double)        // percent score
    case adjecentOverlap(Double) // overlap distance
 
-   case isolatedTwoStreak       // an isolated two member streak
-
    public var BasicColor: BasicColor {
         get {
             switch self {
@@ -27,8 +25,6 @@ enum PaintReason: Equatable, CaseIterable {
                 return .brightCyan
             case .adjecentOverlap:
                 return .brightBlue
-            case .isolatedTwoStreak:
-                return .cyan
             }
         }
    }
@@ -42,7 +38,6 @@ enum PaintReason: Equatable, CaseIterable {
             case .inStreak:          return "in a streak"
             case .badScore:          return "bad score"
             case .adjecentOverlap:   return "adjecent overlap"
-            case .isolatedTwoStreak: return "isolated two streak"
             }
         }
    }
@@ -74,10 +69,6 @@ These outlier groups are not painted over because it overlaps with a similar out
                 return """
 These outlier groups were found to be in a streak across frames.
 """
-            case .isolatedTwoStreak:               
-                return """
-These outlier groups were small streaks by themselves
-"""
             }
         }
    }
@@ -91,7 +82,6 @@ These outlier groups were small streaks by themselves
             case .inStreak:          return true
             case .badScore:          return false
             case .adjecentOverlap:   return false
-            case .isolatedTwoStreak: return false
             }
         }
    }
@@ -106,7 +96,7 @@ These outlier groups were small streaks by themselves
 
    static var allCases: [PaintReason] {
        return [.assumed, .looksLikeALine(0), .goodScore(0),
-               .isolatedTwoStreak, .inStreak(0), .badScore(0), .adjecentOverlap(0)]
+               .inStreak(0), .badScore(0), .adjecentOverlap(0)]
    }
                          
    // colors used to test paint to show why
@@ -152,13 +142,6 @@ These outlier groups were small streaks by themselves
       case .adjecentOverlap:
           switch rhs {
           case .adjecentOverlap:
-              return true
-          default:
-              return false
-          }
-      case .isolatedTwoStreak:
-          switch rhs {
-          case .isolatedTwoStreak:
               return true
           default:
               return false

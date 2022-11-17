@@ -312,7 +312,9 @@ func really_final_streak_processing(onFrame frame: FrameAirplaneRemover,
                                 Log.e("frame \(member_to_remove.frame_index) is already finalized, modifying it now won't change anythig :(")
                                 fatalError("FUCK")
                             }
-                            await member_to_remove.group.shouldPaint(.isolatedTwoStreak)
+                            // here 'removing' means 'de-streakifying' it
+                            // it may or may not still be painted, but now it's not based upon other groups 
+                            await member_to_remove.group.setShouldPaintFromCombinedScore()
                         }
                     }
                 }
@@ -520,12 +522,15 @@ fileprivate func run_final_streak_pass(frames: [FrameAirplaneRemover]) async {
     }
 
     // go through and mark all of airplane_streaks to paint
-    Log.i("analyzing \(airplane_streaks.count) streaks")
+    Log.d("analyzing \(airplane_streaks.count) streaks")
     for (streak_name, airplane_streak) in airplane_streaks {
         let first_member = airplane_streak[0]
-        Log.i("analyzing streak \(streak_name) starting with group \(first_member.group) frame_index \(first_member.frame_index) with \(airplane_streak.count) members")
+        Log.d("analyzing streak \(streak_name) starting with group \(first_member.group) frame_index \(first_member.frame_index) with \(airplane_streak.count) members")
         // XXX perhaps reject small streaks?
-        if airplane_streak.count < 3 { continue } 
+        if airplane_streak.count < 3 {
+            Log.d("ignoring two member streak \(airplane_streak)")
+            continue
+        } 
         var verbotten = false
         var was_already_paintable = false
         //let index_of_first_streak = airplane_streak[0].frame_index
@@ -543,9 +548,7 @@ fileprivate func run_final_streak_pass(frames: [FrameAirplaneRemover]) async {
             }
         }
         if verbotten/* || !was_already_paintable*/ { continue }
-        if airplane_streak[0].group.bounds.max.y < 1000 {
-            Log.w("painting over airplane streak \(airplane_streak)")
-        }
+        Log.d("painting over airplane streak \(airplane_streak)")
         for streak_member in airplane_streak {
             if streak_member.frame_index - initial_frame_index < 0 ||
                streak_member.frame_index - initial_frame_index >= frames.count {
