@@ -1,5 +1,7 @@
 import Foundation
 
+extension String: Error {}
+
 // x, y coordinates
 typealias Coord = (
     x: Int,

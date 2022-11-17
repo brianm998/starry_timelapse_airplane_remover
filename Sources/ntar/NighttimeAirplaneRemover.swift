@@ -125,8 +125,11 @@ class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemover> {
         return frame_plane_remover
     }
 
-
     override func result_hook(with result: FrameAirplaneRemover) async {
+
+
+        Log.d("result hook with result \(result)")
+        
         // next step is to add this frame_plane_remover to an array of optionals
         // indexed by frame number
         // then create a new class that uses the diapatchGroup to keep the process alive
@@ -134,10 +137,8 @@ class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemover> {
         // analysis of the outlier groups between frames and making them look better
         // by doing further analysis and cleanup
 
-        // XXX return the frame remover directly here, and add to the final processor in the task group
-
         if let final_processor = final_processor {
-            await final_processor.add(frame: result, at: result.frame_index)
+            await final_processor.add(frame: result)
         } else {
             fatalError("should not happen")
         }
@@ -180,12 +181,10 @@ class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemover> {
         if let final_processor = final_processor {
             let name = "final processor run" 
             await dispatchGroup.enter(name)
-            dispatchQueue.async {
-                Task {
-                    // run the final processor as a single separate thread
-                    await final_processor.run(shouldProcess: immutable_should_process)
-                    await self.dispatchGroup.leave(name)
-                }
+            Task {
+                // run the final processor as a single separate thread
+                await final_processor.run(shouldProcess: immutable_should_process)
+                await self.dispatchGroup.leave(name)
             }
         } else {
             Log.e("should have a processor")

@@ -54,7 +54,8 @@ actor FinalProcessor {
                                       dispatchGroup: dispatch_group)
     }
 
-    func add(frame: FrameAirplaneRemover, at index: Int) {
+    func add(frame: FrameAirplaneRemover) {
+        let index = frame.frame_index
         Log.i("FINAL THREAD frame \(index) added for final inter-frame analysis")
         if index > max_added_index {
             max_added_index = index

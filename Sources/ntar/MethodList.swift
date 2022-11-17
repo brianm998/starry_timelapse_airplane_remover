@@ -14,9 +14,9 @@ You should have received a copy of the GNU General Public License along with nta
 
 @available(macOS 10.15, *) 
 actor MethodList<T> {
-    var list: [Int : () async -> T] = [:]
+    var list: [Int : () async throws -> T] = [:]
 
-    func add(atIndex index: Int, method: @escaping () async -> T) {
+    func add(atIndex index: Int, method: @escaping () async throws -> T) {
         list[index] = method
     }
 
@@ -24,7 +24,7 @@ actor MethodList<T> {
         list.removeValue(forKey: key)
     }
     
-    func value(forKey key: Int) async -> (() async -> T)? {
+    func value(forKey key: Int) async -> (() async throws -> T)? {
         return await list[key]
     }
     

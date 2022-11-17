@@ -51,7 +51,7 @@ actor FinalQueue {
         await method_list.removeValue(forKey: key)
     }
 
-    func value(forKey key: Int) async -> (() async -> ())? {
+    func value(forKey key: Int) async -> (() async throws -> ())? {
         return await method_list.value(forKey: key)
     }
     
@@ -59,7 +59,7 @@ actor FinalQueue {
         let name = "final queue running"
         await self.dispatch_group.enter(name)
         Log.d("starting")
-        await withTaskGroup(of: Void.self) { group in
+        try await withThrowingTaskGroup(of: Void.self) { group in
             while(await self.should_run()) {
                 let current_running = await self.number_running.currentValue()
                 Log.d("current_running \(current_running)")
@@ -73,7 +73,7 @@ actor FinalQueue {
                         await self.removeValue(forKey: next_key)
                         await self.number_running.increment()
                         group.addTask {
-                            await method()
+                            try await method()
                             await self.number_running.decrement()
                             await self.dispatch_group.leave(dispatch_name)
                         }
