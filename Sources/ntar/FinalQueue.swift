@@ -38,39 +38,44 @@ actor FinalQueue {
     func should_run() async -> Bool {
         let number_running = await self.number_running.currentValue()
         let count = await method_list.count
-        //Log.d("should run \(should_run) && \(number_running) > 0")
+        Log.d("should run \(should_run) && \(number_running) > 0  count \(count)")
         return should_run || number_running > 0 || count > 0
     }
 
+    func add(atIndex index: Int, method: @escaping () async -> Void) async {
+        await method_list.add(atIndex: index, method: method)
+    }
+    
     func removeValue(forKey key: Int) async {
         Log.d("removeValue(forKey: \(key))")
         await method_list.removeValue(forKey: key)
     }
 
-
+    func value(forKey key: Int) async -> (() async -> ())? {
+        return await method_list.value(forKey: key)
+    }
+    
     nonisolated func start() async {
         let name = "final queue running"
         await self.dispatch_group.enter(name)
-        //        await withTaskGroup(of: FrameAirplaneRemover.self) { group in
-        Task { 
+        Log.d("starting")
+        await withTaskGroup(of: Void.self) { group in
             while(await self.should_run()) {
                 let current_running = await self.number_running.currentValue()
-                //Log.d("current_running \(current_running)")
+                Log.d("current_running \(current_running)")
                 if(current_running < self.max_concurrent) {
                     let fu1 = await self.method_list.nextKey
                     if let next_key = fu1,
-                       let method = await self.method_list.list[next_key]
+                       let method = await self.value(forKey: next_key)
                     {
                         let dispatch_name = "final queue frame \(next_key)"
                         await self.dispatch_group.enter(dispatch_name)
-                        await self.method_list.removeValue(forKey: next_key)
+                        await self.removeValue(forKey: next_key)
                         await self.number_running.increment()
-                        dispatchQueue.async {
-                            Task {
-                                await method()
-                                await self.number_running.decrement()
-                                await self.dispatch_group.leave(dispatch_name)
-                            }
+                        group.addTask {
+                            await method()
+                            await self.number_running.decrement()
+                            await self.dispatch_group.leave(dispatch_name)
                         }
                     } else {
                         // waiting for more work

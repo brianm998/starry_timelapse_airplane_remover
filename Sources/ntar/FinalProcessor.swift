@@ -95,6 +95,7 @@ actor FinalProcessor {
         for frame in frames {
             if let frame = frame {
                 count += 1
+                Log.d("adding frame \(frame.frame_index) to final queue")
                 await self.final_queue.method_list.add(atIndex: frame.frame_index) {
                     await frame.finish()
                 }
@@ -106,15 +107,21 @@ actor FinalProcessor {
 
     nonisolated func run(shouldProcess: [Bool]) async {
 
-        await final_queue.start()
+        Task {
+            await final_queue.start()
+        }
         let frame_count = await frames.count
         
         var done = false
         while(!done) {
+            Log.d("FINAL THREAD running")
             let (cfi, frames_count) = await (current_frame_index, frames.count)
             done = cfi >= frames_count
-            Log.d("done \(done) current_frame_index \(cfi) frames.count \(frames_count)")
-            if done { continue }
+            Log.d("FINAL THREAD done \(done) current_frame_index \(cfi) frames.count \(frames_count)")
+            if done {
+                Log.d("we are done")
+                continue
+            }
             
             let index_to_process = await current_frame_index
             if !shouldProcess[index_to_process] {
@@ -146,7 +153,7 @@ actor FinalProcessor {
                 } else {
                     bad = true
                     // XXX bad
-                    //Log.d("FINAL THREAD bad")
+                    Log.d("FINAL THREAD bad")
                 }
             }
             if !bad {
@@ -173,18 +180,18 @@ actor FinalProcessor {
                         
                         let final_frame_group_name = "final frame \(frame_to_finish.frame_index)"
                         await self.dispatch_group.enter(final_frame_group_name)
-                        dispatchQueue.async {
-                            Task {
-                                Log.d("frame \(frame_to_finish.frame_index) adding at index ")
-                                await self.final_queue.method_list.add(atIndex: frame_to_finish.frame_index) {
-                                    Log.i("frame \(frame_to_finish.frame_index) finishing")
-                                    await frame_to_finish.finish()
-                                    Log.i("frame \(frame_to_finish.frame_index) finished")
-                                }
-                                //Log.d("frame \(frame_to_finish.frame_index) done adding to index ")
-                                await self.clearFrame(at: immutable_start - 1)
-                                await self.dispatch_group.leave(final_frame_group_name)
+                        Task {
+                            Log.d("frame \(frame_to_finish.frame_index) adding at index ")
+                            let before_count = await self.final_queue.method_list.count
+                            await self.final_queue.add(atIndex: frame_to_finish.frame_index) {
+                                Log.i("frame \(frame_to_finish.frame_index) finishing")
+                                await frame_to_finish.finish()
+                                Log.i("frame \(frame_to_finish.frame_index) finished")
                             }
+                            let after_count = await self.final_queue.method_list.count
+                            Log.d("frame \(frame_to_finish.frame_index) done adding to index before_count \(before_count) after_count \(after_count)")
+                            await self.clearFrame(at: immutable_start - 1)
+                            await self.dispatch_group.leave(final_frame_group_name)
                         }
                     }
                     //Log.d("FINAL THREAD frame \(index_to_process) done queueing into final queue")

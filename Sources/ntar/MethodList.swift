@@ -24,15 +24,15 @@ actor MethodList<T> {
         list.removeValue(forKey: key)
     }
     
+    func value(forKey key: Int) async -> (() async -> T)? {
+        return await list[key]
+    }
+    
     var count: Int {
-        get {
-            return list.count
-        }
+        return list.count
     }
 
     var nextKey: Int? {
-        get {
-            return list.sorted(by: { $0.key < $1.key}).first?.key
-        }
+        return list.sorted(by: { $0.key < $1.key}).first?.key
     }
 }
