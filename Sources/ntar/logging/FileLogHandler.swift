@@ -40,7 +40,7 @@ public class FileLogHandler: LogHandler {
                     with data: LogData?,
                     at logLevel: Log.Level)
     {
-        dispatchQueue.async {
+//        dispatchQueue.async {
             let dateString = self.dateFormatter.string(from: Date())
             
             if let data = data {
@@ -48,7 +48,7 @@ public class FileLogHandler: LogHandler {
             } else {
                 self.writeToLogFile("\(dateString) | \(logLevel) | \(fileLocation): \(message)\n")
             }
-        }
+//        }
     }
 
     private func writeToLogFile(_ message: String) {
