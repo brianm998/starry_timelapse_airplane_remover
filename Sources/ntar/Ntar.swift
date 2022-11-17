@@ -103,8 +103,6 @@ todo:
  - there is a logging bug where both console and file need to be set to debug, otherwise the logfile
    is not accurate (has some debug, but not all)
 
- - look into using task groups instead of diapatch queues, is that part of the threading problem?
-   
  */
 
 // this is here so that PaintReason can see it

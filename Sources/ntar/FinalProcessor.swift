@@ -108,9 +108,8 @@ actor FinalProcessor {
 
     nonisolated func run(shouldProcess: [Bool]) async {
 
-        Task {
-            await final_queue.start()
-        }
+        Task { try await final_queue.start() }
+
         let frame_count = await frames.count
         
         var done = false

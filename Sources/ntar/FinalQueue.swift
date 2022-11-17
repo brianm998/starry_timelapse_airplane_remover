@@ -55,7 +55,7 @@ actor FinalQueue {
         return await method_list.value(forKey: key)
     }
     
-    nonisolated func start() async {
+    nonisolated func start() async throws {
         let name = "final queue running"
         await self.dispatch_group.enter(name)
         Log.d("starting")
@@ -77,15 +77,14 @@ actor FinalQueue {
                             await self.number_running.decrement()
                             await self.dispatch_group.leave(dispatch_name)
                         }
-                    } else {
-                        // waiting for more work
-                        sleep(1) // XXX hardcoded constant
-                    }
+                    } 
                 } else {
-                    // too many running, wait a bit
-                    sleep(1)    // XXX hardcoded constant
+                    // wait for the next to finish so we can start more
+                    try await group.next()
                 }
             }
+            try await group.waitForAll()
+
             Log.d("done")
             await self.dispatch_group.leave(name)
         }
