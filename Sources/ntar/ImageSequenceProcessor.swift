@@ -150,6 +150,10 @@ class ImageSequenceProcessor<T> {
         // can be overridden
     }
     
+    func result_hook(with result: T) async { 
+        // can be overridden
+    }
+    
     func run() {
         Log.d("run")
         startup_hook()
@@ -193,7 +197,9 @@ class ImageSequenceProcessor<T> {
                         await self.dispatchGroup.enter(name)
                         dispatchQueue.async {
                             Task {
-                                await next_method()
+                                if let result = await next_method() {
+                                    await self.result_hook(with: result)
+                                }
                                 await self.dispatchGroup.leave(name)
                             }
                         }

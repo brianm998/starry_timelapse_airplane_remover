@@ -20,7 +20,7 @@ You should have received a copy of the GNU General Public License along with nta
 // and then using a FinalProcessor to finish processing
 
 @available(macOS 10.15, *) 
-class NighttimeAirplaneRemover: ImageSequenceProcessor<Void> {
+class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemover> {
         
     let test_paint_output_dirname: String
 
@@ -93,7 +93,7 @@ class NighttimeAirplaneRemover: ImageSequenceProcessor<Void> {
     override func processFrame(number index: Int,
                                image: PixelatedImage,
                                output_filename: String,
-                               base_name: String) async
+                               base_name: String) async -> FrameAirplaneRemover
     {
         //Log.e("full_image_path \(full_image_path)")
         // load images outside the main thread
@@ -121,7 +121,12 @@ class NighttimeAirplaneRemover: ImageSequenceProcessor<Void> {
                                    otherFrames: otherFrames,
                                    output_filename: "\(self.output_dirname)/\(base_name)",
                                    test_paint_filename: test_paint_filename)
-        
+
+        return frame_plane_remover
+    }
+
+
+    override func result_hook(with result: FrameAirplaneRemover) async {
         // next step is to add this frame_plane_remover to an array of optionals
         // indexed by frame number
         // then create a new class that uses the diapatchGroup to keep the process alive
@@ -132,7 +137,7 @@ class NighttimeAirplaneRemover: ImageSequenceProcessor<Void> {
         // XXX return the frame remover directly here, and add to the final processor in the task group
 
         if let final_processor = final_processor {
-            await final_processor.add(frame: frame_plane_remover, at: index)
+            await final_processor.add(frame: result, at: result.frame_index)
         } else {
             fatalError("should not happen")
         }
