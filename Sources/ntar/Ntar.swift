@@ -103,6 +103,8 @@ todo:
  - there is a logging bug where both console and file need to be set to debug, otherwise the logfile
    is not accurate (has some debug, but not all)
 
+ - look into using task groups instead of diapatch queues, is that part of the threading problem?
+   
  */
 
 // this is here so that PaintReason can see it
@@ -251,8 +253,12 @@ struct Ntar: ParsableCommand {
             let airplanes_group = "outlier_data/airplanes"
             let non_airplanes_group = "outlier_data/non_airplanes"
             
-            process_outlier_groups(dirname: airplanes_group)
-            process_outlier_groups(dirname: non_airplanes_group)
+            if #available(macOS 10.15, *) {
+                process_outlier_groups(dirname: airplanes_group)
+                process_outlier_groups(dirname: non_airplanes_group)
+            } else {
+                // XXX handle this better
+            }
             
             return
         }
@@ -298,49 +304,56 @@ struct Ntar: ParsableCommand {
 
 // this method reads all the outlier group text files
 // and (if missing) generates a csv file with the hough transform data from it
+@available(macOS 10.15, *)
 func process_outlier_groups(dirname: String) {
     do {
         let dispatchGroup = DispatchGroup()
-        let contents = try file_manager.contentsOfDirectory(atPath: dirname) 
-        contents.forEach { file in
-            if file.hasSuffix("txt") {
+        let contents = try file_manager.contentsOfDirectory(atPath: dirname)
 
-                let base = (file as NSString).deletingPathExtension
-                let csv_filename = "\(dirname)/\(base).csv"
-
-                if !file_manager.fileExists(atPath: csv_filename) {
-                    dispatchGroup.enter()
-                    dispatchQueue.async {
-                        do {
-                            let contents = try String(contentsOfFile: "\(dirname)/\(file)")
-                            let rows = contents.components(separatedBy: "\n")
-                            let height = rows.count
-                            let width = rows[0].count
-                            let houghTransform = HoughTransform(data_width: width, data_height: height)
-                            Log.d("size [\(width), \(height)]")
-                            for y in 0 ..< height {
-                                for (x, char) in rows[y].enumerated() {
-                                    if char == "*" {
-                                        houghTransform.input_data[y*width + x] = true
+        dispatchGroup.enter()
+        Task {
+            await withTaskGroup(of: Void.self) { group in
+            
+                contents.forEach { file in
+                    if file.hasSuffix("txt") {
+                        
+                        let base = (file as NSString).deletingPathExtension
+                        let csv_filename = "\(dirname)/\(base).csv"
+                        
+                        if !file_manager.fileExists(atPath: csv_filename) {
+                            group.addTask {
+                                do {
+                                    let contents = try String(contentsOfFile: "\(dirname)/\(file)")
+                                    let rows = contents.components(separatedBy: "\n")
+                                    let height = rows.count
+                                    let width = rows[0].count
+                                    let houghTransform = HoughTransform(data_width: width, data_height: height)
+                                    Log.d("size [\(width), \(height)]")
+                                    for y in 0 ..< height {
+                                        for (x, char) in rows[y].enumerated() {
+                                            if char == "*" {
+                                                houghTransform.input_data[y*width + x] = true
+                                            }
+                                        }
                                     }
+                                    let lines = houghTransform.lines(min_count: 1,
+                                                                     number_of_lines_returned: 100000)
+                                    var csv_line_data: String = "";
+                                    lines.forEach { line in
+                                        csv_line_data += "\(line.theta),\(line.rho),\(line.count)\n"
+                                    }
+                                    if let data = csv_line_data.data(using: .utf8) {
+                                        file_manager.createFile(atPath: csv_filename, contents: data, attributes: nil)
+                                    }
+                                } catch {
+                                    Log.e(error)
                                 }
-                            }
-                            let lines = houghTransform.lines(min_count: 1,
-                                                             number_of_lines_returned: 100000)
-                            var csv_line_data: String = "";
-                            lines.forEach { line in
-                                csv_line_data += "\(line.theta),\(line.rho),\(line.count)\n"
-                            }
-                            if let data = csv_line_data.data(using: .utf8) {
-                                file_manager.createFile(atPath: csv_filename, contents: data, attributes: nil)
-                            }
-                        } catch {
-                            Log.e(error)
+                            } 
                         }
-                        dispatchGroup.leave()
                     } 
                 }
-            } 
+            }
+            dispatchGroup.leave()
         }
         dispatchGroup.wait()
     } catch {
