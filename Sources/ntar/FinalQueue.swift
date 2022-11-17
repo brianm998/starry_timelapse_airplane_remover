@@ -19,7 +19,7 @@ You should have received a copy of the GNU General Public License along with nta
 @available(macOS 10.15, *)
 actor FinalQueue {
     // actors
-    let method_list = MethodList()       // a list of methods to process each frame
+    let method_list = MethodList<Void>()       // a list of methods to process each frame
     let number_running = NumberRunning() // how many methods are running right now
     let max_concurrent: UInt
     var should_run = true
@@ -51,6 +51,7 @@ actor FinalQueue {
     nonisolated func start() async {
         let name = "final queue running"
         await self.dispatch_group.enter(name)
+        //        await withTaskGroup(of: FrameAirplaneRemover.self) { group in
         Task { 
             while(await self.should_run()) {
                 let current_running = await self.number_running.currentValue()

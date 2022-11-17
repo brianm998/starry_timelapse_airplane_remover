@@ -20,7 +20,7 @@ You should have received a copy of the GNU General Public License along with nta
 // and then using a FinalProcessor to finish processing
 
 @available(macOS 10.15, *) 
-class NighttimeAirplaneRemover : ImageSequenceProcessor {
+class NighttimeAirplaneRemover: ImageSequenceProcessor<Void> {
         
     let test_paint_output_dirname: String
 
@@ -128,6 +128,8 @@ class NighttimeAirplaneRemover : ImageSequenceProcessor {
         // and processes sequentially through them as they are available, doing
         // analysis of the outlier groups between frames and making them look better
         // by doing further analysis and cleanup
+
+        // XXX return the frame remover directly here, and add to the final processor in the task group
 
         if let final_processor = final_processor {
             await final_processor.add(frame: frame_plane_remover, at: index)

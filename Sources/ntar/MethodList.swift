@@ -13,10 +13,10 @@ You should have received a copy of the GNU General Public License along with nta
 */
 
 @available(macOS 10.15, *) 
-actor MethodList {
-    var list: [Int : () async -> Void] = [:]
+actor MethodList<T> {
+    var list: [Int : () async -> T] = [:]
 
-    func add(atIndex index: Int, method: @escaping () async -> Void) {
+    func add(atIndex index: Int, method: @escaping () async -> T) {
         list[index] = method
     }
 

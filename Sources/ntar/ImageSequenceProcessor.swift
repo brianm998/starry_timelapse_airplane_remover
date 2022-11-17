@@ -2,16 +2,16 @@ import Foundation
 import CoreGraphics
 import Cocoa
 
-
-    let dispatchQueue = DispatchQueue(label: "image_sequence_processor",
+// XXX exorcise this daemon 
+let dispatchQueue = DispatchQueue(label: "image_sequence_processor",
                                   qos: .unspecified,
                                   attributes: [.concurrent],
                                   autoreleaseFrequency: .inherit,
                                   target: nil)
-    
+
 
 @available(macOS 10.15, *) 
-class ImageSequenceProcessor {
+class ImageSequenceProcessor<T> {
 
     // the name of the directory holding the image sequence being processed
     let image_sequence_dirname: String
@@ -25,7 +25,7 @@ class ImageSequenceProcessor {
     // the following properties get included into the output videoname
     
     // actors
-    let method_list = MethodList()       // a list of methods to process each frame
+    let method_list = MethodList<T?>()       // a list of methods to process each frame
     let number_running = NumberRunning() // how many methods are running right now
     var image_sequence: ImageSequence    // the sequence of images that we're processing
 
@@ -65,9 +65,9 @@ class ImageSequenceProcessor {
     }
 
     func processFrame(number index: Int,
-                    image: PixelatedImage,
-                    output_filename: String,
-                    base_name: String) async
+                      image: PixelatedImage,
+                      output_filename: String,
+                      base_name: String) async -> T? 
     {
         Log.e("should be overridden")
         fatalError("should be overridden")
@@ -117,15 +117,20 @@ class ImageSequenceProcessor {
                     // this method is run async later                                           
                     Log.i("loading \(image_filename)")
                     if let image = await self.image_sequence.getImage(withName: image_filename) {
-                        await self.processFrame(number: index,
-                                                image: image,
-                                                output_filename: output_filename,
-                                                base_name: basename)
-                        await self.number_running.decrement()
-                        await self.dispatchGroup.leave(name)
+                        if let result = await self.processFrame(number: index,
+                                                                image: image,
+                                                                output_filename: output_filename,
+                                                                base_name: basename) {
+                            await self.number_running.decrement()
+                            await self.dispatchGroup.leave(name)
+                            return result
+                        }
                     } else {
                         Log.w("could't get image for \(image_filename)")
                     }
+                    await self.number_running.decrement()
+                    await self.dispatchGroup.leave(name)
+                    return nil
                 })
             } else {
                 Log.i("not processing existing file \(filename)")
@@ -154,6 +159,9 @@ class ImageSequenceProcessor {
         // this dispatch group is only used for this task
         let local_dispatch_group = DispatchGroup()
         local_dispatch_group.enter()
+
+        // XXX use a task group here instead, re-using the method list
+        // XXX make MethodList class generic for the task group type?
         
         Task {
             // each of these methods removes the airplanes from a particular frame
