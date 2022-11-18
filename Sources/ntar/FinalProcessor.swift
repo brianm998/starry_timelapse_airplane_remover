@@ -482,7 +482,7 @@ fileprivate func run_final_streak_pass(frames: [FrameAirplaneRemover]) async {
                         {
                             existing_streak = airplane_streak
                             existing_streak_name = streak_name
-                            Log.i("frame \(frame.frame_index) using existing streak for \(group)")
+                            Log.d("frame \(frame.frame_index) using existing streak for \(group)")
                             continue
                         }
                     }
@@ -515,7 +515,7 @@ fileprivate func run_final_streak_pass(frames: [FrameAirplaneRemover]) async {
                                            startingIndex: batch_index+1,
                                            potentialStreak: &potential_streak)
                     {
-                        Log.i("frame \(frame_index) found streak \(potential_streak_name) of size \(streak.count) for \(group)")
+                        Log.d("frame \(frame_index) found streak \(potential_streak_name) of size \(streak.count) for \(group)")
                         airplane_streaks[potential_streak_name] = streak
                     } else {
                         Log.d("frame \(frame_index) DID NOT find streak for \(group)")
