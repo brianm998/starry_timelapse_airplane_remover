@@ -180,7 +180,7 @@ class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemover> {
         if let final_processor = final_processor {
             let name = "final processor run" 
             await dispatchGroup.enter(name)
-            Task {
+            Task {              // XXX span this from the task group?
                 // run the final processor as a single separate thread
                 await final_processor.run(shouldProcess: immutable_should_process)
                 await self.dispatchGroup.leave(name)

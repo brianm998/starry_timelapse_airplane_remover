@@ -36,7 +36,13 @@ class HoughTransform {
     let dr: Double
     let dth: Double
 
-    init(data_width: Int, data_height: Int) {
+    convenience init(data_width: Int, data_height: Int) {
+        self.init(data_width: data_width,
+                  data_height: data_height,
+                  input_data: [Bool](repeating: false, count: data_width*data_height))
+    }
+
+    init(data_width: Int, data_height: Int, input_data: [Bool]) {
         self.data_width = data_width
         self.data_height = data_height
         self.rmax = sqrt(Double(data_width*data_width + data_height*data_height))
@@ -45,7 +51,7 @@ class HoughTransform {
         self.dth  = Double.pi / Double(hough_width);
         self.counts = [[UInt32]](repeating: [UInt32](repeating: 0, count: hough_height),
                                  count: Int(hough_width))
-        self.input_data = [Bool](repeating: false, count: data_width*data_height)
+        self.input_data = input_data
     }
 
     func resetCounts() {
@@ -158,7 +164,7 @@ class HoughTransform {
         } else {
             small_set_lines = Array<Line>(sortedLines)
         }
-
+        
         //let time_3 = NSDate().timeIntervalSince1970
         //let interval3 = String(format: "%0.1f", time_3 - time_2)
 

@@ -158,7 +158,6 @@ class ImageSequenceProcessor<T> {
             Log.d("running")
             // atually run it
 
-
             try await withThrowingTaskGroup(of: T.self) { group in
                 while(await method_list.list.count > 0) {
                     let current_running = await self.number_running.currentValue()
@@ -176,7 +175,7 @@ class ImageSequenceProcessor<T> {
                         {
                             await method_list.removeValue(forKey: next_method_key)
                             await self.number_running.increment()
-                            let name = "image sequence processor foobaz \(next_method_key)"
+                            //let name = "image sequence processor foobaz \(next_method_key)"
                             group.addTask {
                                 return try await next_method()
                             }
@@ -188,7 +187,7 @@ class ImageSequenceProcessor<T> {
                         Log.d("waiting for a processed frame")
                         if let processed_frame = try await group.next() {
                             Log.d("got processed_frame \(processed_frame)")
-                            try await self.result_hook(with: processed_frame)
+                            await self.result_hook(with: processed_frame)
                         } else {
                             Log.d("did not get a processed frame")
                         }
@@ -196,7 +195,7 @@ class ImageSequenceProcessor<T> {
                 }
                 while let processed_frame = try await group.next() {
                     Log.d("got processed_frame \(processed_frame)")
-                    try await self.result_hook(with: processed_frame)
+                    await self.result_hook(with: processed_frame)
                 }
                 
                 Log.d("finished hook")

@@ -43,8 +43,6 @@ actor FrameAirplaneRemover: Equatable {
 
     let outlier_output_dirname: String?
 
-    // one dimentional array mirroring pixels indexed by y*width + x
-    var outlier_group_list: [String?]  // named outlier group for each outlier
 
     // populated by pruning
     private var outlier_groups: [String: OutlierGroup] = [:] // keyed by group name
@@ -77,14 +75,14 @@ actor FrameAirplaneRemover: Equatable {
         self.bytesPerPixel = image.bytesPerPixel
         self.bytesPerRow = width*bytesPerPixel
         self.max_pixel_distance = max_pixel_distance
-        self.outlier_group_list = [String?](repeating: nil, count: width*height)
 
         // find outlying bright pixels between frames,
         // and group neighboring outlying pixels into groups
-        await self.pruneOutliers(self.findOutliers())
+        await self.findOutliers()        
         
         Log.i("frame \(frame_index) starting processing")
     }
+    
 
     func outlierGroup(named outlier_name: String) -> OutlierGroup? {
         return outlier_groups[outlier_name]
@@ -98,7 +96,14 @@ actor FrameAirplaneRemover: Equatable {
     }
     
     // this is still a slow part of the process, but is now about 10x faster than before
-    func findOutliers() -> [UInt] {
+    func findOutliers() async {
+
+        // XXX move this out of class memory, and just use it for populating the outlier list
+        // need to have the OutlierGroup class contain a mini version of this for each one
+        
+        // one dimentional array mirroring pixels indexed by y*width + x
+        var outlier_group_list = [String?](repeating: nil, count: width*height)
+        
         Log.i("frame \(frame_index) finding outliers")
         var outlier_amount_list = [UInt](repeating: 0, count: width*height)
         // compare pixels at the same image location in adjecent frames
@@ -193,14 +198,9 @@ actor FrameAirplaneRemover: Equatable {
                 }
             }
         }
-        return outlier_amount_list        
-    }
 
-    // this method groups outliers into groups of direct neighbors,
-    // treating smaller groups of outliers as noise and pruning them out
-    // after pruning, the outlier_groups has been populated, and each
-    // outlier group has been analyzed for basic paintability
-    func pruneOutliers(_ outlier_amount_list: [UInt]) async {
+        // XXX was a boundary
+        
         Log.i("frame \(frame_index) pruning outliers")
         
         // go through the outliers and link together all the outliers that are adject to eachother,
@@ -372,13 +372,28 @@ actor FrameAirplaneRemover: Equatable {
                 let bounding_box = BoundingBox(min: Coord(x: min_x, y: min_y),
                                                max: Coord(x: max_x, y: max_y))
                 let group_brightness = group_amount / group_size
+
+
+                var outlier_pixels = [Bool](repeating: false, count: bounding_box.width*bounding_box.height)
+
+                for x in min_x ... max_x {
+                    for y in min_y ... max_y {
+                        let index = y * self.width + x
+                        if let pixel_group_name = outlier_group_list[index],
+                           pixel_group_name == group_name
+                        {
+                            outlier_pixels[(y-min_y) * bounding_box.width + (x-min_x)] = true
+                        }
+                    }
+                }
                 
                 outlier_groups[group_name] =
                   await OutlierGroup(name: group_name,
                                      size: group_size,
                                      brightness: group_brightness,
                                      bounds: bounding_box,
-                                     frame: self)
+                                     frame: self,
+                                     pixels: outlier_pixels)
             }
         }
     }
@@ -391,9 +406,8 @@ actor FrameAirplaneRemover: Equatable {
             for x in group.bounds.min.x ... group.bounds.max.x {
                 for y in group.bounds.min.y ... group.bounds.max.y {
                     let index = y*width + x
-                    if let group_name = outlier_group_list[index],
-                       group_name == name
-                    {                    
+                    let pixel_index = (y-group.bounds.min.y)*group.bounds.width + (x - group.bounds.min.x)
+                    if group.pixels[pixel_index] {                    
                         var nextPixel = Pixel()
                         if let reason = await group.shouldPaint,
                            !reason.willPaint
@@ -419,17 +433,26 @@ actor FrameAirplaneRemover: Equatable {
         Log.i("frame \(frame_index) painting airplane outlier groups")
 
         // paint over every outlier in the paint list with pixels from the adjecent frames
-        for (index, group_name) in outlier_group_list.enumerated() {
-            if let group_name = group_name,
-               let group = outlier_groups[group_name],
-               let reason = await group.shouldPaint,
+        for (group_name, group) in outlier_groups {
+//        for (index, group_name) in outlier_group_list.enumerated() {
+//            if let group_name = group_name,
+//               let group = outlier_groups[group_name],
+            if let reason = await group.shouldPaint,
                reason.willPaint
             {
                 //Log.d("frame \(frame_index) painting over group \(group_name) for reason \(reason)")
-                let x = index % width;
-                let y = index / width;
-                paint(x: x, y: y, why: reason,
-                      toData: &data, testData: &test_paint_data)
+                //let x = index % width;
+                //let y = index / width;
+                for x in group.bounds.min.x ... group.bounds.max.x {
+                    for y in group.bounds.min.y ... group.bounds.max.y {
+                        let pixel_index = (y - group.bounds.min.y)*group.bounds.width + (x - group.bounds.min.x)
+                        if group.pixels[pixel_index] == true {
+                            paint(x: x, y: y, why: reason,
+                                  toData: &data, testData: &test_paint_data)
+                        }
+                    }
+                }
+                
             }
         }
     }
@@ -552,12 +575,9 @@ actor FrameAirplaneRemover: Equatable {
                     Log.i("creating \(full_path)")                      
                     var line = ""
                     
-                    for y in group.bounds.min.y ... group.bounds.max.y {
-                        for x in group.bounds.min.x ... group.bounds.max.x {
-                            let index = y*width+x
-                            if let new_group_name = outlier_group_list[index],
-                               new_group_name == group.name
-                            {
+                    for y in 0 ..< group.bounds.height {
+                        for x in 0 ..< group.bounds.width {
+                            if group.pixels[y*group.bounds.width+x] == true {
                                 line += "*" // outlier spot
                             } else {
                                 line += " "

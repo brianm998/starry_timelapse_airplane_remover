@@ -393,10 +393,7 @@ fileprivate func run_final_overlap_pass(frames: [FrameAirplaneRemover]) async {
                         {
                             
                             let pixel_overlap_amount =
-                              await pixel_overlap(group_1: group,
-                                                  group_1_frame: frame,
-                                                  group_2: og,
-                                                  group_2_frame: other_frame)
+                              await pixel_overlap(group_1: group, group_2: og)
                             
                             
                             //Log.d("frame \(frame.frame_index) \(group_name) \(og) pixel_overlap_amount \(pixel_overlap_amount)")
@@ -809,9 +806,7 @@ func center_theta(from box_1: BoundingBox, to box_2: BoundingBox) -> Double {
 // how many pixels actually overlap between the groups ?  returns 0-1 value of overlap amount
 @available(macOS 10.15, *)
 func pixel_overlap(group_1: OutlierGroup,
-                   group_1_frame: FrameAirplaneRemover,
-                   group_2: OutlierGroup,
-                   group_2_frame: FrameAirplaneRemover) async -> Double // 1 means total overlap, 0 means none
+                   group_2: OutlierGroup) async -> Double // 1 means total overlap, 0 means none
 {
     // throw out non-overlapping frames, do any slip through?
     if group_1.bounds.min.x > group_2.bounds.max.x || group_1.bounds.min.y > group_2.bounds.max.y { return 0 }
@@ -832,16 +827,14 @@ func pixel_overlap(group_1: OutlierGroup,
 
     var overlap_pixel_amount = 0;
     
-    let outlier_groups_1 = await group_1_frame.outlier_group_list
-    let outlier_groups_2 = await group_2_frame.outlier_group_list
-    let width = group_1_frame.width // they better be the same :)
     for x in min_x ... max_x {
         for y in min_y ... max_y {
-            let index = y * width + x
-            if let pixel_1_group = outlier_groups_1[index],
-               let pixel_2_group = outlier_groups_2[index],
-               pixel_1_group == group_1.name,
-               pixel_2_group == group_2.name
+            let outlier_1_index = (y - min_y) * group_1.bounds.width + (x - min_x)
+            let outlier_2_index = (y - group_2.bounds.min.y) * group_2.bounds.width + (x - group_2.bounds.min.x)
+            if group_1.pixels[outlier_1_index] == true,
+               outlier_2_index > 0,
+               outlier_2_index < group_2.pixels.count,
+               group_2.pixels[outlier_2_index] == true
             {
                 overlap_pixel_amount += 1
             }

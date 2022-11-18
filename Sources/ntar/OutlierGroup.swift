@@ -30,6 +30,7 @@ actor OutlierGroup: CustomStringConvertible, Hashable, Equatable {
     let brightness: UInt        // the average amount per pixel of brightness over the limit 
     let lines: [Line]           // sorted lines from the hough transform of this outlier group
     let frame: FrameAirplaneRemover
+    let pixels: [Bool]          // indexed by y * bounds.width + x, true if part of this group
 
     // after init, shouldPaint is usually set to a base value based upon different statistics 
     var shouldPaint: PaintReason? // should we paint this group, and why?
@@ -89,31 +90,20 @@ actor OutlierGroup: CustomStringConvertible, Hashable, Equatable {
          size: UInt,
          brightness: UInt,
          bounds: BoundingBox,
-         frame: FrameAirplaneRemover) async
+         frame: FrameAirplaneRemover,
+         pixels: [Bool]) async
     {
         self.name = name
         self.size = size
         self.brightness = brightness
         self.bounds = bounds
         self.frame = frame
+        self.pixels = pixels
 
-        let transform = HoughTransform(data_width: bounds.width, data_height: bounds.height)
-        
         // do a hough transform on just this outlier group
-        // set all pixels of this group to true in the hough data
-        let outlier_group_list = await frame.outlier_group_list
-        let width = frame.width
-        for x in bounds.min.x ... bounds.max.x {
-            for y in bounds.min.y ... bounds.max.y {
-                let index = y * width + x
-                let group_index = (y-bounds.min.y) * bounds.width + (x-bounds.min.x)
-                if let group_name = outlier_group_list[index],
-                   name == group_name
-                {
-                    transform.input_data[group_index] = true
-                }
-            }
-        }
+        let transform = HoughTransform(data_width: bounds.width,
+                                       data_height: bounds.height,
+                                       input_data: pixels)
         
         self.lines = transform.lines(min_count: 1)
 
@@ -157,7 +147,7 @@ actor OutlierGroup: CustomStringConvertible, Hashable, Equatable {
     }
     
     private var pixel_distances: [OutlierGroup: Double] = [:]
-    
+    /*
     // SLOW, and not accurate ?
     // returns the distance in pixels between two groups
     // zero means they overlap somehow, positive values are how far apart the closest pixels are
@@ -174,8 +164,8 @@ actor OutlierGroup: CustomStringConvertible, Hashable, Equatable {
             return distance
         }
 
-        let group_1_outlier_pixels = await self.frame.outlier_group_list
-        let group_2_outlier_pixels = await group2.frame.outlier_group_list
+        //let group_1_outlier_pixels = await self.frame.outlier_group_list
+        //let group_2_outlier_pixels = await group2.frame.outlier_group_list
 
         let start_distance = Double(self.frame.width*self.frame.width + self.frame.height*self.frame.height)
         var min_distance = start_distance
@@ -235,7 +225,7 @@ actor OutlierGroup: CustomStringConvertible, Hashable, Equatable {
         return min_distance
     }
     
-    
+    */
     
     // used so we don't recompute on every access
     private var _paint_score_from_lines: Double?
