@@ -25,7 +25,7 @@ actor MethodList<T> {
     }
     
     func value(forKey key: Int) async -> (() async throws -> T)? {
-        return await list[key]
+        return list[key]
     }
     
     var count: Int {

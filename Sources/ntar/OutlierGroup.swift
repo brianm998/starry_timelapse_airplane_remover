@@ -110,8 +110,8 @@ actor OutlierGroup: CustomStringConvertible, Hashable, Equatable {
         // use assume_airplane_size to avoid doing extra processing on
         // really big outlier groups
         if size > assume_airplane_size {
-            Log.d("frame \(frame.frame_index) assuming group \(name) of size \(size) (> \(assume_airplane_size)) is an airplane, will paint over it")
-            Log.d("frame \(frame.frame_index) should_paint[\(name)] = (true, .assumed)")
+            //Log.d("frame \(frame.frame_index) assuming group \(name) of size \(size) (> \(assume_airplane_size)) is an airplane, will paint over it")
+            //Log.d("frame \(frame.frame_index) should_paint[\(name)] = (true, .assumed)")
             self.shouldPaint = .assumed
         }
             
@@ -121,23 +121,23 @@ actor OutlierGroup: CustomStringConvertible, Hashable, Equatable {
             if size < 300 { // XXX constant XXX
                 // don't assume small ones are lines
             } else {
-                Log.d("frame \(frame.frame_index) will paint group \(name) because it looks like a line from the group hough transform")
+                //Log.d("frame \(frame.frame_index) will paint group \(name) because it looks like a line from the group hough transform")
                 self.shouldPaint = .looksLikeALine(self.paintScoreFromHoughTransformLines)
             }
         }
             
         if self.shouldPaint == nil { setShouldPaintFromCombinedScore() }
 
-        Log.d("frame \(frame.frame_index) group \(self) bounds \(bounds) should_paint \(self.shouldPaint?.willPaint) reason \(String(describing: self.shouldPaint)) hough transform score \(paintScore(from: .houghTransform)) aspect ratio \(paintScore(from: .aspectRatio)) brightness score \(paintScore(from: .brightness)) size score \(paintScore(from: .groupSize)) combined \(paintScore(from: .combined)) ")
+        //Log.d("frame \(frame.frame_index) group \(self) bounds \(bounds) should_paint \(self.shouldPaint?.willPaint) reason \(String(describing: self.shouldPaint)) hough transform score \(paintScore(from: .houghTransform)) aspect ratio \(paintScore(from: .aspectRatio)) brightness score \(paintScore(from: .brightness)) size score \(paintScore(from: .groupSize)) combined \(paintScore(from: .combined)) ")
     }
 
     func setShouldPaintFromCombinedScore() {
         let score = self.paintScore(from: .combined)
         if score > 0.5 {
-            Log.d("frame \(frame.frame_index) should_paint[\(name)] = (true, .goodScore(\(score))")
+            //Log.d("frame \(frame.frame_index) should_paint[\(name)] = (true, .goodScore(\(score))")
             self.shouldPaint = .goodScore(score)
         } else {
-            Log.d("frame \(frame.frame_index) should_paint[\(name)] = (false, .badScore(\(score))")
+            //Log.d("frame \(frame.frame_index) should_paint[\(name)] = (false, .badScore(\(score))")
             self.shouldPaint = .badScore(score)
         }
     }

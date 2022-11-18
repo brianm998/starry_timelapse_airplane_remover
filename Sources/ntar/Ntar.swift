@@ -104,6 +104,9 @@ todo:
    is not accurate (has some debug, but not all) (
 
  - also a logging bug where file logs aren't saved even with -f on the command line
+
+ - final processor needs to run on a separate thread
+   - create two task groups in the foobar
  */
 
 // this is here so that PaintReason can see it
@@ -276,19 +279,19 @@ struct Ntar: ParsableCommand {
             }
             
             Log.name = "ntar-log"
-            Log.nameSuffix = input_image_sequence_dirname
+            Log.nameSuffix = input_image_sequence_dirname.components(separatedBy: "/").last
 
             Log.handlers[.console] = ConsoleLogHandler(at: terminalLogLevel)
-            if let fileLogLevel = fileLogLevel {
-                Log.i("enabling file logging")
-                Log.handlers[.file] = FileLogHandler(at: fileLogLevel)
-            }
-            
-            // XXX maybe check to make sure this is a directory
-            Log.i("processing files in \(input_image_sequence_dirname)")
-            
-            if #available(macOS 10.15, *) {
-                do {
+            do {
+                if let fileLogLevel = fileLogLevel {
+                    Log.i("enabling file logging")
+                    Log.handlers[.file] = try FileLogHandler(at: fileLogLevel)
+                }
+                
+                // XXX maybe check to make sure this is a directory
+                Log.i("processing files in \(input_image_sequence_dirname)")
+                
+                if #available(macOS 10.15, *) {
                     let eraser = try NighttimeAirplaneRemover(imageSequenceDirname: input_image_sequence_dirname,
                                                               maxConcurrent: UInt(numConcurrentRenders),
                                                               maxPixelDistance: outlierBrightnessThreshold,
@@ -298,11 +301,11 @@ struct Ntar: ParsableCommand {
                                                               writeOutlierGroupFiles: should_write_outlier_group_files)
                     
                     try eraser.run()
-                } catch {
-                    Log.e(error)
+                } else {
+                    Log.e("cannot run :(") // XXX make this better
                 }
-            } else {
-                Log.e("cannot run :(") // XXX make this better
+            } catch {
+                Log.e(error)
             }
         } else {
             throw ValidationError("need to provide input")

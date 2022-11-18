@@ -17,18 +17,29 @@ public class FileLogHandler: LogHandler {
     let dateFormatter = DateFormatter()
     public let dispatchQueue: DispatchQueue
     public var level: Log.Level?
-    private let logfilename: String
+    //private let logfilename: String
+    public let full_log_path: String
+    public let logURL: URL
 
-    public init(at level: Log.Level) {
+    
+    public init(at level: Log.Level) throws {
         self.level = level
         // this is for the logfile name
         dateFormatter.dateFormat = "yyyy-MM-dd-HH-mm-ss"
         let dateString = dateFormatter.string(from: Date())
+        var logfilename: String = ""
         if let suffix = Log.nameSuffix {
-            self.logfilename = "\(Log.name)-\(dateString)-\(suffix).txt"
+            logfilename = "\(Log.name)-\(dateString)-\(suffix).txt"
         } else {
-            self.logfilename = "\(Log.name)-\(dateString).txt"
+            logfilename = "\(Log.name)-\(dateString).txt"
         }
+        if let documentDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
+            logURL = documentDirectory.appendingPathComponent(logfilename)
+            full_log_path = logURL.path
+        } else {
+            throw "no full log path"
+        }
+
         self.dispatchQueue = DispatchQueue(label: "consoleLogging")
 
         // this is for log lines
@@ -53,17 +64,13 @@ public class FileLogHandler: LogHandler {
 
     private func writeToLogFile(_ message: String) {
         guard let messageData = message.data(using: .utf8) else { return }
-        if let documentDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
-
-            let logURL = documentDirectory.appendingPathComponent(logfilename)
-            if FileManager.default.fileExists(atPath: logURL.path) {
-                guard let fileHandle = try? FileHandle.init(forWritingTo: logURL) else { return }
-                fileHandle.seekToEndOfFile()
-                fileHandle.write(messageData)
-                fileHandle.closeFile()
-            } else {
-                FileManager.default.createFile(atPath: logURL.path, contents: messageData, attributes: nil)
-            }
+        if FileManager.default.fileExists(atPath: full_log_path) {
+            guard let fileHandle = try? FileHandle.init(forWritingTo: logURL) else { return }
+            fileHandle.seekToEndOfFile()
+            fileHandle.write(messageData)
+            fileHandle.closeFile()
+        } else {
+            FileManager.default.createFile(atPath: full_log_path, contents: messageData, attributes: nil)
         }
     }
 }

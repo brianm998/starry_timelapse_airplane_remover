@@ -405,7 +405,6 @@ actor FrameAirplaneRemover: Equatable {
         for (name, group) in outlier_groups {
             for x in group.bounds.min.x ... group.bounds.max.x {
                 for y in group.bounds.min.y ... group.bounds.max.y {
-                    let index = y*width + x
                     let pixel_index = (y-group.bounds.min.y)*group.bounds.width + (x - group.bounds.min.x)
                     if group.pixels[pixel_index] {                    
                         var nextPixel = Pixel()
