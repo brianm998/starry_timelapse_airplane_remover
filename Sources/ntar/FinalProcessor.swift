@@ -114,10 +114,10 @@ actor FinalProcessor {
         
         var done = false
         while(!done) {
-            Log.d("FINAL THREAD running")
+            //Log.d("FINAL THREAD running")
             let (cfi, frames_count) = await (current_frame_index, frames.count)
             done = cfi >= frames_count
-            Log.d("FINAL THREAD done \(done) current_frame_index \(cfi) frames.count \(frames_count)")
+            //Log.d("FINAL THREAD done \(done) current_frame_index \(cfi) frames.count \(frames_count)")
             if done {
                 Log.d("we are done")
                 continue
@@ -153,7 +153,7 @@ actor FinalProcessor {
                 } else {
                     bad = true
                     // XXX bad
-                    Log.d("FINAL THREAD bad")
+                    //Log.d("FINAL THREAD bad")
                 }
             }
             if !bad {
@@ -829,9 +829,11 @@ func pixel_overlap(group_1: OutlierGroup,
     
     for x in min_x ... max_x {
         for y in min_y ... max_y {
-            let outlier_1_index = (y - min_y) * group_1.bounds.width + (x - min_x)
+            let outlier_1_index = (y - group_1.bounds.min.y) * group_1.bounds.width + (x - group_1.bounds.min.x)
             let outlier_2_index = (y - group_2.bounds.min.y) * group_2.bounds.width + (x - group_2.bounds.min.x)
-            if group_1.pixels[outlier_1_index] == true,
+            if outlier_1_index > 0,
+               outlier_1_index < group_1.pixels.count,
+               group_1.pixels[outlier_1_index] == true,
                outlier_2_index > 0,
                outlier_2_index < group_2.pixels.count,
                group_2.pixels[outlier_2_index] == true
