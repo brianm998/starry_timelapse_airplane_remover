@@ -38,7 +38,7 @@ actor FinalQueue {
     func should_run() async -> Bool {
         let number_running = await self.number_running.currentValue()
         let count = await method_list.count
-        Log.d("should run \(should_run) && \(number_running) > 0  count \(count)")
+        //Log.d("should run \(should_run) && \(number_running) > 0  count \(count)")
         return should_run || number_running > 0 || count > 0
     }
 
@@ -62,7 +62,7 @@ actor FinalQueue {
         try await withThrowingTaskGroup(of: Void.self) { group in
             while(await self.should_run()) {
                 let current_running = await self.number_running.currentValue()
-                Log.d("current_running \(current_running)")
+                //Log.d("current_running \(current_running)")
                 if(current_running < self.max_concurrent) {
                     let fu1 = await self.method_list.nextKey
                     if let next_key = fu1,

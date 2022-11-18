@@ -101,8 +101,9 @@ todo:
    - a .dmg file with a command line installer?  any swift command line installer examples?
 
  - there is a logging bug where both console and file need to be set to debug, otherwise the logfile
-   is not accurate (has some debug, but not all)
+   is not accurate (has some debug, but not all) (
 
+ - also a logging bug where file logs aren't saved even with -f on the command line
  */
 
 // this is here so that PaintReason can see it
@@ -279,6 +280,7 @@ struct Ntar: ParsableCommand {
 
             Log.handlers[.console] = ConsoleLogHandler(at: terminalLogLevel)
             if let fileLogLevel = fileLogLevel {
+                Log.i("enabling file logging")
                 Log.handlers[.file] = FileLogHandler(at: fileLogLevel)
             }
             
