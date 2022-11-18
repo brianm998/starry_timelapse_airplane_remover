@@ -17,14 +17,14 @@ class ImageSequenceProcessor<T> {
     // the following properties get included into the output videoname
     
     // actors
-    let method_list = MethodList<T>()       // a list of methods to process each frame
+    var method_list = MethodList<T>()       // a list of methods to process each frame
     let number_running = NumberRunning() // how many methods are running right now
     var image_sequence: ImageSequence    // the sequence of images that we're processing
 
     // concurrent dispatch queue so we can process frames in parallel
     
     let dispatchGroup = DispatchHandler()
-    
+
     var should_process: [Bool] = []       // indexed by frame number
     var existing_output_files: [Bool] = [] // indexed by frame number
     
@@ -38,6 +38,9 @@ class ImageSequenceProcessor<T> {
         self.output_dirname = output_dirname
         self.image_sequence = try ImageSequence(dirname: image_sequence_dirname,
                                                 givenFilenames: given_filenames)
+        self.should_process = [Bool](repeating: false, count: image_sequence.filenames.count)
+        self.existing_output_files = [Bool](repeating: false, count: image_sequence.filenames.count)
+        self.method_list = try assembleMethodList()
     }
 
     func maxConcurrentRenders() async -> UInt {
@@ -61,7 +64,7 @@ class ImageSequenceProcessor<T> {
         fatalError("should be overridden")
     }
 
-    func assembleMethodList() async throws {
+    func assembleMethodList() throws -> MethodList<T> {
         /*
            read all existing output files 
            sort them into frame order
@@ -69,9 +72,9 @@ class ImageSequenceProcessor<T> {
            make sure these re-runs done't bork on existing file later
            only process below based upon this info
         */
-
-        should_process = [Bool](repeating: false, count: image_sequence.filenames.count)
-        existing_output_files = [Bool](repeating: false, count: image_sequence.filenames.count)
+    
+        var _method_list: [Int : () async throws -> T] = [:]
+        
         for (index, image_filename) in image_sequence.filenames.enumerated() {
             let basename = remove_path(fromString: image_filename)
             let output_filename = "\(output_dirname)/\(basename)"
@@ -79,7 +82,7 @@ class ImageSequenceProcessor<T> {
                 existing_output_files[index] = true
             }                                  
         }
-
+        
         for (index, output_file_already_exists) in existing_output_files.enumerated() {
             if !output_file_already_exists {
                 var start_idx = index - number_final_processing_neighbors_needed
@@ -93,36 +96,34 @@ class ImageSequenceProcessor<T> {
                 }
             }
         }
-
-        for (index, image_filename) in image_sequence.filenames.enumerated() {
-            let filename = image_sequence.filenames[index]
+        
+        for (index, image_filename) in self.image_sequence.filenames.enumerated() {
+            let filename = self.image_sequence.filenames[index]
             let basename = remove_path(fromString: filename)
             let output_filename = "\(output_dirname)/\(basename)"
             if should_process[index] {
-                await method_list.add(atIndex: index, method: {
+                _method_list[index] = {
                     // this method is run async later                                           
                     Log.i("loading \(image_filename)")
                     if let image = try await self.image_sequence.getImage(withName: image_filename) {
                         if let result = try await self.processFrame(number: index,
-                                                                image: image,
-                                                                output_filename: output_filename,
-                                                                base_name: basename) {
+                                                                    image: image,
+                                                                    output_filename: output_filename,
+                                                                    base_name: basename) {
                             await self.number_running.decrement()
                             return result
                         }
-                    } 
+                    }
                     throw "could't load image for \(image_filename)"
-                })
+                }
             } else {
                 Log.i("not processing existing file \(filename)")
             }
         }
+
+        return MethodList<T>(list: _method_list)
     }
 
-    func method_list_hook() async {
-        // can be overridden
-    }
-    
     func startup_hook() throws {
         // can be overridden
     }
@@ -150,14 +151,9 @@ class ImageSequenceProcessor<T> {
         
         Task {
             // each of these methods removes the airplanes from a particular frame
-            try await assembleMethodList()
+            //try await assembleMethodList()
             Log.i("processing a total of \(await method_list.list.count) frames")
             
-            await method_list_hook()
-            
-            Log.d("running")
-            // atually run it
-
             try await withThrowingTaskGroup(of: T.self) { group in
                 while(await method_list.list.count > 0) {
                     let current_running = await self.number_running.currentValue()

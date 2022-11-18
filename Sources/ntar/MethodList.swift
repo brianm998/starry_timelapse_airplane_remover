@@ -14,8 +14,16 @@ You should have received a copy of the GNU General Public License along with nta
 
 @available(macOS 10.15, *) 
 actor MethodList<T> {
-    var list: [Int : () async throws -> T] = [:]
+    var list: [Int : () async throws -> T]
 
+    init() {
+        self.list = [:]
+    }
+    
+    init(list: [Int : () async throws -> T]) {
+        self.list = list
+    }
+    
     func add(atIndex index: Int, method: @escaping () async throws -> T) {
         list[index] = method
     }

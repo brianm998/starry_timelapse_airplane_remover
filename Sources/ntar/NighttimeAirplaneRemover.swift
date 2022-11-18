@@ -80,6 +80,40 @@ class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemover> {
         final_processor = processor
     }
 
+    override func run() throws {
+
+        Task {
+            let dispatch_name = "FinalProcessorTaskGroup"
+            await self.dispatchGroup.enter(dispatch_name) // XXX shouldn't really be here ...
+            try await withThrowingTaskGroup(of: Void.self) { group in
+
+                // XXX setup a task group for the final queue and final processor
+                var should_process = [Bool](repeating: false, count: self.existing_output_files.count)
+                for (index, output_file_exists) in self.existing_output_files.enumerated() {
+                    should_process[index] = !output_file_exists
+                }
+                let immutable_should_process = should_process
+                if let final_processor = final_processor {
+                    group.addTask {
+                        // the final queue runs in a separate task group
+                        try await final_processor.final_queue.start()
+                    }
+                    group.addTask {              // XXX span this from the task group?
+                        // run the final processor as a single separate thread
+                        await final_processor.run(shouldProcess: immutable_should_process)
+                    }
+                } else {
+                    Log.e("should have a processor")
+                    fatalError("no processor")
+                }
+                try await group.waitForAll()
+                await self.dispatchGroup.enter(dispatch_name)
+            }
+        }
+      
+        try super.run()
+    }
+
     // called by the superclass at startup
     override func startup_hook() throws {
         if test_paint { try mkdir(test_paint_output_dirname) }
@@ -170,27 +204,6 @@ class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemover> {
         return ret
     }
     
-    // called after the list of already existing output files is known
-    override func method_list_hook() async {
-        var should_process = [Bool](repeating: false, count: self.existing_output_files.count)
-        for (index, output_file_exists) in self.existing_output_files.enumerated() {
-            should_process[index] = !output_file_exists
-        }
-        let immutable_should_process = should_process
-        if let final_processor = final_processor {
-            let name = "final processor run" 
-            await dispatchGroup.enter(name)
-            Task {              // XXX span this from the task group?
-                // run the final processor as a single separate thread
-                await final_processor.run(shouldProcess: immutable_should_process)
-                await self.dispatchGroup.leave(name)
-            }
-        } else {
-            Log.e("should have a processor")
-            fatalError("no processor")
-        }
-    }
-
     // called async, check for access to shared data
     // this method does the first step of processing on each frame.
     // outlier pixel detection, outlier group detection and analysis
