@@ -46,7 +46,7 @@ actor ImageSequence {
     
     let filenames: [String]
 
-    private var images: [String: WeakRef<PixelatedImage>] = [:]
+    private var images: [String: PixelatedImage] = [:]
 
 
     private var pruneIndex: Int = 0
@@ -61,20 +61,16 @@ actor ImageSequence {
     
     // how many images are in ram right now
     var numberOfResidentImages: Int {
-        var ret = 0
-        for (_, image) in images {
-            if !image.isEmpty { ret += 1 }
-        }
-        return ret
+        return images.count
     }
     
     func getImage(withName filename: String) throws -> PixelatedImage? {
-        if let image = images[filename]?.value {
+        if let image = images[filename] {
             return image
         }
         Log.d("loading \(filename)")
         if let pixelatedImage = try PixelatedImage(fromFile: filename) {
-            images[filename] = WeakRef(value: pixelatedImage)
+            images[filename] = pixelatedImage
             return pixelatedImage
         }
         Log.w("could not getImage(withName: \(filename)), no image found")
