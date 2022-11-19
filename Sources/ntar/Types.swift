@@ -61,3 +61,20 @@ struct BoundingBox {
     }
 }
 
+
+class WeakRef<T> where T: AnyObject {
+
+    private(set) weak var value: T?
+
+    var isEmpty: Bool {
+        if let value = value {
+            return false
+        } else {
+            return true
+        }
+    }
+    
+    init(value: T?) {
+        self.value = value
+    }
+}

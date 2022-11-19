@@ -48,6 +48,25 @@ actor ImageSequence {
 
     private var images: [String: WeakRef<PixelatedImage>] = [:]
 
+
+    private var pruneIndex: Int = 0
+    
+    func prune(before index: Int) {
+        for p in pruneIndex ..< index {
+            images.removeValue(forKey: filenames[p])
+        }
+        pruneIndex = index
+    }
+    
+    // how many images are in ram right now
+    var numberOfResidentImages: Int {
+        var ret = 0
+        for (_, image) in images {
+            if !image.isEmpty { ret += 1 }
+        }
+        return ret
+    }
+    
     func getImage(withName filename: String) throws -> PixelatedImage? {
         if let image = images[filename]?.value {
             return image
@@ -59,15 +78,6 @@ actor ImageSequence {
         }
         Log.w("could not getImage(withName: \(filename)), no image found")
         return nil
-    }
-}
-
-class WeakRef<T> where T: AnyObject {
-
-    private(set) weak var value: T?
-
-    init(value: T?) {
-        self.value = value
     }
 }
 

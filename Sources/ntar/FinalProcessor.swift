@@ -39,17 +39,20 @@ actor FinalProcessor {
     let dispatch_group: DispatchHandler
     let final_queue: FinalQueue
     let max_concurrent: UInt
-
+    let image_sequence: ImageSequence
+    
     var is_asleep = false
     
     init(numberOfFrames frame_count: Int,
          maxConcurrent max_concurrent: UInt,
-         dispatchGroup dispatch_group: DispatchHandler)
+         dispatchGroup dispatch_group: DispatchHandler,
+         imageSequence: ImageSequence)
     {
         frames = [FrameAirplaneRemover?](repeating: nil, count: frame_count)
         self.max_concurrent = max_concurrent
         self.frame_count = frame_count
         self.dispatch_group = dispatch_group
+        self.image_sequence = imageSequence
         self.final_queue = FinalQueue(max_concurrent: max_concurrent,
                                       dispatchGroup: dispatch_group)
     }
@@ -67,6 +70,10 @@ actor FinalProcessor {
         frames[index] = nil
     }
     func incrementCurrentFrameIndex() {
+        let prune_index = current_frame_index
+        // tell the image sequence to get rid of images before this
+        Task { await image_sequence.prune(before: prune_index) }
+
         current_frame_index += 1
     }
 

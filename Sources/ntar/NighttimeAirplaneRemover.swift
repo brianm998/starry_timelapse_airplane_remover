@@ -75,7 +75,8 @@ class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemover> {
 
         let processor = FinalProcessor(numberOfFrames: self.image_sequence.filenames.count,
                                        maxConcurrent: max_concurrent_renders,
-                                       dispatchGroup: dispatchGroup)
+                                       dispatchGroup: dispatchGroup,
+                                       imageSequence: image_sequence)
         
         final_processor = processor
     }
@@ -198,7 +199,8 @@ class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemover> {
             } else {
                 ret = max_concurrent_renders - final_queue_size
             }
-            Log.d("final_is_working \(final_is_working) current_running \(current_running) final_queue_size \(final_queue_size) final_frames_unprocessed \(final_frames_unprocessed) max_renders \(ret)")
+            let num_images = await image_sequence.numberOfResidentImages
+            Log.d("final_is_working \(final_is_working) current_running \(current_running) final_queue_size \(final_queue_size) final_frames_unprocessed \(final_frames_unprocessed) max_renders \(ret) images loaded: \(num_images)")
         }
         //Log.d("max_concurrent_renders \(ret)")
         return ret
