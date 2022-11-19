@@ -82,25 +82,25 @@ class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemover> {
 
     override func run() throws {
 
+        // setup the final processor and queue
         Task {
             let dispatch_name = "FinalProcessorTaskGroup"
             await self.dispatchGroup.enter(dispatch_name) // XXX shouldn't really be here ...
             try await withThrowingTaskGroup(of: Void.self) { group in
 
-                // XXX setup a task group for the final queue and final processor
-                var should_process = [Bool](repeating: false, count: self.existing_output_files.count)
-                for (index, output_file_exists) in self.existing_output_files.enumerated() {
-                    should_process[index] = !output_file_exists
-                }
-                let immutable_should_process = should_process
+                // setup a task group for the final queue and final processor
                 if let final_processor = final_processor {
                     group.addTask {
-                        // the final queue runs in a separate task group
+                        // the final queue runs a separate task group for processing 
                         try await final_processor.final_queue.start()
                     }
-                    group.addTask {              // XXX span this from the task group?
+                    group.addTask { 
                         // run the final processor as a single separate thread
-                        await final_processor.run(shouldProcess: immutable_should_process)
+                        var should_process = [Bool](repeating: false, count: self.existing_output_files.count)
+                        for (index, output_file_exists) in self.existing_output_files.enumerated() {
+                            should_process[index] = !output_file_exists
+                        }
+                        await final_processor.run(shouldProcess: should_process)
                     }
                 } else {
                     Log.e("should have a processor")

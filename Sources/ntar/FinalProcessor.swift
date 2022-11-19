@@ -177,20 +177,16 @@ actor FinalProcessor {
                                                              nextFrame: next_frame)
                         
                         let final_frame_group_name = "final frame \(frame_to_finish.frame_index)"
-                        await self.dispatch_group.enter(final_frame_group_name)
-                        Task {
-                            Log.d("frame \(frame_to_finish.frame_index) adding at index ")
-                            let before_count = await self.final_queue.method_list.count
-                            await self.final_queue.add(atIndex: frame_to_finish.frame_index) {
-                                Log.i("frame \(frame_to_finish.frame_index) finishing")
-                                await frame_to_finish.finish()
-                                Log.i("frame \(frame_to_finish.frame_index) finished")
-                            }
-                            let after_count = await self.final_queue.method_list.count
-                            Log.d("frame \(frame_to_finish.frame_index) done adding to index before_count \(before_count) after_count \(after_count)")
-                            await self.clearFrame(at: immutable_start - 1)
-                            await self.dispatch_group.leave(final_frame_group_name)
+                        Log.d("frame \(frame_to_finish.frame_index) adding at index ")
+                        let before_count = await self.final_queue.method_list.count
+                        await self.final_queue.add(atIndex: frame_to_finish.frame_index) {
+                            Log.i("frame \(frame_to_finish.frame_index) finishing")
+                            await frame_to_finish.finish()
+                            Log.i("frame \(frame_to_finish.frame_index) finished")
                         }
+                        let after_count = await self.final_queue.method_list.count
+                        Log.d("frame \(frame_to_finish.frame_index) done adding to index before_count \(before_count) after_count \(after_count)")
+                        await self.clearFrame(at: immutable_start - 1)
                     }
                     //Log.d("FINAL THREAD frame \(index_to_process) done queueing into final queue")
                 }
