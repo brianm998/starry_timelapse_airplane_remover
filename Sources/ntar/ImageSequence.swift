@@ -52,6 +52,7 @@ actor ImageSequence {
     private var pruneIndex: Int = 0
     
     func prune(before index: Int) {
+        if index <= pruneIndex { return }
         for p in pruneIndex ..< index {
             images.removeValue(forKey: filenames[p])
         }

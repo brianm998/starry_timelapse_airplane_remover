@@ -108,7 +108,7 @@ class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemover> {
                     fatalError("no processor")
                 }
                 try await group.waitForAll()
-                await self.dispatchGroup.enter(dispatch_name)
+                await self.dispatchGroup.leave(dispatch_name)
             }
         }
       
