@@ -35,9 +35,6 @@ actor FrameAirplaneRemover: Equatable {
     let min_group_size: Int
     let frame_index: Int
     
-    // only 16 bit RGB images are supported
-    let raw_pixel_size_bytes = 6
-    
     var test_paint_filename: String = "" // the filename to write out test paint data to
     var test_paint = false               // should we test paint?  helpful for debugging
 
@@ -75,7 +72,7 @@ actor FrameAirplaneRemover: Equatable {
         self.bytesPerPixel = image.bytesPerPixel
         self.bytesPerRow = width*bytesPerPixel
         self.max_pixel_distance = max_pixel_distance
-
+        
         // find outlying bright pixels between frames,
         // and group neighboring outlying pixels into groups
         await self.findOutliers()        
@@ -416,9 +413,9 @@ actor FrameAirplaneRemover: Equatable {
                             var nextValue = nextPixel.value
                             let offset = (Int(y) * bytesPerRow) + (Int(x) * bytesPerPixel)
                             
-                            test_paint_data.replaceSubrange(offset ..< offset+raw_pixel_size_bytes,
+                            test_paint_data.replaceSubrange(offset ..< offset+self.bytesPerPixel,
                                                             with: &nextValue,
-                                                            count: raw_pixel_size_bytes)
+                                                            count: self.bytesPerPixel)
                         }
                     }
                 }
@@ -489,15 +486,15 @@ actor FrameAirplaneRemover: Equatable {
         let offset = (Int(y) * bytesPerRow) + (Int(x) * bytesPerPixel)
         
         // actually paint over that airplane like thing in the image data
-        data.replaceSubrange(offset ..< offset+raw_pixel_size_bytes,
-                          with: &paint_value, count: raw_pixel_size_bytes)
+        data.replaceSubrange(offset ..< offset+self.bytesPerPixel,
+                          with: &paint_value, count: self.bytesPerPixel)
         
         // for testing, colors changed pixels
         if test_paint {
             var test_paint_value = why.testPaintPixel.value
-            test_paint_data.replaceSubrange(offset ..< offset+raw_pixel_size_bytes,
+            test_paint_data.replaceSubrange(offset ..< offset+self.bytesPerPixel,
                                             with: &test_paint_value,
-                                            count: raw_pixel_size_bytes)
+                                            count: self.bytesPerPixel)
         }
     }
     
@@ -505,7 +502,7 @@ actor FrameAirplaneRemover: Equatable {
     // does the final painting and then writes out the output files
     func finish() async {
         Log.i("frame \(self.frame_index) finishing")
-        
+
         let _data = image.raw_image_data
         
         // copy the original image data as adjecent frames need
