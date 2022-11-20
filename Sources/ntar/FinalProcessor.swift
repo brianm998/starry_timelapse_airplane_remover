@@ -164,7 +164,7 @@ actor FinalProcessor {
             if !bad {
                 Log.i("FINAL THREAD frame \(index_to_process) doing inter-frame analysis with \(images_to_process.count) frames")
                 await run_final_pass(frames: images_to_process)
-                Log.d("FINAL THREAD frame \(index_to_process) done with inter-frame analysis")
+                Log.i("FINAL THREAD frame \(index_to_process) done with inter-frame analysis")
                 await self.incrementCurrentFrameIndex()
                 
                 
@@ -180,10 +180,13 @@ actor FinalProcessor {
                         // try to find other nearby streaks, if not found,
                         //then skip for new not paint reason
                         
+                        Log.d("running final streak processing on frame \(frame_to_finish.frame_index)")
+                        
                         await really_final_streak_processing(onFrame: frame_to_finish,
                                                              nextFrame: next_frame)
                         
-                        let final_frame_group_name = "final frame \(frame_to_finish.frame_index)"
+                        Log.d("running final streak processing on frame \(frame_to_finish.frame_index)")
+                        //let final_frame_group_name = "final frame \(frame_to_finish.frame_index)"
                         Log.d("frame \(frame_to_finish.frame_index) adding at index ")
                         let before_count = await self.final_queue.method_list.count
                         await self.final_queue.add(atIndex: frame_to_finish.frame_index) {
@@ -238,96 +241,101 @@ func really_final_streak_processing(onFrame frame: FrameAirplaneRemover,
             }
         }
     }
-    
-    for (streak_name, airplane_streak) in airplane_streaks {
-        if airplane_streak.count == 2 {
-            let first_member = airplane_streak[0]
-            let last_member = airplane_streak[1]
-            if last_member.frame_index == frame.frame_index || 
-                 first_member.frame_index == frame.frame_index
-            {
-                var remove_small_streak = true
-                
-                // this is a two member airplane streak that is on our frame
-                // look for other streaks that might match up to it on either side
-                // if neither found, then dump it
-                
-                for (other_streak_name, other_airplane_streak) in airplane_streaks {
-                    if other_streak_name == streak_name { continue }
-                    
-                    // this streak must begin or end at the right end of this 2 count streak
-                    
-                    if let last_other_airplane_streak = other_airplane_streak.last {
-                        let first_other_airplane_streak = other_airplane_streak[0]
 
-                        let move_me_theta_diff: Double = 10      // XXX move me
+    await withTaskGroup(of: Void.self) { taskGroup in
+        for (streak_name, airplane_streak) in airplane_streaks {
+            taskGroup.addTask {
+                if airplane_streak.count == 2 {
+                    let first_member = airplane_streak[0]
+                    let last_member = airplane_streak[1]
+                    if last_member.frame_index == frame.frame_index || 
+                         first_member.frame_index == frame.frame_index
+                    {
+                        var remove_small_streak = true
                         
-                        if first_member.frame_index == last_other_airplane_streak.frame_index + 1 {
-                            // found a streak that ended right before this one started
+                        // this is a two member airplane streak that is on our frame
+                        // look for other streaks that might match up to it on either side
+                        // if neither found, then dump it
+                        
+                        for (other_streak_name, other_airplane_streak) in airplane_streaks {
+                            if other_streak_name == streak_name { continue }
                             
-                            let distance = await distance(from: last_other_airplane_streak.group,
-                                                          to: first_member.group)
-
-                            let theta_diff = await abs(last_other_airplane_streak.group.line.theta -
-                                                         first_member.group.line.theta)
+                            // this streak must begin or end at the right end of this 2 count streak
                             
-                            let hypo_avg = (first_member.group.bounds.hypotenuse +
-                                              last_other_airplane_streak.group.bounds.hypotenuse)/2
+                            if let last_other_airplane_streak = other_airplane_streak.last {
+                                let first_other_airplane_streak = other_airplane_streak[0]
 
-                            let move_me_distance_limit = hypo_avg + 2 // XXX contstant
-                            
-                            if distance < move_me_distance_limit && theta_diff < move_me_theta_diff {
-                                remove_small_streak = false
-                            }
-                            
-                        } else if last_member.frame_index + 1 == first_other_airplane_streak.frame_index {
-                            // found a streak that starts right after this one ends
-                            let distance = await distance(from: last_member.group,
-                                                          to: first_other_airplane_streak.group)
+                                let move_me_theta_diff: Double = 10      // XXX move me
+                                
+                                if first_member.frame_index == last_other_airplane_streak.frame_index + 1 {
+                                    // found a streak that ended right before this one started
+                                    
+                                    let distance = await distance(from: last_other_airplane_streak.group,
+                                                                  to: first_member.group)
 
-                            let theta_diff = await abs(first_other_airplane_streak.group.line.theta -
-                                                         last_member.group.line.theta)
+                                    let theta_diff = await abs(last_other_airplane_streak.group.line.theta -
+                                                                 first_member.group.line.theta)
+                                    
+                                    let hypo_avg = (first_member.group.bounds.hypotenuse +
+                                                      last_other_airplane_streak.group.bounds.hypotenuse)/2
 
-                            let hypo_avg = (last_member.group.bounds.hypotenuse +
-                                              first_other_airplane_streak.group.bounds.hypotenuse)/2
+                                    let move_me_distance_limit = hypo_avg + 2 // XXX contstant
+                                    
+                                    if distance < move_me_distance_limit && theta_diff < move_me_theta_diff {
+                                        remove_small_streak = false
+                                    }
+                                    
+                                } else if last_member.frame_index + 1 == first_other_airplane_streak.frame_index {
+                                    // found a streak that starts right after this one ends
+                                    let distance = await distance(from: last_member.group,
+                                                                  to: first_other_airplane_streak.group)
 
-                            let move_me_distance_limit =  hypo_avg + 2 // XXX contstant
+                                    let theta_diff = await abs(first_other_airplane_streak.group.line.theta -
+                                                                 last_member.group.line.theta)
 
-                            if distance < move_me_distance_limit && theta_diff < move_me_theta_diff {
-                                remove_small_streak = false
+                                    let hypo_avg = (last_member.group.bounds.hypotenuse +
+                                                      first_other_airplane_streak.group.bounds.hypotenuse)/2
+
+                                    let move_me_distance_limit =  hypo_avg + 2 // XXX contstant
+
+                                    if distance < move_me_distance_limit && theta_diff < move_me_theta_diff {
+                                        remove_small_streak = false
+                                    }
+                                }
                             }
                         }
-                    }
-                }
-                
-                if remove_small_streak {
-
-                    var total_line_score: Double = 0
-                    // one last check on the line score
-                    for member_to_remove in airplane_streak {
-                        total_line_score += await member_to_remove.group.paintScore(from: .houghTransform)
-                    }
-                    total_line_score /= Double(airplane_streak.count)
-
-                    // only get rid of small streaks if they don't look like lines
-                    if total_line_score < 0.2 { // XXX constant
                         
-                        airplane_streaks.removeValue(forKey: streak_name) // XXX mutating while iterating?
-                        
-                        for member_to_remove in airplane_streak {
-                            // change should_paint to new value for the frame
-                            if member_to_remove.frame_index < frame.frame_index {
-                                Log.e("frame \(member_to_remove.frame_index) is already finalized, modifying it now won't change anythig :(")
-                                fatalError("FUCK")
+                        if remove_small_streak {
+
+                            var total_line_score: Double = 0
+                            // one last check on the line score
+                            for member_to_remove in airplane_streak {
+                                total_line_score += await member_to_remove.group.paintScore(from: .houghTransform)
                             }
-                            // here 'removing' means 'de-streakifying' it
-                            // it may or may not still be painted, but now it's not based upon other groups 
-                            await member_to_remove.group.setShouldPaintFromCombinedScore()
+                            total_line_score /= Double(airplane_streak.count)
+
+                            // only get rid of small streaks if they don't look like lines
+                            if total_line_score < 0.2 { // XXX constant
+                                
+                                airplane_streaks.removeValue(forKey: streak_name) // XXX mutating while iterating?
+                                
+                                for member_to_remove in airplane_streak {
+                                    // change should_paint to new value for the frame
+                                    if member_to_remove.frame_index < frame.frame_index {
+                                        Log.e("frame \(member_to_remove.frame_index) is already finalized, modifying it now won't change anythig :(")
+                                        fatalError("FUCK")
+                                    }
+                                    // here 'removing' means 'de-streakifying' it
+                                    // it may or may not still be painted, but now it's not based upon other groups 
+                                    await member_to_remove.group.setShouldPaintFromCombinedScore()
+                                }
+                            }
                         }
                     }
                 }
             }
         }
+        await taskGroup.waitForAll()
     }
 }
 
@@ -345,7 +353,12 @@ fileprivate func run_final_pass(frames: [FrameAirplaneRemover]) async {
     Log.d("final pass on \(frames.count) frames")
 
     await run_final_overlap_pass(frames: frames)
+
+    Log.d("final pass on \(frames.count) frames doing streak analysis")
+
     await run_final_streak_pass(frames: frames) // XXX not actually the final streak pass anymore..
+
+    Log.d("done with final pass on \(frames.count) frames")
 }
 
 
@@ -380,65 +393,72 @@ fileprivate func run_final_overlap_pass(frames: [FrameAirplaneRemover]) async {
             let line_rho = await group.line.rho
 
             if let group = await frame.outlierGroup(named: group.name) {
-                for other_frame in frames {
-                    if other_frame == frame { continue }
 
-                    await other_frame.foreachOutlierGroup() { og in
-                        let other_line_theta = await og.line.theta
-                        let other_line_rho = await og.line.rho
+                await withTaskGroup(of: Void.self) { taskGroup in
+                
+                    for other_frame in frames {
+                        if other_frame == frame { continue }
                         
-                        let theta_diff = abs(line_theta-other_line_theta)
-                        let rho_diff = abs(line_rho-other_line_rho)
-                        if (theta_diff < final_theta_diff || abs(theta_diff - 180) < final_theta_diff) &&
-                             rho_diff < final_rho_diff
-                        {
-                            
-                            let pixel_overlap_amount =
-                              await pixel_overlap(group_1: group, group_2: og)
-                            
-                            
-                            //Log.d("frame \(frame.frame_index) \(group_name) \(og) pixel_overlap_amount \(pixel_overlap_amount)")
-                            
-                            if pixel_overlap_amount > 0.05 { // XXX hardcoded constant
+                        await other_frame.foreachOutlierGroup() { og in
+                            taskGroup.addTask {
+                                let other_line_theta = await og.line.theta
+                                let other_line_rho = await og.line.rho
                                 
-                                var do_it = true
-                                
-                                // do paint over objects that look like lines
-                                if let frame_reason = await group.shouldPaint
+                                let theta_diff = abs(line_theta-other_line_theta)
+                                let rho_diff = abs(line_rho-other_line_rho)
+                                if (theta_diff < final_theta_diff || abs(theta_diff - 180) < final_theta_diff) &&
+                                     rho_diff < final_rho_diff
                                 {
-                                    if frame_reason.willPaint && frame_reason == .looksLikeALine(0) {
-                                        do_it = false
-                                    }
-                                }
-                                
-                                if let other_reason = await og.shouldPaint
-                                {
-                                    if other_reason.willPaint && other_reason == .looksLikeALine(0) {
-                                        do_it = false
-                                    }
-                                }
-                                
-                                if do_it {
-                                    // two overlapping groups
-                                    // shouldn't be painted over
-                                //    let _ = await (
-                                    await group.shouldPaint(.adjecentOverlap(pixel_overlap_amount))
-                                    //                                      frame.setShouldPaint(group: group_name,
-                                    //                                                         why: ),
-                                    await og.shouldPaint(.adjecentOverlap(pixel_overlap_amount))
-                                    //                                      other_frame.setShouldPaint(group: og.name,
-                                    //                                                                 why: .adjecentOverlap(pixel_overlap_amount)))
                                     
-                                    //Log.d("frame \(frame.frame_index) should_paint[\(group_name)] = (false, .adjecentOverlap(\(pixel_overlap_amount))")
-                                    //Log.d("frame \(other_frame.frame_index) should_paint[\(og)] = (false, .adjecentOverlap(\(pixel_overlap_amount))")
-                                } else {
-                                    //Log.d("frame \(frame.frame_index) \(group_name) left untouched because of pixel overlap amount \(pixel_overlap_amount)")
-                                    //Log.d("frame \(other_frame.frame_index) \(og) left untouched because of pixel overlap amount \(pixel_overlap_amount)")
+                                    let pixel_overlap_amount =
+                                      await pixel_overlap(group_1: group, group_2: og)
+                                    
+                                    
+                                    //Log.d("frame \(frame.frame_index) \(group_name) \(og) pixel_overlap_amount \(pixel_overlap_amount)")
+                                    
+                                    if pixel_overlap_amount > 0.05 { // XXX hardcoded constant
+                                        
+                                        var do_it = true
+                                        
+                                        // do paint over objects that look like lines
+                                        if let frame_reason = await group.shouldPaint
+                                        {
+                                            if frame_reason.willPaint && frame_reason == .looksLikeALine(0) {
+                                                do_it = false
+                                            }
+                                        }
+                                        
+                                        if let other_reason = await og.shouldPaint
+                                        {
+                                            if other_reason.willPaint && other_reason == .looksLikeALine(0) {
+                                                do_it = false
+                                            }
+                                        }
+                                        
+                                        if do_it {
+                                            // two overlapping groups
+                                            // shouldn't be painted over
+                                            //    let _ = await (
+                                            await group.shouldPaint(.adjecentOverlap(pixel_overlap_amount))
+                                            //                                      frame.setShouldPaint(group: group_name,
+                                            //                                                         why: ),
+                                            await og.shouldPaint(.adjecentOverlap(pixel_overlap_amount))
+                                            //                                      other_frame.setShouldPaint(group: og.name,
+                                            //                                                                 why: .adjecentOverlap(pixel_overlap_amount)))
+                                            
+                                            //Log.d("frame \(frame.frame_index) should_paint[\(group_name)] = (false, .adjecentOverlap(\(pixel_overlap_amount))")
+                                            //Log.d("frame \(other_frame.frame_index) should_paint[\(og)] = (false, .adjecentOverlap(\(pixel_overlap_amount))")
+                                        } else {
+                                            //Log.d("frame \(frame.frame_index) \(group_name) left untouched because of pixel overlap amount \(pixel_overlap_amount)")
+                                            //Log.d("frame \(other_frame.frame_index) \(og) left untouched because of pixel overlap amount \(pixel_overlap_amount)")
+                                        }
+                                    }
                                 }
                             }
+                            return .continue
                         }
-                        return .continue
                     }
+                    await taskGroup.waitForAll()
                 }
             }
             return .continue
@@ -446,128 +466,141 @@ fileprivate func run_final_overlap_pass(frames: [FrameAirplaneRemover]) async {
     }
 }
 
-
 // looks for airplane streaks across frames
 @available(macOS 10.15, *)
 fileprivate func run_final_streak_pass(frames: [FrameAirplaneRemover]) async {
 
     let initial_frame_index = frames[0].frame_index
+
     
     for (batch_index, frame) in frames.enumerated() {
         let frame_index = frame.frame_index
         Log.d("frame_index \(frame_index)")
         if batch_index + 1 == frames.count { continue } // the last frame can be ignored here
 
-        await frame.foreachOutlierGroup() { group in
-            // look for more data to act upon
-            
-            if let reason = await group.shouldPaint {
-                if reason == .adjecentOverlap(0) {
-                    Log.d("frame \(frame.frame_index) skipping \(group) because it has .adjecentOverlap")
-                    return .continue
-                }
-                
-                // grab a streak that we might already be in
-                
-                var existing_streak: [AirplaneStreakMember]?
-                var existing_streak_name: String?
-                
-                for (streak_name, airplane_streak) in airplane_streaks {
-                    if let _ = existing_streak { continue }
-                    for streak_member in airplane_streak {
-                        if frame_index == streak_member.frame_index &&
-                             group.name == streak_member.group.name
+        await withTaskGroup(of: [AirplaneStreakMember].self) { taskGroup in
+            await frame.foreachOutlierGroup() { group in
+                // do streak detection in parallel at the level of groups in a single frame
+                taskGroup.addTask {
+                    // look for more data to act upon
+                    
+                    if let reason = await group.shouldPaint {
+                        if reason == .adjecentOverlap(0) {
+                            //Log.d("frame \(frame.frame_index) skipping \(group) because it has .adjecentOverlap")
+                            return []
+                        }
+                        
+                        // grab a streak that we might already be in
+                        
+                        var existing_streak: [AirplaneStreakMember]?
+                        var existing_streak_name: String?
+                        
+                        for (streak_name, airplane_streak) in airplane_streaks {
+                            if let _ = existing_streak { continue }
+                            for streak_member in airplane_streak {
+                                if frame_index == streak_member.frame_index &&
+                                     group.name == streak_member.group.name
+                                {
+                                    existing_streak = airplane_streak
+                                    existing_streak_name = streak_name
+                                    //Log.d("frame \(frame.frame_index) using existing streak for \(group)")
+                                    continue
+                                }
+                            }
+                        }
+                        
+                        
+                        //Log.d("frame \(frame_index) looking for streak for \(group)")
+                        // search neighboring frames looking for potential tracks
+                        
+                        // see if this group is already part of a streak, and pass that in
+                        
+                        // if not, pass in the starting potential one frame streak
+                        
+                        var potential_streak: [AirplaneStreakMember] = [(frame_index, group, nil)]
+                        var potential_streak_name = "\(frame_index).\(group.name)"
+                        
+                        if let existing_streak = existing_streak,
+                           let existing_streak_name = existing_streak_name
                         {
-                            existing_streak = airplane_streak
-                            existing_streak_name = streak_name
-                            Log.d("frame \(frame.frame_index) using existing streak for \(group)")
-                            continue
+                            potential_streak = existing_streak
+                            potential_streak_name = existing_streak_name
+                        }
+                        
+                        let houghScore = await group.paintScore(from: .houghTransform)
+                        
+                        if houghScore > 0.007 { // XXX constant
+                            if let streak = 
+                                 await streak_from(group: group, // XXX really start from ends of existing streak, not group, which could be in the middle
+                                                   frames: frames,
+                                                   startingIndex: batch_index+1,
+                                                   potentialStreak: &potential_streak)
+                            {
+                                //Log.d("frame \(frame_index) found streak \(potential_streak_name) of size \(streak.count) for \(group)")
+                                return streak
+                            }
                         }
                     }
+                    return []  // no streak found here
                 }
-                
-                
-                Log.d("frame \(frame_index) looking for streak for \(group)")
-                // search neighboring frames looking for potential tracks
-                
-                // see if this group is already part of a streak, and pass that in
-                
-                // if not, pass in the starting potential one frame streak
-                
-                var potential_streak: [AirplaneStreakMember] = [(frame_index, group, nil)]
-                var potential_streak_name = "\(frame_index).\(group.name)"
-                
-                if let existing_streak = existing_streak,
-                   let existing_streak_name = existing_streak_name
-                {
-                    potential_streak = existing_streak
-                    potential_streak_name = existing_streak_name
-                }
-
-                let houghScore = await group.paintScore(from: .houghTransform)
-
-                if houghScore > 0.007 { // XXX constant
-                    if let streak = 
-                         await streak_from(group: group, // XXX really start from ends of existing streak, not group, which could be in the middle
-                                           frames: frames,
-                                           startingIndex: batch_index+1,
-                                           potentialStreak: &potential_streak)
-                    {
-                        Log.d("frame \(frame_index) found streak \(potential_streak_name) of size \(streak.count) for \(group)")
-                        airplane_streaks[potential_streak_name] = streak
-                    } else {
-                        Log.d("frame \(frame_index) DID NOT find streak for \(group)")
-                    }
-                } else {
-                    Log.d("frame \(frame_index) not starting streak for \(group) because of low hough score \(houghScore)")
+                return .continue
+            }
+            while let streak = await taskGroup.next() {
+                if streak.count > 0 {
+                    let first_member = streak[0]
+                    airplane_streaks["\(first_member.group.frame.frame_index).\(first_member.group.name)"] = streak
                 }
             }
-            return .continue
         }
     }
 
     // go through and mark all of airplane_streaks to paint
     Log.d("analyzing \(airplane_streaks.count) streaks")
-    for (streak_name, airplane_streak) in airplane_streaks {
-        let first_member = airplane_streak[0]
-        Log.d("analyzing streak \(streak_name) starting with group \(first_member.group) frame_index \(first_member.frame_index) with \(airplane_streak.count) members")
-        // XXX perhaps reject small streaks?
-        if airplane_streak.count < 3 {
-            Log.d("ignoring two member streak \(airplane_streak)")
-            continue
-        } 
-        var verbotten = false
-        var was_already_paintable = false
-        //let index_of_first_streak = airplane_streak[0].frame_index
-        for streak_member in airplane_streak {
-            if streak_member.frame_index - initial_frame_index < 0 ||
-               streak_member.frame_index - initial_frame_index >= frames.count {
-                // these are frames that are part of the streak, but not part of the batch
-                // being processed right now,
-            } else {
-                //let frame = frames[streak_member.frame_index - initial_frame_index]
-                if let should_paint = await streak_member.group.shouldPaint{
-                    if should_paint == .adjecentOverlap(0) { verbotten = true }
-                    //                if should_paint.willPaint { was_already_paintable = true }
+    await withTaskGroup(of: Void.self) { taskGroup in
+        for (streak_name, airplane_streak) in airplane_streaks {
+            taskGroup.addTask {
+                let first_member = airplane_streak[0]
+                Log.d("analyzing streak \(streak_name) starting with group \(first_member.group) frame_index \(first_member.frame_index) with \(airplane_streak.count) members")
+                // XXX perhaps reject small streaks?
+                if airplane_streak.count < 3 {
+                    //Log.d("ignoring two member streak \(airplane_streak)")
+                    return
+                } 
+                var verbotten = false
+                var was_already_paintable = false
+                //let index_of_first_streak = airplane_streak[0].frame_index
+                for streak_member in airplane_streak {
+                    if streak_member.frame_index - initial_frame_index < 0 ||
+                         streak_member.frame_index - initial_frame_index >= frames.count {
+                        // these are frames that are part of the streak, but not part of the batch
+                        // being processed right now,
+                    } else {
+                        //let frame = frames[streak_member.frame_index - initial_frame_index]
+                        if let should_paint = await streak_member.group.shouldPaint{
+                            if should_paint == .adjecentOverlap(0) { verbotten = true }
+                            //                if should_paint.willPaint { was_already_paintable = true }
+                        }
+                    }
+                }
+                if verbotten/* || !was_already_paintable*/ { return }
+                Log.d("painting over airplane streak \(airplane_streak)")
+                for streak_member in airplane_streak {
+                    if streak_member.frame_index - initial_frame_index < 0 ||
+                         streak_member.frame_index - initial_frame_index >= frames.count {
+                        // these are frames that are part of the streak, but not part of the batch
+                        // being processed right now,
+                    } else {
+                        //let frame = frames[streak_member.frame_index - initial_frame_index]
+                        Log.d("frame \(streak_member.frame_index) will paint group \(streak_member.group) is .inStreak")
+
+                        // XXX check to see if this is already .inStreak with higher count
+                        await streak_member.group.shouldPaint(.inStreak(airplane_streak.count))
+                        //await frame.setShouldPaint(group: streak_member.group.name, why: )
+                    }
                 }
             }
         }
-        if verbotten/* || !was_already_paintable*/ { continue }
-        Log.d("painting over airplane streak \(airplane_streak)")
-        for streak_member in airplane_streak {
-            if streak_member.frame_index - initial_frame_index < 0 ||
-               streak_member.frame_index - initial_frame_index >= frames.count {
-                // these are frames that are part of the streak, but not part of the batch
-                // being processed right now,
-            } else {
-                //let frame = frames[streak_member.frame_index - initial_frame_index]
-                Log.d("frame \(streak_member.frame_index) will paint group \(streak_member.group) is .inStreak")
-
-                // XXX check to see if this is already .inStreak with higher count
-                await streak_member.group.shouldPaint(.inStreak(airplane_streak.count))
-                //await frame.setShouldPaint(group: streak_member.group.name, why: )
-            }
-        }
+        await taskGroup.waitForAll()
     }
 }
 
@@ -584,14 +617,14 @@ func streak_from(streak: inout [AirplaneStreakMember],
                                  startingIndex: starting_index,
                                  potentialStreak: &streak)
     } else {
-        if let new_streak = await streak_from(group: streak[0].group,
-                                              frames: frames,
-                                              startingIndex: starting_index,
-                                              potentialStreak: &streak)
+        if let last_streak_member = streak.last,
+                  let new_streak = await streak_from(group: last_streak_member.group,
+                                                     frames: frames,
+                                                     startingIndex: starting_index,
+                                                     potentialStreak: &streak)
         {
             return new_streak
-        } else if let last_streak_member = streak.last,
-                  let new_streak = await streak_from(group: last_streak_member.group,
+        } else if let new_streak = await streak_from(group: streak[0].group,
                                                      frames: frames,
                                                      startingIndex: starting_index,
                                                      potentialStreak: &streak)
@@ -615,7 +648,7 @@ func streak_from(group: OutlierGroup,
   async -> [AirplaneStreakMember]?
 {
 
-    Log.d("trying to find streak starting at \(group)")
+    //Log.d("trying to find streak starting at \(group)")
     
     // the bounding box of the last element of the streak
 
@@ -677,7 +710,7 @@ func streak_from(group: OutlierGroup,
                        abs(center_line_theta_diff_2 - 180) < center_line_theta_diff)) &&
                  rho_diff < final_rho_diff
             {
-                Log.d("frame \(frame.frame_index) \(other_group) is \(distance) away from \(last_group) other_group_line_theta \(other_group_line_theta) last_group_line_theta \(last_group_line_theta) center_line_theta \(center_line_theta)")
+                //Log.d("frame \(frame.frame_index) \(other_group) is \(distance) away from \(last_group) other_group_line_theta \(other_group_line_theta) last_group_line_theta \(last_group_line_theta) center_line_theta \(center_line_theta)")
                 best_group = other_group
                 best_distance = distance
                 best_frame_index = frame_index // XXX this WAS wrong
