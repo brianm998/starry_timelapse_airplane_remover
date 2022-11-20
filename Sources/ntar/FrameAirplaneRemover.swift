@@ -43,6 +43,8 @@ actor FrameAirplaneRemover: Equatable {
 
     // populated by pruning
     private var outlier_groups: [String: OutlierGroup] = [:] // keyed by group name
+
+    var outlierGroupCount: Int { return outlier_groups.count }
     
     let output_filename: String
     
