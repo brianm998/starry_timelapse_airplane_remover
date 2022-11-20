@@ -64,12 +64,12 @@ actor ImageSequence {
         return images.count
     }
     
-    func getImage(withName filename: String) throws -> PixelatedImage? {
+    func getImage(withName filename: String) async throws -> PixelatedImage? {
         if let image = images[filename] {
             return image
         }
         Log.d("loading \(filename)")
-        if let pixelatedImage = try PixelatedImage(fromFile: filename) {
+        if let pixelatedImage = try await PixelatedImage(fromFile: filename) {
             images[filename] = pixelatedImage
             return pixelatedImage
         }

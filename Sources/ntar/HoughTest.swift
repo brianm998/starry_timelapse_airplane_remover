@@ -15,7 +15,8 @@ You should have received a copy of the GNU General Public License along with nta
 */
 
 // this method is used for testing the hough transformation code by itself
-func hough_test(filename: String, output_filename: String) {
+@available(macOS 10.15, *)
+func hough_test(filename: String, output_filename: String) async {
 
     // the output filename needs to be exactly the right size
     // specifically hough_height and hough_width
@@ -26,8 +27,8 @@ func hough_test(filename: String, output_filename: String) {
     
     do {
     if #available(macOS 10.15, *),
-       let image = try PixelatedImage(fromFile: filename),
-       let output_image = try PixelatedImage(fromFile: output_filename)
+       let image = try await PixelatedImage(fromFile: filename),
+       let output_image = try await PixelatedImage(fromFile: output_filename)
     {
         let rmax = sqrt(Double(image.width*image.width + image.height*image.height))
 
