@@ -51,7 +51,7 @@ actor OutlierGroup: CustomStringConvertible, Hashable, Equatable {
     }
 
     func shouldPaint(_ should_paint: PaintReason) {
-        Log.d("\(self) should paint \(should_paint)")
+        //Log.d("\(self) should paint \(should_paint)")
         self.shouldPaint = should_paint
     }
 
