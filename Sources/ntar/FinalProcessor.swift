@@ -108,7 +108,7 @@ actor FinalProcessor {
         }
     }
     
-    func finishAll() async {
+    func finishAll() async throws {
         Log.d("finishing all")
         var count = 0
         for frame in frames {
@@ -116,7 +116,7 @@ actor FinalProcessor {
                 count += 1
                 Log.d("adding frame \(frame.frame_index) to final queue")
                 await self.final_queue.method_list.add(atIndex: frame.frame_index) {
-                    await frame.finish()
+                    try await frame.finish()
                 }
             }
         }
@@ -124,7 +124,7 @@ actor FinalProcessor {
         Log.d("add all \(count) remaining frames to method list of count \(method_list_count)")
     }
 
-    nonisolated func run(shouldProcess: [Bool]) async {
+    nonisolated func run(shouldProcess: [Bool]) async throws {
 
         let frame_count = await frames.count
         
@@ -202,7 +202,7 @@ actor FinalProcessor {
                         let before_count = await self.final_queue.method_list.count
                         await self.final_queue.add(atIndex: frame_to_finish.frame_index) {
                             Log.i("frame \(frame_to_finish.frame_index) finishing")
-                            await frame_to_finish.finish()
+                            try await frame_to_finish.finish()
                             Log.i("frame \(frame_to_finish.frame_index) finished")
                         }
                         let after_count = await self.final_queue.method_list.count
@@ -221,7 +221,7 @@ actor FinalProcessor {
         }
 
         Log.i("FINAL THREAD finishing all remaining frames")
-        await self.finishAll()
+        try await self.finishAll()
         Log.d("FINAL THREAD check")
         await final_queue.finish()
         Log.d("FINAL THREAD done")

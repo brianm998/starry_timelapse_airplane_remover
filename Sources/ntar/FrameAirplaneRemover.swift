@@ -29,8 +29,7 @@ actor FrameAirplaneRemover: Equatable {
     let height: Int
     let bytesPerPixel: Int
     let bytesPerRow: Int
-    let image: PixelatedImage
-    let otherFrames: [PixelatedImage]
+    let otherFrameIndexes: [Int] // used in found outliers and paint only
     let max_pixel_distance: UInt16
     let min_group_size: Int
     let frame_index: Int
@@ -40,26 +39,30 @@ actor FrameAirplaneRemover: Equatable {
 
     let outlier_output_dirname: String?
 
-
     // populated by pruning
     private var outlier_groups: [String: OutlierGroup] = [:] // keyed by group name
 
     var outlierGroupCount: Int { return outlier_groups.count }
     
     let output_filename: String
+
+    let image_sequence: ImageSequence
     
-    init(fromImage image: PixelatedImage,
+    init(imageSequence image_sequence: ImageSequence,
          atIndex frame_index: Int,
-         otherFrames: [PixelatedImage],
+         otherFrameIndexes: [Int],
          outputFilename output_filename: String,
          testPaintFilename tpfo: String?,
          outlierOutputDirname outlier_output_dirname: String?,
          maxPixelDistance max_pixel_distance: UInt16,
-         minGroupSize min_group_size: Int) async
+         minGroupSize min_group_size: Int) async throws
     {
+
+        guard let image = try await image_sequence.getImage(withName: image_sequence.filenames[frame_index])
+        else { throw "Couldn't load image" }
+        self.image_sequence = image_sequence
         self.frame_index = frame_index // frame index in the image sequence
-        self.image = image
-        self.otherFrames = otherFrames
+        self.otherFrameIndexes = otherFrameIndexes
         self.output_filename = output_filename
         self.min_group_size = min_group_size
         if let tp_filename = tpfo {
@@ -77,7 +80,7 @@ actor FrameAirplaneRemover: Equatable {
         
         // find outlying bright pixels between frames,
         // and group neighboring outlying pixels into groups
-        await self.findOutliers()        
+        try await self.findOutliers()        
         
         Log.i("frame \(frame_index) starting processing")
     }
@@ -95,8 +98,19 @@ actor FrameAirplaneRemover: Equatable {
     }
     
     // this is still a slow part of the process, but is now about 10x faster than before
-    func findOutliers() async {
+    func findOutliers() async throws {
 
+        guard let image = try await image_sequence.getImage(withName: image_sequence.filenames[frame_index])
+        else { throw "Couldn't load image" }
+
+        var otherFrames: [PixelatedImage] = []
+
+        for otherFrameIndex in otherFrameIndexes {
+            guard let otherFrame = try await image_sequence.getImage(withName: image_sequence.filenames[otherFrameIndex])
+            else { throw "Couldn't load image" }
+            otherFrames.append(otherFrame)
+        }
+        
         // XXX move this out of class memory, and just use it for populating the outlier list
         // need to have the OutlierGroup class contain a mini version of this for each one
         
@@ -426,8 +440,10 @@ actor FrameAirplaneRemover: Equatable {
     }
 
     // actually paint over outlier groups that have been selected as airplane tracks
-    private func paintOverAirplanes(toData data: inout Data, testData test_paint_data: inout Data) async {
-        
+    private func paintOverAirplanes(toData data: inout Data,
+                                    testData test_paint_data: inout Data,
+                                    otherFrames: [PixelatedImage]) async
+    {
         Log.i("frame \(frame_index) painting airplane outlier groups")
 
         // paint over every outlier in the paint list with pixels from the adjecent frames
@@ -446,7 +462,9 @@ actor FrameAirplaneRemover: Equatable {
                         let pixel_index = (y - group.bounds.min.y)*group.bounds.width + (x - group.bounds.min.x)
                         if group.pixels[pixel_index] == true {
                             paint(x: x, y: y, why: reason,
-                                  toData: &data, testData: &test_paint_data)
+                                  toData: &data,
+                                  testData: &test_paint_data,
+                                  otherFrames: otherFrames)
                         }
                     }
                 }
@@ -455,7 +473,9 @@ actor FrameAirplaneRemover: Equatable {
         }
     }
 
-    private func writeTestFile(withData data: Data) throws {
+    private func writeTestFile(withData data: Data) async throws {
+        guard let image = try await image_sequence.getImage(withName: image_sequence.filenames[frame_index])
+        else { throw "Couldn't load image" }
         try image.writeTIFFEncoding(ofData: data, toFilename: test_paint_filename)
     }
 
@@ -463,7 +483,8 @@ actor FrameAirplaneRemover: Equatable {
     private func paint(x: Int, y: Int,
                        why: PaintReason,
                        toData data: inout Data,
-                       testData test_paint_data: inout Data)
+                       testData test_paint_data: inout Data,
+                       otherFrames: [PixelatedImage])
     {
         var pixels_to_paint_with: [Pixel] = []
         
@@ -502,9 +523,19 @@ actor FrameAirplaneRemover: Equatable {
     
     // run after should_paint has been set for each group, 
     // does the final painting and then writes out the output files
-    func finish() async {
+    func finish() async throws {
         Log.i("frame \(self.frame_index) finishing")
+        guard let image = try await image_sequence.getImage(withName: image_sequence.filenames[frame_index])
+        else { throw "Couldn't load image" }
 
+        var otherFrames: [PixelatedImage] = []
+
+        for otherFrameIndex in otherFrameIndexes {
+            guard let otherFrame = try await image_sequence.getImage(withName: image_sequence.filenames[otherFrameIndex])
+            else { throw "Couldn't load image" }
+            otherFrames.append(otherFrame)
+        }
+        
         let _data = image.raw_image_data
         
         // copy the original image data as adjecent frames need
@@ -533,14 +564,16 @@ actor FrameAirplaneRemover: Equatable {
                   
         Log.d("frame \(self.frame_index) painting over airplanes")
                   
-        await self.paintOverAirplanes(toData: &output_data, testData: &test_paint_data)
+        await self.paintOverAirplanes(toData: &output_data,
+                                      testData: &test_paint_data,
+                                      otherFrames: otherFrames)
         
         Log.d("frame \(self.frame_index) writing output files")
 
         do {
-            try self.writeTestFile(withData: test_paint_data)
+            try await self.writeTestFile(withData: test_paint_data)
             // write frame out as a tiff file after processing it
-            try self.image.writeTIFFEncoding(ofData: output_data,  toFilename: self.output_filename)
+            try image.writeTIFFEncoding(ofData: output_data,  toFilename: self.output_filename)
         } catch {
             Log.e(error)
         }

@@ -101,7 +101,7 @@ class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemover> {
                         for (index, output_file_exists) in self.existing_output_files.enumerated() {
                             should_process[index] = !output_file_exists
                         }
-                        await final_processor.run(shouldProcess: should_process)
+                        try await final_processor.run(shouldProcess: should_process)
                     }
                 } else {
                     Log.e("should have a processor")
@@ -133,17 +133,13 @@ class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemover> {
         //Log.e("full_image_path \(full_image_path)")
         // load images outside the main thread
 
-        var otherFrames: [PixelatedImage] = []
+        var otherFrameIndexes: [Int] = []
         
-        if index > 0,
-           let image = try await image_sequence.getImage(withName: image_sequence.filenames[index-1])
-        {
-            otherFrames.append(image)
+        if index > 0 {
+            otherFrameIndexes.append(index-1)
         }
-        if index < image_sequence.filenames.count - 1,
-           let image = try await image_sequence.getImage(withName: image_sequence.filenames[index+1])
-        {
-            otherFrames.append(image)
+        if index < image_sequence.filenames.count - 1 {
+            otherFrameIndexes.append(index+1)
         }
         
         let test_paint_filename = self.test_paint ?
@@ -151,11 +147,10 @@ class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemover> {
         
         // the other frames that we use to detect outliers and repaint from
         let frame_plane_remover =
-            await self.createFrame(fromImage: image,
-                                   atIndex: index,
-                                   otherFrames: otherFrames,
-                                   output_filename: "\(self.output_dirname)/\(base_name)",
-                                   test_paint_filename: test_paint_filename)
+          try await self.createFrame(atIndex: index,
+                                 otherFrameIndexes: otherFrameIndexes,
+                                 output_filename: "\(self.output_dirname)/\(base_name)",
+                                 test_paint_filename: test_paint_filename)
 
         return frame_plane_remover
     }
@@ -211,20 +206,19 @@ class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemover> {
     // outlier pixel detection, outlier group detection and analysis
     // after running this method, each frame will have a good idea
     // of what outliers is has, and whether or not should paint over them.
-    func createFrame(fromImage image: PixelatedImage,
-                     atIndex frame_index: Int,
-                     otherFrames: [PixelatedImage],
+    func createFrame(atIndex frame_index: Int,
+                     otherFrameIndexes: [Int],
                      output_filename: String,
-                     test_paint_filename tpfo: String?) async -> FrameAirplaneRemover
+                     test_paint_filename tpfo: String?) async throws -> FrameAirplaneRemover
     {
-        let frame = await FrameAirplaneRemover(fromImage: image,
-                                               atIndex: frame_index,
-                                               otherFrames: otherFrames,
-                                               outputFilename: output_filename,
-                                               testPaintFilename: tpfo,
-                                               outlierOutputDirname: outlier_output_dirname,
-                                               maxPixelDistance: max_pixel_distance,
-                                               minGroupSize: min_group_size)
+        let frame = try await FrameAirplaneRemover(imageSequence: image_sequence,
+                                                   atIndex: frame_index,
+                                                   otherFrameIndexes: otherFrameIndexes,
+                                                   outputFilename: output_filename,
+                                                   testPaintFilename: tpfo,
+                                                   outlierOutputDirname: outlier_output_dirname,
+                                                   maxPixelDistance: max_pixel_distance,
+                                                   minGroupSize: min_group_size)
         
         if should_write_outlier_group_files {
             await frame.writeOutlierGroupFiles()

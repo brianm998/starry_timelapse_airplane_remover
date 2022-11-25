@@ -42,7 +42,7 @@ actor FinalQueue {
         return should_run || number_running > 0 || count > 0
     }
 
-    func add(atIndex index: Int, method: @escaping () async -> Void) async {
+    func add(atIndex index: Int, method: @escaping () async throws -> Void) async {
         await method_list.add(atIndex: index, method: method)
     }
     
