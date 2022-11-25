@@ -85,10 +85,6 @@ actor FinalProcessor {
         frames[index] = nil
     }
     func incrementCurrentFrameIndex() {
-        let prune_index = current_frame_index
-        // tell the image sequence to get rid of images before this
-        Task { await image_sequence.prune(before: prune_index) }
-
         current_frame_index += 1
     }
 

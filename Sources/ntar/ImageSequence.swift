@@ -48,15 +48,8 @@ actor ImageSequence {
 
     private var images: [String: PixelatedImage] = [:]
 
-
-    private var pruneIndex: Int = 0
-    
-    func prune(before index: Int) {
-        if index <= pruneIndex { return }
-        for p in pruneIndex ..< index {
-            images.removeValue(forKey: filenames[p])
-        }
-        pruneIndex = index
+    func removeValue(forKey key: String) {
+        self.images.removeValue(forKey: key)
     }
     
     // how many images are in ram right now
@@ -70,6 +63,13 @@ actor ImageSequence {
         }
         Log.d("loading \(filename)")
         if let pixelatedImage = try await PixelatedImage(fromFile: filename) {
+            // set a timer to purge it
+            let _ = Timer.scheduledTimer(withTimeInterval: 10.0, repeats: false) { timer in
+                Task {
+                    await self.removeValue(forKey: filename)
+                    Log.d("purged \(filename)")
+                }
+            }
             images[filename] = pixelatedImage
             return pixelatedImage
         }
