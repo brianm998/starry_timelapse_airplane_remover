@@ -20,7 +20,7 @@ Be aware that incoming meteor trails will be caught as well, best to re-introduc
 
 ## Technical Details
 
-Ntar is written in swift, and uses only the Foundation, CoreGraphics and Cocoa frameworks.  Any swift installation that has these frameworks should be able to compile and run this software.  I've developed it on macos, and can provide binaries for any desktop mac architecture.  It _might_ compile on windows and or linux, let me know if it works for you.
+Ntar is written in swift, and uses only the Foundation, CoreGraphics, Cocoa and ArgumentParser frameworks.  Any swift installation that has these frameworks should be able to compile and run this software.  I've developed it on macos, and can provide binaries for any desktop mac architecture.  It _might_ compile on windows and or linux, let me know if it works for you.
 
 ## Getting Started
 
