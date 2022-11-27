@@ -52,6 +52,8 @@ While Ntar does get most airplane streaks, it doesn't get them all.
 
 Further work may include identifying outlier groups in a single frame that are small, but that confirm to a line.  Some airplane streaks are not in a single group, but a group of groups placed close to eachother.
 
+Another issue that needs to be addressed are false positives on the horizon for non-static timelapses, i.e. when captured on a moving head and / or slider.  Sometimes features of the horizon are linear enough to get marked as airplanes, and end up causing the horizon to visibly jump a bit sometimes.  One possible solution to this would be to notice a brightness difference on opposite sides of the outlier group, and disable painting based upon that criteria.
+
 A helpful feature of ntar for debugging is the test-paint mode (-t command line option).  This will output a separate image sequence which paints over outlier groups with colors (-s command line option describes them) that will tell you why or why not an outlier group was or was not painted over.
 
 Also more speed and memory usage improvements are always a good thing.
