@@ -101,7 +101,9 @@ todo:
    - a .dmg file with a command line installer?  any swift command line installer examples?
 
  - there is a logging bug where both console and file need to be set to debug, otherwise the logfile
-   is not accurate (has some debug, but not all) (
+    is not accurate (has some debug, but not all) (
+    
+ - look into async file io
  */
 
 // this is here so that PaintReason can see it
@@ -112,7 +114,7 @@ var assume_airplane_size: Int = 5000 // don't bother spending the time to fully 
 let medium_hough_line_score: Double = 0.4 // close to being a line, not really far
 
 // how far in each direction do we go when doing final processing?
-let number_final_processing_neighbors_needed = 3 // in each direction
+let number_final_processing_neighbors_needed = 2 // in each direction
 
 let final_theta_diff: Double = 10       // how close in theta/rho outliers need to be between frames
 let final_rho_diff: Double = 20        // 20 works
@@ -266,6 +268,7 @@ struct Ntar: ParsableCommand {
         
         if var input_image_sequence_dirname = image_sequence_dirname {
 
+
             while input_image_sequence_dirname.hasSuffix("/") {
                 // remove any trailing '/' chars,
                 // otherwise our created output dir(s) will end up inside this dir,
@@ -283,6 +286,10 @@ struct Ntar: ParsableCommand {
                     Log.handlers[.file] = try FileLogHandler(at: fileLogLevel)
                 }
                 
+                signal(SIGKILL) { foo in
+                    print("caught SIGKILL \(foo)")
+                }
+                    
                 // XXX maybe check to make sure this is a directory
                 Log.i("processing files in \(input_image_sequence_dirname)")
                 
