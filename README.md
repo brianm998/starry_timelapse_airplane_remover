@@ -5,8 +5,13 @@ This is a command line utility that removes airplanes streaks from night time ti
 
 ## Comparison videos from the panamint valley in California:
 
-original video: https://vimeo.com/775341167
-processed with ntar 0.0.8: https://vimeo.com/775330768
+### original video
+
+https://vimeo.com/775341167
+
+### processed with ntar 0.0.8
+
+https://vimeo.com/775330768
 
 ## Description
 
