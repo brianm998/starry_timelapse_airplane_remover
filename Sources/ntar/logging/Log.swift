@@ -131,6 +131,9 @@ public class Log {
 
     public static var name: String = "log"
     public static var nameSuffix: String?
+
+    @available(macOS 10.15, *)
+    public static var dispatchGroup: DispatchGroup?
     
     public enum Level: String,
                      CustomStringConvertible,

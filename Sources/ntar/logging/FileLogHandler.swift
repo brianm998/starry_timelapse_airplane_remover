@@ -12,6 +12,7 @@ You should have received a copy of the GNU General Public License along with nta
 
 import Foundation
 
+@available(macOS 10.15, *)
 public class FileLogHandler: LogHandler {
     
     let dateFormatter = DateFormatter()
@@ -51,7 +52,9 @@ public class FileLogHandler: LogHandler {
                     with data: LogData?,
                     at logLevel: Log.Level)
     {
-//        dispatchQueue.async {
+        let dispatch_group = Log.dispatchGroup
+        dispatch_group?.enter()
+        dispatchQueue.async {
             let dateString = self.dateFormatter.string(from: Date())
             
             if let data = data {
@@ -59,7 +62,8 @@ public class FileLogHandler: LogHandler {
             } else {
                 self.writeToLogFile("\(dateString) | \(logLevel) | \(fileLocation): \(message)\n")
             }
-//        }
+            dispatch_group?.leave()
+        }
     }
 
     private func writeToLogFile(_ message: String) {
