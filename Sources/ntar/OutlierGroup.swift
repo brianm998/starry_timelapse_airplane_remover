@@ -77,10 +77,10 @@ actor OutlierGroup: CustomStringConvertible, Hashable, Equatable {
 
             let weights: [PaintScoreType: Double]
               = [.houghTransform:   3,
-                 .surfaceAreaRatio: 0.2,
-                 .groupSize:        0.8,
-                 .aspectRatio:      0.1,
-                 .brightness:       1]
+//                 .surfaceAreaRatio: 0.2,
+                 .groupSize:        0.6,
+//                 .aspectRatio:      0.1,
+                 .brightness:       1.5]
 
             for (type, weight) in weights {
                 totalScore += self.paintScore(from: type) * weight

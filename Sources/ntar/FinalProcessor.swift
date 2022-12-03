@@ -326,7 +326,7 @@ func really_final_streak_processing(onFrame frame: FrameAirplaneRemover,
                             total_line_score /= Double(airplane_streak.count)
 
                             // only get rid of small streaks if they don't look like lines
-                            if total_line_score < 0.2 { // XXX constant
+                            if total_line_score < 0.25 { // XXX constant
                                 
                                 await airplane_streaks.removeValue(forKey: streak_name) // XXX mutating while iterating?
                                 
@@ -680,7 +680,7 @@ func streak_from(group: OutlierGroup,
 
         let last_hypo = last_group.bounds.hypotenuse
         // calculate min distance from hypotenuse of last bounding box
-        let min_distance: Double = last_hypo * 1.3 // XXX hardcoded constant
+        let min_distance: Double = last_hypo * 0.66 // XXX hardcoded constant
         
         var best_distance = min_distance
         //Log.d("looking at frame \(frame.frame_index)")
