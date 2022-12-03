@@ -272,8 +272,9 @@ actor FrameAirplaneRemover: Equatable {
                     let min_pixel_distance = UInt16(2/100*0xFFFF) // XXX 16 bit hardcode
                                     // XXX constant ^^
 
-                    let allowed_decrease_amt = 0.65 // XXX constant XXX
-                    
+                    let allowed_decrease_amt = 0.70 // XXX constant XXX
+                                            // 0.55 is too low
+
                     if outlier_x > 0 { // add left neighbor
                         let left_neighbor_index = outlier_y * width + outlier_x - 1
                         let left_neighbor_amount = outlier_amount_list[left_neighbor_index]
