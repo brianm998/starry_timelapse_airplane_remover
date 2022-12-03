@@ -64,6 +64,7 @@ actor ImageSequence {
         Log.d("loading \(filename)")
         if let pixelatedImage = try await PixelatedImage(fromFile: filename) {
             // set a timer to purge it
+            // interval is a balance between memory usage and having to re-load the same image from disk
             let _ = Timer.scheduledTimer(withTimeInterval: 20.0, repeats: false) { timer in
                 Task {
                     await self.removeValue(forKey: filename)
