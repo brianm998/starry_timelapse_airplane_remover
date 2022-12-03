@@ -36,9 +36,9 @@ Inter frame analysis compares the outlying groups in frames across a wider range
 
 The main point of inter frame analysis is to improve the false positive and netagives from the previous outlier group histogram analysis by looking for outlier groups that move in streaks.
 
-A Streak is defined to be outlier groups that are moving in the same direction as the lines that descirbe them.  Most airplanes will be captured in more than one frame.  If not, it's likely to be a very large outlier group, which will get painted over because of its size.
+A Streak is defined to be outlier groups that are moving in the same direction as the lines that describe them.  Most airplanes will be captured in more than one frame.  If not, it's likely to be a very large outlier group, which will get painted over because of its size alone.
 
-Streak detection can help find smaller outlier groups closer to the horizon that are of a smaller size.  It can also help to find outliers that aren't airplanes, but did get marked so by the previous analysis.
+Streak detection can help find smaller outlier groups closer to the horizon.  It can also help to find outliers that aren't airplanes, but did get marked so by the previous analysis.
 
 ## Final Processing
 
@@ -48,11 +48,11 @@ Painting over airplanes is done by simply copying pixels from one of the adjcent
 
 ## Further Work
 
-While Ntar does get most airplane streaks, it doesn't get them all.
+While ntar does get most airplane streaks, it doesn't get them all.
 
 Further work may include identifying outlier groups in a single frame that are small, but that confirm to a line.  Some airplane streaks are not in a single group, but a group of groups placed close to eachother.
 
-Another issue that needs to be addressed are false positives on the horizon for non-static timelapses, i.e. when captured on a moving head and / or slider.  Sometimes features of the horizon are linear enough to get marked as airplanes, and end up causing the horizon to visibly jump a bit sometimes.  One possible solution to this would be to notice a brightness difference on opposite sides of the outlier group, and disable painting based upon that criteria.
+Another issue that needs to be addressed are false positives on the horizon for non-static timelapses, i.e. when captured on a moving head and / or slider.  Sometimes features of the horizon are linear enough to get marked as airplanes, and end up causing the horizon to visibly jump a bit.  One possible solution to this would be to notice a brightness difference on opposite sides of the outlier group, and disable painting based upon that criteria.
 
 A helpful feature of ntar for debugging is the test-paint mode (-t command line option).  This will output a separate image sequence which paints over outlier groups with colors (-s command line option describes them) that will tell you why or why not an outlier group was or was not painted over.
 
