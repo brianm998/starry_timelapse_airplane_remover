@@ -55,7 +55,7 @@ class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemover> {
          givenFilenames given_filenames: [String]? = nil) throws
     {
         
-        self.max_pixel_distance = UInt16(max_pixel_percent/100*0xFFFF)
+        self.max_pixel_distance = UInt16(max_pixel_percent/100*0xFFFF) // XXX 16 bit hardcode
         self.test_paint = testPaint
         self.should_write_outlier_group_files = writeOutlierGroupFiles
         self.min_group_size = minGroupSize
