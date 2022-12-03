@@ -19,13 +19,13 @@ NTar operates upon a still image sequence, and outputs a modified sequence which
 
 To operate directly on video files, the ntar.pl script is included to use ffmpeg to de-code the given video and then re-encode the ntar results into a video.
 
-The purpose of ntar is to remove airplane and satellite streaks from overnight timelapse videos.  These can be distrating to viewers, who often assume them to be 'shooting stars', because the move so fast in a timelapse.  For years I've accepted airplanes in the night sky in my timelapses, and even like them you can see the airplanes landing in an airport.  But when out in really dark skies in the middle of nowhere, IMO the airplanes stick out too much.
+The purpose of ntar is to remove airplane and satellite streaks from overnight timelapse videos.  These can be distrating to viewers, who often assume them to be 'shooting stars', because the move so fast in a timelapse.  For years I've accepted airplanes in the night sky in my timelapses, and even like them when they can be seen landing.  But when out in really dark skies in the middle of nowhere, IMO the airplanes stick out too much, and the video would benefit from their removal.
 
-Be aware that incoming meteor trails will be caught as well, best to re-introduce those from the original video in post if you want to keep them.
+Be aware that meteor trails will be removed as well, best to re-introduce those from the original video in post if you want to keep them.  Just notice which frame they're in, and mask just part of that frame back in from the original video.
 
 ## Technical Details
 
-Ntar is written in swift, and uses only the Foundation, CoreGraphics, Cocoa and ArgumentParser frameworks.  Any swift installation that has these frameworks should be able to compile and run this software.  I've developed it on macos, and can provide binaries for any desktop mac architecture.  It _might_ compile on windows and or linux, let me know if it works for you.
+NTar is written in swift, and uses only the Foundation, CoreGraphics, Cocoa and ArgumentParser frameworks.  Any swift installation that has these frameworks should be able to compile and run this software.  I've developed it on macos, and can provide binaries for any desktop mac architecture.  It _might_ compile on windows and or linux, let me know if it works for you.
 
 ## Getting Started
 
@@ -50,6 +50,6 @@ ntar.pl [filename of video to process]
 
 The output will match the input, i.e. if given an image sequence dirname, ntar will output a matching image sequence dirname suffixed with '-ntar-version...'.
 
-If ntar.pl is given a video filename, the output will be a ProRes video with a similar suffix.
+If ntar.pl is given a video filename, the output will be a ProRes video with a '-ntar-version...' suffix.
 
 Personally I use https://github.com/brianm998/timelapse_render_daemon for rendering ntar results as part of my timelapse workflow.
