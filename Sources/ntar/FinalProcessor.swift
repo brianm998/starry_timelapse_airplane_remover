@@ -751,18 +751,8 @@ func streak_from(group: OutlierGroup,
                         if distance_two_back < distance_one_back {
                             Log.d("not adding \(best_group) to streak because it's not going in the right direction")
                             do_it = false
-                        } else if let member_one_back_distance = member_one_back.distance {
-                            let distance_two_back = await distance(from: best_group, to: member_two_back.group)
-                            if distance_two_back < member_one_back_distance {
-                                // this new potential member is actually closer to the member two back
-                                // than the one in the middle. skip it.
-                                Log.d("not adding \(best_group) to streak because it's not going in the right direction")
-                                do_it = false
-                            } else {
-                                Log.d("keeping \(best_group) in streak distance_two_back \(distance_two_back) member_one_back_distance \(member_one_back_distance)")
-                            }
                         }
-                        
+
                         // also check if the center line theta between the three points are close enough
                         // i.e. the center line theta should not be too far off between this new group
                         // and the ones before it
