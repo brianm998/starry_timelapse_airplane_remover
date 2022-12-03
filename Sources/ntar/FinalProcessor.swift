@@ -610,7 +610,7 @@ fileprivate func run_final_streak_pass(frames: [FrameAirplaneRemover]) async {
     }
 }
 
-
+/*
 @available(macOS 10.15, *)
 func streak_from(streak: inout [AirplaneStreakMember],
                  frames: [FrameAirplaneRemover],
@@ -640,7 +640,7 @@ func streak_from(streak: inout [AirplaneStreakMember],
         return nil
     }
 }
-
+*/
 
 // see if there is a streak of airplane tracks starting from the given group
 // a 'streak' is a set of outliers with simlar theta and rho, that are
@@ -716,7 +716,10 @@ func streak_from(group: OutlierGroup,
                        abs(center_line_theta_diff_2 - 180) < center_line_theta_diff)) &&
                  rho_diff < final_rho_diff
             {
-                //Log.d("frame \(frame.frame_index) \(other_group) is \(distance) away from \(last_group) other_group_line_theta \(other_group_line_theta) last_group_line_theta \(last_group_line_theta) center_line_theta \(center_line_theta)")
+//                Log.d("frame \(frame.frame_index) \(other_group) is \(distance) away from \(last_group) other_group_line_theta \(other_group_line_theta) last_group_line_theta \(last_group_line_theta) center_line_theta \(center_line_theta)")
+
+                //Log.d("frame \(frame.frame_index) \(other_group) DOES match \(group) houghScore \(houghScore) medium_hough_line_score \(medium_hough_line_score) distance \(distance) best_distance \(best_distance) theta_diff \(theta_diff) rho_diff \(rho_diff) center_line_theta_diff_1 \(center_line_theta_diff_1) center_line_theta_diff_2 \(center_line_theta_diff_2) center_line_theta \(center_line_theta) last \(last_group_line_theta) other \(other_group_line_theta)")
+
                 best_group = other_group
                 best_distance = distance
                 best_frame_index = frame_index // XXX this WAS wrong
@@ -742,16 +745,24 @@ func streak_from(group: OutlierGroup,
                         let member_one_back = potential_streak[prev_index]
                         let member_two_back = potential_streak[prev_index-1]
 
-                        if let member_one_back_distance = member_one_back.distance {
+                        let distance_one_back = best_group.bounds.centerDistance(to: member_one_back.group.bounds)
+                        let distance_two_back = best_group.bounds.centerDistance(to: member_two_back.group.bounds)
+
+                        if distance_two_back < distance_one_back {
+                            Log.d("not adding \(best_group) to streak because it's not going in the right direction")
+                            do_it = false
+                        } else if let member_one_back_distance = member_one_back.distance {
                             let distance_two_back = await distance(from: best_group, to: member_two_back.group)
                             if distance_two_back < member_one_back_distance {
                                 // this new potential member is actually closer to the member two back
                                 // than the one in the middle. skip it.
                                 Log.d("not adding \(best_group) to streak because it's not going in the right direction")
                                 do_it = false
+                            } else {
+                                Log.d("keeping \(best_group) in streak distance_two_back \(distance_two_back) member_one_back_distance \(member_one_back_distance)")
                             }
                         }
-
+                        
                         // also check if the center line theta between the three points are close enough
                         // i.e. the center line theta should not be too far off between this new group
                         // and the ones before it
@@ -891,6 +902,7 @@ func pixel_overlap(group_1: OutlierGroup,
     return 0
 }
 
+// XXX this is likely causing false positives by being innacurate
 @available(macOS 10.15, *) 
 func distance(from group1: OutlierGroup, to group2: OutlierGroup) async -> Double {
 

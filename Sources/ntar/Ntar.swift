@@ -104,6 +104,21 @@ todo:
     is not accurate (has some debug, but not all) (
     
  - look into async file io
+
+ - find something instead of a hard outlier threshold.
+
+ - fix false positive outliers w/ -b 10.0 on test_a9_20_crop
+   seems to be bad streak detection problem
+
+ - add command line option to allow writing output dirs to a different place
+   
+ - notice when disk fills up, and pause processing until able to save
+
+ - speed up inter-frame analysis
+
+ - calculate surface area vs volume stats for airplanes and not airplanes
+
+ - make distance in FinalProcessor more accurate and faster
  */
 
 // this is here so that PaintReason can see it
@@ -119,7 +134,8 @@ let number_final_processing_neighbors_needed = 2 // in each direction
 let final_theta_diff: Double = 10       // how close in theta/rho outliers need to be between frames
 let final_rho_diff: Double = 20        // 20 works
 
-let center_line_theta_diff: Double = 25 // used in outlier streak detection 
+let center_line_theta_diff: Double = 18 // used in outlier streak detection
+                                        // 25 is too large
 
 let supported_image_file_types = [".tif", ".tiff"] // XXX move this out
 
@@ -129,7 +145,7 @@ let supported_image_file_types = [".tif", ".tiff"] // XXX move this out
 let memory_size_bytes = ProcessInfo.processInfo.physicalMemory
 let memory_size_gigs = ProcessInfo.processInfo.physicalMemory/(1024*1024*1024)
 
-let ntar_version = "0.0.8"
+let ntar_version = "0.0.9"
 
 // 0.0.2 added more detail group hough transormation analysis, based upon a data set
 // 0.0.3 included the data set analysis to include group size and fill, and to use histograms
@@ -138,7 +154,7 @@ let ntar_version = "0.0.8"
 // 0.0.6 fixed streak processing and added another layer afterwards
 // 0.0.7 really fixed streak processing and lots of refactoring
 // 0.0.8 got rid of more false positives with weighted scoring and final streak tweaks
-
+// 0.0.9 softer outlier boundries more streak tweaks
 
 @main
 struct Ntar: ParsableCommand {
@@ -283,7 +299,9 @@ struct Ntar: ParsableCommand {
             do {
                 if let fileLogLevel = fileLogLevel {
                     Log.i("enabling file logging")
-                    Log.handlers[.file] = try FileLogHandler(at: fileLogLevel)
+                    if #available(macOS 10.15, *) {
+                        Log.handlers[.file] = try FileLogHandler(at: fileLogLevel)
+                    }
                 }
                 
                 signal(SIGKILL) { foo in
@@ -301,6 +319,8 @@ struct Ntar: ParsableCommand {
                                                               assumeAirplaneSize: assume_airplane_size,
                                                               testPaint: test_paint,
                                                               writeOutlierGroupFiles: should_write_outlier_group_files)
+
+                    Log.dispatchGroup = eraser.dispatchGroup.dispatch_group
                     
                     try eraser.run()
                 } else {

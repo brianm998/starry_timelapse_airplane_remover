@@ -266,10 +266,19 @@ actor FrameAirplaneRemover: Equatable {
                     
                     let outlier_x = next_outlier_index % width;
                     let outlier_y = next_outlier_index / width;
+
+                    let next_outlier_amount = Double(outlier_amount_list[next_outlier_index])
+
+                    let min_pixel_distance = UInt16(2/100*0xFFFF) // XXX 16 bit hardcode
+                                    // XXX constant ^^
+
+                    let allowed_decrease_amt = 0.65 // XXX constant XXX
                     
                     if outlier_x > 0 { // add left neighbor
                         let left_neighbor_index = outlier_y * width + outlier_x - 1
-                        if outlier_amount_list[left_neighbor_index] > max_pixel_distance,
+                        let left_neighbor_amount = outlier_amount_list[left_neighbor_index]
+                        if (left_neighbor_amount > max_pixel_distance ||
+                            (Double(left_neighbor_amount) / next_outlier_amount > allowed_decrease_amt && left_neighbor_amount > min_pixel_distance)),
                            outlier_group_list[left_neighbor_index] == nil
                         {
                             pending_outliers[pending_outlier_insert_index] = left_neighbor_index
@@ -280,7 +289,9 @@ actor FrameAirplaneRemover: Equatable {
                     
                     if outlier_x < width - 1 { // add right neighbor
                         let right_neighbor_index = outlier_y * width + outlier_x + 1
-                        if outlier_amount_list[right_neighbor_index] > max_pixel_distance,
+                        let right_neighbor_amount = outlier_amount_list[right_neighbor_index]
+                        if (outlier_amount_list[right_neighbor_index] > max_pixel_distance ||
+                            (Double(right_neighbor_amount) / next_outlier_amount > allowed_decrease_amt && right_neighbor_amount > min_pixel_distance)),
                            outlier_group_list[right_neighbor_index] == nil
                         {
                             pending_outliers[pending_outlier_insert_index] = right_neighbor_index
@@ -291,7 +302,9 @@ actor FrameAirplaneRemover: Equatable {
                     
                     if outlier_y > 0 { // add top neighbor
                         let top_neighbor_index = (outlier_y - 1) * width + outlier_x
-                        if outlier_amount_list[top_neighbor_index] > max_pixel_distance &&
+                        let top_neighbor_amount = outlier_amount_list[top_neighbor_index]
+                        if (outlier_amount_list[top_neighbor_index] > max_pixel_distance || 
+                            (Double(top_neighbor_amount) / next_outlier_amount > allowed_decrease_amt && top_neighbor_amount > min_pixel_distance)),
                            outlier_group_list[top_neighbor_index] == nil
                         {
                             pending_outliers[pending_outlier_insert_index] = top_neighbor_index
@@ -302,7 +315,9 @@ actor FrameAirplaneRemover: Equatable {
                     
                     if outlier_y < height - 1 { // add bottom neighbor
                         let bottom_neighbor_index = (outlier_y + 1) * width + outlier_x
-                        if outlier_amount_list[bottom_neighbor_index] > max_pixel_distance,
+                        let bottom_neighbor_amount = outlier_amount_list[bottom_neighbor_index]
+                        if (outlier_amount_list[bottom_neighbor_index] > max_pixel_distance ||
+                            (Double(bottom_neighbor_amount) / next_outlier_amount > allowed_decrease_amt && bottom_neighbor_amount > min_pixel_distance)),
                            outlier_group_list[bottom_neighbor_index] == nil
                         {
                             pending_outliers[pending_outlier_insert_index] = bottom_neighbor_index
@@ -409,6 +424,7 @@ actor FrameAirplaneRemover: Equatable {
                                      pixels: outlier_pixels)
             }
         }
+        Log.i("frame \(frame_index) has \(outlier_groups.count) outlier groups")
     }
 
     // paint the outliers that we decided not to paint, to enable debuging
