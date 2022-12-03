@@ -17,6 +17,7 @@ enum PaintScoreType {
     case fillAmount     // based upon the amount of the bounding box that has pixels from this group
     case groupSize      // based upon the number of pixels in this group
     case aspectRatio    // based upon the aspect ratio of this groups bounding box
+    case surfaceAreaRatio       //  based upon the surface area to size ratio
     case brightness     // based upon the relative brightness of this group
     case combined       // a combination, not using fillAmount
 }
@@ -30,7 +31,8 @@ actor OutlierGroup: CustomStringConvertible, Hashable, Equatable {
     let brightness: UInt        // the average amount per pixel of brightness over the limit 
     let lines: [Line]           // sorted lines from the hough transform of this outlier group
     let frame: FrameAirplaneRemover
-    let pixels: [Bool]          // indexed by y * bounds.width + x, true if part of this group
+    let pixels: [Bool]          // indexed by y * bounds.width + x, true if part of this grou
+    let surfaceAreaToSizeRatio: Double
 
     // after init, shouldPaint is usually set to a base value based upon different statistics 
     var shouldPaint: PaintReason? // should we paint this group, and why?
@@ -63,6 +65,8 @@ actor OutlierGroup: CustomStringConvertible, Hashable, Equatable {
             return self.paintScoreFromGroupSize
         case .aspectRatio:
             return self.paintScoreFromAspectRatio
+        case .surfaceAreaRatio:
+            return self.paintScoreFromSurfaceAreaRatio            
         case .brightness:
             return self.paintScoreFromBrightness
         case .fillAmount:       // XXX not used right now
@@ -72,17 +76,28 @@ actor OutlierGroup: CustomStringConvertible, Hashable, Equatable {
             var totalWeight: Double = 0
 
             let weights: [PaintScoreType: Double]
-              = [.houghTransform: 2,
-                 .groupSize:      1,
-                 .aspectRatio:    1,
-                 .brightness:     1]
+              = [.houghTransform:   3,
+                 .surfaceAreaRatio: 0.2,
+                 .groupSize:        0.8,
+                 .aspectRatio:      0.1,
+                 .brightness:       1]
 
             for (type, weight) in weights {
                 totalScore += self.paintScore(from: type) * weight
                 totalWeight += weight
             }
+
+            let ret = totalScore / totalWeight
+
+            if ret > 0.5 {
+                var logmsg = "\(self) paintScore \(ret) from "
+                for (type, weight) in weights {
+                    logmsg += "paintScore(from: \(type)) \(self.paintScore(from: type)) * \(weight) "
+                }
+                Log.d(logmsg)
+            }
             
-            return totalScore / totalWeight
+            return ret
         }
     }
     
@@ -99,7 +114,9 @@ actor OutlierGroup: CustomStringConvertible, Hashable, Equatable {
         self.bounds = bounds
         self.frame = frame
         self.pixels = pixels
-
+        self.surfaceAreaToSizeRatio = surface_area_to_size_ratio(of: pixels,
+                                                                 width: bounds.width,
+                                                                 height: bounds.height)
         // do a hough transform on just this outlier group
         let transform = HoughTransform(data_width: bounds.width,
                                        data_height: bounds.height,
@@ -285,6 +302,24 @@ actor OutlierGroup: CustomStringConvertible, Hashable, Equatable {
         return airplane_score / (non_airplane_score+airplane_score)
     }
 
+    private var paintScoreFromSurfaceAreaRatio: Double {
+        let airplane_score =
+          histogram_lookup(ofValue: surfaceAreaToSizeRatio,
+                           minValue: OAS_AIRPLANES_MIN_SURFACE_AREA_RATIO, 
+                           maxValue: OAS_AIRPLANES_MAX_SURFACE_AREA_RATIO,
+                           stepSize: OAS_AIRPLANES_SURFACE_AREA_RATIO_STEP_SIZE,
+                           histogramValues: OAS_AIRPLANES_SURFACE_AREA_RATIO_HISTOGRAM) ?? 0
+        
+        let non_airplane_score =
+          histogram_lookup(ofValue: surfaceAreaToSizeRatio,
+                           minValue: OAS_NON_AIRPLANES_MIN_SURFACE_AREA_RATIO, 
+                           maxValue: OAS_NON_AIRPLANES_MAX_SURFACE_AREA_RATIO,
+                           stepSize: OAS_NON_AIRPLANES_SURFACE_AREA_RATIO_STEP_SIZE,
+                           histogramValues: OAS_NON_AIRPLANES_SURFACE_AREA_RATIO_HISTOGRAM) ?? 0
+        
+        return airplane_score / (non_airplane_score+airplane_score)
+    }
+
     private var paintScoreFromBrightness: Double {
         let mpd = frame.max_pixel_distance
         if self.brightness < mpd {
@@ -315,4 +350,55 @@ func histogram_lookup(ofValue value: Double,
     if index < 0 { return nil }
     if index >= histogram_values.count { return nil }
     return histogram_values[index]
+}
+
+func surface_area_to_size_ratio(of pixels: [Bool], width: Int, height: Int) -> Double {
+    var size: Int = 0
+    var surface_area: Int = 0
+    for x in 0 ..< width {
+        for y in 0 ..< height {
+            let index = y * width + x
+
+            if pixels[index] {
+                size += 1
+
+                var has_top_neighbor = false
+                var has_bottom_neighbor = false
+                var has_left_neighbor = false
+                var has_right_neighbor = false
+                
+                if x > 0 {
+                    if pixels[y * width + x - 1] {
+                        has_left_neighbor = true
+                    }
+                }
+                if y > 0 {
+                    if pixels[(y - 1) * width + x] {
+                        has_top_neighbor = true
+                    }
+                }
+                if x + 1 < width {
+                    if pixels[y * width + x + 1] {
+                        has_right_neighbor = true
+                    }
+                }
+                if y + 1 < height {
+                    if pixels[(y + 1) * width + x] {
+                        has_bottom_neighbor = true
+                    }
+                }
+                
+                if has_top_neighbor,
+                   has_bottom_neighbor,
+                   has_left_neighbor,
+                   has_right_neighbor
+                {
+                    
+                } else {
+                    surface_area += 1
+                }
+            }
+        }
+    }
+    return Double(surface_area)/Double(size)
 }

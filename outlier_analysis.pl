@@ -4,8 +4,8 @@ use strict;
 
 # this script reads the outlier csv and text files and outputs ShoultPaint.swift
 
-my $airplane_dir = "/Users/brian/git/nighttime_timelapse_airplane_eraser/outlier_data/airplanes";
-my $non_airplane_dir = "/Users/brian/git/nighttime_timelapse_airplane_eraser/outlier_data/non_airplanes";
+my $airplane_dir = "outlier_data/airplanes";
+my $non_airplane_dir = "outlier_data/non_airplanes";
 
 my $airplane_scores = process_csv_dir($airplane_dir);
 my $non_airplane_scores = process_csv_dir($non_airplane_dir);
@@ -74,6 +74,18 @@ my ($non_airplanes_aspect_ratio_histogram, $non_airplanes_aspect_ratio_step_size
 		 $non_airplane_scores->{min_aspect_ratio},
 		 $non_airplane_scores->{max_aspect_ratio},
 		 $non_airplane_scores->{all_aspect_ratio});
+
+my ($airplanes_surface_area_histogram, $airplanes_surface_area_step_size) =
+  make_histogram($histogram_size,
+		 $airplane_scores->{min_surface_area_ratio},
+		 $airplane_scores->{max_surface_area_ratio},
+		 $airplane_scores->{all_surface_area_ratio});
+
+my ($non_airplanes_surface_area_histogram, $non_airplanes_surface_area_step_size) =
+  make_histogram($histogram_size,
+		 $non_airplane_scores->{min_surface_area_ratio},
+		 $non_airplane_scores->{max_surface_area_ratio},
+		 $non_airplane_scores->{all_surface_area_ratio});
 
 print ("keysOverLines: airplane $airplane_scores->{avg_keys_over_lines} non airplane $non_airplane_scores->{avg_keys_over_lines}\n");
 print ("midIndex:      airplane $airplane_scores->{avg_center_line_count_position} non airplane $non_airplane_scores->{avg_center_line_count_position}\n");
@@ -170,6 +182,16 @@ let OAS_NON_AIRPLANES_MIN_ASPECT_RATIO: Double = $non_airplane_scores->{min_aspe
 let OAS_NON_AIRPLANES_MAX_ASPECT_RATIO: Double = $non_airplane_scores->{max_aspect_ratio}
 let OAS_NON_AIRPLANES_ASPECT_RATIO_STEP_SIZE: Double = $non_airplanes_aspect_ratio_step_size
 
+let OAS_AIRPLANES_SURFACE_AREA_RATIO_HISTOGRAM = $airplanes_surface_area_histogram
+let OAS_AIRPLANES_MIN_SURFACE_AREA_RATIO: Double = $airplane_scores->{min_surface_area_ratio}
+let OAS_AIRPLANES_MAX_SURFACE_AREA_RATIO: Double = $airplane_scores->{max_surface_area_ratio}
+let OAS_AIRPLANES_SURFACE_AREA_RATIO_STEP_SIZE: Double = $airplanes_surface_area_step_size
+
+let OAS_NON_AIRPLANES_SURFACE_AREA_RATIO_HISTOGRAM = $non_airplanes_surface_area_histogram
+let OAS_NON_AIRPLANES_MIN_SURFACE_AREA_RATIO: Double = $non_airplane_scores->{min_surface_area_ratio}
+let OAS_NON_AIRPLANES_MAX_SURFACE_AREA_RATIO: Double = $non_airplane_scores->{max_surface_area_ratio}
+let OAS_NON_AIRPLANES_SURFACE_AREA_RATIO_STEP_SIZE: Double = $non_airplanes_surface_area_step_size
+
 let OAS_HISTOGRAM_SIZE = $histogram_size
 
 END
@@ -241,9 +263,15 @@ sub process_csv_dir($) {
   my $max_aspect_ratio = undef;
   my $all_aspect_ratio = [];
 
+  my $total_surface_area_ratio = 0;
+  my $min_surface_area_ratio = undef;
+  my $max_surface_area_ratio = undef;
+  my $all_surface_area_ratio = [];
+
   foreach my $filename (readdir $dir) {
-    if ($filename =~ /^(.*)[.]csv$/) {
+    if ($filename =~ /^(.*)-([\d.]+)[.]csv$/) {
       my $first_part = $1;
+      my $surface_area_ratio = $2;
 
       open my $txt_file, "<$dirname/$first_part.txt";
       my $group_size = 0;
@@ -268,6 +296,9 @@ sub process_csv_dir($) {
       $min_aspect_ratio = $aspect_ratio unless defined $min_aspect_ratio;
       $max_aspect_ratio = $aspect_ratio unless defined $max_aspect_ratio;
 
+      $min_surface_area_ratio = $surface_area_ratio unless defined $min_surface_area_ratio;
+      $max_surface_area_ratio = $surface_area_ratio unless defined $max_surface_area_ratio;
+
       # set min and maxes
       $min_group_size = $group_size if $min_group_size > $group_size;
       $max_group_size = $group_size if $max_group_size < $group_size;
@@ -278,15 +309,22 @@ sub process_csv_dir($) {
       $min_aspect_ratio = $aspect_ratio if $min_aspect_ratio > $aspect_ratio;
       $max_aspect_ratio = $aspect_ratio if $max_aspect_ratio < $aspect_ratio;
 
+      $min_surface_area_ratio = $surface_area_ratio
+	if $min_surface_area_ratio > $surface_area_ratio;
+      $max_surface_area_ratio = $surface_area_ratio
+	if $max_surface_area_ratio < $surface_area_ratio;
+
       # add to totals
       $total_aspect_ratio += $aspect_ratio;
       $total_group_size += $group_size;
       $total_fill_amount += $fill_amount;
+      $total_surface_area_ratio += $surface_area_ratio;
 
       # record individual values
       push @$all_group_size, $group_size;
       push @$all_aspect_ratio, $aspect_ratio;
       push @$all_fill_amount, $fill_amount;
+      push @$all_surface_area_ratio, $surface_area_ratio;
 
       close $txt_file;
 
@@ -404,6 +442,11 @@ sub process_csv_dir($) {
 	  min_aspect_ratio => $min_aspect_ratio,
 	  max_aspect_ratio => $max_aspect_ratio,
 	  all_aspect_ratio => $all_aspect_ratio,
+
+	  avg_surface_area_ratio => $total_surface_area_ratio,
+	  min_surface_area_ratio => $min_surface_area_ratio,
+	  max_surface_area_ratio => $max_surface_area_ratio,
+	  all_surface_area_ratio => $all_surface_area_ratio,
 
 	  size => $total_csv_count,
 	 };
