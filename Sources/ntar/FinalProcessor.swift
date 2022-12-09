@@ -333,12 +333,13 @@ func really_final_streak_processing(onFrame frame: FrameAirplaneRemover,
                                 for member_to_remove in airplane_streak {
                                     // change should_paint to new value for the frame
                                     if member_to_remove.frame_index < frame.frame_index {
-                                        Log.e("frame \(member_to_remove.frame_index) is already finalized, modifying it now won't change anythig :(")
-                                        fatalError("FUCK")
+                                        Log.w("frame \(member_to_remove.frame_index) is already finalized, modifying it now won't change anythig :(")
+                                        //fatalError("FUCK")
+                                    } else {
+                                        // here 'removing' means 'de-streakifying' it
+                                        // it may or may not still be painted, but now it's not based upon other groups 
+                                        await member_to_remove.group.setShouldPaintFromCombinedScore()
                                     }
-                                    // here 'removing' means 'de-streakifying' it
-                                    // it may or may not still be painted, but now it's not based upon other groups 
-                                    await member_to_remove.group.setShouldPaintFromCombinedScore()
                                 }
                             }
                         }
