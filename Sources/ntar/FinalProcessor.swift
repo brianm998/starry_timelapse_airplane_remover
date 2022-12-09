@@ -361,15 +361,15 @@ func really_final_streak_processing(onFrame frame: FrameAirplaneRemover,
 // a bright star or planet, leave them as is.
 @available(macOS 10.15, *)
 fileprivate func run_final_pass(frames: [FrameAirplaneRemover]) async {
-    Log.d("starting final pass on \(frames.count) frames")
-
-    await run_final_overlap_pass(frames: frames)
-
-    Log.d("final pass on \(frames.count) frames doing streak analysis")
+    Log.i("final pass on \(frames.count) frames doing streak analysis")
 
     await run_final_streak_pass(frames: frames) // XXX not actually the final streak pass anymore..
 
-    Log.d("done with final pass on \(frames.count) frames")
+    Log.i("running overlap pass on \(frames.count) frames")
+
+    await run_final_overlap_pass(frames: frames)
+
+    Log.i("done with final pass on \(frames.count) frames")
 }
 
 
@@ -399,6 +399,7 @@ fileprivate func run_final_overlap_pass(frames: [FrameAirplaneRemover]) async {
                         return .continue
                     case .inStreak(let size):
                         if size > 2 {
+                            return .continue
                             //Log.i("frame \(frame.frame_index) skipping \(group_name) because of \(reason)") 
                             // XXX this skips streaks that it shouldn't
                         }
@@ -408,11 +409,15 @@ fileprivate func run_final_overlap_pass(frames: [FrameAirplaneRemover]) async {
                 }
                 
                 let (line_theta, line_rho) = await (group.line.theta, group.line.rho)
-                
+
                 await other_frame.foreachOutlierGroup() { og in
+                    if group.size > og.size * 5 { return .continue } // XXX constant, five times larger
+                    if og.size > group.size * 5 { return .continue } // XXX constant, five times larger
                     taskGroup.addTask {
+                        
                         let other_line_theta = await og.line.theta
                         let other_line_rho = await og.line.rho
+
                         
                         let theta_diff = abs(line_theta-other_line_theta)
                         let rho_diff = abs(line_rho-other_line_rho)
@@ -513,7 +518,6 @@ fileprivate func run_final_streak_pass(frames: [FrameAirplaneRemover]) async {
                                 }
                             }
                         }
-                        
                         
                         //Log.d("frame \(frame_index) looking for streak for \(group)")
                         // search neighboring frames looking for potential tracks
