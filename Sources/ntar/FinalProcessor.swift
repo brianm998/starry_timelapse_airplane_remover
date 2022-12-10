@@ -178,7 +178,6 @@ actor FinalProcessor {
                 Log.i("FINAL THREAD frame \(index_to_process) done with inter-frame analysis")
                 await self.incrementCurrentFrameIndex()
                 
-                
                 if start_index > 0 && index_to_process < frame_count - number_final_processing_neighbors_needed - 1 {
                     // maybe finish a previous frame
                     // leave the ones at the end to finishAll()
@@ -373,12 +372,15 @@ fileprivate func run_final_pass(frames: [FrameAirplaneRemover]) async {
     Log.i("done with final pass on \(frames.count) frames")
 }
 
+var GLOBAL_last_overlap_frame_number = 0 // XXX
 
 @available(macOS 10.15, *)
 fileprivate func run_final_overlap_pass(frames: [FrameAirplaneRemover]) async {
     await withTaskGroup(of: Void.self) { taskGroup in
         for (index, frame) in frames.enumerated() {
+            if frame.frame_index < GLOBAL_last_overlap_frame_number { continue }
             if index + 1 >= frames.count { continue }
+            GLOBAL_last_overlap_frame_number = frame.frame_index            
             let other_frame = frames[index+1]
                     
             Log.d("overlap pass on frame with \(await frame.outlierGroupCount) outliers other frame has \(await other_frame.outlierGroupCount) outliers")
@@ -414,6 +416,11 @@ fileprivate func run_final_overlap_pass(frames: [FrameAirplaneRemover]) async {
                 await other_frame.foreachOutlierGroup() { og in
                     if group.size > og.size * 5 { return .continue } // XXX constant, five times larger
                     if og.size > group.size * 5 { return .continue } // XXX constant, five times larger
+
+                    let distance = group.bounds.centerDistance(to: og.bounds)
+
+                    if distance > 300 { return .continue } // XXX arbitrary constant
+                    
                     taskGroup.addTask {
                         
                         let other_line_theta = await og.line.theta
@@ -425,46 +432,71 @@ fileprivate func run_final_overlap_pass(frames: [FrameAirplaneRemover]) async {
                         if (theta_diff < final_theta_diff || abs(theta_diff - 180) < final_theta_diff) &&
                              rho_diff < final_rho_diff
                         {
+                            // first see how much their bounds overlap
+                            // if overlap is more than 30-40%, then skip the pixel overlap,
+                            // and just mark them as no paint
+
+                            let overlap_amount = group.bounds.overlapAmount(with: og.bounds)
+
+                            var close_enough = false
                             
-                            let pixel_overlap_amount =
-                              await pixel_overlap(group_1: group, group_2: og)
-                            
-                            
-                            //Log.d("frame \(frame.frame_index) \(group_name) \(og) pixel_overlap_amount \(pixel_overlap_amount)")
-                            
-                            if pixel_overlap_amount > 0.05 { // XXX hardcoded constant
-                                
+                            if overlap_amount > 0.33 { // XXX hardcoded constant
+                                // first just check overlap of bounds
+                                close_enough = true
+                            }
+
+                            if !close_enough {
+                                let pixel_overlap_amount =
+                                  await pixel_overlap(group_1: group, group_2: og)
+
+
                                 var do_it = true
                                 
                                 // do paint over objects that look like lines
-                                if let frame_reason = await group.shouldPaint
-                                {
+                                if let frame_reason = await group.shouldPaint {
                                     if frame_reason.willPaint && frame_reason == .looksLikeALine(0) {
                                         do_it = false
                                     }
                                 }
                                 
-                                if let other_reason = await og.shouldPaint
-                                {
+                                if let other_reason = await og.shouldPaint {
                                     if other_reason.willPaint && other_reason == .looksLikeALine(0) {
                                         do_it = false
                                     }
                                 }
-                                
+
                                 if do_it {
-                                    // two overlapping groups
-                                    // shouldn't be painted over
-                                    //    let _ = await (
-                                    await group.shouldPaint(.adjecentOverlap(pixel_overlap_amount))
-                                    
-                                    await og.shouldPaint(.adjecentOverlap(pixel_overlap_amount))
-                                    
-                                    //Log.d("frame \(frame.frame_index) should_paint[\(group_name)] = (false, .adjecentOverlap(\(pixel_overlap_amount))")
-                                    //Log.d("frame \(other_frame.frame_index) should_paint[\(og)] = (false, .adjecentOverlap(\(pixel_overlap_amount))")
+                                    close_enough = pixel_overlap_amount > 0.05 // XXX hardcoded constant
                                 } else {
-                                    //Log.d("frame \(frame.frame_index) \(group_name) left untouched because of pixel overlap amount \(pixel_overlap_amount)")
-                                    //Log.d("frame \(other_frame.frame_index) \(og) left untouched because of pixel overlap amount \(pixel_overlap_amount)")
+                                    close_enough = false
                                 }
+                            }
+                            
+                            //Log.d("frame \(frame.frame_index) \(group_name) \(og) pixel_overlap_amount \(pixel_overlap_amount)")
+                            
+                            if close_enough {
+                                // two overlapping groups
+                                // shouldn't be painted over
+                                //    let _ = await (
+
+//                                if let frame_reason = await group.shouldPaint {
+//                                    if frame_reason.willPaint {
+                                        await group.shouldPaint(.adjecentOverlap(overlap_amount))
+//                                    }
+//                                }
+                                
+//                                if let other_reason = await og.shouldPaint {
+//                                    if other_reason.willPaint {
+                                        await og.shouldPaint(.adjecentOverlap(overlap_amount))
+//                                    }
+//                                }
+                                
+                                //Log.d("frame \(frame.frame_index) should_paint[\(group_name)] = (false, .adjecentOverlap(\(pixel_overlap_amount))")
+                                //Log.d("frame \(other_frame.frame_index) should_paint[\(og)] = (false, .adjecentOverlap(\(pixel_overlap_amount))")
+                            } else {
+                                //Log.d("frame \(frame.frame_index) \(group_name) left untouched because of pixel overlap amount \(pixel_overlap_amount)")
+                                //Log.d("frame \(other_frame.frame_index) \(og) left untouched because of pixel overlap amount \(pixel_overlap_amount)")
+
                             }
                         }
                     }
@@ -614,38 +646,6 @@ fileprivate func run_final_streak_pass(frames: [FrameAirplaneRemover]) async {
         await taskGroup.waitForAll()
     }
 }
-
-/*
-@available(macOS 10.15, *)
-func streak_from(streak: inout [AirplaneStreakMember],
-                 frames: [FrameAirplaneRemover],
-                 startingIndex starting_index: Int)
-  async -> [AirplaneStreakMember]?
-{
-    if streak.count == 1 {
-        return await streak_from(group: streak[0].group,
-                                 frames: frames,
-                                 startingIndex: starting_index,
-                                 potentialStreak: &streak)
-    } else {
-        if let last_streak_member = streak.last,
-                  let new_streak = await streak_from(group: last_streak_member.group,
-                                                     frames: frames,
-                                                     startingIndex: starting_index,
-                                                     potentialStreak: &streak)
-        {
-            return new_streak
-        } else if let new_streak = await streak_from(group: streak[0].group,
-                                                     frames: frames,
-                                                     startingIndex: starting_index,
-                                                     potentialStreak: &streak)
-        {
-            return new_streak
-        }
-        return nil
-    }
-}
-*/
 
 // see if there is a streak of airplane tracks starting from the given group
 // a 'streak' is a set of outliers with simlar theta and rho, that are
@@ -863,11 +863,11 @@ func pixel_overlap(group_1: OutlierGroup,
     var max_x = group_1.bounds.max.x
     var max_y = group_1.bounds.max.y
     
-    if group_2.bounds.min.x < min_x { min_x = group_2.bounds.min.x }
-    if group_2.bounds.min.y < min_y { min_y = group_2.bounds.min.y }
+    if group_2.bounds.min.x > min_x { min_x = group_2.bounds.min.x }
+    if group_2.bounds.min.y > min_y { min_y = group_2.bounds.min.y }
     
-    if group_2.bounds.max.x > max_x { max_x = group_2.bounds.max.x }
-    if group_2.bounds.max.y > max_y { max_y = group_2.bounds.max.y }
+    if group_2.bounds.max.x < max_x { max_x = group_2.bounds.max.x }
+    if group_2.bounds.max.y < max_y { max_y = group_2.bounds.max.y }
     
     // XXX could search a smaller space probably
 
