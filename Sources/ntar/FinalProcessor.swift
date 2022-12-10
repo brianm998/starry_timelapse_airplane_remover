@@ -254,92 +254,90 @@ func really_final_streak_processing(onFrame frame: FrameAirplaneRemover,
 
     await withTaskGroup(of: Void.self) { taskGroup in
         for (streak_name, airplane_streak) in await airplane_streaks.streaks {
+            if airplane_streak.count != 2 { continue }
             taskGroup.addTask {
-                if airplane_streak.count == 2 {
-                    let first_member = airplane_streak[0]
-                    let last_member = airplane_streak[1]
-                    if last_member.frame_index == frame.frame_index || 
-                         first_member.frame_index == frame.frame_index
-                    {
-                        var remove_small_streak = true
+                let first_member = airplane_streak[0]
+                let last_member = airplane_streak[1]
+                if last_member.frame_index == frame.frame_index || 
+                     first_member.frame_index == frame.frame_index
+                {
+                    var remove_small_streak = true
+                    
+                    // this is a two member airplane streak that is on our frame
+                    // look for other streaks that might match up to it on either side
+                    // if neither found, then dump it
+                    
+                    for (other_streak_name, other_airplane_streak) in await airplane_streaks.streaks {
+                        if other_streak_name == streak_name { continue }
                         
-                        // this is a two member airplane streak that is on our frame
-                        // look for other streaks that might match up to it on either side
-                        // if neither found, then dump it
+                        // this streak must begin or end at the right end of this 2 count streak
                         
-                        for (other_streak_name, other_airplane_streak) in await airplane_streaks.streaks {
-                            if other_streak_name == streak_name { continue }
+                        if let last_other_airplane_streak = other_airplane_streak.last {
+                            let first_other_airplane_streak = other_airplane_streak[0]
                             
-                            // this streak must begin or end at the right end of this 2 count streak
+                            let move_me_theta_diff: Double = 10      // XXX move me
                             
-                            if let last_other_airplane_streak = other_airplane_streak.last {
-                                let first_other_airplane_streak = other_airplane_streak[0]
-
-                                let move_me_theta_diff: Double = 10      // XXX move me
+                            if first_member.frame_index == last_other_airplane_streak.frame_index + 1 {
+                                // found a streak that ended right before this one started
                                 
-                                if first_member.frame_index == last_other_airplane_streak.frame_index + 1 {
-                                    // found a streak that ended right before this one started
-                                    
-                                    let distance = await distance(from: last_other_airplane_streak.group,
-                                                                  to: first_member.group)
-
-                                    let theta_diff = await abs(last_other_airplane_streak.group.line.theta -
-                                                                 first_member.group.line.theta)
-                                    
-                                    let hypo_avg = (first_member.group.bounds.hypotenuse +
-                                                      last_other_airplane_streak.group.bounds.hypotenuse)/2
-
-                                    let move_me_distance_limit = hypo_avg + 2 // XXX contstant
-                                    
-                                    if distance < move_me_distance_limit && theta_diff < move_me_theta_diff {
-                                        remove_small_streak = false
-                                    }
-                                    
-                                } else if last_member.frame_index + 1 == first_other_airplane_streak.frame_index {
-                                    // found a streak that starts right after this one ends
-                                    let distance = await distance(from: last_member.group,
-                                                                  to: first_other_airplane_streak.group)
-
-                                    let theta_diff = await abs(first_other_airplane_streak.group.line.theta -
-                                                                 last_member.group.line.theta)
-
-                                    let hypo_avg = (last_member.group.bounds.hypotenuse +
-                                                      first_other_airplane_streak.group.bounds.hypotenuse)/2
-
-                                    let move_me_distance_limit =  hypo_avg + 2 // XXX contstant
-
-                                    if distance < move_me_distance_limit && theta_diff < move_me_theta_diff {
-                                        remove_small_streak = false
-                                    }
+                                let distance = await distance(from: last_other_airplane_streak.group,
+                                                              to: first_member.group)
+                                
+                                let theta_diff = await abs(last_other_airplane_streak.group.line.theta -
+                                                             first_member.group.line.theta)
+                                
+                                let hypo_avg = (first_member.group.bounds.hypotenuse +
+                                                  last_other_airplane_streak.group.bounds.hypotenuse)/2
+                                
+                                let move_me_distance_limit = hypo_avg + 2 // XXX contstant
+                                
+                                if distance < move_me_distance_limit && theta_diff < move_me_theta_diff {
+                                    remove_small_streak = false
+                                }
+                                
+                            } else if last_member.frame_index + 1 == first_other_airplane_streak.frame_index {
+                                // found a streak that starts right after this one ends
+                                let distance = await distance(from: last_member.group,
+                                                              to: first_other_airplane_streak.group)
+                                
+                                let theta_diff = await abs(first_other_airplane_streak.group.line.theta -
+                                                             last_member.group.line.theta)
+                                
+                                let hypo_avg = (last_member.group.bounds.hypotenuse +
+                                                  first_other_airplane_streak.group.bounds.hypotenuse)/2
+                                
+                                let move_me_distance_limit =  hypo_avg + 2 // XXX contstant
+                                
+                                if distance < move_me_distance_limit && theta_diff < move_me_theta_diff {
+                                    remove_small_streak = false
                                 }
                             }
                         }
+                    }
+                    
+                    if remove_small_streak {
                         
-                        if remove_small_streak {
-
-                            var total_line_score: Double = 0
-                            // one last check on the line score
+                        var total_line_score: Double = 0
+                        // one last check on the line score
+                        for member_to_remove in airplane_streak {
+                            total_line_score += await member_to_remove.group.paintScore(from: .houghTransform)
+                        }
+                        total_line_score /= Double(airplane_streak.count)
+                        
+                        // only get rid of small streaks if they don't look like lines
+                        if total_line_score < 0.25 { // XXX constant
+                            
+                            await airplane_streaks.removeValue(forKey: streak_name) // XXX mutating while iterating?
+                            
                             for member_to_remove in airplane_streak {
-                                total_line_score += await member_to_remove.group.paintScore(from: .houghTransform)
-                            }
-                            total_line_score /= Double(airplane_streak.count)
-
-                            // only get rid of small streaks if they don't look like lines
-                            if total_line_score < 0.25 { // XXX constant
-                                
-                                await airplane_streaks.removeValue(forKey: streak_name) // XXX mutating while iterating?
-                                
-                                for member_to_remove in airplane_streak {
-                                    // change should_paint to new value for the frame
-                                    if member_to_remove.frame_index < frame.frame_index {
-                                        Log.w("frame \(member_to_remove.frame_index) is already finalized, modifying it now won't change anythig :(")
-                                        //fatalError("FUCK")
-                                    } else {
-                                        // here 'removing' means 'de-streakifying' it
-                                        // it may or may not still be painted, but now it's not based upon other groups 
-                                        await member_to_remove.group.setShouldPaintFromCombinedScore()
-                                    }
-                                }
+                                // change should_paint to new value for the frame
+                                if member_to_remove.frame_index < frame.frame_index {
+                                    Log.w("frame \(member_to_remove.frame_index) is already finalized, modifying it now won't change anythig :(")
+                                    //fatalError("FUCK")
+                                } 
+                                // here 'removing' means 'de-streakifying' it
+                                // it may or may not still be painted, but now it's not based upon other groups 
+                                await member_to_remove.group.setShouldPaintFromCombinedScore()
                             }
                         }
                     }
@@ -527,63 +525,63 @@ fileprivate func run_final_streak_pass(frames: [FrameAirplaneRemover]) async {
         await withTaskGroup(of: [AirplaneStreakMember].self) { taskGroup in
             await frame.foreachOutlierGroup() { group in
                 // do streak detection in parallel at the level of groups in a single frame
-                taskGroup.addTask {
                     // look for more data to act upon
                     
-                    if let reason = await group.shouldPaint {
-                        if reason == .adjecentOverlap(0) {
-                            //Log.d("frame \(frame.frame_index) skipping \(group) because it has .adjecentOverlap")
-                            return []
-                        }
+                if let reason = await group.shouldPaint {
+                    if reason == .adjecentOverlap(0) {
+                        //Log.d("frame \(frame.frame_index) skipping \(group) because it has .adjecentOverlap")
+                        return .continue
+                    }
+                }
+                taskGroup.addTask {
                         
-                        // grab a streak that we might already be in
+                    // grab a streak that we might already be in
                         
-                        var existing_streak: [AirplaneStreakMember]?
-                        var existing_streak_name: String?
+                    var existing_streak: [AirplaneStreakMember]?
+                    var existing_streak_name: String?
                         
-                        for (streak_name, airplane_streak) in await airplane_streaks.streaks {
-                            if let _ = existing_streak { continue }
-                            for streak_member in airplane_streak {
-                                if frame_index == streak_member.frame_index &&
-                                     group.name == streak_member.group.name
-                                {
-                                    existing_streak = airplane_streak
-                                    existing_streak_name = streak_name
-                                    //Log.d("frame \(frame.frame_index) using existing streak for \(group)")
-                                    continue
-                                }
-                            }
-                        }
-                        
-                        //Log.d("frame \(frame_index) looking for streak for \(group)")
-                        // search neighboring frames looking for potential tracks
-                        
-                        // see if this group is already part of a streak, and pass that in
-                        
-                        // if not, pass in the starting potential one frame streak
-                        
-                        var potential_streak: [AirplaneStreakMember] = [(frame_index, group, nil)]
-                        var potential_streak_name = "\(frame_index).\(group.name)"
-                        
-                        if let existing_streak = existing_streak,
-                           let existing_streak_name = existing_streak_name
-                        {
-                            potential_streak = existing_streak
-                            potential_streak_name = existing_streak_name
-                        }
-                        
-                        let houghScore = await group.paintScore(from: .houghTransform)
-                        
-                        if houghScore > 0.007 { // XXX constant
-                            if let streak = 
-                                 await streak_from(group: group, // XXX really start from ends of existing streak, not group, which could be in the middle
-                                                   frames: frames,
-                                                   startingIndex: batch_index+1,
-                                                   potentialStreak: &potential_streak)
+                    for (streak_name, airplane_streak) in await airplane_streaks.streaks {
+                        if let _ = existing_streak { continue }
+                        for streak_member in airplane_streak {
+                            if frame_index == streak_member.frame_index &&
+                                 group.name == streak_member.group.name
                             {
-                                //Log.d("frame \(frame_index) found streak \(potential_streak_name) of size \(streak.count) for \(group)")
-                                return streak
+                                existing_streak = airplane_streak
+                                existing_streak_name = streak_name
+                                //Log.d("frame \(frame.frame_index) using existing streak for \(group)")
+                                continue
                             }
+                        }
+                    }
+                    
+                    //Log.d("frame \(frame_index) looking for streak for \(group)")
+                    // search neighboring frames looking for potential tracks
+                    
+                    // see if this group is already part of a streak, and pass that in
+                    
+                    // if not, pass in the starting potential one frame streak
+                    
+                    var potential_streak: [AirplaneStreakMember] = [(frame_index, group, nil)]
+                    var potential_streak_name = "\(frame_index).\(group.name)"
+                    
+                    if let existing_streak = existing_streak,
+                       let existing_streak_name = existing_streak_name
+                    {
+                        potential_streak = existing_streak
+                        potential_streak_name = existing_streak_name
+                    }
+                    
+                    let houghScore = await group.paintScore(from: .houghTransform)
+                    
+                    if houghScore > 0.007 { // XXX constant
+                        if let streak = 
+                             await streak_from(group: group, // XXX really start from ends of existing streak, not group, which could be in the middle
+                                               frames: frames,
+                                               startingIndex: batch_index+1,
+                                               potentialStreak: &potential_streak)
+                        {
+                            //Log.d("frame \(frame_index) found streak \(potential_streak_name) of size \(streak.count) for \(group)")
+                            return streak
                         }
                     }
                     return []  // no streak found here
@@ -604,14 +602,14 @@ fileprivate func run_final_streak_pass(frames: [FrameAirplaneRemover]) async {
     Log.d("analyzing \(await airplane_streaks.streaks.count) streaks")
     await withTaskGroup(of: Void.self) { taskGroup in
         for (streak_name, airplane_streak) in await airplane_streaks.streaks {
+            let first_member = airplane_streak[0]
+            Log.d("analyzing streak \(streak_name) starting with group \(first_member.group) frame_index \(first_member.frame_index) with \(airplane_streak.count) members")
+            // XXX perhaps reject small streaks?
+            if airplane_streak.count < 3 {
+                //Log.d("ignoring two member streak \(airplane_streak)")
+                return
+            } 
             taskGroup.addTask {
-                let first_member = airplane_streak[0]
-                Log.d("analyzing streak \(streak_name) starting with group \(first_member.group) frame_index \(first_member.frame_index) with \(airplane_streak.count) members")
-                // XXX perhaps reject small streaks?
-                if airplane_streak.count < 3 {
-                    //Log.d("ignoring two member streak \(airplane_streak)")
-                    return
-                } 
                 var verbotten = false
                 var was_already_paintable = false
                 //let index_of_first_streak = airplane_streak[0].frame_index
@@ -700,6 +698,12 @@ func streak_from(group: OutlierGroup,
 
             let distance = await distance(from: last_group, to: other_group)
 
+            let last_group_hypo = last_group.bounds.hypotenuse
+            let other_group_hypo = other_group.bounds.hypotenuse
+
+            // too far apart
+            if distance > last_group_hypo + other_group_hypo { return .continue }
+            
             let center_line_theta = center_theta(from: last_group.bounds, to: other_group.bounds)
 
             let (other_group_line_theta,
@@ -757,7 +761,7 @@ func streak_from(group: OutlierGroup,
                         let distance_two_back = best_group.bounds.centerDistance(to: member_two_back.group.bounds)
 
                         if distance_two_back < distance_one_back {
-                            Log.d("not adding \(best_group) to streak because it's not going in the right direction")
+                            //Log.d("not adding \(best_group) to streak because it's not going in the right direction")
                             do_it = false
                         }
 
@@ -771,7 +775,7 @@ func streak_from(group: OutlierGroup,
                                                                  to: member_two_back.group.bounds)
 
                         if(abs(center_theta_one_back - center_theta_two_back) > 20) {// XXX constant (could be larger?)
-                            Log.d("not adding \(best_group) to streak because \(center_theta_one_back) - \(center_theta_two_back) > 20")
+                            //Log.d("not adding \(best_group) to streak because \(center_theta_one_back) - \(center_theta_two_back) > 20")
                             do_it = false
                         }
                     }
@@ -780,7 +784,7 @@ func streak_from(group: OutlierGroup,
                         // set previous last group here for comparison later
                         last_group = best_group
                         
-                        Log.d("frame \(frame.frame_index) adding group \(best_group) to streak best_distance \(best_distance)")
+                        //Log.d("frame \(frame.frame_index) adding group \(best_group) to streak best_distance \(best_distance)")
                         potential_streak.append((best_frame_index, best_group, best_distance))
                     }
                 }
@@ -792,7 +796,7 @@ func streak_from(group: OutlierGroup,
     if potential_streak.count == 1 {
         return nil              // nothing added
     } else {
-        Log.d("returning potential_streak \(potential_streak)")
+        //Log.d("returning potential_streak \(potential_streak)")
         return potential_streak
     }
 }
