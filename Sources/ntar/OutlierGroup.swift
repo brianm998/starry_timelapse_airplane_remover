@@ -31,7 +31,8 @@ actor OutlierGroup: CustomStringConvertible, Hashable, Equatable {
     let brightness: UInt        // the average amount per pixel of brightness over the limit 
     let lines: [Line]           // sorted lines from the hough transform of this outlier group
     let frame: FrameAirplaneRemover
-    let pixels: [Bool]          // indexed by y * bounds.width + x, true if part of this grou
+    let pixels: [Bool]          // indexed by y * bounds.width + x, true if part of this group
+    let amounts: [UInt32]       // indexed by y * bounds.width + x, true if part of this group
     let surfaceAreaToSizeRatio: Double
 
     // after init, shouldPaint is usually set to a base value based upon different statistics 
@@ -106,7 +107,8 @@ actor OutlierGroup: CustomStringConvertible, Hashable, Equatable {
          brightness: UInt,
          bounds: BoundingBox,
          frame: FrameAirplaneRemover,
-         pixels: [Bool]) async
+         pixels: [Bool],
+         amounts: [UInt32]) async
     {
         self.name = name
         self.size = size
@@ -114,6 +116,7 @@ actor OutlierGroup: CustomStringConvertible, Hashable, Equatable {
         self.bounds = bounds
         self.frame = frame
         self.pixels = pixels
+        self.amounts = amounts
         self.surfaceAreaToSizeRatio = surface_area_to_size_ratio(of: pixels,
                                                                  width: bounds.width,
                                                                  height: bounds.height)

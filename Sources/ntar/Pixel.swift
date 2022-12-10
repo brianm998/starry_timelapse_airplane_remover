@@ -37,6 +37,21 @@ public struct Pixel {
         self.blue = UInt16(blue/count)
     }
     
+    public init(merging pixel1: Pixel, with pixel2: Pixel, atAlpha alpha: Double) {
+        self.value = 0
+        var red = UInt32(Double(pixel1.red) * (1-alpha))
+        var green = UInt32(Double(pixel1.green) * (1-alpha))
+        var blue = UInt32(Double(pixel1.blue) * (1-alpha))
+
+        red += UInt32(Double(pixel2.red) * alpha)
+        green += UInt32(Double(pixel2.green) * alpha)
+        blue += UInt32(Double(pixel2.blue) * alpha)
+
+        self.red = UInt16(red)
+        self.green = UInt16(green)
+        self.blue = UInt16(blue)
+    }
+    
     public func difference(from otherPixel: Pixel) -> Int32 {
         //print("self \(self.description) other \(otherPixel.description)")
         let red = (Int32(self.red) - Int32(otherPixel.red))

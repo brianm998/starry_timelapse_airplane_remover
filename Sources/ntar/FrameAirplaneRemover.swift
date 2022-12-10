@@ -163,9 +163,9 @@ actor FrameAirplaneRemover: Equatable {
                             let other_1_blue = other_image_1_pixels[offset+2]
 
                             // how much brighter in each channel was the image we're modifying?
-                            let other_1_red_diff = (Int32(orig_red) - Int32(other_1_red))
-                            let other_1_green_diff = (Int32(orig_green) - Int32(other_1_green))
-                            let other_1_blue_diff = (Int32(orig_blue) - Int32(other_1_blue))
+                            let other_1_red_diff = (Int(orig_red) - Int(other_1_red))
+                            let other_1_green_diff = (Int(orig_green) - Int(other_1_green))
+                            let other_1_blue_diff = (Int(orig_blue) - Int(other_1_blue))
 
                             // take a max based upon overal brightness, or just one channel
                             let other_1_max = max(other_1_red_diff +
@@ -175,7 +175,7 @@ actor FrameAirplaneRemover: Equatable {
                                                       max(other_1_green_diff,
                                                           other_1_blue_diff)))
                             
-                            var total_difference: Int32 = other_1_max
+                            var total_difference: Int = Int(other_1_max)
                             
                             if have_two_other_frames {
                                 // rgb values of another adjecent image at this x,y
@@ -184,9 +184,9 @@ actor FrameAirplaneRemover: Equatable {
                                 let other_2_blue = other_image_2_pixels[offset+2]
                                 
                                 // how much brighter in each channel was the image we're modifying?
-                                let other_2_red_diff = (Int32(orig_red) - Int32(other_2_red))
-                                let other_2_green_diff = (Int32(orig_green) - Int32(other_2_green))
-                                let other_2_blue_diff = (Int32(orig_blue) - Int32(other_2_blue))
+                                let other_2_red_diff = (Int(orig_red) - Int(other_2_red))
+                                let other_2_green_diff = (Int(orig_green) - Int(other_2_green))
+                                let other_2_blue_diff = (Int(orig_blue) - Int(other_2_blue))
             
                                 // take a max based upon overal brightness, or just one channel
                                 let other_2_max = max(other_2_red_diff +
@@ -202,7 +202,7 @@ actor FrameAirplaneRemover: Equatable {
                             }
 
                             let amount_index = Int(y*width+x)
-                            // mark this spot as an outlier if it's too bright
+                            // record the brightness change if it is brighter
                             if total_difference > 0  {
                                 outlier_amount_list[amount_index] = UInt(total_difference)
                             }
@@ -268,9 +268,6 @@ actor FrameAirplaneRemover: Equatable {
                     let outlier_y = next_outlier_index / width;
 
                     let next_outlier_amount = Double(outlier_amount_list[next_outlier_index])
-
-                    let min_pixel_distance = UInt16(2/100*0xFFFF) // XXX 16 bit hardcode
-                                    // XXX constant ^^
 
                     let allowed_decrease_amt = 0.70 // XXX constant XXX
                                             // 0.55 is too low
@@ -400,18 +397,21 @@ actor FrameAirplaneRemover: Equatable {
             {
                 let bounding_box = BoundingBox(min: Coord(x: min_x, y: min_y),
                                                max: Coord(x: max_x, y: max_y))
-                let group_brightness = group_amount / group_size
+                let group_brightness = UInt(group_amount) / group_size
 
 
                 var outlier_pixels = [Bool](repeating: false, count: bounding_box.width*bounding_box.height)
-
+                var outlier_amounts = [UInt32](repeating: 0, count: bounding_box.width*bounding_box.height)
                 for x in min_x ... max_x {
                     for y in min_y ... max_y {
                         let index = y * self.width + x
                         if let pixel_group_name = outlier_group_list[index],
                            pixel_group_name == group_name
                         {
-                            outlier_pixels[(y-min_y) * bounding_box.width + (x-min_x)] = true
+                            let pixel_amount = outlier_amount_list[index]
+                            let idx = (y-min_y) * bounding_box.width + (x-min_x)
+                            outlier_pixels[idx] = true
+                            outlier_amounts[idx] = UInt32(pixel_amount)
                         }
                     }
                 }
@@ -422,7 +422,8 @@ actor FrameAirplaneRemover: Equatable {
                                      brightness: group_brightness,
                                      bounds: bounding_box,
                                      frame: self,
-                                     pixels: outlier_pixels)
+                                     pixels: outlier_pixels,
+                                     amounts: outlier_amounts)
             }
         }
         Log.i("frame \(frame_index) has \(outlier_groups.count) outlier groups")
@@ -459,29 +460,46 @@ actor FrameAirplaneRemover: Equatable {
     // actually paint over outlier groups that have been selected as airplane tracks
     private func paintOverAirplanes(toData data: inout Data,
                                     testData test_paint_data: inout Data,
-                                    otherFrames: [PixelatedImage]) async
+                                    otherFrames: [PixelatedImage]) async throws
     {
         Log.i("frame \(frame_index) painting airplane outlier groups")
 
+        guard let image = try await image_sequence.getImage(withName: image_sequence.filenames[frame_index])
+        else { throw "Couldn't load image" }
+
         // paint over every outlier in the paint list with pixels from the adjecent frames
         for (group_name, group) in outlier_groups {
-//        for (index, group_name) in outlier_group_list.enumerated() {
-//            if let group_name = group_name,
-//               let group = outlier_groups[group_name],
             if let reason = await group.shouldPaint,
                reason.willPaint
             {
-                //Log.d("frame \(frame_index) painting over group \(group_name) for reason \(reason)")
+                Log.d("frame \(frame_index) painting over group \(group_name) for reason \(reason)")
                 //let x = index % width;
                 //let y = index / width;
                 for x in group.bounds.min.x ... group.bounds.max.x {
                     for y in group.bounds.min.y ... group.bounds.max.y {
                         let pixel_index = (y - group.bounds.min.y)*group.bounds.width + (x - group.bounds.min.x)
                         if group.pixels[pixel_index] == true {
-                            paint(x: x, y: y, why: reason,
-                                  toData: &data,
-                                  testData: &test_paint_data,
-                                  otherFrames: otherFrames)
+
+                            let pixel_amount = group.amounts[pixel_index]
+
+                            var alpha: Double = 0
+                            
+                            if pixel_amount > max_pixel_distance {
+                                alpha = 1
+                            } else if pixel_amount < min_pixel_distance {
+                                alpha = 0
+                            } else {
+                                alpha = Double(UInt16(pixel_amount) - min_pixel_distance) /
+                                  Double(max_pixel_distance - min_pixel_distance)
+                            }
+
+                            if alpha > 0 {
+                                paint(x: x, y: y, why: reason, alpha: alpha,
+                                      toData: &data,
+                                      testData: &test_paint_data,
+                                      image: image,
+                                      otherFrames: otherFrames)
+                            }
                         }
                     }
                 }
@@ -499,8 +517,10 @@ actor FrameAirplaneRemover: Equatable {
     // paint over a selected outlier pixel with data from pixels from adjecent frames
     private func paint(x: Int, y: Int,
                        why: PaintReason,
+                       alpha: Double,
                        toData data: inout Data,
                        testData test_paint_data: inout Data,
+                       image: PixelatedImage,
                        otherFrames: [PixelatedImage])
     {
         var pixels_to_paint_with: [Pixel] = []
@@ -513,12 +533,18 @@ actor FrameAirplaneRemover: Equatable {
         // XXX blending both adjecent frames can make the painted airlane streak darker
         // then it was before because the bright stars are dimmed 50% due to them moving across
         // two frames.  try just using one frame and see how that works.  maybe make it an option?
+
         
         pixels_to_paint_with.append(otherFrames[0].readPixel(atX: x, andY: y))
         
         // blend the pixels from the adjecent frames
-        let paint_pixel = Pixel(merging: pixels_to_paint_with)
-        
+        var paint_pixel = Pixel(merging: pixels_to_paint_with)
+
+        if alpha < 1 {
+            let op = image.readPixel(atX: x, andY: y)
+            paint_pixel = Pixel(merging: paint_pixel, with: op, atAlpha: alpha)
+        }
+
         // this is the numeric value we need to write out to paint over the airplane
         var paint_value = paint_pixel.value
         
@@ -527,11 +553,19 @@ actor FrameAirplaneRemover: Equatable {
         
         // actually paint over that airplane like thing in the image data
         data.replaceSubrange(offset ..< offset+self.bytesPerPixel,
-                          with: &paint_value, count: self.bytesPerPixel)
+                             with: &paint_value, count: self.bytesPerPixel)
         
         // for testing, colors changed pixels
         if test_paint {
-            var test_paint_value = why.testPaintPixel.value
+            var test_paint_pixel = why.testPaintPixel
+
+            if alpha < 1 {
+                let op = image.readPixel(atX: x, andY: y)
+                test_paint_pixel = Pixel(merging: op, with: test_paint_pixel, atAlpha: alpha)
+                Log.i("alpha \(alpha) @ [\(x), \(y)]")
+            }
+            var test_paint_value = test_paint_pixel.value
+            
             test_paint_data.replaceSubrange(offset ..< offset+self.bytesPerPixel,
                                             with: &test_paint_value,
                                             count: self.bytesPerPixel)
@@ -581,9 +615,9 @@ actor FrameAirplaneRemover: Equatable {
                   
         Log.d("frame \(self.frame_index) painting over airplanes")
                   
-        await self.paintOverAirplanes(toData: &output_data,
-                                      testData: &test_paint_data,
-                                      otherFrames: otherFrames)
+        try await self.paintOverAirplanes(toData: &output_data,
+                                          testData: &test_paint_data,
+                                          otherFrames: otherFrames)
         
         Log.d("frame \(self.frame_index) writing output files")
 
