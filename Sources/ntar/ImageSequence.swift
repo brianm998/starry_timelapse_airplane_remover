@@ -56,26 +56,38 @@ actor ImageSequence {
     var numberOfResidentImages: Int {
         return images.count
     }
+
+    nonisolated func getImage(withName filename: String) async throws -> PixelatedImage? {
+        let (ret, had_to_load) = try await getImageInt(withName: filename)
+        // interval is a balance between memory usage and having to re-load the same image from disk
+
+        if had_to_load {
+            // if we had to load the image, remove it later, giving a window
+            // for other frames to access the same image in ram
+            Log.d("starting task to purge \(filename)")
+            Task {
+                sleep(10)       // XXX sleep, really?
+                Log.d("running task to purge \(filename)")
+
+                await self.removeValue(forKey: filename)
+                let count = await self.numberOfResidentImages
+                Log.d("purged \(filename), \(count) resident images left")
+            }
+        }
+        return ret
+    }
     
-    func getImage(withName filename: String) async throws -> PixelatedImage? {
+    func getImageInt(withName filename: String) async throws -> (PixelatedImage?, Bool) {
         if let image = images[filename] {
-            return image
+            return (image, false)
         }
         Log.d("loading \(filename)")
         if let pixelatedImage = try await PixelatedImage(fromFile: filename) {
-            // set a timer to purge it
-            // interval is a balance between memory usage and having to re-load the same image from disk
-            let _ = Timer.scheduledTimer(withTimeInterval: 20.0, repeats: false) { timer in
-                Task {
-                    await self.removeValue(forKey: filename)
-                    Log.d("purged \(filename)")
-                }
-            }
             images[filename] = pixelatedImage
-            return pixelatedImage
+            return (pixelatedImage, true)
         }
         Log.w("could not getImage(withName: \(filename)), no image found")
-        return nil
+        return (nil, false)
     }
 }
 
