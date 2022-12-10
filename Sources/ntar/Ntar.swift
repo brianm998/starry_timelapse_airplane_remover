@@ -119,6 +119,8 @@ todo:
  - calculate surface area vs volume stats for airplanes and not airplanes
 
  - make distance in FinalProcessor more accurate and faster
+
+ - weight hough transform by brightness?
  */
 
 // this is here so that PaintReason can see it
@@ -129,7 +131,7 @@ var assume_airplane_size: Int = 5000 // don't bother spending the time to fully 
 let medium_hough_line_score: Double = 0.4 // close to being a line, not really far
 
 // how far in each direction do we go when doing final processing?
-let number_final_processing_neighbors_needed = 2 // in each direction
+let number_final_processing_neighbors_needed = 1 // in each direction
 
 let final_theta_diff: Double = 10       // how close in theta/rho outliers need to be between frames
 let final_rho_diff: Double = 20        // 20 works
@@ -156,7 +158,7 @@ let memory_size_gigs = ProcessInfo.processInfo.physicalMemory/(1024*1024*1024)
 // 0.0.7 really fixed streak processing and lots of refactoring
 // 0.0.8 got rid of more false positives with weighted scoring and final streak tweaks
 // 0.0.9 softer outlier boundries, more streak tweaks, outlier overlap adjustments
-// 0.0.10 add alpha on soft outlier boundries, attempt to speed up final process
+// 0.0.10 add alpha on soft outlier boundries, speed up final process some, fix memory problem
 
 let ntar_version = "0.0.10"
 
@@ -366,7 +368,7 @@ func process_outlier_groups(dirname: String) throws {
                             for y in 0 ..< height {
                                 for (x, char) in rows[y].enumerated() {
                                     if char == "*" {
-                                        houghTransform.input_data[y*width + x] = true
+                                        houghTransform.input_data[y*width + x] = 1
                                     }
                                 }
                             }

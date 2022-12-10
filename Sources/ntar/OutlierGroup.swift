@@ -31,8 +31,8 @@ actor OutlierGroup: CustomStringConvertible, Hashable, Equatable {
     let brightness: UInt        // the average amount per pixel of brightness over the limit 
     let lines: [Line]           // sorted lines from the hough transform of this outlier group
     let frame: FrameAirplaneRemover
-    let pixels: [Bool]          // indexed by y * bounds.width + x, true if part of this group
-    let amounts: [UInt32]       // indexed by y * bounds.width + x, true if part of this group
+    let pixels: [UInt32]        // indexed by y * bounds.width + x, true if part of this group
+                                // zero if pixel if not part of group, brightness value otherwise
     let surfaceAreaToSizeRatio: Double
 
     // after init, shouldPaint is usually set to a base value based upon different statistics 
@@ -107,8 +107,7 @@ actor OutlierGroup: CustomStringConvertible, Hashable, Equatable {
          brightness: UInt,
          bounds: BoundingBox,
          frame: FrameAirplaneRemover,
-         pixels: [Bool],
-         amounts: [UInt32]) async
+         pixels: [UInt32]) async
     {
         self.name = name
         self.size = size
@@ -116,7 +115,6 @@ actor OutlierGroup: CustomStringConvertible, Hashable, Equatable {
         self.bounds = bounds
         self.frame = frame
         self.pixels = pixels
-        self.amounts = amounts
         self.surfaceAreaToSizeRatio = surface_area_to_size_ratio(of: pixels,
                                                                  width: bounds.width,
                                                                  height: bounds.height)
@@ -355,14 +353,14 @@ func histogram_lookup(ofValue value: Double,
     return histogram_values[index]
 }
 
-func surface_area_to_size_ratio(of pixels: [Bool], width: Int, height: Int) -> Double {
+func surface_area_to_size_ratio(of pixels: [UInt32], width: Int, height: Int) -> Double {
     var size: Int = 0
     var surface_area: Int = 0
     for x in 0 ..< width {
         for y in 0 ..< height {
             let index = y * width + x
 
-            if pixels[index] {
+            if pixels[index] != 0 {
                 size += 1
 
                 var has_top_neighbor = false
@@ -371,22 +369,22 @@ func surface_area_to_size_ratio(of pixels: [Bool], width: Int, height: Int) -> D
                 var has_right_neighbor = false
                 
                 if x > 0 {
-                    if pixels[y * width + x - 1] {
+                    if pixels[y * width + x - 1] != 0 {
                         has_left_neighbor = true
                     }
                 }
                 if y > 0 {
-                    if pixels[(y - 1) * width + x] {
+                    if pixels[(y - 1) * width + x] != 0 {
                         has_top_neighbor = true
                     }
                 }
                 if x + 1 < width {
-                    if pixels[y * width + x + 1] {
+                    if pixels[y * width + x + 1] != 0 {
                         has_right_neighbor = true
                     }
                 }
                 if y + 1 < height {
-                    if pixels[(y + 1) * width + x] {
+                    if pixels[(y + 1) * width + x] != 0 {
                         has_bottom_neighbor = true
                     }
                 }

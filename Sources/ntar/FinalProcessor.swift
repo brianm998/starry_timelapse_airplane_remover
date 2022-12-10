@@ -886,10 +886,10 @@ func pixel_overlap(group_1: OutlierGroup,
             let outlier_2_index = (y - group_2.bounds.min.y) * group_2.bounds.width + (x - group_2.bounds.min.x)
             if outlier_1_index > 0,
                outlier_1_index < group_1.pixels.count,
-               group_1.pixels[outlier_1_index] == true,
+               group_1.pixels[outlier_1_index] != 0,
                outlier_2_index > 0,
                outlier_2_index < group_2.pixels.count,
-               group_2.pixels[outlier_2_index] == true
+               group_2.pixels[outlier_2_index] != 0
             {
                 overlap_pixel_amount += 1
             }

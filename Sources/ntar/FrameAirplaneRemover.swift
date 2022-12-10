@@ -82,7 +82,7 @@ actor FrameAirplaneRemover: Equatable {
         // and group neighboring outlying pixels into groups
         try await self.findOutliers()        
         
-        Log.i("frame \(frame_index) starting processing")
+        Log.i("frame \(frame_index) detected outlier groups")
     }
     
 
@@ -400,7 +400,6 @@ actor FrameAirplaneRemover: Equatable {
                 let group_brightness = UInt(group_amount) / group_size
 
 
-                var outlier_pixels = [Bool](repeating: false, count: bounding_box.width*bounding_box.height)
                 var outlier_amounts = [UInt32](repeating: 0, count: bounding_box.width*bounding_box.height)
                 for x in min_x ... max_x {
                     for y in min_y ... max_y {
@@ -410,7 +409,6 @@ actor FrameAirplaneRemover: Equatable {
                         {
                             let pixel_amount = outlier_amount_list[index]
                             let idx = (y-min_y) * bounding_box.width + (x-min_x)
-                            outlier_pixels[idx] = true
                             outlier_amounts[idx] = UInt32(pixel_amount)
                         }
                     }
@@ -422,8 +420,7 @@ actor FrameAirplaneRemover: Equatable {
                                      brightness: group_brightness,
                                      bounds: bounding_box,
                                      frame: self,
-                                     pixels: outlier_pixels,
-                                     amounts: outlier_amounts)
+                                     pixels: outlier_amounts)
             }
         }
         Log.i("frame \(frame_index) has \(outlier_groups.count) outlier groups")
@@ -437,7 +434,7 @@ actor FrameAirplaneRemover: Equatable {
             for x in group.bounds.min.x ... group.bounds.max.x {
                 for y in group.bounds.min.y ... group.bounds.max.y {
                     let pixel_index = (y-group.bounds.min.y)*group.bounds.width + (x - group.bounds.min.x)
-                    if group.pixels[pixel_index] {                    
+                    if group.pixels[pixel_index] != 0 {                    
                         var nextPixel = Pixel()
                         if let reason = await group.shouldPaint,
                            !reason.willPaint
@@ -478,9 +475,9 @@ actor FrameAirplaneRemover: Equatable {
                 for x in group.bounds.min.x ... group.bounds.max.x {
                     for y in group.bounds.min.y ... group.bounds.max.y {
                         let pixel_index = (y - group.bounds.min.y)*group.bounds.width + (x - group.bounds.min.x)
-                        if group.pixels[pixel_index] == true {
+                        if group.pixels[pixel_index] != 0 {
 
-                            let pixel_amount = group.amounts[pixel_index]
+                            let pixel_amount = group.pixels[pixel_index]
 
                             var alpha: Double = 0
                             
@@ -562,7 +559,7 @@ actor FrameAirplaneRemover: Equatable {
             if alpha < 1 {
                 let op = image.readPixel(atX: x, andY: y)
                 test_paint_pixel = Pixel(merging: op, with: test_paint_pixel, atAlpha: alpha)
-                Log.i("alpha \(alpha) @ [\(x), \(y)]")
+                //Log.i("alpha \(alpha) @ [\(x), \(y)]")
             }
             var test_paint_value = test_paint_pixel.value
             
@@ -659,7 +656,7 @@ actor FrameAirplaneRemover: Equatable {
                     
                     for y in 0 ..< group.bounds.height {
                         for x in 0 ..< group.bounds.width {
-                            if group.pixels[y*group.bounds.width+x] == true {
+                            if group.pixels[y*group.bounds.width+x] != 0 {
                                 line += "*" // outlier spot
                             } else {
                                 line += " "
