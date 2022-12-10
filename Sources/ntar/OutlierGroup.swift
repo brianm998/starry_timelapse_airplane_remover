@@ -33,6 +33,7 @@ actor OutlierGroup: CustomStringConvertible, Hashable, Equatable {
     let frame: FrameAirplaneRemover
     let pixels: [UInt32]        // indexed by y * bounds.width + x, true if part of this group
                                 // zero if pixel if not part of group, brightness value otherwise
+    let max_pixel_distance: UInt16
     let surfaceAreaToSizeRatio: Double
 
     // after init, shouldPaint is usually set to a base value based upon different statistics 
@@ -107,7 +108,8 @@ actor OutlierGroup: CustomStringConvertible, Hashable, Equatable {
          brightness: UInt,
          bounds: BoundingBox,
          frame: FrameAirplaneRemover,
-         pixels: [UInt32]) async
+         pixels: [UInt32],
+         max_pixel_distance: UInt16) async
     {
         self.name = name
         self.size = size
@@ -115,13 +117,15 @@ actor OutlierGroup: CustomStringConvertible, Hashable, Equatable {
         self.bounds = bounds
         self.frame = frame
         self.pixels = pixels
+        self.max_pixel_distance = max_pixel_distance
         self.surfaceAreaToSizeRatio = surface_area_to_size_ratio(of: pixels,
                                                                  width: bounds.width,
                                                                  height: bounds.height)
         // do a hough transform on just this outlier group
         let transform = HoughTransform(data_width: bounds.width,
                                        data_height: bounds.height,
-                                       input_data: pixels)
+                                       input_data: pixels,
+                                       max_pixel_distance: max_pixel_distance)
         
         self.lines = transform.lines(min_count: 1)
 

@@ -276,8 +276,12 @@ struct Ntar: ParsableCommand {
             
             if #available(macOS 10.15, *) {
                 do {
-                    try process_outlier_groups(dirname: airplanes_group)
-                    try process_outlier_groups(dirname: non_airplanes_group)
+                    let max_pixel_distance = UInt16(outlierBrightnessThreshold/100*0xFFFF) // XXX 16 bit hardcode
+
+                    try process_outlier_groups(dirname: airplanes_group,
+                                               max_pixel_distance: max_pixel_distance)
+                    try process_outlier_groups(dirname: non_airplanes_group,
+                                               max_pixel_distance: max_pixel_distance)
                 } catch {
                     Log.e(error)
                 }
@@ -344,7 +348,8 @@ struct Ntar: ParsableCommand {
 // this method reads all the outlier group text files
 // and (if missing) generates a csv file with the hough transform data from it
 @available(macOS 10.15, *)
-func process_outlier_groups(dirname: String) throws {
+func process_outlier_groups(dirname: String,
+                            max_pixel_distance: UInt16) throws {
     let dispatchGroup = DispatchGroup()
     let contents = try file_manager.contentsOfDirectory(atPath: dirname)
     
@@ -363,12 +368,14 @@ func process_outlier_groups(dirname: String) throws {
                             let rows = contents.components(separatedBy: "\n")
                             let height = rows.count
                             let width = rows[0].count
-                            let houghTransform = HoughTransform(data_width: width, data_height: height)
+                            let houghTransform = HoughTransform(data_width: width,
+                                                                data_height: height,
+                                                                max_pixel_distance: max_pixel_distance)
                             Log.d("size [\(width), \(height)]")
                             for y in 0 ..< height {
                                 for (x, char) in rows[y].enumerated() {
                                     if char == "*" {
-                                        houghTransform.input_data[y*width + x] = 1
+                                        houghTransform.input_data[y*width + x] = UInt32(max_pixel_distance)
                                     }
                                 }
                             }
@@ -387,7 +394,9 @@ func process_outlier_groups(dirname: String) throws {
                             if !file_manager.fileExists(atPath: csv_filename) {
                                 
                                 if let data = csv_line_data.data(using: .utf8) {
-                                    file_manager.createFile(atPath: csv_filename, contents: data, attributes: nil)
+                                    file_manager.createFile(atPath: csv_filename,
+                                                            contents: data,
+                                                            attributes: nil)
                                 }
                             }
                         } catch {

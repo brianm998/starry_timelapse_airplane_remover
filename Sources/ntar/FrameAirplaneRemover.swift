@@ -420,7 +420,8 @@ actor FrameAirplaneRemover: Equatable {
                                      brightness: group_brightness,
                                      bounds: bounding_box,
                                      frame: self,
-                                     pixels: outlier_amounts)
+                                     pixels: outlier_amounts,
+                                     max_pixel_distance: max_pixel_distance)
             }
         }
         Log.i("frame \(frame_index) has \(outlier_groups.count) outlier groups")
