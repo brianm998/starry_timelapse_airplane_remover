@@ -509,17 +509,20 @@ fileprivate func run_final_overlap_pass(frames: [FrameAirplaneRemover]) async {
     }
 }
 
+var GLOBAL_last_streak_frame_number = 0 // XXX
+
 // looks for airplane streaks across frames
 @available(macOS 10.15, *)
 fileprivate func run_final_streak_pass(frames: [FrameAirplaneRemover]) async {
 
     let initial_frame_index = frames[0].frame_index
-
     
     for (batch_index, frame) in frames.enumerated() {
         let frame_index = frame.frame_index
+        if frame_index < GLOBAL_last_streak_frame_number { continue }
         Log.d("frame_index \(frame_index)")
         if batch_index + 1 == frames.count { continue } // the last frame can be ignored here
+        GLOBAL_last_streak_frame_number = frame_index            
 
         await withTaskGroup(of: [AirplaneStreakMember].self) { taskGroup in
             await frame.foreachOutlierGroup() { group in
