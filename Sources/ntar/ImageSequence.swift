@@ -66,7 +66,7 @@ actor ImageSequence {
             // for other frames to access the same image in ram
             Log.d("starting task to purge \(filename)")
             Task {
-                sleep(Double.pi*5)       // XXX sleep, really?
+                sleep(UInt32(Double.pi*5))       // XXX sleep, really?
                 Log.d("running task to purge \(filename)")
 
                 await self.removeValue(forKey: filename)

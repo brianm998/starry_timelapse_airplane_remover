@@ -126,6 +126,7 @@ todo:
    to validate how likely this line is
 
  - handle case where disk fills up better, right now it just keeps running but not saving anything :(
+
  */
 
 
@@ -202,7 +203,7 @@ struct Ntar: ParsableCommand {
         Smaller values produce more groups, which may get more small airplane streaks,
         but also might end with more twinkling stars.
         """)
-    var minGroupSize: Int = 100        // groups smaller than this are ignored
+    var minGroupSize: Int = 80      // groups smaller than this are completely ignored
 
     @Option(name: .shortAndLong, help: """
         Outlier groups larger than this are assumed to be airplanes, and painted over.

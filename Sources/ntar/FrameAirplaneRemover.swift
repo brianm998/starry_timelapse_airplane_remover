@@ -409,17 +409,27 @@ actor FrameAirplaneRemover: Equatable {
                     }
                 }
                 
-                outlier_groups[group_name] =
-                  await OutlierGroup(name: group_name,
-                                     size: group_size,
-                                     brightness: group_brightness,
-                                     bounds: bounding_box,
-                                     frame: self,
-                                     pixels: outlier_amounts,
-                                     max_pixel_distance: max_pixel_distance)
+                let new_outlier = await OutlierGroup(name: group_name,
+                                                     size: group_size,
+                                                     brightness: group_brightness,
+                                                     bounds: bounding_box,
+                                                     frame: self,
+                                                     pixels: outlier_amounts,
+                                                     max_pixel_distance: max_pixel_distance)
+                let hough_score = await new_outlier.paintScore(from: .houghTransform)
+
+                if group_size < 250, // XXX constant
+                   hough_score < 0.25 // XXX constant
+                {
+                    Log.d("ignoring outlier of size \(group_size) with hough score \(hough_score)")
+                    // XXX if test paint, maybe keep these around in a separate bucket to paint with a new color?
+                } else {
+                    outlier_groups[group_name] = new_outlier
+                }
+                  
             }
         }
-        Log.i("frame \(frame_index) has \(outlier_groups.count) outlier groups")
+        Log.i("frame \(frame_index) has found \(outlier_groups.count) outlier groups to consider")
     }
 
     // paint the outliers that we decided not to paint, to enable debuging
