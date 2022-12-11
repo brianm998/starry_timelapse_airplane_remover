@@ -42,6 +42,9 @@ actor FrameAirplaneRemover: Equatable {
     // populated by pruning
     private var outlier_groups: [String: OutlierGroup] = [:] // keyed by group name
 
+    // only used for test painting
+    private var ignored_outlier_groups: [String: OutlierGroup] = [:] // keyed by group name
+
     var outlierGroupCount: Int { return outlier_groups.count }
     
     let output_filename: String
@@ -422,7 +425,11 @@ actor FrameAirplaneRemover: Equatable {
                    hough_score < 0.25 // XXX constant
                 {
                     Log.d("ignoring outlier of size \(group_size) with hough score \(hough_score)")
-                    // XXX if test paint, maybe keep these around in a separate bucket to paint with a new color?
+                    if test_paint {
+                        // allow test painting of these ignored groups
+                        await new_outlier.shouldPaint(.smallNotLinear)
+                        ignored_outlier_groups[group_name] = new_outlier
+                    }
                 } else {
                     outlier_groups[group_name] = new_outlier
                 }
@@ -432,11 +439,8 @@ actor FrameAirplaneRemover: Equatable {
         Log.i("frame \(frame_index) has found \(outlier_groups.count) outlier groups to consider")
     }
 
-    // paint the outliers that we decided not to paint, to enable debuging
-    private func testPaintOutliers(toData test_paint_data: inout Data) async {
-        Log.d("frame \(frame_index) painting outliers green")
-
-        for (name, group) in outlier_groups {
+    private func testPaintOutliers(from outliers: [String:OutlierGroup], toData test_paint_data: inout Data) async {
+        for (name, group) in outliers {
             for x in group.bounds.min.x ... group.bounds.max.x {
                 for y in group.bounds.min.y ... group.bounds.max.y {
                     let pixel_index = (y-group.bounds.min.y)*group.bounds.width + (x - group.bounds.min.x)
@@ -458,6 +462,14 @@ actor FrameAirplaneRemover: Equatable {
                 }
             }
         }
+    }
+
+    // paint the outliers that we decided not to paint, to enable debuging
+    private func testPaintOutliers(toData test_paint_data: inout Data) async {
+        Log.d("frame \(frame_index) painting outliers green")
+
+        await self.testPaintOutliers(from: outlier_groups, toData: &test_paint_data)
+        await self.testPaintOutliers(from: ignored_outlier_groups, toData: &test_paint_data)
     }
 
     // actually paint over outlier groups that have been selected as airplane tracks
