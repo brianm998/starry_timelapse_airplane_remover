@@ -155,12 +155,23 @@ class ImageSequenceProcessor<T> {
             Log.i("processing a total of \(await method_list.list.count) frames")
             
             try await withThrowingTaskGroup(of: T.self) { group in
+                var now = Date().timeIntervalSince1970
                 while(await method_list.list.count > 0) {
                     let current_running = await self.number_running.currentValue()
                     let current_max_concurrent = await self.maxConcurrentRenders()
-                    let fuck = await method_list.list.count
+                    //let fuck = await method_list.list.count
+
+
                     //Log.d("current_running \(current_running) max concurrent \(current_max_concurrent) method_list.count \(fuck)")
                     if current_running < current_max_concurrent {
+
+                        // keep from starting all at once, so that the earlier ones are more likely
+                        // to finish first.
+                        let min_duration: Double = Double.pi // who doesn't want pi?
+                        let duration = Date().timeIntervalSince1970 - now
+                        if duration < min_duration { sleep(UInt32(min_duration-duration)) }
+                        now = Date().timeIntervalSince1970
+                        
                         Log.d("\(current_running) frames currently processing")
                         Log.d("we have \(await method_list.list.count) more frames to process")
                         Log.d("processing new frame")
