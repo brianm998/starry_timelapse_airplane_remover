@@ -164,14 +164,6 @@ class ImageSequenceProcessor<T> {
 
                     //Log.d("current_running \(current_running) max concurrent \(current_max_concurrent) method_list.count \(fuck)")
                     if current_running < current_max_concurrent {
-
-                        // keep from starting all at once, so that the earlier ones are more likely
-                        // to finish first.
-                        let min_duration: Double = Double.pi // who doesn't want pi?
-                        let duration = Date().timeIntervalSince1970 - now
-                        if duration < min_duration { sleep(UInt32(min_duration-duration)) }
-                        now = Date().timeIntervalSince1970
-                        
                         Log.d("\(current_running) frames currently processing")
                         Log.d("we have \(await method_list.list.count) more frames to process")
                         Log.d("processing new frame")
