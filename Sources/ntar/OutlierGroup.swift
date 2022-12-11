@@ -38,8 +38,14 @@ actor OutlierGroup: CustomStringConvertible, Hashable, Equatable {
 
     // after init, shouldPaint is usually set to a base value based upon different statistics 
     var shouldPaint: PaintReason? // should we paint this group, and why?
-    
-    var line: Line { return lines[0] } // returns the first, most likely line 
+
+    // returns the first, most likely line, if any
+    var line: Line? {
+        if lines.count > 0 {
+            return lines[0]
+        }
+        return nil
+    } 
 
     public static func == (lhs: OutlierGroup, rhs: OutlierGroup) -> Bool {
         return lhs.name == rhs.name && lhs.frame.frame_index == rhs.frame.frame_index

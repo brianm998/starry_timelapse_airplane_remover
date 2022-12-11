@@ -279,37 +279,47 @@ func really_final_streak_processing(onFrame frame: FrameAirplaneRemover,
                             
                             if first_member.frame_index == last_other_airplane_streak.frame_index + 1 {
                                 // found a streak that ended right before this one started
-                                
-                                let distance = await distance(from: last_other_airplane_streak.group,
-                                                              to: first_member.group)
-                                
-                                let theta_diff = await abs(last_other_airplane_streak.group.line.theta -
-                                                             first_member.group.line.theta)
-                                
-                                let hypo_avg = (first_member.group.bounds.hypotenuse +
-                                                  last_other_airplane_streak.group.bounds.hypotenuse)/2
-                                
-                                let move_me_distance_limit = hypo_avg + 2 // XXX contstant
-                                
-                                if distance < move_me_distance_limit && theta_diff < move_me_theta_diff {
-                                    remove_small_streak = false
+
+                                if let first_member_group_line = await first_member.group.line,
+                                   let last_other_airplane_streak_group_line = await last_other_airplane_streak.group.line
+                                {
+                                    let distance = await distance(from: last_other_airplane_streak.group,
+                                                                  to: first_member.group)
+                                    
+                                    let theta_diff = abs(last_other_airplane_streak_group_line.theta -
+                                                           first_member_group_line.theta)
+                                    
+                                    let hypo_avg = (first_member.group.bounds.hypotenuse +
+                                                      last_other_airplane_streak.group.bounds.hypotenuse)/2
+                                    
+                                    let move_me_distance_limit = hypo_avg + 2 // XXX contstant
+                                    
+                                    if distance < move_me_distance_limit && theta_diff < move_me_theta_diff {
+                                        remove_small_streak = false
+                                    }
                                 }
                                 
                             } else if last_member.frame_index + 1 == first_other_airplane_streak.frame_index {
-                                // found a streak that starts right after this one ends
-                                let distance = await distance(from: last_member.group,
-                                                              to: first_other_airplane_streak.group)
-                                
-                                let theta_diff = await abs(first_other_airplane_streak.group.line.theta -
-                                                             last_member.group.line.theta)
-                                
-                                let hypo_avg = (last_member.group.bounds.hypotenuse +
-                                                  first_other_airplane_streak.group.bounds.hypotenuse)/2
-                                
-                                let move_me_distance_limit =  hypo_avg + 2 // XXX contstant
-                                
-                                if distance < move_me_distance_limit && theta_diff < move_me_theta_diff {
-                                    remove_small_streak = false
+
+
+                                if let last_member_group_line = await last_member.group.line,
+                                   let first_other_airplane_streak_group_line = await first_other_airplane_streak.group.line
+                                {
+                                    // found a streak that starts right after this one ends
+                                    let distance = await distance(from: last_member.group,
+                                                                  to: first_other_airplane_streak.group)
+                                    
+                                    let theta_diff = abs(first_other_airplane_streak_group_line.theta -
+                                                           last_member_group_line.theta)
+                                    
+                                    let hypo_avg = (last_member.group.bounds.hypotenuse +
+                                                      first_other_airplane_streak.group.bounds.hypotenuse)/2
+                                    
+                                    let move_me_distance_limit =  hypo_avg + 2 // XXX contstant
+                                    
+                                    if distance < move_me_distance_limit && theta_diff < move_me_theta_diff {
+                                        remove_small_streak = false
+                                    }
                                 }
                             }
                         }
@@ -408,8 +418,9 @@ fileprivate func run_final_overlap_pass(frames: [FrameAirplaneRemover]) async {
                         break
                     }
                 }
-                
-                let (line_theta, line_rho) = await (group.line.theta, group.line.rho)
+
+                guard let group_line = await group.line else { return .continue }
+                let (line_theta, line_rho) = (group_line.theta, group_line.rho)
 
                 await other_frame.foreachOutlierGroup() { og in
                     if group.size > og.size * 5 { return .continue } // XXX constant, five times larger
@@ -418,12 +429,13 @@ fileprivate func run_final_overlap_pass(frames: [FrameAirplaneRemover]) async {
                     let distance = group.bounds.centerDistance(to: og.bounds)
 
                     if distance > 300 { return .continue } // XXX arbitrary constant
+
+                    guard let og_line = await og.line else { return .continue }
                     
                     taskGroup.addTask {
                         
-                        let other_line_theta = await og.line.theta
-                        let other_line_rho = await og.line.rho
-
+                        let other_line_theta = og_line.theta
+                        let other_line_rho = og_line.rho
                         
                         let theta_diff = abs(line_theta-other_line_theta)
                         let rho_diff = abs(line_rho-other_line_rho)
@@ -706,12 +718,15 @@ func streak_from(group: OutlierGroup,
             
             let center_line_theta = center_theta(from: last_group.bounds, to: other_group.bounds)
 
-            let (other_group_line_theta,
-                 last_group_line_theta) = await (other_group.line.theta,
-                                                 last_group.line.theta)
+            guard let other_group_line = await other_group.line else { return .continue }
+            guard let last_group_line = await last_group.line else { return .continue }
             
-            let (theta_diff, rho_diff) = await (abs(last_group.line.theta-other_group_line_theta),
-                                                abs(last_group.line.rho-other_group.line.rho))
+            let (other_group_line_theta,
+                 last_group_line_theta) = (other_group_line.theta,
+                                           last_group_line.theta)
+            
+            let (theta_diff, rho_diff) = (abs(last_group_line.theta-other_group_line_theta),
+                                          abs(last_group_line.rho-other_group_line.rho))
 
             let center_line_theta_diff_1 = abs(center_line_theta-other_group_line_theta)
             let center_line_theta_diff_2 = abs(center_line_theta-last_group_line_theta)
