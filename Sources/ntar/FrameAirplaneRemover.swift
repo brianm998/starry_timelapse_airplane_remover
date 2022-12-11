@@ -424,7 +424,7 @@ actor FrameAirplaneRemover: Equatable {
                 if group_size < 250, // XXX constant
                    hough_score < 0.25 // XXX constant
                 {
-                    Log.d("ignoring outlier of size \(group_size) with hough score \(hough_score)")
+                    //Log.d("ignoring outlier of size \(group_size) with hough score \(hough_score)")
                     if test_paint {
                         // allow test painting of these ignored groups
                         await new_outlier.shouldPaint(.smallNotLinear)
