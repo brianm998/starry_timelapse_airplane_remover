@@ -269,14 +269,12 @@ actor FrameAirplaneRemover: Equatable {
 
                     let next_outlier_amount = Double(outlier_amount_list[next_outlier_index])
 
-                    let allowed_decrease_amt = 0.70 // XXX constant XXX
-                                            // 0.55 is too low
-
+                    //Log.e("min_pixel_distance \(min_pixel_distance) max_pixel_distance \(max_pixel_distance)")
+                    
                     if outlier_x > 0 { // add left neighbor
                         let left_neighbor_index = outlier_y * width + outlier_x - 1
                         let left_neighbor_amount = outlier_amount_list[left_neighbor_index]
-                        if (left_neighbor_amount > max_pixel_distance ||
-                            (Double(left_neighbor_amount) / next_outlier_amount > allowed_decrease_amt && left_neighbor_amount > min_pixel_distance)),
+                        if left_neighbor_amount > min_pixel_distance,
                            outlier_group_list[left_neighbor_index] == nil
                         {
                             pending_outliers[pending_outlier_insert_index] = left_neighbor_index
@@ -288,8 +286,7 @@ actor FrameAirplaneRemover: Equatable {
                     if outlier_x < width - 1 { // add right neighbor
                         let right_neighbor_index = outlier_y * width + outlier_x + 1
                         let right_neighbor_amount = outlier_amount_list[right_neighbor_index]
-                        if (outlier_amount_list[right_neighbor_index] > max_pixel_distance ||
-                            (Double(right_neighbor_amount) / next_outlier_amount > allowed_decrease_amt && right_neighbor_amount > min_pixel_distance)),
+                        if right_neighbor_amount > min_pixel_distance,
                            outlier_group_list[right_neighbor_index] == nil
                         {
                             pending_outliers[pending_outlier_insert_index] = right_neighbor_index
@@ -301,8 +298,7 @@ actor FrameAirplaneRemover: Equatable {
                     if outlier_y > 0 { // add top neighbor
                         let top_neighbor_index = (outlier_y - 1) * width + outlier_x
                         let top_neighbor_amount = outlier_amount_list[top_neighbor_index]
-                        if (outlier_amount_list[top_neighbor_index] > max_pixel_distance || 
-                            (Double(top_neighbor_amount) / next_outlier_amount > allowed_decrease_amt && top_neighbor_amount > min_pixel_distance)),
+                        if top_neighbor_amount > min_pixel_distance,
                            outlier_group_list[top_neighbor_index] == nil
                         {
                             pending_outliers[pending_outlier_insert_index] = top_neighbor_index
@@ -314,8 +310,7 @@ actor FrameAirplaneRemover: Equatable {
                     if outlier_y < height - 1 { // add bottom neighbor
                         let bottom_neighbor_index = (outlier_y + 1) * width + outlier_x
                         let bottom_neighbor_amount = outlier_amount_list[bottom_neighbor_index]
-                        if (outlier_amount_list[bottom_neighbor_index] > max_pixel_distance ||
-                            (Double(bottom_neighbor_amount) / next_outlier_amount > allowed_decrease_amt && bottom_neighbor_amount > min_pixel_distance)),
+                        if bottom_neighbor_amount > min_pixel_distance,
                            outlier_group_list[bottom_neighbor_index] == nil
                         {
                             pending_outliers[pending_outlier_insert_index] = bottom_neighbor_index
