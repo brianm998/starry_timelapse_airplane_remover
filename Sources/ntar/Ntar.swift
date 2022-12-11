@@ -121,7 +121,12 @@ todo:
  - make distance in FinalProcessor more accurate and faster
 
  - weight hough transform by brightness?
+
+ - instead of just taking the first line from the hough transform blindly, try a more statistical approach
+   to validate how likely this line is
+
  */
+
 
 // this is here so that PaintReason can see it
 var assume_airplane_size: Int = 5000 // don't bother spending the time to fully process
@@ -140,7 +145,8 @@ let center_line_theta_diff: Double = 18 // used in outlier streak detection
                                         // 25 is too large
 
 // the minimum brightness distance possible when detecting outlier groups
-let min_pixel_distance = UInt16(25/100*0xFFFF) // XXX 16 bit hardcode
+let min_pixel_distance = UInt16((10/100.0)*Double(0xFFFF)) // XXX 16 bit hardcode
+
 
 let supported_image_file_types = [".tif", ".tiff"] // XXX move this out
 
