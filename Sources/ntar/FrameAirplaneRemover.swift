@@ -421,9 +421,10 @@ actor FrameAirplaneRemover: Equatable {
                                                      max_pixel_distance: max_pixel_distance)
                 let hough_score = await new_outlier.paintScore(from: .houghTransform)
 
-                if group_size < 250, // XXX constant
-                   hough_score < 0.25 // XXX constant
+                if group_size < max_must_look_like_line_size, // XXX global
+                   hough_score < max_must_look_like_line_score // XXX global
                 {
+                    // ignore small groups that have a bad hough score
                     //Log.d("ignoring outlier of size \(group_size) with hough score \(hough_score)")
                     if test_paint {
                         // allow test painting of these ignored groups
@@ -431,6 +432,7 @@ actor FrameAirplaneRemover: Equatable {
                         ignored_outlier_groups[group_name] = new_outlier
                     }
                 } else {
+                    // add this new outlier to the set to analyize
                     outlier_groups[group_name] = new_outlier
                 }
                   

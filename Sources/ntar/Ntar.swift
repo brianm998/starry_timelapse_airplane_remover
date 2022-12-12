@@ -121,12 +121,15 @@ todo:
  - make distance in FinalProcessor more accurate and faster
 
  - weight hough transform by brightness?
-
+   need to redo-training histograms, they fail when we do this :(
+ 
  - instead of just taking the first line from the hough transform blindly, try a more statistical approach
    to validate how likely this line is
 
  - handle case where disk fills up better, right now it just keeps running but not saving anything :(
 
+ - see what happens when max concurrent renders stays constant, or is allowed to go a bit higher
+ 
  */
 
 
@@ -146,12 +149,18 @@ let final_rho_diff: Double = 20        // 20 works
 let center_line_theta_diff: Double = 18 // used in outlier streak detection
                                         // 25 is too large
 
-let min_pixel_distance_percent: Double = 9
-
 
 // the minimum brightness distance possible when detecting outlier groups
 // make this a command line parameter and not a global?
+let min_pixel_distance_percent: Double = 9
+
 let min_pixel_distance = UInt16((min_pixel_distance_percent/100.0)*Double(0xFFFF)) // XXX 16 bit hardcode
+
+// these parameters are used to throw out outlier groups from the
+// initial list to consider.  Smaller groups than this must have
+// a hough score this big or greater to be included.
+let max_must_look_like_line_size: Int = 250
+let max_must_look_like_line_score: Double = 0.25
 
 
 let supported_image_file_types = [".tif", ".tiff"] // XXX move this out
@@ -171,7 +180,7 @@ let memory_size_gigs = ProcessInfo.processInfo.physicalMemory/(1024*1024*1024)
 // 0.0.8 got rid of more false positives with weighted scoring and final streak tweaks
 // 0.0.9 softer outlier boundries, more streak tweaks, outlier overlap adjustments
 // 0.0.10 add alpha on soft outlier boundries, speed up final process some, fix memory problem
-// 0.0.11 fix problem with soft outlier boundries, update constants to work better
+// 0.0.11 fix soft outlier boundries, better constants, initial group filter
 
 let ntar_version = "0.0.11"
 
