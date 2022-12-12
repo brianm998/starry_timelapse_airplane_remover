@@ -10,7 +10,7 @@ enum PaintReason: Equatable, CaseIterable {
    case badScore(Double)        // percent score
    case adjecentOverlap(Double) // overlap distance
 
-   case smallNotLinear
+   case smallNonLinear
 
    public var BasicColor: BasicColor {
         get {
@@ -27,7 +27,7 @@ enum PaintReason: Equatable, CaseIterable {
                 return .brightCyan
             case .adjecentOverlap:
                 return .brightBlue
-            case .smallNotLinear:
+            case .smallNonLinear:
                 return .cyan
             }
         }
@@ -42,7 +42,7 @@ enum PaintReason: Equatable, CaseIterable {
             case .inStreak:          return "in a streak"
             case .badScore:          return "bad score"
             case .adjecentOverlap:   return "adjecent overlap"
-            case .smallNotLinear:    return "small not linear"
+            case .smallNonLinear:    return "small not linear"
             }
         }
    }
@@ -74,11 +74,10 @@ These outlier groups are not painted over because it overlaps with a similar out
                 return """
 These outlier groups were found to be in a streak across frames.
 """
-            case .smallNotLinear:
+            case .smallNonLinear:
                 return """
-These outlier groups were ignored for being too small and not linear
+These outlier groups were ignored for being too small and not linear enough.
 """
-
             }
         }
    }
@@ -92,7 +91,7 @@ These outlier groups were ignored for being too small and not linear
             case .inStreak:          return true
             case .badScore:          return false
             case .adjecentOverlap:   return false
-            case .smallNotLinear:    return false
+            case .smallNonLinear:    return false
             }
         }
    }
@@ -107,7 +106,7 @@ These outlier groups were ignored for being too small and not linear
 
    static var allCases: [PaintReason] {
        return [.assumed, .looksLikeALine(0), .goodScore(0),
-               .inStreak(0), .badScore(0), .adjecentOverlap(0), .smallNotLinear]
+               .inStreak(0), .badScore(0), .adjecentOverlap(0), .smallNonLinear]
    }
                          
    // colors used to test paint to show why
@@ -157,9 +156,9 @@ These outlier groups were ignored for being too small and not linear
           default:
               return false
           }
-      case .smallNotLinear:
+      case .smallNonLinear:
           switch rhs {
-          case .smallNotLinear:
+          case .smallNonLinear:
               return true
           default:
               return false
