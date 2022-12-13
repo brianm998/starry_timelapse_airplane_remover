@@ -31,6 +31,7 @@ actor FrameAirplaneRemover: Equatable {
     let bytesPerRow: Int
     let otherFrameIndexes: [Int] // used in found outliers and paint only
     let max_pixel_distance: UInt16
+    let min_pixel_distance: UInt16
     let min_group_size: Int
     let frame_index: Int
     
@@ -58,6 +59,7 @@ actor FrameAirplaneRemover: Equatable {
          testPaintFilename tpfo: String?,
          outlierOutputDirname outlier_output_dirname: String?,
          maxPixelDistance max_pixel_distance: UInt16,
+         minPixelDistance min_pixel_distance: UInt16,
          minGroupSize min_group_size: Int) async throws
     {
 
@@ -80,6 +82,7 @@ actor FrameAirplaneRemover: Equatable {
         self.bytesPerPixel = image.bytesPerPixel
         self.bytesPerRow = width*bytesPerPixel
         self.max_pixel_distance = max_pixel_distance
+        self.min_pixel_distance = min_pixel_distance
         
         // find outlying bright pixels between frames,
         // and group neighboring outlying pixels into groups

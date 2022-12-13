@@ -153,12 +153,6 @@ let center_line_theta_diff: Double = 18 // used in outlier streak detection
                                         // 25 is too large
 
 
-// the minimum brightness distance possible when detecting outlier groups
-// make this a command line parameter and not a global?
-let min_pixel_distance_percent: Double = 9
-
-let min_pixel_distance = UInt16((min_pixel_distance_percent/100.0)*Double(0xFFFF)) // XXX 16 bit hardcode
-
 // these parameters are used to throw out outlier groups from the
 // initial list to consider.  Smaller groups than this must have
 // a hough score this big or greater to be included.
@@ -206,15 +200,24 @@ struct Ntar: ParsableCommand {
         """)
     var outputPath: String?
     
-    @Option(name: [.customShort("b"), .long], help: """
-        The percentage in brightness increase necessary for a pixel to be considered an outlier.
-        Higher values the number and size of found outlier groups.
+    @Option(name: [.customShort("B"), .long], help: """
+        The percentage in brightness increase necessary for a single pixel to be considered an outlier.
+        Higher values decrease the number and size of found outlier groups.
         Lower values increase the size and number of outlier groups,
-        which may find more airplanes, but also may yield more false positives,
-        usually making stars twinkle.
+        which may find more airplanes, but also may yield more false positives.
+        Outlier Pixels with brightness increases greater than this are fully painted over.
         """)
-    var outlierBrightnessThreshold: Double = 13
+    var outlierMaxThreshold: Double = 13
 
+    @Option(name: [.customShort("b"), .long], help: """
+        The percentage in brightness increase for the lower threshold.
+        This threshold is used to expand the size of outlier groups by neighboring pixels
+        that have brightness changes above this threshold.
+        Any outlier pixel that falls between this lower threshold and --outlier-max-threshold
+        will be painted over with an alpha level betewen the two values,
+        leaving some of the original pixel value present.
+        """)
+    var outlierMinThreshold: Double = 9
 
     @Option(name: .shortAndLong, help: """
         The minimum outlier group size.  Outlier groups smaller than this will be ignored.
@@ -307,7 +310,7 @@ struct Ntar: ParsableCommand {
             
             if #available(macOS 10.15, *) {
                 do {
-                    let max_pixel_distance = UInt16(outlierBrightnessThreshold/100*0xFFFF) // XXX 16 bit hardcode
+                    let max_pixel_distance = UInt16((outlierMaxThreshold/100)*0xFFFF) // XXX 16 bit hardcode
 
                     try process_outlier_groups(dirname: airplanes_group,
                                                max_pixel_distance: max_pixel_distance)
@@ -378,7 +381,8 @@ struct Ntar: ParsableCommand {
                                                    imageSequencePath: input_image_sequence_path,
                                                    outputPath: output_path,
                                                    maxConcurrent: UInt(numConcurrentRenders),
-                                                   maxPixelDistance: outlierBrightnessThreshold,
+                                                   maxPixelDistance: outlierMaxThreshold,
+                                                   minPixelDistance: outlierMinThreshold,
                                                    minGroupSize: minGroupSize,
                                                    assumeAirplaneSize: assume_airplane_size,
                                                    testPaint: test_paint,

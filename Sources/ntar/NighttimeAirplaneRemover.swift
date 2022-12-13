@@ -31,6 +31,9 @@ class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemover> {
     // difference between same pixels on different frames to consider an outlier
     let max_pixel_distance: UInt16
 
+    // min difference between same pixels on different frames to consider an outlier
+    let min_pixel_distance: UInt16
+    
     // groups smaller than this are ignored
     let min_group_size: Int
 
@@ -50,13 +53,15 @@ class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemover> {
          outputPath output_path: String,
          maxConcurrent max_concurrent: UInt = 5,
          maxPixelDistance max_pixel_percent: Double,
+         minPixelDistance min_pixel_percent: Double,
          minGroupSize: Int,
          assumeAirplaneSize: Int,
          testPaint: Bool = false,
          writeOutlierGroupFiles: Bool = false,
          givenFilenames given_filenames: [String]? = nil) throws
     {
-        
+        self.min_pixel_distance = UInt16((min_pixel_percent/100.0)*Double(0xFFFF)) // XXX 16 bit hardcode
+
         self.max_pixel_distance = UInt16(max_pixel_percent/100*0xFFFF) // XXX 16 bit hardcode
         self.test_paint = testPaint
         self.should_write_outlier_group_files = writeOutlierGroupFiles
@@ -229,6 +234,7 @@ class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemover> {
                                                    testPaintFilename: tpfo,
                                                    outlierOutputDirname: outlier_output_dirname,
                                                    maxPixelDistance: max_pixel_distance,
+                                                   minPixelDistance: min_pixel_distance,
                                                    minGroupSize: min_group_size)
         
         if should_write_outlier_group_files {
