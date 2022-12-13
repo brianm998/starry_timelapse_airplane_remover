@@ -45,7 +45,9 @@ class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemover> {
     
     var final_processor: FinalProcessor?    
 
-    init(imageSequenceDirname image_sequence_dirname: String,
+    init(imageSequenceName image_sequence_name: String,
+         imageSequencePath image_sequence_path: String,
+         outputPath output_path: String,
          maxConcurrent max_concurrent: UInt = 5,
          maxPixelDistance max_pixel_percent: Double,
          minGroupSize: Int,
@@ -62,14 +64,14 @@ class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemover> {
         self.assume_airplane_size = assumeAirplaneSize
 
         let formatted_pixel_distance = String(format: "%0.1f", max_pixel_percent)        
-        
-        var basename = "\(image_sequence_dirname)-ntar-v-\(ntar_version)-\(formatted_pixel_distance)-\(minGroupSize)-\(assumeAirplaneSize)"
+
+        var basename = "\(image_sequence_name)-ntar-v-\(ntar_version)-\(formatted_pixel_distance)-\(minGroupSize)-\(assumeAirplaneSize)"
         basename = basename.replacingOccurrences(of: ".", with: "_")
-        test_paint_output_dirname = "\(basename)-test-paint"
-        outlier_output_dirname = "\(basename)-outliers"
-        let output_dirname = basename
-        try super.init(imageSequenceDirname: image_sequence_dirname,
-                       outputDirname: output_dirname,
+        test_paint_output_dirname = "\(output_path)/\(basename)-test-paint"
+        outlier_output_dirname = "\(output_path)/\(basename)-outliers"
+        
+        try super.init(imageSequenceDirname: "\(image_sequence_path)/\(image_sequence_name)",
+                       outputDirname: "\(output_path)/\(basename)",
                        maxConcurrent: max_concurrent,
                        givenFilenames: given_filenames)
 
@@ -173,6 +175,8 @@ class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemover> {
         }
     }
 
+    var last_final_log: TimeInterval = 0
+    
     // balance the total number of active processes, and favor the end of the process
     // so that we don't experience backup and overload memory
     override func maxConcurrentRenders() async -> UInt {
@@ -195,7 +199,14 @@ class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemover> {
                 ret = max_concurrent_renders - final_queue_size
             }
             let num_images = await image_sequence.numberOfResidentImages
-            Log.d("final_is_working \(final_is_working) current_running \(current_running) final_queue_size \(final_queue_size) final_frames_unprocessed \(final_frames_unprocessed) max_renders \(ret) images loaded: \(num_images)")
+
+            let now = Date().timeIntervalSince1970
+
+            if now - last_final_log > 10 {
+                Log.d("final_is_working \(final_is_working) current_running \(current_running) final_queue_size \(final_queue_size) final_frames_unprocessed \(final_frames_unprocessed) max_renders \(ret) images loaded: \(num_images)")
+                last_final_log = now
+            }
+            
         }
         //Log.d("max_concurrent_renders \(ret)")
         return ret

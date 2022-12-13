@@ -122,14 +122,17 @@ todo:
 
  - weight hough transform by brightness?
    need to redo-training histograms, they fail when we do this :(
+ - redo histogram output to include brightness level of each pixel in outlier groups
  
  - instead of just taking the first line from the hough transform blindly, try a more statistical approach
    to validate how likely this line is
 
- - handle case where disk fills up better, right now it just keeps running but not saving anything :(
+ - handle case where disk fills up better, right now it just keeps running but not saving anything
+ - add feature to ensure available disk space before running (with command line disable)
+
 
  - see what happens when max concurrent renders stays constant, or is allowed to go a bit higher
- 
+
  */
 
 
@@ -196,6 +199,12 @@ struct Ntar: ParsableCommand {
         If present, ntar will output a file log at the given level.
         """)
     var fileLogLevel: Log.Level?
+
+    @Option(name: [.short, .customLong("output-path")], help:"""
+        The filesystem location under which ntar will create output dir(s).
+        Defaults to creating output dir(s) alongside input sequence dir
+        """)
+    var outputPath: String?
     
     @Option(name: [.customShort("b"), .long], help: """
         The percentage in brightness increase necessary for a pixel to be considered an outlier.
@@ -316,18 +325,38 @@ struct Ntar: ParsableCommand {
         
         if var input_image_sequence_dirname = image_sequence_dirname {
 
-
             while input_image_sequence_dirname.hasSuffix("/") {
                 // remove any trailing '/' chars,
                 // otherwise our created output dir(s) will end up inside this dir,
                 // not alongside it
                 _ = input_image_sequence_dirname.removeLast()
             }
+
+            var filename_paths = input_image_sequence_dirname.components(separatedBy: "/")
+            var input_image_sequence_path: String = ""
+            var input_image_sequence_name: String = ""
+            if let last_element = filename_paths.last {
+                filename_paths.removeLast()
+                input_image_sequence_path = filename_paths.joined(separator: "/")
+                if input_image_sequence_path.count == 0 { input_image_sequence_path = "." }
+                input_image_sequence_name = last_element
+            } else {
+                input_image_sequence_path = "."
+                input_image_sequence_name = input_image_sequence_dirname
+            }
+
+            var output_path = ""
+            if let outputPath = outputPath {
+                output_path = outputPath
+            } else {
+                output_path = input_image_sequence_path
+            }
             
             Log.name = "ntar-log"
-            Log.nameSuffix = input_image_sequence_dirname.components(separatedBy: "/").last
+            Log.nameSuffix = input_image_sequence_name
 
             Log.handlers[.console] = ConsoleLogHandler(at: terminalLogLevel)
+
             do {
                 if let fileLogLevel = fileLogLevel {
                     Log.i("enabling file logging")
@@ -344,13 +373,16 @@ struct Ntar: ParsableCommand {
                 Log.i("processing files in \(input_image_sequence_dirname)")
                 
                 if #available(macOS 10.15, *) {
-                    let eraser = try NighttimeAirplaneRemover(imageSequenceDirname: input_image_sequence_dirname,
-                                                              maxConcurrent: UInt(numConcurrentRenders),
-                                                              maxPixelDistance: outlierBrightnessThreshold,
-                                                              minGroupSize: minGroupSize,
-                                                              assumeAirplaneSize: assume_airplane_size,
-                                                              testPaint: test_paint,
-                                                              writeOutlierGroupFiles: should_write_outlier_group_files)
+                    let eraser =
+                      try NighttimeAirplaneRemover(imageSequenceName: input_image_sequence_name,
+                                                   imageSequencePath: input_image_sequence_path,
+                                                   outputPath: output_path,
+                                                   maxConcurrent: UInt(numConcurrentRenders),
+                                                   maxPixelDistance: outlierBrightnessThreshold,
+                                                   minGroupSize: minGroupSize,
+                                                   assumeAirplaneSize: assume_airplane_size,
+                                                   testPaint: test_paint,
+                                                   writeOutlierGroupFiles: should_write_outlier_group_files)
 
                     Log.dispatchGroup = eraser.dispatchGroup.dispatch_group
                     
@@ -359,7 +391,7 @@ struct Ntar: ParsableCommand {
                     Log.e("cannot run :(") // XXX make this better
                 }
             } catch {
-                Log.e(error)
+                Log.e("\(error)")
             }
         } else {
             throw ValidationError("need to provide input")
