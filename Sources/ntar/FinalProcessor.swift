@@ -27,6 +27,7 @@ import Cocoa
 
 
 // identified airplane trails XXX why is this a global?  put this in the class and make these funcs part of it
+
 @available(macOS 10.15, *)
 actor AirplaneStreaks {
     var streaks: [String:[AirplaneStreakMember]] = [:]
@@ -118,7 +119,7 @@ actor FinalProcessor {
                 Log.d("adding frame \(frame.frame_index) to final queue")
                 await self.final_queue.method_list.add(atIndex: frame.frame_index) {
                     if index + 2 <= self.frames.count,
-                       let next_frame = await self.frame(at: index + 1)
+                       let next_frame = self.frame(at: index + 1)
                     {
                         await really_final_streak_processing(onFrame: frame,
                                                              nextFrame: next_frame)
@@ -138,10 +139,10 @@ actor FinalProcessor {
         
         var done = false
         while(!done) {
-            //Log.d("FINAL THREAD running")
+            Log.v("FINAL THREAD running")
             let (cfi, frames_count) = await (current_frame_index, frames.count)
             done = cfi >= frames_count
-            //Log.d("FINAL THREAD done \(done) current_frame_index \(cfi) frames.count \(frames_count)")
+            Log.v("FINAL THREAD done \(done) current_frame_index \(cfi) frames.count \(frames_count)")
             if done {
                 Log.d("we are done")
                 continue
@@ -177,7 +178,7 @@ actor FinalProcessor {
                 } else {
                     bad = true
                     // XXX bad
-                    //Log.d("FINAL THREAD bad")
+                    Log.v("FINAL THREAD bad")
                 }
             }
             if !bad {
@@ -192,7 +193,7 @@ actor FinalProcessor {
                     // maybe finish a previous frame
                     // leave the ones at the end to finishAll()
                     let immutable_start = start_index
-                    //Log.d("FINAL THREAD frame \(index_to_process) queueing into final queue")
+                    Log.v("FINAL THREAD frame \(index_to_process) queueing into final queue")
                     if let frame_to_finish = await self.frame(at: immutable_start - 1),
                        let next_frame = await self.frame(at: immutable_start)
                     {
@@ -219,13 +220,13 @@ actor FinalProcessor {
                         let after_count = await self.final_queue.method_list.count
                         Log.d("frame \(frame_to_finish.frame_index) done adding to index before_count \(before_count) after_count \(after_count)")
                     }
-                    //Log.d("FINAL THREAD frame \(index_to_process) done queueing into final queue")
+                    Log.v("FINAL THREAD frame \(index_to_process) done queueing into final queue")
                 }
             } else {
-                //Log.d("FINAL THREAD sleeping")
+                Log.v("FINAL THREAD sleeping")
                 await self.setAsleep(to: true)
                 sleep(1)        // XXX hardcoded sleep amount
-                //Log.d("FINAL THREAD waking up")
+                Log.v("FINAL THREAD waking up")
                 await self.setAsleep(to: false)
             }
         }
@@ -493,8 +494,6 @@ fileprivate func run_final_overlap_pass(frames: [FrameAirplaneRemover]) async {
                                 }
                             }
                             
-                            //Log.d("frame \(frame.frame_index) \(group_name) \(og) pixel_overlap_amount \(pixel_overlap_amount)")
-                            
                             if close_enough {
                                 // two overlapping groups
                                 // shouldn't be painted over
@@ -512,11 +511,11 @@ fileprivate func run_final_overlap_pass(frames: [FrameAirplaneRemover]) async {
 //                                    }
 //                                }
                                 
-                                //Log.d("frame \(frame.frame_index) should_paint[\(group_name)] = (false, .adjecentOverlap(\(pixel_overlap_amount))")
-                                //Log.d("frame \(other_frame.frame_index) should_paint[\(og)] = (false, .adjecentOverlap(\(pixel_overlap_amount))")
+                                Log.v("frame \(frame.frame_index) should_paint[\(group)] = (false, .adjecentOverlap(\(overlap_amount))")
+                                Log.v("frame \(other_frame.frame_index) should_paint[\(og)] = (false, .adjecentOverlap(\(overlap_amount))")
                             } else {
-                                //Log.d("frame \(frame.frame_index) \(group_name) left untouched because of pixel overlap amount \(pixel_overlap_amount)")
-                                //Log.d("frame \(other_frame.frame_index) \(og) left untouched because of pixel overlap amount \(pixel_overlap_amount)")
+                                Log.v("frame \(frame.frame_index) \(group) left untouched because of pixel overlap amount \(overlap_amount)")
+                                Log.v("frame \(other_frame.frame_index) \(og) left untouched because of pixel overlap amount \(overlap_amount)")
 
                             }
                         }
@@ -552,7 +551,7 @@ fileprivate func run_final_streak_pass(frames: [FrameAirplaneRemover]) async {
                 
                 if let reason = await group.shouldPaint {
                     if reason == .adjecentOverlap(0) {
-                        //Log.d("frame \(frame.frame_index) skipping \(group) because it has .adjecentOverlap")
+                        Log.v("frame \(frame.frame_index) skipping \(group) because it has .adjecentOverlap")
                         return .continue
                     }
                 }
@@ -571,13 +570,13 @@ fileprivate func run_final_streak_pass(frames: [FrameAirplaneRemover]) async {
                             {
                                 existing_streak = airplane_streak
                                 existing_streak_name = streak_name
-                                //Log.d("frame \(frame.frame_index) using existing streak for \(group)")
+                                Log.v("frame \(frame.frame_index) using existing streak for \(group)")
                                 continue
                             }
                         }
                     }
                     
-                    //Log.d("frame \(frame_index) looking for streak for \(group)")
+                    Log.v("frame \(frame_index) looking for streak for \(group)")
                     // search neighboring frames looking for potential tracks
                     
                     // see if this group is already part of a streak, and pass that in
@@ -603,7 +602,7 @@ fileprivate func run_final_streak_pass(frames: [FrameAirplaneRemover]) async {
                                                startingIndex: batch_index+1,
                                                potentialStreak: &potential_streak)
                         {
-                            //Log.d("frame \(frame_index) found streak \(potential_streak_name) of size \(streak.count) for \(group)")
+                            Log.v("frame \(frame_index) found streak \(potential_streak_name) of size \(streak.count) for \(group)")
                             return streak
                         }
                     }
@@ -615,7 +614,7 @@ fileprivate func run_final_streak_pass(frames: [FrameAirplaneRemover]) async {
                 if streak.count > 0 {
                     let first_member = streak[0]
                     let key = "\(first_member.group.frame.frame_index).\(first_member.group.name)"
-                    //Log.d("frame \(frame_index) adding streak \(streak) named \(key)")
+                    Log.v("frame \(frame_index) adding streak \(streak) named \(key)")
                     await airplane_streaks.add(value: streak, forKey: key)
                 }
             }
@@ -630,7 +629,7 @@ fileprivate func run_final_streak_pass(frames: [FrameAirplaneRemover]) async {
             Log.d("analyzing streak \(streak_name) starting with group \(first_member.group) frame_index \(first_member.frame_index) with \(airplane_streak.count) members")
             // XXX perhaps reject small streaks?
             if airplane_streak.count < 3 {
-                //Log.d("ignoring two member streak \(airplane_streak)")
+                Log.v("ignoring two member streak \(airplane_streak)")
                 continue
             } 
             taskGroup.addTask {
@@ -677,7 +676,7 @@ func streak_from(group: OutlierGroup,
   async -> [AirplaneStreakMember]?
 {
 
-    //Log.d("trying to find streak starting at \(group)")
+    Log.v("trying to find streak starting at \(group)")
     
     // the bounding box of the last element of the streak
 
@@ -696,7 +695,7 @@ func streak_from(group: OutlierGroup,
         Log.d("streak index \(index) frame \(frame.frame_index)")
     }
     */
-    //Log.d("starting_index \(starting_index)  \(frames.count)")
+    Log.v("starting_index \(starting_index)  \(frames.count)")
     for index in starting_index ..< frames.count {
         let frame = frames[index]
         let frame_index = frame.frame_index
@@ -704,10 +703,10 @@ func streak_from(group: OutlierGroup,
 
         let last_hypo = last_group.bounds.hypotenuse
         // calculate min distance from hypotenuse of last bounding box
-        let min_distance: Double = last_hypo * 0.66 // XXX hardcoded constant
+        let min_distance: Double = last_hypo * 2 // XXX hardcoded constant
         
         var best_distance = min_distance
-        //Log.d("looking at frame \(frame.frame_index)")
+        Log.v("looking at frame \(frame.frame_index)")
 
         await frame.foreachOutlierGroup() { other_group in
             // XXX not sure this value is right
@@ -716,7 +715,7 @@ func streak_from(group: OutlierGroup,
 
             let distance = await distance(from: last_group, to: other_group)
 
-            let last_group_hypo = last_group.bounds.hypotenuse
+            let last_group_hypo = last_hypo//last_group.bounds.hypotenuse
             let other_group_hypo = other_group.bounds.hypotenuse
 
             // too far apart
@@ -751,13 +750,13 @@ func streak_from(group: OutlierGroup,
             {
 //                Log.d("frame \(frame.frame_index) \(other_group) is \(distance) away from \(last_group) other_group_line_theta \(other_group_line_theta) last_group_line_theta \(last_group_line_theta) center_line_theta \(center_line_theta)")
 
-                //Log.d("frame \(frame.frame_index) \(other_group) DOES match \(group) houghScore \(houghScore) medium_hough_line_score \(medium_hough_line_score) distance \(distance) best_distance \(best_distance) theta_diff \(theta_diff) rho_diff \(rho_diff) center_line_theta_diff_1 \(center_line_theta_diff_1) center_line_theta_diff_2 \(center_line_theta_diff_2) center_line_theta \(center_line_theta) last \(last_group_line_theta) other \(other_group_line_theta)")
+                Log.v("frame \(frame.frame_index) \(other_group) DOES match \(group) houghScore \(houghScore) medium_hough_line_score \(medium_hough_line_score) distance \(distance) best_distance \(best_distance) theta_diff \(theta_diff) rho_diff \(rho_diff) center_line_theta_diff_1 \(center_line_theta_diff_1) center_line_theta_diff_2 \(center_line_theta_diff_2) center_line_theta \(center_line_theta) last \(last_group_line_theta) other \(other_group_line_theta)")
 
                 best_group = other_group
                 best_distance = distance
                 best_frame_index = frame_index // XXX this WAS wrong
             } else {
-                //Log.d("frame \(frame.frame_index) \(other_group) doesn't match \(group) houghScore \(houghScore) medium_hough_line_score \(medium_hough_line_score) distance \(distance) best_distance \(best_distance) theta_diff \(theta_diff) rho_diff \(rho_diff) center_line_theta_diff_1 \(center_line_theta_diff_1) center_line_theta_diff_2 \(center_line_theta_diff_2) center_line_theta \(center_line_theta) last \(last_group_line_theta) other \(other_group_line_theta)")
+                Log.v("frame \(frame.frame_index) \(other_group) doesn't match \(group) houghScore \(houghScore) medium_hough_line_score \(medium_hough_line_score) distance \(distance) best_distance \(best_distance) theta_diff \(theta_diff) rho_diff \(rho_diff) center_line_theta_diff_1 \(center_line_theta_diff_1) center_line_theta_diff_2 \(center_line_theta_diff_2) center_line_theta \(center_line_theta) last \(last_group_line_theta) other \(other_group_line_theta)")
             }
             return .continue
         }
@@ -782,7 +781,7 @@ func streak_from(group: OutlierGroup,
                         let distance_two_back = best_group.bounds.centerDistance(to: member_two_back.group.bounds)
 
                         if distance_two_back < distance_one_back {
-                            //Log.d("not adding \(best_group) to streak because it's not going in the right direction")
+                            Log.v("not adding \(best_group) to streak because it's not going in the right direction")
                             do_it = false
                         }
 
@@ -796,7 +795,7 @@ func streak_from(group: OutlierGroup,
                                                                  to: member_two_back.group.bounds)
 
                         if(abs(center_theta_one_back - center_theta_two_back) > 20) {// XXX constant (could be larger?)
-                            //Log.d("not adding \(best_group) to streak because \(center_theta_one_back) - \(center_theta_two_back) > 20")
+                            Log.v("not adding \(best_group) to streak because \(center_theta_one_back) - \(center_theta_two_back) > 20")
                             do_it = false
                         }
                     }
@@ -805,7 +804,7 @@ func streak_from(group: OutlierGroup,
                         // set previous last group here for comparison later
                         last_group = best_group
                         
-                        //Log.d("frame \(frame.frame_index) adding group \(best_group) to streak best_distance \(best_distance)")
+                        Log.v("frame \(frame.frame_index) adding group \(best_group) to streak best_distance \(best_distance)")
                         potential_streak.append((best_frame_index, best_group, best_distance))
                     }
                 }
@@ -817,7 +816,7 @@ func streak_from(group: OutlierGroup,
     if potential_streak.count == 1 {
         return nil              // nothing added
     } else {
-        //Log.d("returning potential_streak \(potential_streak)")
+        Log.v("returning potential_streak \(potential_streak)")
         return potential_streak
     }
 }
@@ -826,19 +825,19 @@ func streak_from(group: OutlierGroup,
 
 // theta in degrees of the line between the centers of the two bounding boxes
 func center_theta(from box_1: BoundingBox, to box_2: BoundingBox) -> Double {
-    //Log.d("center_theta(box_1.min.x: \(box_1.min.x), box_1.min.y: \(box_1.min.y), box_1.max.x: \(box_1.max.x), box_1.max.y: \(box_1.max.y), min_2_x: \(min_2_x), min_2_y: \(min_2_y), max_2_x: \(max_2_x), box_2.max.y: \(box_2.max.y)")
+    //Log.v("center_theta(box_1.min.x: \(box_1.min.x), box_1.min.y: \(box_1.min.y), box_1.max.x: \(box_1.max.x), box_1.max.y: \(box_1.max.y), min_2_x: \(min_2_x), min_2_y: \(min_2_y), max_2_x: \(max_2_x), box_2.max.y: \(box_2.max.y)")
 
-    //Log.d("2 half size [\(half_width_2), \(half_height_2)]")
+    //Log.v("2 half size [\(half_width_2), \(half_height_2)]")
 
     let center_1_x = Double(box_1.min.x) + Double(box_1.width)/2
     let center_1_y = Double(box_1.min.y) + Double(box_1.height)/2
 
-    //Log.d("1 center [\(center_1_x), \(center_1_y)]")
+    //Log.v("1 center [\(center_1_x), \(center_1_y)]")
     
     let center_2_x = Double(box_2.min.x) + Double(box_2.width)/2
     let center_2_y = Double(box_2.min.y) + Double(box_2.height)/2
     
-    //Log.d("2 center [\(center_2_x), \(center_2_y)]")
+    //Log.v("2 center [\(center_2_x), \(center_2_y)]")
 
     // special case horizontal alignment, theta 0 degrees
     if center_1_y == center_2_y { return 0 }
@@ -873,7 +872,7 @@ func center_theta(from box_1: BoundingBox, to box_2: BoundingBox) -> Double {
 
     // XXX what about rho?
     let theta_degrees = theta*180/Double.pi // convert from radians to degrees
-    //Log.d("theta_degrees \(theta_degrees)")
+    //Log.v("theta_degrees \(theta_degrees)")
     return  theta_degrees
 }
 
@@ -962,17 +961,17 @@ func distance_on(box bounding_box: BoundingBox,
     let math_accuracy_error: Double = 3
     
     if Double(bounding_box.min.y) - math_accuracy_error <= y_max_value && y_max_value <= Double(bounding_box.max.y) + math_accuracy_error {
-        //Log.d("vertical")
+        //Log.v("vertical")
         edge = .vertical
     } else if Double(bounding_box.min.x) - math_accuracy_error <= x_max_value && x_max_value <= Double(bounding_box.max.x) + math_accuracy_error {
-        //Log.d("horizontal")
+        //Log.v("horizontal")
         edge = .horizontal
     } else {
-        //Log.d("slope \(slope) y_intercept \(y_intercept) theta \(theta)")
-        //Log.d("min_x \(min_x) x_max_value \(x_max_value) bounding_box.max.x \(bounding_box.max.x)")
-        //Log.d("bounding_box.min.y \(bounding_box.min.y) y_max_value \(y_max_value) bounding_box.max.y \(bounding_box.max.y)")
-        //Log.d("min_x \(min_x) x_min_value \(x_min_value) bounding_box.max.x \(bounding_box.max.x)")
-        //Log.d("bounding_box.min.y \(bounding_box.min.y) y_min_value \(y_min_value) bounding_box.max.y \(bounding_box.max.y)")
+        //Log.v("slope \(slope) y_intercept \(y_intercept) theta \(theta)")
+        //Log.v("min_x \(min_x) x_max_value \(x_max_value) bounding_box.max.x \(bounding_box.max.x)")
+        //Log.v("bounding_box.min.y \(bounding_box.min.y) y_max_value \(y_max_value) bounding_box.max.y \(bounding_box.max.y)")
+        //Log.v("min_x \(min_x) x_min_value \(x_min_value) bounding_box.max.x \(bounding_box.max.x)")
+        //Log.v("bounding_box.min.y \(bounding_box.min.y) y_min_value \(y_min_value) bounding_box.max.y \(bounding_box.max.y)")
         // this means that the line generated from the given slope and line
         // does not intersect the rectangle given 
 
@@ -981,7 +980,7 @@ func distance_on(box bounding_box: BoundingBox,
         //(1122 141),  (1156 160)
 
         // is this really a problem? not sure
-        //Log.d("the line generated from the given slope and line does not intersect the rectangle given")
+        //Log.v("the line generated from the given slope and line does not intersect the rectangle given")
     }
 
     var hypotenuse_length: Double = 0
@@ -989,12 +988,12 @@ func distance_on(box bounding_box: BoundingBox,
     switch edge {
     case .vertical:
         let half_width = Double(bounding_box.width)/2
-        //Log.d("vertical half_width \(half_width)")
+        //Log.v("vertical half_width \(half_width)")
         hypotenuse_length = half_width / cos((90/180*Double.pi)-theta)
         
     case .horizontal:
         let half_height = Double(bounding_box.height)/2
-        //Log.d("horizontal half_height \(half_height)")
+        //Log.v("horizontal half_height \(half_height)")
         hypotenuse_length = half_height / cos(theta)
     }
     
@@ -1006,23 +1005,23 @@ func edge_distance(from box_1: BoundingBox, to box_2: BoundingBox) -> Double {
     let half_width_1 = Double(box_1.width)/2
     let half_height_1 = Double(box_1.height)/2
     
-    //Log.d("1 half size [\(half_width_1), \(half_height_1)]")
+    //Log.v("1 half size [\(half_width_1), \(half_height_1)]")
     
     let half_width_2 = Double(box_2.width)/2
     let half_height_2 = Double(box_2.height)/2
     
-    //Log.d("2 half size [\(half_width_2), \(half_height_2)]")
+    //Log.v("2 half size [\(half_width_2), \(half_height_2)]")
 
     let center_1_x = Double(box_1.min.x) + half_width_1
     let center_1_y = Double(box_1.min.y) + half_height_1
 
-    //Log.d("1 center [\(center_1_x), \(center_1_y)]")
+    //Log.v("1 center [\(center_1_x), \(center_1_y)]")
     
     let center_2_x = Double(box_2.min.x) + half_width_2
     let center_2_y = Double(box_2.min.y) + half_height_2
     
 
-    //Log.d("2 center [\(center_2_x), \(center_2_y)]")
+    //Log.v("2 center [\(center_2_x), \(center_2_y)]")
 
     if center_1_y == center_2_y {
         // special case horizontal alignment
@@ -1043,7 +1042,7 @@ func edge_distance(from box_1: BoundingBox, to box_2: BoundingBox) -> Double {
     // base the y_intercept on the center 1 coordinates
     let y_intercept = Double(center_1_y) - slope * Double(center_1_x)
 
-    //Log.d("slope \(slope) y_intercept \(y_intercept)")
+    //Log.v("slope \(slope) y_intercept \(y_intercept)")
     
     var theta: Double = 0
 
@@ -1073,26 +1072,26 @@ func edge_distance(from box_1: BoundingBox, to box_2: BoundingBox) -> Double {
         }
     }
 
-    //Log.d("theta \(theta*180/Double.pi) degrees")
+    //Log.v("theta \(theta*180/Double.pi) degrees")
     
     // the distance along the line between the center points that lies within group 1
     let dist_1 = distance_on(box: box_1, slope: slope, y_intercept: y_intercept, theta: theta)
-    //Log.d("dist_1 \(dist_1)")
+    //Log.v("dist_1 \(dist_1)")
     
     // the distance along the line between the center points that lies within group 2
     let dist_2 = distance_on(box: box_2, slope: slope, y_intercept: y_intercept, theta: theta)
 
-    //Log.d("dist_2 \(dist_2)")
+    //Log.v("dist_2 \(dist_2)")
 
     // the direct distance bewteen the two centers
     let center_distance = sqrt(width * width + height * height)
 
-    //Log.d("center_distance \(center_distance)")
+    //Log.v("center_distance \(center_distance)")
     
     // return the distance between their centers minus the amount of the line which is within each group
     // will be positive if the distance is separation
     // will be negative if they overlap
     let ret = center_distance - dist_1 - dist_2
-    //Log.d("returning \(ret)")
+    //Log.v("returning \(ret)")
     return ret
 }
