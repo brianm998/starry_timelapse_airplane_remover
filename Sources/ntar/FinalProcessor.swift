@@ -84,6 +84,7 @@ actor FinalProcessor {
     func clearFrame(at index: Int) {
         frames[index] = nil
     }
+    
     func incrementCurrentFrameIndex() {
         current_frame_index += 1
     }
@@ -111,11 +112,18 @@ actor FinalProcessor {
     func finishAll() async throws {
         Log.d("finishing all")
         var count = 0
-        for frame in frames {
+        for (index, frame) in frames.enumerated() {
             if let frame = frame {
                 count += 1
                 Log.d("adding frame \(frame.frame_index) to final queue")
                 await self.final_queue.method_list.add(atIndex: frame.frame_index) {
+                    if index + 2 <= self.frames.count,
+                       let next_frame = await self.frame(at: index + 1)
+                    {
+                        await really_final_streak_processing(onFrame: frame,
+                                                             nextFrame: next_frame)
+                    }
+                    
                     try await frame.finish()
                 }
             }
@@ -178,7 +186,9 @@ actor FinalProcessor {
                 Log.i("FINAL THREAD frame \(index_to_process) done with inter-frame analysis")
                 await self.incrementCurrentFrameIndex()
                 
-                if start_index > 0 && index_to_process < frame_count - number_final_processing_neighbors_needed - 1 {
+                if start_index > 0,
+                   index_to_process < frame_count - number_final_processing_neighbors_needed - 1
+                {
                     // maybe finish a previous frame
                     // leave the ones at the end to finishAll()
                     let immutable_start = start_index
@@ -186,15 +196,17 @@ actor FinalProcessor {
                     if let frame_to_finish = await self.frame(at: immutable_start - 1),
                        let next_frame = await self.frame(at: immutable_start)
                     {
+                        await self.clearFrame(at: immutable_start - 1)
+
                         // identify all existing streaks with length of only 2
                         // try to find other nearby streaks, if not found,
                         //then skip for new not paint reason
                         
                         Log.d("running final streak processing on frame \(frame_to_finish.frame_index)")
-                        
+
                         await really_final_streak_processing(onFrame: frame_to_finish,
                                                              nextFrame: next_frame)
-                        
+
                         Log.d("running final streak processing on frame \(frame_to_finish.frame_index)")
                         //let final_frame_group_name = "final frame \(frame_to_finish.frame_index)"
                         Log.d("frame \(frame_to_finish.frame_index) adding at index ")
@@ -206,7 +218,6 @@ actor FinalProcessor {
                         }
                         let after_count = await self.final_queue.method_list.count
                         Log.d("frame \(frame_to_finish.frame_index) done adding to index before_count \(before_count) after_count \(after_count)")
-                        await self.clearFrame(at: immutable_start - 1)
                     }
                     //Log.d("FINAL THREAD frame \(index_to_process) done queueing into final queue")
                 }
@@ -354,7 +365,7 @@ func really_final_streak_processing(onFrame frame: FrameAirplaneRemover,
                 }
             }
         }
-        await taskGroup.waitForAll()
+            await taskGroup.waitForAll()
     }
 }
 
@@ -537,8 +548,8 @@ fileprivate func run_final_streak_pass(frames: [FrameAirplaneRemover]) async {
         await withTaskGroup(of: [AirplaneStreakMember].self) { taskGroup in
             await frame.foreachOutlierGroup() { group in
                 // do streak detection in parallel at the level of groups in a single frame
-                    // look for more data to act upon
-                    
+                // look for more data to act upon
+                
                 if let reason = await group.shouldPaint {
                     if reason == .adjecentOverlap(0) {
                         //Log.d("frame \(frame.frame_index) skipping \(group) because it has .adjecentOverlap")
@@ -604,12 +615,13 @@ fileprivate func run_final_streak_pass(frames: [FrameAirplaneRemover]) async {
                 if streak.count > 0 {
                     let first_member = streak[0]
                     let key = "\(first_member.group.frame.frame_index).\(first_member.group.name)"
+                    //Log.d("frame \(frame_index) adding streak \(streak) named \(key)")
                     await airplane_streaks.add(value: streak, forKey: key)
                 }
             }
         }
     }
-
+    
     // go through and mark all of airplane_streaks to paint
     Log.d("analyzing \(await airplane_streaks.streaks.count) streaks")
     await withTaskGroup(of: Void.self) { taskGroup in
@@ -619,7 +631,7 @@ fileprivate func run_final_streak_pass(frames: [FrameAirplaneRemover]) async {
             // XXX perhaps reject small streaks?
             if airplane_streak.count < 3 {
                 //Log.d("ignoring two member streak \(airplane_streak)")
-                return
+                continue
             } 
             taskGroup.addTask {
                 var verbotten = false
@@ -641,18 +653,11 @@ fileprivate func run_final_streak_pass(frames: [FrameAirplaneRemover]) async {
                 if verbotten/* || !was_already_paintable*/ { return }
                 Log.d("painting over airplane streak \(airplane_streak)")
                 for streak_member in airplane_streak {
-                    if streak_member.frame_index - initial_frame_index < 0 ||
-                         streak_member.frame_index - initial_frame_index >= frames.count {
-                        // these are frames that are part of the streak, but not part of the batch
-                        // being processed right now,
-                    } else {
-                        //let frame = frames[streak_member.frame_index - initial_frame_index]
-                        Log.d("frame \(streak_member.frame_index) will paint group \(streak_member.group) is .inStreak")
+                    //let frame = frames[streak_member.frame_index - initial_frame_index]
+                    Log.d("frame \(streak_member.frame_index) will paint group \(streak_member.group) is .inStreak")
 
-                        // XXX check to see if this is already .inStreak with higher count
-                        await streak_member.group.shouldPaint(.inStreak(airplane_streak.count))
-                        //await frame.setShouldPaint(group: streak_member.group.name, why: )
-                    }
+                    // XXX check to see if this is already .inStreak with higher count
+                    await streak_member.group.shouldPaint(.inStreak(airplane_streak.count))
                 }
             }
         }
@@ -683,13 +688,14 @@ func streak_from(group: OutlierGroup,
     var best_frame_index = 0
     
     var count = 1
-/*
+
+    /*
     Log.d("streak:")
     for index in starting_index ..< frames.count {
         let frame = frames[index]
         Log.d("streak index \(index) frame \(frame.frame_index)")
     }
-*/
+    */
     //Log.d("starting_index \(starting_index)  \(frames.count)")
     for index in starting_index ..< frames.count {
         let frame = frames[index]

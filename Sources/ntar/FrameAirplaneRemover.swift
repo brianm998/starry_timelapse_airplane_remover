@@ -427,11 +427,9 @@ actor FrameAirplaneRemover: Equatable {
 
                 // XXX check more here, this fails for some small planes near horizon
 
-                let satsr = new_outlier.surfaceAreaToSizeRatio
-                
                 if group_size < max_must_look_like_line_size, // XXX global
                    hough_score < max_must_look_like_line_score, // XXX global
-                   satsr > 0.5                                  // XXX constant
+                   new_outlier.surfaceAreaToSizeRatio > 0.5 // XXX constant
                 {
                     // ignore small groups that have a bad hough score
                     //Log.e("frame \(frame_index) ignoring outlier \(new_outlier) with hough score \(hough_score) satsr \(satsr) surface_area_score \(surface_area_score)")
@@ -496,41 +494,42 @@ actor FrameAirplaneRemover: Equatable {
 
         // paint over every outlier in the paint list with pixels from the adjecent frames
         for (group_name, group) in outlier_groups {
-            if let reason = await group.shouldPaint,
-               reason.willPaint
-            {
-                Log.d("frame \(frame_index) painting over group \(group_name) for reason \(reason)")
-                //let x = index % width;
-                //let y = index / width;
-                for x in group.bounds.min.x ... group.bounds.max.x {
-                    for y in group.bounds.min.y ... group.bounds.max.y {
-                        let pixel_index = (y - group.bounds.min.y)*group.bounds.width + (x - group.bounds.min.x)
-                        if group.pixels[pixel_index] != 0 {
-
-                            let pixel_amount = group.pixels[pixel_index]
-
-                            var alpha: Double = 0
-                            
-                            if pixel_amount > max_pixel_distance {
-                                alpha = 1
-                            } else if pixel_amount < min_pixel_distance {
-                                alpha = 0
-                            } else {
-                                alpha = Double(UInt16(pixel_amount) - min_pixel_distance) /
-                                  Double(max_pixel_distance - min_pixel_distance)
-                            }
-
-                            if alpha > 0 {
-                                paint(x: x, y: y, why: reason, alpha: alpha,
-                                      toData: &data,
-                                      testData: &test_paint_data,
-                                      image: image,
-                                      otherFrames: otherFrames)
+            if let reason = await group.shouldPaint {
+                if reason.willPaint {
+                    Log.d("frame \(frame_index) painting over group \(group) for reason \(reason)")
+                    //let x = index % width;
+                    //let y = index / width;
+                    for x in group.bounds.min.x ... group.bounds.max.x {
+                        for y in group.bounds.min.y ... group.bounds.max.y {
+                            let pixel_index = (y - group.bounds.min.y)*group.bounds.width + (x - group.bounds.min.x)
+                            if group.pixels[pixel_index] != 0 {
+                                
+                                let pixel_amount = group.pixels[pixel_index]
+                                
+                                var alpha: Double = 0
+                                
+                                if pixel_amount > max_pixel_distance {
+                                    alpha = 1
+                                } else if pixel_amount < min_pixel_distance {
+                                    alpha = 0
+                                } else {
+                                    alpha = Double(UInt16(pixel_amount) - min_pixel_distance) /
+                                      Double(max_pixel_distance - min_pixel_distance)
+                                }
+                                
+                                if alpha > 0 {
+                                    paint(x: x, y: y, why: reason, alpha: alpha,
+                                          toData: &data,
+                                          testData: &test_paint_data,
+                                          image: image,
+                                          otherFrames: otherFrames)
+                                }
                             }
                         }
                     }
+                } else {
+                    Log.d("frame \(frame_index) NOT painting over group \(group) for reason \(reason)")
                 }
-                
             }
         }
     }

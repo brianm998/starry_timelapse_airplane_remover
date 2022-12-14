@@ -178,8 +178,9 @@ let memory_size_gigs = ProcessInfo.processInfo.physicalMemory/(1024*1024*1024)
 // 0.0.9 softer outlier boundries, more streak tweaks, outlier overlap adjustments
 // 0.0.10 add alpha on soft outlier boundries, speed up final process some, fix memory problem
 // 0.0.11 fix soft outlier boundries, better constants, initial group filter
+// 0.0.12 fix a streak bug, other small fixes
 
-let ntar_version = "0.0.11"
+let ntar_version = "0.0.12"
 
 @main
 struct Ntar: ParsableCommand {
