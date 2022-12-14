@@ -15,6 +15,24 @@ import ArgumentParser
 
 /*
 
+ Verbose Log functions:
+
+   Log.verbose()
+   Log.verbose("something happened")
+   Log.verbose("something happened", somedata)
+   Log.verbose(somedata)
+   Log.verbose("something happened", [somedata, otherdata])
+   Log.verbose([somedata, otherdata])
+
+   or 
+
+   Log.v()
+   Log.v("something happened")
+   Log.v("something happened", somedata)
+   Log.v(somedata)
+   Log.v("something happened", [somedata, otherdata])
+   Log.v([somedata, otherdata])
+
  Debug Log functions:
 
    Log.debug()
@@ -141,6 +159,7 @@ public class Log {
                      ExpressibleByArgument,
                      Decodable
     {
+        case verbose
         case debug
         case info
         case warn
@@ -152,6 +171,8 @@ public class Log {
 
         public var emo: String {
             switch self {
+            case .verbose:
+                return "💦"
             case .debug:
                 return "👩‍💻"
             case .info:
@@ -165,6 +186,8 @@ public class Log {
 
         public var description: String {
             switch self {
+            case .verbose:
+                return "VERBOSE"
             case .debug:
                 return "DEBUG"
             case .info:
@@ -178,6 +201,8 @@ public class Log {
 
         private var num: Int {
             switch self {
+            case .verbose:
+                return 4
             case .debug:
                 return 3
             case .info:
@@ -190,6 +215,127 @@ public class Log {
         }
     }
 }
+
+extension Log {                 
+    /*
+       Log.verbose()
+       Log.verbose("something happened")
+     */
+    public static func verbose(_ message: String? = nil,
+                             file: String = #file,
+                             function: String = #function,
+                             line: Int = #line)
+    {
+        logInternal(message, at: Level.verbose, file, function, line)
+    }
+
+    /*
+       Log.verbose("something happened", somedata)
+     */
+    public static func verbose<T>(_ message: String? = nil,
+                                _ data: T?,
+                                file: String = #file,
+                                function: String = #function,
+                                line: Int = #line) 
+    {
+        logInternal(message, with: data, at: .verbose, file, function, line)
+    }
+    
+    /*
+       Log.verbose(somedata)
+     */
+    public static func verbose<T>(_ data: T?,
+                                file: String = #file,
+                                function: String = #function,
+                                line: Int = #line)
+    {
+        logInternal(with: data, at: .verbose, file, function, line)
+    }
+    
+    /*
+       Log.verbose("something happened", [somedata, otherdata])
+     */
+    public static func verbose<T>(_ message: String? = nil,
+                                _ data: [T]?,
+                                file: String = #file,
+                                function: String = #function,
+                                line: Int = #line)
+    {
+        logInternal(message, with: data, at: .verbose, file, function, line)
+    }
+    
+    /*
+       Log.verbose([somedata, otherdata])
+     */
+    public static func verbose<T>(_ data: [T]?,
+                                file: String = #file,
+                                function: String = #function,
+                                line: Int = #line)
+    {
+        logInternal(with: data, at: .verbose, file, function, line)
+    }
+}
+
+extension Log {                 
+    /*
+       Log.v()
+       Log.v("something happened")
+     */
+    public static func v(_ message: String? = nil,
+                         file: String = #file,
+                         function: String = #function,
+                         line: Int = #line)
+    {
+        logInternal(message, at: Level.verbose, file, function, line)
+    }
+
+    /*
+     Log.v("something happened", somedata)
+     */
+    public static func v<T>(_ message: String? = nil,
+                            _ data: T?,
+                            file: String = #file,
+                            function: String = #function,
+                            line: Int = #line) 
+    {
+        logInternal(message, with: data, at: .verbose, file, function, line)
+    }
+    
+    /*
+       Log.v(somedata)
+     */
+    public static func v<T>(_ data: T?,
+                            file: String = #file,
+                            function: String = #function,
+                            line: Int = #line)
+    {
+        logInternal(with: data, at: .verbose, file, function, line)
+    }
+    
+    /*
+       Log.v("something happened", [somedata, otherdata])
+     */
+    public static func v<T>(_ message: String? = nil,
+                            _ data: [T]?,
+                            file: String = #file,
+                            function: String = #function,
+                            line: Int = #line)
+    {
+        logInternal(message, with: data, at: .verbose, file, function, line)
+    }
+    
+    /*
+       Log.v([somedata, otherdata])
+     */
+    public static func v<T>(_ data: [T]?,
+                            file: String = #file,
+                            function: String = #function,
+                            line: Int = #line)
+    {
+        logInternal(with: data, at: .verbose, file, function, line)
+    }
+}
+
 
 extension Log {                 
     /*
