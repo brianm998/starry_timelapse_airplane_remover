@@ -176,7 +176,7 @@ public class Log {
             case .debug:
                 return "👩‍💻"
             case .info:
-                return "ℹ️"
+                return "🚩"
             case .warn:
                 return "⚠️"
             case .error:
