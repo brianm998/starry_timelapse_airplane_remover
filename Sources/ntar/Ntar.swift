@@ -144,7 +144,7 @@ var assume_airplane_size: Int = 5000 // don't bother spending the time to fully 
 let medium_hough_line_score: Double = 0.4 // close to being a line, not really far
 
 // how far in each direction do we go when doing final processing?
-let number_final_processing_neighbors_needed = 1 // in each direction
+let number_final_processing_neighbors_needed = 5 // in each direction
 
 let final_theta_diff: Double = 10       // how close in theta/rho outliers need to be between frames
 let final_rho_diff: Double = 20        // 20 works
@@ -156,7 +156,7 @@ let center_line_theta_diff: Double = 18 // used in outlier streak detection
 // these parameters are used to throw out outlier groups from the
 // initial list to consider.  Smaller groups than this must have
 // a hough score this big or greater to be included.
-let max_must_look_like_line_size: Int = 250
+let max_must_look_like_line_size: Int = 200
 let max_must_look_like_line_score: Double = 0.25
 
 

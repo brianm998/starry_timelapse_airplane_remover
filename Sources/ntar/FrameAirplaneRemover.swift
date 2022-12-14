@@ -423,18 +423,25 @@ actor FrameAirplaneRemover: Equatable {
                                                      pixels: outlier_amounts,
                                                      max_pixel_distance: max_pixel_distance)
                 let hough_score = await new_outlier.paintScore(from: .houghTransform)
+                //let surface_area_score = await new_outlier.paintScore(from: .surfaceAreaRatio)
 
+                // XXX check more here, this fails for some small planes near horizon
+
+                let satsr = new_outlier.surfaceAreaToSizeRatio
+                
                 if group_size < max_must_look_like_line_size, // XXX global
-                   hough_score < max_must_look_like_line_score // XXX global
+                   hough_score < max_must_look_like_line_score, // XXX global
+                   satsr > 0.5                                  // XXX constant
                 {
                     // ignore small groups that have a bad hough score
-                    //Log.d("ignoring outlier of size \(group_size) with hough score \(hough_score)")
+                    //Log.e("frame \(frame_index) ignoring outlier \(new_outlier) with hough score \(hough_score) satsr \(satsr) surface_area_score \(surface_area_score)")
                     if test_paint {
                         // allow test painting of these ignored groups
                         await new_outlier.shouldPaint(.smallNonLinear)
                         ignored_outlier_groups[group_name] = new_outlier
                     }
                 } else {
+                    //Log.w("frame \(frame_index) adding outlier \(new_outlier) with hough score \(hough_score) satsr \(satsr) surface_area_score \(surface_area_score)")
                     // add this new outlier to the set to analyize
                     outlier_groups[group_name] = new_outlier
                 }
