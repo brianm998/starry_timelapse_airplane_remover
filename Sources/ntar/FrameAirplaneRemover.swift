@@ -30,9 +30,9 @@ actor FrameAirplaneRemover: Equatable {
     let bytesPerPixel: Int
     let bytesPerRow: Int
     let otherFrameIndexes: [Int] // used in found outliers and paint only
-    let max_pixel_distance: UInt16
-    let min_pixel_distance: UInt16
-    let min_group_size: Int
+//    let max_pixel_distance: UInt16
+//    let min_pixel_distance: UInt16
+//    let min_group_size: Int
     let frame_index: Int
     
     var test_paint_filename: String = "" // the filename to write out test paint data to
@@ -51,25 +51,28 @@ actor FrameAirplaneRemover: Equatable {
     let output_filename: String
 
     let image_sequence: ImageSequence
+
+    let config: Config
     
-    init(imageSequence image_sequence: ImageSequence,
+    init(with config: Config,
+         imageSequence image_sequence: ImageSequence,
          atIndex frame_index: Int,
          otherFrameIndexes: [Int],
          outputFilename output_filename: String,
          testPaintFilename tpfo: String?,
-         outlierOutputDirname outlier_output_dirname: String?,
+         outlierOutputDirname outlier_output_dirname: String?/*,
          maxPixelDistance max_pixel_distance: UInt16,
          minPixelDistance min_pixel_distance: UInt16,
-         minGroupSize min_group_size: Int) async throws
+         minGroupSize min_group_size: Int*/) async throws
     {
-
+        self.config = config
         guard let image = try await image_sequence.getImage(withName: image_sequence.filenames[frame_index])
         else { throw "Couldn't load image" }
         self.image_sequence = image_sequence
         self.frame_index = frame_index // frame index in the image sequence
         self.otherFrameIndexes = otherFrameIndexes
         self.output_filename = output_filename
-        self.min_group_size = min_group_size
+//        self.min_group_size = min_group_size
         if let tp_filename = tpfo {
             self.test_paint = true
             self.test_paint_filename = tp_filename
@@ -81,8 +84,8 @@ actor FrameAirplaneRemover: Equatable {
 
         self.bytesPerPixel = image.bytesPerPixel
         self.bytesPerRow = width*bytesPerPixel
-        self.max_pixel_distance = max_pixel_distance
-        self.min_pixel_distance = min_pixel_distance
+        //self.max_pixel_distance = max_pixel_distance
+        //self.min_pixel_distance = min_pixel_distance
         
         // find outlying bright pixels between frames,
         // and group neighboring outlying pixels into groups
@@ -239,7 +242,7 @@ actor FrameAirplaneRemover: Equatable {
         // then label all adject outliers
         for (index, outlier_amount) in outlier_amount_list.enumerated() {
             
-            if outlier_amount <= max_pixel_distance { continue }
+            if outlier_amount <= config.max_pixel_distance { continue }
             
             let outlier_groupname = outlier_group_list[index]
             if outlier_groupname != nil { continue }
@@ -280,7 +283,7 @@ actor FrameAirplaneRemover: Equatable {
                     if outlier_x > 0 { // add left neighbor
                         let left_neighbor_index = outlier_y * width + outlier_x - 1
                         let left_neighbor_amount = outlier_amount_list[left_neighbor_index]
-                        if left_neighbor_amount > min_pixel_distance,
+                        if left_neighbor_amount > config.min_pixel_distance,
                            outlier_group_list[left_neighbor_index] == nil
                         {
                             pending_outliers[pending_outlier_insert_index] = left_neighbor_index
@@ -292,7 +295,7 @@ actor FrameAirplaneRemover: Equatable {
                     if outlier_x < width - 1 { // add right neighbor
                         let right_neighbor_index = outlier_y * width + outlier_x + 1
                         let right_neighbor_amount = outlier_amount_list[right_neighbor_index]
-                        if right_neighbor_amount > min_pixel_distance,
+                        if right_neighbor_amount > config.min_pixel_distance,
                            outlier_group_list[right_neighbor_index] == nil
                         {
                             pending_outliers[pending_outlier_insert_index] = right_neighbor_index
@@ -304,7 +307,7 @@ actor FrameAirplaneRemover: Equatable {
                     if outlier_y > 0 { // add top neighbor
                         let top_neighbor_index = (outlier_y - 1) * width + outlier_x
                         let top_neighbor_amount = outlier_amount_list[top_neighbor_index]
-                        if top_neighbor_amount > min_pixel_distance,
+                        if top_neighbor_amount > config.min_pixel_distance,
                            outlier_group_list[top_neighbor_index] == nil
                         {
                             pending_outliers[pending_outlier_insert_index] = top_neighbor_index
@@ -316,7 +319,7 @@ actor FrameAirplaneRemover: Equatable {
                     if outlier_y < height - 1 { // add bottom neighbor
                         let bottom_neighbor_index = (outlier_y + 1) * width + outlier_x
                         let bottom_neighbor_amount = outlier_amount_list[bottom_neighbor_index]
-                        if bottom_neighbor_amount > min_pixel_distance,
+                        if bottom_neighbor_amount > config.min_pixel_distance,
                            outlier_group_list[bottom_neighbor_index] == nil
                         {
                             pending_outliers[pending_outlier_insert_index] = bottom_neighbor_index
@@ -331,7 +334,7 @@ actor FrameAirplaneRemover: Equatable {
                 }
             }
             //Log.d("group \(outlier_key) has \(group_size) members")
-            if group_size > min_group_size { 
+            if group_size > config.minGroupSize { 
                 individual_group_counts[outlier_key] = group_size
             }
         }
@@ -412,12 +415,12 @@ actor FrameAirplaneRemover: Equatable {
                 {
                     let group_center_y = bounding_box.center.y
 
-                    let upper_area_size = Double(height)*upper_sky_percentage/100
+                    let upper_area_size = Double(height)*config.upper_sky_percentage/100
 
                     if group_center_y < Int(upper_area_size) {
                         // 1 if at top, 0 if at bottom of the upper area
                         let how_close_to_top = (upper_area_size - Double(group_center_y)) / upper_area_size
-                        let min_size_for_this_group = min_group_size + Int(Double(min_group_size_at_top - min_group_size) * how_close_to_top)
+                        let min_size_for_this_group = config.minGroupSize + Int(Double(config.min_group_size_at_top - config.minGroupSize) * how_close_to_top)
                         Log.v("min_size_for_this_group \(min_size_for_this_group) how_close_to_top \(how_close_to_top) group_center_y \(group_center_y) height \(height)")
                         if group_size < min_size_for_this_group {
                             Log.d("frame \(frame_index) skipping group of size \(group_size) < \(min_size_for_this_group) @ center_y \(group_center_y)")
@@ -449,12 +452,12 @@ actor FrameAirplaneRemover: Equatable {
                                                      bounds: bounding_box,
                                                      frame: self,
                                                      pixels: outlier_amounts,
-                                                     max_pixel_distance: max_pixel_distance)
+                                                     max_pixel_distance: config.max_pixel_distance)
                 let hough_score = await new_outlier.paintScore(from: .houghTransform)
                 //let surface_area_score = await new_outlier.paintScore(from: .surfaceAreaRatio)
 
-                if group_size < max_must_look_like_line_size, // XXX global
-                   hough_score < max_must_look_like_line_score, // XXX global
+                if group_size < config.max_must_look_like_line_size,
+                   hough_score < config.max_must_look_like_line_score,
                    new_outlier.surfaceAreaToSizeRatio > 0.5 // XXX constant
                 {
                     // ignore small groups that have a bad hough score
@@ -534,13 +537,13 @@ actor FrameAirplaneRemover: Equatable {
                                 
                                 var alpha: Double = 0
                                 
-                                if pixel_amount > max_pixel_distance {
+                                if pixel_amount > config.max_pixel_distance {
                                     alpha = 1
-                                } else if pixel_amount < min_pixel_distance {
+                                } else if pixel_amount < config.min_pixel_distance {
                                     alpha = 0
                                 } else {
-                                    alpha = Double(UInt16(pixel_amount) - min_pixel_distance) /
-                                      Double(max_pixel_distance - min_pixel_distance)
+                                    alpha = Double(UInt16(pixel_amount) - config.min_pixel_distance) /
+                                      Double(config.max_pixel_distance - config.min_pixel_distance)
                                 }
                                 
                                 if alpha > 0 {
@@ -695,8 +698,7 @@ actor FrameAirplaneRemover: Equatable {
         for (group_name, group) in self.outlier_groups {
             Log.i("writing text file for group \(group_name)")
             
-            if let output_dirname = outlier_output_dirname
-            {
+            if let output_dirname = outlier_output_dirname {
                 // XXX check the determined paintability of each group and write them
                 // out to different output dirnames
                 

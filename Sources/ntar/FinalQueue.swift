@@ -21,12 +21,12 @@ actor FinalQueue {
     // actors
     let method_list = MethodList<Void>()       // a list of methods to process each frame
     let number_running = NumberRunning() // how many methods are running right now
-    let max_concurrent: UInt
+    let max_concurrent: Int
     var should_run = true
 
     let dispatch_group: DispatchHandler
 
-    init(max_concurrent: UInt = 8, dispatchGroup dispatch_group: DispatchHandler) {
+    init(max_concurrent: Int = 8, dispatchGroup dispatch_group: DispatchHandler) {
         self.max_concurrent = max_concurrent
         self.dispatch_group = dispatch_group
     }

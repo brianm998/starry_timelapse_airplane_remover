@@ -54,22 +54,23 @@ actor FinalProcessor {
     let frame_count: Int
     let dispatch_group: DispatchHandler
     let final_queue: FinalQueue
-    let max_concurrent: UInt
     let image_sequence: ImageSequence
+
+    let config: Config
     
     var is_asleep = false
     
-    init(numberOfFrames frame_count: Int,
-         maxConcurrent max_concurrent: UInt,
+    init(with config: Config,
+         numberOfFrames frame_count: Int,
          dispatchGroup dispatch_group: DispatchHandler,
          imageSequence: ImageSequence)
     {
-        frames = [FrameAirplaneRemover?](repeating: nil, count: frame_count)
-        self.max_concurrent = max_concurrent
+        self.config = config
+        self.frames = [FrameAirplaneRemover?](repeating: nil, count: frame_count)
         self.frame_count = frame_count
         self.dispatch_group = dispatch_group
         self.image_sequence = imageSequence
-        self.final_queue = FinalQueue(max_concurrent: max_concurrent,
+        self.final_queue = FinalQueue(max_concurrent: config.numConcurrentRenders,
                                       dispatchGroup: dispatch_group)
     }
 
@@ -156,8 +157,8 @@ actor FinalProcessor {
             
             var images_to_process: [FrameAirplaneRemover] = []
             
-            var start_index = index_to_process - number_final_processing_neighbors_needed
-            var end_index = index_to_process + number_final_processing_neighbors_needed
+            var start_index = index_to_process - config.number_final_processing_neighbors_needed
+            var end_index = index_to_process + config.number_final_processing_neighbors_needed
             if start_index < 0 {
                 start_index = 0
             }
@@ -188,7 +189,7 @@ actor FinalProcessor {
                 await self.incrementCurrentFrameIndex()
                 
                 if start_index > 0,
-                   index_to_process < frame_count - number_final_processing_neighbors_needed - 1
+                   index_to_process < frame_count - config.number_final_processing_neighbors_needed - 1
                 {
                     // maybe finish a previous frame
                     // leave the ones at the end to finishAll()
@@ -409,7 +410,7 @@ fileprivate func run_final_overlap_pass(frames: [FrameAirplaneRemover]) async {
                 
                 let houghScore = await group.paintScore(from: .houghTransform)
                 
-                if houghScore > medium_hough_line_score { return .continue }
+                if houghScore > config.medium_hough_line_score { return .continue }
                 
                 // look for more data to act upon
                 
@@ -451,8 +452,8 @@ fileprivate func run_final_overlap_pass(frames: [FrameAirplaneRemover]) async {
                         
                         let theta_diff = abs(line_theta-other_line_theta)
                         let rho_diff = abs(line_rho-other_line_rho)
-                        if (theta_diff < final_theta_diff || abs(theta_diff - 180) < final_theta_diff) &&
-                             rho_diff < final_rho_diff
+                        if (theta_diff < config.final_theta_diff || abs(theta_diff - 180) < config.final_theta_diff) &&
+                             rho_diff < config.final_rho_diff
                         {
                             // first see how much their bounds overlap
                             // if overlap is more than 30-40%, then skip the pixel overlap,
@@ -741,22 +742,22 @@ func streak_from(group: OutlierGroup,
             // XXX constant  VVV 
             if houghScore > 0.007 &&
                  distance < best_distance &&
-                 (theta_diff < final_theta_diff || abs(theta_diff - 180) < final_theta_diff) &&
-                 ((center_line_theta_diff_1 < center_line_theta_diff ||
-                     abs(center_line_theta_diff_1 - 180) < center_line_theta_diff) || // && ??
-                    (center_line_theta_diff_2 < center_line_theta_diff ||
-                       abs(center_line_theta_diff_2 - 180) < center_line_theta_diff)) &&
-                 rho_diff < final_rho_diff
+                 (theta_diff < config.final_theta_diff || abs(theta_diff - 180) < config.final_theta_diff) &&
+                 ((center_line_theta_diff_1 < config.center_line_theta_diff ||
+                     abs(center_line_theta_diff_1 - 180) < config.center_line_theta_diff) || // && ??
+                    (center_line_theta_diff_2 < config.center_line_theta_diff ||
+                       abs(center_line_theta_diff_2 - 180) < config.center_line_theta_diff)) &&
+                 rho_diff < config.final_rho_diff
             {
 //                Log.d("frame \(frame.frame_index) \(other_group) is \(distance) away from \(last_group) other_group_line_theta \(other_group_line_theta) last_group_line_theta \(last_group_line_theta) center_line_theta \(center_line_theta)")
 
-                Log.v("frame \(frame.frame_index) \(other_group) DOES match \(group) houghScore \(houghScore) medium_hough_line_score \(medium_hough_line_score) distance \(distance) best_distance \(best_distance) theta_diff \(theta_diff) rho_diff \(rho_diff) center_line_theta_diff_1 \(center_line_theta_diff_1) center_line_theta_diff_2 \(center_line_theta_diff_2) center_line_theta \(center_line_theta) last \(last_group_line_theta) other \(other_group_line_theta)")
+                Log.v("frame \(frame.frame_index) \(other_group) DOES match \(group) houghScore \(houghScore) medium_hough_line_score \(config.medium_hough_line_score) distance \(distance) best_distance \(best_distance) theta_diff \(theta_diff) rho_diff \(rho_diff) center_line_theta_diff_1 \(center_line_theta_diff_1) center_line_theta_diff_2 \(center_line_theta_diff_2) center_line_theta \(center_line_theta) last \(last_group_line_theta) other \(other_group_line_theta)")
 
                 best_group = other_group
                 best_distance = distance
                 best_frame_index = frame_index
             } else {
-                Log.v("frame \(frame.frame_index) \(other_group) doesn't match \(group) houghScore \(houghScore) medium_hough_line_score \(medium_hough_line_score) distance \(distance) best_distance \(best_distance) theta_diff \(theta_diff) rho_diff \(rho_diff) center_line_theta_diff_1 \(center_line_theta_diff_1) center_line_theta_diff_2 \(center_line_theta_diff_2) center_line_theta \(center_line_theta) last \(last_group_line_theta) other \(other_group_line_theta)")
+                Log.v("frame \(frame.frame_index) \(other_group) doesn't match \(group) houghScore \(houghScore) medium_hough_line_score \(config.medium_hough_line_score) distance \(distance) best_distance \(best_distance) theta_diff \(theta_diff) rho_diff \(rho_diff) center_line_theta_diff_1 \(center_line_theta_diff_1) center_line_theta_diff_2 \(center_line_theta_diff_2) center_line_theta \(center_line_theta) last \(last_group_line_theta) other \(other_group_line_theta)")
             }
             return .continue
         }

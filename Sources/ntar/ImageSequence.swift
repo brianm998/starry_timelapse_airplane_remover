@@ -18,29 +18,24 @@ You should have received a copy of the GNU General Public License along with nta
 @available(macOS 10.15, *)
 actor ImageSequence {
 
-    init(dirname: String, givenFilenames given_filenames: [String]? = nil) throws {
+    init(dirname: String, supported_image_file_types: [String]) throws {
         var image_files: [String] = []
 
-        if let given_filenames = given_filenames {
-            given_filenames.forEach { filename in
-                image_files.append("\(dirname)/\(filename)")
-            }
-        } else {
-            let contents = try file_manager.contentsOfDirectory(atPath: dirname)
-            contents.forEach { file in
-                supported_image_file_types.forEach { type in
-                    if file.hasSuffix(type) {
-                        image_files.append("\(dirname)/\(file)")
-                    } 
-                }
-            }
-    
-            image_files.sort { (lhs: String, rhs: String) -> Bool in
-                let lh = remove_path_and_suffix(fromString: lhs)
-                let rh = remove_path_and_suffix(fromString: rhs)
-                return lh < rh
+        let contents = try file_manager.contentsOfDirectory(atPath: dirname)
+        contents.forEach { file in
+            supported_image_file_types.forEach { type in
+                if file.hasSuffix(type) {
+                    image_files.append("\(dirname)/\(file)")
+                } 
             }
         }
+        
+        image_files.sort { (lhs: String, rhs: String) -> Bool in
+            let lh = remove_path_and_suffix(fromString: lhs)
+            let rh = remove_path_and_suffix(fromString: rhs)
+            return lh < rh
+        }
+
         self.filenames = image_files
     }
     

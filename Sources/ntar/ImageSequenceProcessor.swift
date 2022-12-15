@@ -12,8 +12,10 @@ class ImageSequenceProcessor<T> {
     let output_dirname: String
 
     // the max number of frames to process at one time
-    let max_concurrent_renders: UInt
+    let max_concurrent_renders: Int
 
+    let number_final_processing_neighbors_needed: Int
+    
     // the following properties get included into the output videoname
     
     // actors
@@ -27,23 +29,26 @@ class ImageSequenceProcessor<T> {
 
     var should_process: [Bool] = []       // indexed by frame number
     var existing_output_files: [Bool] = [] // indexed by frame number
+
     
     init(imageSequenceDirname image_sequence_dirname: String,
          outputDirname output_dirname: String,
-         maxConcurrent max_concurrent: UInt = 5,
-         givenFilenames given_filenames: [String]? = nil) throws
+         maxConcurrent max_concurrent: Int = 5,
+         supported_image_file_types: [String],
+         number_final_processing_neighbors_needed: Int) throws
     {
         self.max_concurrent_renders = max_concurrent
         self.image_sequence_dirname = image_sequence_dirname
         self.output_dirname = output_dirname
+        self.number_final_processing_neighbors_needed = number_final_processing_neighbors_needed
         self.image_sequence = try ImageSequence(dirname: image_sequence_dirname,
-                                                givenFilenames: given_filenames)
+                                                supported_image_file_types: supported_image_file_types)
         self.should_process = [Bool](repeating: false, count: image_sequence.filenames.count)
         self.existing_output_files = [Bool](repeating: false, count: image_sequence.filenames.count)
         self.method_list = try assembleMethodList()
     }
 
-    func maxConcurrentRenders() async -> UInt {
+    func maxConcurrentRenders() async -> Int {
         return max_concurrent_renders
     }
     

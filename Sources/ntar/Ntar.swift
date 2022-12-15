@@ -108,46 +108,22 @@ todo:
  - handle case where disk fills up better, right now it just keeps running but not saving anything
  - add feature to ensure available disk space before running (with command line disable)
 
+ - make a single config struct that holds all configuration values,
+   both constants and command line params
+
  */
 
 
+// XXX make this a global Config ref instead
 // this is here so that PaintReason can see it
 var assume_airplane_size: Int = 5000 // don't bother spending the time to fully process
 
 // XXX here are some random global constants that maybe should be exposed somehow
 
-let medium_hough_line_score: Double = 0.4 // close to being a line, not really far
-
-// how far in each direction do we go when doing final processing?
-let number_final_processing_neighbors_needed = 1 // in each direction
-
-let final_theta_diff: Double = 10       // how close in theta/rho outliers need to be between frames
-let final_rho_diff: Double = 20        // 20 works
-
-let center_line_theta_diff: Double = 18 // used in outlier streak detection
-                                        // 25 is too large
 
 
-// the minimum outlier group size at the top of the screen
-// smaller outliers at the top are discarded early on
-let min_group_size_at_top = 400
+var config: Config = Config()
 
-// what percentage of the top of the screen is considered far enough
-// above the horizon to not need really small outlier groups
-// between the bottom and the top of this area, the minimum
-// outlier group size increases
-let upper_sky_percentage: Double = 66 // top 66% of the screen
-
-
-
-// these parameters are used to throw out outlier groups from the
-// initial list to consider.  Smaller groups than this must have
-// a hough score this big or greater to be included.
-let max_must_look_like_line_size: Int = 500
-let max_must_look_like_line_score: Double = 0.25
-
-
-let supported_image_file_types = [".tif", ".tiff"] // XXX move this out
 
 // XXX use this to try to avoid running out of memory somehow
 // maybe determine megapixels of images, and guestimate usage and
@@ -349,6 +325,17 @@ struct Ntar: ParsableCommand {
 
             Log.handlers[.console] = ConsoleLogHandler(at: terminalLogLevel)
 
+            config = Config(outputPath: output_path,
+                            outlierMaxThreshold: outlierMaxThreshold,
+                            outlierMinThreshold: outlierMinThreshold,
+                            minGroupSize: minGroupSize,
+                            assumeAirplaneSize: assumeAirplaneSize,
+                            numConcurrentRenders: numConcurrentRenders,
+                            test_paint: test_paint,
+                            imageSequenceName: input_image_sequence_name,
+                            imageSequencePath: input_image_sequence_path,
+                            writeOutlierGroupFiles: should_write_outlier_group_files)
+            
             do {
                 if let fileLogLevel = fileLogLevel {
                     Log.i("enabling file logging")
@@ -366,7 +353,7 @@ struct Ntar: ParsableCommand {
                 
                 if #available(macOS 10.15, *) {
                     let eraser =
-                      try NighttimeAirplaneRemover(imageSequenceName: input_image_sequence_name,
+                      try NighttimeAirplaneRemover(with: config)/*imageSequenceName: input_image_sequence_name,
                                                    imageSequencePath: input_image_sequence_path,
                                                    outputPath: output_path,
                                                    maxConcurrent: UInt(numConcurrentRenders),
@@ -376,7 +363,7 @@ struct Ntar: ParsableCommand {
                                                    assumeAirplaneSize: assume_airplane_size,
                                                    testPaint: test_paint,
                                                    writeOutlierGroupFiles: should_write_outlier_group_files)
-
+*/
                     Log.dispatchGroup = eraser.dispatchGroup.dispatch_group
                     
                     try eraser.run()

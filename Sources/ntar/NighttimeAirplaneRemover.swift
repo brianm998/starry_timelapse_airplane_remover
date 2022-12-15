@@ -21,7 +21,9 @@ You should have received a copy of the GNU General Public License along with nta
 
 @available(macOS 10.15, *) 
 class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemover> {
-        
+
+    let config: Config
+    
     let test_paint_output_dirname: String
 
     let outlier_output_dirname: String
@@ -29,10 +31,10 @@ class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemover> {
     // the following properties get included into the output videoname
     
     // difference between same pixels on different frames to consider an outlier
-    let max_pixel_distance: UInt16
+    //let max_pixel_distance: UInt16
 
     // min difference between same pixels on different frames to consider an outlier
-    let min_pixel_distance: UInt16
+    //let min_pixel_distance: UInt16
     
     // groups smaller than this are ignored
     let min_group_size: Int
@@ -48,40 +50,28 @@ class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemover> {
     
     var final_processor: FinalProcessor?    
 
-    init(imageSequenceName image_sequence_name: String,
-         imageSequencePath image_sequence_path: String,
-         outputPath output_path: String,
-         maxConcurrent max_concurrent: UInt = 5,
-         maxPixelDistance max_pixel_percent: Double,
-         minPixelDistance min_pixel_percent: Double,
-         minGroupSize: Int,
-         assumeAirplaneSize: Int,
-         testPaint: Bool = false,
-         writeOutlierGroupFiles: Bool = false,
-         givenFilenames given_filenames: [String]? = nil) throws
-    {
-        self.min_pixel_distance = UInt16((min_pixel_percent/100.0)*Double(0xFFFF)) // XXX 16 bit hardcode
+    init(with config: Config) throws {
+        self.config = config
+        self.test_paint = config.test_paint
+        self.should_write_outlier_group_files = config.writeOutlierGroupFiles
+        self.min_group_size = config.minGroupSize
+        self.assume_airplane_size = config.assumeAirplaneSize
 
-        self.max_pixel_distance = UInt16(max_pixel_percent/100*0xFFFF) // XXX 16 bit hardcode
-        self.test_paint = testPaint
-        self.should_write_outlier_group_files = writeOutlierGroupFiles
-        self.min_group_size = minGroupSize
-        self.assume_airplane_size = assumeAirplaneSize
+        let formatted_pixel_distance = String(format: "%0.1f", config.max_pixel_distance)        
 
-        let formatted_pixel_distance = String(format: "%0.1f", max_pixel_percent)        
-
-        var basename = "\(image_sequence_name)-ntar-v-\(ntar_version)-\(formatted_pixel_distance)-\(minGroupSize)-\(assumeAirplaneSize)"
+        var basename = "\(config.image_sequence_dirname)-ntar-v-\(ntar_version)-\(formatted_pixel_distance)-\(config.minGroupSize)-\(config.assumeAirplaneSize)"
         basename = basename.replacingOccurrences(of: ".", with: "_")
-        test_paint_output_dirname = "\(output_path)/\(basename)-test-paint"
-        outlier_output_dirname = "\(output_path)/\(basename)-outliers"
+        test_paint_output_dirname = "\(config.outputPath)/\(basename)-test-paint"
+        outlier_output_dirname = "\(config.outputPath)/\(basename)-outliers"
         
-        try super.init(imageSequenceDirname: "\(image_sequence_path)/\(image_sequence_name)",
-                       outputDirname: "\(output_path)/\(basename)",
-                       maxConcurrent: max_concurrent,
-                       givenFilenames: given_filenames)
+        try super.init(imageSequenceDirname: "\(config.image_sequence_path)/\(config.image_sequence_dirname)",
+                       outputDirname: "\(config.outputPath)/\(basename)",
+                       maxConcurrent: config.numConcurrentRenders,
+                       supported_image_file_types: config.supported_image_file_types,
+                       number_final_processing_neighbors_needed: config.number_final_processing_neighbors_needed)
 
-        let processor = FinalProcessor(numberOfFrames: self.image_sequence.filenames.count,
-                                       maxConcurrent: max_concurrent_renders,
+        let processor = FinalProcessor(with: config,
+                                       numberOfFrames: self.image_sequence.filenames.count,
                                        dispatchGroup: dispatchGroup,
                                        imageSequence: image_sequence)
         
@@ -118,7 +108,7 @@ class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemover> {
                 await self.dispatchGroup.leave(dispatch_name)
             }
         }
-      
+        
         try super.run()
     }
 
@@ -150,14 +140,14 @@ class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemover> {
         }
         
         let test_paint_filename = self.test_paint ?
-                                  "\(self.test_paint_output_dirname)/\(base_name)" : nil
+          "\(self.test_paint_output_dirname)/\(base_name)" : nil
         
         // the other frames that we use to detect outliers and repaint from
         let frame_plane_remover =
           try await self.createFrame(atIndex: index,
-                                 otherFrameIndexes: otherFrameIndexes,
-                                 output_filename: "\(self.output_dirname)/\(base_name)",
-                                 test_paint_filename: test_paint_filename)
+                                     otherFrameIndexes: otherFrameIndexes,
+                                     output_filename: "\(self.output_dirname)/\(base_name)",
+                                     test_paint_filename: test_paint_filename)
 
         return frame_plane_remover
     }
@@ -184,7 +174,7 @@ class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemover> {
     
     // balance the total number of active processes, and favor the end of the process
     // so that we don't experience backup and overload memory
-    override func maxConcurrentRenders() async -> UInt {
+    override func maxConcurrentRenders() async -> Int {
         var ret = max_concurrent_renders
         if let final_processor = final_processor {
             let final_is_working = await final_processor.isWorking
@@ -196,12 +186,12 @@ class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemover> {
                 if signed_ret < 0 {
                     ret = 0
                 } else if signed_ret > 0 {
-                    ret = UInt(signed_ret)
+                    ret = signed_ret
                 } else {
                     ret = 1
                 }
             } else {
-                ret = max_concurrent_renders - final_queue_size
+                ret = max_concurrent_renders - Int(final_queue_size)
             }
             let num_images = await image_sequence.numberOfResidentImages
 
@@ -227,15 +217,17 @@ class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemover> {
                      output_filename: String,
                      test_paint_filename tpfo: String?) async throws -> FrameAirplaneRemover
     {
-        let frame = try await FrameAirplaneRemover(imageSequence: image_sequence,
+        let frame = try await FrameAirplaneRemover(with: config,
+                                                   imageSequence: image_sequence,
                                                    atIndex: frame_index,
                                                    otherFrameIndexes: otherFrameIndexes,
                                                    outputFilename: output_filename,
                                                    testPaintFilename: tpfo,
-                                                   outlierOutputDirname: outlier_output_dirname,
-                                                   maxPixelDistance: max_pixel_distance,
-                                                   minPixelDistance: min_pixel_distance,
-                                                   minGroupSize: min_group_size)
+                                                   outlierOutputDirname: outlier_output_dirname
+        /*,
+                                                    maxPixelDistance: max_pixel_distance,
+                                                    minPixelDistance: min_pixel_distance,
+                                                   minGroupSize: min_group_size*/)
         
         if should_write_outlier_group_files {
             await frame.writeOutlierGroupFiles()

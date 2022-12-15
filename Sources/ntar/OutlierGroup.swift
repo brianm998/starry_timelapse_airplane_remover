@@ -332,7 +332,7 @@ actor OutlierGroup: CustomStringConvertible, Hashable, Equatable {
     }
 
     private var paintScoreFromBrightness: Double {
-        let mpd = frame.max_pixel_distance
+        let mpd = frame.config.max_pixel_distance
         if self.brightness < mpd {
             return 0
         } else {
