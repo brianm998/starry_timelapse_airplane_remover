@@ -128,6 +128,18 @@ let center_line_theta_diff: Double = 18 // used in outlier streak detection
                                         // 25 is too large
 
 
+// the minimum outlier group size at the top of the screen
+// smaller outliers at the top are discarded early on
+let min_group_size_at_top = 400
+
+// what percentage of the top of the screen is considered far enough
+// above the horizon to not need really small outlier groups
+// between the bottom and the top of this area, the minimum
+// outlier group size increases
+let upper_sky_percentage: Double = 66 // top 66% of the screen
+
+
+
 // these parameters are used to throw out outlier groups from the
 // initial list to consider.  Smaller groups than this must have
 // a hough score this big or greater to be included.

@@ -406,13 +406,13 @@ actor FrameAirplaneRemover: Equatable {
                 
                 // don't do if this bounding box borders an edge
                 if min_y != 0,
-                   min_x != 0   // XXX add max boundries too
+                   min_x != 0,
+                   max_x < width - 1,
+                   max_y < height - 1
                 {
-                    let min_group_size_at_top = 400 // XXX hardcoded constant
-
                     let group_center_y = bounding_box.center.y
 
-                    let upper_area_size = Double(height)*0.66 // top 66% of the screen
+                    let upper_area_size = Double(height)*upper_sky_percentage/100
 
                     if group_center_y < Int(upper_area_size) {
                         // 1 if at top, 0 if at bottom of the upper area
@@ -452,8 +452,6 @@ actor FrameAirplaneRemover: Equatable {
                                                      max_pixel_distance: max_pixel_distance)
                 let hough_score = await new_outlier.paintScore(from: .houghTransform)
                 //let surface_area_score = await new_outlier.paintScore(from: .surfaceAreaRatio)
-
-                // XXX check more here, this fails for some small planes near horizon
 
                 if group_size < max_must_look_like_line_size, // XXX global
                    hough_score < max_must_look_like_line_score, // XXX global

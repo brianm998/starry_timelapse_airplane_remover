@@ -597,7 +597,7 @@ fileprivate func run_final_streak_pass(frames: [FrameAirplaneRemover]) async {
                     
                     if houghScore > 0.007 { // XXX constant
                         if let streak = 
-                             await streak_from(group: group, // XXX really start from ends of existing streak, not group, which could be in the middle
+                             await streak_from(group: group, 
                                                frames: frames,
                                                startingIndex: batch_index+1,
                                                potentialStreak: &potential_streak)
@@ -739,7 +739,7 @@ func streak_from(group: OutlierGroup,
             let houghScore = await other_group.paintScore(from: .houghTransform)
 
             // XXX constant  VVV 
-            if houghScore > 0.007 /*medium_hough_line_score*/ &&
+            if houghScore > 0.007 &&
                  distance < best_distance &&
                  (theta_diff < final_theta_diff || abs(theta_diff - 180) < final_theta_diff) &&
                  ((center_line_theta_diff_1 < center_line_theta_diff ||
@@ -754,7 +754,7 @@ func streak_from(group: OutlierGroup,
 
                 best_group = other_group
                 best_distance = distance
-                best_frame_index = frame_index // XXX this WAS wrong
+                best_frame_index = frame_index
             } else {
                 Log.v("frame \(frame.frame_index) \(other_group) doesn't match \(group) houghScore \(houghScore) medium_hough_line_score \(medium_hough_line_score) distance \(distance) best_distance \(best_distance) theta_diff \(theta_diff) rho_diff \(rho_diff) center_line_theta_diff_1 \(center_line_theta_diff_1) center_line_theta_diff_2 \(center_line_theta_diff_2) center_line_theta \(center_line_theta) last \(last_group_line_theta) other \(other_group_line_theta)")
             }
