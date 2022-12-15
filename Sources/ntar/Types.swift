@@ -42,6 +42,11 @@ struct BoundingBox {
         let height = Double(self.height)
         return sqrt(width*width + height*height)
     }
+
+    var center: Coord {
+        Coord(x: Int(Double(self.min.x) + Double(self.width)/2),
+              y: Int(Double(self.min.y) + Double(self.height)/2))
+    }
     
     func centerDistance(to other: BoundingBox) -> Double {
         let center_1_x = Double(self.min.x) + Double(self.width)/2

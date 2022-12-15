@@ -58,16 +58,6 @@ todo:
    for example one frame has a known line, and next frame has another group
    w/ similar theta/rho that is not painted, but is the same object
 
- - perhaps identify smaller groups that are airplanes by % of solidness?
-   i.e. no missing pixels in the middle
-   oftentimes airplane streaks close to the horizon don't register as lines via hough transform
-   because they are too wide and not long enough.  But they are usually solid.
-
- - false positives are lower now, but still occur sometimes
-   try fixing PaintReason.goodScore cases
-   perhaps better single group hough transform analysis?
-   look at more lines and the distribution of them
-   
  - make the info logging better
 
  - airplanes have:
@@ -89,10 +79,7 @@ todo:
 
  - apply the same center theta outlier logic to outliers within the same frame
 
- - attempt to reduce false positives by applying .looksLikeALine values to streaks
-   i.e. don't trush the theta from hough transform when looksLikeALine score is low
-
- - find some way to ignore groups on the horizon, it's a problem for moving timelapses,
+ - find some way to ignore groups of the horizon, it's a problem for moving timelapses,
    can cause the background to skip badly
    perhaps detecting contrast changes on the edge?
    i.e. notice when neighboring pixels of the group are brighter on one side than the other.
@@ -105,18 +92,9 @@ todo:
     
  - look into async file io
 
- - find something instead of a hard outlier threshold.
-
- - fix false positive outliers w/ -b 10.0 on test_a9_20_crop
-   seems to be bad streak detection problem
-
- - add command line option to allow writing output dirs to a different place
-   
  - notice when disk fills up, and pause processing until able to save
 
  - speed up inter-frame analysis
-
- - calculate surface area vs volume stats for airplanes and not airplanes
 
  - make distance in FinalProcessor more accurate and faster
 
@@ -129,9 +107,6 @@ todo:
 
  - handle case where disk fills up better, right now it just keeps running but not saving anything
  - add feature to ensure available disk space before running (with command line disable)
-
-
- - see what happens when max concurrent renders stays constant, or is allowed to go a bit higher
 
  */
 
@@ -179,8 +154,9 @@ let memory_size_gigs = ProcessInfo.processInfo.physicalMemory/(1024*1024*1024)
 // 0.0.10 add alpha on soft outlier boundries, speed up final process some, fix memory problem
 // 0.0.11 fix soft outlier boundries, better constants, initial group filter
 // 0.0.12 fix a streak bug, other small fixes
+// 0.1.0 added height based size constraints, runs faster, gets 95% or more airplanes
 
-let ntar_version = "0.0.12"
+let ntar_version = "0.1.0"
 
 @main
 struct Ntar: ParsableCommand {

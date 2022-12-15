@@ -400,7 +400,35 @@ actor FrameAirplaneRemover: Equatable {
                                                max: Coord(x: max_x, y: max_y))
                 let group_brightness = UInt(group_amount) / group_size
 
+                // first apply a height based distinction on the group size,
+                // to allow smaller groups lower in the sky, and not higher up.
+                // can greatly reduce the outlier group count
+                
+                // don't do if this bounding box borders an edge
+                if min_y != 0,
+                   min_x != 0   // XXX add max boundries too
+                {
+                    let min_group_size_at_top = 400 // XXX hardcoded constant
 
+                    let group_center_y = bounding_box.center.y
+
+                    let upper_area_size = Double(height)*0.66 // top 66% of the screen
+
+                    if group_center_y < Int(upper_area_size) {
+                        // 1 if at top, 0 if at bottom of the upper area
+                        let how_close_to_top = (upper_area_size - Double(group_center_y)) / upper_area_size
+                        let min_size_for_this_group = min_group_size + Int(Double(min_group_size_at_top - min_group_size) * how_close_to_top)
+                        Log.v("min_size_for_this_group \(min_size_for_this_group) how_close_to_top \(how_close_to_top) group_center_y \(group_center_y) height \(height)")
+                        if group_size < min_size_for_this_group {
+                            Log.d("frame \(frame_index) skipping group of size \(group_size) < \(min_size_for_this_group) @ center_y \(group_center_y)")
+                            continue
+                        }
+                    }
+
+                }
+
+                // next collect the amounts
+                
                 var outlier_amounts = [UInt32](repeating: 0, count: bounding_box.width*bounding_box.height)
                 for x in min_x ... max_x {
                     for y in min_y ... max_y {
