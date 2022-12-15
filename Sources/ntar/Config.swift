@@ -12,6 +12,10 @@ You should have received a copy of the GNU General Public License along with nta
 
 */
 
+func sixteenBitVersion(ofPercentage percentage: Double) -> UInt16 {
+    return UInt16((percentage/100)*Double(0xFFFF))
+}
+
 struct Config {
 
     init() {
@@ -27,10 +31,10 @@ struct Config {
         self.writeOutlierGroupFiles = false
 
         // XXX 16 bit hardcode
-        self.min_pixel_distance = UInt16((outlierMaxThreshold/100)*Double(0xFFFF))
+        self.min_pixel_distance = sixteenBitVersion(ofPercentage: outlierMaxThreshold)
 
         // XXX 16 bit hardcode
-        self.max_pixel_distance = UInt16((outlierMinThreshold/100)*Double(0xFFFF))
+        self.max_pixel_distance = sixteenBitVersion(ofPercentage: outlierMinThreshold)
     }
 
     init(outputPath: String?,
@@ -59,9 +63,11 @@ struct Config {
         self.image_sequence_path = imageSequencePath
         self.writeOutlierGroupFiles = writeOutlierGroupFiles
 
-        self.min_pixel_distance = UInt16((outlierMaxThreshold/100)*Double(0xFFFF)) // XXX 16 bit hardcode
+        // XXX 16 bit hardcode
+        self.min_pixel_distance = sixteenBitVersion(ofPercentage: outlierMaxThreshold)
 
-        self.max_pixel_distance = UInt16((outlierMinThreshold/100)*Double(0xFFFF)) // XXX 16 bit hardcode
+        // XXX 16 bit hardcode
+        self.max_pixel_distance = sixteenBitVersion(ofPercentage: outlierMinThreshold)
     }
 
     // the base dir under which to create dir(s) for output sequence(s)
@@ -127,6 +133,7 @@ struct Config {
     // a hough score this big or greater to be included.
     let max_must_look_like_line_size: Int = 500
     let max_must_look_like_line_score: Double = 0.25
+    let surface_area_to_size_max = 0.5
 
 
     let supported_image_file_types = [".tif", ".tiff"] // XXX move this out

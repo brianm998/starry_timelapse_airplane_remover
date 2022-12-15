@@ -120,7 +120,6 @@ actor FrameAirplaneRemover: Equatable {
             otherFrames.append(otherFrame)
         }
         
-        // XXX move this out of class memory, and just use it for populating the outlier list
         // need to have the OutlierGroup class contain a mini version of this for each one
         
         // one dimentional array mirroring pixels indexed by y*width + x
@@ -159,7 +158,8 @@ actor FrameAirplaneRemover: Equatable {
                             Log.d("frame \(frame_index) detected outliers in \(y) rows")
                         }
                         for x in 0 ..< width {
-                            let offset = (y * width*3) + (x * 3) // XXX hardcoded 3's
+                            let cpp = 3 // number of components per pixel
+                            let offset = (y * width*cpp) + (x * cpp)
 
                             // rgb values of the image we're modifying at this x,y
                             let orig_red = orig_image_pixels[offset]
@@ -458,7 +458,7 @@ actor FrameAirplaneRemover: Equatable {
 
                 if group_size < config.max_must_look_like_line_size,
                    hough_score < config.max_must_look_like_line_score,
-                   new_outlier.surfaceAreaToSizeRatio > 0.5 // XXX constant
+                   new_outlier.surfaceAreaToSizeRatio > config.surface_area_to_size_max
                 {
                     // ignore small groups that have a bad hough score
                     //Log.e("frame \(frame_index) ignoring outlier \(new_outlier) with hough score \(hough_score) satsr \(satsr) surface_area_score \(surface_area_score)")

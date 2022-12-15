@@ -23,9 +23,11 @@ You should have received a copy of the GNU General Public License along with nta
 class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemover> {
 
     let config: Config
-    
+
+    // the name of the directory to create when writing test paint images
     let test_paint_output_dirname: String
 
+    // the name of the directory to create when writing outlier group files
     let outlier_output_dirname: String
 
     var final_processor: FinalProcessor?    
@@ -33,9 +35,7 @@ class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemover> {
     init(with config: Config) throws {
         self.config = config
 
-        let formatted_pixel_distance = String(format: "%0.1f", config.max_pixel_distance)        
-
-        var basename = "\(config.image_sequence_dirname)-ntar-v-\(ntar_version)-\(formatted_pixel_distance)-\(config.minGroupSize)-\(config.assumeAirplaneSize)"
+        var basename = "\(config.image_sequence_dirname)-ntar-v-\(ntar_version)"
         basename = basename.replacingOccurrences(of: ".", with: "_")
         test_paint_output_dirname = "\(config.outputPath)/\(basename)-test-paint"
         outlier_output_dirname = "\(config.outputPath)/\(basename)-outliers"
