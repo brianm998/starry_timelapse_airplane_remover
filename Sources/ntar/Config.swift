@@ -63,20 +63,43 @@ struct Config {
 
         self.max_pixel_distance = UInt16((outlierMinThreshold/100)*Double(0xFFFF)) // XXX 16 bit hardcode
     }
-    
+
+    // the base dir under which to create dir(s) for output sequence(s)
     let outputPath: String
+    
+    // percentage difference between same pixels on different frames to consider an outlier
     let outlierMaxThreshold: Double
-    let outlierMinThreshold: Double
-    let minGroupSize: Int
-    let assumeAirplaneSize: Int
-    let numConcurrentRenders: Int
-    let test_paint: Bool
-    let image_sequence_dirname: String
-    let image_sequence_path: String
-    let writeOutlierGroupFiles: Bool
+
+    // computed over 16 bits per pixel from the value above
     let min_pixel_distance: UInt16
+
+    // min percentage difference between same pixels on different frames to consider an outlier
+    let outlierMinThreshold: Double
+
+    // computed over 16 bits per pixel from the value above
     let max_pixel_distance: UInt16
     
+    // groups smaller than this are ignored
+    let minGroupSize: Int
+
+    // groups larger than this are assumed to be airplanes and painted over
+    let assumeAirplaneSize: Int
+
+    // how many cpu cores should we max out at?
+    let numConcurrentRenders: Int
+
+    // write out test paint images
+    let test_paint: Bool
+    
+    // the name of the directory containing the input sequence
+    let image_sequence_dirname: String
+
+    // where the input image sequence dir lives
+    let image_sequence_path: String
+    
+    // write out individual outlier group images
+    let writeOutlierGroupFiles: Bool
+
     let medium_hough_line_score: Double = 0.4 // close to being a line, not really far
     // how far in each direction do we go when doing final processing?
     let number_final_processing_neighbors_needed = 1 // in each direction

@@ -28,34 +28,10 @@ class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemover> {
 
     let outlier_output_dirname: String
 
-    // the following properties get included into the output videoname
-    
-    // difference between same pixels on different frames to consider an outlier
-    //let max_pixel_distance: UInt16
-
-    // min difference between same pixels on different frames to consider an outlier
-    //let min_pixel_distance: UInt16
-    
-    // groups smaller than this are ignored
-    let min_group_size: Int
-
-    // groups larger than this are assumed to be airplanes and painted over
-    let assume_airplane_size: Int
-    
-    // write out test paint images
-    let test_paint: Bool
-
-    // write out individual outlier group images
-    let should_write_outlier_group_files: Bool
-    
     var final_processor: FinalProcessor?    
 
     init(with config: Config) throws {
         self.config = config
-        self.test_paint = config.test_paint
-        self.should_write_outlier_group_files = config.writeOutlierGroupFiles
-        self.min_group_size = config.minGroupSize
-        self.assume_airplane_size = config.assumeAirplaneSize
 
         let formatted_pixel_distance = String(format: "%0.1f", config.max_pixel_distance)        
 
@@ -114,8 +90,8 @@ class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemover> {
 
     // called by the superclass at startup
     override func startup_hook() throws {
-        if test_paint { try mkdir(test_paint_output_dirname) }
-        if should_write_outlier_group_files {
+        if config.test_paint { try mkdir(test_paint_output_dirname) }
+        if config.writeOutlierGroupFiles {
             try mkdir(outlier_output_dirname)
         }
     }
@@ -139,7 +115,7 @@ class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemover> {
             otherFrameIndexes.append(index+1)
         }
         
-        let test_paint_filename = self.test_paint ?
+        let test_paint_filename = self.config.test_paint ?
           "\(self.test_paint_output_dirname)/\(base_name)" : nil
         
         // the other frames that we use to detect outliers and repaint from
@@ -227,9 +203,9 @@ class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemover> {
         /*,
                                                     maxPixelDistance: max_pixel_distance,
                                                     minPixelDistance: min_pixel_distance,
-                                                   minGroupSize: min_group_size*/)
+                                                   minGroupSize: config.minGroupSize*/)
         
-        if should_write_outlier_group_files {
+        if config.writeOutlierGroupFiles {
             await frame.writeOutlierGroupFiles()
         }
         
