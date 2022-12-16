@@ -55,7 +55,7 @@ class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemover> {
                 Task {
                     var progress = Double(number_of_unprocessed)/Double(image_sequence_size)
                     await updateable.log(name: "unprocessed frames",
-                                         message: progress_bar(length: 50, progress: progress) + " \(number_of_unprocessed) frames waiting to process",
+                                         message: reverse_progress_bar(length: 50, progress: progress) + " \(number_of_unprocessed) frames waiting to process",
                                          value: -1)
                 }
             }

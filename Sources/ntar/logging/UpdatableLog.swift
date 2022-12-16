@@ -41,6 +41,22 @@ func progress_bar(length: Int, progress: Double) -> String {
     return progress_bar
 }
 
+// progress is between 0 and 1
+func reverse_progress_bar(length: Int, progress: Double) -> String {
+
+    var progress_bar: String = TerminalColor.blue.rawValue + "["
+    for i in (0 ..< length).reversed() {
+        if Double(i)/Double(length) < progress {
+            progress_bar += TerminalColor.green.rawValue + "*";
+        } else {
+            progress_bar += TerminalColor.yellow.rawValue + "-";
+        }
+    }
+    progress_bar += TerminalColor.blue.rawValue+"]"+TerminalColor.reset.rawValue;
+
+    return progress_bar
+}
+
 class UpdateableLogLine {
     let name: String            // a unique name
     var message: String         // the current log message
