@@ -20,7 +20,10 @@ class ImageSequenceProcessor<T> {
     
     // actors
     var method_list = MethodList<T>()       // a list of methods to process each frame
-    let number_running = NumberRunning() // how many methods are running right now
+
+    // how many methods are running right now
+    let number_running: NumberRunning
+    
     var image_sequence: ImageSequence    // the sequence of images that we're processing
 
     // concurrent dispatch queue so we can process frames in parallel
@@ -37,6 +40,9 @@ class ImageSequenceProcessor<T> {
          supported_image_file_types: [String],
          number_final_processing_neighbors_needed: Int) throws
     {
+        self.number_running = NumberRunning(in: " frames processing outliers",
+                                            max: max_concurrent,
+                                            position: 0) 
         self.max_concurrent_renders = max_concurrent
         self.image_sequence_dirname = image_sequence_dirname
         self.output_dirname = output_dirname

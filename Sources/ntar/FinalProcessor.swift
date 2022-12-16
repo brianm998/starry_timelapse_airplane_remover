@@ -72,6 +72,17 @@ actor FinalProcessor {
         self.image_sequence = imageSequence
         self.final_queue = FinalQueue(max_concurrent: config.numConcurrentRenders,
                                       dispatchGroup: dispatch_group)
+
+
+        if let updateable = updateable {
+            Task {
+                await updateable.log(name: "total_progress",
+                                     message: progress_bar(length: 40,
+                                                           progress: 0) + " 0 / \(self.frames.count) frames finished",
+                                     value: 100)
+            }
+        }
+        
     }
 
     func add(frame: FrameAirplaneRemover) {
@@ -102,6 +113,16 @@ actor FinalProcessor {
     var framesBetween: Int {
         var ret = max_added_index - current_frame_index
         if ret < 0 { ret = 0 }
+
+        if let updateable = updateable {
+            Task {
+                var progress = Double(ret)/Double(config.numConcurrentRenders)
+                await updateable.log(name: "frames waiting final processing",
+                                     message: progress_bar(length: 40, progress: progress) + " \(ret) frames waiting for final processing",
+                                     value: 2)
+            }
+        }
+        
         return ret
     }
     
@@ -216,6 +237,19 @@ actor FinalProcessor {
                         await self.final_queue.add(atIndex: frame_to_finish.frame_index) {
                             Log.i("frame \(frame_to_finish.frame_index) finishing")
                             try await frame_to_finish.finish()
+
+                            if let updateable = updateable {
+                                let progress =
+                                  Double(frame_to_finish.frame_index) /
+                                  Double(await self.frames.count)
+                                Task {
+                                    await updateable.log(name: "total_progress",
+                                                         message: progress_bar(length: 40,
+                                                                               progress: progress) + " \(frame_to_finish.frame_index) / \(self.frames.count) frames finished",
+                                                         value: 100)
+                                }
+                            }
+                            
                             Log.i("frame \(frame_to_finish.frame_index) finished")
                         }
                         let after_count = await self.final_queue.method_list.count

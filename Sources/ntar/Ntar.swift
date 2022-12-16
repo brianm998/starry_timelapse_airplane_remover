@@ -39,8 +39,6 @@ todo:
    use some tool like this to avoid forcing a reboot:
    https://stackoverflow.com/questions/71209362/how-to-check-system-memory-usage-with-swift
 
- - make a better config system than the hardcoded constants below
-
  - look for existing file before painting
    minor help when restarting after a crash, frames that need to be re-calculated but already exist
    number_final_processing_neighbors_needed before the last existing one.
@@ -119,6 +117,9 @@ todo:
 // this is here so that PaintReason can see it
 var config: Config = Config()
 
+@available(macOS 10.15, *) 
+var updateable: UpdateableLog?
+
 
 // 0.0.2 added more detail group hough transormation analysis, based upon a data set
 // 0.0.3 included the data set analysis to include group size and fill, and to use histograms
@@ -141,7 +142,7 @@ struct Ntar: ParsableCommand {
     @Option(name: [.customShort("c"), .customLong("console-log-level")], help:"""
         The logging level that ntar will output directly to the terminal.
         """)
-    var terminalLogLevel: Log.Level = .info
+    var terminalLogLevel: Log.Level?/* = .info*/
 
     @Option(name: [.short, .customLong("file-log-level")], help:"""
         If present, ntar will output a file log at the given level.
@@ -310,7 +311,25 @@ struct Ntar: ParsableCommand {
             Log.name = "ntar-log"
             Log.nameSuffix = input_image_sequence_name
 
-            Log.handlers[.console] = ConsoleLogHandler(at: terminalLogLevel)
+            if let terminalLogLevel = terminalLogLevel {
+                // use console logging
+                Log.handlers[.console] = ConsoleLogHandler(at: terminalLogLevel)
+            } else {
+                // enable updateable logging when not doing console logging
+                if #available(macOS 10.15, *) {
+                    updateable = UpdateableLog()
+
+                    if let updateable = updateable {
+                        Task {
+                            await updateable.log(name: "ntar",
+                                                 message: "Ntar v\(ntar_version) is running",
+                                                 value: -1)
+                            
+                        }
+                    }
+                    
+                }
+            }
 
             config = Config(outputPath: output_path,
                             outlierMaxThreshold: outlierMaxThreshold,

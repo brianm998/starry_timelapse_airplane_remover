@@ -20,7 +20,10 @@ You should have received a copy of the GNU General Public License along with nta
 actor FinalQueue {
     // actors
     let method_list = MethodList<Void>()       // a list of methods to process each frame
-    let number_running = NumberRunning() // how many methods are running right now
+
+    // how many methods are running right now
+    let number_running: NumberRunning
+
     let max_concurrent: Int
     var should_run = true
 
@@ -29,6 +32,9 @@ actor FinalQueue {
     init(max_concurrent: Int = 8, dispatchGroup dispatch_group: DispatchHandler) {
         self.max_concurrent = max_concurrent
         self.dispatch_group = dispatch_group
+        self.number_running = NumberRunning(in: "frames finishing",
+                                            max: max_concurrent,
+                                            position: 2) 
     }
 
     func finish() {

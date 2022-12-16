@@ -136,10 +136,7 @@ public class Log {
 
         If handlers are not set elsewhere, the following will then apply:
      */
-    public static var handlers: [Log.Output: LogHandler] =
-      [
-        .console: ConsoleLogHandler(at: .debug),
-      ]
+    public static var handlers: [Log.Output: LogHandler] = [ : ]
     
     public enum Output {
         case console

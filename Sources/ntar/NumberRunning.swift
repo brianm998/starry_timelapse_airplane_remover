@@ -15,16 +15,41 @@ You should have received a copy of the GNU General Public License along with nta
 actor NumberRunning {
     private var count: UInt = 0
 
+    let name: String
+    let max: Int
+    let position: Double
+    
+    init(in name: String, max: Int, position: Double) {
+        self.name = name
+        self.max = max
+        self.position = position
+    }
+    
     public func increment() {
-        count = count + 1 
+        count += 1
+        log()
     }
 
     public func decrement() {
-        count = count - 1 
+        count -= 1 
+        log()
     }
 
     public func currentValue() -> UInt {
         return count
     }
+
+    private func log() {
+        if let updateable = updateable {
+            let count_to_log = count
+            Task {
+                var progress = Double(count_to_log)/Double(max)
+                await updateable.log(name: self.name,
+                                     message: progress_bar(length: max, progress: progress) + " \(count_to_log) \(name)",
+                                     value: self.position)
+                     
+            }
+        }
+    }    
 }
 
