@@ -107,10 +107,27 @@ actor FinalProcessor {
 
     private func log() {
         if let updateable = updateable {
+            // show what frames are in place to be processed
             Task {
-                var progress = Double(self.framesBetween)/Double(self.config.numConcurrentRenders)
+                var message: String = TerminalColor.blue.rawValue + "["
+                var count = 0
+                let end = current_frame_index + config.numConcurrentRenders
+                for i in current_frame_index ..< end {
+                    if i >= self.frames.count {
+                        message += TerminalColor.yellow.rawValue + "-";
+                    } else {
+                        if let _ = self.frames[i] {
+                            message += TerminalColor.green.rawValue + "*";
+                            count += 1
+                        } else {
+                            message += TerminalColor.yellow.rawValue + "-";
+                        }
+                    }
+                }
+                message += TerminalColor.blue.rawValue+"]"+TerminalColor.reset.rawValue;
+                message += " \(count) frames awaiting final processing"
                 await updateable.log(name: "frames waiting final processing",
-                                     message: progress_bar(length: self.config.numConcurrentRenders, progress: progress) + " \(self.framesBetween) frames waiting for final processing",
+                                     message: message,
                                      value: 2)
             }
         }
@@ -229,6 +246,7 @@ actor FinalProcessor {
                         // identify all existing streaks with length of only 2
                         // try to find other nearby streaks, if not found,
                         //then skip for new not paint reason
+                        await frame_to_finish.set(state: .interFrameProcessing)
                         
                         Log.d("running final streak processing on frame \(frame_to_finish.frame_index)")
 
@@ -239,6 +257,7 @@ actor FinalProcessor {
                         //let final_frame_group_name = "final frame \(frame_to_finish.frame_index)"
                         Log.d("frame \(frame_to_finish.frame_index) adding at index ")
                         let before_count = await self.final_queue.method_list.count
+                        await frame_to_finish.set(state: .outlierProcessingComplete)
                         await self.final_queue.add(atIndex: frame_to_finish.frame_index) {
                             Log.i("frame \(frame_to_finish.frame_index) finishing")
                             try await frame_to_finish.finish()
@@ -249,7 +268,7 @@ actor FinalProcessor {
                                   Double(await self.frames.count)
                                 Task {
                                     await updateable.log(name: "total_progress",
-                                                         message: progress_bar(length: 40,
+                                                         message: progress_bar(length: 50,
                                                                                progress: progress) + " \(frame_to_finish.frame_index) / \(self.frames.count) frames finished",
                                                          value: 100)
                                 }

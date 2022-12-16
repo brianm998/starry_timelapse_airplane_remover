@@ -23,16 +23,34 @@ enum LoopReturn {
     case `break`
 }
 
+enum FrameProcessingState {
+    case unprocessed
+    case detectingOutliers
+    case pruningOutliers
+    case caculatingOutlierBounds
+    case readyForInterFrameProcessing
+    case interFrameProcessing
+    case outlierProcessingComplete
+    case painting
+    case writingOutputFile
+    case complete
+}
+
 @available(macOS 10.15, *)
-actor FrameAirplaneRemover: Equatable { 
+actor FrameAirplaneRemover: Equatable {
+
+    var state: FrameProcessingState = .unprocessed {
+        didSet {
+            // XXX trigger updateable log update
+        }
+    }
+    func set(state: FrameProcessingState) { self.state = state }
+    
     let width: Int
     let height: Int
     let bytesPerPixel: Int
     let bytesPerRow: Int
     let otherFrameIndexes: [Int] // used in found outliers and paint only
-//    let max_pixel_distance: UInt16
-//    let min_pixel_distance: UInt16
-//    let min_group_size: Int
     let frame_index: Int
     
     var test_paint_filename: String = "" // the filename to write out test paint data to
@@ -112,6 +130,8 @@ actor FrameAirplaneRemover: Equatable {
         guard let image = try await image_sequence.getImage(withName: image_sequence.filenames[frame_index])
         else { throw "Couldn't load image" }
 
+        self.state = .detectingOutliers
+        
         var otherFrames: [PixelatedImage] = []
 
         for otherFrameIndex in otherFrameIndexes {
@@ -223,6 +243,7 @@ actor FrameAirplaneRemover: Equatable {
 
         // XXX was a boundary
         
+        self.state = .pruningOutliers
         Log.i("frame \(frame_index) pruning outliers")
         
         // go through the outliers and link together all the outliers that are adject to eachother,
@@ -341,6 +362,7 @@ actor FrameAirplaneRemover: Equatable {
 
         var group_amounts: [String: UInt] = [:] // keyed by group name, average brightness of each group
 
+        self.state = .caculatingOutlierBounds
         Log.i("frame \(frame_index) calculating outlier group bounds")
         var group_min_x: [String:Int] = [:]   // keyed by group name, image bounds of each group
         var group_min_y: [String:Int] = [:]
@@ -475,6 +497,7 @@ actor FrameAirplaneRemover: Equatable {
                   
             }
         }
+        self.state = .readyForInterFrameProcessing
         Log.i("frame \(frame_index) has found \(outlier_groups.count) outlier groups to consider")
     }
 
@@ -654,6 +677,8 @@ actor FrameAirplaneRemover: Equatable {
             fatalError("couldn't copy image data")
         }
         var output_data = _mut_data
+
+        self.state = .painting
         
         var test_paint_data: Data = Data()
         if test_paint {
@@ -677,9 +702,11 @@ actor FrameAirplaneRemover: Equatable {
         Log.d("frame \(self.frame_index) writing output files")
 
         do {
+            self.state = .writingOutputFile
             try await self.writeTestFile(withData: test_paint_data)
             // write frame out as a tiff file after processing it
             try image.writeTIFFEncoding(ofData: output_data,  toFilename: self.output_filename)
+            self.state = .complete
         } catch {
             Log.e(error)
         }
