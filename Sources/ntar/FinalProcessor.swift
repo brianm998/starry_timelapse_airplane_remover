@@ -77,7 +77,7 @@ actor FinalProcessor {
         if let updateable = updateable {
             Task {
                 await updateable.log(name: "total_progress",
-                                     message: progress_bar(length: 40,
+                                     message: progress_bar(length: 50,
                                                            progress: 0) + " 0 / \(self.frames.count) frames finished",
                                      value: 100)
             }
@@ -92,6 +92,7 @@ actor FinalProcessor {
             max_added_index = index
         }
         frames[index] = frame
+        log()
     }
 
     func clearFrame(at index: Int) {
@@ -100,8 +101,21 @@ actor FinalProcessor {
     
     func incrementCurrentFrameIndex() {
         current_frame_index += 1
+
+        log()
     }
 
+    private func log() {
+        if let updateable = updateable {
+            Task {
+                var progress = Double(self.framesBetween)/Double(self.config.numConcurrentRenders)
+                await updateable.log(name: "frames waiting final processing",
+                                     message: progress_bar(length: self.config.numConcurrentRenders, progress: progress) + " \(self.framesBetween) frames waiting for final processing",
+                                     value: 2)
+            }
+        }
+    }
+    
     func frame(at index: Int) -> FrameAirplaneRemover? {
         return frames[index]
     }
@@ -114,15 +128,6 @@ actor FinalProcessor {
         var ret = max_added_index - current_frame_index
         if ret < 0 { ret = 0 }
 
-        if let updateable = updateable {
-            Task {
-                var progress = Double(ret)/Double(config.numConcurrentRenders)
-                await updateable.log(name: "frames waiting final processing",
-                                     message: progress_bar(length: 40, progress: progress) + " \(ret) frames waiting for final processing",
-                                     value: 2)
-            }
-        }
-        
         return ret
     }
     

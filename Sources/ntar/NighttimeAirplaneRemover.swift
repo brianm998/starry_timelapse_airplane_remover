@@ -39,15 +39,36 @@ class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemover> {
         basename = basename.replacingOccurrences(of: ".", with: "_")
         test_paint_output_dirname = "\(config.outputPath)/\(basename)-test-paint"
         outlier_output_dirname = "\(config.outputPath)/\(basename)-outliers"
-        
+
+
         try super.init(imageSequenceDirname: "\(config.image_sequence_path)/\(config.image_sequence_dirname)",
                        outputDirname: "\(config.outputPath)/\(basename)",
                        maxConcurrent: config.numConcurrentRenders,
                        supported_image_file_types: config.supported_image_file_types,
-                       number_final_processing_neighbors_needed: config.number_final_processing_neighbors_needed)
+                       number_final_processing_neighbors_needed: config.number_final_processing_neighbors_needed);
 
+        let image_sequence_size = /*self.*/image_sequence.filenames.count
+        
+        self.remaining_images_closure = { number_of_unprocessed in
+            if let updateable = updateable {
+                // log number of unprocessed images here
+                Task {
+                    var progress = Double(number_of_unprocessed)/Double(image_sequence_size)
+                    await updateable.log(name: "unprocessed frames",
+                                         message: progress_bar(length: 50, progress: progress) + " \(number_of_unprocessed) frames waiting to process",
+                                         value: -1)
+                }
+            }
+        }
+        if let remaining_images_closure = remaining_images_closure {
+            Task {
+                await self.method_list.set(removeClosure: remaining_images_closure)
+                remaining_images_closure(await self.method_list.count)
+            }
+        }
+        
         let processor = FinalProcessor(with: config,
-                                       numberOfFrames: self.image_sequence.filenames.count,
+                                       numberOfFrames: image_sequence_size,
                                        dispatchGroup: dispatchGroup,
                                        imageSequence: image_sequence)
         

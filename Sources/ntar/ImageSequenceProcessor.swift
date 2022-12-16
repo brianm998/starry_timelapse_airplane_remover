@@ -33,12 +33,14 @@ class ImageSequenceProcessor<T> {
     var should_process: [Bool] = []       // indexed by frame number
     var existing_output_files: [Bool] = [] // indexed by frame number
 
+    var remaining_images_closure: ((Int) -> Void)?
     
     init(imageSequenceDirname image_sequence_dirname: String,
          outputDirname output_dirname: String,
          maxConcurrent max_concurrent: Int = 5,
          supported_image_file_types: [String],
-         number_final_processing_neighbors_needed: Int) throws
+         number_final_processing_neighbors_needed: Int/*,
+         remaining_images_closure: @escaping (Int) -> Void*/) throws
     {
         self.number_running = NumberRunning(in: " frames processing outliers",
                                             max: max_concurrent,
@@ -132,7 +134,7 @@ class ImageSequenceProcessor<T> {
             }
         }
 
-        return MethodList<T>(list: _method_list)
+        return MethodList<T>(list: _method_list, removeClosure: remaining_images_closure)
     }
 
     func startup_hook() throws {

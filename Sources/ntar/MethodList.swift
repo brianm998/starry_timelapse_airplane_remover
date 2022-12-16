@@ -15,21 +15,33 @@ You should have received a copy of the GNU General Public License along with nta
 @available(macOS 10.15, *) 
 actor MethodList<T> {
     var list: [Int : () async throws -> T]
-
-    init() {
+    var removeClosure: ((Int) -> Void)?
+    
+    init(removeClosure: ((Int) -> Void)? = nil) {
         self.list = [:]
+        self.removeClosure = removeClosure
     }
     
-    init(list: [Int : () async throws -> T]) {
+    init(list: [Int : () async throws -> T], removeClosure: ((Int) -> Void)? = nil) {
         self.list = list
+        self.removeClosure = removeClosure
     }
     
     func add(atIndex index: Int, method: @escaping () async throws -> T) {
         list[index] = method
     }
 
+    func set(removeClosure: @escaping (Int) -> Void) {
+        self.removeClosure = removeClosure
+    }
+    
     func removeValue(forKey key: Int) {
+        Log.w("removeValue(\(self.count))")
         list.removeValue(forKey: key)
+        if let removeClosure = removeClosure {
+            Log.e("removeClosure(\(self.count))")
+            removeClosure(self.count)
+        }
     }
     
     func value(forKey key: Int) async -> (() async throws -> T)? {
