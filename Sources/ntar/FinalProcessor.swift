@@ -628,8 +628,8 @@ fileprivate func run_final_streak_pass(frames: [FrameAirplaneRemover]) async {
         for (streak_name, airplane_streak) in await airplane_streaks.streaks {
             let first_member = airplane_streak[0]
             Log.d("analyzing streak \(streak_name) starting with group \(first_member.group) frame_index \(first_member.frame_index) with \(airplane_streak.count) members")
-            // XXX perhaps reject small streaks?
-            if airplane_streak.count < 3 {
+            if airplane_streak.count < 3 { // XXX hardcoded constant
+                // reject small streaks
                 Log.v("ignoring two member streak \(airplane_streak)")
                 continue
             } 

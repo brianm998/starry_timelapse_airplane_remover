@@ -137,4 +137,10 @@ struct Config {
 
 
     let supported_image_file_types = [".tif", ".tiff"] // XXX move this out
+
+    // XXX use this to try to avoid running out of memory somehow
+    // maybe determine megapixels of images, and guestimate usage and
+    // avoid spawaning too many threads?
+    let memory_size_bytes = ProcessInfo.processInfo.physicalMemory
+    let memory_size_gigs = ProcessInfo.processInfo.physicalMemory/(1024*1024*1024)
 }

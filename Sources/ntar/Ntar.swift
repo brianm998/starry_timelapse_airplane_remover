@@ -111,25 +111,14 @@ todo:
  - make a single config struct that holds all configuration values,
    both constants and command line params
 
+ - implement an updatable log like the timelapse render daemon
+   
  */
 
 
-// XXX make this a global Config ref instead
 // this is here so that PaintReason can see it
-var assume_airplane_size: Int = 5000 // don't bother spending the time to fully process
-
-// XXX here are some random global constants that maybe should be exposed somehow
-
-
-
 var config: Config = Config()
 
-
-// XXX use this to try to avoid running out of memory somehow
-// maybe determine megapixels of images, and guestimate usage and
-// avoid spawaning too many threads?
-let memory_size_bytes = ProcessInfo.processInfo.physicalMemory
-let memory_size_gigs = ProcessInfo.processInfo.physicalMemory/(1024*1024*1024)
 
 // 0.0.2 added more detail group hough transormation analysis, based upon a data set
 // 0.0.3 included the data set analysis to include group size and fill, and to use histograms
@@ -194,7 +183,7 @@ struct Ntar: ParsableCommand {
     @Option(name: .shortAndLong, help: """
         Outlier groups larger than this are assumed to be airplanes, and painted over.
         """)
-    var assumeAirplaneSize: Int = assume_airplane_size
+    var assumeAirplaneSize: Int = 5000
     
     @Option(name: .shortAndLong, help: """
         Max Number of frames to process at once.
@@ -232,8 +221,6 @@ struct Ntar: ParsableCommand {
     var image_sequence_dirname: String?
 
     mutating func run() throws {
-
-        assume_airplane_size = assumeAirplaneSize
         
         if version {
             print("""
@@ -352,20 +339,8 @@ struct Ntar: ParsableCommand {
                 Log.i("processing files in \(input_image_sequence_dirname)")
                 
                 if #available(macOS 10.15, *) {
-                    let eraser =
-                      try NighttimeAirplaneRemover(with: config)/*imageSequenceName: input_image_sequence_name,
-                                                   imageSequencePath: input_image_sequence_path,
-                                                   outputPath: output_path,
-                                                   maxConcurrent: UInt(numConcurrentRenders),
-                                                   maxPixelDistance: outlierMaxThreshold,
-                                                   minPixelDistance: outlierMinThreshold,
-                                                   minGroupSize: minGroupSize,
-                                                   assumeAirplaneSize: assume_airplane_size,
-                                                   testPaint: test_paint,
-                                                   writeOutlierGroupFiles: should_write_outlier_group_files)
-*/
+                    let eraser = try NighttimeAirplaneRemover(with: config)
                     Log.dispatchGroup = eraser.dispatchGroup.dispatch_group
-                    
                     try eraser.run()
                 } else {
                     Log.e("cannot run :(") // XXX make this better

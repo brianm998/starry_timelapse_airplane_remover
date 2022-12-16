@@ -52,7 +52,7 @@ enum PaintReason: Equatable, CaseIterable {
             switch self {
             case .assumed:
                 return """
-These outlier groups are painted over because they are larger than \(assume_airplane_size) pixels in size.
+These outlier groups are painted over because they are larger than \(config.assumeAirplaneSize) pixels in size.
 """
             case .goodScore:
                 return """
