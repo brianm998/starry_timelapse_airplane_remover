@@ -133,8 +133,9 @@ var updateable: UpdateableLog?
 // 0.0.11 fix soft outlier boundries, better constants, initial group filter
 // 0.0.12 fix a streak bug, other small fixes
 // 0.1.0 added height based size constraints, runs faster, gets 95% or more airplanes
+// 0.1.1 updateable logging, try to improve speed
 
-let ntar_version = "0.1.0"
+let ntar_version = "0.1.1"
 
 @main
 struct Ntar: ParsableCommand {

@@ -56,9 +56,7 @@ class ImageSequenceProcessor<T> {
         self.method_list = try assembleMethodList()
     }
 
-    func maxConcurrentRenders() async -> Int {
-        return max_concurrent_renders
-    }
+    func maxConcurrentRenders() async -> Int { max_concurrent_renders }
     
     func mkdir(_ path: String) throws {
         if !file_manager.fileExists(atPath: path) {
@@ -188,7 +186,7 @@ class ImageSequenceProcessor<T> {
                             await method_list.removeValue(forKey: next_method_key)
                             await self.number_running.increment()
                             //let name = "image sequence processor foobaz \(next_method_key)"
-                            group.addTask {
+                            group.addTask(priority: .background) {
                                 return try await next_method()
                             }
                         } else {

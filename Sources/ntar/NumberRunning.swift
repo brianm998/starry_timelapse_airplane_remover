@@ -25,31 +25,8 @@ actor NumberRunning {
         self.position = position
     }
     
-    public func increment() {
-        count += 1
-        log()
-    }
-
-    public func decrement() {
-        count -= 1 
-        log()
-    }
-
-    public func currentValue() -> UInt {
-        return count
-    }
-
-    private func log() {
-        if let updateable = updateable {
-            let count_to_log = count
-            Task {
-                var progress = Double(count_to_log)/Double(max)
-                await updateable.log(name: self.name,
-                                     message: progress_bar(length: max, progress: progress) + " \(count_to_log) \(name)",
-                                     value: self.position)
-                     
-            }
-        }
-    }    
+    public func increment() { count += 1 }
+    public func decrement() { count -= 1 }
+    public func currentValue() -> UInt { count }
 }
 

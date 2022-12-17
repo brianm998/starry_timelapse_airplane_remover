@@ -72,17 +72,6 @@ actor FinalProcessor {
         self.image_sequence = imageSequence
         self.final_queue = FinalQueue(max_concurrent: config.numConcurrentRenders,
                                       dispatchGroup: dispatch_group)
-
-
-        if let updateable = updateable {
-            Task {
-                await updateable.log(name: "total_progress",
-                                     message: progress_bar(length: 50,
-                                                           progress: 0) + " 0 / \(self.frames.count) frames finished",
-                                     value: 100)
-            }
-        }
-        
     }
 
     func add(frame: FrameAirplaneRemover) {
@@ -108,7 +97,7 @@ actor FinalProcessor {
     private func log() {
         if let updateable = updateable {
             // show what frames are in place to be processed
-            Task {
+            Task(priority: .high) {
                 var message: String = TerminalColor.blue.rawValue + "["
                 var count = 0
                 let end = current_frame_index + config.numConcurrentRenders
@@ -130,7 +119,7 @@ actor FinalProcessor {
                                      message: message,
                                      value: 2)
             }
-        }
+         }
     }
     
     func frame(at index: Int) -> FrameAirplaneRemover? {
@@ -261,19 +250,6 @@ actor FinalProcessor {
                         await self.final_queue.add(atIndex: frame_to_finish.frame_index) {
                             Log.i("frame \(frame_to_finish.frame_index) finishing")
                             try await frame_to_finish.finish()
-
-                            if let updateable = updateable {
-                                let progress =
-                                  Double(frame_to_finish.frame_index) /
-                                  Double(await self.frames.count)
-                                Task {
-                                    await updateable.log(name: "total_progress",
-                                                         message: progress_bar(length: 50,
-                                                                               progress: progress) + " \(frame_to_finish.frame_index) / \(self.frames.count) frames finished",
-                                                         value: 100)
-                                }
-                            }
-                            
                             Log.i("frame \(frame_to_finish.frame_index) finished")
                         }
                         let after_count = await self.final_queue.method_list.count
@@ -326,7 +302,7 @@ func really_final_streak_processing(onFrame frame: FrameAirplaneRemover,
     await withTaskGroup(of: Void.self) { taskGroup in
         for (streak_name, airplane_streak) in await airplane_streaks.streaks {
             if airplane_streak.count != 2 { continue }
-            taskGroup.addTask {
+            taskGroup.addTask(priority: .medium)  {
                 let first_member = airplane_streak[0]
                 let last_member = airplane_streak[1]
                 if last_member.frame_index == frame.frame_index || 
@@ -503,7 +479,7 @@ fileprivate func run_final_overlap_pass(frames: [FrameAirplaneRemover]) async {
 
                     guard let og_line = await og.line else { return .continue }
                     
-                    taskGroup.addTask {
+                    taskGroup.addTask(priority: .medium) {
                         
                         let other_line_theta = og_line.theta
                         let other_line_rho = og_line.rho
@@ -614,7 +590,7 @@ fileprivate func run_final_streak_pass(frames: [FrameAirplaneRemover]) async {
                         return .continue
                     }
                 }
-                taskGroup.addTask {
+                taskGroup.addTask(priority: .medium) {
                         
                     // grab a streak that we might already be in
                         
@@ -691,7 +667,7 @@ fileprivate func run_final_streak_pass(frames: [FrameAirplaneRemover]) async {
                 Log.v("ignoring two member streak \(airplane_streak)")
                 continue
             } 
-            taskGroup.addTask {
+            taskGroup.addTask(priority: .medium) {
                 var verbotten = false
                 var was_already_paintable = false
                 //let index_of_first_streak = airplane_streak[0].frame_index

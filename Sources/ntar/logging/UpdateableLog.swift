@@ -117,9 +117,9 @@ actor UpdateableLog {
         let screen_char_width = 120 // XXX fix this, get it from the console somehow
 
         var index = self.list.count
-        for line in self.list {
+        for _ in self.list {
             print("\u{001b}[\(index)A", terminator:"") // move cursor up index lines
-            for i in 0 ..< screen_char_width {
+            for _ in 0 ..< screen_char_width {
                 print(" ", terminator:"")
             }
             print("\n", terminator:"")

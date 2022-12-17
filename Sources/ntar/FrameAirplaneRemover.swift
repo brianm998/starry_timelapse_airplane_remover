@@ -23,11 +23,9 @@ enum LoopReturn {
     case `break`
 }
 
-enum FrameProcessingState {
+enum FrameProcessingState: Int, CaseIterable {
     case unprocessed
     case detectingOutliers
-    case pruningOutliers
-    case caculatingOutlierBounds
     case readyForInterFrameProcessing
     case interFrameProcessing
     case outlierProcessingComplete
@@ -37,13 +35,23 @@ enum FrameProcessingState {
 }
 
 @available(macOS 10.15, *)
-actor FrameAirplaneRemover: Equatable {
+actor FrameAirplaneRemover: Equatable, Hashable {
 
     var state: FrameProcessingState = .unprocessed {
-        didSet {
-            // XXX trigger updateable log update
+        willSet {
+            if let updateableProgressMonitor = updateableProgressMonitor {
+                // trigger updateable log update
+                Task(priority: .high) {
+                    await updateableProgressMonitor.stateChange(for: self, to: newValue)
+                }
+            }
         }
     }
+
+    nonisolated func hash(into hasher: inout Hasher) {
+        hasher.combine(frame_index)
+    }
+    
     func set(state: FrameProcessingState) { self.state = state }
     
     let width: Int
@@ -78,10 +86,7 @@ actor FrameAirplaneRemover: Equatable {
          otherFrameIndexes: [Int],
          outputFilename output_filename: String,
          testPaintFilename tpfo: String?,
-         outlierOutputDirname outlier_output_dirname: String?/*,
-         maxPixelDistance max_pixel_distance: UInt16,
-         minPixelDistance min_pixel_distance: UInt16,
-         minGroupSize min_group_size: Int*/) async throws
+         outlierOutputDirname outlier_output_dirname: String?) async throws
     {
         self.config = config
         guard let image = try await image_sequence.getImage(withName: image_sequence.filenames[frame_index])
@@ -90,7 +95,6 @@ actor FrameAirplaneRemover: Equatable {
         self.frame_index = frame_index // frame index in the image sequence
         self.otherFrameIndexes = otherFrameIndexes
         self.output_filename = output_filename
-//        self.min_group_size = min_group_size
         if let tp_filename = tpfo {
             self.test_paint = true
             self.test_paint_filename = tp_filename
@@ -102,13 +106,11 @@ actor FrameAirplaneRemover: Equatable {
 
         self.bytesPerPixel = image.bytesPerPixel
         self.bytesPerRow = width*bytesPerPixel
-        //self.max_pixel_distance = max_pixel_distance
-        //self.min_pixel_distance = min_pixel_distance
-        
+
         // find outlying bright pixels between frames,
         // and group neighboring outlying pixels into groups
         try await self.findOutliers()        
-        
+
         Log.i("frame \(frame_index) detected outlier groups")
     }
     
@@ -243,7 +245,6 @@ actor FrameAirplaneRemover: Equatable {
 
         // XXX was a boundary
         
-        self.state = .pruningOutliers
         Log.i("frame \(frame_index) pruning outliers")
         
         // go through the outliers and link together all the outliers that are adject to eachother,
@@ -362,7 +363,6 @@ actor FrameAirplaneRemover: Equatable {
 
         var group_amounts: [String: UInt] = [:] // keyed by group name, average brightness of each group
 
-        self.state = .caculatingOutlierBounds
         Log.i("frame \(frame_index) calculating outlier group bounds")
         var group_min_x: [String:Int] = [:]   // keyed by group name, image bounds of each group
         var group_min_y: [String:Int] = [:]

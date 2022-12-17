@@ -15,6 +15,7 @@ You should have received a copy of the GNU General Public License along with nta
 */
 
 
+
 // this class handles removing airplanes from an entire sequence,
 // delegating each frame to an instance of FrameAirplaneRemover
 // and then using a FinalProcessor to finish processing
@@ -52,7 +53,7 @@ class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemover> {
         self.remaining_images_closure = { number_of_unprocessed in
             if let updateable = updateable {
                 // log number of unprocessed images here
-                Task {
+                Task(priority: .high) {
                     var progress = Double(number_of_unprocessed)/Double(image_sequence_size)
                     await updateable.log(name: "unprocessed frames",
                                          message: reverse_progress_bar(length: 50, progress: progress) + " \(number_of_unprocessed) frames waiting to process",
@@ -61,7 +62,7 @@ class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemover> {
             }
         }
         if let remaining_images_closure = remaining_images_closure {
-            Task {
+            Task(priority: .high) {
                 await self.method_list.set(removeClosure: remaining_images_closure)
                 remaining_images_closure(await self.method_list.count)
             }
@@ -71,6 +72,13 @@ class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemover> {
                                        numberOfFrames: image_sequence_size,
                                        dispatchGroup: dispatchGroup,
                                        imageSequence: image_sequence)
+
+        if let updateable = updateable {
+            // setup sequence monitor
+            updateableProgressMonitor =
+              UpdateableProgressMonitor(frameCount: image_sequence_size,
+                                        maxConcurrent: config.numConcurrentRenders)
+        }
         
         final_processor = processor
     }
@@ -78,18 +86,18 @@ class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemover> {
     override func run() throws {
 
         // setup the final processor and queue
-        Task {
+        Task(priority: .high) {
             let dispatch_name = "FinalProcessorTaskGroup"
             await self.dispatchGroup.enter(dispatch_name) // XXX shouldn't really be here ...
             try await withThrowingTaskGroup(of: Void.self) { group in
 
                 // setup a task group for the final queue and final processor
                 if let final_processor = final_processor {
-                    group.addTask {
+                    group.addTask(priority: .high) {
                         // the final queue runs a separate task group for processing 
                         try await final_processor.final_queue.start()
                     }
-                    group.addTask { 
+                    group.addTask(priority: .high) { 
                         // run the final processor as a single separate thread
                         var should_process = [Bool](repeating: false, count: self.existing_output_files.count)
                         for (index, output_file_exists) in self.existing_output_files.enumerated() {
@@ -169,41 +177,6 @@ class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemover> {
 
     var last_final_log: TimeInterval = 0
     
-    // balance the total number of active processes, and favor the end of the process
-    // so that we don't experience backup and overload memory
-    override func maxConcurrentRenders() async -> Int {
-        var ret = max_concurrent_renders
-        if let final_processor = final_processor {
-            let final_is_working = await final_processor.isWorking
-            let final_frames_unprocessed = await final_processor.framesBetween
-            let final_queue_size = await final_processor.final_queue.number_running.currentValue()
-            let current_running = await self.number_running.currentValue()
-            if final_frames_unprocessed - number_final_processing_neighbors_needed > 0 {
-                let signed_ret: Int = (Int(max_concurrent_renders) - Int(final_queue_size))-final_frames_unprocessed
-                if signed_ret < 0 {
-                    ret = 0
-                } else if signed_ret > 0 {
-                    ret = signed_ret
-                } else {
-                    ret = 1
-                }
-            } else {
-                ret = max_concurrent_renders - Int(final_queue_size)
-            }
-            let num_images = await image_sequence.numberOfResidentImages
-
-            let now = Date().timeIntervalSince1970
-
-            if now - last_final_log > 10 {
-                Log.d("final_is_working \(final_is_working) current_running \(current_running) final_queue_size \(final_queue_size) final_frames_unprocessed \(final_frames_unprocessed) max_renders \(ret) images loaded: \(num_images)")
-                last_final_log = now
-            }
-            
-        }
-        //Log.d("max_concurrent_renders \(ret)")
-        return ret
-    }
-    
     // called async, check for access to shared data
     // this method does the first step of processing on each frame.
     // outlier pixel detection, outlier group detection and analysis
@@ -220,11 +193,7 @@ class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemover> {
                                                    otherFrameIndexes: otherFrameIndexes,
                                                    outputFilename: output_filename,
                                                    testPaintFilename: tpfo,
-                                                   outlierOutputDirname: outlier_output_dirname
-        /*,
-                                                    maxPixelDistance: max_pixel_distance,
-                                                    minPixelDistance: min_pixel_distance,
-                                                   minGroupSize: config.minGroupSize*/)
+                                                   outlierOutputDirname: outlier_output_dirname)
         
         if config.writeOutlierGroupFiles {
             await frame.writeOutlierGroupFiles()
