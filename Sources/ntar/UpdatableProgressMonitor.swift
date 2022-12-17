@@ -128,10 +128,9 @@ actor UpdatableProgressMonitor {
             // log crap here
         }
 
-        let fuck = updates
+        let _updates = updates
         
-        Task(priority: .high) { for update in fuck { await update() } }
-        
+        Task(priority: .userInitiated) { for update in _updates { await update() } }
     }
 }
 

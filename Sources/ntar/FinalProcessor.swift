@@ -97,7 +97,7 @@ actor FinalProcessor {
     private func log() {
         if let updatable = updatable {
             // show what frames are in place to be processed
-            Task(priority: .high) {
+            Task(priority: .userInitiated) {
                 var message: String = TerminalColor.blue.rawValue + "["
                 var count = 0
                 let end = current_frame_index + config.numConcurrentRenders
@@ -566,7 +566,7 @@ fileprivate func run_final_streak_pass(frames: [FrameAirplaneRemover]) async {
                         return .continue
                     }
                 }
-                taskGroup.addTask(priority: .high) {
+                taskGroup.addTask(priority: .medium) {
                         
                     // grab a streak that we might already be in
                         
@@ -643,7 +643,7 @@ fileprivate func run_final_streak_pass(frames: [FrameAirplaneRemover]) async {
                 Log.v("ignoring two member streak \(airplane_streak)")
                 continue
             } 
-            taskGroup.addTask(priority: .high) {
+            taskGroup.addTask(priority: .medium) {
                 var verbotten = false
                 //let index_of_first_streak = airplane_streak[0].frame_index
                 for streak_member in airplane_streak {

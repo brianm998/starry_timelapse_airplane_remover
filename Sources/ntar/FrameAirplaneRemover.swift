@@ -41,7 +41,7 @@ actor FrameAirplaneRemover: Equatable, Hashable {
         willSet {
             if let updatableProgressMonitor = updatableProgressMonitor {
                 // trigger updatable log update
-                Task(priority: .high) {
+                Task(priority: .userInitiated) {
                     await updatableProgressMonitor.stateChange(for: self, to: newValue)
                 }
             }
@@ -653,6 +653,8 @@ actor FrameAirplaneRemover: Equatable, Hashable {
     // run after should_paint has been set for each group, 
     // does the final painting and then writes out the output files
     func finish() async throws {
+        self.state = .painting
+        
         Log.i("frame \(self.frame_index) finishing")
         guard let image = try await image_sequence.getImage(withName: image_sequence.filenames[frame_index])
         else { throw "Couldn't load image" }
@@ -678,8 +680,6 @@ actor FrameAirplaneRemover: Equatable, Hashable {
         }
         var output_data = _mut_data
 
-        self.state = .painting
-        
         var test_paint_data: Data = Data()
         if test_paint {
             guard let foobar = CFDataCreateMutableCopy(kCFAllocatorDefault,
