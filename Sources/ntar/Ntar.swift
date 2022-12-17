@@ -316,10 +316,13 @@ struct Ntar: ParsableCommand {
                     updatable = UpdatableLog()
 
                     if let updatable = updatable {
+                        let name = input_image_sequence_name
+                        let path = input_image_sequence_path
+                        let message = "Ntar v\(ntar_version) is processing image sequence in \(path)/\(name)"
                         Task {
                             await updatable.log(name: "ntar",
-                                                 message: "Ntar v\(ntar_version) is running",
-                                                 value: -1)
+                                                message: message,
+                                                value: -1)
                             
                         }
                     }

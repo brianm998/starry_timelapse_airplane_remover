@@ -166,7 +166,6 @@ class ImageSequenceProcessor<T> {
             Log.i("processing a total of \(await method_list.list.count) frames")
             
             try await withThrowingTaskGroup(of: T.self) { group in
-                var now = Date().timeIntervalSince1970
                 while(await method_list.list.count > 0) {
                     let current_running = await self.number_running.currentValue()
                     let current_max_concurrent = await self.maxConcurrentRenders()
@@ -186,7 +185,7 @@ class ImageSequenceProcessor<T> {
                             await method_list.removeValue(forKey: next_method_key)
                             await self.number_running.increment()
                             //let name = "image sequence processor foobaz \(next_method_key)"
-                            group.addTask(priority: .medium) {
+                            group.addTask(priority: .high) {
                                 return try await next_method()
                             }
                         } else {

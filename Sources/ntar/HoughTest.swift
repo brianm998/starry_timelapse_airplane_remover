@@ -26,8 +26,7 @@ func hough_test(filename: String, output_filename: String) async {
     Log.d("Loading image from \(filename)")
     
     do {
-    if #available(macOS 10.15, *),
-       let image = try await PixelatedImage(fromFile: filename),
+    if let image = try await PixelatedImage(fromFile: filename),
        let output_image = try await PixelatedImage(fromFile: output_filename)
     {
         let rmax = sqrt(Double(image.width*image.width + image.height*image.height))

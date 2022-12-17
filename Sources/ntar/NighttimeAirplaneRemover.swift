@@ -54,7 +54,7 @@ class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemover> {
             if let updatable = updatable {
                 // log number of unprocessed images here
                 Task(priority: .high) {
-                    var progress = Double(number_of_unprocessed)/Double(image_sequence_size)
+                    let progress = Double(number_of_unprocessed)/Double(image_sequence_size)
                     await updatable.log(name: "unprocessed frames",
                                          message: reverse_progress_bar(length: 50, progress: progress) + " \(number_of_unprocessed) frames waiting to process",
                                          value: -1)
@@ -73,7 +73,7 @@ class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemover> {
                                        dispatchGroup: dispatchGroup,
                                        imageSequence: image_sequence)
 
-        if let updatable = updatable {
+        if let _ = updatable {
             // setup sequence monitor
             updatableProgressMonitor =
               UpdatableProgressMonitor(frameCount: image_sequence_size,

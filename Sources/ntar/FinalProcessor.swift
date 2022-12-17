@@ -114,10 +114,9 @@ actor FinalProcessor {
                     }
                 }
                 message += TerminalColor.blue.rawValue+"]"+TerminalColor.reset.rawValue;
-                message += " \(count) frames awaiting final processing"
-                await updatable.log(name: "frames waiting final processing",
-                                     message: message,
-                                     value: 2)
+                let name = "frames awaiting inter-frame processing"
+                message += " \(count) \(name)"
+                await updatable.log(name: name, message: message, value: 2)
             }
          }
     }
@@ -247,6 +246,7 @@ actor FinalProcessor {
                         Log.d("frame \(frame_to_finish.frame_index) adding at index ")
                         let before_count = await self.final_queue.method_list.count
                         await frame_to_finish.set(state: .outlierProcessingComplete)
+                        // XXX lots of images are getting blocked up here for some reason
                         await self.final_queue.add(atIndex: frame_to_finish.frame_index) {
                             Log.i("frame \(frame_to_finish.frame_index) finishing")
                             try await frame_to_finish.finish()
@@ -645,7 +645,6 @@ fileprivate func run_final_streak_pass(frames: [FrameAirplaneRemover]) async {
             } 
             taskGroup.addTask(priority: .high) {
                 var verbotten = false
-                var was_already_paintable = false
                 //let index_of_first_streak = airplane_streak[0].frame_index
                 for streak_member in airplane_streak {
                     if streak_member.frame_index - initial_frame_index < 0 ||
@@ -656,14 +655,12 @@ fileprivate func run_final_streak_pass(frames: [FrameAirplaneRemover]) async {
                         //let frame = frames[streak_member.frame_index - initial_frame_index]
                         if let should_paint = await streak_member.group.shouldPaint{
                             if should_paint == .adjecentOverlap(0) { verbotten = true }
-                            //                if should_paint.willPaint { was_already_paintable = true }
                         }
                     }
                 }
-                if verbotten/* || !was_already_paintable*/ { return }
+                if verbotten { return }
                 Log.d("painting over airplane streak \(airplane_streak)")
                 for streak_member in airplane_streak {
-                    //let frame = frames[streak_member.frame_index - initial_frame_index]
                     Log.d("frame \(streak_member.frame_index) will paint group \(streak_member.group) is .inStreak")
 
                     // XXX check to see if this is already .inStreak with higher count
