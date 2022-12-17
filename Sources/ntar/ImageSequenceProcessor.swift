@@ -186,7 +186,7 @@ class ImageSequenceProcessor<T> {
                             await method_list.removeValue(forKey: next_method_key)
                             await self.number_running.increment()
                             //let name = "image sequence processor foobaz \(next_method_key)"
-                            group.addTask(priority: .background) {
+                            group.addTask(priority: .medium) {
                                 return try await next_method()
                             }
                         } else {

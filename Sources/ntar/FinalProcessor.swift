@@ -555,7 +555,7 @@ fileprivate func run_final_streak_pass(frames: [FrameAirplaneRemover]) async {
         if batch_index + 1 == frames.count { continue } // the last frame can be ignored here
         GLOBAL_last_streak_frame_number = frame_index            
 
-        await withTaskGroup(of: [AirplaneStreakMember].self) { taskGroup in
+ await withTaskGroup(of: [AirplaneStreakMember].self) { taskGroup in
             await frame.foreachOutlierGroup() { group in
                 // do streak detection in parallel at the level of groups in a single frame
                 // look for more data to act upon
@@ -566,7 +566,7 @@ fileprivate func run_final_streak_pass(frames: [FrameAirplaneRemover]) async {
                         return .continue
                     }
                 }
-                taskGroup.addTask(priority: .medium) {
+                taskGroup.addTask(priority: .high) {
                         
                     // grab a streak that we might already be in
                         
@@ -643,7 +643,7 @@ fileprivate func run_final_streak_pass(frames: [FrameAirplaneRemover]) async {
                 Log.v("ignoring two member streak \(airplane_streak)")
                 continue
             } 
-            taskGroup.addTask(priority: .medium) {
+            taskGroup.addTask(priority: .high) {
                 var verbotten = false
                 var was_already_paintable = false
                 //let index_of_first_streak = airplane_streak[0].frame_index

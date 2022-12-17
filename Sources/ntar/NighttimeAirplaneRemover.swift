@@ -85,35 +85,32 @@ class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemover> {
 
     override func run() throws {
 
-        // setup the final processor and queue
-        Task(priority: .high) {
-            let dispatch_name = "FinalProcessorTaskGroup"
-            await self.dispatchGroup.enter(dispatch_name) // XXX shouldn't really be here ...
-            try await withThrowingTaskGroup(of: Void.self) { group in
-
-                // setup a task group for the final queue and final processor
-                if let final_processor = final_processor {
-                    group.addTask(priority: .high) {
-                        // the final queue runs a separate task group for processing 
-                        try await final_processor.final_queue.start()
-                    }
-                    group.addTask(priority: .high) { 
-                        // run the final processor as a single separate thread
-                        var should_process = [Bool](repeating: false, count: self.existing_output_files.count)
-                        for (index, output_file_exists) in self.existing_output_files.enumerated() {
-                            should_process[index] = !output_file_exists
-                        }
-                        try await final_processor.run(shouldProcess: should_process)
-                    }
-                } else {
-                    Log.e("should have a processor")
-                    fatalError("no processor")
-                }
-                try await group.waitForAll()
-                await self.dispatchGroup.leave(dispatch_name)
+        if let final_processor = final_processor {
+            // setup the final processor and queue
+            let final_queue_dispatch_name = "FinalQueue"
+            Task(priority: .high) {
+                // XXX really should have the enter before the task
+                await self.dispatchGroup.enter(final_queue_dispatch_name)
+                // the final queue runs a separate task group for processing 
+                try await final_processor.final_queue.start()
+                await self.dispatchGroup.leave(final_queue_dispatch_name)
             }
+            let final_processor_dispatch_name = "FinalProcessor"
+            Task(priority: .high) {
+                // XXX really should have the enter before the task
+                await self.dispatchGroup.enter(final_processor_dispatch_name) 
+                // run the final processor as a single separate thread
+                var should_process = [Bool](repeating: false, count: self.existing_output_files.count)
+                for (index, output_file_exists) in self.existing_output_files.enumerated() {
+                    should_process[index] = !output_file_exists
+                }
+                try await final_processor.run(shouldProcess: should_process)
+                await self.dispatchGroup.leave(final_processor_dispatch_name)
+            }
+        } else {
+            Log.e("should have a processor")
+            fatalError("no processor")
         }
-        
         try super.run()
     }
 

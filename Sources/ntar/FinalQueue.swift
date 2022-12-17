@@ -78,7 +78,7 @@ actor FinalQueue {
                         await self.dispatch_group.enter(dispatch_name)
                         await self.removeValue(forKey: next_key)
                         await self.number_running.increment()
-                        group.addTask(priority: .low) {
+                        group.addTask(priority: .high) {
                             try await method()
                             await self.number_running.decrement()
                             await self.dispatch_group.leave(dispatch_name)
