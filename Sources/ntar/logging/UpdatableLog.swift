@@ -57,7 +57,7 @@ func reverse_progress_bar(length: Int, progress: Double) -> String {
     return progress_bar
 }
 
-class UpdateableLogLine {
+class UpdatableLogLine {
     let name: String            // a unique name
     var message: String         // the current log message
     var value: Double           // a sortable value
@@ -74,7 +74,7 @@ class UpdateableLogLine {
         self.value2 = value2
     }
 
-    func copyFrom(other: UpdateableLogLine) {
+    func copyFrom(other: UpdatableLogLine) {
         self.message = other.message
         self.value = other.value
         self.value2 = other.value2
@@ -82,9 +82,9 @@ class UpdateableLogLine {
 }
 
 @available(macOS 10.15, *) 
-actor UpdateableLog {
+actor UpdatableLog {
 
-    var list: [UpdateableLogLine] = []
+    var list: [UpdatableLogLine] = []
 
     func sort() {
         self.clear()
@@ -135,7 +135,7 @@ actor UpdateableLog {
              value2: Double? = nil)
     {
         var found = false
-        let new_logline = UpdateableLogLine(name: name,
+        let new_logline = UpdatableLogLine(name: name,
                                             message: message,
                                             value: value,
                                             value2: value2);

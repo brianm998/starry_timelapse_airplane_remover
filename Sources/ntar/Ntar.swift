@@ -106,11 +106,6 @@ todo:
  - handle case where disk fills up better, right now it just keeps running but not saving anything
  - add feature to ensure available disk space before running (with command line disable)
 
- - make a single config struct that holds all configuration values,
-   both constants and command line params
-
- - implement an updatable log like the timelapse render daemon
-   
  */
 
 
@@ -118,7 +113,7 @@ todo:
 var config: Config = Config()
 
 @available(macOS 10.15, *) 
-var updateable: UpdateableLog?
+var updatable: UpdatableLog?
 
 
 // 0.0.2 added more detail group hough transormation analysis, based upon a data set
@@ -133,7 +128,7 @@ var updateable: UpdateableLog?
 // 0.0.11 fix soft outlier boundries, better constants, initial group filter
 // 0.0.12 fix a streak bug, other small fixes
 // 0.1.0 added height based size constraints, runs faster, gets 95% or more airplanes
-// 0.1.1 updateable logging, try to improve speed
+// 0.1.1 updatable logging, try to improve speed
 
 let ntar_version = "0.1.1"
 
@@ -316,13 +311,13 @@ struct Ntar: ParsableCommand {
                 // use console logging
                 Log.handlers[.console] = ConsoleLogHandler(at: terminalLogLevel)
             } else {
-                // enable updateable logging when not doing console logging
+                // enable updatable logging when not doing console logging
                 if #available(macOS 10.15, *) {
-                    updateable = UpdateableLog()
+                    updatable = UpdatableLog()
 
-                    if let updateable = updateable {
+                    if let updatable = updatable {
                         Task {
-                            await updateable.log(name: "ntar",
+                            await updatable.log(name: "ntar",
                                                  message: "Ntar v\(ntar_version) is running",
                                                  value: -1)
                             

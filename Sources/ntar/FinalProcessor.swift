@@ -95,7 +95,7 @@ actor FinalProcessor {
     }
 
     private func log() {
-        if let updateable = updateable {
+        if let updatable = updatable {
             // show what frames are in place to be processed
             Task(priority: .high) {
                 var message: String = TerminalColor.blue.rawValue + "["
@@ -115,7 +115,7 @@ actor FinalProcessor {
                 }
                 message += TerminalColor.blue.rawValue+"]"+TerminalColor.reset.rawValue;
                 message += " \(count) frames awaiting final processing"
-                await updateable.log(name: "frames waiting final processing",
+                await updatable.log(name: "frames waiting final processing",
                                      message: message,
                                      value: 2)
             }

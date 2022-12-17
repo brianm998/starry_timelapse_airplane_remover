@@ -16,10 +16,10 @@ You should have received a copy of the GNU General Public License along with nta
 
 
 @available(macOS 10.15, *)
-var updateableProgressMonitor: UpdateableProgressMonitor?
+var updatableProgressMonitor: UpdatableProgressMonitor?
 
 @available(macOS 10.15, *)
-actor UpdateableProgressMonitor {
+actor UpdatableProgressMonitor {
     let number_of_frames: Int
     let maxConcurrent: Int
     
@@ -51,7 +51,7 @@ actor UpdateableProgressMonitor {
 
     func redraw() {
 
-        guard let updateable = updateable else { return }
+        guard let updatable = updatable else { return }
 
         var updates: [() async -> Void] = []
         
@@ -60,7 +60,7 @@ actor UpdateableProgressMonitor {
               Double(detectingOutliers.count) /
               Double(self.maxConcurrent)        // XXX self.maxConcurrent
             updates.append() {
-                await updateable.log(name: "detectingOutliers",
+                await updatable.log(name: "detectingOutliers",
                                      message: progress_bar(length: self.maxConcurrent, // XXX get max number of frames
                                                            progress: progress) +
                                        " \(detectingOutliers.count) frames detecting outliers",
@@ -72,7 +72,7 @@ actor UpdateableProgressMonitor {
               Double(interFrameProcessing.count) /
               Double(self.maxConcurrent)        // XXX 36
             updates.append() {
-                await updateable.log(name: "interFrameProcessing",
+                await updatable.log(name: "interFrameProcessing",
                                      message: progress_bar(length: self.maxConcurrent, // XXX get max number of frames
                                                            progress: progress) +
                                        " \(interFrameProcessing.count) frames inter frame processing",
@@ -85,7 +85,7 @@ actor UpdateableProgressMonitor {
               Double(outlierProcessingComplete.count) /
               Double(self.maxConcurrent)        // XXX 36
             updates.append() {
-                await updateable.log(name: "outlierProcessingComplete",
+                await updatable.log(name: "outlierProcessingComplete",
                                      message: progress_bar(length: self.maxConcurrent, // XXX get max number of frames
                                                            progress: progress) +
                                        " \(outlierProcessingComplete.count) frames outlier processing complete",
@@ -97,7 +97,7 @@ actor UpdateableProgressMonitor {
               Double(painting.count) /
               Double(self.maxConcurrent)        // XXX self.maxConcurrent
             updates.append() {
-                await updateable.log(name: "painting",
+                await updatable.log(name: "painting",
                                      message: progress_bar(length: self.maxConcurrent, // XXX get max number of frames
                                                            progress: progress) +
                                        " \(painting.count) frames painting",
@@ -109,7 +109,7 @@ actor UpdateableProgressMonitor {
               Double(writingOutputFile.count) /
               Double(self.maxConcurrent)        // XXX self.maxConcurrent
             updates.append() {
-                await updateable.log(name: "writingOutputFile",
+                await updatable.log(name: "writingOutputFile",
                                      message: progress_bar(length: self.maxConcurrent, // XXX get max number of frames
                                                            progress: progress) +
                                        " \(writingOutputFile.count) frames writing to disk",
@@ -121,7 +121,7 @@ actor UpdateableProgressMonitor {
               Double(complete.count) /
               Double(self.number_of_frames)
             updates.append() {
-                await updateable.log(name: "complete",
+                await updatable.log(name: "complete",
                                      message: progress_bar(length: 50, progress: progress) +
                                        " \(complete.count) / \(self.number_of_frames) frames complete",
                                      value: 100)
