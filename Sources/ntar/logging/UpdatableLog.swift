@@ -90,11 +90,50 @@ class UpdatableLogLine {
     }
 }
 
+var screen_width: UInt16 = 120
+
 @available(macOS 10.15, *) 
 actor UpdatableLog {
 
     var list: [UpdatableLogLine] = []
 
+    init() {
+        var w = winsize()
+        let ioctl_ret = ioctl(STDOUT_FILENO, TIOCGWINSZ, &w)
+        if ioctl_ret == 0 {
+            screen_width = w.ws_col
+        }
+        /*
+         XXX attempt to get sigwinch signals to alert us to changes in the console size
+         
+        Task(priority: .userInitiated) {
+            await MainActor.run { subscribe() }
+        }
+
+         */
+    }
+
+    @MainActor
+    func subscribe() {
+        var w = winsize()
+        let sigwinchSrc = DispatchSource.makeSignalSource(signal: SIGWINCH, queue: .main)
+        sigwinchSrc.setEventHandler {
+            if ioctl(STDOUT_FILENO, TIOCGWINSZ, &w) == 0 {
+                screen_width = w.ws_col
+                /*
+                if let updatable = updatable {
+                    Task(priority: .userInitiated) {
+                        await updatable.redraw()
+                    }
+                }*/
+//                print("rows:", w.ws_row, "cols", w.ws_col)
+            }
+        }
+//        sigwinchSrc.resume()
+
+//        dispatchMain()
+    }
+    
     func sort() {
         let sorted_logs = self.list.sorted() { a, b in
             if a.value == b.value,
@@ -110,13 +149,11 @@ actor UpdatableLog {
         self.redraw()
     }
 
-    let screen_char_width = 120 // XXX fix this, get it from the console somehow
-
     func redraw() {
         var index = self.list.count
         for line in self.list {
             print("\u{001b}[\(index)A", terminator:"") // move cursor up index lines 
-            let num_extra_spaces = screen_char_width-line.printableLength
+            let num_extra_spaces = Int(screen_width)-line.printableLength-1
 
             Log.w("num_extra_spaces \(num_extra_spaces)")
             
