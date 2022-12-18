@@ -72,33 +72,31 @@ actor ImageSequence {
     }
 
     nonisolated func getImage(withName filename: String) async -> ImageLoader {
-        let (ret, had_to_load) = await getImageInt(withName: filename)
-        // interval is a balance between memory usage and having to re-load the same image from disk
-
-        if had_to_load {
-            // if we had to load the image, remove it later, giving a window
-            // for other frames to access the same image in ram
-            Log.d("starting task to purge \(filename)")
-            Task(priority: .low) {
-                sleep(UInt32(180))       // XXX sleep, really?
-                Log.d("running task to purge \(filename)")
-
-                await self.removeValue(forKey: filename)
-                let count = await self.numberOfResidentImages
-                Log.d("purged \(filename), \(count) resident images left")
-            }
-        }
-        return ret
+        Log.d("getImage(withName: \(filename))")
+        return await getImageInt(withName: filename)
     }
+
+    var loaded_filenames: [String] = []
     
-    func getImageInt(withName filename: String) -> (ImageLoader, Bool) {
+    func getImageInt(withName filename: String) -> ImageLoader {
+        Log.d("getImageInt(withName: \(filename))")
         if let image = images[filename] {
-            return (image, false)
+            Log.d("image was cached")
+            return image
         }
         Log.d("loading \(filename)")
         let pixelatedImage = ImageLoader(fromFile: filename) 
         images[filename] = pixelatedImage
-        return (pixelatedImage, true)
+
+        loaded_filenames.insert(filename, at: 0)
+
+        // XXX calculate this value by the image resultion and amount of ram?
+        while loaded_filenames.count > 200 { // XXX hardcoded constant
+            self.removeValue(forKey: loaded_filenames.removeLast())
+        }
+        
+        Log.d("loaded \(filename)")
+        return pixelatedImage
     }
 }
 

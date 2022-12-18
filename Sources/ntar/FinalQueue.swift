@@ -41,13 +41,6 @@ actor FinalQueue {
         should_run = false
     }
 
-    func should_run() async -> Bool {
-        let number_running = await self.number_running.currentValue()
-        let count = await method_list.count
-        //Log.d("should run \(should_run) && \(number_running) > 0  count \(count)")
-        return should_run || number_running > 0 || count > 0
-    }
-
     func add(atIndex index: Int, method: @escaping () async throws -> Void) async {
         await method_list.add(atIndex: index, method: method)
     }
@@ -66,27 +59,25 @@ actor FinalQueue {
         await self.dispatch_group.enter(name)
         Log.d("starting")
         try await withThrowingTaskGroup(of: Void.self) { group in
-            while(await self.should_run()) {
+            while(await self.should_run) {
                 let current_running = await self.number_running.currentValue()
-                //Log.d("current_running \(current_running)")
-                if(current_running < self.max_concurrent) {
-                    let fu1 = await self.method_list.nextKey
-                    if let next_key = fu1,
-                       let method = await self.value(forKey: next_key)
-                    {
-                        let dispatch_name = "final queue frame \(next_key)"
-                        await self.dispatch_group.enter(dispatch_name)
-                        await self.removeValue(forKey: next_key)
-                        await self.number_running.increment()
-                        group.addTask(priority: .low) {
-                            try await method()
-                            await self.number_running.decrement()
-                            await self.dispatch_group.leave(dispatch_name)
-                        }
-                    } 
+
+                Log.d("current_running \(current_running)")
+                let fu1 = await self.method_list.nextKey
+                if let next_key = fu1,
+                   let method = await self.value(forKey: next_key)
+                {
+                    let dispatch_name = "final queue frame \(next_key)"
+                    await self.dispatch_group.enter(dispatch_name)
+                    await self.removeValue(forKey: next_key)
+                    await self.number_running.increment()
+                    group.addTask(priority: .medium) {
+                        try await method()
+                        await self.number_running.decrement()
+                        await self.dispatch_group.leave(dispatch_name)
+                    }
                 } else {
-                    // wait for the next to finish so we can start more
-                    try await group.next()
+                    sleep(1)
                 }
             }
             try await group.waitForAll()
