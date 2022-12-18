@@ -105,6 +105,13 @@ actor FrameAirplaneRemover: Equatable, Hashable {
         self.width = image.width
         self.height = image.height
 
+        if ImageSequence.image_width == 0 {
+            ImageSequence.image_width = image.width
+        }
+        if ImageSequence.image_height == 0 {
+            ImageSequence.image_height = image.height
+        }
+        
         self.bytesPerPixel = image.bytesPerPixel
         self.bytesPerRow = width*bytesPerPixel
 

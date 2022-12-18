@@ -106,6 +106,12 @@ todo:
  - handle case where disk fills up better, right now it just keeps running but not saving anything
  - add feature to ensure available disk space before running (with command line disable)
 
+ - errors and warnings should still show up with updatable logging
+ 
+ - updatable 'frames complete' wrong when re-starting an incomplete previous run
+
+ - updatable 'awaiting inter-frame processing' doesn't show items past max concurrent
+ 
  */
 
 
