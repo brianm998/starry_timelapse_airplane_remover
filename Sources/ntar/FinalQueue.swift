@@ -53,13 +53,19 @@ actor FinalQueue {
     func value(forKey key: Int) async -> (() async throws -> ())? {
         return await method_list.value(forKey: key)
     }
+
+    func should_run() async -> Bool {
+        let number_running = await self.number_running.currentValue()
+        let count = await method_list.count
+        return should_run || number_running > 0 || count > 0
+    }
     
     nonisolated func start() async throws {
         let name = "final queue running"
         await self.dispatch_group.enter(name)
         Log.d("starting")
         try await withThrowingTaskGroup(of: Void.self) { group in
-            while(await self.should_run) {
+            while(await self.should_run()) {
                 let current_running = await self.number_running.currentValue()
 
                 Log.d("current_running \(current_running)")
