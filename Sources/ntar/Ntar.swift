@@ -135,8 +135,9 @@ var updatable: UpdatableLog?
 // 0.0.12 fix a streak bug, other small fixes
 // 0.1.0 added height based size constraints, runs faster, gets 95% or more airplanes
 // 0.1.1 updatable logging, try to improve speed
+// 0.1.2 lots of speed/memory usage improvements, better updatable log
 
-let ntar_version = "0.1.1"
+let ntar_version = "0.1.2"
 
 @main
 struct Ntar: ParsableCommand {
