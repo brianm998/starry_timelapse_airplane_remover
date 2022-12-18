@@ -111,6 +111,8 @@ actor ImageSequence {
 
             // this is a rule of thumb, not exact
             _max_images = Int(memory_size_bytes / UInt64(bytes_per_image)) / 5 // XXX hardcoded constant
+            if _max_images > 200 { _max_images = 200 } // XXX hardcoded max
+            
             max_images = _max_images
             Log.w("calculated max_images \(_max_images)")
         } else {
