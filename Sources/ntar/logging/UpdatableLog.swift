@@ -13,7 +13,7 @@ You should have received a copy of the GNU General Public License along with nta
 
 */
 
-enum TerminalColor: String {
+enum TerminalColor: String, CaseIterable {
     case black = "\u{001b}[30m"
     case red = "\u{001b}[31m"
     case green = "\u{001b}[32m"
@@ -74,6 +74,15 @@ class UpdatableLogLine {
         self.value2 = value2
     }
 
+    var printableLength: Int {
+        var printable_message = message
+        for type in TerminalColor.allCases {
+            printable_message = printable_message.replacingOccurrences(
+              of: type.rawValue, with: "")
+        }
+        return printable_message.count
+    }
+
     func copyFrom(other: UpdatableLogLine) {
         self.message = other.message
         self.value = other.value
@@ -87,7 +96,6 @@ actor UpdatableLog {
     var list: [UpdatableLogLine] = []
 
     func sort() {
-        self.clear()
         let sorted_logs = self.list.sorted() { a, b in
             if a.value == b.value,
                let a_value2 = a.value2,
@@ -102,31 +110,25 @@ actor UpdatableLog {
         self.redraw()
     }
 
+    let screen_char_width = 120 // XXX fix this, get it from the console somehow
+
     func redraw() {
         var index = self.list.count
         for line in self.list {
             print("\u{001b}[\(index)A", terminator:"") // move cursor up index lines 
-            print(line.message/*, terminator:""*/)
-            //print("\n", terminator:"")a
-            print("\u{001b}[\(index)B", terminator:"") // move cursor down index lines
-            index -= 1
-        }
-    }
+            let num_extra_spaces = screen_char_width-line.printableLength
 
-    func clear() {
-        let screen_char_width = 120 // XXX fix this, get it from the console somehow
+            Log.w("num_extra_spaces \(num_extra_spaces)")
+            
+            var extra_spaces: String = ""
+            
+            if num_extra_spaces > 0 { for _ in 0 ..< num_extra_spaces { extra_spaces += " " } }
 
-        var index = self.list.count
-        for _ in self.list {
-            print("\u{001b}[\(index)A", terminator:"") // move cursor up index lines
-            for _ in 0 ..< screen_char_width {
-                print(" ", terminator:"")
-            }
+            print(line.message + extra_spaces, terminator:"")
             print("\n", terminator:"")
             print("\u{001b}[\(index)B", terminator:"") // move cursor down index lines
             index -= 1
         }
-        
     }
 
     func log(name: String,
