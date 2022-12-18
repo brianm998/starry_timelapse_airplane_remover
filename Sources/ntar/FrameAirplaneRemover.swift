@@ -25,10 +25,12 @@ enum LoopReturn {
 
 enum FrameProcessingState: Int, CaseIterable {
     case unprocessed
+    case loadingImages    
     case detectingOutliers
     case readyForInterFrameProcessing
     case interFrameProcessing
     case outlierProcessingComplete
+    case reloadingImages
     case painting
     case writingOutputFile
     case complete
@@ -89,8 +91,7 @@ actor FrameAirplaneRemover: Equatable, Hashable {
          outlierOutputDirname outlier_output_dirname: String?) async throws
     {
         self.config = config
-        guard let image = try await image_sequence.getImage(withName: image_sequence.filenames[frame_index])
-        else { throw "Couldn't load image" }
+        let image = try await image_sequence.getImage(withName: image_sequence.filenames[frame_index]).image()
         self.image_sequence = image_sequence
         self.frame_index = frame_index // frame index in the image sequence
         self.otherFrameIndexes = otherFrameIndexes
@@ -129,18 +130,19 @@ actor FrameAirplaneRemover: Equatable, Hashable {
     // this is still a slow part of the process, but is now about 10x faster than before
     func findOutliers() async throws {
 
-        guard let image = try await image_sequence.getImage(withName: image_sequence.filenames[frame_index])
-        else { throw "Couldn't load image" }
-
-        self.state = .detectingOutliers
+        self.state = .loadingImages
         
+        let image = try await image_sequence.getImage(withName: image_sequence.filenames[frame_index]).image()
+
         var otherFrames: [PixelatedImage] = []
 
         for otherFrameIndex in otherFrameIndexes {
-            guard let otherFrame = try await image_sequence.getImage(withName: image_sequence.filenames[otherFrameIndex])
-            else { throw "Couldn't load image" }
+            let otherFrame = try await image_sequence.getImage(withName: image_sequence.filenames[otherFrameIndex]).image()
             otherFrames.append(otherFrame)
         }
+
+        self.state = .detectingOutliers
+        
         
         // need to have the OutlierGroup class contain a mini version of this for each one
         
@@ -541,8 +543,7 @@ actor FrameAirplaneRemover: Equatable, Hashable {
     {
         Log.i("frame \(frame_index) painting airplane outlier groups")
 
-        guard let image = try await image_sequence.getImage(withName: image_sequence.filenames[frame_index])
-        else { throw "Couldn't load image" }
+        let image = try await image_sequence.getImage(withName: image_sequence.filenames[frame_index]).image()
 
         // paint over every outlier in the paint list with pixels from the adjecent frames
         for (group_name, group) in outlier_groups {
@@ -587,8 +588,7 @@ actor FrameAirplaneRemover: Equatable, Hashable {
     }
 
     private func writeTestFile(withData data: Data) async throws {
-        guard let image = try await image_sequence.getImage(withName: image_sequence.filenames[frame_index])
-        else { throw "Couldn't load image" }
+        let image = try await image_sequence.getImage(withName: image_sequence.filenames[frame_index]).image()
         try image.writeTIFFEncoding(ofData: data, toFilename: test_paint_filename)
     }
 
@@ -653,19 +653,17 @@ actor FrameAirplaneRemover: Equatable, Hashable {
     // run after should_paint has been set for each group, 
     // does the final painting and then writes out the output files
     func finish() async throws {
-        self.state = .painting
+        self.state = .reloadingImages
         
         Log.i("frame \(self.frame_index) finishing")
-        guard let image = try await image_sequence.getImage(withName: image_sequence.filenames[frame_index])
-        else { throw "Couldn't load image" }
+        let image = try await image_sequence.getImage(withName: image_sequence.filenames[frame_index]).image()
 
         var otherFrames: [PixelatedImage] = []
 
-        for otherFrameIndex in otherFrameIndexes {
-            guard let otherFrame = try await image_sequence.getImage(withName: image_sequence.filenames[otherFrameIndex])
-            else { throw "Couldn't load image" }
-            otherFrames.append(otherFrame)
-        }
+        // only load the first other frame for painting
+        let otherFrameIndex = otherFrameIndexes[0]
+        let otherFrame = try await image_sequence.getImage(withName: image_sequence.filenames[otherFrameIndex]).image()
+        otherFrames.append(otherFrame)
         
         let _data = image.raw_image_data
         
@@ -690,7 +688,10 @@ actor FrameAirplaneRemover: Equatable, Hashable {
                 fatalError("couldn't copy image data")
             }
             test_paint_data = foobar
+            self.state = .painting
             await self.testPaintOutliers(toData: &test_paint_data)
+        } else {
+            self.state = .painting
         }
                   
         Log.d("frame \(self.frame_index) painting over airplanes")

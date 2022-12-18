@@ -52,7 +52,19 @@ actor UpdatableProgressMonitor {
         guard let updatable = updatable else { return }
 
         var updates: [() async -> Void] = []
-        
+
+        if let loadingImages = frames[.loadingImages] {
+            let progress =
+              Double(loadingImages.count) /
+              Double(self.maxConcurrent)
+            updates.append() {
+                await updatable.log(name: "loadingImages",
+                                     message: progress_bar(length: self.maxConcurrent,
+                                                           progress: progress) +
+                                       " \(loadingImages.count) frames loading images",
+                                     value: 0.9)
+            }
+        }
         if let detectingOutliers = frames[.detectingOutliers] {
             let progress =
               Double(detectingOutliers.count) /
@@ -88,6 +100,19 @@ actor UpdatableProgressMonitor {
                                                            progress: progress) +
                                        " \(outlierProcessingComplete.count) frames ready to paint",
                                      value: 4)
+            }
+        }
+        
+        if let reloadingImages = frames[.reloadingImages] {
+            let progress =
+              Double(reloadingImages.count) /
+              Double(self.maxConcurrent)      
+            updates.append() {
+                await updatable.log(name: "reloadingImages",
+                                     message: progress_bar(length: self.maxConcurrent, 
+                                                           progress: progress) +
+                                       " \(reloadingImages.count) frames reloadingImages",
+                                     value: 5)
             }
         }
         if let painting = frames[.painting] {

@@ -14,6 +14,25 @@ You should have received a copy of the GNU General Public License along with nta
 
 */
 
+@available(macOS 10.15, *)
+actor ImageLoader {
+    let filename: String
+    private var _image: PixelatedImage?
+    
+    init(fromFile filename: String) {
+        self.filename = filename
+    }
+
+    func image() async throws -> PixelatedImage {
+        if let image = _image { return image }
+        if let image = try await PixelatedImage(fromFile: filename) {
+            _image = image
+            return image
+        }
+        throw "could not load image from \(filename)"
+    }
+}
+
 // support lazy loading of images from the sequence using reference counting
 @available(macOS 10.15, *)
 actor ImageSequence {
@@ -41,7 +60,7 @@ actor ImageSequence {
     
     let filenames: [String]
 
-    private var images: [String: PixelatedImage] = [:]
+    private var images: [String: ImageLoader] = [:]
 
     func removeValue(forKey key: String) {
         self.images.removeValue(forKey: key)
@@ -52,16 +71,16 @@ actor ImageSequence {
         return images.count
     }
 
-    nonisolated func getImage(withName filename: String) async throws -> PixelatedImage? {
-        let (ret, had_to_load) = try await getImageInt(withName: filename)
+    nonisolated func getImage(withName filename: String) async -> ImageLoader {
+        let (ret, had_to_load) = await getImageInt(withName: filename)
         // interval is a balance between memory usage and having to re-load the same image from disk
 
         if had_to_load {
             // if we had to load the image, remove it later, giving a window
             // for other frames to access the same image in ram
             Log.d("starting task to purge \(filename)")
-            Task {
-                sleep(UInt32(Double.pi*5))       // XXX sleep, really?
+            Task(priority: .low) {
+                sleep(UInt32(180))       // XXX sleep, really?
                 Log.d("running task to purge \(filename)")
 
                 await self.removeValue(forKey: filename)
@@ -72,17 +91,14 @@ actor ImageSequence {
         return ret
     }
     
-    func getImageInt(withName filename: String) async throws -> (PixelatedImage?, Bool) {
+    func getImageInt(withName filename: String) -> (ImageLoader, Bool) {
         if let image = images[filename] {
             return (image, false)
         }
         Log.d("loading \(filename)")
-        if let pixelatedImage = try await PixelatedImage(fromFile: filename) {
-            images[filename] = pixelatedImage
-            return (pixelatedImage, true)
-        }
-        Log.w("could not getImage(withName: \(filename)), no image found")
-        return (nil, false)
+        let pixelatedImage = ImageLoader(fromFile: filename) 
+        images[filename] = pixelatedImage
+        return (pixelatedImage, true)
     }
 }
 

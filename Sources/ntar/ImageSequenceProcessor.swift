@@ -116,14 +116,13 @@ class ImageSequenceProcessor<T> {
                 _method_list[index] = {
                     // this method is run async later                                           
                     Log.i("loading \(image_filename)")
-                    if let image = try await self.image_sequence.getImage(withName: image_filename) {
-                        if let result = try await self.processFrame(number: index,
-                                                                    image: image,
-                                                                    output_filename: output_filename,
-                                                                    base_name: basename) {
-                            await self.number_running.decrement()
-                            return result
-                        }
+                    let image = await self.image_sequence.getImage(withName: image_filename)
+                    if let result = try await self.processFrame(number: index,
+                                                                image: image.image(),
+                                                                output_filename: output_filename,
+                                                                base_name: basename) {
+                        await self.number_running.decrement()
+                        return result
                     }
                     throw "could't load image for \(image_filename)"
                 }
