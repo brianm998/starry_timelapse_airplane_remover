@@ -33,7 +33,7 @@ actor ImageLoader {
     }
 }
 
-// support lazy loading of images from the sequence using reference counting
+// allows loading and caching of frames of an image sequence
 @available(macOS 10.15, *)
 actor ImageSequence {
 
@@ -74,17 +74,12 @@ actor ImageSequence {
         return images.count
     }
 
-    nonisolated func getImage(withName filename: String) async -> ImageLoader {
-        Log.d("getImage(withName: \(filename))")
-        return await getImageInt(withName: filename)
-    }
+    private var loaded_filenames: [String] = []
 
-    var loaded_filenames: [String] = []
-
-    var max_images: Int?
+    private var max_images: Int?
     
-    func getImageInt(withName filename: String) -> ImageLoader {
-        Log.d("getImageInt(withName: \(filename))")
+    func getImage(withName filename: String) -> ImageLoader {
+        Log.d("getImage(withName: \(filename))")
         if let image = images[filename] {
             Log.d("image was cached")
             return image

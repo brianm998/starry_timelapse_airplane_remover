@@ -14,15 +14,15 @@ You should have received a copy of the GNU General Public License along with nta
 */
 
 enum TerminalColor: String, CaseIterable {
-    case black = "\u{001b}[30m"
-    case red = "\u{001b}[31m"
-    case green = "\u{001b}[32m"
-    case yellow = "\u{001b}[33m"
-    case blue = "\u{001b}[34m"
+    case black   = "\u{001b}[30m"
+    case red     = "\u{001b}[31m"
+    case green   = "\u{001b}[32m"
+    case yellow  = "\u{001b}[33m"
+    case blue    = "\u{001b}[34m"
     case magenta = "\u{001b}[35m"
-    case cyan = "\u{001b}[36m"
-    case white = "\u{001b}[37m"
-    case reset = "\u{001b}[0m"
+    case cyan    = "\u{001b}[36m"
+    case white   = "\u{001b}[37m"
+    case reset   = "\u{001b}[0m"
 }
 
 // progress is between 0 and 1
