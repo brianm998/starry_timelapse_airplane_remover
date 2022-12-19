@@ -98,22 +98,22 @@ actor FinalProcessor {
         if let updatable = updatable {
             // show what frames are in place to be processed
             Task(priority: .userInitiated) {
-                var message: String = TerminalColor.blue.rawValue + "["
+                var message: String = ConsoleColor.blue.rawValue + "["
                 var count = 0
                 let end = current_frame_index + config.numConcurrentRenders
                 for i in current_frame_index ..< end {
                     if i >= self.frames.count {
-                        message += TerminalColor.yellow.rawValue + "-";
+                        message += ConsoleColor.yellow.rawValue + "-";
                     } else {
                         if let _ = self.frames[i] {
-                            message += TerminalColor.green.rawValue + "*";
+                            message += ConsoleColor.green.rawValue + "*";
                             count += 1
                         } else {
-                            message += TerminalColor.yellow.rawValue + "-";
+                            message += ConsoleColor.yellow.rawValue + "-";
                         }
                     }
                 }
-                message += TerminalColor.blue.rawValue+"]"+TerminalColor.reset.rawValue;
+                message += ConsoleColor.blue.rawValue+"]"+ConsoleColor.reset.rawValue;
                 let name = "frames awaiting inter-frame processing"
                 message += " \(count) \(name)"
                 await updatable.log(name: name, message: message, value: 2)

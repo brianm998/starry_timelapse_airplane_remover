@@ -13,7 +13,7 @@ You should have received a copy of the GNU General Public License along with nta
 
 */
 
-enum TerminalColor: String, CaseIterable {
+enum ConsoleColor: String, CaseIterable {
     case black   = "\u{001b}[30m"
     case red     = "\u{001b}[31m"
     case green   = "\u{001b}[32m"
@@ -28,15 +28,15 @@ enum TerminalColor: String, CaseIterable {
 // progress is between 0 and 1
 func progress_bar(length: Int, progress: Double) -> String {
 
-    var progress_bar: String = TerminalColor.blue.rawValue + "["
+    var progress_bar: String = ConsoleColor.blue.rawValue + "["
     for i in 0 ..< length {
         if Double(i)/Double(length) < progress {
-            progress_bar += TerminalColor.green.rawValue + "*";
+            progress_bar += ConsoleColor.green.rawValue + "*";
         } else {
-            progress_bar += TerminalColor.yellow.rawValue + "-";
+            progress_bar += ConsoleColor.yellow.rawValue + "-";
         }
     }
-    progress_bar += TerminalColor.blue.rawValue+"]"+TerminalColor.reset.rawValue;
+    progress_bar += ConsoleColor.blue.rawValue+"]"+ConsoleColor.reset.rawValue;
 
     return progress_bar
 }
@@ -44,15 +44,15 @@ func progress_bar(length: Int, progress: Double) -> String {
 // progress is between 0 and 1
 func reverse_progress_bar(length: Int, progress: Double) -> String {
 
-    var progress_bar: String = TerminalColor.blue.rawValue + "["
+    var progress_bar: String = ConsoleColor.blue.rawValue + "["
     for i in (0 ..< length).reversed() {
         if Double(i)/Double(length) < progress {
-            progress_bar += TerminalColor.green.rawValue + "*";
+            progress_bar += ConsoleColor.green.rawValue + "*";
         } else {
-            progress_bar += TerminalColor.yellow.rawValue + "-";
+            progress_bar += ConsoleColor.yellow.rawValue + "-";
         }
     }
-    progress_bar += TerminalColor.blue.rawValue+"]"+TerminalColor.reset.rawValue;
+    progress_bar += ConsoleColor.blue.rawValue+"]"+ConsoleColor.reset.rawValue;
 
     return progress_bar
 }
@@ -76,7 +76,7 @@ class UpdatableLogLine {
 
     var printableLength: Int {
         var printable_message = message
-        for type in TerminalColor.allCases {
+        for type in ConsoleColor.allCases {
             printable_message = printable_message.replacingOccurrences(
               of: type.rawValue, with: "")
         }
