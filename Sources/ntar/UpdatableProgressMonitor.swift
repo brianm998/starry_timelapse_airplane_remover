@@ -29,6 +29,8 @@ actor UpdatableProgressMonitor {
         self.maxConcurrent = maxConcurrent
     }
 
+    private var last_update_time: TimeInterval?
+    
     func stateChange(for frame: FrameAirplaneRemover, to new_state: FrameProcessingState) {
         for state in FrameProcessingState.allCases {
             if state == new_state { continue }
@@ -44,7 +46,18 @@ actor UpdatableProgressMonitor {
             frames[new_state] = [frame]
         }
 
-        redraw()
+        var should_update = true
+        
+        let now = NSDate().timeIntervalSince1970
+        if let last_update_time = last_update_time,
+           now - last_update_time < Double.pi/10 // XXX hardcoded minimum update time
+        {
+            should_update = false 
+        }
+        if should_update {
+            last_update_time = now
+            redraw()
+        }
     }
 
     func redraw() {
