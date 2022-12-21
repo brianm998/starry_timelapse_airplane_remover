@@ -14,6 +14,40 @@ You should have received a copy of the GNU General Public License along with nta
 
 */
 
+@available(macOS 10.15, *)
+class UpdatableLogHandler: LogHandler {
+    func log(message: String,
+             at fileLocation: String,
+             with data: LogData?,
+             at logLevel: Log.Level)
+    {
+
+        if let updatable = updatable {
+            Task(priority: .userInitiated) {
+                var log_message = ""
+                if let data = data {
+                    log_message = "\(logLevel.emo) \(logLevel) | \(fileLocation): \(message) | \(data.description)"
+                } else {
+                    log_message = "\(logLevel.emo) \(logLevel) | \(fileLocation): \(message)"
+                }        
+
+                let now = NSDate().timeIntervalSince1970
+                await updatable.log(name: "\(now)",
+                                    message: log_message,
+                                    value: now)
+            }
+        }
+    }
+    
+    public let dispatchQueue: DispatchQueue
+    public var level: Log.Level?
+
+    public init() {
+        self.level = .warn
+        self.dispatchQueue = DispatchQueue(label: "fileLogging")
+    }
+}
+
 
 @available(macOS 10.15, *)
 var updatableProgressMonitor: UpdatableProgressMonitor?
@@ -22,6 +56,8 @@ var updatableProgressMonitor: UpdatableProgressMonitor?
 actor UpdatableProgressMonitor {
     let number_of_frames: Int
     let maxConcurrent: Int
+
+    let dispatchGroup = DispatchGroup()
     
     var frames: [FrameProcessingState: Set<FrameAirplaneRemover>] = [:]
     init(frameCount: Int, maxConcurrent: Int) {
@@ -46,18 +82,7 @@ actor UpdatableProgressMonitor {
             frames[new_state] = [frame]
         }
 
-        var should_update = true
-        
-        let now = NSDate().timeIntervalSince1970
-        if let last_update_time = last_update_time,
-           now - last_update_time < Double.pi/10 // XXX hardcoded minimum update time
-        {
-            should_update = false 
-        }
-        if should_update {
-            last_update_time = now
-            redraw()
-        }
+        redraw()
     }
 
     func redraw() {
@@ -167,8 +192,12 @@ actor UpdatableProgressMonitor {
         }
 
         let _updates = updates
-        
-        Task(priority: .userInitiated) { for update in _updates { await update() } }
+
+        dispatchGroup.enter()
+        Task(priority: .userInitiated) {
+            for update in _updates { await update() }
+            dispatchGroup.leave()
+        }
     }
 }
 

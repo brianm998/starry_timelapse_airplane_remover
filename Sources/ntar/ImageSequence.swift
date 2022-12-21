@@ -109,7 +109,7 @@ actor ImageSequence {
             if _max_images > 200 { _max_images = 200 } // XXX hardcoded max
             
             max_images = _max_images
-            Log.w("calculated max_images \(_max_images)")
+            Log.i("calculated max_images \(_max_images)")
         } else {
             _max_images = 10    // initial default
         }

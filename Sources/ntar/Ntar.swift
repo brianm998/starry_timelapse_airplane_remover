@@ -322,6 +322,8 @@ struct Ntar: ParsableCommand {
                 if #available(macOS 10.15, *) {
                     updatable = UpdatableLog()
 
+                    Log.handlers[.console] = UpdatableLogHandler()
+                    
                     if let updatable = updatable {
                         let name = input_image_sequence_name
                         let path = input_image_sequence_path
@@ -367,6 +369,13 @@ struct Ntar: ParsableCommand {
                     let eraser = try NighttimeAirplaneRemover(with: config)
                     Log.dispatchGroup = eraser.dispatchGroup.dispatch_group
                     try eraser.run()
+
+
+                    if let updatableProgressMonitor = updatableProgressMonitor
+                    {
+                        updatableProgressMonitor.dispatchGroup.wait()
+                        print("processing complete, output is in \(eraser.output_dirname)")
+                    }
                 } else {
                     Log.e("cannot run :(") // XXX make this better
                 }
