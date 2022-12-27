@@ -38,7 +38,7 @@ class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemover> {
 
         var basename = "\(config.image_sequence_dirname)-ntar-v-\(ntar_version)"
         basename = basename.replacingOccurrences(of: ".", with: "_")
-        test_paint_output_dirname = "\(config.outputPath)/\(basename)-test-paint"
+        test_paint_output_dirname = "\(config.test_paint_output_path)/\(basename)-test-paint"
         outlier_output_dirname = "\(config.outputPath)/\(basename)-outliers"
 
 
@@ -56,7 +56,7 @@ class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemover> {
                 Task(priority: .userInitiated) {
                     let progress = Double(number_of_unprocessed)/Double(image_sequence_size)
                     await updatable.log(name: "unprocessed frames",
-                                         message: reverse_progress_bar(length: 50, progress: progress) + " \(number_of_unprocessed) frames waiting to process",
+                                         message: reverse_progress_bar(length: progress_bar_length, progress: progress) + " \(number_of_unprocessed) frames waiting to process",
                                          value: -1)
                 }
             }

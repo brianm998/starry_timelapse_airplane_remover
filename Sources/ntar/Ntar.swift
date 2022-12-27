@@ -106,12 +106,27 @@ todo:
  - handle case where disk fills up better, right now it just keeps running but not saving anything
  - add feature to ensure available disk space before running (with command line disable)
 
- - errors and warnings should still show up with updatable logging
- 
  - updatable 'frames complete' wrong when re-starting an incomplete previous run
 
  - updatable 'awaiting inter-frame processing' doesn't show items past max concurrent
- 
+
+ - add a keep the meteor feature?
+   specify what frame, and the bounds the meteor is in,
+   and how many frames to keep it for
+   Then detect the outlier, keep it, and blend it back in for that many frames
+
+ - put warnings above updatable log
+
+ - have 'frames complete' updatable log include skipped already existing files
+   (without this, restarting shows the wrong number of complete frames)
+
+ - on successful completion, overwrite updatable progress log with ascii art of night sky?
+
+ - 12/22/2022 videos have false positives on clouds because of both assumed size and streak detection
+   eliminate assumed size?
+   enhance streak detection to make sure the group center line between frames is close to the outlier
+   groups hough line
+
  */
 
 
@@ -121,6 +136,8 @@ var config: Config = Config()
 @available(macOS 10.15, *) 
 var updatable: UpdatableLog?
 
+// XXX move this to config
+let progress_bar_length = 50
 
 // 0.0.2 added more detail group hough transormation analysis, based upon a data set
 // 0.0.3 included the data set analysis to include group size and fill, and to use histograms
@@ -202,6 +219,12 @@ struct Ntar: ParsableCommand {
         Shows what changes have been made to each frame.
         """)
     var test_paint = false
+
+    @Option(name: [.customLong("test-paint-output-path")], help:"""
+        The filesystem location under which ntar will create the test paint output dir.
+        Defaults to the main output path.
+        """)
+    var testPaintOutputPath: String?
 
     @Flag(name: [.short, .customLong("show-test-paint-colors")],
           help:"Print out what the test paint colors mean")
@@ -310,6 +333,11 @@ struct Ntar: ParsableCommand {
             } else {
                 output_path = input_image_sequence_path
             }
+
+            var test_paint_output_path = output_path
+            if let testPaintOutputPath = testPaintOutputPath {
+                test_paint_output_path = testPaintOutputPath
+            }
             
             Log.name = "ntar-log"
             Log.nameSuffix = input_image_sequence_name
@@ -346,6 +374,7 @@ struct Ntar: ParsableCommand {
                             assumeAirplaneSize: assumeAirplaneSize,
                             numConcurrentRenders: numConcurrentRenders,
                             test_paint: test_paint,
+                            test_paint_output_path: test_paint_output_path,
                             imageSequenceName: input_image_sequence_name,
                             imageSequencePath: input_image_sequence_path,
                             writeOutlierGroupFiles: should_write_outlier_group_files)

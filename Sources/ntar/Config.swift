@@ -26,6 +26,7 @@ struct Config {
         self.assumeAirplaneSize = 0
         self.numConcurrentRenders = 0
         self.test_paint = false
+        self.test_paint_output_path = ""
         self.image_sequence_dirname = ""
         self.image_sequence_path = ""
         self.writeOutlierGroupFiles = false
@@ -44,6 +45,7 @@ struct Config {
          assumeAirplaneSize: Int,
          numConcurrentRenders: Int,
          test_paint: Bool,
+         test_paint_output_path: String,
          imageSequenceName: String,
          imageSequencePath: String,
          writeOutlierGroupFiles: Bool)
@@ -59,6 +61,7 @@ struct Config {
         self.assumeAirplaneSize = assumeAirplaneSize
         self.numConcurrentRenders = numConcurrentRenders
         self.test_paint = test_paint
+        self.test_paint_output_path = test_paint_output_path
         self.image_sequence_dirname = imageSequenceName
         self.image_sequence_path = imageSequencePath
         self.writeOutlierGroupFiles = writeOutlierGroupFiles
@@ -96,6 +99,9 @@ struct Config {
 
     // write out test paint images
     let test_paint: Bool
+
+    // where to create the test paint output dir
+    let test_paint_output_path: String
     
     // the name of the directory containing the input sequence
     let image_sequence_dirname: String
