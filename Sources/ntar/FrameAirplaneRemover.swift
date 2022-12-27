@@ -716,7 +716,7 @@ actor FrameAirplaneRemover: Equatable, Hashable {
             try image.writeTIFFEncoding(ofData: output_data,  toFilename: self.output_filename)
             self.state = .complete
         } catch {
-            Log.e(error)
+            Log.e("\(error)")
         }
         
         Log.i("frame \(self.frame_index) complete")

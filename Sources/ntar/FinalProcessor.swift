@@ -98,7 +98,12 @@ actor FinalProcessor {
         if let updatable = updatable {
             // show what frames are in place to be processed
             Task(priority: .userInitiated) {
-                var message: String = ConsoleColor.blue.rawValue + "["
+                var padding = ""
+                if self.config.numConcurrentRenders < progress_bar_length {
+                    padding = String(repeating: " ", count: (progress_bar_length - self.config.numConcurrentRenders))
+                }
+                
+                var message: String = padding + ConsoleColor.blue.rawValue + "["
                 var count = 0
                 let end = current_frame_index + config.numConcurrentRenders
                 for i in current_frame_index ..< end {
@@ -114,7 +119,7 @@ actor FinalProcessor {
                     }
                 }
                 message += ConsoleColor.blue.rawValue+"]"+ConsoleColor.reset.rawValue;
-                let name = "frames awaiting inter-frame processing"
+                let name = "frames awaiting inter frame processing"
                 message += " \(count) \(name)"
                 await updatable.log(name: name, message: message, value: 2)
             }

@@ -91,14 +91,19 @@ actor UpdatableProgressMonitor {
 
         var updates: [() async -> Void] = []
 
+        var padding = ""
+        if self.maxConcurrent < progress_bar_length {
+            padding = String(repeating: " ", count: (progress_bar_length - self.maxConcurrent))
+        }
+
         if let loadingImages = frames[.loadingImages] {
             let progress =
               Double(loadingImages.count) /
               Double(self.maxConcurrent)
             updates.append() {
                 await updatable.log(name: "loadingImages",
-                                     message: progress_bar(length: self.maxConcurrent,
-                                                           progress: progress) +
+                                     message: padding + progress_bar(length: self.maxConcurrent,
+                                                                     progress: progress) +
                                        " \(loadingImages.count) frames loading images",
                                      value: 0.9)
             }
@@ -109,10 +114,10 @@ actor UpdatableProgressMonitor {
               Double(self.maxConcurrent)
             updates.append() {
                 await updatable.log(name: "detectingOutliers",
-                                     message: progress_bar(length: self.maxConcurrent,
-                                                           progress: progress) +
-                                       " \(detectingOutliers.count) frames detecting outliers",
-                                     value: 1)
+                                    message: padding + progress_bar(length: self.maxConcurrent,
+                                                                    progress: progress) +
+                                      " \(detectingOutliers.count) frames detecting outliers",
+                                    value: 1)
             }
         }
         if let interFrameProcessing = frames[.interFrameProcessing] {
@@ -121,10 +126,10 @@ actor UpdatableProgressMonitor {
               Double(self.maxConcurrent)
             updates.append() {
                 await updatable.log(name: "interFrameProcessing",
-                                     message: progress_bar(length: self.maxConcurrent,
-                                                           progress: progress) +
-                                       " \(interFrameProcessing.count) frames inter frame processing",
-                                     value: 3)
+                                    message: padding + progress_bar(length: self.maxConcurrent,
+                                                                    progress: progress) +
+                                      " \(interFrameProcessing.count) frames inter frame processing",
+                                    value: 3)
             }
             
         }
@@ -134,10 +139,10 @@ actor UpdatableProgressMonitor {
               Double(self.maxConcurrent)       
             updates.append() {
                 await updatable.log(name: "outlierProcessingComplete",
-                                     message: progress_bar(length: self.maxConcurrent,
-                                                           progress: progress) +
-                                       " \(outlierProcessingComplete.count) frames ready to paint",
-                                     value: 4)
+                                    message: padding + progress_bar(length: self.maxConcurrent,
+                                                                    progress: progress) +
+                                      " \(outlierProcessingComplete.count) frames ready to paint",
+                                    value: 4)
             }
         }
         
@@ -147,10 +152,10 @@ actor UpdatableProgressMonitor {
               Double(self.maxConcurrent)      
             updates.append() {
                 await updatable.log(name: "reloadingImages",
-                                     message: progress_bar(length: self.maxConcurrent, 
-                                                           progress: progress) +
-                                       " \(reloadingImages.count) frames reloadingImages",
-                                     value: 5)
+                                    message: padding + progress_bar(length: self.maxConcurrent, 
+                                                                    progress: progress) +
+                                      " \(reloadingImages.count) frames reloadingImages",
+                                    value: 5)
             }
         }
         if let painting = frames[.painting] {
@@ -159,10 +164,10 @@ actor UpdatableProgressMonitor {
               Double(self.maxConcurrent)      
             updates.append() {
                 await updatable.log(name: "painting",
-                                     message: progress_bar(length: self.maxConcurrent, 
-                                                           progress: progress) +
-                                       " \(painting.count) frames painting",
-                                     value: 5)
+                                    message: padding + progress_bar(length: self.maxConcurrent, 
+                                                                    progress: progress) +
+                                      " \(painting.count) frames painting",
+                                    value: 5)
             }
         }
         if let writingOutputFile = frames[.writingOutputFile] {
@@ -171,10 +176,10 @@ actor UpdatableProgressMonitor {
               Double(self.maxConcurrent)        
             updates.append() {
                 await updatable.log(name: "writingOutputFile",
-                                     message: progress_bar(length: self.maxConcurrent,
-                                                           progress: progress) +
-                                       " \(writingOutputFile.count) frames writing to disk",
-                                     value: 6)
+                                    message: padding + progress_bar(length: self.maxConcurrent,
+                                                                    progress: progress) +
+                                      " \(writingOutputFile.count) frames writing to disk",
+                                    value: 6)
             }
         }
         if let complete = frames[.complete] {
@@ -183,9 +188,9 @@ actor UpdatableProgressMonitor {
               Double(self.number_of_frames)
             updates.append() {
                 await updatable.log(name: "complete",
-                                     message: progress_bar(length: 50, progress: progress) +
-                                       " \(complete.count) / \(self.number_of_frames) frames complete",
-                                     value: 100)
+                                    message: progress_bar(length: progress_bar_length, progress: progress) +
+                                      " \(complete.count) / \(self.number_of_frames) frames complete",
+                                    value: 100)
             }
         } else {
             // log crap here
