@@ -135,14 +135,6 @@ actor OutlierGroup: CustomStringConvertible, Hashable, Equatable {
         
         self.lines = transform.lines(min_count: 1)
 
-        // use assume_airplane_size to avoid doing extra processing on
-        // really big outlier groups
-        if size > frame.config.assumeAirplaneSize {
-            //Log.d("frame \(frame.frame_index) assuming group \(name) of size \(size) (> \(assume_airplane_size)) is an airplane, will paint over it")
-            //Log.d("frame \(frame.frame_index) should_paint[\(name)] = (true, .assumed)")
-            self.shouldPaint = .assumed
-        }
-            
         if self.shouldPaint == nil,
            self.paintScoreFromHoughTransformLines > 0.5
         {

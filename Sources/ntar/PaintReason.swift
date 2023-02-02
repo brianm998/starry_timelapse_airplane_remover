@@ -2,7 +2,6 @@ import Foundation
 
 // why we are or are not painting a group
 enum PaintReason: Equatable, CaseIterable {
-   case assumed                      // large groups are assumed to be airplanes
    case goodScore(Double)            // percent score
    case looksLikeALine(Double)       
    case inStreak(Int)           // size
@@ -15,8 +14,6 @@ enum PaintReason: Equatable, CaseIterable {
    public var BasicColor: BasicColor {
         get {
             switch self {
-            case .assumed:
-                return .brightMagenta
             case .goodScore:
                 return .yellow
             case .looksLikeALine:
@@ -36,7 +33,6 @@ enum PaintReason: Equatable, CaseIterable {
    public var name: String {
         get {
             switch self {
-            case .assumed:           return "assumed"
             case .goodScore:         return "good score"
             case .looksLikeALine:    return "looks like a line"
             case .inStreak:          return "in a streak"
@@ -50,10 +46,6 @@ enum PaintReason: Equatable, CaseIterable {
    public var description: String {
         get {
             switch self {
-            case .assumed:
-                return """
-These outlier groups are painted over because they are larger than \(config.assumeAirplaneSize) pixels in size.
-"""
             case .goodScore:
                 return """
 These outlier groups are painted over because of a good score analyzing the outliers in a single frame.
@@ -85,7 +77,6 @@ These outlier groups were ignored for being too small and not linear enough.
    public var willPaint: Bool {
         get {
             switch self {
-            case .assumed:           return true
             case .goodScore:         return true
             case .looksLikeALine:    return true
             case .inStreak:          return true
@@ -105,7 +96,7 @@ These outlier groups were ignored for being too small and not linear enough.
    }
 
    static var allCases: [PaintReason] {
-       return [.assumed, .looksLikeALine(0), .goodScore(0),
+       return [.looksLikeALine(0), .goodScore(0),
                .inStreak(0), .badScore(0), .adjecentOverlap(0), .smallNonLinear]
    }
                          
@@ -114,13 +105,6 @@ These outlier groups were ignored for being too small and not linear enough.
         
    public static func == (lhs: PaintReason, rhs: PaintReason) -> Bool {
       switch lhs {
-      case .assumed:
-          switch rhs {
-          case .assumed:
-              return true
-          default:
-              return false
-          }
       case .looksLikeALine:
           switch rhs {
           case .looksLikeALine:

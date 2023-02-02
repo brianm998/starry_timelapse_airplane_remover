@@ -21,8 +21,6 @@ todo:
 
  - try image blending
  - make it faster (can always be faster) 
- - make sure it doesn't still crash - after last actor refactor it has only crashed twice :(
-   look into actor access to properties, should those be wrapped in methods and not exposed?
  - make crash detection perl script better
  - add scripts to allow video to processed video in one command
    - decompress existing video w/ ffmpeg (and note exactly how it was compressed)
@@ -38,10 +36,6 @@ todo:
  - specific out of memory issue with initial processing queue overloading the single final processing thread
    use some tool like this to avoid forcing a reboot:
    https://stackoverflow.com/questions/71209362/how-to-check-system-memory-usage-with-swift
-
- - look for existing file before painting
-   minor help when restarting after a crash, frames that need to be re-calculated but already exist
-   number_final_processing_neighbors_needed before the last existing one.
 
  - try some kind of processing of individual groups that classifies them as plane or not
    either a hough transform to detect that it's cloas to a line, or detecting holes in them?
@@ -123,7 +117,6 @@ todo:
  - on successful completion, overwrite updatable progress log with ascii art of night sky?
 
  - 12/22/2022 videos have false positives on clouds because of both assumed size and streak detection
-   eliminate assumed size?
    enhance streak detection to make sure the group center line between frames is close to the outlier
    groups hough line
 
@@ -200,11 +193,6 @@ struct Ntar: ParsableCommand {
         but also might end with more twinkling stars.
         """)
     var minGroupSize: Int = 80      // groups smaller than this are completely ignored
-
-    @Option(name: .shortAndLong, help: """
-        Outlier groups larger than this are assumed to be airplanes, and painted over.
-        """)
-    var assumeAirplaneSize: Int = 5000
     
     @Option(name: .shortAndLong, help: """
         Max Number of frames to process at once.
@@ -371,7 +359,6 @@ struct Ntar: ParsableCommand {
                             outlierMaxThreshold: outlierMaxThreshold,
                             outlierMinThreshold: outlierMinThreshold,
                             minGroupSize: minGroupSize,
-                            assumeAirplaneSize: assumeAirplaneSize,
                             numConcurrentRenders: numConcurrentRenders,
                             test_paint: test_paint,
                             test_paint_output_path: test_paint_output_path,

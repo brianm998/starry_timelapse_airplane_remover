@@ -23,7 +23,6 @@ struct Config {
         self.outlierMaxThreshold = 0
         self.outlierMinThreshold = 0
         self.minGroupSize = 0
-        self.assumeAirplaneSize = 0
         self.numConcurrentRenders = 0
         self.test_paint = false
         self.test_paint_output_path = ""
@@ -42,7 +41,6 @@ struct Config {
          outlierMaxThreshold: Double,
          outlierMinThreshold: Double,
          minGroupSize: Int,
-         assumeAirplaneSize: Int,
          numConcurrentRenders: Int,
          test_paint: Bool,
          test_paint_output_path: String,
@@ -58,7 +56,6 @@ struct Config {
         self.outlierMaxThreshold = outlierMaxThreshold
         self.outlierMinThreshold = outlierMinThreshold
         self.minGroupSize = minGroupSize
-        self.assumeAirplaneSize = assumeAirplaneSize
         self.numConcurrentRenders = numConcurrentRenders
         self.test_paint = test_paint
         self.test_paint_output_path = test_paint_output_path
@@ -90,9 +87,6 @@ struct Config {
     
     // groups smaller than this are ignored
     let minGroupSize: Int
-
-    // groups larger than this are assumed to be airplanes and painted over
-    let assumeAirplaneSize: Int
 
     // how many cpu cores should we max out at?
     let numConcurrentRenders: Int
