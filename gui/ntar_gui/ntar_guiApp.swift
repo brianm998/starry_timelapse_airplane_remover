@@ -92,11 +92,13 @@ struct ntar_guiApp: App {
         }
         /*
 
-         next steps:
+         did:
 
          hard code some Config class
-
+         
          use that to startup something similar to what Ntar.swift does on cli
+         
+         next steps:
 
          track this progress w/ the ui
 

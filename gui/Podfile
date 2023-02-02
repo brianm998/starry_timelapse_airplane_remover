@@ -13,7 +13,7 @@ target 'ntar_gui' do
   use_frameworks!
 
   pod 'ArgumentParser'
-  pod 'ntar', :path => "../"
+  pod 'ntar', :path => "../cli"
   
   # this gets rid of some localizability warnings on the pods xcode project
   post_install do |installer|
