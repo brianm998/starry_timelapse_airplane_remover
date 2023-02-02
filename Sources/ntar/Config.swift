@@ -17,7 +17,7 @@ func sixteenBitVersion(ofPercentage percentage: Double) -> UInt16 {
 }
 
 @available(macOS 10.15, *) 
-struct Config {
+public struct Config {
 
     init() {
         self.outputPath = "."
@@ -38,16 +38,16 @@ struct Config {
         self.max_pixel_distance = sixteenBitVersion(ofPercentage: outlierMinThreshold)
     }
 
-    init(outputPath: String?,
-         outlierMaxThreshold: Double,
-         outlierMinThreshold: Double,
-         minGroupSize: Int,
-         numConcurrentRenders: Int,
-         test_paint: Bool,
-         test_paint_output_path: String,
-         imageSequenceName: String,
-         imageSequencePath: String,
-         writeOutlierGroupFiles: Bool)
+    public init(outputPath: String?,
+                outlierMaxThreshold: Double,
+                outlierMinThreshold: Double,
+                minGroupSize: Int,
+                numConcurrentRenders: Int,
+                test_paint: Bool,
+                test_paint_output_path: String,
+                imageSequenceName: String,
+                imageSequencePath: String,
+                writeOutlierGroupFiles: Bool)
     {
         if let outputPath = outputPath {
             self.outputPath = outputPath

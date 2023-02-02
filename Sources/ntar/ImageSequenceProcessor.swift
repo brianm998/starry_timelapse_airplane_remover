@@ -3,7 +3,7 @@ import CoreGraphics
 import Cocoa
 
 @available(macOS 10.15, *) 
-class ImageSequenceProcessor<T> {
+public class ImageSequenceProcessor<T> {
 
     // the name of the directory holding the image sequence being processed
     let image_sequence_dirname: String
@@ -28,7 +28,7 @@ class ImageSequenceProcessor<T> {
 
     // concurrent dispatch queue so we can process frames in parallel
     
-    let dispatchGroup = DispatchHandler()
+    public let dispatchGroup = DispatchHandler()
 
     var should_process: [Bool] = []       // indexed by frame number
     var existing_output_files: [Bool] = [] // indexed by frame number
@@ -146,7 +146,7 @@ class ImageSequenceProcessor<T> {
         // can be overridden
     }
     
-    func run() throws {
+    public func run() throws {
         Log.d("run")
         try startup_hook()
 

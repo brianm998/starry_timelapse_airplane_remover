@@ -21,7 +21,7 @@ You should have received a copy of the GNU General Public License along with nta
 // and then using a FinalProcessor to finish processing
 
 @available(macOS 10.15, *) 
-class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemover> {
+public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemover> {
 
     let config: Config
 
@@ -33,7 +33,7 @@ class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemover> {
 
     var final_processor: FinalProcessor?    
 
-    init(with config: Config) throws {
+    public init(with config: Config) throws {
         self.config = config
 
         var basename = "\(config.image_sequence_dirname)-ntar-v-\(config.ntar_version)"
@@ -85,7 +85,7 @@ class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemover> {
         final_processor = processor
     }
 
-    override func run() throws {
+    public override func run() throws {
 
         if let final_processor = final_processor {
             // setup the final processor and queue

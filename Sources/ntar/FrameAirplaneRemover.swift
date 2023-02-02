@@ -37,7 +37,7 @@ enum FrameProcessingState: Int, CaseIterable {
 }
 
 @available(macOS 10.15, *)
-actor FrameAirplaneRemover: Equatable, Hashable {
+public actor FrameAirplaneRemover: Equatable, Hashable {
 
     var state: FrameProcessingState = .unprocessed {
         willSet {
@@ -50,7 +50,7 @@ actor FrameAirplaneRemover: Equatable, Hashable {
         }
     }
 
-    nonisolated func hash(into hasher: inout Hasher) {
+    nonisolated public func hash(into hasher: inout Hasher) {
         hasher.combine(frame_index)
     }
     

@@ -325,7 +325,6 @@ struct Ntar: ParsableCommand {
                 // enable updatable logging when not doing console logging
                 config.updatable = UpdatableLog()
 
-                
                 if let updatable = config.updatable {
                     Log.handlers[.console] = UpdatableLogHandler(updatable)
                     let name = input_image_sequence_name
@@ -335,7 +334,6 @@ struct Ntar: ParsableCommand {
                         await updatable.log(name: "ntar",
                                             message: message,
                                             value: -1)
-                        
                     }
                 }
             }

@@ -3,13 +3,13 @@ import Foundation
 // this class is to debug issues with not calling DispatchHandler.leave() properly
 
 @available(macOS 10.15, *)
-actor DispatchHandler {
+public actor DispatchHandler {
 
     // these are helpful for debugging but are not async aware,
     // and making this class an actor causes too many other changes
     var count = 0
     var running: [String:Bool] = [:] // could be a set
-    let dispatch_group = DispatchGroup()
+    public let dispatch_group = DispatchGroup()
     
     init() { }
     
