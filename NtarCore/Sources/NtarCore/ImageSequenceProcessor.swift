@@ -9,7 +9,7 @@ public class ImageSequenceProcessor<T> {
     let image_sequence_dirname: String
 
     // the name of the directory to write processed images to
-    let output_dirname: String
+    public let output_dirname: String
 
     // the max number of frames to process at one time
     let max_concurrent_renders: Int

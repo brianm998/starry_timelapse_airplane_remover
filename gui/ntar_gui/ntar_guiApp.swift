@@ -6,7 +6,7 @@
 //
 
 import SwiftUI
-import ntar
+import NtarCore
 
 @main
 struct ntar_guiApp: App {

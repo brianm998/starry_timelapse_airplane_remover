@@ -1,7 +1,7 @@
 import Foundation
 
 // why we are or are not painting a group
-enum PaintReason: Equatable, CaseIterable {
+public enum PaintReason: Equatable, CaseIterable {
    case goodScore(Double)            // percent score
    case looksLikeALine(Double)       
    case inStreak(Int)           // size
@@ -87,15 +87,15 @@ These outlier groups were ignored for being too small and not linear enough.
         }
    }
 
-   static var shouldPaintCases: [PaintReason] {
+   public static var shouldPaintCases: [PaintReason] {
        return PaintReason.allCases.filter { $0.willPaint }
    }
 
-   static var shouldNotPaintCases: [PaintReason] {
+   public static var shouldNotPaintCases: [PaintReason] {
        return PaintReason.allCases.filter { !$0.willPaint }
    }
 
-   static var allCases: [PaintReason] {
+   public static var allCases: [PaintReason] {
        return [.looksLikeALine(0), .goodScore(0),
                .inStreak(0), .badScore(0), .adjecentOverlap(0), .smallNonLinear]
    }

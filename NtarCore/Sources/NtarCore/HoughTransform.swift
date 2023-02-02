@@ -18,7 +18,7 @@ You should have received a copy of the GNU General Public License along with nta
 // this class does a hough transform on the input_data var into the counts var
 // input_data is rows of a matrix of data_width and data_height
 // users should input their data into input_data before calling the lines method.
-class HoughTransform {
+public class HoughTransform {
 
     let data_width: Int
     let data_height: Int
@@ -32,20 +32,20 @@ class HoughTransform {
 
     let max_pixel_distance: UInt16
     
-    var input_data: [UInt32]
+    public var input_data: [UInt32]
     var counts: [[Double]]
     
     let dr: Double
     let dth: Double
 
-    convenience init(data_width: Int, data_height: Int, max_pixel_distance: UInt16) {
+    public convenience init(data_width: Int, data_height: Int, max_pixel_distance: UInt16) {
         self.init(data_width: data_width,
                   data_height: data_height,
                   input_data: [UInt32](repeating: 0, count: data_width*data_height),
                   max_pixel_distance: max_pixel_distance)
     }
 
-    init(data_width: Int, data_height: Int, input_data: [UInt32], max_pixel_distance: UInt16) {
+    public init(data_width: Int, data_height: Int, input_data: [UInt32], max_pixel_distance: UInt16) {
         self.data_width = data_width
         self.data_height = data_height
         self.rmax = sqrt(Double(data_width*data_width + data_height*data_height))
@@ -66,8 +66,8 @@ class HoughTransform {
         }
     }
     
-    func lines(min_count: Int = 5, // lines with less counts than this aren't returned
-              number_of_lines_returned: Int? = nil) -> [Line]
+    public func lines(min_count: Int = 5, // lines with less counts than this aren't returned
+                      number_of_lines_returned: Int? = nil) -> [Line]
     {
         //let start_time = NSDate().timeIntervalSince1970
 

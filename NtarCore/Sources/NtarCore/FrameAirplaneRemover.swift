@@ -41,7 +41,7 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
 
     var state: FrameProcessingState = .unprocessed {
         willSet {
-            if let updatableProgressMonitor = updatableProgressMonitor {
+            if let updatableProgressMonitor = config.updatableProgressMonitor {
                 // trigger updatable log update
                 Task(priority: .userInitiated) {
                     await updatableProgressMonitor.stateChange(for: self, to: newValue)

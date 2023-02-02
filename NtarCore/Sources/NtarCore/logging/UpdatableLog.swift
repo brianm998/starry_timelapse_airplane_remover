@@ -13,7 +13,7 @@ You should have received a copy of the GNU General Public License along with nta
 
 */
 
-enum ConsoleColor: String, CaseIterable {
+public enum ConsoleColor: String, CaseIterable {
     case black   = "\u{001b}[30m"
     case red     = "\u{001b}[31m"
     case green   = "\u{001b}[32m"
@@ -26,7 +26,7 @@ enum ConsoleColor: String, CaseIterable {
 }
 
 // progress is between 0 and 1
-func progress_bar(length: Int, progress: Double) -> String {
+public func progress_bar(length: Int, progress: Double) -> String {
 
     var progress_bar: String = ConsoleColor.blue.rawValue + "["
     for i in 0 ..< length {
@@ -42,7 +42,7 @@ func progress_bar(length: Int, progress: Double) -> String {
 }
 
 // progress is between 0 and 1
-func reverse_progress_bar(length: Int, progress: Double) -> String {
+public func reverse_progress_bar(length: Int, progress: Double) -> String {
 
     var progress_bar: String = ConsoleColor.blue.rawValue + "["
     for i in (0 ..< length).reversed() {
@@ -57,16 +57,16 @@ func reverse_progress_bar(length: Int, progress: Double) -> String {
     return progress_bar
 }
 
-class UpdatableLogLine {
+public class UpdatableLogLine {
     let name: String            // a unique name
     var message: String         // the current log message
     var value: Double           // a sortable value
     var value2: Double?         // a second sortable value, used when the first values are equal
 
-    init(name: String,
-         message: String,
-         value: Double,
-         value2: Double? = nil)
+    public init(name: String,
+                message: String,
+                value: Double,
+                value2: Double? = nil)
     {
         self.name = name
         self.message = message
@@ -93,11 +93,11 @@ class UpdatableLogLine {
 var screen_width: UInt16 = 120
 
 @available(macOS 10.15, *) 
-actor UpdatableLog {
+public actor UpdatableLog {
 
     var list: [UpdatableLogLine] = []
 
-    init() {
+    public init() {
         var w = winsize()
         let ioctl_ret = ioctl(STDOUT_FILENO, TIOCGWINSZ, &w)
         if ioctl_ret == 0 {
@@ -168,10 +168,10 @@ actor UpdatableLog {
         }
     }
 
-    func log(name: String,
-             message: String,
-             value: Double,
-             value2: Double? = nil)
+    public func log(name: String,
+                    message: String,
+                    value: Double,
+                    value2: Double? = nil)
     {
         var found = false
         let new_logline = UpdatableLogLine(name: name,

@@ -3,19 +3,19 @@ import Foundation
 extension String: Error {}
 
 // x, y coordinates
-typealias Coord = (
+public typealias Coord = (
     x: Int,
     y: Int
 )
 
 // polar coordinates for right angle intersection with line from origin
-typealias Line = (                 
+public typealias Line = (                 
     theta: Double,                 // angle in degrees
     rho: Double,                   // distance in pixels
     count: Int                     // higher count is better fit for line
 )
 
-enum Edge {
+public enum Edge {
     case vertical
     case horizontal
 }
@@ -29,7 +29,7 @@ typealias AirplaneStreakMember = (
 )
 
 // the bounding box of an outlier group
-struct BoundingBox {
+public struct BoundingBox {
     let min: Coord
     let max: Coord
 

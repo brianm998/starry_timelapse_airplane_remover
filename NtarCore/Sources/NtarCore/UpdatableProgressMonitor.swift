@@ -15,11 +15,11 @@ You should have received a copy of the GNU General Public License along with nta
 */
 
 @available(macOS 10.15, *)
-class UpdatableLogHandler: LogHandler {
-    func log(message: String,
-             at fileLocation: String,
-             with data: LogData?,
-             at logLevel: Log.Level)
+public class UpdatableLogHandler: LogHandler {
+    public func log(message: String,
+                    at fileLocation: String,
+                    with data: LogData?,
+                    at logLevel: Log.Level)
     {
         Task(priority: .userInitiated) {
             var log_message = ""
@@ -47,17 +47,13 @@ class UpdatableLogHandler: LogHandler {
     }
 }
 
-
 @available(macOS 10.15, *)
-var updatableProgressMonitor: UpdatableProgressMonitor?
-
-@available(macOS 10.15, *)
-actor UpdatableProgressMonitor {
+public actor UpdatableProgressMonitor {
     let number_of_frames: Int
     let maxConcurrent: Int
     let config: Config
     
-    let dispatchGroup = DispatchGroup()
+    public let dispatchGroup = DispatchGroup()
     
     var frames: [FrameProcessingState: Set<FrameAirplaneRemover>] = [:]
     init(frameCount: Int, maxConcurrent: Int, config: Config) {

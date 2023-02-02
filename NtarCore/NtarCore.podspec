@@ -3,7 +3,7 @@
 
 Pod::Spec.new do |s|
 
-  s.name         = "ntar"
+  s.name         = "NtarCore"
   s.version      = "0.1.2"
   s.summary      = "ntar"
 

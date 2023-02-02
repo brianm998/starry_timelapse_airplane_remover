@@ -15,7 +15,7 @@ You should have received a copy of the GNU General Public License along with nta
 // describes basic colors that are both ansi terminal colors and also Pixel values we can use to paint
 // test paint values of
 
-enum BasicColor: String {
+public enum BasicColor: String {
     case black = "\u{001B}[0;30m"
     case red = "\u{001B}[0;31m"
     case green = "\u{001B}[0;32m"
@@ -35,7 +35,7 @@ enum BasicColor: String {
     case brightCyan = "\u{001b}[36;1m"
     case brightWhite = "\u{001b}[37;1m"
     
-    func name() -> String {
+    public func name() -> String {
         switch self {
         case .black: return "Black"
         case .red: return "Red"
@@ -57,7 +57,7 @@ enum BasicColor: String {
         }
     }
 
-    var pixel: Pixel {
+    public var pixel: Pixel {
         get {
             var pixel = Pixel()
             switch self {
@@ -136,11 +136,11 @@ enum BasicColor: String {
     }
 }
 
-func + (left: BasicColor, right: String) -> String {
+public func + (left: BasicColor, right: String) -> String {
     return left.rawValue + right
 }
 
-func + (left: String, right: BasicColor) -> String {
+public func + (left: String, right: BasicColor) -> String {
     return left + right.rawValue
 }
 

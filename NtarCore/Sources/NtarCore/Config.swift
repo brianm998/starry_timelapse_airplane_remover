@@ -19,7 +19,7 @@ func sixteenBitVersion(ofPercentage percentage: Double) -> UInt16 {
 @available(macOS 10.15, *) 
 public struct Config {
 
-    init() {
+    public init() {
         self.outputPath = "."
         self.outlierMaxThreshold = 0
         self.outlierMinThreshold = 0
@@ -72,83 +72,85 @@ public struct Config {
     }
 
     // the base dir under which to create dir(s) for output sequence(s)
-    let outputPath: String
+    public let outputPath: String
     
     // percentage difference between same pixels on different frames to consider an outlier
-    let outlierMaxThreshold: Double
+    public let outlierMaxThreshold: Double
 
     // computed over 16 bits per pixel from the value above
-    let min_pixel_distance: UInt16
+    public let min_pixel_distance: UInt16
 
     // min percentage difference between same pixels on different frames to consider an outlier
-    let outlierMinThreshold: Double
+    public let outlierMinThreshold: Double
 
     // computed over 16 bits per pixel from the value above
-    let max_pixel_distance: UInt16
+    public let max_pixel_distance: UInt16
     
     // groups smaller than this are ignored
-    let minGroupSize: Int
+    public let minGroupSize: Int
 
     // how many cpu cores should we max out at?
-    let numConcurrentRenders: Int
+    public let numConcurrentRenders: Int
 
     // write out test paint images
-    let test_paint: Bool
+    public let test_paint: Bool
 
     // where to create the test paint output dir
-    let test_paint_output_path: String
+    public let test_paint_output_path: String
     
     // the name of the directory containing the input sequence
-    let image_sequence_dirname: String
+    public let image_sequence_dirname: String
 
     // where the input image sequence dir lives
-    let image_sequence_path: String
+    public let image_sequence_path: String
     
     // write out individual outlier group images
-    let writeOutlierGroupFiles: Bool
+    public let writeOutlierGroupFiles: Bool
 
-    let medium_hough_line_score: Double = 0.4 // close to being a line, not really far
+    public let medium_hough_line_score: Double = 0.4 // close to being a line, not really far
     // how far in each direction do we go when doing final processing?
-    let number_final_processing_neighbors_needed = 1 // in each direction
+    public let number_final_processing_neighbors_needed = 1 // in each direction
 
-    let final_theta_diff: Double = 10       // how close in theta/rho outliers need to be between frames
-    let final_rho_diff: Double = 20        // 20 works
+    public let final_theta_diff: Double = 10       // how close in theta/rho outliers need to be between frames
+    public let final_rho_diff: Double = 20        // 20 works
 
-    let center_line_theta_diff: Double = 18 // used in outlier streak detection
+    public let center_line_theta_diff: Double = 18 // used in outlier streak detection
     // 25 is too large
 
     // the minimum outlier group size at the top of the screen
     // smaller outliers at the top are discarded early on
-    let min_group_size_at_top = 400
+    public let min_group_size_at_top = 400
     
 
     // what percentage of the top of the screen is considered far enough
     // above the horizon to not need really small outlier groups
     // between the bottom and the top of this area, the minimum
     // outlier group size increases
-    let upper_sky_percentage: Double = 66 // top 66% of the screen
+    public let upper_sky_percentage: Double = 66 // top 66% of the screen
 
 
     // these parameters are used to throw out outlier groups from the
     // initial list to consider.  Smaller groups than this must have
     // a hough score this big or greater to be included.
-    let max_must_look_like_line_size: Int = 500
-    let max_must_look_like_line_score: Double = 0.25
-    let surface_area_to_size_max = 0.5
+    public let max_must_look_like_line_size: Int = 500
+    public let max_must_look_like_line_score: Double = 0.25
+    public let surface_area_to_size_max = 0.5
 
 
-    let supported_image_file_types = [".tif", ".tiff"] // XXX move this out
+    public let supported_image_file_types = [".tif", ".tiff"] // XXX move this out
 
     // XXX use this to try to avoid running out of memory somehow
     // maybe determine megapixels of images, and guestimate usage and
     // avoid spawaning too many threads?
-    let memory_size_bytes = ProcessInfo.processInfo.physicalMemory
-    let memory_size_gigs = ProcessInfo.processInfo.physicalMemory/(1024*1024*1024)
+    public let memory_size_bytes = ProcessInfo.processInfo.physicalMemory
+    public let memory_size_gigs = ProcessInfo.processInfo.physicalMemory/(1024*1024*1024)
 
     // used by updatable log
-    let progress_bar_length = 50
+    public let progress_bar_length = 50
 
-    var updatable: UpdatableLog?
+    public var updatable: UpdatableLog?
+
+    public var updatableProgressMonitor: UpdatableProgressMonitor?
 
     // 0.0.2 added more detail group hough transormation analysis, based upon a data set
     // 0.0.3 included the data set analysis to include group size and fill, and to use histograms
@@ -166,6 +168,6 @@ public struct Config {
     // 0.1.2 lots of speed/memory usage improvements, better updatable log
     // 0.1.3 started to add the gui
 
-    let ntar_version = "0.1.3"
+    public let ntar_version = "0.1.3"
     
 }

@@ -2,6 +2,7 @@ import Foundation
 import ArgumentParser
 import CoreGraphics
 import Cocoa
+import NtarCore
 
 /*
 
@@ -124,10 +125,9 @@ todo:
 
 
 // this is here so that PaintReason can see it
+// XXX still necessary?
 @available(macOS 10.15, *) 
 var config: Config = Config()
-
-
 
 @main
 @available(macOS 10.15, *) 
@@ -350,17 +350,21 @@ struct Ntar: ParsableCommand {
                     
                 // XXX maybe check to make sure this is a directory
                 Log.i("processing files in \(input_image_sequence_dirname)")
-                
-                let eraser = try NighttimeAirplaneRemover(with: config)
-                Log.dispatchGroup = eraser.dispatchGroup.dispatch_group
-                try eraser.run()
+                let local_dispatch = DispatchGroup()
+                local_dispatch.enter()
+                Task {
+                    let eraser = try NighttimeAirplaneRemover(with: config)
+                    Log.dispatchGroup = await eraser.dispatchGroup.dispatch_group
+                    try eraser.run()
 
-
-                if let updatableProgressMonitor = updatableProgressMonitor
-                {
-                    updatableProgressMonitor.dispatchGroup.wait()
-                    print("processing complete, output is in \(eraser.output_dirname)")
+                    if let updatableProgressMonitor = config.updatableProgressMonitor
+                    {
+                        await updatableProgressMonitor.dispatchGroup.wait()
+                        print("processing complete, output is in \(eraser.output_dirname)")
+                    }
+                    local_dispatch.leave()
                 }
+                local_dispatch.wait()
             } catch {
                 Log.e("\(error)")
             }

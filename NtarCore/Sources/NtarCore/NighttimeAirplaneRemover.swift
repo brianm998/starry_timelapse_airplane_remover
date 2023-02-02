@@ -23,7 +23,7 @@ You should have received a copy of the GNU General Public License along with nta
 @available(macOS 10.15, *) 
 public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemover> {
 
-    let config: Config
+    var config: Config
 
     // the name of the directory to create when writing test paint images
     let test_paint_output_dirname: String
@@ -73,9 +73,9 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
                                        dispatchGroup: dispatchGroup,
                                        imageSequence: image_sequence)
 
-        if let _ = config.updatable {
-            // setup sequence monitor
-            updatableProgressMonitor =
+        if let _ = self.config.updatable {
+            // setup sequence monitor XXX do this in config
+            self.config.updatableProgressMonitor =
               UpdatableProgressMonitor(frameCount: image_sequence_size,
                                        // XXX don't pass this VVV, use config, DUH
                                        maxConcurrent: config.numConcurrentRenders,

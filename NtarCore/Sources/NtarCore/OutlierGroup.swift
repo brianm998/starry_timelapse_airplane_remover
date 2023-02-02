@@ -355,7 +355,7 @@ func histogram_lookup(ofValue value: Double,
     return histogram_values[index]
 }
 
-func surface_area_to_size_ratio(of pixels: [UInt32], width: Int, height: Int) -> Double {
+public func surface_area_to_size_ratio(of pixels: [UInt32], width: Int, height: Int) -> Double {
     var size: Int = 0
     var surface_area: Int = 0
     for x in 0 ..< width {
