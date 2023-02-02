@@ -19,7 +19,7 @@ Pod::Spec.new do |s|
 
   s.source       = { :git => "git@github.com:brianm998/nighttime_timelapse_airplane_remover", :branch => "develop" }
   s.source_files  = "Sources/**/*.{swift}"
-#  s.exclude_files = "Sources/ntar/Ntar.swift"
+  s.exclude_files = "Sources/ntar/Ntar.swift"
 
   s.pod_target_xcconfig = { 'SWIFT_VERSION' => 5 }
 
