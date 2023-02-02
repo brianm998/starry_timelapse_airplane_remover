@@ -124,32 +124,13 @@ todo:
 
 
 // this is here so that PaintReason can see it
+@available(macOS 10.15, *) 
 var config: Config = Config()
 
-@available(macOS 10.15, *) 
-var updatable: UpdatableLog?
 
-// XXX move this to config
-let progress_bar_length = 50
-
-// 0.0.2 added more detail group hough transormation analysis, based upon a data set
-// 0.0.3 included the data set analysis to include group size and fill, and to use histograms
-// 0.0.4 included .inStreak final processing
-// 0.0.5 added pixel overlap between outlier groups
-// 0.0.6 fixed streak processing and added another layer afterwards
-// 0.0.7 really fixed streak processing and lots of refactoring
-// 0.0.8 got rid of more false positives with weighted scoring and final streak tweaks
-// 0.0.9 softer outlier boundries, more streak tweaks, outlier overlap adjustments
-// 0.0.10 add alpha on soft outlier boundries, speed up final process some, fix memory problem
-// 0.0.11 fix soft outlier boundries, better constants, initial group filter
-// 0.0.12 fix a streak bug, other small fixes
-// 0.1.0 added height based size constraints, runs faster, gets 95% or more airplanes
-// 0.1.1 updatable logging, try to improve speed
-// 0.1.2 lots of speed/memory usage improvements, better updatable log
-
-let ntar_version = "0.1.2"
 
 @main
+@available(macOS 10.15, *) 
 struct Ntar: ParsableCommand {
 
     @Option(name: [.customShort("c"), .customLong("console-log-level")], help:"""
@@ -239,7 +220,7 @@ struct Ntar: ParsableCommand {
         
         if version {
             print("""
-                  Nighttime Timelapse Airplane Remover (ntar) version \(ntar_version)
+                  Nighttime Timelapse Airplane Remover (ntar) version \(config.ntar_version)
                   """)
             return
         }
@@ -275,19 +256,15 @@ struct Ntar: ParsableCommand {
             let airplanes_group = "outlier_data/airplanes"
             let non_airplanes_group = "outlier_data/non_airplanes"
             
-            if #available(macOS 10.15, *) {
-                do {
-                    let max_pixel_distance = UInt16((outlierMaxThreshold/100)*0xFFFF) // XXX 16 bit hardcode
+            do {
+                let max_pixel_distance = UInt16((outlierMaxThreshold/100)*0xFFFF) // XXX 16 bit hardcode
 
-                    try process_outlier_groups(dirname: airplanes_group,
-                                               max_pixel_distance: max_pixel_distance)
-                    try process_outlier_groups(dirname: non_airplanes_group,
-                                               max_pixel_distance: max_pixel_distance)
-                } catch {
-                    Log.e(error)
-                }
-            } else {
-                // XXX handle this better
+                try process_outlier_groups(dirname: airplanes_group,
+                                           max_pixel_distance: max_pixel_distance)
+                try process_outlier_groups(dirname: non_airplanes_group,
+                                           max_pixel_distance: max_pixel_distance)
+            } catch {
+                Log.e(error)
             }
             
             return
@@ -326,34 +303,6 @@ struct Ntar: ParsableCommand {
             if let testPaintOutputPath = testPaintOutputPath {
                 test_paint_output_path = testPaintOutputPath
             }
-            
-            Log.name = "ntar-log"
-            Log.nameSuffix = input_image_sequence_name
-
-            if let terminalLogLevel = terminalLogLevel {
-                // use console logging
-                Log.handlers[.console] = ConsoleLogHandler(at: terminalLogLevel)
-            } else {
-                // enable updatable logging when not doing console logging
-                if #available(macOS 10.15, *) {
-                    updatable = UpdatableLog()
-
-                    Log.handlers[.console] = UpdatableLogHandler()
-                    
-                    if let updatable = updatable {
-                        let name = input_image_sequence_name
-                        let path = input_image_sequence_path
-                        let message = "ntar v\(ntar_version) is processing images from sequence in \(path)/\(name)"
-                        Task {
-                            await updatable.log(name: "ntar",
-                                                message: message,
-                                                value: -1)
-                            
-                        }
-                    }
-                    
-                }
-            }
 
             config = Config(outputPath: output_path,
                             outlierMaxThreshold: outlierMaxThreshold,
@@ -366,12 +315,35 @@ struct Ntar: ParsableCommand {
                             imageSequencePath: input_image_sequence_path,
                             writeOutlierGroupFiles: should_write_outlier_group_files)
             
+            Log.name = "ntar-log"
+            Log.nameSuffix = input_image_sequence_name
+
+            if let terminalLogLevel = terminalLogLevel {
+                // use console logging
+                Log.handlers[.console] = ConsoleLogHandler(at: terminalLogLevel)
+            } else {
+                // enable updatable logging when not doing console logging
+                config.updatable = UpdatableLog()
+
+                
+                if let updatable = config.updatable {
+                    Log.handlers[.console] = UpdatableLogHandler(updatable)
+                    let name = input_image_sequence_name
+                    let path = input_image_sequence_path
+                    let message = "ntar v\(config.ntar_version) is processing images from sequence in \(path)/\(name)"
+                    Task {
+                        await updatable.log(name: "ntar",
+                                            message: message,
+                                            value: -1)
+                        
+                    }
+                }
+            }
+
             do {
                 if let fileLogLevel = fileLogLevel {
                     Log.i("enabling file logging")
-                    if #available(macOS 10.15, *) {
-                        Log.handlers[.file] = try FileLogHandler(at: fileLogLevel)
-                    }
+                    Log.handlers[.file] = try FileLogHandler(at: fileLogLevel)
                 }
                 
                 signal(SIGKILL) { foo in
@@ -381,19 +353,15 @@ struct Ntar: ParsableCommand {
                 // XXX maybe check to make sure this is a directory
                 Log.i("processing files in \(input_image_sequence_dirname)")
                 
-                if #available(macOS 10.15, *) {
-                    let eraser = try NighttimeAirplaneRemover(with: config)
-                    Log.dispatchGroup = eraser.dispatchGroup.dispatch_group
-                    try eraser.run()
+                let eraser = try NighttimeAirplaneRemover(with: config)
+                Log.dispatchGroup = eraser.dispatchGroup.dispatch_group
+                try eraser.run()
 
 
-                    if let updatableProgressMonitor = updatableProgressMonitor
-                    {
-                        updatableProgressMonitor.dispatchGroup.wait()
-                        print("processing complete, output is in \(eraser.output_dirname)")
-                    }
-                } else {
-                    Log.e("cannot run :(") // XXX make this better
+                if let updatableProgressMonitor = updatableProgressMonitor
+                {
+                    updatableProgressMonitor.dispatchGroup.wait()
+                    print("processing complete, output is in \(eraser.output_dirname)")
                 }
             } catch {
                 Log.e("\(error)")
@@ -471,5 +439,6 @@ func process_outlier_groups(dirname: String,
     dispatchGroup.wait()
 }
 
+extension Log.Level: ExpressibleByArgument { }
 
-let file_manager = FileManager.default
+fileprivate let file_manager = FileManager.default

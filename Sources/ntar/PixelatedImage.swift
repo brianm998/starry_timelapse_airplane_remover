@@ -131,3 +131,4 @@ class PixelatedImage {
     }
 }
 
+fileprivate let file_manager = FileManager.default

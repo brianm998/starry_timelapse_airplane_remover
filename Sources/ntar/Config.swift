@@ -16,6 +16,7 @@ func sixteenBitVersion(ofPercentage percentage: Double) -> UInt16 {
     return UInt16((percentage/100)*Double(0xFFFF))
 }
 
+@available(macOS 10.15, *) 
 struct Config {
 
     init() {
@@ -143,4 +144,28 @@ struct Config {
     // avoid spawaning too many threads?
     let memory_size_bytes = ProcessInfo.processInfo.physicalMemory
     let memory_size_gigs = ProcessInfo.processInfo.physicalMemory/(1024*1024*1024)
+
+    // used by updatable log
+    let progress_bar_length = 50
+
+    var updatable: UpdatableLog?
+
+    // 0.0.2 added more detail group hough transormation analysis, based upon a data set
+    // 0.0.3 included the data set analysis to include group size and fill, and to use histograms
+    // 0.0.4 included .inStreak final processing
+    // 0.0.5 added pixel overlap between outlier groups
+    // 0.0.6 fixed streak processing and added another layer afterwards
+    // 0.0.7 really fixed streak processing and lots of refactoring
+    // 0.0.8 got rid of more false positives with weighted scoring and final streak tweaks
+    // 0.0.9 softer outlier boundries, more streak tweaks, outlier overlap adjustments
+    // 0.0.10 add alpha on soft outlier boundries, speed up final process some, fix memory problem
+    // 0.0.11 fix soft outlier boundries, better constants, initial group filter
+    // 0.0.12 fix a streak bug, other small fixes
+    // 0.1.0 added height based size constraints, runs faster, gets 95% or more airplanes
+    // 0.1.1 updatable logging, try to improve speed
+    // 0.1.2 lots of speed/memory usage improvements, better updatable log
+    // 0.1.3 started to add the gui
+
+    let ntar_version = "0.1.3"
+    
 }

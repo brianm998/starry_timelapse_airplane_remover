@@ -1,0 +1,652 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		5950D2092E1D060BC9275E66 /* Pods_ntar_gui.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0B0453DB24E8A23144C66A23 /* Pods_ntar_gui.framework */; };
+		D386FA11298B617300878B56 /* ntar_guiApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = D386FA10298B617300878B56 /* ntar_guiApp.swift */; };
+		D386FA13298B617300878B56 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D386FA12298B617300878B56 /* ContentView.swift */; };
+		D386FA15298B617400878B56 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = D386FA14298B617400878B56 /* Assets.xcassets */; };
+		D386FA18298B617400878B56 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = D386FA17298B617400878B56 /* Preview Assets.xcassets */; };
+		D386FA23298B617400878B56 /* ntar_guiTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D386FA22298B617400878B56 /* ntar_guiTests.swift */; };
+		D386FA2D298B617400878B56 /* ntar_guiUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D386FA2C298B617400878B56 /* ntar_guiUITests.swift */; };
+		D386FA2F298B617400878B56 /* ntar_guiUITestsLaunchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D386FA2E298B617400878B56 /* ntar_guiUITestsLaunchTests.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		D386FA1F298B617400878B56 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = D386FA05298B617300878B56 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = D386FA0C298B617300878B56;
+			remoteInfo = ntar_gui;
+		};
+		D386FA29298B617400878B56 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = D386FA05298B617300878B56 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = D386FA0C298B617300878B56;
+			remoteInfo = ntar_gui;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		0B0453DB24E8A23144C66A23 /* Pods_ntar_gui.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_ntar_gui.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		540415BAD54DC7E2F8297DCF /* Pods-ntar_gui.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-ntar_gui.release.xcconfig"; path = "Target Support Files/Pods-ntar_gui/Pods-ntar_gui.release.xcconfig"; sourceTree = "<group>"; };
+		5F0FA5BFD47E6F6D97B17603 /* Pods-ntar_gui.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-ntar_gui.debug.xcconfig"; path = "Target Support Files/Pods-ntar_gui/Pods-ntar_gui.debug.xcconfig"; sourceTree = "<group>"; };
+		D386FA0D298B617300878B56 /* ntar_gui.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ntar_gui.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		D386FA10298B617300878B56 /* ntar_guiApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ntar_guiApp.swift; sourceTree = "<group>"; };
+		D386FA12298B617300878B56 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		D386FA14298B617400878B56 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		D386FA17298B617400878B56 /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
+		D386FA19298B617400878B56 /* ntar_gui.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ntar_gui.entitlements; sourceTree = "<group>"; };
+		D386FA1E298B617400878B56 /* ntar_guiTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ntar_guiTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		D386FA22298B617400878B56 /* ntar_guiTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ntar_guiTests.swift; sourceTree = "<group>"; };
+		D386FA28298B617400878B56 /* ntar_guiUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ntar_guiUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		D386FA2C298B617400878B56 /* ntar_guiUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ntar_guiUITests.swift; sourceTree = "<group>"; };
+		D386FA2E298B617400878B56 /* ntar_guiUITestsLaunchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ntar_guiUITestsLaunchTests.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		D386FA0A298B617300878B56 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				5950D2092E1D060BC9275E66 /* Pods_ntar_gui.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D386FA1B298B617400878B56 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D386FA25298B617400878B56 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		26FD1C08E241439DFF9D9A38 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				0B0453DB24E8A23144C66A23 /* Pods_ntar_gui.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		539A197B9AA999D1261E7269 /* Pods */ = {
+			isa = PBXGroup;
+			children = (
+				5F0FA5BFD47E6F6D97B17603 /* Pods-ntar_gui.debug.xcconfig */,
+				540415BAD54DC7E2F8297DCF /* Pods-ntar_gui.release.xcconfig */,
+			);
+			name = Pods;
+			path = Pods;
+			sourceTree = "<group>";
+		};
+		D386FA04298B617300878B56 = {
+			isa = PBXGroup;
+			children = (
+				D386FA0F298B617300878B56 /* ntar_gui */,
+				D386FA21298B617400878B56 /* ntar_guiTests */,
+				D386FA2B298B617400878B56 /* ntar_guiUITests */,
+				D386FA0E298B617300878B56 /* Products */,
+				539A197B9AA999D1261E7269 /* Pods */,
+				26FD1C08E241439DFF9D9A38 /* Frameworks */,
+			);
+			sourceTree = "<group>";
+		};
+		D386FA0E298B617300878B56 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				D386FA0D298B617300878B56 /* ntar_gui.app */,
+				D386FA1E298B617400878B56 /* ntar_guiTests.xctest */,
+				D386FA28298B617400878B56 /* ntar_guiUITests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		D386FA0F298B617300878B56 /* ntar_gui */ = {
+			isa = PBXGroup;
+			children = (
+				D386FA10298B617300878B56 /* ntar_guiApp.swift */,
+				D386FA12298B617300878B56 /* ContentView.swift */,
+				D386FA14298B617400878B56 /* Assets.xcassets */,
+				D386FA19298B617400878B56 /* ntar_gui.entitlements */,
+				D386FA16298B617400878B56 /* Preview Content */,
+			);
+			path = ntar_gui;
+			sourceTree = "<group>";
+		};
+		D386FA16298B617400878B56 /* Preview Content */ = {
+			isa = PBXGroup;
+			children = (
+				D386FA17298B617400878B56 /* Preview Assets.xcassets */,
+			);
+			path = "Preview Content";
+			sourceTree = "<group>";
+		};
+		D386FA21298B617400878B56 /* ntar_guiTests */ = {
+			isa = PBXGroup;
+			children = (
+				D386FA22298B617400878B56 /* ntar_guiTests.swift */,
+			);
+			path = ntar_guiTests;
+			sourceTree = "<group>";
+		};
+		D386FA2B298B617400878B56 /* ntar_guiUITests */ = {
+			isa = PBXGroup;
+			children = (
+				D386FA2C298B617400878B56 /* ntar_guiUITests.swift */,
+				D386FA2E298B617400878B56 /* ntar_guiUITestsLaunchTests.swift */,
+			);
+			path = ntar_guiUITests;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		D386FA0C298B617300878B56 /* ntar_gui */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = D386FA32298B617400878B56 /* Build configuration list for PBXNativeTarget "ntar_gui" */;
+			buildPhases = (
+				4D98E86BEFEEE42E5AA18E69 /* [CP] Check Pods Manifest.lock */,
+				D386FA09298B617300878B56 /* Sources */,
+				D386FA0A298B617300878B56 /* Frameworks */,
+				D386FA0B298B617300878B56 /* Resources */,
+				26D0FF90821EBF86A8866857 /* [CP] Embed Pods Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = ntar_gui;
+			productName = ntar_gui;
+			productReference = D386FA0D298B617300878B56 /* ntar_gui.app */;
+			productType = "com.apple.product-type.application";
+		};
+		D386FA1D298B617400878B56 /* ntar_guiTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = D386FA35298B617400878B56 /* Build configuration list for PBXNativeTarget "ntar_guiTests" */;
+			buildPhases = (
+				D386FA1A298B617400878B56 /* Sources */,
+				D386FA1B298B617400878B56 /* Frameworks */,
+				D386FA1C298B617400878B56 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				D386FA20298B617400878B56 /* PBXTargetDependency */,
+			);
+			name = ntar_guiTests;
+			productName = ntar_guiTests;
+			productReference = D386FA1E298B617400878B56 /* ntar_guiTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		D386FA27298B617400878B56 /* ntar_guiUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = D386FA38298B617400878B56 /* Build configuration list for PBXNativeTarget "ntar_guiUITests" */;
+			buildPhases = (
+				D386FA24298B617400878B56 /* Sources */,
+				D386FA25298B617400878B56 /* Frameworks */,
+				D386FA26298B617400878B56 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				D386FA2A298B617400878B56 /* PBXTargetDependency */,
+			);
+			name = ntar_guiUITests;
+			productName = ntar_guiUITests;
+			productReference = D386FA28298B617400878B56 /* ntar_guiUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		D386FA05298B617300878B56 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1410;
+				LastUpgradeCheck = 1410;
+				TargetAttributes = {
+					D386FA0C298B617300878B56 = {
+						CreatedOnToolsVersion = 14.1;
+					};
+					D386FA1D298B617400878B56 = {
+						CreatedOnToolsVersion = 14.1;
+						TestTargetID = D386FA0C298B617300878B56;
+					};
+					D386FA27298B617400878B56 = {
+						CreatedOnToolsVersion = 14.1;
+						TestTargetID = D386FA0C298B617300878B56;
+					};
+				};
+			};
+			buildConfigurationList = D386FA08298B617300878B56 /* Build configuration list for PBXProject "ntar_gui" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = D386FA04298B617300878B56;
+			productRefGroup = D386FA0E298B617300878B56 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				D386FA0C298B617300878B56 /* ntar_gui */,
+				D386FA1D298B617400878B56 /* ntar_guiTests */,
+				D386FA27298B617400878B56 /* ntar_guiUITests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		D386FA0B298B617300878B56 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				D386FA18298B617400878B56 /* Preview Assets.xcassets in Resources */,
+				D386FA15298B617400878B56 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D386FA1C298B617400878B56 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D386FA26298B617400878B56 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		26D0FF90821EBF86A8866857 /* [CP] Embed Pods Frameworks */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-ntar_gui/Pods-ntar_gui-frameworks-${CONFIGURATION}-input-files.xcfilelist",
+			);
+			name = "[CP] Embed Pods Frameworks";
+			outputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-ntar_gui/Pods-ntar_gui-frameworks-${CONFIGURATION}-output-files.xcfilelist",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-ntar_gui/Pods-ntar_gui-frameworks.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
+		4D98E86BEFEEE42E5AA18E69 /* [CP] Check Pods Manifest.lock */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"${PODS_PODFILE_DIR_PATH}/Podfile.lock",
+				"${PODS_ROOT}/Manifest.lock",
+			);
+			name = "[CP] Check Pods Manifest.lock";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(DERIVED_FILE_DIR)/Pods-ntar_gui-checkManifestLockResult.txt",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
+			showEnvVarsInLog = 0;
+		};
+/* End PBXShellScriptBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		D386FA09298B617300878B56 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				D386FA13298B617300878B56 /* ContentView.swift in Sources */,
+				D386FA11298B617300878B56 /* ntar_guiApp.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D386FA1A298B617400878B56 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				D386FA23298B617400878B56 /* ntar_guiTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D386FA24298B617400878B56 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				D386FA2F298B617400878B56 /* ntar_guiUITestsLaunchTests.swift in Sources */,
+				D386FA2D298B617400878B56 /* ntar_guiUITests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		D386FA20298B617400878B56 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = D386FA0C298B617300878B56 /* ntar_gui */;
+			targetProxy = D386FA1F298B617400878B56 /* PBXContainerItemProxy */;
+		};
+		D386FA2A298B617400878B56 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = D386FA0C298B617300878B56 /* ntar_gui */;
+			targetProxy = D386FA29298B617400878B56 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		D386FA30298B617400878B56 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 12.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		D386FA31298B617400878B56 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 12.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+			};
+			name = Release;
+		};
+		D386FA33298B617400878B56 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 5F0FA5BFD47E6F6D97B17603 /* Pods-ntar_gui.debug.xcconfig */;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = ntar_gui/ntar_gui.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_ASSET_PATHS = "\"ntar_gui/Preview Content\"";
+				DEVELOPMENT_TEAM = G3L75S65V9;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.ntar-gui";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		D386FA34298B617400878B56 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 540415BAD54DC7E2F8297DCF /* Pods-ntar_gui.release.xcconfig */;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = ntar_gui/ntar_gui.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_ASSET_PATHS = "\"ntar_gui/Preview Content\"";
+				DEVELOPMENT_TEAM = G3L75S65V9;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.ntar-gui";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		D386FA36298B617400878B56 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = G3L75S65V9;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 12.5;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.ntar-guiTests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/ntar_gui.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/ntar_gui";
+			};
+			name = Debug;
+		};
+		D386FA37298B617400878B56 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = G3L75S65V9;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 12.5;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.ntar-guiTests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/ntar_gui.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/ntar_gui";
+			};
+			name = Release;
+		};
+		D386FA39298B617400878B56 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = G3L75S65V9;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.ntar-guiUITests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TEST_TARGET_NAME = ntar_gui;
+			};
+			name = Debug;
+		};
+		D386FA3A298B617400878B56 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = G3L75S65V9;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.ntar-guiUITests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TEST_TARGET_NAME = ntar_gui;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		D386FA08298B617300878B56 /* Build configuration list for PBXProject "ntar_gui" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D386FA30298B617400878B56 /* Debug */,
+				D386FA31298B617400878B56 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		D386FA32298B617400878B56 /* Build configuration list for PBXNativeTarget "ntar_gui" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D386FA33298B617400878B56 /* Debug */,
+				D386FA34298B617400878B56 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		D386FA35298B617400878B56 /* Build configuration list for PBXNativeTarget "ntar_guiTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D386FA36298B617400878B56 /* Debug */,
+				D386FA37298B617400878B56 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		D386FA38298B617400878B56 /* Build configuration list for PBXNativeTarget "ntar_guiUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D386FA39298B617400878B56 /* Debug */,
+				D386FA3A298B617400878B56 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = D386FA05298B617300878B56 /* Project object */;
+}

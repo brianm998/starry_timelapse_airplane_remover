@@ -237,3 +237,4 @@ func remove_path(fromString string: String) -> String {
 }
 
 
+fileprivate let file_manager = FileManager.default

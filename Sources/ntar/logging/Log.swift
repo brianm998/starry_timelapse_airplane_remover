@@ -11,7 +11,6 @@ You should have received a copy of the GNU General Public License along with nta
 */
 
 import Foundation
-import ArgumentParser
 
 /*
 
@@ -153,7 +152,6 @@ public class Log {
     public enum Level: String,
                      CustomStringConvertible,
                      CaseIterable,
-                     ExpressibleByArgument,
                      Decodable
     {
         case verbose

@@ -21,29 +21,28 @@ class UpdatableLogHandler: LogHandler {
              with data: LogData?,
              at logLevel: Log.Level)
     {
+        Task(priority: .userInitiated) {
+            var log_message = ""
+            if let data = data {
+                log_message = "\(logLevel.emo) \(logLevel) | \(fileLocation): \(message) | \(data.description)"
+            } else {
+                log_message = "\(logLevel.emo) \(logLevel) | \(fileLocation): \(message)"
+            }        
 
-        if let updatable = updatable {
-            Task(priority: .userInitiated) {
-                var log_message = ""
-                if let data = data {
-                    log_message = "\(logLevel.emo) \(logLevel) | \(fileLocation): \(message) | \(data.description)"
-                } else {
-                    log_message = "\(logLevel.emo) \(logLevel) | \(fileLocation): \(message)"
-                }        
-
-                let now = NSDate().timeIntervalSince1970
-                await updatable.log(name: "\(now)",
-                                    message: log_message,
-                                    value: now)
-            }
+            let now = NSDate().timeIntervalSince1970
+            await updatable.log(name: "\(now)",
+                                message: log_message,
+                                value: now)
         }
     }
     
     public let dispatchQueue: DispatchQueue
     public var level: Log.Level?
-
-    public init() {
+    let updatable: UpdatableLog
+    
+    public init(_ updatable: UpdatableLog) {
         self.level = .warn
+        self.updatable = updatable
         self.dispatchQueue = DispatchQueue(label: "fileLogging")
     }
 }
@@ -56,13 +55,15 @@ var updatableProgressMonitor: UpdatableProgressMonitor?
 actor UpdatableProgressMonitor {
     let number_of_frames: Int
     let maxConcurrent: Int
-
+    let config: Config
+    
     let dispatchGroup = DispatchGroup()
     
     var frames: [FrameProcessingState: Set<FrameAirplaneRemover>] = [:]
-    init(frameCount: Int, maxConcurrent: Int) {
+    init(frameCount: Int, maxConcurrent: Int, config: Config) {
         self.number_of_frames = frameCount
         self.maxConcurrent = maxConcurrent
+        self.config = config
     }
 
     private var last_update_time: TimeInterval?
@@ -87,13 +88,13 @@ actor UpdatableProgressMonitor {
 
     func redraw() {
 
-        guard let updatable = updatable else { return }
+        guard let updatable = config.updatable else { return }
 
         var updates: [() async -> Void] = []
 
         var padding = ""
-        if self.maxConcurrent < progress_bar_length {
-            padding = String(repeating: " ", count: (progress_bar_length - self.maxConcurrent))
+        if self.maxConcurrent < config.progress_bar_length {
+            padding = String(repeating: " ", count: (config.progress_bar_length - self.maxConcurrent))
         }
 
         if let loadingImages = frames[.loadingImages] {
@@ -188,7 +189,7 @@ actor UpdatableProgressMonitor {
               Double(self.number_of_frames)
             updates.append() {
                 await updatable.log(name: "complete",
-                                    message: progress_bar(length: progress_bar_length, progress: progress) +
+                                    message: progress_bar(length: self.config.progress_bar_length, progress: progress) +
                                       " \(complete.count) / \(self.number_of_frames) frames complete",
                                     value: 100)
             }

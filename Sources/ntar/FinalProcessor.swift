@@ -95,12 +95,12 @@ actor FinalProcessor {
     }
 
     private func log() {
-        if let updatable = updatable {
+        if let updatable = config.updatable {
             // show what frames are in place to be processed
             Task(priority: .userInitiated) {
                 var padding = ""
-                if self.config.numConcurrentRenders < progress_bar_length {
-                    padding = String(repeating: " ", count: (progress_bar_length - self.config.numConcurrentRenders))
+                if self.config.numConcurrentRenders < config.progress_bar_length {
+                    padding = String(repeating: " ", count: (config.progress_bar_length - self.config.numConcurrentRenders))
                 }
                 
                 var message: String = padding + ConsoleColor.blue.rawValue + "["
@@ -220,7 +220,7 @@ actor FinalProcessor {
             }
             if !bad {
                 Log.i("FINAL THREAD frame \(index_to_process) doing inter-frame analysis with \(images_to_process.count) frames")
-                await run_final_pass(frames: images_to_process)
+                await run_final_pass(frames: images_to_process, config: config)
                 Log.i("FINAL THREAD frame \(index_to_process) done with inter-frame analysis")
                 await self.incrementCurrentFrameIndex()
                 
@@ -415,14 +415,16 @@ func really_final_streak_processing(onFrame frame: FrameAirplaneRemover,
 // otherwise, if they do overlap, then it's more likely a cloud or 
 // a bright star or planet, leave them as is.
 @available(macOS 10.15, *)
-fileprivate func run_final_pass(frames: [FrameAirplaneRemover]) async {
+fileprivate func run_final_pass(frames: [FrameAirplaneRemover],
+                                config: Config) async
+{
     Log.i("final pass on \(frames.count) frames doing streak analysis")
 
-    await run_final_streak_pass(frames: frames) // XXX not actually the final streak pass anymore..
+    await run_final_streak_pass(frames: frames, config: config) // XXX not actually the final streak pass anymore..
 
     Log.i("running overlap pass on \(frames.count) frames")
 
-    await run_final_overlap_pass(frames: frames)
+    await run_final_overlap_pass(frames: frames, config: config)
 
     Log.i("done with final pass on \(frames.count) frames")
 }
@@ -430,7 +432,9 @@ fileprivate func run_final_pass(frames: [FrameAirplaneRemover]) async {
 var GLOBAL_last_overlap_frame_number = 0 // XXX
 
 @available(macOS 10.15, *)
-fileprivate func run_final_overlap_pass(frames: [FrameAirplaneRemover]) async {
+fileprivate func run_final_overlap_pass(frames: [FrameAirplaneRemover],
+                                        config: Config) async
+{
     for (index, frame) in frames.enumerated() {
         if frame.frame_index < GLOBAL_last_overlap_frame_number { continue }
         if index + 1 >= frames.count { continue }
@@ -549,7 +553,9 @@ var GLOBAL_last_streak_frame_number = 0 // XXX
 
 // looks for airplane streaks across frames
 @available(macOS 10.15, *)
-fileprivate func run_final_streak_pass(frames: [FrameAirplaneRemover]) async {
+fileprivate func run_final_streak_pass(frames: [FrameAirplaneRemover],
+                                       config: Config) async
+{
 
     let initial_frame_index = frames[0].frame_index
     
@@ -616,7 +622,8 @@ fileprivate func run_final_streak_pass(frames: [FrameAirplaneRemover]) async {
                              await streak_from(group: group, 
                                                frames: frames,
                                                startingIndex: batch_index+1,
-                                               potentialStreak: &potential_streak)
+                                               potentialStreak: &potential_streak,
+                                               config: config)
                         {
                             Log.v("frame \(frame_index) found streak \(potential_streak_name) of size \(streak.count) for \(group)")
                             return streak
@@ -685,7 +692,8 @@ fileprivate func run_final_streak_pass(frames: [FrameAirplaneRemover]) async {
 func streak_from(group: OutlierGroup,
                  frames: [FrameAirplaneRemover],
                  startingIndex starting_index: Int,
-                 potentialStreak potential_streak: inout [AirplaneStreakMember])
+                 potentialStreak potential_streak: inout [AirplaneStreakMember],
+                 config: Config)
   async -> [AirplaneStreakMember]?
 {
 

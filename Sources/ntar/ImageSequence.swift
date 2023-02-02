@@ -130,3 +130,5 @@ func remove_path_and_suffix(fromString string: String) -> String {
     let components = full_path.components(separatedBy: "/")
     return components[components.count-1]
 }
+
+fileprivate let file_manager = FileManager.default

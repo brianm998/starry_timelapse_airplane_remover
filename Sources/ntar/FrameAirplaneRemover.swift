@@ -769,3 +769,5 @@ actor FrameAirplaneRemover: Equatable, Hashable {
         }
     }
 }
+
+fileprivate let file_manager = FileManager.default

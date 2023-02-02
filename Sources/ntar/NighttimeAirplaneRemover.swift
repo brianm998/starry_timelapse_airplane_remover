@@ -36,7 +36,7 @@ class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemover> {
     init(with config: Config) throws {
         self.config = config
 
-        var basename = "\(config.image_sequence_dirname)-ntar-v-\(ntar_version)"
+        var basename = "\(config.image_sequence_dirname)-ntar-v-\(config.ntar_version)"
         basename = basename.replacingOccurrences(of: ".", with: "_")
         test_paint_output_dirname = "\(config.test_paint_output_path)/\(basename)-test-paint"
         outlier_output_dirname = "\(config.outputPath)/\(basename)-outliers"
@@ -51,12 +51,12 @@ class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemover> {
         let image_sequence_size = /*self.*/image_sequence.filenames.count
         
         self.remaining_images_closure = { number_of_unprocessed in
-            if let updatable = updatable {
+            if let updatable = config.updatable {
                 // log number of unprocessed images here
                 Task(priority: .userInitiated) {
                     let progress = Double(number_of_unprocessed)/Double(image_sequence_size)
                     await updatable.log(name: "unprocessed frames",
-                                         message: reverse_progress_bar(length: progress_bar_length, progress: progress) + " \(number_of_unprocessed) frames waiting to process",
+                                        message: reverse_progress_bar(length: config.progress_bar_length, progress: progress) + " \(number_of_unprocessed) frames waiting to process",
                                          value: -1)
                 }
             }
@@ -73,11 +73,13 @@ class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemover> {
                                        dispatchGroup: dispatchGroup,
                                        imageSequence: image_sequence)
 
-        if let _ = updatable {
+        if let _ = config.updatable {
             // setup sequence monitor
             updatableProgressMonitor =
               UpdatableProgressMonitor(frameCount: image_sequence_size,
-                                        maxConcurrent: config.numConcurrentRenders)
+                                       // XXX don't pass this VVV, use config, DUH
+                                       maxConcurrent: config.numConcurrentRenders,
+                                       config: config)
         }
         
         final_processor = processor
