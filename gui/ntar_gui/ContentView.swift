@@ -9,9 +9,17 @@ import SwiftUI
 import NtarCore
 
 class ImageView: ObservableObject {
-    var eraser: NighttimeAirplaneRemover? 
+    var framesToCheck: FramesToCheck
+    var eraser: NighttimeAirplaneRemover?
+    var frame: FrameAirplaneRemover?
+    // XXX add link to FramesToCheck
+    // XXX add link to frame
     var image: Image? {
         didSet { self.objectWillChange.send() }
+    }
+
+    init(framesToCheck: FramesToCheck) {
+        self.framesToCheck = framesToCheck
     }
 }
 
@@ -30,20 +38,48 @@ struct ContentView: View {
                   .foregroundColor(.accentColor)
             }
             Text("Hello, world!")
-            Button(action: {
-                Log.w("FKME")
-                Task.detached(priority: .background) {
-                    do {
-                        try await image.eraser?.run()
-                    } catch {
-                        Log.e("\(error)")
+            HStack {
+                Button(action: { // XXX hide when running
+                    Log.w("FKME")
+                    Task.detached(priority: .background) {
+                        do {
+                            try await image.eraser?.run()
+                        } catch {
+                            Log.e("\(error)")
+                        }
                     }
-                }
-                Log.w("FKME 2")
-            }) {
-                Text("FUCK").font(.largeTitle)
-            }.buttonStyle(PlainButtonStyle())
-            
+                }) {
+                    Text("START").font(.largeTitle)
+                }.buttonStyle(PlainButtonStyle())
+                Button(action: {
+                    Task {
+                        if let frame_to_remove = image.frame {
+                            if let eraser = image.eraser,
+                               let fp = eraser.final_processor
+                            {
+                                // add to final queue somehow
+                                await fp.final_queue.add(atIndex: frame_to_remove.frame_index) {
+                                    Log.i("frame \(frame_to_remove.frame_index) finishing")
+                                    try await frame_to_remove.finish()
+                                    Log.i("frame \(frame_to_remove.frame_index) finished")
+                                }
+                            }
+                            await image.framesToCheck.remove(frame: frame_to_remove)
+                        }
+                        if let next_frame = await image.framesToCheck.nextFrame(),
+                           let baseImage = try await next_frame.baseImage()
+                        {
+                            image.frame = next_frame
+                            image.image = Image(nsImage: baseImage)
+                        } else {
+                            image.frame = nil
+                            image.image = Image(systemName: "person")
+                        }
+                    }
+                }) {
+                    Text("DONE").font(.largeTitle)
+                }.buttonStyle(PlainButtonStyle())
+            }
         }.frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding()
     }
@@ -51,6 +87,6 @@ struct ContentView: View {
 
 struct ContentView_Previews: PreviewProvider {
     static var previews: some View {
-        ContentView(image: ImageView())
+        ContentView(image: ImageView(framesToCheck: FramesToCheck()))
     }
 }

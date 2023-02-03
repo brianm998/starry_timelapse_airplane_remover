@@ -17,7 +17,7 @@ You should have received a copy of the GNU General Public License along with nta
 // it exists mainly to limit the concurrent number of processes running
 
 @available(macOS 10.15, *)
-actor FinalQueue {
+public actor FinalQueue {
     // actors
     let method_list = MethodList<Void>()       // a list of methods to process each frame
 
@@ -41,7 +41,7 @@ actor FinalQueue {
         should_run = false
     }
 
-    func add(atIndex index: Int, method: @escaping () async throws -> Void) async {
+    public func add(atIndex index: Int, method: @escaping () async throws -> Void) async {
         await method_list.add(atIndex: index, method: method)
     }
     

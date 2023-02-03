@@ -61,7 +61,7 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
     public let bytesPerPixel: Int
     public let bytesPerRow: Int
     public let otherFrameIndexes: [Int] // used in found outliers and paint only
-    public let frame_index: Int
+    nonisolated public let frame_index: Int
     
     var test_paint_filename: String = "" // the filename to write out test paint data to
     var test_paint = false               // should we test paint?  helpful for debugging
@@ -664,7 +664,7 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
     
     // run after should_paint has been set for each group, 
     // does the final painting and then writes out the output files
-    func finish() async throws {
+    public func finish() async throws {
         self.state = .reloadingImages
         
         Log.i("frame \(self.frame_index) finishing")

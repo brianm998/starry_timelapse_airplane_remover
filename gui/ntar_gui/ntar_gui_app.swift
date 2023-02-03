@@ -11,12 +11,28 @@ import NtarCore
 actor FramesToCheck {
     var frames: [FrameAirplaneRemover] = []
 
+    func remove(frame: FrameAirplaneRemover) {
+        Log.e("FFF REMOVE \(frames.count)")
+        for i in 0..<frames.count {
+            if frames[i].frame_index == frame.frame_index {
+                frames.remove(at: i)
+                break
+            }
+        }
+        Log.e("FFF AFTER REMOVE \(frames.count)")
+    }
+    
     func append(frame: FrameAirplaneRemover) {
         self.frames.append(frame)
     }
 
     func count() -> Int {
         return self.frames.count
+    }
+
+    func nextFrame() -> FrameAirplaneRemover? {
+        if frames.count == 0 { return nil }
+        return frames[0]
     }
 }
 
@@ -37,11 +53,12 @@ class ntar_gui_app: App {
 
 
     // XXX
-    var imageView = ImageView()
+    var imageView: ImageView
 
     var framesToCheck = FramesToCheck()
-
+    
     required init() {
+        imageView = ImageView(framesToCheck: framesToCheck)
         Log.handlers[.console] = ConsoleLogHandler(at: .debug)
         Log.w("Starting Up")
 
@@ -108,11 +125,13 @@ class ntar_gui_app: App {
                     Log.i("got frame index \(frame)")
                     do {
                         Log.d("frameCheckClosure 4")
-                            if let baseImage = try await frame.baseImage() {
-                                self.imageView.image = Image(nsImage: baseImage)
-                                Log.d("XXX self.imageView.image = \(self.imageView.image)")
-                                // Perform UI updates
-                            }
+                        if let baseImage = try await frame.baseImage() {
+                            await self.framesToCheck.append(frame: frame)
+                            self.imageView.frame = frame
+                            self.imageView.image = Image(nsImage: baseImage)
+                            Log.d("XXX self.imageView.image = \(self.imageView.image)")
+                            // Perform UI updates
+                        }
                     } catch {
                         Log.e("\(error)")
                     }

@@ -47,13 +47,13 @@ actor AirplaneStreaks {
 var airplane_streaks = AirplaneStreaks()
 
 @available(macOS 10.15, *)
-actor FinalProcessor {
+public actor FinalProcessor {
     var frames: [FrameAirplaneRemover?]
     var current_frame_index = 0
     var max_added_index = 0
     let frame_count: Int
     let dispatch_group: DispatchHandler
-    let final_queue: FinalQueue
+    public let final_queue: FinalQueue
     let image_sequence: ImageSequence
 
     let config: Config
@@ -316,11 +316,12 @@ actor FinalProcessor {
             // XXX need to await here for the frame check if it's happening
 
             if let countOfFramesToCheck = config.countOfFramesToCheck {
-                let count = await countOfFramesToCheck()
+                var count = await countOfFramesToCheck()
                 Log.i("FINAL THREAD countOfFramesToCheck \(count)")
                 while(count > 0) {
-                    Log.i("FINAL THREAD sleeping")
+                    Log.i("FINAL THREAD sleeping with count \(count)")
                     try await Task.sleep(nanoseconds: 1_000_000_000)
+                    count = await countOfFramesToCheck()
                     //sleep(1)
                 }
             } else {

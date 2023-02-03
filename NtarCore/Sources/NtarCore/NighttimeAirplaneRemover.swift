@@ -31,7 +31,7 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
     // the name of the directory to create when writing outlier group files
     let outlier_output_dirname: String
 
-    var final_processor: FinalProcessor?    
+    public var final_processor: FinalProcessor?    
 
     public init(with config: Config) throws {
         self.config = config
