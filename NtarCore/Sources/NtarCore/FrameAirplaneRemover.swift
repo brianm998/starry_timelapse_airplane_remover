@@ -543,6 +543,11 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
         await self.testPaintOutliers(from: ignored_outlier_groups, toData: &test_paint_data)
     }
 
+    public func baseImage() async throws -> NSImage? {
+        let name = image_sequence.filenames[frame_index]
+        return try await image_sequence.getImage(withName: name).image().baseImage
+    }
+    
     // actually paint over outlier groups that have been selected as airplane tracks
     private func paintOverAirplanes(toData data: inout Data,
                                     testData test_paint_data: inout Data,

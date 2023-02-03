@@ -80,14 +80,21 @@ class ntar_gui_app: App {
                                 imageSequencePath: input_image_sequence_path,
                                 writeOutlierGroupFiles: should_write_outlier_group_files)
 
-            /*
+
             // XXX count numbers here for max running too
             config.frameCheckClosure = { frame in
                 Task {
-                    Log.e("got frame index \(frame)")
+                    Log.i("got frame index \(frame)")
+                    do {
+                        if let baseImage = try await frame.baseImage() {
+                            self.imageView.image = Image(nsImage: baseImage)
+                        }
+                    } catch {
+                        Log.e("\(error)")
+                    }
                 }
             }
-            */
+
             Log.i("have config")
             Task {
                 do {

@@ -15,7 +15,20 @@ import CoreGraphics
 import Cocoa
 
 @available(macOS 10.15, *) 
-class PixelatedImage {
+public func loadImage(fromFile filename: String) async throws -> NSImage? {
+    Log.d("Loading image from \(filename)")
+    let imageURL = NSURL(fileURLWithPath: filename, isDirectory: false)
+
+    let (data, _) = try await URLSession.shared.data(for: URLRequest(url: imageURL as URL))
+    if let image = NSImage(data: data) {
+        return image
+    } else {
+        return nil
+    }
+}
+
+@available(macOS 10.15, *) 
+public class PixelatedImage {
     let width: Int
     let height: Int
     //let image: CGImage
@@ -30,11 +43,8 @@ class PixelatedImage {
 
     convenience init?(fromFile filename: String) async throws {
         Log.d("Loading image from \(filename)")
-        let imageURL = NSURL(fileURLWithPath: filename, isDirectory: false)
-
-        let (data, _) = try await URLSession.shared.data(for: URLRequest(url: imageURL as URL))
-        if let image = NSImage(data: data),
-           let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil)
+        if let nsImage = try await loadImage(fromFile: filename),
+           let cgImage = nsImage.cgImage(forProposedRect: nil, context: nil, hints: nil)
         {
             self.init(cgImage)
         } else {
@@ -82,6 +92,36 @@ class PixelatedImage {
         return pixel
     }
 
+    var baseImage: NSImage? {
+        do {
+            if let base = try image(fromData: raw_image_data) {
+                return NSImage(cgImage: base, size: .zero)
+            }
+        } catch {
+            Log.e("error \(error)")
+        }
+        return nil
+    }
+    
+    func image(fromData image_data: Data) throws -> CGImage? {
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
+        if let dataProvider = CGDataProvider(data: image_data as CFData) {
+           return CGImage(width: width,
+                          height: height,
+                          bitsPerComponent: bitsPerComponent,
+                          bitsPerPixel: bytesPerPixel*8,
+                          bytesPerRow: width*bytesPerPixel,
+                          space: colorSpace,
+                          bitmapInfo: bitmapInfo,
+                          provider: dataProvider,
+                          decode: nil,
+                          shouldInterpolate: false,
+                          intent: .defaultIntent)
+        } else {
+            return nil          // doh
+        }
+    }
+    
     // write out the given image data as a 16 bit tiff file to the given filename
     // used when modifying the invariant original image data, and saying the edits to a file
     // XXX make this async
@@ -93,20 +133,7 @@ class PixelatedImage {
         }
         
         // create a CGImage from the data we just changed
-        let colorSpace = CGColorSpaceCreateDeviceRGB()
-        if let dataProvider = CGDataProvider(data: image_data as CFData),
-           let new_image =  CGImage(width: width,
-                                    height: height,
-                                    bitsPerComponent: bitsPerComponent,
-                                    bitsPerPixel: bytesPerPixel*8,
-                                    bytesPerRow: width*bytesPerPixel,
-                                    space: colorSpace,
-                                    bitmapInfo: bitmapInfo,
-                                    provider: dataProvider,
-                                    decode: nil,
-                                    shouldInterpolate: false,
-                                    intent: .defaultIntent) 
-        {
+        if let new_image = try image(fromData: image_data) {
             // save it
             //Log.d("new_image \(new_image)")
 
