@@ -15,7 +15,7 @@ You should have received a copy of the GNU General Public License along with nta
 */
 
 @available(macOS 10.15, *)
-actor ImageLoader {
+public actor ImageLoader {
     let filename: String
     private var _image: PixelatedImage?
     
@@ -35,7 +35,7 @@ actor ImageLoader {
 
 // allows loading and caching of frames of an image sequence
 @available(macOS 10.15, *)
-actor ImageSequence {
+public actor ImageSequence {
 
     init(dirname: String, supported_image_file_types: [String]) throws {
         var image_files: [String] = []

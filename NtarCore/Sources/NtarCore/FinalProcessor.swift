@@ -252,13 +252,27 @@ actor FinalProcessor {
                         let before_count = await self.final_queue.method_list.count
                         await frame_to_finish.set(state: .outlierProcessingComplete)
                         // XXX lots of images are getting blocked up here for some reason
-                        await self.final_queue.add(atIndex: frame_to_finish.frame_index) {
-                            Log.i("frame \(frame_to_finish.frame_index) finishing")
-                            try await frame_to_finish.finish()
-                            Log.i("frame \(frame_to_finish.frame_index) finished")
+
+
+                        // here we need to see if we are in gui or cli mode
+
+                        // gui needs to have the user look at each image now and
+                        // validate it, maybe making painting changes
+
+                        // cli needs to go straight to the final queue as seen here
+                        if let frameCheckClosure = config.frameCheckClosure {
+                            // gui
+                            frameCheckClosure(frame_to_finish)
+                        } else {
+                            // cli
+                            await self.final_queue.add(atIndex: frame_to_finish.frame_index) {
+                                Log.i("frame \(frame_to_finish.frame_index) finishing")
+                                try await frame_to_finish.finish()
+                                Log.i("frame \(frame_to_finish.frame_index) finished")
+                            }
+                            let after_count = await self.final_queue.method_list.count
+                            Log.d("frame \(frame_to_finish.frame_index) done adding to index before_count \(before_count) after_count \(after_count)")
                         }
-                        let after_count = await self.final_queue.method_list.count
-                        Log.d("frame \(frame_to_finish.frame_index) done adding to index before_count \(before_count) after_count \(after_count)")
                     }
                     Log.v("FINAL THREAD frame \(index_to_process) done queueing into final queue")
                 }

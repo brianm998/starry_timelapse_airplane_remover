@@ -56,17 +56,17 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
     
     func set(state: FrameProcessingState) { self.state = state }
     
-    let width: Int
-    let height: Int
-    let bytesPerPixel: Int
-    let bytesPerRow: Int
-    let otherFrameIndexes: [Int] // used in found outliers and paint only
-    let frame_index: Int
+    public let width: Int
+    public let height: Int
+    public let bytesPerPixel: Int
+    public let bytesPerRow: Int
+    public let otherFrameIndexes: [Int] // used in found outliers and paint only
+    public let frame_index: Int
     
     var test_paint_filename: String = "" // the filename to write out test paint data to
     var test_paint = false               // should we test paint?  helpful for debugging
 
-    let outlier_output_dirname: String?
+    public let outlier_output_dirname: String?
 
     // populated by pruning
     private var outlier_groups: [String: OutlierGroup] = [:] // keyed by group name
@@ -76,11 +76,11 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
 
     var outlierGroupCount: Int { return outlier_groups.count }
     
-    let output_filename: String
+    public let output_filename: String
 
-    let image_sequence: ImageSequence
+    public let image_sequence: ImageSequence
 
-    let config: Config
+    public let config: Config
     
     init(with config: Config,
          imageSequence image_sequence: ImageSequence,

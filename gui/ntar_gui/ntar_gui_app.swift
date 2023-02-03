@@ -9,7 +9,7 @@ import SwiftUI
 import NtarCore
 
 @main
-struct ntar_guiApp: App {
+class ntar_gui_app: App {
 
     var outputPath: String?
     var outlierMaxThreshold: Double = 13
@@ -23,13 +23,16 @@ struct ntar_guiApp: App {
     var process_outlier_group_images = false
     var image_sequence_dirname: String?
 
+
+    // XXX
+    var imageView = ImageView()
     
-    init() {
+    required init() {
         Log.handlers[.console] = ConsoleLogHandler(at: .debug)
         Log.w("Starting Up")
 
         // XXX take this from the input somehow
-        image_sequence_dirname = "/Users/brian/git/nighttime_timelapse_airplane_remover/test_small_medium"
+        image_sequence_dirname = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/test_small_medium"
         
         // XXX copied from Ntar.swift
         if var input_image_sequence_dirname = image_sequence_dirname {
@@ -66,7 +69,7 @@ struct ntar_guiApp: App {
                 test_paint_output_path = testPaintOutputPath
             }
 
-            let config = Config(outputPath: output_path,
+            var config = Config(outputPath: output_path,
                                 outlierMaxThreshold: outlierMaxThreshold,
                                 outlierMinThreshold: outlierMinThreshold,
                                 minGroupSize: minGroupSize,
@@ -77,18 +80,29 @@ struct ntar_guiApp: App {
                                 imageSequencePath: input_image_sequence_path,
                                 writeOutlierGroupFiles: should_write_outlier_group_files)
 
-            do {
-                Log.i("have config")
-                let eraser = try NighttimeAirplaneRemover(with: config)
+            /*
+            // XXX count numbers here for max running too
+            config.frameCheckClosure = { frame in
                 Task {
-                    await Log.dispatchGroup = eraser.dispatchGroup.dispatch_group
+                    Log.e("got frame index \(frame)")
                 }
-                try eraser.run()
-                Log.i("done running")
-            } catch {
-                Log.e("\(error)")
             }
-            
+            */
+            Log.i("have config")
+            Task {
+                do {
+                    let eraser = try NighttimeAirplaneRemover(with: config)
+                    await Log.dispatchGroup = eraser.dispatchGroup.dispatch_group
+                    try eraser.run()
+
+                    self.imageView.image = Image(systemName: "person")
+                    
+                    Log.i("done running")
+                    
+                } catch {
+                    Log.e("\(error)")
+                }
+            }
         }
         /*
 
@@ -112,9 +126,10 @@ struct ntar_guiApp: App {
          
          */
     }
+
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            ContentView(image: imageView)
         }
     }
 }
