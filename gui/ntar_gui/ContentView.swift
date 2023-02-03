@@ -6,8 +6,10 @@
 //
 
 import SwiftUI
+import NtarCore
 
 class ImageView: ObservableObject {
+    var eraser: NighttimeAirplaneRemover? 
     var image: Image? {
         didSet { self.objectWillChange.send() }
     }
@@ -15,7 +17,6 @@ class ImageView: ObservableObject {
 
 struct ContentView: View {
     @ObservedObject var image: ImageView
-    
     
     var body: some View {
         VStack {
@@ -29,6 +30,20 @@ struct ContentView: View {
                   .foregroundColor(.accentColor)
             }
             Text("Hello, world!")
+            Button(action: {
+                Log.w("FKME")
+                Task.detached(priority: .background) {
+                    do {
+                        try await image.eraser?.run()
+                    } catch {
+                        Log.e("\(error)")
+                    }
+                }
+                Log.w("FKME 2")
+            }) {
+                Text("FUCK").font(.largeTitle)
+            }.buttonStyle(PlainButtonStyle())
+            
         }.frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding()
     }

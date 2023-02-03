@@ -152,7 +152,9 @@ public struct Config {
 
     public var updatableProgressMonitor: UpdatableProgressMonitor?
 
-    public var frameCheckClosure: ((FrameAirplaneRemover) -> ())?
+    public var frameCheckClosure: ((FrameAirplaneRemover) async -> ())?
+
+    public var countOfFramesToCheck: (() async -> Int)?
     
     // 0.0.2 added more detail group hough transormation analysis, based upon a data set
     // 0.0.3 included the data set analysis to include group size and fill, and to use histograms

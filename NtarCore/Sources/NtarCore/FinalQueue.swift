@@ -83,7 +83,8 @@ actor FinalQueue {
                         await self.dispatch_group.leave(dispatch_name)
                     }
                 } else {
-                    sleep(1)
+                    try await Task.sleep(nanoseconds: 1_000_000_000)
+                    //sleep(1)
                 }
             }
             try await group.waitForAll()

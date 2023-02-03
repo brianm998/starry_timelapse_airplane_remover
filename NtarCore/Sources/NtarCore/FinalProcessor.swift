@@ -162,7 +162,17 @@ actor FinalProcessor {
                                                              nextFrame: next_frame)
                     }
                     
-                    try await frame.finish()
+                    if let frameCheckClosure = self.config.frameCheckClosure {
+                        // gui
+                        Log.i("about to call frameCheckClosure")
+                        Task {
+                            await frameCheckClosure(frame)
+                        }
+                        Log.w("called frameCheckClosure")
+                    } else {
+                        // cli
+                        try await frame.finish()
+                    }
                 }
             }
         }
@@ -262,7 +272,9 @@ actor FinalProcessor {
                         // cli needs to go straight to the final queue as seen here
                         if let frameCheckClosure = config.frameCheckClosure {
                             // gui
-                            frameCheckClosure(frame_to_finish)
+                            Task {
+                                await frameCheckClosure(frame_to_finish)
+                            }
                         } else {
                             // cli
                             await self.final_queue.add(atIndex: frame_to_finish.frame_index) {
@@ -279,7 +291,10 @@ actor FinalProcessor {
             } else {
                 Log.v("FINAL THREAD sleeping")
                 await self.setAsleep(to: true)
-                sleep(1)        // XXX hardcoded sleep amount
+
+                try await Task.sleep(nanoseconds: 1_000_000_000)
+                //sleep(1)        // XXX hardcoded sleep amount
+                
                 Log.v("FINAL THREAD waking up")
                 await self.setAsleep(to: false)
             }
@@ -287,6 +302,33 @@ actor FinalProcessor {
 
         Log.i("FINAL THREAD finishing all remaining frames")
         try await self.finishAll()
+
+        if let frameCheckClosure = config.frameCheckClosure {
+            // XXX there is a race condition here if we are in gui
+            // mode where we add each frame off to the gui for processing
+            // XXX make this better
+            try await Task.sleep(nanoseconds: 5_000_000_000)
+            
+            Log.i("FINAL THREAD check closure")
+
+            // XXX look for method to call here
+            
+            // XXX need to await here for the frame check if it's happening
+
+            if let countOfFramesToCheck = config.countOfFramesToCheck {
+                let count = await countOfFramesToCheck()
+                Log.i("FINAL THREAD countOfFramesToCheck \(count)")
+                while(count > 0) {
+                    Log.i("FINAL THREAD sleeping")
+                    try await Task.sleep(nanoseconds: 1_000_000_000)
+                    //sleep(1)
+                }
+            } else {
+                Log.e("must set both frameCheckClosure and countOfFramesToCheck")
+                fatalError("must set both frameCheckClosure and countOfFramesToCheck")
+            }
+        }
+        
         Log.d("FINAL THREAD check")
         await final_queue.finish()
         Log.d("FINAL THREAD done")

@@ -8,6 +8,18 @@
 import SwiftUI
 import NtarCore
 
+actor FramesToCheck {
+    var frames: [FrameAirplaneRemover] = []
+
+    func append(frame: FrameAirplaneRemover) {
+        self.frames.append(frame)
+    }
+
+    func count() -> Int {
+        return self.frames.count
+    }
+}
+
 @main
 class ntar_gui_app: App {
 
@@ -26,16 +38,19 @@ class ntar_gui_app: App {
 
     // XXX
     var imageView = ImageView()
-    
+
+    var framesToCheck = FramesToCheck()
+
     required init() {
         Log.handlers[.console] = ConsoleLogHandler(at: .debug)
         Log.w("Starting Up")
 
         // XXX take this from the input somehow
-        image_sequence_dirname = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/test_small_medium"
-        
+        //image_sequence_dirname = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/test_small_medium"
+        image_sequence_dirname = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/test_small_fix_error"
+
         // XXX copied from Ntar.swift
-        if var input_image_sequence_dirname = image_sequence_dirname {
+        if var input_image_sequence_dirname = self.image_sequence_dirname {
 
             while input_image_sequence_dirname.hasSuffix("/") {
                 // remove any trailing '/' chars,
@@ -58,37 +73,46 @@ class ntar_gui_app: App {
             }
 
             var output_path = ""
-            if let outputPath = outputPath {
+            if let outputPath = self.outputPath {
                 output_path = outputPath
             } else {
                 output_path = input_image_sequence_path
             }
 
             var test_paint_output_path = output_path
-            if let testPaintOutputPath = testPaintOutputPath {
+            if let testPaintOutputPath = self.testPaintOutputPath {
                 test_paint_output_path = testPaintOutputPath
             }
 
             var config = Config(outputPath: output_path,
-                                outlierMaxThreshold: outlierMaxThreshold,
-                                outlierMinThreshold: outlierMinThreshold,
-                                minGroupSize: minGroupSize,
-                                numConcurrentRenders: numConcurrentRenders,
-                                test_paint: test_paint,
+                                outlierMaxThreshold: self.outlierMaxThreshold,
+                                outlierMinThreshold: self.outlierMinThreshold,
+                                minGroupSize: self.minGroupSize,
+                                numConcurrentRenders: self.numConcurrentRenders,
+                                test_paint: self.test_paint,
                                 test_paint_output_path: test_paint_output_path,
                                 imageSequenceName: input_image_sequence_name,
                                 imageSequencePath: input_image_sequence_path,
-                                writeOutlierGroupFiles: should_write_outlier_group_files)
+                                writeOutlierGroupFiles: self.should_write_outlier_group_files)
+            // count numbers here for max running 
+            config.countOfFramesToCheck = {
+                let count = await self.framesToCheck.count()
+                Log.i("XXX count \(count)")
+                return count
+            }
 
-
-            // XXX count numbers here for max running too
             config.frameCheckClosure = { frame in
+                Log.d("frameCheckClosure 2")
                 Task {
+                    Log.d("frameCheckClosure 3")
                     Log.i("got frame index \(frame)")
                     do {
-                        if let baseImage = try await frame.baseImage() {
-                            self.imageView.image = Image(nsImage: baseImage)
-                        }
+                        Log.d("frameCheckClosure 4")
+                            if let baseImage = try await frame.baseImage() {
+                                self.imageView.image = Image(nsImage: baseImage)
+                                Log.d("XXX self.imageView.image = \(self.imageView.image)")
+                                // Perform UI updates
+                            }
                     } catch {
                         Log.e("\(error)")
                     }
@@ -96,19 +120,16 @@ class ntar_gui_app: App {
             }
 
             Log.i("have config")
-            Task {
-                do {
-                    let eraser = try NighttimeAirplaneRemover(with: config)
-                    await Log.dispatchGroup = eraser.dispatchGroup.dispatch_group
-                    try eraser.run()
+            do {
+                let eraser = try NighttimeAirplaneRemover(with: config)
+                //                        await Log.dispatchGroup = eraser.dispatchGroup.dispatch_group
+                self.imageView.eraser = eraser // XXX rename this crap
+                //                            try eraser.run()
 
-                    self.imageView.image = Image(systemName: "person")
-                    
-                    Log.i("done running")
-                    
-                } catch {
-                    Log.e("\(error)")
-                }
+                Log.i("done running")
+                
+            } catch {
+                Log.e("\(error)")
             }
         }
         /*
