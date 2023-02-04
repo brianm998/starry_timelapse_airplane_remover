@@ -32,6 +32,7 @@ actor FramesToCheck {
     }
 
     func nextFrame() -> FrameAirplaneRemover? {
+        Log.e("NEXT FRAME \(frames.count)")
         if frames.count == 0 { return nil }
         return frames[0]
     }

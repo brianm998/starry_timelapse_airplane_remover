@@ -15,6 +15,7 @@ class ViewModel: ObservableObject {
     var eraser: NighttimeAirplaneRemover?
     var frame: FrameAirplaneRemover?
     var outlierViews: [OutlierGroupView] = []
+    var outlierCount: Int = 0
     var image: Image? 
 
     init(framesToCheck: FramesToCheck) {
@@ -22,18 +23,18 @@ class ViewModel: ObservableObject {
     }
     
     func update() async {
+        if await framesToCheck.nextFrame() == nil {
+            frame = nil
+            outlierViews = []
+            image = Image(systemName: "globe")
+        }
         if let frame = frame {
-            Log.w("view model update for \(frame.frame_index)")
-            Log.w("did set frame 1")
-            
-            Log.w("did set frame in task")
             let (outlierGroups, frame_width, frame_height) =
               await (frame.outlierGroups(), frame.width, frame.height)
             
-            Log.w("we have \(outlierGroups.count) outlierGroups")
+            Log.i("we have \(outlierGroups.count) outlierGroups")
             outlierViews = []
             for group in outlierGroups {
-                Log.w("we have group \(group)")
                 if let cgImage = await group.testImage() {
                     var size = CGSize()
                     size.width = CGFloat(cgImage.width)
@@ -48,11 +49,14 @@ class ViewModel: ObservableObject {
                                                            frame_width: frame_width,
                                                            frame_height: frame_height)
                     outlierViews.append(groupView)
-                    Log.w("outlierViews has \(outlierViews.count) items")
                 } else {
                     Log.e("NO FUCKING IMAGE")
                 }
             }
+            outlierCount = outlierViews.count
+        }
+        Task {
+//            try? await Task.sleep(nanoseconds: 5_000_000_000)
             await MainActor.run {
                 self.objectWillChange.send()
             }
@@ -89,7 +93,13 @@ struct ContentView: View {
                     if showOutliers {
 
                         // XXX this VVV sucks badly, why the 100?
-                        ForEach(0..<100/*viewModel.outlierViews.count*/) { idx in
+                        // some kind of race condition with ForEach?
+                        // everything shows up fine when toggling showOutliers?
+                        let fuck = 100
+                        //let fuck = viewModel.outlierViews.count
+                        //let fuck = viewModel.outlierCount
+                        
+                        ForEach(0 ..< fuck) { idx in
 
                             if idx < viewModel.outlierViews.count {
                                 let outlierViewModel = viewModel.outlierViews[idx]
