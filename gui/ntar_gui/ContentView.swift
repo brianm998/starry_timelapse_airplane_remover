@@ -9,63 +9,53 @@ import Foundation
 import SwiftUI
 import Cocoa
 import NtarCore
-/*
-extension Image: Identifiable {
-    public var id: ObjectIdentifier {
-        return ObjectIdentifier(self)
-    }
-}
-*/
-class ImageView: ObservableObject {
+
+class ViewModel: ObservableObject {
     var framesToCheck: FramesToCheck
     var eraser: NighttimeAirplaneRemover?
-    var frame: FrameAirplaneRemover? {
-        didSet(newValue) {
-            Log.w("did set frame \(frame)")
-            if let frame = frame {
-                Log.w("did set frame 1")
-                Task {
-                    Log.w("did set frame in task")
-                    let (outlierGroups, frame_width, frame_height) =
-                      await (frame.outlierGroups(), frame.width, frame.height)
-                    
-                    Log.w("we have \(outlierGroups.count) outlierGroups")
-                    outlierViews = []
-                    for group in outlierGroups {
-                        Log.w("we have group \(group)")
-                        if let cgImage = await group.testImage() {
-                            var size = CGSize()
-                            size.width = CGFloat(cgImage.width)
-                            size.height = CGFloat(cgImage.height)
-                            let outlierImage = NSImage(cgImage: cgImage,
-                                                       size: size)
-
-                            let groupView = await OutlierGroupView(name: group.name,
-                                                                   bounds: group.bounds,
-                                                                   image: outlierImage,
-                                                                   frame_width: frame_width,
-                                                                   frame_height: frame_height)
-                            outlierViews.append(groupView)
-                            Log.w("outlierViews has \(outlierViews.count) items")
-                        } else {
-                            Log.e("NO FUCKING IMAGE")
-                        }
-                    }
-                    await MainActor.run {
-                        self.objectWillChange.send()
-                    }
-                }
-            }
-        }
-    }
-//    var outlierGroups: [OutlierGroup] = []
+    var frame: FrameAirplaneRemover?
     var outlierViews: [OutlierGroupView] = []
-    var image: Image? {
-        didSet { self.objectWillChange.send() }
-    }
+    var image: Image? 
 
     init(framesToCheck: FramesToCheck) {
         self.framesToCheck = framesToCheck
+    }
+    
+    func update() async {
+        if let frame = frame {
+            Log.w("view model update for \(frame.frame_index)")
+            Log.w("did set frame 1")
+            
+            Log.w("did set frame in task")
+            let (outlierGroups, frame_width, frame_height) =
+              await (frame.outlierGroups(), frame.width, frame.height)
+            
+            Log.w("we have \(outlierGroups.count) outlierGroups")
+            outlierViews = []
+            for group in outlierGroups {
+                Log.w("we have group \(group)")
+                if let cgImage = await group.testImage() {
+                    var size = CGSize()
+                    size.width = CGFloat(cgImage.width)
+                    size.height = CGFloat(cgImage.height)
+                    let outlierImage = NSImage(cgImage: cgImage,
+                                               size: size)
+
+                    let groupView = await OutlierGroupView(name: group.name,
+                                                           bounds: group.bounds,
+                                                           image: outlierImage,
+                                                           frame_width: frame_width,
+                                                           frame_height: frame_height)
+                    outlierViews.append(groupView)
+                    Log.w("outlierViews has \(outlierViews.count) items")
+                } else {
+                    Log.e("NO FUCKING IMAGE")
+                }
+            }
+            await MainActor.run {
+                self.objectWillChange.send()
+            }
+        }
     }
 }
 
@@ -78,7 +68,8 @@ struct OutlierGroupView {
 }
 
 struct ContentView: View {
-    @ObservedObject var viewModel: ImageView
+    @ObservedObject var viewModel: ViewModel
+    @State private var showOutliers = true
     
     var body: some View {
         VStack {
@@ -93,28 +84,28 @@ struct ContentView: View {
                          get it clickable to change paintability
                          */
 
+                    if showOutliers {
 
-                    // XXX this VVV sucks badly, why the 100?
-                    ForEach(0..<100/*viewModel.outlierViews.count*/) { idx in
+                        // XXX this VVV sucks badly, why the 100?
+                        ForEach(0..<100/*viewModel.outlierViews.count*/) { idx in
 
-                        if idx < viewModel.outlierViews.count {
-                            let outlierViewModel = viewModel.outlierViews[idx]
-                            
-                            let frame_center_x = outlierViewModel.frame_width/2
-                            let frame_center_y = outlierViewModel.frame_height/2
-                            let outlier_center = outlierViewModel.bounds.center
-                            
-                            Image(nsImage: outlierViewModel.image)
-                              // offset from the center of parent view
-                                .offset(x: CGFloat(outlier_center.x - frame_center_x),
-                                        y: CGFloat(outlier_center.y - frame_center_y)) 
-/*                        
-                        Image(nsImage: viewModel.outlierViews[idx])
-                          .imageScale(.large)
-                          .foregroundColor(.accentColor)
-
-                        .frame(width: 200, height: 200)
- */
+                            if idx < viewModel.outlierViews.count {
+                                let outlierViewModel = viewModel.outlierViews[idx]
+                                
+                                let frame_center_x = outlierViewModel.frame_width/2
+                                let frame_center_y = outlierViewModel.frame_height/2
+                                let outlier_center = outlierViewModel.bounds.center
+                                
+                                Image(nsImage: outlierViewModel.image)
+                                // offset from the center of parent view
+                                  .offset(x: CGFloat(outlier_center.x - frame_center_x),
+                                          y: CGFloat(outlier_center.y - frame_center_y))
+                                  .onTapGesture {
+                                      Log.w("WOOT WOOT")
+                                      // XXX change the paintability of this outlier group now
+                                      // XXX do it
+                                  }
+                            }
                         }
                     }
 
@@ -125,56 +116,66 @@ struct ContentView: View {
                   .imageScale(.large)
                   .foregroundColor(.accentColor)
             }
-            Text("Hello, world!")
-            HStack {
-                Button(action: { // XXX hide when running
-                    Log.w("FKME")
-                    Task.detached(priority: .background) {
-                        do {
-                            try await viewModel.eraser?.run()
-                        } catch {
-                            Log.e("\(error)")
-                        }
-                    }
-                }) {
-                    Text("START").font(.largeTitle)
-                }.buttonStyle(PlainButtonStyle())
-                Button(action: {
-                    Task {
-                        if let frame_to_remove = viewModel.frame {
-                            if let eraser = viewModel.eraser,
-                               let fp = eraser.final_processor
-                            {
-                                // add to final queue somehow
-                                await fp.final_queue.add(atIndex: frame_to_remove.frame_index) {
-                                    Log.i("frame \(frame_to_remove.frame_index) finishing")
-                                    try await frame_to_remove.finish()
-                                    Log.i("frame \(frame_to_remove.frame_index) finished")
-                                }
+            if let frame = viewModel.frame {
+                Text("frame \(frame.frame_index)")
+            } else {
+                Text("Hello, world!")
+            }
+            VStack {
+                HStack {
+                    Button(action: { // XXX hide when running
+                        Log.w("FKME")
+                        Task.detached(priority: .background) {
+                            do {
+                                try await viewModel.eraser?.run()
+                            } catch {
+                                Log.e("\(error)")
                             }
-                            await viewModel.framesToCheck.remove(frame: frame_to_remove)
                         }
-                        if let next_frame = await viewModel.framesToCheck.nextFrame(),
-                           let baseImage = try await next_frame.baseImage()
-                        {
-                            viewModel.frame = next_frame
-                            viewModel.image = Image(nsImage: baseImage)
-                        } else {
-                            viewModel.frame = nil
-                            viewModel.image = Image(systemName: "person")
+                    }) {
+                        Text("START").font(.largeTitle)
+                    }.buttonStyle(PlainButtonStyle())
+                    Button(action: {
+                        Task {
+                            if let frame_to_remove = viewModel.frame {
+                                if let eraser = viewModel.eraser,
+                                   let fp = eraser.final_processor
+                                {
+                                    // add to final queue somehow
+                                    await fp.final_queue.add(atIndex: frame_to_remove.frame_index) {
+                                        Log.i("frame \(frame_to_remove.frame_index) finishing")
+                                        try await frame_to_remove.finish()
+                                        Log.i("frame \(frame_to_remove.frame_index) finished")
+                                    }
+                                }
+                                await viewModel.framesToCheck.remove(frame: frame_to_remove)
+                            }
+                            if let next_frame = await viewModel.framesToCheck.nextFrame(),
+                               let baseImage = try await next_frame.baseImage()
+                            {
+                                viewModel.frame = next_frame
+                                viewModel.image = Image(nsImage: baseImage)
+                                await viewModel.update()
+                            } else {
+                                viewModel.frame = nil
+                                viewModel.outlierViews = []
+                                viewModel.image = Image(systemName: "person")
+                                await viewModel.update()
+                            }
                         }
-                    }
-                }) {
-                    Text("DONE").font(.largeTitle)
-                }.buttonStyle(PlainButtonStyle())
+                    }) {
+                        Text("DONE").font(.largeTitle)
+                    }.buttonStyle(PlainButtonStyle())
+                }
+                Toggle("show outliers", isOn: $showOutliers)
             }
         }.frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding()
+          .padding()
     }
 }
 
 struct ContentView_Previews: PreviewProvider {
     static var previews: some View {
-        ContentView(viewModel: ImageView(framesToCheck: FramesToCheck()))
+        ContentView(viewModel: ViewModel(framesToCheck: FramesToCheck()))
     }
 }

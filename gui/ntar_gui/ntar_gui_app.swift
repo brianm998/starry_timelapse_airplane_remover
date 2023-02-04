@@ -23,6 +23,7 @@ actor FramesToCheck {
     }
     
     func append(frame: FrameAirplaneRemover) {
+        // XXX append them in frame order
         self.frames.append(frame)
     }
 
@@ -51,14 +52,12 @@ class ntar_gui_app: App {
     var process_outlier_group_images = false
     var image_sequence_dirname: String?
 
-
-    // XXX
-    var imageView: ImageView
+    var viewModel: ViewModel
 
     var framesToCheck = FramesToCheck()
     
     required init() {
-        imageView = ImageView(framesToCheck: framesToCheck)
+        viewModel = ViewModel(framesToCheck: framesToCheck)
         Log.handlers[.console] = ConsoleLogHandler(at: .debug)
         Log.w("Starting Up")
 
@@ -118,23 +117,27 @@ class ntar_gui_app: App {
                 return count
             }
 
-            config.frameCheckClosure = { frame in
-                Log.d("frameCheckClosure 2")
+            config.frameCheckClosure = { new_frame in
+                Log.d("frameCheckClosure for frame \(new_frame.frame_index)")
                 Task {
-                    Log.d("frameCheckClosure 3")
-                    Log.i("got frame index \(frame)")
-                    do {
-                        Log.d("frameCheckClosure 4")
-                        if let baseImage = try await frame.baseImage() {
-                            await self.framesToCheck.append(frame: frame)
-                            self.imageView.image = Image(nsImage: baseImage)
-                            self.imageView.frame = frame
-                            Log.d("XXX self.imageView.image = \(self.imageView.image)")
-                            // Perform UI updates
+                    await self.framesToCheck.append(frame: new_frame)
+                    if let frame = await self.framesToCheck.nextFrame() {
+                        Log.d("frameCheckClosure 3")
+                        Log.i("got frame index \(frame)")
+                        do {
+                            Log.d("frameCheckClosure 4")
+                            if let baseImage = try await frame.baseImage() {
+                                self.viewModel.image = Image(nsImage: baseImage)
+                                self.viewModel.frame = frame
+                                await self.viewModel.update()
+                                
+                                Log.d("XXX self.viewModel.image = \(self.viewModel.image)")
+                                // Perform UI updates
+                            }
+                        } catch {
+                            Log.e("\(error)")
                         }
-                    } catch {
-                        Log.e("\(error)")
-                    }
+                    } 
                 }
             }
 
@@ -142,7 +145,7 @@ class ntar_gui_app: App {
             do {
                 let eraser = try NighttimeAirplaneRemover(with: config)
                 //                        await Log.dispatchGroup = eraser.dispatchGroup.dispatch_group
-                self.imageView.eraser = eraser // XXX rename this crap
+                self.viewModel.eraser = eraser // XXX rename this crap
                 //                            try eraser.run()
 
                 Log.i("done running")
@@ -176,7 +179,7 @@ class ntar_gui_app: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView(viewModel: imageView)
+            ContentView(viewModel: viewModel)
         }
     }
 }
