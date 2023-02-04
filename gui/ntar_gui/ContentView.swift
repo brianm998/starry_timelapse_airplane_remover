@@ -16,7 +16,20 @@ class ViewModel: ObservableObject {
     var frame: FrameAirplaneRemover?
     var outlierViews: [OutlierGroupView] = []
     var outlierCount: Int = 0
-    var image: Image? 
+    var image: Image?
+//    var frameState: [FrameProcessingState: Int] = [:]
+
+    var number_unprocessed: Int = 0
+    var number_loadingImages: Int = 0
+    var number_detectingOutliers: Int = 0
+    var number_readyForInterFrameProcessing: Int = 0
+    var number_interFrameProcessing: Int = 0
+    var number_outlierProcessingComplete: Int = 0
+    // XXX add gui check step?
+    var number_reloadingImages: Int = 0
+    var number_painting: Int = 0
+    var number_writingOutputFile: Int = 0
+    var number_complete: Int = 0
 
     init(framesToCheck: FramesToCheck) {
         self.framesToCheck = framesToCheck
@@ -213,55 +226,68 @@ struct ContentView: View {
             VStack {
                 HStack {
                     if !running {
-                    Button(action: { // XXX hide when running
-                        running = true                                
-                        Log.w("FKME")
-                        Task.detached(priority: .background) {
-                            do {
-                                try await viewModel.eraser?.run()
-                            } catch {
-                                Log.e("\(error)")
-                            }
-                        }
-                    }) {
-                        Text("START").font(.largeTitle)
-                    }.buttonStyle(PlainButtonStyle())
-                    } else {
-                    Button(action: {
-                               // XXX move this task to a method somewhere else
-                        Task {
-                            if let frame_to_remove = viewModel.frame {
-                                if let eraser = viewModel.eraser,
-                                   let fp = eraser.final_processor
-                                {
-                                    // add to final queue somehow
-                                    await fp.final_queue.add(atIndex: frame_to_remove.frame_index) {
-                                        Log.i("frame \(frame_to_remove.frame_index) finishing")
-                                        try await frame_to_remove.finish()
-                                        Log.i("frame \(frame_to_remove.frame_index) finished")
-                                    }
+                        Button(action: { // XXX hide when running
+                            running = true                                
+                            Log.w("FKME")
+                            Task.detached(priority: .background) {
+                                do {
+                                    try await viewModel.eraser?.run()
+                                } catch {
+                                    Log.e("\(error)")
                                 }
-                                await viewModel.framesToCheck.remove(frame: frame_to_remove)
                             }
-                            if let next_frame = await viewModel.framesToCheck.nextFrame(),
-                               let baseImage = try await next_frame.baseImage()
-                            {
-                                viewModel.frame = next_frame
-                                viewModel.image = Image(nsImage: baseImage)
-                                await viewModel.update()
-                            } else {
-                                viewModel.frame = nil
-                                viewModel.outlierViews = []
-                                viewModel.image = Image(systemName: "person")
-                                await viewModel.update()
+                        }) {
+                            Text("START").font(.largeTitle)
+                        }.buttonStyle(PlainButtonStyle())
+                    } else {
+                        Button(action: {
+                                   // XXX move this task to a method somewhere else
+                            Task {
+                                if let frame_to_remove = viewModel.frame {
+                                    if let eraser = viewModel.eraser,
+                                       let fp = eraser.final_processor
+                                    {
+                                        // add to final queue somehow
+                                        await fp.final_queue.add(atIndex: frame_to_remove.frame_index) {
+                                            Log.i("frame \(frame_to_remove.frame_index) finishing")
+                                            try await frame_to_remove.finish()
+                                            Log.i("frame \(frame_to_remove.frame_index) finished")
+                                        }
+                                    }
+                                    await viewModel.framesToCheck.remove(frame: frame_to_remove)
+                                }
+                                if let next_frame = await viewModel.framesToCheck.nextFrame(),
+                                   let baseImage = try await next_frame.baseImage()
+                                {
+                                    viewModel.frame = next_frame
+                                    viewModel.image = Image(nsImage: baseImage)
+                                    await viewModel.update()
+                                } else {
+                                    viewModel.frame = nil
+                                    viewModel.outlierViews = []
+                                    viewModel.image = Image(systemName: "person")
+                                    await viewModel.update()
+                                }
                             }
-                        }
-                    }) {
-                        Text("DONE").font(.largeTitle)
-                    }.buttonStyle(PlainButtonStyle())
+                        }) {
+                            Text("DONE").font(.largeTitle)
+                        }.buttonStyle(PlainButtonStyle())
                     }
                 }
                 Toggle("show outliers", isOn: $showOutliers)
+                HStack {
+                    Text("\(viewModel.number_unprocessed) unprocessed frames")
+                    Text("\(viewModel.number_loadingImages) loadingImages frames")
+                    Text("\(viewModel.number_detectingOutliers) detectingOutliers frames")
+                    Text("\(viewModel.number_readyForInterFrameProcessing) readyForInterFrameProcessing frames")
+                    Text("\(viewModel.number_interFrameProcessing) interFrameProcessing frames")
+                    Text("\(viewModel.number_outlierProcessingComplete) outlierProcessingComplete frames")
+                    // XXX add gui check step?
+                    Text("\(viewModel.number_reloadingImages) reloadingImages frames")
+                    Text("\(viewModel.number_painting) painting frames")
+                    Text("\(viewModel.number_writingOutputFile) writingOutputFile frames")
+                    Text("\(viewModel.number_complete) complete frames")
+                }
             }
         }.frame(maxWidth: .infinity, maxHeight: .infinity)
           .padding()

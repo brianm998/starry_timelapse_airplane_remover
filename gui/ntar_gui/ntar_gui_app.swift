@@ -56,6 +56,9 @@ class ntar_gui_app: App {
     var viewModel: ViewModel
 
     var framesToCheck = FramesToCheck()
+
+    // the state of each frame indexed by frame #
+    var frame_states: [Int: FrameProcessingState] = [:]
     
     required init() {
         viewModel = ViewModel(framesToCheck: framesToCheck)
@@ -119,6 +122,25 @@ class ntar_gui_app: App {
                 return count
             }
 
+          
+            config.frameStateChangeCallback = { frame, state in
+                // XXX do something here
+                Log.d("frame \(frame.frame_index) changed to state \(state)")
+                Task {
+                    await MainActor.run {
+                        self.frame_states[frame.frame_index] = state
+                        self.condense_frame_states_into_view_model()
+                        self.viewModel.objectWillChange.send()
+                    }
+                }
+
+                // XXX run method to condense these into counts
+//                await MainActor.run {
+//                    self.viewModel.frameState[frame.frame_index] = state
+                    // XXX update view model?
+//                }
+            }
+            
             config.frameCheckClosure = { new_frame in
                 Log.d("frameCheckClosure for frame \(new_frame.frame_index)")
                 Task {
@@ -179,6 +201,52 @@ class ntar_gui_app: App {
          */
     }
 
+    func condense_frame_states_into_view_model() {
+        // XXX write this
+        //var frame_states: [Int: FrameProcessingState] = [:]
+
+
+        viewModel.number_unprocessed = 0
+        viewModel.number_loadingImages = 0
+        viewModel.number_detectingOutliers = 0
+        viewModel.number_readyForInterFrameProcessing = 0
+        viewModel.number_interFrameProcessing = 0
+        viewModel.number_outlierProcessingComplete = 0
+        // XXX add gui check step?
+        viewModel.number_reloadingImages = 0
+        viewModel.number_painting = 0
+        viewModel.number_writingOutputFile = 0
+        viewModel.number_complete = 0
+
+        
+        for (frame_index, state) in frame_states {
+            switch state {
+            case .unprocessed:
+                viewModel.number_unprocessed += 1
+            case .loadingImages:    
+                viewModel.number_loadingImages += 1
+            case .detectingOutliers:
+                viewModel.number_detectingOutliers += 1
+            case .readyForInterFrameProcessing:
+                viewModel.number_readyForInterFrameProcessing += 1
+            case .interFrameProcessing:
+                viewModel.number_interFrameProcessing += 1
+            case .outlierProcessingComplete:
+                viewModel.number_outlierProcessingComplete += 1
+                // XXX add gui check step?
+                // XXX add gui check step?
+            case .reloadingImages:
+                viewModel.number_reloadingImages += 1
+            case .painting:
+                viewModel.number_painting += 1
+            case .writingOutputFile:
+                viewModel.number_writingOutputFile += 1
+            case .complete:
+                viewModel.number_complete += 1
+            }
+        }
+    }
+    
     var body: some Scene {
         WindowGroup {
             ContentView(viewModel: viewModel)

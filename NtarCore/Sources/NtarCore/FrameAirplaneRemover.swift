@@ -30,6 +30,7 @@ public enum FrameProcessingState: Int, CaseIterable {
     case readyForInterFrameProcessing
     case interFrameProcessing
     case outlierProcessingComplete
+    // XXX add gui check step?
     case reloadingImages
     case painting
     case writingOutputFile

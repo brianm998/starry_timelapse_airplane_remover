@@ -358,7 +358,7 @@ struct Ntar: ParsableCommand {
                     var upm: UpdatableProgressMonitor?
 
                     if let _ = eraser.config.updatable {
-                        // setup sequence monitor XXX do this in config
+                        // setup sequence monitor
                         let updatableProgressMonitor =
                           await UpdatableProgressMonitor(frameCount: eraser.image_sequence.filenames.count,
                                                          config: eraser.config)
