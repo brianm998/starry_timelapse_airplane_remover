@@ -30,25 +30,25 @@ typealias AirplaneStreakMember = (
 
 // the bounding box of an outlier group
 public struct BoundingBox {
-    let min: Coord
-    let max: Coord
+    public let min: Coord
+    public let max: Coord
 
-    var width:  Int { self.max.x - self.min.x + 1 }
-    var height: Int { return self.max.y - self.min.y + 1 }
-    var size:   Int { width * height }
+    public var width:  Int { self.max.x - self.min.x + 1 }
+    public var height: Int { return self.max.y - self.min.y + 1 }
+    public var size:   Int { width * height }
     
-    var hypotenuse: Double {
+    public var hypotenuse: Double {
         let width = Double(self.width)
         let height = Double(self.height)
         return sqrt(width*width + height*height)
     }
 
-    var center: Coord {
+    public var center: Coord {
         Coord(x: Int(Double(self.min.x) + Double(self.width)/2),
               y: Int(Double(self.min.y) + Double(self.height)/2))
     }
     
-    func centerDistance(to other: BoundingBox) -> Double {
+    public func centerDistance(to other: BoundingBox) -> Double {
         let center_1_x = Double(self.min.x) + Double(self.width)/2
         let center_1_y = Double(self.min.y) + Double(self.height)/2
 
@@ -61,7 +61,7 @@ public struct BoundingBox {
         return sqrt(x_dist * x_dist + y_dist * y_dist)
     }
 
-    func overlap(with other: BoundingBox) -> BoundingBox? {
+    public func overlap(with other: BoundingBox) -> BoundingBox? {
         if self.min.x < other.max.x,
            self.min.y < other.max.y,
            other.min.x < self.max.x,
@@ -84,7 +84,7 @@ public struct BoundingBox {
     }
     
     // returns the number of overlapping pixels divided by the average size of the two boxes
-    func overlapAmount(with other: BoundingBox) -> Double {
+    public func overlapAmount(with other: BoundingBox) -> Double {
         if let overlap = overlap(with: other) {
             let avg_size = (self.size + other.size)/2
             return Double(overlap.size)/Double(avg_size)

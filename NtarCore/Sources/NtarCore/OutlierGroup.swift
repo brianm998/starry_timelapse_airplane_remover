@@ -26,16 +26,16 @@ enum PaintScoreType {
 @available(macOS 10.15, *) 
 public actor OutlierGroup: CustomStringConvertible, Hashable, Equatable, Comparable {
 
-    let name: String
-    let size: UInt              // number of pixels in this outlier group
-    let bounds: BoundingBox     // a bounding box on the image that contains this group
-    let brightness: UInt        // the average amount per pixel of brightness over the limit 
-    let lines: [Line]           // sorted lines from the hough transform of this outlier group
-    let frame: FrameAirplaneRemover
-    let pixels: [UInt32]        // indexed by y * bounds.width + x, true if part of this group
+    public let name: String
+    public let size: UInt              // number of pixels in this outlier group
+    public let bounds: BoundingBox     // a bounding box on the image that contains this group
+    public let brightness: UInt        // the average amount per pixel of brightness over the limit 
+    public let lines: [Line]           // sorted lines from the hough transform of this outlier group
+    public let frame: FrameAirplaneRemover
+    public let pixels: [UInt32]        // indexed by y * bounds.width + x, true if part of this group
                                 // zero if pixel if not part of group, brightness value otherwise
-    let max_pixel_distance: UInt16
-    let surfaceAreaToSizeRatio: Double
+    public let max_pixel_distance: UInt16
+    public let surfaceAreaToSizeRatio: Double
 
     // after init, shouldPaint is usually set to a base value based upon different statistics 
     var shouldPaint: PaintReason? // should we paint this group, and why?

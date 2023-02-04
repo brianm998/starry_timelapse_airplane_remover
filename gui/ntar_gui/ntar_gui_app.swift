@@ -176,7 +176,7 @@ class ntar_gui_app: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView(image: imageView)
+            ContentView(viewModel: imageView)
         }
     }
 }
