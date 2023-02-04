@@ -6,15 +6,15 @@ import Cocoa
 public class ImageSequenceProcessor<T> {
 
     // the name of the directory holding the image sequence being processed
-    let image_sequence_dirname: String
+    public let image_sequence_dirname: String
 
     // the name of the directory to write processed images to
     public let output_dirname: String
 
     // the max number of frames to process at one time
-    let max_concurrent_renders: Int
+    public let max_concurrent_renders: Int
 
-    let number_final_processing_neighbors_needed: Int
+    public let number_final_processing_neighbors_needed: Int
     
     // the following properties get included into the output videoname
     
@@ -24,7 +24,7 @@ public class ImageSequenceProcessor<T> {
     // how many methods are running right now
     let number_running: NumberRunning
     
-    var image_sequence: ImageSequence    // the sequence of images that we're processing
+    public var image_sequence: ImageSequence    // the sequence of images that we're processing
 
     // concurrent dispatch queue so we can process frames in parallel
     

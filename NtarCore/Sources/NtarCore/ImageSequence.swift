@@ -61,7 +61,7 @@ public actor ImageSequence {
     static var image_width: Int = 0
     static var image_height: Int = 0
     
-    let filenames: [String]
+    public let filenames: [String]
 
     private var images: [String: ImageLoader] = [:]
 

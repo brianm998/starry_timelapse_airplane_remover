@@ -47,6 +47,7 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
                     await updatableProgressMonitor.stateChange(for: self, to: newValue)
                 }
             }
+            // XXX have different update here for gui maybe?
         }
     }
 
