@@ -23,7 +23,7 @@ enum LoopReturn {
     case `break`
 }
 
-enum FrameProcessingState: Int, CaseIterable {
+public enum FrameProcessingState: Int, CaseIterable {
     case unprocessed
     case loadingImages    
     case detectingOutliers
@@ -41,13 +41,9 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
 
     var state: FrameProcessingState = .unprocessed {
         willSet {
-            if let updatableProgressMonitor = config.updatableProgressMonitor {
-                // trigger updatable log update
-                Task(priority: .userInitiated) {
-                    await updatableProgressMonitor.stateChange(for: self, to: newValue)
-                }
+            if let frameStateChangeCallback = config.frameStateChangeCallback {
+                frameStateChangeCallback(self, newValue)
             }
-            // XXX have different update here for gui maybe?
         }
     }
 

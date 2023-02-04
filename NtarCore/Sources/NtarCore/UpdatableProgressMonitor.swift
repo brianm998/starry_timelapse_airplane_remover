@@ -62,7 +62,7 @@ public actor UpdatableProgressMonitor {
 
     private var last_update_time: TimeInterval?
     
-    func stateChange(for frame: FrameAirplaneRemover, to new_state: FrameProcessingState) {
+    public func stateChange(for frame: FrameAirplaneRemover, to new_state: FrameProcessingState) {
         for state in FrameProcessingState.allCases {
             if state == new_state { continue }
             if var state_items = frames[state] {

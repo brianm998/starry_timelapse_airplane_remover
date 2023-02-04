@@ -150,8 +150,8 @@ public struct Config {
 
     public var updatable: UpdatableLog?
 
-    public var updatableProgressMonitor: UpdatableProgressMonitor?
-
+    public var frameStateChangeCallback: ((FrameAirplaneRemover, FrameProcessingState) -> ())?
+    
     public var frameCheckClosure: ((FrameAirplaneRemover) async -> ())?
 
     public var countOfFramesToCheck: (() async -> Int)?

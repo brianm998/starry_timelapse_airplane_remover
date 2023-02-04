@@ -355,20 +355,25 @@ struct Ntar: ParsableCommand {
                 Task {
                     let eraser = try NighttimeAirplaneRemover(with: config)
 
+                    var upm: UpdatableProgressMonitor?
 
                     if let _ = eraser.config.updatable {
                         // setup sequence monitor XXX do this in config
-                        eraser.config.updatableProgressMonitor =
+                        let updatableProgressMonitor =
                           await UpdatableProgressMonitor(frameCount: eraser.image_sequence.filenames.count,
                                                          config: eraser.config)
+                        upm = updatableProgressMonitor
+                        eraser.config.frameStateChangeCallback = { frame, state in
+                            Task(priority: .userInitiated) {
+                                await updatableProgressMonitor.stateChange(for: frame, to: state)
+                            }
+                        }
                     }
-
                     
                     Log.dispatchGroup = await eraser.dispatchGroup.dispatch_group
                     try eraser.run()
 
-                    if let updatableProgressMonitor = config.updatableProgressMonitor
-                    {
+                    if let updatableProgressMonitor = upm {
                         await updatableProgressMonitor.dispatchGroup.wait()
                         print("processing complete, output is in \(eraser.output_dirname)")
                     }
