@@ -73,40 +73,37 @@ struct ContentView: View {
         VStack {
             if let image_f = image.image {
                 ZStack {
-                    /*
-                    Image(systemName: "person")
-                      .imageScale(.large)
-                      .foregroundColor(.accentColor)
-*/
                     image_f
                       .imageScale(.large)
 
-                    if image.outlierImages.count != 0 {
                         /*
-                        Image(systemName: "globe")
-                          .imageScale(.large)
-                          .foregroundColor(.accentColor)
+                         why does this foreach fail?
+                         get it in the right spot
+                         get it to be the right size
+                         get it clickable to change paintability
                          */
-                        Image(nsImage: image.outlierImages[0])
-                          .position(x: 0, y:0 ) // at the top of window, not image :(
-//                          .offset(x: CGFloat(0), y: CGFloat(0)) // offset from center
-                    }
+                    
+                    ForEach(0..<100/*image.outlierImages.count*/) { idx in
 
-                    ForEach(0..<image.outlierImages.count) { idx in
-
+                        if idx < image.outlierImages.count {
+                        
                         // XXX this is always empty for some reason :(
                         /*
                         Image(systemName: "globe")
                           .imageScale(.large)
                           .foregroundColor(.accentColor)
                          */
+
+                        Image(nsImage: image.outlierImages[idx])
+                          .position(x: 0, y:0 ) // at the top of window, not image :(
+/*                        
                         Image(nsImage: image.outlierImages[idx])
                           .imageScale(.large)
                           .foregroundColor(.accentColor)
 
-/*
                         .frame(width: 200, height: 200)
  */
+                        }
                     }
 
                     // add to ZStack with clickable outlier groups on top
