@@ -322,7 +322,6 @@ public actor FinalProcessor {
                     Log.i("FINAL THREAD sleeping with count \(count)")
                     try await Task.sleep(nanoseconds: 1_000_000_000)
                     count = await countOfFramesToCheck()
-                    //sleep(1)
                 }
             } else {
                 Log.e("must set both frameCheckClosure and countOfFramesToCheck")

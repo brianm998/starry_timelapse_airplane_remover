@@ -71,6 +71,10 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
     // populated by pruning
     private var outlier_groups: [String: OutlierGroup] = [:] // keyed by group name
 
+    public func outlierGroups() -> [OutlierGroup] {
+        return outlier_groups.map {$0.value}
+    }
+    
     // only used for test painting
     private var ignored_outlier_groups: [String: OutlierGroup] = [:] // keyed by group name
 

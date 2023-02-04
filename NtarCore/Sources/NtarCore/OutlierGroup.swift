@@ -24,7 +24,8 @@ enum PaintScoreType {
 
 // represents a single outler group in a frame
 @available(macOS 10.15, *) 
-actor OutlierGroup: CustomStringConvertible, Hashable, Equatable {
+public actor OutlierGroup: CustomStringConvertible, Hashable, Equatable, Comparable {
+
     let name: String
     let size: UInt              // number of pixels in this outlier group
     let bounds: BoundingBox     // a bounding box on the image that contains this group
@@ -51,11 +52,15 @@ actor OutlierGroup: CustomStringConvertible, Hashable, Equatable {
         return lhs.name == rhs.name && lhs.frame.frame_index == rhs.frame.frame_index
     }
     
-    nonisolated var description: String {
+    public static func < (lhs: OutlierGroup, rhs: OutlierGroup) -> Bool {
+        return lhs.name < rhs.name
+    }
+    
+    nonisolated public var description: String {
         "outlier group \(frame.frame_index).\(name) size \(size) "
     }
     
-    nonisolated func hash(into hasher: inout Hasher) {
+    nonisolated public func hash(into hasher: inout Hasher) {
         hasher.combine(name)
         hasher.combine(frame.frame_index)
     }
@@ -106,6 +111,58 @@ actor OutlierGroup: CustomStringConvertible, Hashable, Equatable {
             }
             
             return ret
+        }
+    }
+    
+    // outputs an image the same size as this outlier's bounding box,
+    // coloring the outlier pixels red if will paint, green if not
+    public func testImage() -> CGImage? {
+        let bytesPerPixel = 64/8
+        
+        var image_data = Data(count: self.bounds.width*self.bounds.height*bytesPerPixel)
+        for x in 0 ..< self.bounds.width {
+            for y in 0 ..< self.bounds.height {
+                let pixel_index = y*self.bounds.width + x
+                var pixel = Pixel()
+                if self.pixels[pixel_index] != 0 {                    
+                    if let reason = self.shouldPaint {
+                        if reason.willPaint {
+                            pixel.red = 0xFFFF
+                            pixel.alpha = 0xFFFF
+                          } else {
+                            pixel.green = 0xFFFF
+                            pixel.alpha = 0xFFFF
+                        }
+
+                        var nextValue = pixel.value
+                        
+                        let offset = (Int(y) * bytesPerPixel*self.bounds.width) + (Int(x) * bytesPerPixel)
+                        
+                        image_data.replaceSubrange(offset ..< offset+bytesPerPixel,
+                                                   with: &nextValue,
+                                                   count: bytesPerPixel)
+                    }
+                }
+            }
+        }
+
+        let bitmapInfo = CGBitmapInfo(rawValue: CGImageAlphaInfo.last.rawValue)
+        
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
+        if let dataProvider = CGDataProvider(data: image_data as CFData) {
+            return CGImage(width: self.bounds.width,
+                           height: self.bounds.height,
+                           bitsPerComponent: 16,
+                           bitsPerPixel: bytesPerPixel*8,
+                           bytesPerRow: self.bounds.width*bytesPerPixel,
+                           space: colorSpace,
+                           bitmapInfo: bitmapInfo,
+                           provider: dataProvider,
+                           decode: nil,
+                           shouldInterpolate: false,
+                           intent: .defaultIntent)
+        } else {
+            return nil
         }
     }
     

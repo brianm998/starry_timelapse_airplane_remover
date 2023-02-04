@@ -127,8 +127,8 @@ class ntar_gui_app: App {
                         Log.d("frameCheckClosure 4")
                         if let baseImage = try await frame.baseImage() {
                             await self.framesToCheck.append(frame: frame)
-                            self.imageView.frame = frame
                             self.imageView.image = Image(nsImage: baseImage)
+                            self.imageView.frame = frame
                             Log.d("XXX self.imageView.image = \(self.imageView.image)")
                             // Perform UI updates
                         }
