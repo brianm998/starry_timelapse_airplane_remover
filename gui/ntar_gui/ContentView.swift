@@ -83,8 +83,7 @@ struct ContentView: View {
 
                         /*
                          why does this foreach fail?
-                         why do we get outlier groups for the wrong frame?
-                         get it clickable to change paintability
+                         last done not properly handled anymore
                          */
 
                     if showOutliers {
@@ -104,23 +103,19 @@ struct ContentView: View {
                                   .offset(x: CGFloat(outlier_center.x - frame_center_x),
                                           y: CGFloat(outlier_center.y - frame_center_y))
                                   .onTapGesture {
-                                      Log.w("WOOT WOOT")
                                       Task {
                                           if let origShouldPaint = await outlierViewModel.group.shouldPaint {
+                                              // change the paintability of this outlier group
+                                              // set it to user selected opposite previous value
                                               await outlierViewModel.group.shouldPaint(
                                                 .userSelected(!origShouldPaint.willPaint))
+
+                                              // update the view model so it shows up on screen
                                               await self.viewModel.update()
-//                                              await MsainActor.run {
-                                                  //self.viewModel.objectWillChange.send()
-  //                                            }
-                                              
-                                              Log.e("fucking did it?")
                                           } else {
                                               Log.e("WTF, not already set to paint??")
                                           }
                                       }
-                                      // XXX change the paintability of this outlier group now
-                                      // XXX do it
                                   }
                             }
                         }

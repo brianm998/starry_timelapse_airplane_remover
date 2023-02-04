@@ -11,6 +11,7 @@ You should have received a copy of the GNU General Public License along with nta
 */
 
 import Foundation
+import Cocoa
 
 enum PaintScoreType {
     case houghTransform // based upon the lines returned from a hough transform
