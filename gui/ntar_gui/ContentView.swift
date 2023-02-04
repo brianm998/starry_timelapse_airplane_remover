@@ -86,7 +86,7 @@ struct ContentView: View {
 
     @State private var width: CGFloat = 0
     @State private var height: CGFloat = 0
-    @State private var finalAmount: CGFloat = 0
+    @State private var finalAmount: CGFloat = 1
     @State private var currentAmount: CGFloat = 0
     @State private var offsetX: CGFloat = 0
     @State private var offsetY: CGFloat = 0
@@ -116,35 +116,6 @@ struct ContentView: View {
 
                     
 //                      .frame(width: width, height: height)
-                      .scaleEffect(finalAmount + currentAmount)
-                      .offset(x: offsetX, y:offsetY)
-                    
-                      .gesture(
-                        DragGesture()
-                          .onChanged { value in
-                              offsetY = value.translation.height + offsetYBuffer
-                              offsetX =  value.translation.width + offsetXBuffer
-                          }
-                          .onEnded { value in
-                              offsetXBuffer = value.translation.width + offsetXBuffer
-                              offsetYBuffer = value.translation.height + offsetYBuffer
-                          }
-                      ).gesture(
-                        MagnificationGesture()
-                          .onChanged { value in
-                              currentAmount = value - 1
-                          }
-                          .onEnded { value in
-                              finalAmount += currentAmount
-                              currentAmount = 0
-                              if self.positive {
-                                  offsetY += 0.1 //this seems to fix it
-                              } else {
-                                  offsetY -= 0.1 //this seems to fix it
-                              }
-                              self.positive = !self.positive
-                          }
-                      )
                     
                     
 //                      .imageScale(.large)
@@ -197,6 +168,36 @@ struct ContentView: View {
                         }
                     }
                 }
+                      .scaleEffect(finalAmount + currentAmount)
+                      .offset(x: offsetX, y:offsetY)
+                    
+                      .gesture(
+                        DragGesture()
+                          .onChanged { value in
+                              offsetY = value.translation.height + offsetYBuffer
+                              offsetX =  value.translation.width + offsetXBuffer
+                          }
+                          .onEnded { value in
+                              offsetXBuffer = value.translation.width + offsetXBuffer
+                              offsetYBuffer = value.translation.height + offsetYBuffer
+                          }
+                      ).gesture(
+                        MagnificationGesture()
+                          .onChanged { value in
+                              currentAmount = value - 1
+                          }
+                          .onEnded { value in
+                              finalAmount += currentAmount
+                              currentAmount = 0
+                              if self.positive {
+                                  offsetY += 0.1 //this seems to fix it
+                              } else {
+                                  offsetY -= 0.1 //this seems to fix it
+                              }
+                              self.positive = !self.positive
+                          }
+                      )
+                
                 //.scaleEffect(self.scale)
                 }//.gesture(magnificationGesture)
             } else {
