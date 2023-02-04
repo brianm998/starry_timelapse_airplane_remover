@@ -41,7 +41,8 @@ class ViewModel: ObservableObject {
                     let outlierImage = NSImage(cgImage: cgImage,
                                                size: size)
 
-                    let groupView = await OutlierGroupView(name: group.name,
+                    let groupView = await OutlierGroupView(group: group,
+                                                           name: group.name,
                                                            bounds: group.bounds,
                                                            image: outlierImage,
                                                            frame_width: frame_width,
@@ -60,6 +61,7 @@ class ViewModel: ObservableObject {
 }
 
 struct OutlierGroupView {
+    let group: OutlierGroup
     let name: String
     let bounds: BoundingBox
     let image: NSImage
@@ -70,6 +72,7 @@ struct OutlierGroupView {
 struct ContentView: View {
     @ObservedObject var viewModel: ViewModel
     @State private var showOutliers = true
+    @State private var running = false
     
     var body: some View {
         VStack {
@@ -102,6 +105,20 @@ struct ContentView: View {
                                           y: CGFloat(outlier_center.y - frame_center_y))
                                   .onTapGesture {
                                       Log.w("WOOT WOOT")
+                                      Task {
+                                          if let origShouldPaint = await outlierViewModel.group.shouldPaint {
+                                              await outlierViewModel.group.shouldPaint(
+                                                .userSelected(!origShouldPaint.willPaint))
+                                              await self.viewModel.update()
+//                                              await MsainActor.run {
+                                                  //self.viewModel.objectWillChange.send()
+  //                                            }
+                                              
+                                              Log.e("fucking did it?")
+                                          } else {
+                                              Log.e("WTF, not already set to paint??")
+                                          }
+                                      }
                                       // XXX change the paintability of this outlier group now
                                       // XXX do it
                                   }
@@ -123,7 +140,9 @@ struct ContentView: View {
             }
             VStack {
                 HStack {
+                    if !running {
                     Button(action: { // XXX hide when running
+                        running = true                                
                         Log.w("FKME")
                         Task.detached(priority: .background) {
                             do {
@@ -135,7 +154,9 @@ struct ContentView: View {
                     }) {
                         Text("START").font(.largeTitle)
                     }.buttonStyle(PlainButtonStyle())
+                    } else {
                     Button(action: {
+                               // XXX move this task to a method somewhere else
                         Task {
                             if let frame_to_remove = viewModel.frame {
                                 if let eraser = viewModel.eraser,
@@ -166,6 +187,7 @@ struct ContentView: View {
                     }) {
                         Text("DONE").font(.largeTitle)
                     }.buttonStyle(PlainButtonStyle())
+                    }
                 }
                 Toggle("show outliers", isOn: $showOutliers)
             }

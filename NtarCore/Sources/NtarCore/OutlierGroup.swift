@@ -38,7 +38,7 @@ public actor OutlierGroup: CustomStringConvertible, Hashable, Equatable, Compara
     public let surfaceAreaToSizeRatio: Double
 
     // after init, shouldPaint is usually set to a base value based upon different statistics 
-    var shouldPaint: PaintReason? // should we paint this group, and why?
+    public var shouldPaint: PaintReason? // should we paint this group, and why?
 
     // returns the first, most likely line, if any
     var line: Line? {
@@ -65,7 +65,7 @@ public actor OutlierGroup: CustomStringConvertible, Hashable, Equatable, Compara
         hasher.combine(frame.frame_index)
     }
 
-    func shouldPaint(_ should_paint: PaintReason) {
+    public func shouldPaint(_ should_paint: PaintReason) {
         //Log.d("\(self) should paint \(should_paint)")
         self.shouldPaint = should_paint
     }

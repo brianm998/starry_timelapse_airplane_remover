@@ -11,6 +11,8 @@ public enum PaintReason: Equatable, CaseIterable {
 
    case smallNonLinear
 
+   case userSelected(Bool)      // true if should paint
+
    public var BasicColor: BasicColor {
         get {
             switch self {
@@ -26,6 +28,12 @@ public enum PaintReason: Equatable, CaseIterable {
                 return .brightBlue
             case .smallNonLinear:
                 return .cyan
+            case .userSelected(let willPaint):
+                if willPaint {
+                    return .red
+                } else {
+                    return .green
+                }
             }
         }
    }
@@ -39,6 +47,7 @@ public enum PaintReason: Equatable, CaseIterable {
             case .badScore:          return "bad score"
             case .adjecentOverlap:   return "adjecent overlap"
             case .smallNonLinear:    return "small not linear"
+            case .userSelected(let willPaint): return "user selected \(willPaint)"
             }
         }
    }
@@ -70,6 +79,10 @@ These outlier groups were found to be in a streak across frames.
                 return """
 These outlier groups were ignored for being too small and not linear enough.
 """
+            case .userSelected:
+                return """
+These outlier groups were selected specifically by user in gui.
+"""
             }
         }
    }
@@ -83,6 +96,8 @@ These outlier groups were ignored for being too small and not linear enough.
             case .badScore:          return false
             case .adjecentOverlap:   return false
             case .smallNonLinear:    return false
+            case .userSelected(let willPaint):
+                return willPaint
             }
         }
    }
@@ -144,6 +159,14 @@ These outlier groups were ignored for being too small and not linear enough.
           switch rhs {
           case .smallNonLinear:
               return true
+          default:
+              return false
+          }
+
+      case .userSelected(let lhsWillPaint):
+          switch rhs {
+          case .userSelected(let rhsWillPaint):
+              return lhsWillPaint == rhsWillPaint
           default:
               return false
           }
