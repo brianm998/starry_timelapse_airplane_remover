@@ -56,8 +56,8 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
     
     func set(state: FrameProcessingState) { self.state = state }
     
-    public let width: Int
-    public let height: Int
+    nonisolated public let width: Int
+    nonisolated public let height: Int
     public let bytesPerPixel: Int
     public let bytesPerRow: Int
     public let otherFrameIndexes: [Int] // used in found outliers and paint only
