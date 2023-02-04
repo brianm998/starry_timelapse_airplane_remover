@@ -24,16 +24,20 @@ class ViewModel: ObservableObject {
     
     func update() async {
         if await framesToCheck.nextFrame() == nil {
-            frame = nil
-            outlierViews = []
-            image = Image(systemName: "globe")
+            await MainActor.run {
+                frame = nil
+                outlierViews = []
+                image = Image(systemName: "globe")
+            }
         }
         if let frame = frame {
             let (outlierGroups, frame_width, frame_height) =
               await (frame.outlierGroups(), frame.width, frame.height)
             
             Log.i("we have \(outlierGroups.count) outlierGroups")
-            outlierViews = []
+            await MainActor.run {
+                outlierViews = []
+            }
             for group in outlierGroups {
                 if let cgImage = await group.testImage() {
                     var size = CGSize()
@@ -48,16 +52,18 @@ class ViewModel: ObservableObject {
                                                            image: outlierImage,
                                                            frame_width: frame_width,
                                                            frame_height: frame_height)
-                    outlierViews.append(groupView)
+                    await MainActor.run {
+                        outlierViews.append(groupView)
+                    }
                 } else {
                     Log.e("NO FUCKING IMAGE")
                 }
             }
-            outlierCount = outlierViews.count
         }
         Task {
 //            try? await Task.sleep(nanoseconds: 5_000_000_000)
             await MainActor.run {
+                outlierCount = outlierViews.count
                 self.objectWillChange.send()
             }
         }
@@ -81,6 +87,7 @@ struct ContentView: View {
     var body: some View {
         VStack {
             if let image_f = viewModel.image {
+                ScrollView([.horizontal, .vertical], showsIndicators: false) {
                 ZStack {
                     image_f
                       .imageScale(.large)
@@ -94,11 +101,13 @@ struct ContentView: View {
 
                         // XXX this VVV sucks badly, why the 100?
                         // some kind of race condition with ForEach?
-                        // everything shows up fine when toggling showOutliers?
-                        let fuck = 100
+                        // everything shows up fine when toggling showOutliers for some reason
+                        let fuck = 10000
                         //let fuck = viewModel.outlierViews.count
                         //let fuck = viewModel.outlierCount
-                        
+                        //Users/brian/git/nighttime_timelapse_airplane_remover/gui/ntar_gui/ContentView.swift:104:39 Non-constant range: argument must be an integer literal
+
+                        // add to ZStack with clickable outlier groups on top
                         ForEach(0 ..< fuck) { idx in
 
                             if idx < viewModel.outlierViews.count {
@@ -130,9 +139,8 @@ struct ContentView: View {
                             }
                         }
                     }
-
-                    // add to ZStack with clickable outlier groups on top
-                }
+                }//.scaleEffect(self.scale)
+                }//.gesture(magnificationGesture)
             } else {
                 Image(systemName: "globe")
                   .imageScale(.large)
