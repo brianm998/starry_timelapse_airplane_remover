@@ -126,7 +126,31 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
 
         Log.i("frame \(frame_index) detected outlier groups")
     }
+
+    func readOutliers(fromJson json: String) throws {
+        if let jsonData = json.data(using: .utf8) {
+            let decoder = JSONDecoder()
+            self.outlier_groups = try decoder.decode(OutlierGroups.self, from: jsonData)
+        } else {
+            Log.e("json erorr: \(json)")
+        }
+    }
     
+    func outlierJsonData() -> Data {
+        let encoder = JSONEncoder()
+    //    encoder.outputFormatting = .prettyPrinted
+
+        do {
+            let data = try encoder.encode(outlier_groups)
+//            if let json_string = String(data: data, encoding: .utf8) {
+//                return json_string
+//            }
+            return data
+        } catch {
+            Log.e("\(error)")
+        }
+        return Data()
+    }
 
     func outlierGroup(named outlier_name: String) -> OutlierGroup? {
         return outlier_groups.groups[outlier_name]
@@ -735,49 +759,6 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
     public static func == (lhs: FrameAirplaneRemover, rhs: FrameAirplaneRemover) -> Bool {
         return lhs.frame_index == rhs.frame_index
     }    
-
-    // write out a set of text files that desribe each outlier group
-    // these are the initial step of data generation
-    func writeOutlierGroupFiles() {
-        Log.e("writing outlier group images")              
-        for (group_name, group) in self.outlier_groups.groups {
-            Log.i("writing text file for group \(group_name)")
-            
-            if let output_dirname = outlier_output_dirname {
-                // XXX check the determined paintability of each group and write them
-                // out to different output dirnames
-                
-                let filename = "\(frame_index)_outlier_\(group.name).txt".replacingOccurrences(of: ",", with: "_")
-                
-                let full_path = "\(output_dirname)/\(filename)"
-                if file_manager.fileExists(atPath: full_path) {
-                    Log.w("cannot write to \(full_path), it already exists")
-                } else {
-                    Log.i("creating \(full_path)")                      
-                    var line = ""
-                    
-                    for y in 0 ..< group.bounds.height {
-                        for x in 0 ..< group.bounds.width {
-                            if group.pixels[y*group.bounds.width+x] != 0 {
-                                line += "*" // outlier spot
-                            } else {
-                                line += " "
-                            }
-                        }
-                        line += "\n"
-                    }
-                    if let data = line.data(using: .utf8) {
-                        file_manager.createFile(atPath: full_path, contents: data, attributes: nil)
-                        Log.i("wrote \(full_path)")
-                    } else {
-                        Log.e("cannot create data?")
-                    }
-                }
-            } else {
-                Log.w("cannot write image for group \(group_name)")
-            }
-        }
-    }
 }
 
 fileprivate let file_manager = FileManager.default

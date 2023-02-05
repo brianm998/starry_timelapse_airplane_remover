@@ -49,7 +49,7 @@ class ntar_gui_app: App {
     var test_paint = false
     var testPaintOutputPath: String?
     var show_test_paint_colors = false
-    var should_write_outlier_group_files = false
+    var should_write_outlier_group_files = true // XXX see what happens
     var process_outlier_group_images = false
     var image_sequence_dirname: String?
 
@@ -66,9 +66,9 @@ class ntar_gui_app: App {
         Log.w("Starting Up")
 
         // XXX take this from the input somehow
-        //image_sequence_dirname = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/test_small_medium"
+        image_sequence_dirname = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/test_small_medium"
         //image_sequence_dirname = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/test_small_fix_error"
-        image_sequence_dirname = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/test_a7sii_10"        
+        //image_sequence_dirname = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/test_a7sii_10"        
         //image_sequence_dirname = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/test_a9_20"        
         
         // XXX copied from Ntar.swift

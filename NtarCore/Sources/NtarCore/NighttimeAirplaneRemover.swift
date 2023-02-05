@@ -178,21 +178,14 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
                      output_filename: String,
                      test_paint_filename tpfo: String?) async throws -> FrameAirplaneRemover
     {
-        let frame = try await FrameAirplaneRemover(with: config,
-                                                   imageSequence: image_sequence,
-                                                   atIndex: frame_index,
-                                                   otherFrameIndexes: otherFrameIndexes,
-                                                   outputFilename: output_filename,
-                                                   testPaintFilename: tpfo,
-                                                   outlierOutputDirname: outlier_output_dirname)
-        
-        if config.writeOutlierGroupFiles {
-            await frame.writeOutlierGroupFiles()
-        }
-        
-        return frame
+        return try await FrameAirplaneRemover(with: config,
+                                              imageSequence: image_sequence,
+                                              atIndex: frame_index,
+                                              otherFrameIndexes: otherFrameIndexes,
+                                              outputFilename: output_filename,
+                                              testPaintFilename: tpfo,
+                                              outlierOutputDirname: outlier_output_dirname)
    }        
-
 }
               
               

@@ -170,19 +170,32 @@ public actor FinalProcessor {
         Log.d("add all \(count) remaining frames to method list of count \(method_list_count)")
     }
 
-    func finish(frame frame_to_finish: FrameAirplaneRemover) async {
-
-        // XXX write out json for this frame if in config
-        
+    func finish(frame: FrameAirplaneRemover) async {
+        if config.writeOutlierGroupFiles,
+           let output_dirname = frame.outlier_output_dirname
+        {
+            // write to outlier json
+            let json_data = await frame.outlierJsonData()
+            //Log.e(json_string)
+            
+            let filename = "\(frame.frame_index)_outliers.json"
+            let full_path = "\(output_dirname)/\(filename)"
+            if file_manager.fileExists(atPath: full_path) {
+                Log.w("cannot write to \(full_path), it already exists")
+            } else {
+                Log.i("creating \(full_path)")                      
+                file_manager.createFile(atPath: full_path, contents: json_data, attributes: nil)
+            }            
+        }
         if let frameCheckClosure = config.frameCheckClosure {
             // gui
-            await frameCheckClosure(frame_to_finish)
+            await frameCheckClosure(frame)
         } else {
             // cli
-            await self.final_queue.add(atIndex: frame_to_finish.frame_index) {
-                Log.i("frame \(frame_to_finish.frame_index) finishing")
-                try await frame_to_finish.finish()
-                Log.i("frame \(frame_to_finish.frame_index) finished")
+            await self.final_queue.add(atIndex: frame.frame_index) {
+                Log.i("frame \(frame.frame_index) finishing")
+                try await frame.finish()
+                Log.i("frame \(frame.frame_index) finished")
             }
         }
     }
@@ -1163,3 +1176,5 @@ func edge_distance(from box_1: BoundingBox, to box_2: BoundingBox) -> Double {
     //Log.v("returning \(ret)")
     return ret
 }
+
+fileprivate let file_manager = FileManager.default
