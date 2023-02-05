@@ -24,6 +24,7 @@ You should have received a copy of the GNU General Public License along with nta
 public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemover> {
 
     public var config: Config
+    public var callbacks: Callbacks
 
     // the name of the directory to create when writing test paint images
     let test_paint_output_dirname: String
@@ -33,8 +34,9 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
 
     public var final_processor: FinalProcessor?    
 
-    public init(with config: Config) throws {
+    public init(with config: Config, callbacks: Callbacks) throws {
         self.config = config
+        self.callbacks = callbacks
 
         var basename = "\(config.image_sequence_dirname)-ntar-v-\(config.ntar_version)"
         basename = basename.replacingOccurrences(of: ".", with: "_")
@@ -51,7 +53,7 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
         let image_sequence_size = /*self.*/image_sequence.filenames.count
         
         self.remaining_images_closure = { number_of_unprocessed in
-            if let updatable = config.updatable {
+            if let updatable = callbacks.updatable {
                 // log number of unprocessed images here
                 Task(priority: .userInitiated) {
                     let progress = Double(number_of_unprocessed)/Double(image_sequence_size)
@@ -69,6 +71,7 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
         }
         
         let processor = FinalProcessor(with: config,
+                                       callbacks: callbacks,
                                        numberOfFrames: image_sequence_size,
                                        dispatchGroup: dispatchGroup,
                                        imageSequence: image_sequence)
@@ -179,6 +182,7 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
                      test_paint_filename tpfo: String?) async throws -> FrameAirplaneRemover
     {
         return try await FrameAirplaneRemover(with: config,
+                                              callbacks: callbacks,
                                               imageSequence: image_sequence,
                                               atIndex: frame_index,
                                               otherFrameIndexes: otherFrameIndexes,

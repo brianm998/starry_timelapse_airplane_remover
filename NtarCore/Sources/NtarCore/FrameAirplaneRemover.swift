@@ -42,7 +42,7 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
 
     private var state: FrameProcessingState = .unprocessed {
         willSet {
-            if let frameStateChangeCallback = config.frameStateChangeCallback {
+            if let frameStateChangeCallback = self.callbacks.frameStateChangeCallback {
                 frameStateChangeCallback(self, newValue)
             }
         }
@@ -83,8 +83,10 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
     public let image_sequence: ImageSequence
 
     public let config: Config
+    public let callbacks: Callbacks
     
     init(with config: Config,
+         callbacks: Callbacks,
          imageSequence image_sequence: ImageSequence,
          atIndex frame_index: Int,
          otherFrameIndexes: [Int],
@@ -93,6 +95,7 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
          outlierOutputDirname outlier_output_dirname: String?) async throws
     {
         self.config = config
+        self.callbacks = callbacks
         let image = try await image_sequence.getImage(withName: image_sequence.filenames[frame_index]).image()
         self.image_sequence = image_sequence
         self.frame_index = frame_index // frame index in the image sequence
@@ -513,7 +516,7 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
                                                      frame: self,
                                                      pixels: outlier_amounts,
                                                      max_pixel_distance: config.max_pixel_distance)
-                let hough_score = await new_outlier.paintScore(from: .houghTransform)
+                let hough_score = new_outlier.paintScore(from: .houghTransform)
                 //let surface_area_score = await new_outlier.paintScore(from: .surfaceAreaRatio)
 
                 if group_size < config.max_must_look_like_line_size,
@@ -524,7 +527,7 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
                     //Log.e("frame \(frame_index) ignoring outlier \(new_outlier) with hough score \(hough_score) satsr \(satsr) surface_area_score \(surface_area_score)")
                     if test_paint {
                         // allow test painting of these ignored groups
-                        await new_outlier.shouldPaint(.smallNonLinear)
+                        new_outlier.shouldPaint(.smallNonLinear)
                         ignored_outlier_groups[group_name] = new_outlier
                     }
                 } else {
@@ -546,7 +549,7 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
                     let pixel_index = (y-group.bounds.min.y)*group.bounds.width + (x - group.bounds.min.x)
                     if group.pixels[pixel_index] != 0 {                    
                         var nextPixel = Pixel()
-                        if let reason = await group.shouldPaint,
+                        if let reason = group.shouldPaint,
                            !reason.willPaint
                         {
                             nextPixel.value = reason.testPaintPixel.value
@@ -588,7 +591,7 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
 
         // paint over every outlier in the paint list with pixels from the adjecent frames
         for (group_name, group) in outlier_groups.groups {
-            if let reason = await group.shouldPaint {
+            if let reason = group.shouldPaint {
                 if reason.willPaint {
                     Log.d("frame \(frame_index) painting over group \(group) for reason \(reason)")
                     //let x = index % width;

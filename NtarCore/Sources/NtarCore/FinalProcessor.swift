@@ -57,15 +57,18 @@ public actor FinalProcessor {
     let image_sequence: ImageSequence
 
     let config: Config
+    let callbacks: Callbacks
     
     var is_asleep = false
     
     init(with config: Config,
+         callbacks: Callbacks,
          numberOfFrames frame_count: Int,
          dispatchGroup dispatch_group: DispatchHandler,
          imageSequence: ImageSequence)
     {
         self.config = config
+        self.callbacks = callbacks
         self.frames = [FrameAirplaneRemover?](repeating: nil, count: frame_count)
         self.frame_count = frame_count
         self.dispatch_group = dispatch_group
@@ -95,7 +98,7 @@ public actor FinalProcessor {
     }
 
     private func log() {
-        if let updatable = config.updatable {
+        if let updatable = callbacks.updatable {
             // show what frames are in place to be processed
             Task(priority: .userInitiated) {
                 var padding = ""
@@ -187,7 +190,7 @@ public actor FinalProcessor {
                 file_manager.createFile(atPath: full_path, contents: json_data, attributes: nil)
             }            
         }
-        if let frameCheckClosure = config.frameCheckClosure {
+        if let frameCheckClosure = callbacks.frameCheckClosure {
             // gui
             await frameCheckClosure(frame)
         } else {
@@ -309,7 +312,7 @@ public actor FinalProcessor {
         Log.i("FINAL THREAD finishing all remaining frames")
         try await self.finishAll()
 
-        if let frameCheckClosure = config.frameCheckClosure {
+        if let frameCheckClosure = callbacks.frameCheckClosure {
             // XXX there is a race condition here if we are in gui
             // mode where we add each frame off to the gui for processing
             // XXX make this better
@@ -321,7 +324,7 @@ public actor FinalProcessor {
             
             // XXX need to await here for the frame check if it's happening
 
-            if let countOfFramesToCheck = config.countOfFramesToCheck {
+            if let countOfFramesToCheck = callbacks.countOfFramesToCheck {
                 var count = await countOfFramesToCheck()
                 Log.i("FINAL THREAD countOfFramesToCheck \(count)")
                 while(count > 0) {

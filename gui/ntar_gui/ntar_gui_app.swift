@@ -116,15 +116,17 @@ class ntar_gui_app: App {
                                 imageSequenceName: input_image_sequence_name,
                                 imageSequencePath: input_image_sequence_path,
                                 writeOutlierGroupFiles: self.should_write_outlier_group_files)
+
+            var callbacks = Callbacks()
             // count numbers here for max running 
-            config.countOfFramesToCheck = {
+            callbacks.countOfFramesToCheck = {
                 let count = await self.framesToCheck.count()
                 Log.i("XXX count \(count)")
                 return count
             }
 
           
-            config.frameStateChangeCallback = { frame, state in
+            callbacks.frameStateChangeCallback = { frame, state in
                 // XXX do something here
                 Log.d("frame \(frame.frame_index) changed to state \(state)")
                 Task {
@@ -142,7 +144,7 @@ class ntar_gui_app: App {
 //                }
             }
             
-            config.frameCheckClosure = { new_frame in
+            callbacks.frameCheckClosure = { new_frame in
                 Log.d("frameCheckClosure for frame \(new_frame.frame_index)")
                 Task {
                     await self.framesToCheck.append(frame: new_frame)
@@ -168,7 +170,7 @@ class ntar_gui_app: App {
 
             Log.i("have config")
             do {
-                let eraser = try NighttimeAirplaneRemover(with: config)
+                let eraser = try NighttimeAirplaneRemover(with: config, callbacks: callbacks)
                 //                        await Log.dispatchGroup = eraser.dispatchGroup.dispatch_group
                 self.viewModel.eraser = eraser // XXX rename this crap
                 //                            try eraser.run()

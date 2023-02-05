@@ -51,13 +51,15 @@ public class UpdatableLogHandler: LogHandler {
 public actor UpdatableProgressMonitor {
     let number_of_frames: Int
     let config: Config
+    let callbacks: Callbacks
     
     public let dispatchGroup = DispatchGroup()
     
     var frames: [FrameProcessingState: Set<FrameAirplaneRemover>] = [:]
-    public init(frameCount: Int, config: Config) {
+    public init(frameCount: Int, config: Config, callbacks: Callbacks) {
         self.number_of_frames = frameCount
         self.config = config
+        self.callbacks = callbacks
     }
 
     private var last_update_time: TimeInterval?
@@ -82,7 +84,7 @@ public actor UpdatableProgressMonitor {
 
     func redraw() {
 
-        guard let updatable = config.updatable else { return }
+        guard let updatable = callbacks.updatable else { return }
 
         var updates: [() async -> Void] = []
 

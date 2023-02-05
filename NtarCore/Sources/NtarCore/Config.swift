@@ -17,7 +17,7 @@ func sixteenBitVersion(ofPercentage percentage: Double) -> UInt16 {
 }
 
 @available(macOS 10.15, *) 
-public struct Config {
+public struct Config: Codable {
 
     public init() {
         self.outputPath = "."
@@ -72,90 +72,82 @@ public struct Config {
     }
 
     // the base dir under which to create dir(s) for output sequence(s)
-    public let outputPath: String
+    public var outputPath: String
     
     // percentage difference between same pixels on different frames to consider an outlier
-    public let outlierMaxThreshold: Double
+    public var outlierMaxThreshold: Double
 
     // computed over 16 bits per pixel from the value above
-    public let min_pixel_distance: UInt16
+    public var min_pixel_distance: UInt16
 
     // min percentage difference between same pixels on different frames to consider an outlier
-    public let outlierMinThreshold: Double
+    public var outlierMinThreshold: Double
 
     // computed over 16 bits per pixel from the value above
-    public let max_pixel_distance: UInt16
+    public var max_pixel_distance: UInt16
     
     // groups smaller than this are ignored
-    public let minGroupSize: Int
+    public var minGroupSize: Int
 
     // how many cpu cores should we max out at?
-    public let numConcurrentRenders: Int
+    public var numConcurrentRenders: Int
 
     // write out test paint images
-    public let test_paint: Bool
+    public var test_paint: Bool
 
     // where to create the test paint output dir
-    public let test_paint_output_path: String
+    public var test_paint_output_path: String
     
     // the name of the directory containing the input sequence
-    public let image_sequence_dirname: String
+    public var image_sequence_dirname: String
 
     // where the input image sequence dir lives
-    public let image_sequence_path: String
+    public var image_sequence_path: String
     
     // write out individual outlier group images
-    public let writeOutlierGroupFiles: Bool
+    public var writeOutlierGroupFiles: Bool
 
-    public let medium_hough_line_score: Double = 0.4 // close to being a line, not really far
+    public var medium_hough_line_score: Double = 0.4 // close to being a line, not really far
     // how far in each direction do we go when doing final processing?
-    public let number_final_processing_neighbors_needed = 1 // in each direction
+    public var number_final_processing_neighbors_needed = 1 // in each direction
 
-    public let final_theta_diff: Double = 10       // how close in theta/rho outliers need to be between frames
-    public let final_rho_diff: Double = 20        // 20 works
+    public var final_theta_diff: Double = 10       // how close in theta/rho outliers need to be between frames
+    public var final_rho_diff: Double = 20        // 20 works
 
-    public let center_line_theta_diff: Double = 18 // used in outlier streak detection
+    public var center_line_theta_diff: Double = 18 // used in outlier streak detection
     // 25 is too large
 
     // the minimum outlier group size at the top of the screen
     // smaller outliers at the top are discarded early on
-    public let min_group_size_at_top = 400
+    public var min_group_size_at_top = 400
     
 
     // what percentage of the top of the screen is considered far enough
     // above the horizon to not need really small outlier groups
     // between the bottom and the top of this area, the minimum
     // outlier group size increases
-    public let upper_sky_percentage: Double = 66 // top 66% of the screen
+    public var upper_sky_percentage: Double = 66 // top 66% of the screen
 
 
     // these parameters are used to throw out outlier groups from the
     // initial list to consider.  Smaller groups than this must have
     // a hough score this big or greater to be included.
-    public let max_must_look_like_line_size: Int = 500
-    public let max_must_look_like_line_score: Double = 0.25
-    public let surface_area_to_size_max = 0.5
+    public var max_must_look_like_line_size: Int = 500
+    public var max_must_look_like_line_score: Double = 0.25
+    public var surface_area_to_size_max = 0.5
 
 
-    public let supported_image_file_types = [".tif", ".tiff"] // XXX move this out
+    public var supported_image_file_types = [".tif", ".tiff"] // XXX move this out
 
     // XXX use this to try to avoid running out of memory somehow
     // maybe determine megapixels of images, and guestimate usage and
     // avoid spawaning too many threads?
-    public let memory_size_bytes = ProcessInfo.processInfo.physicalMemory
-    public let memory_size_gigs = ProcessInfo.processInfo.physicalMemory/(1024*1024*1024)
+    public var memory_size_bytes = ProcessInfo.processInfo.physicalMemory
+    public var memory_size_gigs = ProcessInfo.processInfo.physicalMemory/(1024*1024*1024)
 
     // used by updatable log
-    public let progress_bar_length = 50
+    public var progress_bar_length = 50
 
-    public var updatable: UpdatableLog?
-
-    public var frameStateChangeCallback: ((FrameAirplaneRemover, FrameProcessingState) -> ())?
-    
-    public var frameCheckClosure: ((FrameAirplaneRemover) async -> ())?
-
-    public var countOfFramesToCheck: (() async -> Int)?
-    
     // 0.0.2 added more detail group hough transormation analysis, based upon a data set
     // 0.0.3 included the data set analysis to include group size and fill, and to use histograms
     // 0.0.4 included .inStreak final processing
@@ -172,6 +164,20 @@ public struct Config {
     // 0.1.2 lots of speed/memory usage improvements, better updatable log
     // 0.1.3 started to add the gui
 
-    public let ntar_version = "0.1.3"
+    public var ntar_version = "0.1.3"
+}
+
+@available(macOS 10.15, *) 
+public class Callbacks {
+    public init() { }
+    
+    public var updatable: UpdatableLog?
+
+    public var frameStateChangeCallback: ((FrameAirplaneRemover, FrameProcessingState) -> ())?
+    
+    public var frameCheckClosure: ((FrameAirplaneRemover) async -> ())?
+
+    public var countOfFramesToCheck: (() async -> Int)?
+    
     
 }

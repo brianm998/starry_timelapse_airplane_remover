@@ -124,10 +124,12 @@ todo:
  */
 
 
-// this is here so that PaintReason can see it
-// XXX still necessary?
+// do these really have to be globals?
 @available(macOS 10.15, *) 
 var config: Config = Config()
+
+@available(macOS 10.15, *) 
+var callbacks = Callbacks()
 
 @main
 @available(macOS 10.15, *) 
@@ -215,6 +217,7 @@ struct Ntar: ParsableCommand {
         Should include a sequence of 16 bit tiff files, sortable by name.
         """)
     var image_sequence_dirname: String?
+
 
     mutating func run() throws {
         
@@ -314,7 +317,7 @@ struct Ntar: ParsableCommand {
                             imageSequenceName: input_image_sequence_name,
                             imageSequencePath: input_image_sequence_path,
                             writeOutlierGroupFiles: should_write_outlier_group_files)
-            
+
             Log.name = "ntar-log"
             Log.nameSuffix = input_image_sequence_name
 
@@ -323,9 +326,9 @@ struct Ntar: ParsableCommand {
                 Log.handlers[.console] = ConsoleLogHandler(at: terminalLogLevel)
             } else {
                 // enable updatable logging when not doing console logging
-                config.updatable = UpdatableLog()
+                callbacks.updatable = UpdatableLog()
 
-                if let updatable = config.updatable {
+                if let updatable = callbacks.updatable {
                     Log.handlers[.console] = UpdatableLogHandler(updatable)
                     let name = input_image_sequence_name
                     let path = input_image_sequence_path
@@ -353,17 +356,18 @@ struct Ntar: ParsableCommand {
                 let local_dispatch = DispatchGroup()
                 local_dispatch.enter()
                 Task {
-                    let eraser = try NighttimeAirplaneRemover(with: config)
+                    let eraser = try NighttimeAirplaneRemover(with: config, callbacks: callbacks)
 
                     var upm: UpdatableProgressMonitor?
 
-                    if let _ = eraser.config.updatable {
+                    if let _ = eraser.callbacks.updatable {
                         // setup sequence monitor
                         let updatableProgressMonitor =
                           await UpdatableProgressMonitor(frameCount: eraser.image_sequence.filenames.count,
-                                                         config: eraser.config)
+                                                         config: eraser.config,
+                                                         callbacks: callbacks)
                         upm = updatableProgressMonitor
-                        eraser.config.frameStateChangeCallback = { frame, state in
+                        eraser.callbacks.frameStateChangeCallback = { frame, state in
                             Task(priority: .userInitiated) {
                                 await updatableProgressMonitor.stateChange(for: frame, to: state)
                             }
