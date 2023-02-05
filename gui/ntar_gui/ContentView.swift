@@ -137,7 +137,12 @@ struct ContentView: View {
                 }
 
                 if self.zstack_frame == .zero {
-                    finalAmount = geometry.size.height / height
+                    let zoom_factor = geometry.size.height / height
+                    if zoom_factor > 1 {
+                        finalAmount = zoom_factor
+                    } else {
+                        finalAmount = 1
+                    }
                     Log.w("INITIAL SIZE [\(geometry.size.width), \(geometry.size.height)] - [\(width), \(height)] finalAmount \(finalAmount)")
                     // set initial finalAmount based upon stack frame size and frame size
                 }
@@ -227,22 +232,26 @@ struct ContentView: View {
                         MagnificationGesture()
                           .onChanged { value in
                               Log.d("currentAmount \(currentAmount) value \(value)")
+                              /*
                               if finalAmount + value - 1 < 15,
                                  finalAmount + value - 1 > 0.2 // XXX compute these based on frame size
                               {
+                               */
                                   currentAmount = value - 1
                                   Log.d("currentAmount 2 \(currentAmount)")
+                                  /*
                               } else {
                                   Log.d("skipping")
-                              }
+                              }*/
                           }
                           .onEnded { value in
                               finalAmount += currentAmount
+                              /*
                               if finalAmount > 15 {
                                   finalAmount = 15
                               } else if finalAmount < 0.2 {
                                   finalAmount = 0.2
-                              }
+                              }*/
                               Log.d("finalAmount \(finalAmount)")
                               currentAmount = 0
                               if self.positive {
