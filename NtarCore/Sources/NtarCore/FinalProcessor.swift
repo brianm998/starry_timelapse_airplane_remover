@@ -161,23 +161,30 @@ public actor FinalProcessor {
                         await really_final_streak_processing(onFrame: frame,
                                                              nextFrame: next_frame)
                     }
-                    
-                    if let frameCheckClosure = self.config.frameCheckClosure {
-                        // gui
-                        Log.i("about to call frameCheckClosure")
-                        Task {
-                            await frameCheckClosure(frame)
-                        }
-                        Log.w("called frameCheckClosure")
-                    } else {
-                        // cli
-                        try await frame.finish()
-                    }
+
+                    await self.finish(frame: frame)
                 }
             }
         }
         let method_list_count = await self.final_queue.method_list.count
         Log.d("add all \(count) remaining frames to method list of count \(method_list_count)")
+    }
+
+    func finish(frame frame_to_finish: FrameAirplaneRemover) async {
+
+        // XXX write out json for this frame if in config
+        
+        if let frameCheckClosure = config.frameCheckClosure {
+            // gui
+            await frameCheckClosure(frame_to_finish)
+        } else {
+            // cli
+            await self.final_queue.add(atIndex: frame_to_finish.frame_index) {
+                Log.i("frame \(frame_to_finish.frame_index) finishing")
+                try await frame_to_finish.finish()
+                Log.i("frame \(frame_to_finish.frame_index) finished")
+            }
+        }
     }
 
     nonisolated func run(shouldProcess: [Bool]) async throws {
@@ -259,7 +266,6 @@ public actor FinalProcessor {
                         Log.d("running final streak processing on frame \(frame_to_finish.frame_index)")
                         //let final_frame_group_name = "final frame \(frame_to_finish.frame_index)"
                         Log.d("frame \(frame_to_finish.frame_index) adding at index ")
-                        let before_count = await self.final_queue.method_list.count
                         await frame_to_finish.set(state: .outlierProcessingComplete)
                         // XXX lots of images are getting blocked up here for some reason
 
@@ -270,21 +276,8 @@ public actor FinalProcessor {
                         // validate it, maybe making painting changes
 
                         // cli needs to go straight to the final queue as seen here
-                        if let frameCheckClosure = config.frameCheckClosure {
-                            // gui
-                            Task {
-                                await frameCheckClosure(frame_to_finish)
-                            }
-                        } else {
-                            // cli
-                            await self.final_queue.add(atIndex: frame_to_finish.frame_index) {
-                                Log.i("frame \(frame_to_finish.frame_index) finishing")
-                                try await frame_to_finish.finish()
-                                Log.i("frame \(frame_to_finish.frame_index) finished")
-                            }
-                            let after_count = await self.final_queue.method_list.count
-                            Log.d("frame \(frame_to_finish.frame_index) done adding to index before_count \(before_count) after_count \(after_count)")
-                        }
+
+                        await self.finish(frame: frame_to_finish)
                     }
                     Log.v("FINAL THREAD frame \(index_to_process) done queueing into final queue")
                 }

@@ -52,14 +52,14 @@ class ViewModel: ObservableObject {
                 outlierViews = []
             }
             for group in outlierGroups {
-                if let cgImage = await group.testImage() {
+                if let cgImage = group.testImage() {
                     var size = CGSize()
                     size.width = CGFloat(cgImage.width)
                     size.height = CGFloat(cgImage.height)
                     let outlierImage = NSImage(cgImage: cgImage,
                                                size: size)
 
-                    let groupView = await OutlierGroupView(group: group,
+                    let groupView = OutlierGroupView(group: group,
                                                            name: group.name,
                                                            bounds: group.bounds,
                                                            image: outlierImage,
@@ -194,7 +194,7 @@ struct ContentView: View {
                                           if let origShouldPaint = await outlierViewModel.group.shouldPaint {
                                               // change the paintability of this outlier group
                                               // set it to user selected opposite previous value
-                                              await outlierViewModel.group.shouldPaint(
+                                               outlierViewModel.group.shouldPaint(
                                                 .userSelected(!origShouldPaint.willPaint))
 
                                               // update the view model so it shows up on screen
