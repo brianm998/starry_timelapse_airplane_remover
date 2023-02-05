@@ -48,6 +48,8 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
         }
     }
 
+    public func processingState() -> FrameProcessingState { return state }
+    
     nonisolated public func hash(into hasher: inout Hasher) {
         hasher.combine(frame_index)
     }
@@ -86,7 +88,7 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
             do {
                 if file_manager.fileExists(atPath: full_path) {
                     try file_manager.removeItem(atPath: full_path)
-                    // XXX make this overwrite for new user changes to existing json
+                    // make this overwrite for new user changes to existing json
                     Log.i("overwriting \(full_path)")
                 } 
                 Log.i("creating \(full_path)")                      
@@ -152,6 +154,7 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
             self.outlier_groups = outlierGroups
             self.state = .outlierProcessingComplete
         } else {
+            Log.i("calculating outlier groups for frame \(frame_index)")
             self.outlier_groups = OutlierGroups(frame_index: frame_index)
             // find outlying bright pixels between frames,
             // and group neighboring outlying pixels into groups

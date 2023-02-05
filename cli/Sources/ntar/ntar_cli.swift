@@ -295,10 +295,10 @@ struct Ntar: ParsableCommand {
             if let last_element = filename_paths.last {
                 filename_paths.removeLast()
                 input_image_sequence_path = filename_paths.joined(separator: "/")
-                if input_image_sequence_path.count == 0 { input_image_sequence_path = "." }
+                if input_image_sequence_path.count == 0 { input_image_sequence_path = "/" }
                 input_image_sequence_name = last_element
             } else {
-                input_image_sequence_path = "."
+                input_image_sequence_path = "/"
                 input_image_sequence_name = input_image_sequence_dirname
             }
 

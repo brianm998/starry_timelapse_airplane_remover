@@ -32,7 +32,7 @@ actor FramesToCheck {
     }
 
     func nextFrame() -> FrameAirplaneRemover? {
-        Log.e("NEXT FRAME \(frames.count)")
+        //Log.e("NEXT FRAME \(frames.count)")
         if frames.count == 0 { return nil }
         return frames[0]
     }
@@ -71,10 +71,10 @@ class ntar_gui_app: App {
             // this path reads a saved json config file, along with potentially
             // a set of saved outlier groups for each frame
             
-            //let outlier_dirname = "/pp/tmp/LRT_12_22_2022-a9-2-aurora-topaz-ntar-v-0_1_3-outliers"
+            let outlier_dirname = "/pp/tmp/LRT_12_22_2022-a9-2-aurora-topaz-ntar-v-0_1_3-outliers"
             //let outlier_dirname = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/test_small_medium-ntar-v-0_1_3-outliers"
 
-            let outlier_dirname = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/test_a7sii_100-ntar-v-0_1_3-outliers"
+            //let outlier_dirname = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/test_a7sii_100-ntar-v-0_1_3-outliers"
             
             outlier_json_startup(with: outlier_dirname)
             
@@ -135,10 +135,10 @@ class ntar_gui_app: App {
             if let last_element = filename_paths.last {
                 filename_paths.removeLast()
                 input_image_sequence_path = filename_paths.joined(separator: "/")
-                if input_image_sequence_path.count == 0 { input_image_sequence_path = "." }
+                if input_image_sequence_path.count == 0 { input_image_sequence_path = "/" }
                 input_image_sequence_name = last_element
             } else {
-                input_image_sequence_path = "."
+                input_image_sequence_path = "/"
                 input_image_sequence_name = input_image_sequence_dirname
             }
 

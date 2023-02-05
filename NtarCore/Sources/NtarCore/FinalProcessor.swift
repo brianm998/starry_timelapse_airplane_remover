@@ -78,13 +78,23 @@ public actor FinalProcessor {
     }
 
     func add(frame: FrameAirplaneRemover) {
-        let index = frame.frame_index
-        Log.i("FINAL THREAD frame \(index) added for final inter-frame analysis")
-        if index > max_added_index {
-            max_added_index = index
+        Task {
+            let frame_state = await frame.processingState()
+            if frame_state == .outlierProcessingComplete {
+                // these frames have already been inter-frame processed,
+                // likely from saved json outlier groups
+                await self.finish(frame: frame)
+            } else {
+                // this frame needs inter-frame processing still
+                let index = frame.frame_index
+                Log.i("FINAL THREAD frame \(index) added for final inter-frame analysis")
+                if index > max_added_index {
+                    max_added_index = index
+                }
+                frames[index] = frame
+                log()
+            }
         }
-        frames[index] = frame
-        log()
     }
 
     func clearFrame(at index: Int) {

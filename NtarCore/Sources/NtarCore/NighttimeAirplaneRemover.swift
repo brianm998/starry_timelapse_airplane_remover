@@ -195,11 +195,22 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
                     let url = NSURL(fileURLWithPath: frame_outliers_json_filename, isDirectory: false) as URL
                     let (data, _) = try await URLSession.shared.data(for: URLRequest(url: url))
                     let decoder = JSONDecoder()
+                    decoder.nonConformingFloatDecodingStrategy = .convertFromString(
+                      positiveInfinity: "inf",
+                      negativeInfinity: "-inf",
+                      nan: "nan")
+                    
                     outlier_groups_for_this_frame = try decoder.decode(OutlierGroups.self, from: data)
                 } catch {
-                    Log.e("\(error)")
+                    Log.e("frame \(frame_index) error decoding file \(frame_outliers_json_filename): \(error)")
                 }
             }
+        }
+
+        if let _ = outlier_groups_for_this_frame  {
+            Log.i("loading frame \(frame_index) with outlier groups from json")
+        } else {
+            Log.d("loading frame \(frame_index)")
         }
         
         return try await FrameAirplaneRemover(with: config,
@@ -215,4 +226,5 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
 }
               
               
+
 fileprivate let file_manager = FileManager.default
