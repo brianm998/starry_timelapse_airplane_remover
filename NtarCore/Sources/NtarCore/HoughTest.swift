@@ -205,7 +205,7 @@ func hough_test(filename: String, output_filename: String) async {
                         if count > 10 {
                             Log.i("line at (\(x), \(y)) has theta \(theta) rho \(rho) count \(count)")
                         }
-                        lines.append(( 
+                        lines.append(Line( 
                                      theta: theta, // XXX small data loss in conversion
                                      rho: rho,
                                      count: Int(counts[x][y])

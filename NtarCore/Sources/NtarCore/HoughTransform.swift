@@ -155,7 +155,7 @@ public class HoughTransform {
                         theta = (theta + 180).truncatingRemainder(dividingBy: 360)
                     }
                     
-                    lines.append((theta: theta, rho: rho, count: Int(count)))
+                    lines.append(Line(theta: theta, rho: rho, count: Int(count)))
                 }
             }
         }
