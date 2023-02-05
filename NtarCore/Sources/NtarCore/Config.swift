@@ -185,7 +185,7 @@ public struct Config: Codable {
             // write to config json
 
             let encoder = JSONEncoder()
-            //    encoder.outputFormatting = .prettyPrinted
+            encoder.outputFormatting = .prettyPrinted
 
             do {
                 let json_data = try encoder.encode(self)
