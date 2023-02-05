@@ -174,24 +174,6 @@ public actor FinalProcessor {
     }
 
     func finish(frame: FrameAirplaneRemover) async {
-        if config.writeOutlierGroupFiles,
-           let output_dirname = frame.outlier_output_dirname
-        {
-            // write to outlier json
-            let json_data = await frame.outlierJsonData()
-            //Log.e(json_string)
-            
-            let filename = "\(frame.frame_index)_outliers.json"
-            let full_path = "\(output_dirname)/\(filename)"
-            if file_manager.fileExists(atPath: full_path) {
-                // XXX make this overwrite for new user changes to existing json
-                Log.w("cannot write to \(full_path), it already exists")
-            } else {
-                Log.i("creating \(full_path)")                      
-                file_manager.createFile(atPath: full_path, contents: json_data, attributes: nil)
-            }            
-        }
-
         // here is where the gui and cli paths diverge
         // if we have a frame check closure, we allow the user to check the frame here
         // but only if there are some outliers to check, otherwise just finish it.
@@ -1188,4 +1170,3 @@ func edge_distance(from box_1: BoundingBox, to box_2: BoundingBox) -> Double {
     return ret
 }
 
-fileprivate let file_manager = FileManager.default

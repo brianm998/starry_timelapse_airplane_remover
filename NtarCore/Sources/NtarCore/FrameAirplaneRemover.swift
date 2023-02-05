@@ -72,6 +72,30 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
     public func outlierGroups() -> [OutlierGroup] {
         return outlier_groups.groups.map {$0.value}
     }
+
+    public func writeOutliersJson() {
+        if config.writeOutlierGroupFiles,
+           let output_dirname = self.outlier_output_dirname
+        {
+            // write to outlier json
+            let json_data = self.outlierJsonData()
+            //Log.e(json_string)
+            
+            let filename = "\(self.frame_index)_outliers.json"
+            let full_path = "\(output_dirname)/\(filename)"
+            do {
+                if file_manager.fileExists(atPath: full_path) {
+                    try file_manager.removeItem(atPath: full_path)
+                    // XXX make this overwrite for new user changes to existing json
+                    Log.i("overwriting \(full_path)")
+                } 
+                Log.i("creating \(full_path)")                      
+                file_manager.createFile(atPath: full_path, contents: json_data, attributes: nil)
+            } catch {
+                Log.e("\(error)")
+            }
+        }
+    }
     
     // only used for test painting
     private var ignored_outlier_groups: [String: OutlierGroup] = [:] // keyed by group name
@@ -100,7 +124,6 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
         let image = try await image_sequence.getImage(withName: image_sequence.filenames[frame_index]).image()
         self.image_sequence = image_sequence
         self.frame_index = frame_index // frame index in the image sequence
-        self.outlier_groups = OutlierGroups(frame_index: frame_index)
         self.otherFrameIndexes = otherFrameIndexes
         self.output_filename = output_filename
         if let tp_filename = tpfo {
@@ -129,6 +152,7 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
             self.outlier_groups = outlierGroups
             self.state = .outlierProcessingComplete
         } else {
+            self.outlier_groups = OutlierGroups(frame_index: frame_index)
             // find outlying bright pixels between frames,
             // and group neighboring outlying pixels into groups
             // this can take a long time
@@ -712,6 +736,8 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
     // run after should_paint has been set for each group, 
     // does the final painting and then writes out the output files
     public func finish() async throws {
+        self.writeOutliersJson()
+
         self.state = .reloadingImages
         
         Log.i("frame \(self.frame_index) finishing")
@@ -780,3 +806,4 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
 }
 
 
+fileprivate let file_manager = FileManager.default
