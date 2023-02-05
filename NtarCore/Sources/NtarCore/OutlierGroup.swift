@@ -32,7 +32,7 @@ public actor OutlierGroup: CustomStringConvertible, Hashable, Equatable, Compara
     public let bounds: BoundingBox     // a bounding box on the image that contains this group
     public let brightness: UInt        // the average amount per pixel of brightness over the limit 
     public let lines: [Line]           // sorted lines from the hough transform of this outlier group
-    public let frame: FrameAirplaneRemover
+//    public let frame: FrameAirplaneRemover
     public let pixels: [UInt32]        // indexed by y * bounds.width + x, true if part of this group
                                 // zero if pixel if not part of group, brightness value otherwise
     public let max_pixel_distance: UInt16
@@ -40,6 +40,8 @@ public actor OutlierGroup: CustomStringConvertible, Hashable, Equatable, Compara
 
     // after init, shouldPaint is usually set to a base value based upon different statistics 
     public var shouldPaint: PaintReason? // should we paint this group, and why?
+
+    let frame_index: Int
 
     // returns the first, most likely line, if any
     var line: Line? {
@@ -49,8 +51,50 @@ public actor OutlierGroup: CustomStringConvertible, Hashable, Equatable, Compara
         return nil
     } 
 
+    init(name: String,
+         size: UInt,
+         brightness: UInt,
+         bounds: BoundingBox,
+         frame: FrameAirplaneRemover,
+         pixels: [UInt32],
+         max_pixel_distance: UInt16) async
+    {
+        self.name = name
+        self.size = size
+        self.brightness = brightness
+        self.bounds = bounds
+        self.frame_index = frame.frame_index
+        self.pixels = pixels
+        self.max_pixel_distance = max_pixel_distance
+        self.surfaceAreaToSizeRatio = surface_area_to_size_ratio(of: pixels,
+                                                                 width: bounds.width,
+                                                                 height: bounds.height)
+        // do a hough transform on just this outlier group
+        let transform = HoughTransform(data_width: bounds.width,
+                                       data_height: bounds.height,
+                                       input_data: pixels,
+                                       max_pixel_distance: max_pixel_distance)
+        
+        self.lines = transform.lines(min_count: 1)
+
+        if self.shouldPaint == nil,
+           self.paintScoreFromHoughTransformLines > 0.5
+        {
+            if size < 300 { // XXX constant XXX
+                // don't assume small ones are lines
+            } else {
+                //Log.d("frame \(frame_index) will paint group \(name) because it looks like a line from the group hough transform")
+                self.shouldPaint = .looksLikeALine(self.paintScoreFromHoughTransformLines)
+            }
+        }
+            
+        if self.shouldPaint == nil { setShouldPaintFromCombinedScore() }
+
+        //Log.d("frame \(frame_index) group \(self) bounds \(bounds) should_paint \(self.shouldPaint?.willPaint) reason \(String(describing: self.shouldPaint)) hough transform score \(paintScore(from: .houghTransform)) aspect ratio \(paintScore(from: .aspectRatio)) brightness score \(paintScore(from: .brightness)) size score \(paintScore(from: .groupSize)) combined \(paintScore(from: .combined)) ")
+    }
+
     public static func == (lhs: OutlierGroup, rhs: OutlierGroup) -> Bool {
-        return lhs.name == rhs.name && lhs.frame.frame_index == rhs.frame.frame_index
+        return lhs.name == rhs.name && lhs.frame_index == rhs.frame_index
     }
     
     public static func < (lhs: OutlierGroup, rhs: OutlierGroup) -> Bool {
@@ -58,12 +102,12 @@ public actor OutlierGroup: CustomStringConvertible, Hashable, Equatable, Compara
     }
     
     nonisolated public var description: String {
-        "outlier group \(frame.frame_index).\(name) size \(size) "
+        "outlier group \(frame_index).\(name) size \(size) "
     }
     
     nonisolated public func hash(into hasher: inout Hasher) {
         hasher.combine(name)
-        hasher.combine(frame.frame_index)
+        hasher.combine(frame_index)
     }
 
     public func shouldPaint(_ should_paint: PaintReason) {
@@ -166,56 +210,14 @@ public actor OutlierGroup: CustomStringConvertible, Hashable, Equatable, Compara
             return nil
         }
     }
-    
-    init(name: String,
-         size: UInt,
-         brightness: UInt,
-         bounds: BoundingBox,
-         frame: FrameAirplaneRemover,
-         pixels: [UInt32],
-         max_pixel_distance: UInt16) async
-    {
-        self.name = name
-        self.size = size
-        self.brightness = brightness
-        self.bounds = bounds
-        self.frame = frame
-        self.pixels = pixels
-        self.max_pixel_distance = max_pixel_distance
-        self.surfaceAreaToSizeRatio = surface_area_to_size_ratio(of: pixels,
-                                                                 width: bounds.width,
-                                                                 height: bounds.height)
-        // do a hough transform on just this outlier group
-        let transform = HoughTransform(data_width: bounds.width,
-                                       data_height: bounds.height,
-                                       input_data: pixels,
-                                       max_pixel_distance: max_pixel_distance)
-        
-        self.lines = transform.lines(min_count: 1)
-
-        if self.shouldPaint == nil,
-           self.paintScoreFromHoughTransformLines > 0.5
-        {
-            if size < 300 { // XXX constant XXX
-                // don't assume small ones are lines
-            } else {
-                //Log.d("frame \(frame.frame_index) will paint group \(name) because it looks like a line from the group hough transform")
-                self.shouldPaint = .looksLikeALine(self.paintScoreFromHoughTransformLines)
-            }
-        }
-            
-        if self.shouldPaint == nil { setShouldPaintFromCombinedScore() }
-
-        //Log.d("frame \(frame.frame_index) group \(self) bounds \(bounds) should_paint \(self.shouldPaint?.willPaint) reason \(String(describing: self.shouldPaint)) hough transform score \(paintScore(from: .houghTransform)) aspect ratio \(paintScore(from: .aspectRatio)) brightness score \(paintScore(from: .brightness)) size score \(paintScore(from: .groupSize)) combined \(paintScore(from: .combined)) ")
-    }
 
     func setShouldPaintFromCombinedScore() {
         let score = self.paintScore(from: .combined)
         if score > 0.5 {
-            //Log.d("frame \(frame.frame_index) should_paint[\(name)] = (true, .goodScore(\(score))")
+            //Log.d("frame \(frame_index) should_paint[\(name)] = (true, .goodScore(\(score))")
             self.shouldPaint = .goodScore(score)
         } else {
-            //Log.d("frame \(frame.frame_index) should_paint[\(name)] = (false, .badScore(\(score))")
+            //Log.d("frame \(frame_index) should_paint[\(name)] = (false, .badScore(\(score))")
             self.shouldPaint = .badScore(score)
         }
     }
@@ -382,11 +384,10 @@ public actor OutlierGroup: CustomStringConvertible, Hashable, Equatable, Compara
     }
 
     private var paintScoreFromBrightness: Double {
-        let mpd = frame.config.max_pixel_distance
-        if self.brightness < mpd {
+        if self.brightness < max_pixel_distance {
             return 0
         } else {
-            let max = UInt(mpd)
+            let max = UInt(max_pixel_distance)
             let score = Double(self.brightness - max)/Double(max)*20
             if score > 100 {
                 return 1

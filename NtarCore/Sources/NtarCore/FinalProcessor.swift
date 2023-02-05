@@ -692,7 +692,7 @@ fileprivate func run_final_streak_pass(frames: [FrameAirplaneRemover],
             while let streak = await taskGroup.next() {
                 if streak.count > 0 {
                     let first_member = streak[0]
-                    let key = "\(first_member.group.frame.frame_index).\(first_member.group.name)"
+                    let key = "\(first_member.group.frame_index).\(first_member.group.name)"
                     Log.v("frame \(frame_index) adding streak \(streak) named \(key)")
                     await airplane_streaks.add(value: streak, forKey: key)
                 }

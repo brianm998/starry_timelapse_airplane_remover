@@ -117,6 +117,8 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
         self.bytesPerPixel = image.bytesPerPixel
         self.bytesPerRow = width*bytesPerPixel
 
+        // XXX avoid this following step when loading outlier data from file 
+        
         // find outlying bright pixels between frames,
         // and group neighboring outlying pixels into groups
         try await self.findOutliers()        
