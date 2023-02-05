@@ -282,6 +282,13 @@ struct Ntar: ParsableCommand {
                 _ = input_image_sequence_dirname.removeLast()
             }
 
+            if !input_image_sequence_dirname.hasPrefix("/") {
+                let full_path =
+                  file_manager.currentDirectoryPath + "/" + 
+                  input_image_sequence_dirname
+                input_image_sequence_dirname = full_path
+            }
+            
             var filename_paths = input_image_sequence_dirname.components(separatedBy: "/")
             var input_image_sequence_path: String = ""
             var input_image_sequence_name: String = ""
@@ -460,6 +467,7 @@ func process_outlier_groups(dirname: String,
     dispatchGroup.wait()
 }
 
+// needs ArgumentParser, so it's here in cli land
 extension Log.Level: ExpressibleByArgument { }
 
 fileprivate let file_manager = FileManager.default

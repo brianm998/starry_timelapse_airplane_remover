@@ -68,13 +68,19 @@ class ntar_gui_app: App {
         var use_json = true
 
         if use_json {
-
+            // this path reads a saved json config file, along with potentially
+            // a set of saved outlier groups for each frame
+            
             //let outlier_dirname = "/pp/tmp/LRT_12_22_2022-a9-2-aurora-topaz-ntar-v-0_1_3-outliers"
-            let outlier_dirname = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/test_small_medium-ntar-v-0_1_3-outliers"
+            //let outlier_dirname = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/test_small_medium-ntar-v-0_1_3-outliers"
+
+            let outlier_dirname = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/test_a7sii_100-ntar-v-0_1_3-outliers"
+            
             outlier_json_startup(with: outlier_dirname)
             
         } else {
-
+            // this path starts from a image sequence only
+            
             // XXX take this from the input somehow
             //let image_sequence_dirname = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/test_small_medium"
             let image_sequence_dirname = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/test_small_lots"
@@ -116,6 +122,13 @@ class ntar_gui_app: App {
                 _ = input_image_sequence_dirname.removeLast()
             }
 
+            if !input_image_sequence_dirname.hasPrefix("/") {
+                let full_path =
+                  file_manager.currentDirectoryPath + "/" + 
+                  input_image_sequence_dirname
+                input_image_sequence_dirname = full_path
+            }
+            
             var filename_paths = input_image_sequence_dirname.components(separatedBy: "/")
             var input_image_sequence_path: String = ""
             var input_image_sequence_name: String = ""
@@ -266,3 +279,5 @@ class ntar_gui_app: App {
         }
     }
 }
+
+fileprivate let file_manager = FileManager.default
