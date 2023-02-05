@@ -37,11 +37,6 @@ public enum FrameProcessingState: Int, CaseIterable, Codable {
     case complete
 }
 
-@available(macOS 10.15, *) 
-public struct OutlierGroups: Codable {
-    var groups: [String: OutlierGroup] = [:]
-}
-
 @available(macOS 10.15, *)
 public actor FrameAirplaneRemover: Equatable, Hashable {
 
@@ -72,7 +67,7 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
     public let outlier_output_dirname: String?
 
     // populated by pruning
-    private var outlier_groups = OutlierGroups()
+    private var outlier_groups: OutlierGroups
 
     public func outlierGroups() -> [OutlierGroup] {
         return outlier_groups.groups.map {$0.value}
@@ -101,6 +96,7 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
         let image = try await image_sequence.getImage(withName: image_sequence.filenames[frame_index]).image()
         self.image_sequence = image_sequence
         self.frame_index = frame_index // frame index in the image sequence
+        self.outlier_groups = OutlierGroups(frame_index: frame_index)
         self.otherFrameIndexes = otherFrameIndexes
         self.output_filename = output_filename
         if let tp_filename = tpfo {

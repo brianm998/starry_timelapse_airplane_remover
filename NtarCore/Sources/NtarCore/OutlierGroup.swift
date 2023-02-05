@@ -23,6 +23,13 @@ enum PaintScoreType {
     case combined       // a combination, not using fillAmount
 }
 
+
+@available(macOS 10.15, *) 
+public struct OutlierGroups: Codable {
+    let frame_index: Int
+    var groups: [String: OutlierGroup] = [:] // keyed by name
+}
+
 // represents a single outler group in a frame
 @available(macOS 10.15, *) 
 public class OutlierGroup: CustomStringConvertible, Hashable, Equatable, Comparable, Codable {

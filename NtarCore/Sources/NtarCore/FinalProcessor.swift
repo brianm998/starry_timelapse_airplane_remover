@@ -386,8 +386,8 @@ func really_final_streak_processing(onFrame frame: FrameAirplaneRemover,
                     if first_member.frame_index == last_other_airplane_streak.frame_index + 1 {
                         // found a streak that ended right before this one started
                         
-                        if let first_member_group_line = await first_member.group.firstLine,
-                           let last_other_airplane_streak_group_line = await last_other_airplane_streak.group.firstLine
+                        if let first_member_group_line = first_member.group.firstLine,
+                           let last_other_airplane_streak_group_line = last_other_airplane_streak.group.firstLine
                         {
                             let distance = await distance(from: last_other_airplane_streak.group,
                                                           to: first_member.group)
@@ -406,8 +406,8 @@ func really_final_streak_processing(onFrame frame: FrameAirplaneRemover,
                         }
                         
                     } else if last_member.frame_index + 1 == first_other_airplane_streak.frame_index {
-                        if let last_member_group_line = await last_member.group.firstLine,
-                           let first_other_airplane_streak_group_line = await first_other_airplane_streak.group.firstLine
+                        if let last_member_group_line = last_member.group.firstLine,
+                           let first_other_airplane_streak_group_line = first_other_airplane_streak.group.firstLine
                         {
                             // found a streak that starts right after this one ends
                             let distance = await distance(from: last_member.group,
@@ -434,7 +434,7 @@ func really_final_streak_processing(onFrame frame: FrameAirplaneRemover,
                 var total_line_score: Double = 0
                 // one last check on the line score
                 for member_to_remove in airplane_streak {
-                    total_line_score += await member_to_remove.group.paintScore(from: .houghTransform)
+                    total_line_score += member_to_remove.group.paintScore(from: .houghTransform)
                 }
                 total_line_score /= Double(airplane_streak.count)
                 
@@ -451,7 +451,7 @@ func really_final_streak_processing(onFrame frame: FrameAirplaneRemover,
                         } 
                         // here 'removing' means 'de-streakifying' it
                         // it may or may not still be painted, but now it's not based upon other groups 
-                        await member_to_remove.group.setShouldPaintFromCombinedScore()
+                        member_to_remove.group.setShouldPaintFromCombinedScore()
                     }
                 }
             }
@@ -499,13 +499,13 @@ fileprivate func run_final_overlap_pass(frames: [FrameAirplaneRemover],
         
         await frame.foreachOutlierGroup { group in
                 
-            let houghScore = await group.paintScore(from: .houghTransform)
+            let houghScore = group.paintScore(from: .houghTransform)
             
             if houghScore > config.medium_hough_line_score { return .continue }
             
             // look for more data to act upon
             
-            if let reason = await group.shouldPaint,
+            if let reason = group.shouldPaint,
                reason.willPaint
             {
                 switch reason {
@@ -523,7 +523,7 @@ fileprivate func run_final_overlap_pass(frames: [FrameAirplaneRemover],
                 }
             }
             
-            guard let group_line = await group.firstLine else { return .continue }
+            guard let group_line = group.firstLine else { return .continue }
             let (line_theta, line_rho) = (group_line.theta, group_line.rho)
             
             await other_frame.foreachOutlierGroup() { og in
@@ -534,7 +534,7 @@ fileprivate func run_final_overlap_pass(frames: [FrameAirplaneRemover],
                 
                 if distance > 300 { return .continue } // XXX arbitrary constant
                 
-                guard let og_line = await og.firstLine else { return .continue }
+                guard let og_line = og.firstLine else { return .continue }
                 
                 
                 let other_line_theta = og_line.theta
@@ -566,13 +566,13 @@ fileprivate func run_final_overlap_pass(frames: [FrameAirplaneRemover],
                         var do_it = true
                         
                         // do paint over objects that look like lines
-                        if let frame_reason = await group.shouldPaint {
+                        if let frame_reason = group.shouldPaint {
                             if frame_reason.willPaint && frame_reason == .looksLikeALine(0) {
                                 do_it = false
                             }
                         }
                         
-                        if let other_reason = await og.shouldPaint {
+                        if let other_reason = og.shouldPaint {
                             if other_reason.willPaint && other_reason == .looksLikeALine(0) {
                                 do_it = false
                             }
@@ -586,8 +586,8 @@ fileprivate func run_final_overlap_pass(frames: [FrameAirplaneRemover],
                     }
                     
                     if close_enough {
-                        await group.shouldPaint(.adjecentOverlap(overlap_amount))
-                        await og.shouldPaint(.adjecentOverlap(overlap_amount))
+                        group.shouldPaint(.adjecentOverlap(overlap_amount))
+                        og.shouldPaint(.adjecentOverlap(overlap_amount))
                         Log.v("frame \(frame.frame_index) should_paint[\(group)] = (false, .adjecentOverlap(\(overlap_amount))")
                         Log.v("frame \(other_frame.frame_index) should_paint[\(og)] = (false, .adjecentOverlap(\(overlap_amount))")
                     } else {
@@ -625,7 +625,7 @@ fileprivate func run_final_streak_pass(frames: [FrameAirplaneRemover],
                 // do streak detection in parallel at the level of groups in a single frame
                 // look for more data to act upon
                 
-                if let reason = await group.shouldPaint {
+                if let reason = group.shouldPaint {
                     if reason == .adjecentOverlap(0) {
                         Log.v("frame \(frame.frame_index) skipping \(group) because it has .adjecentOverlap")
                         return .continue
@@ -669,7 +669,7 @@ fileprivate func run_final_streak_pass(frames: [FrameAirplaneRemover],
                         potential_streak_name = existing_streak_name
                     }
                     
-                    let houghScore = await group.paintScore(from: .houghTransform)
+                    let houghScore = group.paintScore(from: .houghTransform)
                     
                     if houghScore > 0.007 { // XXX constant
                         if let streak = 
@@ -719,7 +719,7 @@ fileprivate func run_final_streak_pass(frames: [FrameAirplaneRemover],
                         // being processed right now,
                     } else {
                         //let frame = frames[streak_member.frame_index - initial_frame_index]
-                        if let should_paint = await streak_member.group.shouldPaint{
+                        if let should_paint = streak_member.group.shouldPaint{
                             if should_paint == .adjecentOverlap(0) { verbotten = true }
                         }
                     }
@@ -730,7 +730,7 @@ fileprivate func run_final_streak_pass(frames: [FrameAirplaneRemover],
                     Log.d("frame \(streak_member.frame_index) will paint group \(streak_member.group) is .inStreak")
 
                     // XXX check to see if this is already .inStreak with higher count
-                    await streak_member.group.shouldPaint(.inStreak(airplane_streak.count))
+                    streak_member.group.shouldPaint(.inStreak(airplane_streak.count))
                 }
             }
         }
@@ -798,8 +798,8 @@ func streak_from(group: OutlierGroup,
             
             let center_line_theta = center_theta(from: last_group.bounds, to: other_group.bounds)
 
-            guard let other_group_line = await other_group.firstLine else { return .continue }
-            guard let last_group_line = await last_group.firstLine else { return .continue }
+            guard let other_group_line = other_group.firstLine else { return .continue }
+            guard let last_group_line = last_group.firstLine else { return .continue }
             
             let (other_group_line_theta,
                  last_group_line_theta) = (other_group_line.theta,
@@ -811,7 +811,7 @@ func streak_from(group: OutlierGroup,
             let center_line_theta_diff_1 = abs(center_line_theta-other_group_line_theta)
             let center_line_theta_diff_2 = abs(center_line_theta-last_group_line_theta)
 
-            let houghScore = await other_group.paintScore(from: .houghTransform)
+            let houghScore = other_group.paintScore(from: .houghTransform)
 
             // XXX constant  VVV 
             if houghScore > 0.007 &&
