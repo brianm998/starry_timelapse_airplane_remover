@@ -125,7 +125,7 @@ struct ContentView: View {
     // this is the frame with outliers on top of it
     func frameView(_ geometry: GeometryProxy, _ image: Image) -> some View {
         Log.d("[\(geometry.size.width), \(geometry.size.height)]")
-
+        
         Task {
             await MainActor.run {
                 if width == 0,
@@ -138,10 +138,15 @@ struct ContentView: View {
 
                 if self.zstack_frame == .zero {
                     let zoom_factor = geometry.size.height / height
-                    if zoom_factor > 1 {
-                        finalAmount = zoom_factor
-                    } else {
-                        finalAmount = 1
+                    let min = 1
+                    finalAmount = zoom_factor
+                    if zoom_factor < 1 {
+
+                        // XXX this _kindof_ works, but the frame isn't centered still :(
+                        offsetX = -width//*finalAmount
+//                        offsetYBuffer = offsetX
+                        offsetY = -height//2 // XXX
+//                        offsetYBuffer = offsetY
                     }
                     Log.w("INITIAL SIZE [\(geometry.size.width), \(geometry.size.height)] - [\(width), \(height)] finalAmount \(finalAmount)")
                     // set initial finalAmount based upon stack frame size and frame size
@@ -165,59 +170,60 @@ struct ContentView: View {
                          last done not properly handled anymore
                          */
 
-                    if showOutliers {
+            if showOutliers {
 
-                        // XXX this VVV sucks badly, why the 100?
-                        // some kind of race condition with ForEach?
-                        // everything shows up fine when toggling showOutliers for some reason
-                        let fuck = 10000
-                        //let fuck = viewModel.outlierViews.count
-                        //let fuck = viewModel.outlierCount
-                        //Users/brian/git/nighttime_timelapse_airplane_remover/gui/ntar_gui/ContentView.swift:104:39 Non-constant range: argument must be an integer literal
-
-                        // add to ZStack with clickable outlier groups on top
-                        ForEach(0 ..< fuck) { idx in
-
-                            if idx < viewModel.outlierViews.count {
-                                let outlierViewModel = viewModel.outlierViews[idx]
-                                
-                                let frame_center_x = outlierViewModel.frame_width/2
-                                let frame_center_y = outlierViewModel.frame_height/2
-                                let outlier_center = outlierViewModel.bounds.center
-                                
-                                Image(nsImage: outlierViewModel.image)
-                                // offset from the center of parent view
-                                  .offset(x: CGFloat(outlier_center.x - frame_center_x),
-                                          y: CGFloat(outlier_center.y - frame_center_y))
-                                  .onTapGesture {
-                                      Task {
-                                          if let origShouldPaint = outlierViewModel.group.shouldPaint {
-                                              // change the paintability of this outlier group
-                                              // set it to user selected opposite previous value
-                                               outlierViewModel.group.shouldPaint(
-                                                .userSelected(!origShouldPaint.willPaint))
-
-                                              // update the view model so it shows up on screen
-                                              await self.viewModel.update()
-                                          } else {
-                                              Log.e("WTF, not already set to paint??")
-                                          }
-                                      }
+                // XXX this VVV sucks badly, why the 100?
+                // some kind of race condition with ForEach?
+                // everything shows up fine when toggling showOutliers for some reason
+                let fuck = 10000
+                //let fuck = viewModel.outlierViews.count
+                //let fuck = viewModel.outlierCount
+                //Users/brian/git/nighttime_timelapse_airplane_remover/gui/ntar_gui/ContentView.swift:104:39 Non-constant range: argument must be an integer literal
+                
+                // add to ZStack with clickable outlier groups on top
+                ForEach(0 ..< fuck) { idx in
+                    
+                    if idx < viewModel.outlierViews.count {
+                        let outlierViewModel = viewModel.outlierViews[idx]
+                        
+                        let frame_center_x = outlierViewModel.frame_width/2
+                        let frame_center_y = outlierViewModel.frame_height/2
+                        let outlier_center = outlierViewModel.bounds.center
+                        
+                        Image(nsImage: outlierViewModel.image)
+                        // offset from the center of parent view
+                          .offset(x: CGFloat(outlier_center.x - frame_center_x),
+                                  y: CGFloat(outlier_center.y - frame_center_y))
+                          .onTapGesture {
+                              Task {
+                                  if let origShouldPaint = outlierViewModel.group.shouldPaint {
+                                      // change the paintability of this outlier group
+                                      // set it to user selected opposite previous value
+                                      outlierViewModel.group.shouldPaint(
+                                        .userSelected(!origShouldPaint.willPaint))
+                                      
+                                      // update the view model so it shows up on screen
+                                      await self.viewModel.update()
+                                  } else {
+                                      Log.e("WTF, not already set to paint??")
                                   }
-                            }
-                        }
+                              }
+                          }
                     }
+                }
+            }
         }
+          .offset(x: offsetX, y:offsetY)
+          .scaleEffect(finalAmount + currentAmount/*, anchor: scaling_anchor*/)
     }
 
     var body: some View {
+        let scaling_anchor = UnitPoint(x: 0.75, y: 0.75)
         VStack {
             if let frame_image = viewModel.image {
                 GeometryReader { geomerty in
                 ScrollView([.horizontal, .vertical], showsIndicators: false) {
                     self.frameView(geomerty, frame_image)
-                      .scaleEffect(finalAmount + currentAmount)
-                      .offset(x: offsetX, y:offsetY)
                       .gesture(
                         DragGesture()
                           .onChanged { value in
@@ -232,6 +238,8 @@ struct ContentView: View {
                         MagnificationGesture()
                           .onChanged { value in
                               Log.d("currentAmount \(currentAmount) value \(value)")
+                              offsetX -= value
+                              offsetY -= value
                               /*
                               if finalAmount + value - 1 < 15,
                                  finalAmount + value - 1 > 0.2 // XXX compute these based on frame size
