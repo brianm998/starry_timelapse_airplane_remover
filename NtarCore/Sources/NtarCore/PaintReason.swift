@@ -1,7 +1,7 @@
 import Foundation
 
 // why we are or are not painting a group
-public enum PaintReason: Equatable, CaseIterable {
+public enum PaintReason: Equatable, CaseIterable, Codable {
    case goodScore(Double)            // percent score
    case looksLikeALine(Double)       
    case inStreak(Int)           // size

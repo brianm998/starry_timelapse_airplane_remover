@@ -37,6 +37,11 @@ public enum FrameProcessingState: Int, CaseIterable, Codable {
     case complete
 }
 
+@available(macOS 10.15, *) 
+public struct OutlierGroups: Codable {
+    var groups: [String: OutlierGroup] = [:]
+}
+
 @available(macOS 10.15, *)
 public actor FrameAirplaneRemover: Equatable, Hashable {
 
@@ -67,16 +72,16 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
     public let outlier_output_dirname: String?
 
     // populated by pruning
-    private var outlier_groups: [String: OutlierGroup] = [:] // keyed by group name
+    private var outlier_groups = OutlierGroups()
 
     public func outlierGroups() -> [OutlierGroup] {
-        return outlier_groups.map {$0.value}
+        return outlier_groups.groups.map {$0.value}
     }
     
     // only used for test painting
     private var ignored_outlier_groups: [String: OutlierGroup] = [:] // keyed by group name
 
-    var outlierGroupCount: Int { return outlier_groups.count }
+    var outlierGroupCount: Int { return outlier_groups.groups.count }
     
     public let output_filename: String
 
@@ -128,11 +133,11 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
     
 
     func outlierGroup(named outlier_name: String) -> OutlierGroup? {
-        return outlier_groups[outlier_name]
+        return outlier_groups.groups[outlier_name]
     }
     
     func foreachOutlierGroup(_ closure: (OutlierGroup)async->LoopReturn) async {
-        for (_, group) in self.outlier_groups {
+        for (_, group) in self.outlier_groups.groups {
             let result = await closure(group)
             if result == .break { break }
         }
@@ -505,13 +510,13 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
                 } else {
                     //Log.w("frame \(frame_index) adding outlier \(new_outlier) with hough score \(hough_score) satsr \(satsr) surface_area_score \(surface_area_score)")
                     // add this new outlier to the set to analyize
-                    outlier_groups[group_name] = new_outlier
+                    outlier_groups.groups[group_name] = new_outlier
                 }
                   
             }
         }
         self.state = .readyForInterFrameProcessing
-        Log.i("frame \(frame_index) has found \(outlier_groups.count) outlier groups to consider")
+        Log.i("frame \(frame_index) has found \(outlier_groups.groups.count) outlier groups to consider")
     }
 
     private func testPaintOutliers(from outliers: [String:OutlierGroup], toData test_paint_data: inout Data) async {
@@ -543,7 +548,7 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
     private func testPaintOutliers(toData test_paint_data: inout Data) async {
         Log.d("frame \(frame_index) painting outliers green")
 
-        await self.testPaintOutliers(from: outlier_groups, toData: &test_paint_data)
+        await self.testPaintOutliers(from: outlier_groups.groups, toData: &test_paint_data)
         await self.testPaintOutliers(from: ignored_outlier_groups, toData: &test_paint_data)
     }
 
@@ -562,7 +567,7 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
         let image = try await image_sequence.getImage(withName: image_sequence.filenames[frame_index]).image()
 
         // paint over every outlier in the paint list with pixels from the adjecent frames
-        for (group_name, group) in outlier_groups {
+        for (group_name, group) in outlier_groups.groups {
             if let reason = await group.shouldPaint {
                 if reason.willPaint {
                     Log.d("frame \(frame_index) painting over group \(group) for reason \(reason)")
@@ -739,7 +744,7 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
     // these are the initial step of data generation
     func writeOutlierGroupFiles() {
         Log.e("writing outlier group images")              
-        for (group_name, group) in self.outlier_groups {
+        for (group_name, group) in self.outlier_groups.groups {
             Log.i("writing text file for group \(group_name)")
             
             if let output_dirname = outlier_output_dirname {

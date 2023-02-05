@@ -25,7 +25,7 @@ enum PaintScoreType {
 
 // represents a single outler group in a frame
 @available(macOS 10.15, *) 
-public actor OutlierGroup: CustomStringConvertible, Hashable, Equatable, Comparable {
+public class OutlierGroup: CustomStringConvertible, Hashable, Equatable, Comparable, Codable {
 
     public let name: String
     public let size: UInt              // number of pixels in this outlier group
