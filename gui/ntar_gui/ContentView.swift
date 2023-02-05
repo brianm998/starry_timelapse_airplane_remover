@@ -191,7 +191,7 @@ struct ContentView: View {
                                           y: CGFloat(outlier_center.y - frame_center_y))
                                   .onTapGesture {
                                       Task {
-                                          if let origShouldPaint = await outlierViewModel.group.shouldPaint {
+                                          if let origShouldPaint = outlierViewModel.group.shouldPaint {
                                               // change the paintability of this outlier group
                                               // set it to user selected opposite previous value
                                                outlierViewModel.group.shouldPaint(

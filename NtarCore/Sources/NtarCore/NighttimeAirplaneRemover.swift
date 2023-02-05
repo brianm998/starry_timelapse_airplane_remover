@@ -116,6 +116,26 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
         if config.test_paint { try mkdir(test_paint_output_dirname) }
         if config.writeOutlierGroupFiles {
             try mkdir(outlier_output_dirname)
+            
+            // write to config json
+
+            let encoder = JSONEncoder()
+            //    encoder.outputFormatting = .prettyPrinted
+
+            do {
+                let json_data = try encoder.encode(config)
+                
+                let filename = "config.json"
+                let full_path = "\(outlier_output_dirname)/\(filename)"
+                if file_manager.fileExists(atPath: full_path) {
+                    Log.w("cannot write to \(full_path), it already exists")
+                } else {
+                    Log.i("creating \(full_path)")                      
+                    file_manager.createFile(atPath: full_path, contents: json_data, attributes: nil)
+                }
+            } catch {
+                Log.e("\(error)")
+            }
         }
     }
     
@@ -193,3 +213,4 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
 }
               
               
+fileprivate let file_manager = FileManager.default
