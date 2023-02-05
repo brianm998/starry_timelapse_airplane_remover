@@ -23,7 +23,7 @@ enum LoopReturn {
     case `break`
 }
 
-public enum FrameProcessingState: Int, CaseIterable {
+public enum FrameProcessingState: Int, CaseIterable, Codable {
     case unprocessed
     case loadingImages    
     case detectingOutliers
@@ -40,7 +40,7 @@ public enum FrameProcessingState: Int, CaseIterable {
 @available(macOS 10.15, *)
 public actor FrameAirplaneRemover: Equatable, Hashable {
 
-    var state: FrameProcessingState = .unprocessed {
+    private var state: FrameProcessingState = .unprocessed {
         willSet {
             if let frameStateChangeCallback = config.frameStateChangeCallback {
                 frameStateChangeCallback(self, newValue)

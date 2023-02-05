@@ -386,8 +386,8 @@ func really_final_streak_processing(onFrame frame: FrameAirplaneRemover,
                     if first_member.frame_index == last_other_airplane_streak.frame_index + 1 {
                         // found a streak that ended right before this one started
                         
-                        if let first_member_group_line = await first_member.group.line,
-                           let last_other_airplane_streak_group_line = await last_other_airplane_streak.group.line
+                        if let first_member_group_line = await first_member.group.firstLine,
+                           let last_other_airplane_streak_group_line = await last_other_airplane_streak.group.firstLine
                         {
                             let distance = await distance(from: last_other_airplane_streak.group,
                                                           to: first_member.group)
@@ -406,10 +406,8 @@ func really_final_streak_processing(onFrame frame: FrameAirplaneRemover,
                         }
                         
                     } else if last_member.frame_index + 1 == first_other_airplane_streak.frame_index {
-                        
-                        
-                        if let last_member_group_line = await last_member.group.line,
-                           let first_other_airplane_streak_group_line = await first_other_airplane_streak.group.line
+                        if let last_member_group_line = await last_member.group.firstLine,
+                           let first_other_airplane_streak_group_line = await first_other_airplane_streak.group.firstLine
                         {
                             // found a streak that starts right after this one ends
                             let distance = await distance(from: last_member.group,
@@ -525,7 +523,7 @@ fileprivate func run_final_overlap_pass(frames: [FrameAirplaneRemover],
                 }
             }
             
-            guard let group_line = await group.line else { return .continue }
+            guard let group_line = await group.firstLine else { return .continue }
             let (line_theta, line_rho) = (group_line.theta, group_line.rho)
             
             await other_frame.foreachOutlierGroup() { og in
@@ -536,7 +534,7 @@ fileprivate func run_final_overlap_pass(frames: [FrameAirplaneRemover],
                 
                 if distance > 300 { return .continue } // XXX arbitrary constant
                 
-                guard let og_line = await og.line else { return .continue }
+                guard let og_line = await og.firstLine else { return .continue }
                 
                 
                 let other_line_theta = og_line.theta
@@ -800,8 +798,8 @@ func streak_from(group: OutlierGroup,
             
             let center_line_theta = center_theta(from: last_group.bounds, to: other_group.bounds)
 
-            guard let other_group_line = await other_group.line else { return .continue }
-            guard let last_group_line = await last_group.line else { return .continue }
+            guard let other_group_line = await other_group.firstLine else { return .continue }
+            guard let last_group_line = await last_group.firstLine else { return .continue }
             
             let (other_group_line_theta,
                  last_group_line_theta) = (other_group_line.theta,

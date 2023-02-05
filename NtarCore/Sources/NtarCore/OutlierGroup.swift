@@ -44,7 +44,7 @@ public actor OutlierGroup: CustomStringConvertible, Hashable, Equatable, Compara
     let frame_index: Int
 
     // returns the first, most likely line, if any
-    var line: Line? {
+    var firstLine: Line? {
         if lines.count > 0 {
             return lines[0]
         }

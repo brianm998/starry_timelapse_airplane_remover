@@ -1,7 +1,7 @@
 import Foundation
 
 // the bounding box of an outlier group
-public struct BoundingBox {
+public struct BoundingBox: Codable {
     public let min: Coord
     public let max: Coord
 
