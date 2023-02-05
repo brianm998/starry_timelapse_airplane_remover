@@ -184,6 +184,7 @@ public actor FinalProcessor {
             let filename = "\(frame.frame_index)_outliers.json"
             let full_path = "\(output_dirname)/\(filename)"
             if file_manager.fileExists(atPath: full_path) {
+                // XXX make this overwrite for new user changes to existing json
                 Log.w("cannot write to \(full_path), it already exists")
             } else {
                 Log.i("creating \(full_path)")                      

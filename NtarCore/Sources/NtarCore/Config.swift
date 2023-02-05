@@ -38,6 +38,17 @@ public struct Config: Codable {
         self.max_pixel_distance = sixteenBitVersion(ofPercentage: outlierMinThreshold)
     }
 
+    // returns a stored json config file
+    public static func read(fromJsonDirname json_dirname: String) async throws -> Config {
+        let filename = "\(json_dirname)/config.json"
+        let config_url = NSURL(fileURLWithPath: filename, isDirectory: false) as URL
+        let (config_data, _) = try await URLSession.shared.data(for: URLRequest(url: config_url))
+        let decoder = JSONDecoder()
+        let config = try decoder.decode(Config.self, from: config_data)
+
+        return config
+    }
+    
     public init(outputPath: String?,
                 outlierMaxThreshold: Double,
                 outlierMinThreshold: Double,
@@ -165,6 +176,33 @@ public struct Config: Codable {
     // 0.1.3 started to add the gui
 
     public var ntar_version = "0.1.3"
+
+
+    public func writeJson(to dirname: String) {
+
+        if self.writeOutlierGroupFiles {
+        
+            // write to config json
+
+            let encoder = JSONEncoder()
+            //    encoder.outputFormatting = .prettyPrinted
+
+            do {
+                let json_data = try encoder.encode(self)
+                
+                let filename = "config.json"
+                let full_path = "\(dirname)/\(filename)"
+                if file_manager.fileExists(atPath: full_path) {
+                    Log.w("cannot write to \(full_path), it already exists")
+                } else {
+                    Log.i("creating \(full_path)")                      
+                    file_manager.createFile(atPath: full_path, contents: json_data, attributes: nil)
+                }
+            } catch {
+                Log.e("\(error)")
+            }
+        }
+    }
 }
 
 @available(macOS 10.15, *) 
@@ -181,3 +219,5 @@ public class Callbacks {
     
     
 }
+
+fileprivate let file_manager = FileManager.default

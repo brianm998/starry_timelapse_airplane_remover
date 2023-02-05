@@ -65,11 +65,41 @@ class ntar_gui_app: App {
         Log.handlers[.console] = ConsoleLogHandler(at: .debug)
         Log.w("Starting Up")
 
-        // XXX take this from the input somehow
-        image_sequence_dirname = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/test_small_medium"
-        //image_sequence_dirname = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/test_small_fix_error"
-        //image_sequence_dirname = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/test_a7sii_10"        
-        //image_sequence_dirname = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/test_a9_20"        
+        var use_json = true
+
+        if use_json {
+
+            let outlier_dirname = "/pp/tmp/LRT_12_22_2022-a9-2-aurora-topaz-ntar-v-0_1_3-outliers"
+            outlier_json_startup(with: outlier_dirname)
+            
+        } else {
+
+            // XXX take this from the input somehow
+            //let image_sequence_dirname = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/test_small_medium"
+            let image_sequence_dirname = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/test_small_lots"
+            //let image_sequence_dirname = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/test_small_fix_error"
+            //let image_sequence_dirname = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/test_a7sii_10"        
+            //let image_sequence_dirname = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/test_a9_20"        
+            startup(with: image_sequence_dirname)
+        }
+    }
+
+    func outlier_json_startup(with outlier_dirname: String) {
+        // first read config from json
+        Task {
+            do {
+                let config = try await Config.read(fromJsonDirname: outlier_dirname)
+
+                Log.i("got config")
+            } catch {
+                Log.e("\(error)")
+            }
+        }
+    }
+    
+    func startup(with image_sequence_dirname: String) {
+
+        self.image_sequence_dirname = image_sequence_dirname
         
         // XXX copied from Ntar.swift
         if var input_image_sequence_dirname = self.image_sequence_dirname {
@@ -117,57 +147,7 @@ class ntar_gui_app: App {
                                 imageSequencePath: input_image_sequence_path,
                                 writeOutlierGroupFiles: self.should_write_outlier_group_files)
 
-            var callbacks = Callbacks()
-            // count numbers here for max running 
-            callbacks.countOfFramesToCheck = {
-                let count = await self.framesToCheck.count()
-                Log.i("XXX count \(count)")
-                return count
-            }
-
-          
-            callbacks.frameStateChangeCallback = { frame, state in
-                // XXX do something here
-                Log.d("frame \(frame.frame_index) changed to state \(state)")
-                Task {
-                    await MainActor.run {
-                        self.frame_states[frame.frame_index] = state
-                        self.condense_frame_states_into_view_model()
-                        self.viewModel.objectWillChange.send()
-                    }
-                }
-
-                // XXX run method to condense these into counts
-//                await MainActor.run {
-//                    self.viewModel.frameState[frame.frame_index] = state
-                    // XXX update view model?
-//                }
-            }
-            
-            callbacks.frameCheckClosure = { new_frame in
-                Log.d("frameCheckClosure for frame \(new_frame.frame_index)")
-                Task {
-                    await self.framesToCheck.append(frame: new_frame)
-                    if let frame = await self.framesToCheck.nextFrame() {
-                        Log.d("frameCheckClosure 3")
-                        Log.i("got frame index \(frame)")
-                        do {
-                            Log.d("frameCheckClosure 4")
-                            if let baseImage = try await frame.baseImage() {
-                                self.viewModel.image = Image(nsImage: baseImage)
-                                self.viewModel.frame = frame
-                                await self.viewModel.update()
-                                
-                                Log.d("XXX self.viewModel.image = \(self.viewModel.image)")
-                                // Perform UI updates
-                            }
-                        } catch {
-                            Log.e("\(error)")
-                        }
-                    } 
-                }
-            }
-
+            let callbacks = make_callbacks()
             Log.i("have config")
             do {
                 let eraser = try NighttimeAirplaneRemover(with: config, callbacks: callbacks)
@@ -181,34 +161,60 @@ class ntar_gui_app: App {
                 Log.e("\(error)")
             }
         }
-        /*
-
-         did:
-
-         hard code some Config class
-         
-         use that to startup something similar to what Ntar.swift does on cli
-         
-         next steps:
-
-         track this progress w/ the ui
-
-         get it to show an image before painting with choices
-
-         allow choices to be changed
-
-         add paint button
-
-         add more ui crap so it doesn't look like shit
-         
-         */
     }
 
+    func make_callbacks() -> Callbacks {
+        var callbacks = Callbacks()
+        // count numbers here for max running 
+        callbacks.countOfFramesToCheck = {
+            let count = await self.framesToCheck.count()
+            Log.i("XXX count \(count)")
+            return count
+        }
+
+        
+        callbacks.frameStateChangeCallback = { frame, state in
+            // XXX do something here
+            Log.d("frame \(frame.frame_index) changed to state \(state)")
+            Task {
+                await MainActor.run {
+                    self.frame_states[frame.frame_index] = state
+                    self.condense_frame_states_into_view_model()
+                    self.viewModel.objectWillChange.send()
+                }
+            }
+        }
+        
+        callbacks.frameCheckClosure = { new_frame in
+            Log.d("frameCheckClosure for frame \(new_frame.frame_index)")
+            Task {
+                await self.framesToCheck.append(frame: new_frame)
+                if let frame = await self.framesToCheck.nextFrame() {
+                    Log.d("frameCheckClosure 3")
+                    Log.i("got frame index \(frame)")
+                    do {
+                        Log.d("frameCheckClosure 4")
+                        if let baseImage = try await frame.baseImage() {
+                            self.viewModel.image = Image(nsImage: baseImage)
+                            self.viewModel.frame = frame
+                            await self.viewModel.update()
+                            
+                            Log.d("XXX self.viewModel.image = \(self.viewModel.image)")
+                            // Perform UI updates
+                        }
+                    } catch {
+                        Log.e("\(error)")
+                    }
+                } 
+            }
+        }
+        return callbacks
+    }
+    
+    // change the mapping of frame to state
+    // to a mapping of state to frame count,
+    // and put it in the view model
     func condense_frame_states_into_view_model() {
-        // XXX write this
-        //var frame_states: [Int: FrameProcessingState] = [:]
-
-
         viewModel.number_unprocessed = 0
         viewModel.number_loadingImages = 0
         viewModel.number_detectingOutliers = 0
@@ -220,7 +226,6 @@ class ntar_gui_app: App {
         viewModel.number_painting = 0
         viewModel.number_writingOutputFile = 0
         viewModel.number_complete = 0
-
         
         for (frame_index, state) in frame_states {
             switch state {
