@@ -182,6 +182,26 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
                      output_filename: String,
                      test_paint_filename tpfo: String?) async throws -> FrameAirplaneRemover
     {
+        var outlier_groups_for_this_frame: OutlierGroups?
+        
+        if self.config.writeOutlierGroupFiles {
+            // look inside outlier_output_dirname for json
+            // XXX check for 1_outlier.json file in outliers dir
+
+            let frame_outliers_json_filename = "\(outlier_output_dirname)/\(frame_index)_outliers.json"
+            
+            if file_manager.fileExists(atPath: frame_outliers_json_filename) {
+                do {
+                    let url = NSURL(fileURLWithPath: frame_outliers_json_filename, isDirectory: false) as URL
+                    let (data, _) = try await URLSession.shared.data(for: URLRequest(url: url))
+                    let decoder = JSONDecoder()
+                    outlier_groups_for_this_frame = try decoder.decode(OutlierGroups.self, from: data)
+                } catch {
+                    Log.e("\(error)")
+                }
+            }
+        }
+        
         return try await FrameAirplaneRemover(with: config,
                                               callbacks: callbacks,
                                               imageSequence: image_sequence,
@@ -189,8 +209,10 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
                                               otherFrameIndexes: otherFrameIndexes,
                                               outputFilename: output_filename,
                                               testPaintFilename: tpfo,
-                                              outlierOutputDirname: outlier_output_dirname)
+                                              outlierOutputDirname: outlier_output_dirname,
+                                              outlierGroups: outlier_groups_for_this_frame)
    }        
 }
               
               
+fileprivate let file_manager = FileManager.default

@@ -90,7 +90,11 @@ class ntar_gui_app: App {
             do {
                 let config = try await Config.read(fromJsonDirname: outlier_dirname)
 
-                Log.i("got config")
+                let callbacks = make_callbacks()
+                
+                let eraser = try NighttimeAirplaneRemover(with: config, callbacks: callbacks)
+                self.viewModel.eraser = eraser // XXX rename this crap
+                
             } catch {
                 Log.e("\(error)")
             }

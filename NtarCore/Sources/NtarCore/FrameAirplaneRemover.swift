@@ -92,7 +92,8 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
          otherFrameIndexes: [Int],
          outputFilename output_filename: String,
          testPaintFilename tpfo: String?,
-         outlierOutputDirname outlier_output_dirname: String?) async throws
+         outlierOutputDirname outlier_output_dirname: String?,
+         outlierGroups: OutlierGroups?) async throws
     {
         self.config = config
         self.callbacks = callbacks
@@ -122,10 +123,17 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
         self.bytesPerRow = width*bytesPerPixel
 
         // XXX avoid this following step when loading outlier data from file 
-        
-        // find outlying bright pixels between frames,
-        // and group neighboring outlying pixels into groups
-        try await self.findOutliers()        
+
+        if let outlierGroups = outlierGroups {
+            Log.i("loaded outlier groups for frame \(frame_index)")
+            self.outlier_groups = outlierGroups
+            self.state = .outlierProcessingComplete
+        } else {
+            // find outlying bright pixels between frames,
+            // and group neighboring outlying pixels into groups
+            // this can take a long time
+            try await self.findOutliers()
+        }
 
         Log.i("frame \(frame_index) detected outlier groups")
     }
@@ -771,4 +779,4 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
     }    
 }
 
-fileprivate let file_manager = FileManager.default
+
