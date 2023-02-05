@@ -99,7 +99,9 @@ struct ContentView: View {
 
     @State private var width: CGFloat = 0
     @State private var height: CGFloat = 0
+
     @State private var finalAmount: CGFloat = 1
+
     @State private var currentAmount: CGFloat = 0
     @State private var offsetX: CGFloat = 0
     @State private var offsetY: CGFloat = 0
@@ -107,25 +109,45 @@ struct ContentView: View {
     @State private var offsetYBuffer: CGFloat = 0
 
     @State private var positive = true
+
+    @State private var zstack_frame: CGSize = .zero
     
     init(viewModel: ViewModel) {
         self.viewModel = viewModel
 
-        if let frame = viewModel.frame { 
-            let (frame_width, frame_height) = (frame.width, frame.height)
-            
-            width = CGFloat(frame_width)
-            height = CGFloat(frame_height)
+        if let frame = viewModel.frame {
+            Log.w("INITIAL SIZE [\(width), \(height)]")
+            width = CGFloat(frame.width)
+            height = CGFloat(frame.height)
         }
     }
-    
-    var body: some View {
-        VStack {
-            if let image_f = viewModel.image {
-                ScrollView([.horizontal, .vertical], showsIndicators: false) {
-                ZStack {
-                    image_f
-                      .resizable()
+
+    // this is the frame with outliers on top of it
+    func frameView(_ geometry: GeometryProxy, _ image: Image) -> some View {
+        Log.d("[\(geometry.size.width), \(geometry.size.height)]")
+
+        Task {
+            await MainActor.run {
+                if width == 0,
+                   height == 0,
+                   let frame = viewModel.frame
+                {
+                    width = CGFloat(frame.width)
+                    height = CGFloat(frame.height)
+                }
+
+                if self.zstack_frame == .zero {
+                    finalAmount = geometry.size.height / height
+                    Log.w("INITIAL SIZE [\(geometry.size.width), \(geometry.size.height)] - [\(width), \(height)] finalAmount \(finalAmount)")
+                    // set initial finalAmount based upon stack frame size and frame size
+                }
+                self.zstack_frame = geometry.size
+            }
+        }
+
+        return ZStack {
+            image
+              .resizable()
 
                     
 //                      .frame(width: width, height: height)
@@ -180,10 +202,17 @@ struct ContentView: View {
                             }
                         }
                     }
-                }
+        }
+    }
+
+    var body: some View {
+        VStack {
+            if let frame_image = viewModel.image {
+                GeometryReader { geomerty in
+                ScrollView([.horizontal, .vertical], showsIndicators: false) {
+                    self.frameView(geomerty, frame_image)
                       .scaleEffect(finalAmount + currentAmount)
                       .offset(x: offsetX, y:offsetY)
-                    
                       .gesture(
                         DragGesture()
                           .onChanged { value in
@@ -197,10 +226,24 @@ struct ContentView: View {
                       ).gesture(
                         MagnificationGesture()
                           .onChanged { value in
-                              currentAmount = value - 1
+                              Log.d("currentAmount \(currentAmount) value \(value)")
+                              if finalAmount + value - 1 < 15,
+                                 finalAmount + value - 1 > 0.2 // XXX compute these based on frame size
+                              {
+                                  currentAmount = value - 1
+                                  Log.d("currentAmount 2 \(currentAmount)")
+                              } else {
+                                  Log.d("skipping")
+                              }
                           }
                           .onEnded { value in
                               finalAmount += currentAmount
+                              if finalAmount > 15 {
+                                  finalAmount = 15
+                              } else if finalAmount < 0.2 {
+                                  finalAmount = 0.2
+                              }
+                              Log.d("finalAmount \(finalAmount)")
                               currentAmount = 0
                               if self.positive {
                                   offsetY += 0.1 //this seems to fix it
@@ -210,6 +253,7 @@ struct ContentView: View {
                               self.positive = !self.positive
                           }
                       )
+                }
                 
                 //.scaleEffect(self.scale)
                 }//.gesture(magnificationGesture)
@@ -276,17 +320,17 @@ struct ContentView: View {
                 }
                 Toggle("show outliers", isOn: $showOutliers)
                 HStack {
-                    Text("\(viewModel.number_unprocessed) unprocessed frames")
-                    Text("\(viewModel.number_loadingImages) loadingImages frames")
-                    Text("\(viewModel.number_detectingOutliers) detectingOutliers frames")
-                    Text("\(viewModel.number_readyForInterFrameProcessing) readyForInterFrameProcessing frames")
-                    Text("\(viewModel.number_interFrameProcessing) interFrameProcessing frames")
-                    Text("\(viewModel.number_outlierProcessingComplete) outlierProcessingComplete frames")
+                    Text("\(viewModel.number_unprocessed) unprocessed")
+                    Text("\(viewModel.number_loadingImages) loadingImages")
+                    Text("\(viewModel.number_detectingOutliers) detectingOutliers")
+                    Text("\(viewModel.number_readyForInterFrameProcessing) readyForInterFrameProcessing")
+                    Text("\(viewModel.number_interFrameProcessing) interFrameProcessing")
+                    Text("\(viewModel.number_outlierProcessingComplete) outlierProcessingComplete")
                     // XXX add gui check step?
-                    Text("\(viewModel.number_reloadingImages) reloadingImages frames")
-                    Text("\(viewModel.number_painting) painting frames")
-                    Text("\(viewModel.number_writingOutputFile) writingOutputFile frames")
-                    Text("\(viewModel.number_complete) complete frames")
+                    Text("\(viewModel.number_reloadingImages) reloadingImages")
+                    Text("\(viewModel.number_painting) painting")
+                    Text("\(viewModel.number_writingOutputFile) writingOutputFile")
+                    Text("\(viewModel.number_complete) complete")
                 }
             }
         }.frame(maxWidth: .infinity, maxHeight: .infinity)
