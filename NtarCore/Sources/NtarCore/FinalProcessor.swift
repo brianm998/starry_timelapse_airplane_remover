@@ -190,7 +190,14 @@ public actor FinalProcessor {
                 file_manager.createFile(atPath: full_path, contents: json_data, attributes: nil)
             }            
         }
-        if let frameCheckClosure = callbacks.frameCheckClosure {
+
+        // here is where the gui and cli paths diverge
+        // if we have a frame check closure, we allow the user to check the frame here
+        // but only if there are some outliers to check, otherwise just finish it.
+
+        if let frameCheckClosure = callbacks.frameCheckClosure,
+           await frame.outlierGroupCount > 0
+        {
             // gui
             await frameCheckClosure(frame)
         } else {
