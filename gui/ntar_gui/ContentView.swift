@@ -119,7 +119,10 @@ struct ContentView: View {
 
     @State private var zstack_frame: CGSize = .zero
 
-    @State private var scale: CGFloat = 1
+    // this sets the original scale factor of the frame zoom view
+    // it would be best to calculate this based upon the size of the
+    // frame vs the size of the are to show it in
+    @State private var scale: CGFloat = 0.25
     
     init(viewModel: ViewModel) {
         self.viewModel = viewModel
@@ -188,7 +191,7 @@ struct ContentView: View {
             if let frame_image = viewModel.image {
                 ZoomableView(size: CGSize(width: viewModel.frame_width,
                                           height: viewModel.frame_height),
-                             min: 0.4,
+                             min: 0.25, // XXX calculate based upon size of frame vs view
                              max: 3,
                              showsIndicators: true,
                              scale: $scale)
@@ -229,8 +232,11 @@ struct ContentView: View {
                     } else {
                         Button(action: {
                                    // XXX move this task to a method somewhere else
+                            let foobar = viewModel.frame
+                            viewModel.frame = nil
+                            // XXX set loading image here
                             Task {
-                                if let frame_to_remove = viewModel.frame {
+                                if let frame_to_remove = foobar {
                                     if let eraser = viewModel.eraser,
                                        let fp = eraser.final_processor
                                     {
@@ -259,6 +265,7 @@ struct ContentView: View {
                         }) {
                             Text("DONE").font(.largeTitle)
                         }.buttonStyle(PlainButtonStyle())
+                         .disabled(viewModel.frame == nil)
                     }
                     Button(action: {
                         Task {
