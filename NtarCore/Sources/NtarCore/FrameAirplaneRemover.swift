@@ -103,8 +103,6 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
                                       between startLocation: CGPoint,
                                       and endLocation: CGPoint) async
     {
-        Log.w("userSelectAllOutliers to \(should_paint) between \(startLocation) and \(endLocation)")
-
         // first get bounding box from start and end location
         var min_x: CGFloat = CGFLOAT_MAX
         var max_x: CGFloat = 0

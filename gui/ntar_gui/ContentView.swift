@@ -130,6 +130,8 @@ struct ContentView: View {
 
     @State private var drag_start: CGPoint?
 
+    @State private var done_frames: [Int: Bool] = [:] // frame_index to done
+    
     init(viewModel: ViewModel) {
         self.viewModel = viewModel
 
@@ -261,17 +263,27 @@ struct ContentView: View {
                             // XXX set loading image here
                             Task {
                                 if let frame_to_remove = foobar {
+                                    await viewModel.framesToCheck.remove(frame: frame_to_remove)
+                                    
                                     if let eraser = viewModel.eraser,
                                        let fp = eraser.final_processor
                                     {
-                                        // add to final queue somehow
-                                        await fp.final_queue.add(atIndex: frame_to_remove.frame_index) {
-                                            Log.i("frame \(frame_to_remove.frame_index) finishing")
-                                            try await frame_to_remove.finish()
-                                            Log.i("frame \(frame_to_remove.frame_index) finished")
+                                        var finish_this_one = true
+                                        if let done_already = done_frames[frame_to_remove.frame_index],
+                                           done_already
+                                        {
+                                            finish_this_one = false
+                                        }
+                                        if finish_this_one {
+                                            // add to final queue
+                                            done_frames[frame_to_remove.frame_index] = true
+                                            await fp.final_queue.add(atIndex: frame_to_remove.frame_index) {
+                                                Log.i("frame \(frame_to_remove.frame_index) finishing")
+                                                try await frame_to_remove.finish()
+                                                Log.i("frame \(frame_to_remove.frame_index) finished")
+                                            }
                                         }
                                     }
-                                    await viewModel.framesToCheck.remove(frame: frame_to_remove)
                                 }
                                 if let next_frame = await viewModel.framesToCheck.nextFrame(),
                                    let baseImage = try await next_frame.baseImage()
