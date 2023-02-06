@@ -142,18 +142,8 @@ struct ContentView: View {
         return ZStack {
             image
 
-                // XXX this VVV sucks badly, why the 100?
-                // some kind of race condition with ForEach?
-                // everything shows up fine when toggling showOutliers for some reason
-                //let fuck = 10000
-                //let fuck = viewModel.outlierViews.count
-                //let fuck = viewModel.outlierCount
-                //Users/brian/git/nighttime_timelapse_airplane_remover/gui/ntar_gui/ContentView.swift:104:39 Non-constant range: argument must be an integer literal
-                
-                // add to ZStack with clickable outlier groups on top
-                ForEach(0 ..< 10000) { idx in
-                //ForEach(0 ..< viewModel.outlierViews.count) { idx in
-                    if showOutliers {
+            if showOutliers {
+                ForEach(0 ..< viewModel.outlierViews.count, id: \.self) { idx in
                     if idx < viewModel.outlierViews.count {
                         let outlierViewModel = viewModel.outlierViews[idx]
                         
@@ -165,14 +155,14 @@ struct ContentView: View {
                         // offset from the center of parent view
                           .offset(x: CGFloat(outlier_center.x - frame_center_x),
                                   y: CGFloat(outlier_center.y - frame_center_y))
+                          // tap gesture toggles paintability of the tapped group
                           .onTapGesture {
-                              Log.d("tapped")
                               Task {
                                   if let origShouldPaint = outlierViewModel.group.shouldPaint {
                                       // change the paintability of this outlier group
                                       // set it to user selected opposite previous value
-                                      outlierViewModel.group.shouldPaint(
-                                        .userSelected(!origShouldPaint.willPaint))
+                                      let reason = PaintReason.userSelected(!origShouldPaint.willPaint)
+                                      outlierViewModel.group.shouldPaint(reason)
                                       
                                       // update the view model so it shows up on screen
                                       await self.viewModel.update()
@@ -206,7 +196,6 @@ struct ContentView: View {
                                                                             and: end_location)
                                await viewModel.update()
                            }
-
                        }
                        drag_start = nil
                    }
@@ -237,7 +226,7 @@ struct ContentView: View {
             HStack {
                 Text(viewModel.label_text)
                 if viewModel.outlierCount > 0 {
-                    Text("we have \(viewModel.outlierCount) outliers")
+                    Text("has \(viewModel.outlierCount) outliers")
                 }
             }
             VStack {
