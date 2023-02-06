@@ -185,12 +185,12 @@ struct ContentView: View {
                 }
             }
         }
+        // add a drag gesture to allow selecting outliers for painting or not
           .gesture(DragGesture()
                    .onChanged { gesture in
                        let location = gesture.location
                        if let drag_start = drag_start {
-                           // XXX tell the frame to do the right thing between
-                           // drag_start and location
+                           // updating during drag is too slow 
                        } else {
                            drag_start = location
                        }
@@ -200,10 +200,6 @@ struct ContentView: View {
                        let end_location = gesture.location
                        if let drag_start = drag_start {
                            Log.d("end location \(end_location) drag start \(drag_start)")
-                           // XXX tell the frame to do the right thing between
-                           // drag_start and end_location
-
-                           // XXX put this in onChanged above if it doesn't kill performance
                            Task {
                                await viewModel.frame?.userSelectAllOutliers(toShouldPaint: selection_causes_painting,
                                                                             between: drag_start,
@@ -238,7 +234,12 @@ struct ContentView: View {
                   .imageScale(.large)
                   .foregroundColor(.accentColor)
             }
-            Text(viewModel.label_text)
+            HStack {
+                Text(viewModel.label_text)
+                if viewModel.outlierCount > 0 {
+                    Text("we have \(viewModel.outlierCount) outliers")
+                }
+            }
             VStack {
                 HStack {
                     if !running {
