@@ -316,7 +316,7 @@ public actor FinalProcessor {
             // XXX there is a race condition here if we are in gui
             // mode where we add each frame off to the gui for processing
             // XXX make this better
-            try await Task.sleep(nanoseconds: 5_000_000_000)
+            try await Task.sleep(nanoseconds: 3_000_000_000)
             
             Log.i("FINAL THREAD check closure")
 

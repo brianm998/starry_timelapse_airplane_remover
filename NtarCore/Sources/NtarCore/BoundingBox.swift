@@ -33,6 +33,14 @@ public struct BoundingBox: Codable {
         return sqrt(x_dist * x_dist + y_dist * y_dist)
     }
 
+    // true if this BoundingBox fully contains the other
+    public func contains(other: BoundingBox) -> Bool {
+        return self.min.x <= other.min.x &&
+               self.max.x >= other.max.x &&
+               self.min.y <= other.min.y &&
+               self.max.y >= other.max.y
+    }
+    
     public func overlap(with other: BoundingBox) -> BoundingBox? {
         if self.min.x < other.max.x,
            self.min.y < other.max.y,

@@ -118,6 +118,7 @@ struct OutlierGroupView {
 struct ContentView: View {
     @ObservedObject var viewModel: ViewModel
     @State private var showOutliers = true
+    @State private var selection_causes_painting = true
     @State private var running = false
 
     @State private var zstack_frame: CGSize = .zero
@@ -126,6 +127,8 @@ struct ContentView: View {
     // it would be best to calculate this based upon the size of the
     // frame vs the size of the are to show it in
     @State private var scale: CGFloat = 0.25
+
+    @State private var drag_start: CGPoint?
 
     init(viewModel: ViewModel) {
         self.viewModel = viewModel
@@ -176,10 +179,40 @@ struct ContentView: View {
                                   }
                               }
                           }
-                    }
+                     }
                 }
             }
         }
+          .gesture(DragGesture()
+                   .onChanged { gesture in
+                       let location = gesture.location
+                       if let drag_start = drag_start {
+                           // XXX tell the frame to do the right thing between
+                           // drag_start and location
+                       } else {
+                           drag_start = location
+                       }
+                       Log.d("location \(location)")
+                   }
+                   .onEnded { gesture in
+                       let end_location = gesture.location
+                       if let drag_start = drag_start {
+                           Log.d("end location \(end_location) drag start \(drag_start)")
+                           // XXX tell the frame to do the right thing between
+                           // drag_start and end_location
+
+                           // XXX put this in onChanged above if it doesn't kill performance
+                           Task {
+                               await viewModel.frame?.userSelectAllOutliers(toShouldPaint: selection_causes_painting,
+                                                                            between: drag_start,
+                                                                            and: end_location)
+                               await viewModel.update()
+                           }
+
+                       }
+                       drag_start = nil
+                   }
+          )
     }
 
     var body: some View {
@@ -207,7 +240,7 @@ struct ContentView: View {
             VStack {
                 HStack {
                     if !running {
-                        Button(action: { // XXX hide when running
+                        Button(action: { // hide when running
                             running = true                                
                             Task.detached(priority: .background) {
                                 do {
@@ -275,7 +308,10 @@ struct ContentView: View {
                         Text("Clear All").font(.largeTitle)
                     }.buttonStyle(PlainButtonStyle())
                 }
-                Toggle("show outliers", isOn: $showOutliers)
+                HStack {
+                    Toggle("show outliers", isOn: $showOutliers)
+                    Toggle("selection causes paint", isOn: $selection_causes_painting)
+                }
                 HStack {
                     Text("\(viewModel.number_unprocessed) unprocessed")
                     Text("\(viewModel.number_loadingImages) loadingImages")

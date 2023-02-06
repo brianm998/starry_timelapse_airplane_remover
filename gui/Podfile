@@ -14,7 +14,8 @@ target 'ntar_gui' do
 
   pod 'ArgumentParser'
   pod 'NtarCore', :path => "../NtarCore"
-  pod 'Zoomable', { :git => "git@github.com:brianm998/Zoomable", :branch => "main" }
+#  pod 'Zoomable', { :git => "git@github.com:brianm998/Zoomable", :branch => "main" }
+  pod 'Zoomable',  :path => "../../Zoomable"
   
   # this gets rid of some localizability warnings on the pods xcode project
   post_install do |installer|
