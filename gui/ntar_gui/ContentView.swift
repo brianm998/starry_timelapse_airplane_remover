@@ -51,6 +51,8 @@ class ViewModel: ObservableObject {
     var number_writingOutputFile: Int = 0
     var number_complete: Int = 0
 
+    var label_text: String = "Started"
+    
     init(framesToCheck: FramesToCheck) {
         self.framesToCheck = framesToCheck
     }
@@ -64,6 +66,7 @@ class ViewModel: ObservableObject {
             }
         }
         if let frame = frame {
+            label_text = "frame \(frame.frame_index)"
             let (outlierGroups, frame_width, frame_height) =
               await (frame.outlierGroups(), frame.width, frame.height)
             
@@ -123,7 +126,7 @@ struct ContentView: View {
     // it would be best to calculate this based upon the size of the
     // frame vs the size of the are to show it in
     @State private var scale: CGFloat = 0.25
-    
+
     init(viewModel: ViewModel) {
         self.viewModel = viewModel
 
@@ -131,15 +134,8 @@ struct ContentView: View {
 
     // this is the frame with outliers on top of it
     func frameView( _ image: Image) -> some View {
-
         return ZStack {
             image
-                        /*
-                         why does this foreach fail?
-                         last done not properly handled anymore
-                         */
-
-            if showOutliers {
 
                 // XXX this VVV sucks badly, why the 100?
                 // some kind of race condition with ForEach?
@@ -151,7 +147,8 @@ struct ContentView: View {
                 
                 // add to ZStack with clickable outlier groups on top
                 ForEach(0 ..< 10000) { idx in
-                    
+                //ForEach(0 ..< viewModel.outlierViews.count) { idx in
+                    if showOutliers {
                     if idx < viewModel.outlierViews.count {
                         let outlierViewModel = viewModel.outlierViews[idx]
                         
@@ -189,36 +186,29 @@ struct ContentView: View {
         let scaling_anchor = UnitPoint(x: 0.75, y: 0.75)
         VStack {
             if let frame_image = viewModel.image {
-                ZoomableView(size: CGSize(width: viewModel.frame_width,
-                                          height: viewModel.frame_height),
-                             min: 0.25, // XXX calculate based upon size of frame vs view
-                             max: 3,
-                             showsIndicators: true,
-                             scale: $scale)
-                {
-                    self.frameView(frame_image)
-                      //.resizable()
-                      .scaledToFit()
-                      .clipped()
-                      //.frame(maxWidth: self.width, maxHeight: self.height)
+                GeometryReader { geometry in
+                    let min = geometry.size.height/viewModel.frame_height
+                    let max = min < 1 ? 1 : min
+                    ZoomableView(size: CGSize(width: viewModel.frame_width,
+                                              height: viewModel.frame_height),
+                                 min: min,
+                                 max: max,
+                                 showsIndicators: true)
+                    {
+                        self.frameView(frame_image)
+                    }
                 }
-
             } else {
                 Image(systemName: "globe")
                   .imageScale(.large)
                   .foregroundColor(.accentColor)
             }
-            if let frame = viewModel.frame {
-                Text("frame \(frame.frame_index)")
-            } else {
-                Text("Hello, world!")
-            }
+            Text(viewModel.label_text)
             VStack {
                 HStack {
                     if !running {
                         Button(action: { // XXX hide when running
                             running = true                                
-                            Log.w("FKME")
                             Task.detached(priority: .background) {
                                 do {
                                     try await viewModel.eraser?.run()
@@ -234,6 +224,7 @@ struct ContentView: View {
                                    // XXX move this task to a method somewhere else
                             let foobar = viewModel.frame
                             viewModel.frame = nil
+                            viewModel.label_text = "loading..."
                             // XXX set loading image here
                             Task {
                                 if let frame_to_remove = foobar {
