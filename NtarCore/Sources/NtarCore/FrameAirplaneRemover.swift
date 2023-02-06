@@ -98,6 +98,13 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
             }
         }
     }
+
+    public func userSelectAllOutliers(toShouldPaint should_paint: Bool) async {
+        await foreachOutlierGroup() { group in
+            group.shouldPaint(.userSelected(should_paint))
+            return .continue
+        }
+    }
     
     // only used for test painting
     private var ignored_outlier_groups: [String: OutlierGroup] = [:] // keyed by group name

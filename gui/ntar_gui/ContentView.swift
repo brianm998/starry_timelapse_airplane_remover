@@ -188,8 +188,8 @@ struct ContentView: View {
             if let frame_image = viewModel.image {
                 ZoomableView(size: CGSize(width: viewModel.frame_width,
                                           height: viewModel.frame_height),
-                             min: 0.2,
-                             max: 20,
+                             min: 0.4,
+                             max: 3,
                              showsIndicators: true,
                              scale: $scale)
                 {
@@ -260,6 +260,22 @@ struct ContentView: View {
                             Text("DONE").font(.largeTitle)
                         }.buttonStyle(PlainButtonStyle())
                     }
+                    Button(action: {
+                        Task {
+                            await viewModel.frame?.userSelectAllOutliers(toShouldPaint: true)
+                            await viewModel.update()
+                        }
+                    }) {
+                        Text("Paint All").font(.largeTitle)
+                    }.buttonStyle(PlainButtonStyle())
+                    Button(action: {
+                        Task {
+                            await viewModel.frame?.userSelectAllOutliers(toShouldPaint: false)
+                            await viewModel.update()
+                        }
+                    }) {
+                        Text("Clear All").font(.largeTitle)
+                    }.buttonStyle(PlainButtonStyle())
                 }
                 Toggle("show outliers", isOn: $showOutliers)
                 HStack {
