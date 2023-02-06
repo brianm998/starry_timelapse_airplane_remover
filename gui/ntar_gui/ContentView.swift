@@ -139,14 +139,14 @@ struct ContentView: View {
                 if self.zstack_frame == .zero {
                     let zoom_factor = geometry.size.height / height
                     let min = 1
-                    finalAmount = zoom_factor
+                    //finalAmount = zoom_factor
                     if zoom_factor < 1 {
 
                         // XXX this _kindof_ works, but the frame isn't centered still :(
-                        offsetX = -width//*finalAmount
-//                        offsetYBuffer = offsetX
-                        offsetY = -height//2 // XXX
-//                        offsetYBuffer = offsetY
+                        //offsetX = -width//*finalAmount
+                        //offsetYBuffer = offsetX
+                        //offsetY = -height//2 // XXX
+                        //offsetYBuffer = offsetY
                     }
                     Log.w("INITIAL SIZE [\(geometry.size.width), \(geometry.size.height)] - [\(width), \(height)] finalAmount \(finalAmount)")
                     // set initial finalAmount based upon stack frame size and frame size
@@ -175,13 +175,13 @@ struct ContentView: View {
                 // XXX this VVV sucks badly, why the 100?
                 // some kind of race condition with ForEach?
                 // everything shows up fine when toggling showOutliers for some reason
-                let fuck = 10000
+                //let fuck = 10000
                 //let fuck = viewModel.outlierViews.count
                 //let fuck = viewModel.outlierCount
                 //Users/brian/git/nighttime_timelapse_airplane_remover/gui/ntar_gui/ContentView.swift:104:39 Non-constant range: argument must be an integer literal
                 
                 // add to ZStack with clickable outlier groups on top
-                ForEach(0 ..< fuck) { idx in
+                ForEach(0 ..< 10000) { idx in
                     
                     if idx < viewModel.outlierViews.count {
                         let outlierViewModel = viewModel.outlierViews[idx]
@@ -222,56 +222,62 @@ struct ContentView: View {
         VStack {
             if let frame_image = viewModel.image {
                 GeometryReader { geomerty in
-                ScrollView([.horizontal, .vertical], showsIndicators: false) {
-                    self.frameView(geomerty, frame_image)
-                      .gesture(
-                        DragGesture()
-                          .onChanged { value in
-                              offsetY = value.translation.height + offsetYBuffer
-                              offsetX =  value.translation.width + offsetXBuffer
-                          }
-                          .onEnded { value in
-                              offsetXBuffer = value.translation.width + offsetXBuffer
-                              offsetYBuffer = value.translation.height + offsetYBuffer
-                          }
-                      ).gesture(
-                        MagnificationGesture()
-                          .onChanged { value in
-                              Log.d("currentAmount \(currentAmount) value \(value)")
-                              offsetX -= value
-                              offsetY -= value
-                              /*
-                              if finalAmount + value - 1 < 15,
-                                 finalAmount + value - 1 > 0.2 // XXX compute these based on frame size
-                              {
-                               */
-                                  currentAmount = value - 1
-                                  Log.d("currentAmount 2 \(currentAmount)")
-                                  /*
-                              } else {
-                                  Log.d("skipping")
-                              }*/
-                          }
-                          .onEnded { value in
-                              finalAmount += currentAmount
-                              /*
-                              if finalAmount > 15 {
-                                  finalAmount = 15
-                              } else if finalAmount < 0.2 {
-                                  finalAmount = 0.2
-                              }*/
-                              Log.d("finalAmount \(finalAmount)")
-                              currentAmount = 0
-                              if self.positive {
-                                  offsetY += 0.1 //this seems to fix it
-                              } else {
-                                  offsetY -= 0.1 //this seems to fix it
-                              }
-                              self.positive = !self.positive
-                          }
-                      )
-                }
-                
+                    ScrollViewReader { scrollValue in 
+                        ScrollView([.horizontal, .vertical], showsIndicators: false) {
+                            self.frameView(geomerty, frame_image)
+                              .scaledToFit()
+                              .frame(maxWidth: self.width, maxHeight: self.height)
+
+                              .gesture(
+                                DragGesture()
+                                  .onChanged { value in
+                                      offsetY = value.translation.height + offsetYBuffer
+                                      offsetX =  value.translation.width + offsetXBuffer
+                                  }
+                                  .onEnded { value in
+                                      offsetXBuffer = value.translation.width + offsetXBuffer
+                                      offsetYBuffer = value.translation.height + offsetYBuffer
+                                  }
+                              ).gesture(
+                                MagnificationGesture()
+                                  .onChanged { value in
+                                      Log.d("currentAmount \(currentAmount) value \(value)")
+                                      //offsetX -= value
+                                      //offsetY -= value
+                                      /*
+                                       if finalAmount + value - 1 < 15,
+                                       finalAmount + value - 1 > 0.2 // XXX compute these based on frame size
+                                       {
+                                       */
+                                      currentAmount = value - 1
+                                      Log.d("currentAmount 2 \(currentAmount)")
+                                      /*
+                                       } else {
+                                       Log.d("skipping")
+                                       }*/
+                                  }
+                                  .onEnded { value in
+                                      finalAmount += currentAmount
+//                                      scrollValue.scrollTo(0, anchor: .center)
+                                      /*
+                                       if finalAmount > 15 {
+                                       finalAmount = 15
+                                       } else if finalAmount < 0.2 {
+                                       finalAmount = 0.2
+                                       }*/
+                                      Log.d("finalAmount \(finalAmount)")
+                                      currentAmount = 0
+                                      if self.positive {
+                                          offsetY += 0.1 //this seems to fix it
+                                      } else {
+                                          offsetY -= 0.1 //this seems to fix it
+                                      }
+                                      self.positive = !self.positive
+                                  }
+                              )
+                        }
+                    }
+                      // .frame(maxWidth: 300, maxHeight: 300)                    
                 //.scaleEffect(self.scale)
                 }//.gesture(magnificationGesture)
             } else {
@@ -360,3 +366,5 @@ struct ContentView_Previews: PreviewProvider {
         ContentView(viewModel: ViewModel(framesToCheck: FramesToCheck()))
     }
 }
+
+
