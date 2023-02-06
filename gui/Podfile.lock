@@ -3,10 +3,12 @@ PODS:
     - ArgumentParserToolInfo (~> 1.2.0)
   - ArgumentParserToolInfo (1.2.0)
   - NtarCore (0.1.2)
+  - Zoomable (0.0.1)
 
 DEPENDENCIES:
   - ArgumentParser
   - NtarCore (from `../NtarCore`)
+  - Zoomable (from `../../Zoomable`)
 
 SPEC REPOS:
   trunk:
@@ -16,12 +18,15 @@ SPEC REPOS:
 EXTERNAL SOURCES:
   NtarCore:
     :path: "../NtarCore"
+  Zoomable:
+    :path: "../../Zoomable"
 
 SPEC CHECKSUMS:
   ArgumentParser: 33874ea30134f4131398810725e3dbfed96ddb1a
   ArgumentParserToolInfo: 8531cd8ada6bc81f2acc6cc243065ea9fc540647
   NtarCore: 712d4ed7e27f5c25a36f25c779f6db333a8b1796
+  Zoomable: 794284468173d9e9d77bf17f7c473fa4ef06c2f1
 
-PODFILE CHECKSUM: 3da013e231dfc2d2fced430c7df1ca4100ab0b0e
+PODFILE CHECKSUM: 8f1e050f63453ec3201bc30c3b20f591c438b244
 
 COCOAPODS: 1.11.0

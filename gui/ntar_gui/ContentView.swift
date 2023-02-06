@@ -9,16 +9,36 @@ import Foundation
 import SwiftUI
 import Cocoa
 import NtarCore
+import Zoomable
 
 class ViewModel: ObservableObject {
     var framesToCheck: FramesToCheck
     var eraser: NighttimeAirplaneRemover?
-    var frame: FrameAirplaneRemover?
+    var frame: FrameAirplaneRemover? {
+        didSet {
+            if let frame = frame {
+                let new_frame_width = CGFloat(frame.width)
+                let new_frame_height = CGFloat(frame.height)
+                if frame_width != new_frame_width {
+                    frame_width = new_frame_width
+                }
+                if frame_height != new_frame_height {
+                    frame_height = new_frame_height
+                }
+                Log.w("INITIAL SIZE [\(frame_width), \(frame_height)]")
+            } else {
+                Log.e("NO INITIAL SIZE :(")
+            }
+        }
+    }
     var outlierViews: [OutlierGroupView] = []
     var outlierCount: Int = 0
     var image: Image?
-//    var frameState: [FrameProcessingState: Int] = [:]
 
+    var frame_width: CGFloat = 300
+    var frame_height: CGFloat = 300
+    
+    // frame states as individual values
     var number_unprocessed: Int = 0
     var number_loadingImages: Int = 0
     var number_detectingOutliers: Int = 0
@@ -60,11 +80,11 @@ class ViewModel: ObservableObject {
                                                size: size)
 
                     let groupView = OutlierGroupView(group: group,
-                                                           name: group.name,
-                                                           bounds: group.bounds,
-                                                           image: outlierImage,
-                                                           frame_width: frame_width,
-                                                           frame_height: frame_height)
+                                                     name: group.name,
+                                                     bounds: group.bounds,
+                                                     image: outlierImage,
+                                                     frame_width: frame_width,
+                                                     frame_height: frame_height)
                     await MainActor.run {
                         outlierViews.append(groupView)
                     }
@@ -97,74 +117,20 @@ struct ContentView: View {
     @State private var showOutliers = true
     @State private var running = false
 
-    @State private var width: CGFloat = 0
-    @State private var height: CGFloat = 0
-
-    @State private var finalAmount: CGFloat = 1
-
-    @State private var currentAmount: CGFloat = 0
-    @State private var offsetX: CGFloat = 0
-    @State private var offsetY: CGFloat = 0
-    @State private var offsetXBuffer: CGFloat = 0
-    @State private var offsetYBuffer: CGFloat = 0
-
-    @State private var positive = true
-
     @State private var zstack_frame: CGSize = .zero
+
+    @State private var scale: CGFloat = 1
     
     init(viewModel: ViewModel) {
         self.viewModel = viewModel
 
-        if let frame = viewModel.frame {
-            Log.w("INITIAL SIZE [\(width), \(height)]")
-            width = CGFloat(frame.width)
-            height = CGFloat(frame.height)
-        }
     }
 
     // this is the frame with outliers on top of it
-    func frameView(_ geometry: GeometryProxy, _ image: Image) -> some View {
-        Log.d("[\(geometry.size.width), \(geometry.size.height)]")
-        
-        Task {
-            await MainActor.run {
-                if width == 0,
-                   height == 0,
-                   let frame = viewModel.frame
-                {
-                    width = CGFloat(frame.width)
-                    height = CGFloat(frame.height)
-                }
-
-                if self.zstack_frame == .zero {
-                    let zoom_factor = geometry.size.height / height
-                    let min = 1
-                    //finalAmount = zoom_factor
-                    if zoom_factor < 1 {
-
-                        // XXX this _kindof_ works, but the frame isn't centered still :(
-                        //offsetX = -width//*finalAmount
-                        //offsetYBuffer = offsetX
-                        //offsetY = -height//2 // XXX
-                        //offsetYBuffer = offsetY
-                    }
-                    Log.w("INITIAL SIZE [\(geometry.size.width), \(geometry.size.height)] - [\(width), \(height)] finalAmount \(finalAmount)")
-                    // set initial finalAmount based upon stack frame size and frame size
-                }
-                self.zstack_frame = geometry.size
-            }
-        }
+    func frameView( _ image: Image) -> some View {
 
         return ZStack {
             image
-              .resizable()
-
-                    
-//                      .frame(width: width, height: height)
-                    
-                    
-//                      .imageScale(.large)
-                    
                         /*
                          why does this foreach fail?
                          last done not properly handled anymore
@@ -195,6 +161,7 @@ struct ContentView: View {
                           .offset(x: CGFloat(outlier_center.x - frame_center_x),
                                   y: CGFloat(outlier_center.y - frame_center_y))
                           .onTapGesture {
+                              Log.d("tapped")
                               Task {
                                   if let origShouldPaint = outlierViewModel.group.shouldPaint {
                                       // change the paintability of this outlier group
@@ -213,73 +180,26 @@ struct ContentView: View {
                 }
             }
         }
-          .offset(x: offsetX, y:offsetY)
-          .scaleEffect(finalAmount + currentAmount/*, anchor: scaling_anchor*/)
     }
 
     var body: some View {
         let scaling_anchor = UnitPoint(x: 0.75, y: 0.75)
         VStack {
             if let frame_image = viewModel.image {
-                GeometryReader { geomerty in
-                    ScrollViewReader { scrollValue in 
-                        ScrollView([.horizontal, .vertical], showsIndicators: false) {
-                            self.frameView(geomerty, frame_image)
-                              .scaledToFit()
-                              .frame(maxWidth: self.width, maxHeight: self.height)
+                ZoomableView(size: CGSize(width: viewModel.frame_width,
+                                          height: viewModel.frame_height),
+                             min: 0.2,
+                             max: 20,
+                             showsIndicators: true,
+                             scale: $scale)
+                {
+                    self.frameView(frame_image)
+                      //.resizable()
+                      .scaledToFit()
+                      .clipped()
+                      //.frame(maxWidth: self.width, maxHeight: self.height)
+                }
 
-                              .gesture(
-                                DragGesture()
-                                  .onChanged { value in
-                                      offsetY = value.translation.height + offsetYBuffer
-                                      offsetX =  value.translation.width + offsetXBuffer
-                                  }
-                                  .onEnded { value in
-                                      offsetXBuffer = value.translation.width + offsetXBuffer
-                                      offsetYBuffer = value.translation.height + offsetYBuffer
-                                  }
-                              ).gesture(
-                                MagnificationGesture()
-                                  .onChanged { value in
-                                      Log.d("currentAmount \(currentAmount) value \(value)")
-                                      //offsetX -= value
-                                      //offsetY -= value
-                                      /*
-                                       if finalAmount + value - 1 < 15,
-                                       finalAmount + value - 1 > 0.2 // XXX compute these based on frame size
-                                       {
-                                       */
-                                      currentAmount = value - 1
-                                      Log.d("currentAmount 2 \(currentAmount)")
-                                      /*
-                                       } else {
-                                       Log.d("skipping")
-                                       }*/
-                                  }
-                                  .onEnded { value in
-                                      finalAmount += currentAmount
-//                                      scrollValue.scrollTo(0, anchor: .center)
-                                      /*
-                                       if finalAmount > 15 {
-                                       finalAmount = 15
-                                       } else if finalAmount < 0.2 {
-                                       finalAmount = 0.2
-                                       }*/
-                                      Log.d("finalAmount \(finalAmount)")
-                                      currentAmount = 0
-                                      if self.positive {
-                                          offsetY += 0.1 //this seems to fix it
-                                      } else {
-                                          offsetY -= 0.1 //this seems to fix it
-                                      }
-                                      self.positive = !self.positive
-                                  }
-                              )
-                        }
-                    }
-                      // .frame(maxWidth: 300, maxHeight: 300)                    
-                //.scaleEffect(self.scale)
-                }//.gesture(magnificationGesture)
             } else {
                 Image(systemName: "globe")
                   .imageScale(.large)
