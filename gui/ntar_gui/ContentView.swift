@@ -52,6 +52,8 @@ class ViewModel: ObservableObject {
     var number_complete: Int = 0
 
     var label_text: String = "Started"
+
+    var image_sequence_size: Int = 0
     
     init(framesToCheck: FramesToCheck) {
         self.framesToCheck = framesToCheck
@@ -238,116 +240,136 @@ struct ContentView: View {
 
     var body: some View {
         let scaling_anchor = UnitPoint(x: 0.75, y: 0.75)
-        VStack {
-            if let frame_image = viewModel.image {
-                GeometryReader { geometry in
-                    let min = geometry.size.height/viewModel.frame_height
-                    let max = min < 1 ? 1 : min
-                    ZoomableView(size: CGSize(width: viewModel.frame_width,
-                                              height: viewModel.frame_height),
-                                 min: min,
-                                 max: max,
-                                 showsIndicators: true)
-                    {
-                        self.frameView(frame_image)
-                    }
-                }
-            } else {
-                Image(systemName: "globe")
-                  .imageScale(.large)
-                  .foregroundColor(.accentColor)
-            }
-            HStack {
-                Text(viewModel.label_text)
-                if viewModel.outlierCount > 0 {
-                    Text("has \(viewModel.outlierCount) outliers")
-                }
-            }
+        GeometryReader { top_geometry in
             VStack {
-                HStack {
-                    if !running {
-                        Button(action: { // hide when running
-                            running = true                                
-                            Task.detached(priority: .background) {
-                                do {
-                                    try await viewModel.eraser?.run()
-                                } catch {
-                                    Log.e("\(error)")
-                                }
-                            }
-                        }) {
-                            Text("START").font(.largeTitle)
-                        }.buttonStyle(PlainButtonStyle())
-                    } else {
-                        Button(action: {
-                                   // XXX move this task to a method somewhere else
-                            let foobar = viewModel.frame
-                            viewModel.frame = nil
-                            viewModel.label_text = "loading..."
-                            // XXX set loading image here
-                            Task {
-                                if let frame_to_remove = foobar {
-                                    await viewModel.framesToCheck.remove(frame: frame_to_remove)
-                                    
-                                    if let eraser = viewModel.eraser,
-                                       let fp = eraser.final_processor
-                                    {
-                                        var finish_this_one = true
-                                        if let done_already = done_frames[frame_to_remove.frame_index],
-                                           done_already
-                                        {
-                                            finish_this_one = false
-                                        }
-                                        if finish_this_one {
-                                            // add to final queue
-                                            done_frames[frame_to_remove.frame_index] = true
-                                            await fp.final_queue.add(atIndex: frame_to_remove.frame_index) {
-                                                Log.i("frame \(frame_to_remove.frame_index) finishing")
-                                                try await frame_to_remove.finish()
-                                                Log.i("frame \(frame_to_remove.frame_index) finished")
-                                            }
-                                        }
-                                    }
-                                }
-                                if let next_frame = await viewModel.framesToCheck.nextFrame(),
-                                   let baseImage = try await next_frame.baseImage()
-                                {
-                                    viewModel.frame = next_frame
-                                    viewModel.image = Image(nsImage: baseImage)
-                                    await viewModel.update()
-                                } else {
-                                    viewModel.frame = nil
-                                    viewModel.outlierViews = []
-                                    viewModel.image = Image(systemName: "person")
-                                    await viewModel.update()
-                                }
-                            }
-                        }) {
-                            Text("DONE").font(.largeTitle)
-                        }.buttonStyle(PlainButtonStyle())
-                         .disabled(viewModel.frame == nil)
+                if let frame_image = viewModel.image {
+                    GeometryReader { geometry in
+                        let min = geometry.size.height/viewModel.frame_height
+                        let max = min < 1 ? 1 : min
+                        ZoomableView(size: CGSize(width: viewModel.frame_width,
+                                                  height: viewModel.frame_height),
+                                     min: min,
+                                     max: max,
+                                     showsIndicators: true)
+                        {
+                            self.frameView(frame_image)
+                        }
                     }
-                    Button(action: {
-                        Task {
-                            await viewModel.frame?.userSelectAllOutliers(toShouldPaint: true)
-                            await viewModel.update()
-                        }
-                    }) {
-                        Text("Paint All").font(.largeTitle)
-                    }.buttonStyle(PlainButtonStyle())
-                    Button(action: {
-                        Task {
-                            await viewModel.frame?.userSelectAllOutliers(toShouldPaint: false)
-                            await viewModel.update()
-                        }
-                    }) {
-                        Text("Clear All").font(.largeTitle)
-                    }.buttonStyle(PlainButtonStyle())
+                } else {
+                    Image(systemName: "globe")
+                      .imageScale(.large)
+                      .foregroundColor(.accentColor)
                 }
                 HStack {
-                    Toggle("show outliers", isOn: $showOutliers)
-                    Toggle("selection causes paint", isOn: $selection_causes_painting)
+                    Text(viewModel.label_text)
+                    if viewModel.outlierCount > 0 {
+                        Text("has \(viewModel.outlierCount) outliers")
+                    }
                 }
+                VStack {
+                    HStack {
+                        if !running {
+                            Button(action: { // hide when running
+                                       running = true                                
+                                       Task.detached(priority: .background) {
+                                           do {
+                                               try await viewModel.eraser?.run()
+                                           } catch {
+                                               Log.e("\(error)")
+                                           }
+                                       }
+                                   }) {
+                                Text("START").font(.largeTitle)
+                            }.buttonStyle(PlainButtonStyle())
+                        } else {
+                            Button(action: {
+                                       // XXX move this task to a method somewhere else
+                                       let foobar = viewModel.frame
+                                       viewModel.frame = nil
+                                       viewModel.label_text = "loading..."
+                                       // XXX set loading image here
+                                       Task {
+                                           if let frame_to_remove = foobar {
+                                               await viewModel.framesToCheck.remove(frame: frame_to_remove)
+                                               
+                                               if let eraser = viewModel.eraser,
+                                                  let fp = eraser.final_processor
+                                               {
+                                                   var finish_this_one = true
+                                                   if let done_already = done_frames[frame_to_remove.frame_index],
+                                                      done_already
+                                                   {
+                                                       finish_this_one = false
+                                                   }
+                                                   if finish_this_one {
+                                                       // add to final queue
+                                                       done_frames[frame_to_remove.frame_index] = true
+                                                       await fp.final_queue.add(atIndex: frame_to_remove.frame_index) {
+                                                           Log.i("frame \(frame_to_remove.frame_index) finishing")
+                                                           try await frame_to_remove.finish()
+                                                           Log.i("frame \(frame_to_remove.frame_index) finished")
+                                                       }
+                                                   }
+                                               }
+                                           }
+                                           if let next_frame = await viewModel.framesToCheck.nextFrame(),
+                                              let baseImage = try await next_frame.baseImage()
+                                           {
+                                               viewModel.frame = next_frame
+                                               viewModel.image = Image(nsImage: baseImage)
+                                               await viewModel.update()
+                                           } else {
+                                               viewModel.frame = nil
+                                               viewModel.outlierViews = []
+                                               viewModel.image = Image(systemName: "person")
+                                               await viewModel.update()
+                                           }
+                                       }
+                                   }) {
+                                Text("DONE").font(.largeTitle)
+                            }.buttonStyle(PlainButtonStyle())
+                              .disabled(viewModel.frame == nil)
+                        }
+                        Button(action: {
+                                   Task {
+                                       await viewModel.frame?.userSelectAllOutliers(toShouldPaint: true)
+                                       await viewModel.update()
+                                   }
+                               }) {
+                            Text("Paint All").font(.largeTitle)
+                        }.buttonStyle(PlainButtonStyle())
+                        Button(action: {
+                                   Task {
+                                       await viewModel.frame?.userSelectAllOutliers(toShouldPaint: false)
+                                       await viewModel.update()
+                                   }
+                               }) {
+                            Text("Clear All").font(.largeTitle)
+                        }.buttonStyle(PlainButtonStyle())
+                    }
+                    HStack {
+                        Toggle("show outliers", isOn: $showOutliers)
+                        Toggle("selection causes paint", isOn: $selection_causes_painting)
+                    }
+
+                    if viewModel.image_sequence_size > 0 {
+                        // the filmstrip at the bottom
+                        ScrollView(.horizontal) {
+                            HStack(spacing: 5) {
+                                ForEach(0..<viewModel.image_sequence_size, id: \.self) { frame_index in
+                                    // XXX 
+                                    Rectangle()
+                                      .foregroundColor(.purple)
+                                      .frame(width: 80, height: 50)
+                                    
+                                }
+                            }
+                        }.frame(maxWidth: .infinity, maxHeight: 50)
+                    }
+
+                    
+                /*
+                 this looks bad and barely works, replace it with a filmstrip
                 HStack {
                     Text("\(viewModel.number_unprocessed) unprocessed")
                     Text("\(viewModel.number_loadingImages) loadingImages")
@@ -360,10 +382,12 @@ struct ContentView: View {
                     Text("\(viewModel.number_painting) painting")
                     Text("\(viewModel.number_writingOutputFile) writingOutputFile")
                     Text("\(viewModel.number_complete) complete")
+                    }
+                 */
                 }
-            }
-        }.frame(maxWidth: .infinity, maxHeight: .infinity)
-          .padding()
+            }.frame(maxWidth: .infinity, maxHeight: .infinity)
+              .padding()
+        }
     }
 }
 

@@ -8,6 +8,20 @@
 import SwiftUI
 import NtarCore
 
+/*
+
+ UI Improvements:
+  - scroll back and forth through frames
+  - don't finish frames until some number later
+  - make frames go in order
+  - make a filmstrip below to show the status of each frame
+  - improve speed when still processing files
+  - overlier hover to give paint reason and size
+  - feature to split outlier groups apart
+  - add ability to have selection work for just part of outlier group, or all like now
+  - have streak detection take notice of user choices before processing further frames
+  - show preview images when loading
+ */
 actor FramesToCheck {
     var frames: [FrameAirplaneRemover] = []
 
@@ -71,10 +85,12 @@ class ntar_gui_app: App {
             // this path reads a saved json config file, along with potentially
             // a set of saved outlier groups for each frame
             
-            let outlier_dirname = "/pp/tmp/LRT_12_22_2022-a9-2-aurora-topaz-ntar-v-0_1_3-outliers"
-            //let outlier_dirname = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/test_small_medium-ntar-v-0_1_3-outliers"
+            //let outlier_dirname = "/pp/tmp/LRT_12_22_2022-a9-2-aurora-topaz-ntar-v-0_1_3-outliers"
+            let outlier_dirname = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/test_small_medium-ntar-v-0_1_3-outliers"
 
             //let outlier_dirname = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/test_a7sii_100-ntar-v-0_1_3-outliers"
+
+            //let outlier_dirname = "/qp/tmp/LRT_09_24_2022-a7iv-2-aurora-topaz-ntar-v-0_1_3-outliers"
             
             outlier_json_startup(with: outlier_dirname)
             
@@ -158,7 +174,7 @@ class ntar_gui_app: App {
                                 outlierMaxThreshold: self.outlierMaxThreshold,
                                 outlierMinThreshold: self.outlierMinThreshold,
                                 minGroupSize: self.minGroupSize,
-                                numConcurrentRenders: self.numConcurrentRenders,
+                                numConcurrentRenders: 10,//self.numConcurrentRenders,
                                 test_paint: self.test_paint,
                                 test_paint_output_path: test_paint_output_path,
                                 imageSequenceName: input_image_sequence_name,
@@ -183,6 +199,13 @@ class ntar_gui_app: App {
 
     func make_callbacks() -> Callbacks {
         var callbacks = Callbacks()
+
+
+        // get the full number of images in the sequcne
+        callbacks.imageSequenceSizeClosure = { image_sequence_size in
+            self.viewModel.image_sequence_size = image_sequence_size
+        }
+        
         // count numbers here for max running 
         callbacks.countOfFramesToCheck = {
             let count = await self.framesToCheck.count()

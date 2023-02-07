@@ -51,6 +51,10 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
                        number_final_processing_neighbors_needed: config.number_final_processing_neighbors_needed);
 
         let image_sequence_size = /*self.*/image_sequence.filenames.count
+
+        if let imageSequenceSizeClosure = callbacks.imageSequenceSizeClosure {
+            imageSequenceSizeClosure(image_sequence_size)
+        }
         
         self.remaining_images_closure = { number_of_unprocessed in
             if let updatable = callbacks.updatable {
@@ -76,7 +80,7 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
                                        dispatchGroup: dispatchGroup,
                                        imageSequence: image_sequence)
 
-        
+
         final_processor = processor
     }
 
