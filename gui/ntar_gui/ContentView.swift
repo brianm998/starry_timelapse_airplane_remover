@@ -60,7 +60,7 @@ class ViewModel: ObservableObject {
     }
     
     func update() async {
-        if await framesToCheck.nextFrame() == nil {
+        if await framesToCheck.isDone() {
             await MainActor.run {
                 frame = nil
                 outlierViews = []
@@ -283,67 +283,67 @@ struct ContentView: View {
                             }.buttonStyle(PlainButtonStyle())
                         } else {
                             Button(action: {
-                                       // XXX move this task to a method somewhere else
-                                       let foobar = viewModel.frame
-                                       viewModel.frame = nil
-                                       viewModel.label_text = "loading..."
-                                       // XXX set loading image here
-                                       Task {
-                                           if let frame_to_remove = foobar {
-                                               await viewModel.framesToCheck.remove(frame: frame_to_remove)
-                                               
-                                               if let eraser = viewModel.eraser,
-                                                  let fp = eraser.final_processor
-                                               {
-                                                   var finish_this_one = true
-                                                   if let done_already = done_frames[frame_to_remove.frame_index],
-                                                      done_already
-                                                   {
-                                                       finish_this_one = false
-                                                   }
-                                                   if finish_this_one {
-                                                       // add to final queue
-                                                       done_frames[frame_to_remove.frame_index] = true
-                                                       await fp.final_queue.add(atIndex: frame_to_remove.frame_index) {
-                                                           Log.i("frame \(frame_to_remove.frame_index) finishing")
-                                                           try await frame_to_remove.finish()
-                                                           Log.i("frame \(frame_to_remove.frame_index) finished")
-                                                       }
-                                                   }
-                                               }
-                                           }
-                                           if let next_frame = await viewModel.framesToCheck.nextFrame(),
-                                              let baseImage = try await next_frame.baseImage()
-                                           {
-                                               viewModel.frame = next_frame
-                                               viewModel.image = Image(nsImage: baseImage)
-                                               await viewModel.update()
-                                           } else {
-                                               viewModel.frame = nil
-                                               viewModel.outlierViews = []
-                                               viewModel.image = Image(systemName: "person")
-                                               await viewModel.update()
-                                           }
-                                       }
-                                   }) {
+                                // XXX move this task to a method somewhere else
+                                let foobar = viewModel.frame
+                                viewModel.frame = nil
+                                viewModel.label_text = "loading..."
+                                // XXX set loading image here
+                                Task {
+                                    if let frame_to_remove = foobar {
+                                        //await viewModel.framesToCheck.remove(frame: frame_to_remove)
+                                        
+                                        if let eraser = viewModel.eraser,
+                                           let fp = eraser.final_processor
+                                        {
+                                            var finish_this_one = true
+                                            if let done_already = done_frames[frame_to_remove.frame_index],
+                                               done_already
+                                            {
+                                                finish_this_one = false
+                                            }
+                                            if finish_this_one {
+                                                // add to final queue
+                                                done_frames[frame_to_remove.frame_index] = true
+                                                await fp.final_queue.add(atIndex: frame_to_remove.frame_index) {
+                                                    Log.i("frame \(frame_to_remove.frame_index) finishing")
+                                                    try await frame_to_remove.finish()
+                                                    Log.i("frame \(frame_to_remove.frame_index) finished")
+                                                }
+                                            }
+                                        }
+                                    }
+                                    if let next_frame = await viewModel.framesToCheck.nextFrame(),
+                                       let baseImage = try await next_frame.baseImage()
+                                    {
+                                        viewModel.frame = next_frame
+                                        viewModel.image = Image(nsImage: baseImage)
+                                        await viewModel.update()
+                                    } else {
+                                        viewModel.frame = nil
+                                        viewModel.outlierViews = []
+                                        viewModel.image = Image(systemName: "person")
+                                        await viewModel.update()
+                                    }
+                                }
+                            }) {
                                 Text("DONE").font(.largeTitle)
                             }.buttonStyle(PlainButtonStyle())
                               .disabled(viewModel.frame == nil)
                         }
                         Button(action: {
-                                   Task {
-                                       await viewModel.frame?.userSelectAllOutliers(toShouldPaint: true)
-                                       await viewModel.update()
-                                   }
-                               }) {
+                            Task {
+                                await viewModel.frame?.userSelectAllOutliers(toShouldPaint: true)
+                                await viewModel.update()
+                            }
+                        }) {
                             Text("Paint All").font(.largeTitle)
                         }.buttonStyle(PlainButtonStyle())
                         Button(action: {
-                                   Task {
-                                       await viewModel.frame?.userSelectAllOutliers(toShouldPaint: false)
-                                       await viewModel.update()
-                                   }
-                               }) {
+                            Task {
+                                await viewModel.frame?.userSelectAllOutliers(toShouldPaint: false)
+                                await viewModel.update()
+                            }
+                        }) {
                             Text("Clear All").font(.largeTitle)
                         }.buttonStyle(PlainButtonStyle())
                     }

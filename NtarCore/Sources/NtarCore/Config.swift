@@ -216,11 +216,15 @@ public class Callbacks {
     // called for the user to check a frame
     public var frameCheckClosure: ((FrameAirplaneRemover) async -> ())?
 
+    // called when the user is not asked to check this frame
+    public var frameNotCheckedClosure: ((FrameAirplaneRemover) async -> ())?
+
     // called by the final processor to keep running when user is checking frames
     public var countOfFramesToCheck: (() async -> Int)?
 
     // returns the total full size of the image sequence
     public var imageSequenceSizeClosure: ((Int) -> Void)?
+
 }
 
 fileprivate let file_manager = FileManager.default

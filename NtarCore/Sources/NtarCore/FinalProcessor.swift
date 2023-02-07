@@ -78,8 +78,10 @@ public actor FinalProcessor {
     }
 
     func add(frame: FrameAirplaneRemover) {
+        Log.d("add frame \(frame.frame_index)")
         Task {
             let frame_state = await frame.processingState()
+            Log.d("add frame \(frame.frame_index) with state \(frame_state)")
             if frame_state == .outlierProcessingComplete {
                 // these frames have already been inter-frame processed,
                 // likely from saved json outlier groups
@@ -188,19 +190,30 @@ public actor FinalProcessor {
         // if we have a frame check closure, we allow the user to check the frame here
         // but only if there are some outliers to check, otherwise just finish it.
 
-        if let frameCheckClosure = callbacks.frameCheckClosure,
-           await frame.outlierGroupCount > 0
+        Log.d("finish(frame: \(frame.frame_index)")
+        
+        if let frameCheckClosure = callbacks.frameCheckClosure
         {
-            // gui
-            await frameCheckClosure(frame)
-        } else {
-            // cli
-            await self.final_queue.add(atIndex: frame.frame_index) {
-                Log.i("frame \(frame.frame_index) finishing")
-                try await frame.finish()
-                Log.i("frame \(frame.frame_index) finished")
+            if await frame.outlierGroupCount > 0 {
+                Log.d("calling frame check closure for frame \(frame.frame_index)")
+                // gui
+                await frameCheckClosure(frame)
+                return
             }
+
+            if let frameNotCheckedClosure = callbacks.frameNotCheckedClosure {
+                await frameNotCheckedClosure(frame)
+            }
+        }            
+
+        // cli and not checked frames go to the finish queue
+        Log.d("adding frame \(frame.frame_index) to the final queue")
+        await self.final_queue.add(atIndex: frame.frame_index) {
+            Log.i("frame \(frame.frame_index) finishing")
+            try await frame.finish()
+            Log.i("frame \(frame.frame_index) finished")
         }
+
     }
 
     nonisolated func run(shouldProcess: [Bool]) async throws {

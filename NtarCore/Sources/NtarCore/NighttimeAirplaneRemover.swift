@@ -158,7 +158,7 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
 
     override func result_hook(with result: FrameAirplaneRemover) async {
 
-        Log.d("result hook with result \(result)")
+        Log.d("result hook for frame \(result.frame_index)")
         
         // next step is to add this frame_plane_remover to an array of optionals
         // indexed by frame number

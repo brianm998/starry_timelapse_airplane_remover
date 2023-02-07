@@ -23,32 +23,52 @@ import NtarCore
   - show preview images when loading
  */
 actor FramesToCheck {
-    var frames: [FrameAirplaneRemover] = []
+    var frames: [FrameAirplaneRemover?] = []
+    var current_index = 0
+    
+    init() { }
 
+    
+    init(number: Int) {
+        Log.d("FramesToCheck init with \(number)")
+        frames = Array<FrameAirplaneRemover?>(repeating: nil, count: number)
+    }
+
+    func isDone() -> Bool {
+        return current_index >= frames.count
+    }
+
+    
+        /*
     func remove(frame: FrameAirplaneRemover) {
-        Log.e("FFF REMOVE \(frames.count)")
+        // XXX this method is obsolete
         for i in 0..<frames.count {
             if frames[i].frame_index == frame.frame_index {
                 frames.remove(at: i)
                 break
             }
         }
-        Log.e("FFF AFTER REMOVE \(frames.count)")
     }
-    
+    */
     func append(frame: FrameAirplaneRemover) {
         // XXX append them in frame order
-        self.frames.append(frame)
+        Log.w("appending frame \(frame.frame_index)")
+        self.frames[frame.frame_index] = frame
     }
-
+/*
     func count() -> Int {
         return self.frames.count
     }
-
+*/
     func nextFrame() -> FrameAirplaneRemover? {
-        //Log.e("NEXT FRAME \(frames.count)")
-        if frames.count == 0 { return nil }
-        return frames[0]
+        if current_index < frames.count,
+           let frame = frames[current_index]
+        {
+            Log.d("returning next frame @ \(current_index) should equal \(frame.frame_index)")
+            current_index += 1
+            return frame
+        }
+        return nil
     }
 }
 
@@ -69,17 +89,17 @@ class ntar_gui_app: App {
 
     var viewModel: ViewModel
 
-    var framesToCheck = FramesToCheck()
+    //var framesToCheck = FramesToCheck()
 
     // the state of each frame indexed by frame #
     var frame_states: [Int: FrameProcessingState] = [:]
     
     required init() {
-        viewModel = ViewModel(framesToCheck: framesToCheck)
+        viewModel = ViewModel(framesToCheck: FramesToCheck())
         Log.handlers[.console] = ConsoleLogHandler(at: .debug)
         Log.w("Starting Up")
 
-        var use_json = true
+        var use_json = false
 
         if use_json {
             // this path reads a saved json config file, along with potentially
@@ -204,13 +224,16 @@ class ntar_gui_app: App {
         // get the full number of images in the sequcne
         callbacks.imageSequenceSizeClosure = { image_sequence_size in
             self.viewModel.image_sequence_size = image_sequence_size
+            Log.e("read image_sequence_size \(image_sequence_size)")
+            self.viewModel.framesToCheck = FramesToCheck(number: image_sequence_size)
         }
         
-        // count numbers here for max running 
+        // count numbers here for max running
+        // XXX this method is obsolete
         callbacks.countOfFramesToCheck = {
-            let count = await self.framesToCheck.count()
-            Log.i("XXX count \(count)")
-            return count
+//            let count = await self.framesToCheck.count()
+            //Log.i("XXX count \(count)")
+            return 1//count
         }
 
         
@@ -225,34 +248,49 @@ class ntar_gui_app: App {
                 }
             }
         }
-        
+
+        // called when we should check a frame
+        callbacks.frameNotCheckedClosure = { frame in
+            Task {
+                await self.addToViewModel(frame: frame)
+            }
+        }
+
+        // called when we should check a frame
         callbacks.frameCheckClosure = { new_frame in
             Log.d("frameCheckClosure for frame \(new_frame.frame_index)")
             Task {
-                await self.framesToCheck.append(frame: new_frame)
-                if self.viewModel.frame == nil,
-                   let frame = await self.framesToCheck.nextFrame()
-                {
-                    Log.d("frameCheckClosure 3")
-                    Log.i("got frame index \(frame)")
-                    do {
-                        Log.d("frameCheckClosure 4")
-                        if let baseImage = try await frame.baseImage() {
-                            self.viewModel.image = Image(nsImage: baseImage)
-                            self.viewModel.frame = frame
-                            await self.viewModel.update()
-                            
-                            Log.d("XXX self.viewModel.image = \(self.viewModel.image)")
-                            // Perform UI updates
-                        }
-                    } catch {
-                        Log.e("\(error)")
-                    }
-                } 
+                await self.addToViewModel(frame: new_frame)
             }
         }
         
         return callbacks
+    }
+
+    func addToViewModel(frame new_frame: FrameAirplaneRemover) async {
+        await self.viewModel.framesToCheck.append(frame: new_frame)
+
+        // XXX do this when the user clicks on the filmstrip
+        if self.viewModel.frame == nil,
+           await self.viewModel.framesToCheck.current_index == new_frame.frame_index,
+           let frame = await self.viewModel.framesToCheck.nextFrame()
+        {
+            Log.d("frameCheckClosure 3")
+            Log.i("got frame index \(frame)")
+            do {
+                Log.d("frameCheckClosure 4")
+                if let baseImage = try await frame.baseImage() {
+                    self.viewModel.image = Image(nsImage: baseImage)
+                    self.viewModel.frame = frame
+                    await self.viewModel.update()
+                    
+                    Log.d("XXX self.viewModel.image = \(self.viewModel.image)")
+                    // Perform UI updates
+                }
+            } catch {
+                Log.e("\(error)")
+            }
+        }
     }
     
     // change the mapping of frame to state
