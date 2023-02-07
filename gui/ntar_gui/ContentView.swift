@@ -129,8 +129,11 @@ struct ContentView: View {
     @State private var scale: CGFloat = 0.25
 
     @State private var drag_start: CGPoint?
-
+    @State private var drag_end: CGPoint?
+    @State private var isDragging = false
+      
     @State private var done_frames: [Int: Bool] = [:] // frame_index to done
+
     
     init(viewModel: ViewModel) {
         self.viewModel = viewModel
@@ -174,19 +177,49 @@ struct ContentView: View {
                      }
                 }
             }
+            // this is the selection overlay
+            if isDragging,
+               let drag_start = drag_start,
+               let drag_end = drag_end
+            {
+                let width = abs(drag_start.x-drag_end.x)
+                let height = abs(drag_start.y-drag_end.y)
+
+                let drag_x_offset = drag_end.x > drag_start.x ? drag_end.x : drag_start.x
+                let drag_y_offset = drag_end.y > drag_start.y ? drag_end.y : drag_start.y
+
+                Rectangle()
+                  .fill((selection_causes_painting ?
+                          Color.red :
+                          Color.green).opacity(0.1))
+                  .overlay(
+                    Rectangle()
+                      .stroke(style: StrokeStyle(lineWidth: 1))
+                      .foregroundColor((selection_causes_painting ?
+                                          Color.red : Color.green).opacity(0.5))
+                  )                
+                  .frame(width: width, height: height)
+                  .offset(x: CGFloat(-viewModel.frame_width/2) + drag_x_offset - width/2,
+                          y: CGFloat(-viewModel.frame_height/2) + drag_y_offset - height/2)
+
+            }
         }
         // add a drag gesture to allow selecting outliers for painting or not
           .gesture(DragGesture()
+            
                    .onChanged { gesture in
+                       isDragging = true
                        let location = gesture.location
                        if let drag_start = drag_start {
-                           // updating during drag is too slow 
+                           // updating during drag is too slow
+                           drag_end = location
                        } else {
-                           drag_start = location
+                           drag_start = gesture.startLocation
                        }
                        Log.d("location \(location)")
                    }
                    .onEnded { gesture in
+                       isDragging = false
                        let end_location = gesture.location
                        if let drag_start = drag_start {
                            Log.d("end location \(end_location) drag start \(drag_start)")
@@ -198,6 +231,7 @@ struct ContentView: View {
                            }
                        }
                        drag_start = nil
+                       drag_end = nil
                    }
           )
     }
