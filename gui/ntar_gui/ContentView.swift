@@ -60,7 +60,7 @@ class ViewModel: ObservableObject {
     }
     
     func update() async {
-        if await framesToCheck.isDone() {
+        if framesToCheck.isDone() {
             await MainActor.run {
                 frame = nil
                 outlierViews = []
@@ -207,6 +207,7 @@ struct ContentView: View {
             }
         }
         // add a drag gesture to allow selecting outliers for painting or not
+        // XXX selecting and zooming conflict with eachother
           .gesture(DragGesture()
             
                    .onChanged { gesture in
@@ -218,7 +219,7 @@ struct ContentView: View {
                        } else {
                            drag_start = gesture.startLocation
                        }
-                       Log.d("location \(location)")
+                       //Log.d("location \(location)")
                    }
                    .onEnded { gesture in
                        isDragging = false
@@ -238,6 +239,45 @@ struct ContentView: View {
           )
     }
 
+    // the view for each frame in the filmstrip at the bottom
+    func filmStripView(forFrame frame_index: Int) -> some View {
+        var bg_color: Color = .yellow
+        if let frame = viewModel.framesToCheck.frame(atIndex: frame_index) {
+//            if frame.outlierGroupCount() > 0 {
+//                bg_color = .red
+//            } else {
+                bg_color = .green
+//            }
+        }
+
+        return ZStack {
+            Rectangle()
+              .foregroundColor(bg_color)
+            Text("\(frame_index)")
+            // XXX add status
+        }
+          .frame(width: 80, height: 50)
+          .onTapGesture {
+              Task {
+                  // grab frame and try to show it
+                  if let next_frame = viewModel.framesToCheck.frame(atIndex: frame_index),
+                     let baseImage = try await next_frame.baseImage()
+                  {
+                      viewModel.frame = next_frame
+                      viewModel.image = Image(nsImage: baseImage)
+                      await viewModel.update()
+                  } else {
+                      viewModel.frame = nil
+                      viewModel.outlierViews = []
+                      viewModel.image = Image(systemName: "person")
+                      await viewModel.update()
+                  }
+              }
+          }
+
+    }
+
+    
     var body: some View {
         let scaling_anchor = UnitPoint(x: 0.75, y: 0.75)
         GeometryReader { top_geometry in
@@ -269,16 +309,17 @@ struct ContentView: View {
                 VStack {
                     HStack {
                         if !running {
-                            Button(action: { // hide when running
-                                       running = true                                
-                                       Task.detached(priority: .background) {
-                                           do {
-                                               try await viewModel.eraser?.run()
-                                           } catch {
-                                               Log.e("\(error)")
-                                           }
-                                       }
-                                   }) {
+                            let action = {
+                                running = true
+                                Task.detached(priority: .background) {
+                                    do {
+                                        try await viewModel.eraser?.run()
+                                    } catch {
+                                        Log.e("\(error)")
+                                    }
+                                }
+                            }
+                            Button(action: action) {
                                 Text("START").font(.largeTitle)
                             }.buttonStyle(PlainButtonStyle())
                         } else {
@@ -312,7 +353,7 @@ struct ContentView: View {
                                             }
                                         }
                                     }
-                                    if let next_frame = await viewModel.framesToCheck.nextFrame(),
+                                    if let next_frame = viewModel.framesToCheck.nextFrame(),
                                        let baseImage = try await next_frame.baseImage()
                                     {
                                         viewModel.frame = next_frame
@@ -357,10 +398,7 @@ struct ContentView: View {
                         ScrollView(.horizontal) {
                             HStack(spacing: 5) {
                                 ForEach(0..<viewModel.image_sequence_size, id: \.self) { frame_index in
-                                    // XXX 
-                                    Rectangle()
-                                      .foregroundColor(.purple)
-                                      .frame(width: 80, height: 50)
+                                    self.filmStripView(forFrame: frame_index)
                                     
                                 }
                             }

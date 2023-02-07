@@ -21,16 +21,25 @@ import NtarCore
   - add ability to have selection work for just part of outlier group, or all like now
   - have streak detection take notice of user choices before processing further frames
   - show preview images when loading
+
+  - fix bug where zooming and selection gestures correspond
+
+  NEW UI:
+
+  - load all frames into filmstrip, even when already existing output files are there
+  - show frame status w/ color and/or text
+  - when a frame is left, for any reason, save it
+  - whan a saved frame is re-visited, re-open it
+  - have a render all button
+  
  */
-actor FramesToCheck {
+class FramesToCheck {
     var frames: [FrameAirplaneRemover?] = []
     var current_index = 0
     
     init() { }
-
     
     init(number: Int) {
-        Log.d("FramesToCheck init with \(number)")
         frames = Array<FrameAirplaneRemover?>(repeating: nil, count: number)
     }
 
@@ -38,28 +47,16 @@ actor FramesToCheck {
         return current_index >= frames.count
     }
 
-    
-        /*
-    func remove(frame: FrameAirplaneRemover) {
-        // XXX this method is obsolete
-        for i in 0..<frames.count {
-            if frames[i].frame_index == frame.frame_index {
-                frames.remove(at: i)
-                break
-            }
-        }
-    }
-    */
     func append(frame: FrameAirplaneRemover) {
-        // XXX append them in frame order
-        Log.w("appending frame \(frame.frame_index)")
         self.frames[frame.frame_index] = frame
     }
-/*
-    func count() -> Int {
-        return self.frames.count
+
+    func frame(atIndex index: Int) -> FrameAirplaneRemover? {
+        if index < 0 { return nil }
+        if index >= frames.count { return nil }
+        return frames[index]
     }
-*/
+    
     func nextFrame() -> FrameAirplaneRemover? {
         if current_index < frames.count,
            let frame = frames[current_index]
@@ -88,8 +85,6 @@ class ntar_gui_app: App {
     var image_sequence_dirname: String?
 
     var viewModel: ViewModel
-
-    //var framesToCheck = FramesToCheck()
 
     // the state of each frame indexed by frame #
     var frame_states: [Int: FrameProcessingState] = [:]
@@ -268,12 +263,12 @@ class ntar_gui_app: App {
     }
 
     func addToViewModel(frame new_frame: FrameAirplaneRemover) async {
-        await self.viewModel.framesToCheck.append(frame: new_frame)
+        self.viewModel.framesToCheck.append(frame: new_frame)
 
         // XXX do this when the user clicks on the filmstrip
         if self.viewModel.frame == nil,
-           await self.viewModel.framesToCheck.current_index == new_frame.frame_index,
-           let frame = await self.viewModel.framesToCheck.nextFrame()
+           self.viewModel.framesToCheck.current_index == new_frame.frame_index,
+           let frame = self.viewModel.framesToCheck.nextFrame()
         {
             Log.d("frameCheckClosure 3")
             Log.i("got frame index \(frame)")

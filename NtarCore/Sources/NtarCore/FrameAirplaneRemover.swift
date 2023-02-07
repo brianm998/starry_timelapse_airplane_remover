@@ -62,7 +62,7 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
     public let bytesPerRow: Int
     public let otherFrameIndexes: [Int] // used in found outliers and paint only
     nonisolated public let frame_index: Int
-    
+
     var test_paint_filename: String = "" // the filename to write out test paint data to
     var test_paint = false               // should we test paint?  helpful for debugging
 
