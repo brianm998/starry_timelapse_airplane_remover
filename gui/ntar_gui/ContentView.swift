@@ -239,7 +239,6 @@ struct ContentView: View {
 
         return ZStack {
             let frameView = viewModel.framesToCheck.frames[frame_index]
-
             
             if frameView.preview_image == nil {
               Rectangle()
@@ -250,8 +249,6 @@ struct ContentView: View {
                 Image(nsImage: frameView.preview_image!)
                   .overlay(
                     Rectangle()
-                      // XXX this stoke works, but could look better
-//                      .stroke(style: StrokeStyle(lineWidth: 4))
                       .foregroundColor(.orange).opacity(opacity)
                       )
 
@@ -259,17 +256,7 @@ struct ContentView: View {
                 Image(nsImage: frameView.preview_image!)
             }
             Text("\(frame_index)")
-            
-            /*
-            if let preview_image = frameView.preview_image {
-               Image(nsImage: preview_image)
-               } else {
-             */
-//                Rectangle()
-//                  .foregroundColor(bg_color)
-//            }
-//            Text("\(frame_index)")
-            // XXX add status
+
         }
           .frame(width: 80, height: 50)
           .onTapGesture {
@@ -285,18 +272,27 @@ struct ContentView: View {
               }
               // grab frame and try to show it
               let frame_view = viewModel.framesToCheck.frames[frame_index]
-              if let next_frame = frame_view.frame,
-                 let image = frame_view.image
-              {
+              if let next_frame = frame_view.frame {
                   viewModel.framesToCheck.current_index = frame_index
                   viewModel.frame = next_frame
-                  viewModel.image = Image(nsImage: image)
+                  // grab this from the frame async
+
+                  Task { // XXX duplicated code
+                      do {
+                          if let baseImage = try await next_frame.baseImage() {
+                              viewModel.image = Image(nsImage: baseImage)
+                              await viewModel.update()
+                          }
+                      } catch {
+                          Log.e("error")
+                      }
+                  }
               } else {
                   viewModel.frame = nil
                   viewModel.outlierViews = []
                   viewModel.image = Image(systemName: "person")
+                  Task { await viewModel.update() }
               }
-              Task { await viewModel.update() }
           }
 
     }
@@ -396,18 +392,29 @@ struct ContentView: View {
                                 }
 
                                 let frame_view = viewModel.framesToCheck.previousFrame()
-                                if let next_frame = frame_view.frame,
-                                   let baseImage = frame_view.image
-                                {
+                                if let next_frame = frame_view.frame {
                                     viewModel.frame = next_frame
-                                    viewModel.image = Image(nsImage: baseImage)
+
+                                    // get this async from the frame
+                                    Task { // XXX duplicated code
+                                        do {
+                                            if let baseImage = try await next_frame.baseImage() {
+                                                viewModel.image = Image(nsImage: baseImage)
+                                                await viewModel.update()
+                                            }
+                                        } catch {
+                                            Log.e("error")
+                                        }
+                                    }
+
+
                                     scroller.scrollTo(next_frame.frame_index)
                                 } else {
                                     viewModel.frame = nil
                                     viewModel.outlierViews = []
                                     viewModel.image = Image(systemName: "person")
+                                    Task { await viewModel.update() }
                                 }
-                                Task { await viewModel.update() }
                             }) {
                                 Text("Previous").font(.largeTitle)
                             }.buttonStyle(PlainButtonStyle())
@@ -430,19 +437,27 @@ struct ContentView: View {
                                 }
                                 Log.d("viewModel.framesToCheck.current_index = \(viewModel.framesToCheck.current_index)")
                                 let frame_view = viewModel.framesToCheck.nextFrame()
-                                if let next_frame = frame_view.frame,
-                                   let baseImage = frame_view.image
-                                {
+                                if let next_frame = frame_view.frame {
                                     Log.d("next button pressed for frame \(next_frame.frame_index)")
                                     viewModel.frame = next_frame
-                                    viewModel.image = Image(nsImage: baseImage)
+                                    // get this async from the frame
+                                    Task { // XXX duplicated code
+                                        do {
+                                            if let baseImage = try await next_frame.baseImage() {
+                                                viewModel.image = Image(nsImage: baseImage)
+                                                await viewModel.update()
+                                            }
+                                        } catch {
+                                            Log.e("error")
+                                        }
+                                    }
                                     scroller.scrollTo(next_frame.frame_index)
                                 } else {
                                     viewModel.frame = nil
                                     viewModel.outlierViews = []
                                     viewModel.image = Image(systemName: "person")
+                                    Task { await viewModel.update() }
                                 }
-                                Task { await viewModel.update() }
                             }) {
                                 Text("Next").font(.largeTitle)
                             }

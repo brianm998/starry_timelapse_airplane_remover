@@ -23,6 +23,10 @@ import NtarCore
   - show preview images when loading
 
   - fix bug where zooming and selection gestures correspond
+  - allow dark/light themes
+  - the filmstrip doesn't update very quickly on its own
+  - make sure it overwrites existing output files
+  - use one or more levels of preview to show before full image on screen
 
   NEW UI:
 
@@ -37,10 +41,6 @@ import NtarCore
 
 class FrameView {
     var frame: FrameAirplaneRemover?
-
-    // don't keep these all the time
-    var image: NSImage? 
-    
     var preview_image: NSImage? 
 }
 
@@ -60,10 +60,6 @@ class FramesToCheck {
         return frames[current_index].frame
     }
     
-    var currentImage: NSImage? {
-        return frames[current_index].image
-    }
-
     var currentPreviewImage: NSImage? {
         return frames[current_index].preview_image
     }
@@ -88,10 +84,8 @@ class FramesToCheck {
         Task {
             if let pixImage = try await frame.pixelatedImage() {
                 // generate images here
-                self.frames[frame.frame_index].image = pixImage.baseImage
                 self.frames[frame.frame_index].preview_image =
                   pixImage.baseImage(ofSize: preview_size)
-
                 // XXX refresh ui?
             }
             local_dispatch.leave()
@@ -162,9 +156,9 @@ class ntar_gui_app: App {
             //let outlier_dirname = "/pp/tmp/LRT_12_22_2022-a9-2-aurora-topaz-ntar-v-0_1_3-outliers"
             //let outlier_dirname = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/test_small_medium-ntar-v-0_1_3-outliers"
 
-            let outlier_dirname = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/test_a7sii_100-ntar-v-0_1_3-outliers"
+            //let outlier_dirname = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/test_a7sii_100-ntar-v-0_1_3-outliers"
 
-            //let outlier_dirname = "/qp/tmp/LRT_09_24_2022-a7iv-2-aurora-topaz-ntar-v-0_1_3-outliers"
+            let outlier_dirname = "/qp/tmp/LRT_09_24_2022-a7iv-2-aurora-topaz-ntar-v-0_1_3-outliers"
             
             outlier_json_startup(with: outlier_dirname)
             
@@ -330,11 +324,23 @@ class ntar_gui_app: App {
 
         Log.d("addToViewModel self.viewModel.frame \(self.viewModel.frame)")
         if self.viewModel.frame == nil,
-           self.viewModel.framesToCheck.current_index == new_frame.frame_index,
-           let image = self.viewModel.framesToCheck.currentImage
+           self.viewModel.framesToCheck.current_index == new_frame.frame_index
         {
             Log.i("got frame index \(new_frame.frame_index)")
-            self.viewModel.image = Image(nsImage: image)
+
+            do {
+                if let baseImage = try await new_frame.baseImage() {
+                    self.viewModel.image = Image(nsImage: baseImage)
+                    await self.viewModel.update()
+                }
+            } catch {
+                Log.e("error")
+            }
+
+            
+            // XXX get this from the frame
+            //            self.viewModel.image = Image(nsImage: image)
+            
             self.viewModel.frame = new_frame
             // Perform UI updates
             await self.viewModel.update()
