@@ -88,7 +88,8 @@ class ViewModel: ObservableObject {
         }
         Task {
 //            try? await Task.sleep(nanoseconds: 5_000_000_000)
-            await MainActor.run {
+            await MainActor.run
+            {                   // XXX this VVV isn't always right, it changes sometimes
                 outlierCount = outlierViews.count
                 self.objectWillChange.send()
             }
@@ -283,16 +284,14 @@ struct ContentView: View {
     func clearAndSave(frame frame_to_save: FrameAirplaneRemover) async {
             
         if let eraser = viewModel.eraser,
-           let fp = eraser.final_processor//,
-//           false            // XXX save is broken???
+           let fp = eraser.final_processor
         {
-
             /*
              ideally we could keep these frames to finish in a queue of some kind
              and use some kind of timer
              */
             
-            // XXX this logic may need updating
+            // XXX this logic NEEDS updating
             var finish_this_one = true
             if let done_already = done_frames[frame_to_save.frame_index],
                done_already
@@ -308,9 +307,9 @@ struct ContentView: View {
                     Log.i("frame \(frame_to_save.frame_index) finished")
                 }
             }
+        } else {
+            Log.w("cannot save frame \(frame_to_save.frame_index)")
         }
-
-
     }
     
     var body: some View {

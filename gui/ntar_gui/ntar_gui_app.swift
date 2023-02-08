@@ -19,19 +19,27 @@ import NtarCore
   - add ability to have selection work for just part of outlier group, or all like now
   - have streak detection take notice of user choices before processing further frames
 
+  - add meteor detection phase, which the backend will use to accentuate this outlier
+
   - fix bug where zooming and selection gestures correspond
   - allow dark/light themes
   - the filmstrip doesn't update very quickly on its own
   - make it overwrite existing output files
   - fix final queue usage from UI so it doesn't crash by trying to save the same frame twice
+  - use something besides json for storying outlier groups to file?
+
+  - use https://github.com/christophhagen/BinaryCodable instead of json for outlier groups
+
+  - back/forward doesn't work on unloaded frames
 
   NEW UI:
 
   - have a render all button
   - add filter options by frame state to constrain the filmstrip
-  
+  - make filmstrip sizeable by dragging the top of it
  */
 
+// UI view class used for each frame
 class FrameView {
     init(_ frame_index: Int) {
         self.frame_index = frame_index
@@ -42,15 +50,22 @@ class FrameView {
     var preview_image: NSImage? 
 }
 
+// allow intiazliation of an array with objects of some type that know their index
 extension Array {
     public init(count: Int, elementMaker: (Int) -> Element) {
         self = (0 ..< count).map { i in elementMaker(i) }
     }
 }
 
+// view model used for the entire sequence
 class FramesToCheck {
+    // overall view model
     var viewModel: ViewModel? = nil
+
+    // view class for each frame in the sequence in order
     var frames: [FrameView] = []
+
+    // currently selected index in the sequence
     var current_index = 0      
     
     init() { }
