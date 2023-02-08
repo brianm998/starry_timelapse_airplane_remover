@@ -40,17 +40,23 @@ import NtarCore
  */
 
 class FrameView {
+    init(_ frame_index: Int) {
+        self.frame_index = frame_index
+    }
+    
+    let frame_index: Int
     var frame: FrameAirplaneRemover?
     var preview_image: NSImage? 
 }
 
 extension Array {
-    public init(count: Int, elementMaker: () -> Element) {
-        self = (0 ..< count).map { _ in elementMaker() }
+    public init(count: Int, elementMaker: (Int) -> Element) {
+        self = (0 ..< count).map { i in elementMaker(i) }
     }
 }
 
 class FramesToCheck {
+    var viewModel: ViewModel? = nil
     var frames: [FrameView] = []
     var current_index = 0      
     
@@ -65,7 +71,7 @@ class FramesToCheck {
     }
     
     init(number: Int) {
-        frames = Array<FrameView>(count: number) { FrameView() }
+        frames = Array<FrameView>(count: number) { i in FrameView(i) }
     }
     
     func isDone() -> Bool {
@@ -86,6 +92,11 @@ class FramesToCheck {
                 // generate images here
                 self.frames[frame.frame_index].preview_image =
                   pixImage.baseImage(ofSize: preview_size)
+
+//                await MainActor.run {
+                    self.viewModel?.objectWillChange.send()
+//                }
+                
                 // XXX refresh ui?
             }
             local_dispatch.leave()
@@ -326,8 +337,12 @@ class ntar_gui_app: App {
         if self.viewModel.frame == nil,
            self.viewModel.framesToCheck.current_index == new_frame.frame_index
         {
+            self.viewModel.label_text = "frame \(new_frame.frame_index)"
+
             Log.i("got frame index \(new_frame.frame_index)")
 
+            // XXX not getting preview here
+            
             do {
                 if let baseImage = try await new_frame.baseImage() {
                     self.viewModel.image = Image(nsImage: baseImage)
@@ -337,16 +352,11 @@ class ntar_gui_app: App {
                 Log.e("error")
             }
 
-            
-            // XXX get this from the frame
-            //            self.viewModel.image = Image(nsImage: image)
-            
             self.viewModel.frame = new_frame
             // Perform UI updates
             await self.viewModel.update()
             
             Log.d("XXX self.viewModel.image = \(self.viewModel.image)")
-
         }
     }
     

@@ -34,6 +34,7 @@ class ViewModel: ObservableObject {
     var outlierViews: [OutlierGroupView] = []
     var outlierCount: Int = 0
     var image: Image?
+    var no_image_explaination_text: String = "Loading..."
 
     var frame_width: CGFloat = 300
     var frame_height: CGFloat = 300
@@ -44,6 +45,7 @@ class ViewModel: ObservableObject {
     
     init(framesToCheck: FramesToCheck) {
         self.framesToCheck = framesToCheck
+        self.framesToCheck.viewModel = self
     }
     
     func update() async {
@@ -51,11 +53,10 @@ class ViewModel: ObservableObject {
             await MainActor.run {
                 frame = nil
                 outlierViews = []
-                image = Image(systemName: "globe")
+                image = Image(systemName: "globe").resizable()
             }
         }
         if let frame = frame {
-            label_text = "frame \(frame.frame_index)"
             let (outlierGroups, frame_width, frame_height) =
               await (frame.outlierGroups(), frame.width, frame.height)
             
@@ -325,9 +326,11 @@ struct ContentView: View {
                         }
                     }
                 } else {
-                    Image(systemName: "globe")
-                      .imageScale(.large)
-                      .foregroundColor(.accentColor)
+                    ZStack {
+                        Rectangle()
+                          .foregroundColor(.yellow)
+                        Text(viewModel.no_image_explaination_text)
+                    }
                 }
                 HStack {
                     Text(viewModel.label_text)
@@ -438,6 +441,8 @@ struct ContentView: View {
     func transition(toFrame new_frame_view: FrameView,
                     withScroll scroller: ScrollViewProxy? = nil)
     {
+        viewModel.label_text = "frame \(new_frame_view.frame_index)"
+
         if let frame_to_save = viewModel.frame {
             Task {
                 await self.clearAndSave(frame: frame_to_save)
@@ -471,7 +476,7 @@ struct ContentView: View {
         } else {
             viewModel.frame = nil
             viewModel.outlierViews = []
-            viewModel.image = Image(systemName: "person")
+            //viewModel.image = Image(systemName: "person").resizable()
             Task { await viewModel.update() }
         }
     }
