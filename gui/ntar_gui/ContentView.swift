@@ -264,35 +264,11 @@ struct ContentView: View {
               //viewModel.frame = nil
               //viewModel.label_text = "loading..."
         // XXX set loading image here
-
-              if let frame_to_save = viewModel.frame {
-                  Task {
-                      await self.clearAndSave(frame: frame_to_save)
-                  }
-              }
               // grab frame and try to show it
               let frame_view = viewModel.framesToCheck.frames[frame_index]
-              if let next_frame = frame_view.frame {
-                  viewModel.framesToCheck.current_index = frame_index
-                  viewModel.frame = next_frame
-                  // grab this from the frame async
+              viewModel.framesToCheck.current_index = frame_index
 
-                  Task { // XXX duplicated code
-                      do {
-                          if let baseImage = try await next_frame.baseImage() {
-                              viewModel.image = Image(nsImage: baseImage)
-                              await viewModel.update()
-                          }
-                      } catch {
-                          Log.e("error")
-                      }
-                  }
-              } else {
-                  viewModel.frame = nil
-                  viewModel.outlierViews = []
-                  viewModel.image = Image(systemName: "person")
-                  Task { await viewModel.update() }
-              }
+              self.transition(toFrame: frame_view)
           }
 
     }
@@ -384,37 +360,9 @@ struct ContentView: View {
         //viewModel.label_text = "loading..."
         // XXX set loading image here
 
-                                       
-                                if let frame_to_save = viewModel.frame {
-                                    Task {
-                                        await self.clearAndSave(frame: frame_to_save)
-                                    }
-                                }
-
-                                let frame_view = viewModel.framesToCheck.previousFrame()
-                                if let next_frame = frame_view.frame {
-                                    viewModel.frame = next_frame
-
-                                    // get this async from the frame
-                                    Task { // XXX duplicated code
-                                        do {
-                                            if let baseImage = try await next_frame.baseImage() {
-                                                viewModel.image = Image(nsImage: baseImage)
-                                                await viewModel.update()
-                                            }
-                                        } catch {
-                                            Log.e("error")
-                                        }
-                                    }
-
-
-                                    scroller.scrollTo(next_frame.frame_index)
-                                } else {
-                                    viewModel.frame = nil
-                                    viewModel.outlierViews = []
-                                    viewModel.image = Image(systemName: "person")
-                                    Task { await viewModel.update() }
-                                }
+                                let new_frame_view = viewModel.framesToCheck.previousFrame()
+                                self.transition(toFrame: new_frame_view,
+                                                withScroll: scroller)
                             }) {
                                 Text("Previous").font(.largeTitle)
                             }.buttonStyle(PlainButtonStyle())
@@ -430,34 +378,11 @@ struct ContentView: View {
         //viewModel.label_text = "loading..."
         // XXX set loading image here
 
-                                if let frame_to_save = viewModel.frame {
-                                    Task {
-                                        await self.clearAndSave(frame: frame_to_save)
-                                    }
-                                }
                                 Log.d("viewModel.framesToCheck.current_index = \(viewModel.framesToCheck.current_index)")
                                 let frame_view = viewModel.framesToCheck.nextFrame()
-                                if let next_frame = frame_view.frame {
-                                    Log.d("next button pressed for frame \(next_frame.frame_index)")
-                                    viewModel.frame = next_frame
-                                    // get this async from the frame
-                                    Task { // XXX duplicated code
-                                        do {
-                                            if let baseImage = try await next_frame.baseImage() {
-                                                viewModel.image = Image(nsImage: baseImage)
-                                                await viewModel.update()
-                                            }
-                                        } catch {
-                                            Log.e("error")
-                                        }
-                                    }
-                                    scroller.scrollTo(next_frame.frame_index)
-                                } else {
-                                    viewModel.frame = nil
-                                    viewModel.outlierViews = []
-                                    viewModel.image = Image(systemName: "person")
-                                    Task { await viewModel.update() }
-                                }
+
+                                self.transition(toFrame: frame_view,
+                                                withScroll: scroller)
                             }) {
                                 Text("Next").font(.largeTitle)
                             }
@@ -507,6 +432,47 @@ struct ContentView: View {
                 }
             }.frame(maxWidth: .infinity, maxHeight: .infinity)
               .padding()
+        }
+    }
+
+    func transition(toFrame new_frame_view: FrameView,
+                    withScroll scroller: ScrollViewProxy? = nil)
+    {
+        if let frame_to_save = viewModel.frame {
+            Task {
+                await self.clearAndSave(frame: frame_to_save)
+            }
+        }
+        
+        if let next_frame = new_frame_view.frame {
+            viewModel.frame = next_frame
+
+            // stick the preview image in there if we have it
+            if let preview_image = new_frame_view.preview_image {
+                viewModel.image = Image(nsImage: preview_image).resizable()
+                Task {
+                    await viewModel.update()
+                }
+            }
+            
+            // get the full resolution image async from the frame
+            Task {
+                do {
+                    if let baseImage = try await next_frame.baseImage() {
+                        viewModel.image = Image(nsImage: baseImage)
+                        await viewModel.update()
+                    }
+                } catch {
+                    Log.e("error")
+                }
+            }
+            
+            scroller?.scrollTo(next_frame.frame_index)
+        } else {
+            viewModel.frame = nil
+            viewModel.outlierViews = []
+            viewModel.image = Image(systemName: "person")
+            Task { await viewModel.update() }
         }
     }
 }
