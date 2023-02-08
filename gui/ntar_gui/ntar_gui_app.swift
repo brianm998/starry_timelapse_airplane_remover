@@ -13,27 +13,20 @@ import NtarCore
  UI Improvements:
   - scroll back and forth through frames
   - don't finish frames until some number later
-  - make frames go in order
-  - make a filmstrip below to show the status of each frame
   - improve speed when still processing files
   - overlier hover to give paint reason and size
   - feature to split outlier groups apart
   - add ability to have selection work for just part of outlier group, or all like now
   - have streak detection take notice of user choices before processing further frames
-  - show preview images when loading
 
   - fix bug where zooming and selection gestures correspond
   - allow dark/light themes
   - the filmstrip doesn't update very quickly on its own
-  - make sure it overwrites existing output files
-  - use one or more levels of preview to show before full image on screen
+  - make it overwrite existing output files
+  - fix final queue usage from UI so it doesn't crash by trying to save the same frame twice
 
   NEW UI:
 
-  - load all frames into filmstrip, even when already existing output files are there
-  - show frame status w/ color and/or text
-  - when a frame is left, for any reason, save it
-  - whan a saved frame is re-visited, re-open it
   - have a render all button
   - add filter options by frame state to constrain the filmstrip
   

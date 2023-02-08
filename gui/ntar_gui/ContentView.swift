@@ -181,12 +181,12 @@ struct ContentView: View {
                 Rectangle()
                   .fill((selection_causes_painting ?
                           Color.red :
-                          Color.green).opacity(0.1))
+                          Color.green).opacity(0.2))
                   .overlay(
                     Rectangle()
-                      .stroke(style: StrokeStyle(lineWidth: 1))
+                      .stroke(style: StrokeStyle(lineWidth: 2))
                       .foregroundColor((selection_causes_painting ?
-                                          Color.red : Color.green).opacity(0.5))
+                                          Color.red : Color.green).opacity(0.8))
                   )                
                   .frame(width: width, height: height)
                   .offset(x: CGFloat(-viewModel.frame_width/2) + drag_x_offset - width/2,
@@ -197,7 +197,6 @@ struct ContentView: View {
         // add a drag gesture to allow selecting outliers for painting or not
         // XXX selecting and zooming conflict with eachother
           .gesture(DragGesture()
-            
                    .onChanged { gesture in
                        isDragging = true
                        let location = gesture.location
@@ -240,21 +239,26 @@ struct ContentView: View {
 
         return ZStack {
             let frameView = viewModel.framesToCheck.frames[frame_index]
-            
-            if frameView.preview_image == nil {
-              Rectangle()
-                .foregroundColor(bg_color)
-            } else if viewModel.framesToCheck.current_index == frame_index {
-                // highlight the selected frame
-                let opacity = viewModel.framesToCheck.current_index == frame_index ? 0.3 : 0
-                Image(nsImage: frameView.preview_image!)
-                  .overlay(
-                    Rectangle()
-                      .foregroundColor(.orange).opacity(opacity)
-                      )
 
+            if viewModel.framesToCheck.current_index == frame_index {            
+                if frameView.preview_image == nil {
+                    Rectangle().foregroundColor(.orange)
+                } else {
+                    // highlight the selected frame
+                    let opacity = viewModel.framesToCheck.current_index == frame_index ? 0.4 : 0
+                    Image(nsImage: frameView.preview_image!)
+                      .overlay(
+                        Rectangle()
+                          .foregroundColor(.orange).opacity(opacity)
+                      )
+                }
             } else {
-                Image(nsImage: frameView.preview_image!)
+                if frameView.preview_image == nil {
+                    Rectangle()
+                      .foregroundColor(bg_color)
+                } else {
+                    Image(nsImage: frameView.preview_image!)
+                }
             }
             Text("\(frame_index)")
 
@@ -262,8 +266,9 @@ struct ContentView: View {
           .frame(width: 80, height: 50)
           .onTapGesture {
         // XXX move this out 
-              //viewModel.frame = nil
-              //viewModel.label_text = "loading..."
+        viewModel.frame = nil
+        viewModel.image = nil
+        viewModel.label_text = "loading..."
         // XXX set loading image here
               // grab frame and try to show it
               let frame_view = viewModel.framesToCheck.frames[frame_index]
@@ -359,8 +364,9 @@ struct ContentView: View {
                             // previous button
                             Button(action: {
         // XXX move this out 
-        //viewModel.frame = nil
-        //viewModel.label_text = "loading..."
+        viewModel.frame = nil
+        viewModel.image = nil
+        viewModel.label_text = "loading..."
         // XXX set loading image here
 
                                 let new_frame_view = viewModel.framesToCheck.previousFrame()
@@ -377,8 +383,9 @@ struct ContentView: View {
                             Button(action: {
                                 Log.d("next button pressed")
         // XXX move this out 
-        //viewModel.frame = nil
-        //viewModel.label_text = "loading..."
+        viewModel.frame = nil
+        viewModel.image = nil
+        viewModel.label_text = "loading..."
         // XXX set loading image here
 
                                 Log.d("viewModel.framesToCheck.current_index = \(viewModel.framesToCheck.current_index)")
