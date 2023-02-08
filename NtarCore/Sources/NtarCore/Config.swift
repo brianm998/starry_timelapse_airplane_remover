@@ -212,13 +212,8 @@ public class Callbacks {
     public var updatable: UpdatableLog?
 
     public var frameStateChangeCallback: ((FrameAirplaneRemover, FrameProcessingState) -> ())?
-
-    // called for the user to check a frame
+    // called for the user to see a frame
     public var frameCheckClosure: ((FrameAirplaneRemover) async -> ())?
-
-    // called when the user is not asked to check this frame
-    // happens when there are no outlier groups for a frame
-    public var frameNotCheckedClosure: ((FrameAirplaneRemover) async -> ())?
 
     // called by the final processor to keep running when user is checking frames
     public var countOfFramesToCheck: (() async -> Int)?

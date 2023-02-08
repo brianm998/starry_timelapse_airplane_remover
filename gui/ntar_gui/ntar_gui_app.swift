@@ -32,11 +32,17 @@ import NtarCore
 
   - back/forward doesn't work on unloaded frames
 
+  - allow showing changed frames too
+
+  - use bigger preview to try to enable smooth scrool scrubbing of the video,
+    and maybe playing it too
+  
   NEW UI:
 
   - have a render all button
   - add filter options by frame state to constrain the filmstrip
   - make filmstrip sizeable by dragging the top of it
+  - make it possible to play the video based upon previews
  */
 
 // UI view class used for each frame
@@ -163,6 +169,8 @@ class ntar_gui_app: App {
     
     required init() {
         viewModel = ViewModel(framesToCheck: FramesToCheck())
+
+        
         Log.handlers[.console] = ConsoleLogHandler(at: .debug)
         Log.i("Starting Up")
 
@@ -206,6 +214,12 @@ class ntar_gui_app: App {
                                                           callbacks: callbacks,
                                                           processExistingFiles: true)
                 self.viewModel.eraser = eraser // XXX rename this crap
+
+                if let fp = eraser.final_processor {
+                    self.viewModel.frameSaveQueue = FrameSaveQueue(fp)
+                } else {
+                    fatalError("fucking fix this")
+                }
                 
             } catch {
                 Log.e("\(error)")
@@ -280,6 +294,14 @@ class ntar_gui_app: App {
                 self.viewModel.eraser = eraser // XXX rename this crap
                 //                            try eraser.run()
 
+
+                if let fp = eraser.final_processor {
+                    self.viewModel.frameSaveQueue = FrameSaveQueue(fp)
+                } else {
+                    fatalError("fucking fix this")
+                }
+
+                
                 Log.i("done running")
                 
             } catch {
@@ -320,13 +342,6 @@ class ntar_gui_app: App {
         }
 
         // called when we should check a frame
-        callbacks.frameNotCheckedClosure = { frame in
-            Task {
-                await self.addToViewModel(frame: frame)
-            }
-        }
-
-        // called when we should check a frame
         callbacks.frameCheckClosure = { new_frame in
             Log.d("frameCheckClosure for frame \(new_frame.frame_index)")
             Task {
@@ -342,6 +357,8 @@ class ntar_gui_app: App {
         self.viewModel.framesToCheck.append(frame: new_frame)
 
         Log.d("addToViewModel self.viewModel.frame \(self.viewModel.frame)")
+
+        // is this the currently selected frame?
         if self.viewModel.frame == nil,
            self.viewModel.framesToCheck.current_index == new_frame.frame_index
         {

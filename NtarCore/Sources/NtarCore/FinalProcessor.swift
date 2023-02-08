@@ -194,16 +194,9 @@ public actor FinalProcessor {
         
         if let frameCheckClosure = callbacks.frameCheckClosure
         {
-            if await frame.outlierGroupCount > 0 {
-                Log.d("calling frame check closure for frame \(frame.frame_index)")
-                // gui
-                await frameCheckClosure(frame)
-                return
-            }
-
-            if let frameNotCheckedClosure = callbacks.frameNotCheckedClosure {
-                await frameNotCheckedClosure(frame)
-            }
+            // gui
+            await frameCheckClosure(frame)
+            return
         }            
 
         // cli and not checked frames go to the finish queue
