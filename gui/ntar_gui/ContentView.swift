@@ -38,19 +38,6 @@ class ViewModel: ObservableObject {
     var frame_width: CGFloat = 300
     var frame_height: CGFloat = 300
     
-    // frame states as individual values
-    var number_unprocessed: Int = 0
-    var number_loadingImages: Int = 0
-    var number_detectingOutliers: Int = 0
-    var number_readyForInterFrameProcessing: Int = 0
-    var number_interFrameProcessing: Int = 0
-    var number_outlierProcessingComplete: Int = 0
-    // XXX add gui check step?
-    var number_reloadingImages: Int = 0
-    var number_painting: Int = 0
-    var number_writingOutputFile: Int = 0
-    var number_complete: Int = 0
-
     var label_text: String = "Started"
 
     var image_sequence_size: Int = 0
@@ -251,32 +238,102 @@ struct ContentView: View {
         }
 
         return ZStack {
-            Rectangle()
-              .foregroundColor(bg_color)
+            let frameView = viewModel.framesToCheck.frames[frame_index]
+
+            
+            if frameView.preview_image == nil {
+              Rectangle()
+                .foregroundColor(bg_color)
+            } else if viewModel.framesToCheck.current_index == frame_index {
+                // highlight the selected frame
+                let opacity = viewModel.framesToCheck.current_index == frame_index ? 0.3 : 0
+                Image(nsImage: frameView.preview_image!)
+                  .overlay(
+                    Rectangle()
+                      // XXX this stoke works, but could look better
+//                      .stroke(style: StrokeStyle(lineWidth: 4))
+                      .foregroundColor(.orange).opacity(opacity)
+                      )
+
+            } else {
+                Image(nsImage: frameView.preview_image!)
+            }
             Text("\(frame_index)")
+            
+            /*
+            if let preview_image = frameView.preview_image {
+               Image(nsImage: preview_image)
+               } else {
+             */
+//                Rectangle()
+//                  .foregroundColor(bg_color)
+//            }
+//            Text("\(frame_index)")
             // XXX add status
         }
           .frame(width: 80, height: 50)
           .onTapGesture {
-              Task {
-                  // grab frame and try to show it
-                  if let next_frame = viewModel.framesToCheck.frame(atIndex: frame_index),
-                     let baseImage = try await next_frame.baseImage()
-                  {
-                      viewModel.frame = next_frame
-                      viewModel.image = Image(nsImage: baseImage)
-                      await viewModel.update()
-                  } else {
-                      viewModel.frame = nil
-                      viewModel.outlierViews = []
-                      viewModel.image = Image(systemName: "person")
-                      await viewModel.update()
+        // XXX move this out 
+              //viewModel.frame = nil
+              //viewModel.label_text = "loading..."
+        // XXX set loading image here
+
+              if let frame_to_save = viewModel.frame {
+                  Task {
+                      await self.clearAndSave(frame: frame_to_save)
                   }
               }
+              // grab frame and try to show it
+              let frame_view = viewModel.framesToCheck.frames[frame_index]
+              if let next_frame = frame_view.frame,
+                 let image = frame_view.image
+              {
+                  viewModel.framesToCheck.current_index = frame_index
+                  viewModel.frame = next_frame
+                  viewModel.image = Image(nsImage: image)
+              } else {
+                  viewModel.frame = nil
+                  viewModel.outlierViews = []
+                  viewModel.image = Image(systemName: "person")
+              }
+              Task { await viewModel.update() }
           }
 
     }
 
+    // used when advancing between frames
+    func clearAndSave(frame frame_to_save: FrameAirplaneRemover) async {
+            
+        if let eraser = viewModel.eraser,
+           let fp = eraser.final_processor//,
+//           false            // XXX save is broken???
+        {
+
+            /*
+             ideally we could keep these frames to finish in a queue of some kind
+             and use some kind of timer
+             */
+            
+            // XXX this logic may need updating
+            var finish_this_one = true
+            if let done_already = done_frames[frame_to_save.frame_index],
+               done_already
+            {
+                finish_this_one = false
+            }
+            if finish_this_one {
+                // add to final queue
+                done_frames[frame_to_save.frame_index] = true
+                await fp.final_queue.add(atIndex: frame_to_save.frame_index) {
+                    Log.i("frame \(frame_to_save.frame_index) finishing")
+                    try await frame_to_save.finish()
+                    Log.i("frame \(frame_to_save.frame_index) finished")
+                }
+            }
+        }
+
+
+    }
     
     var body: some View {
         let scaling_anchor = UnitPoint(x: 0.75, y: 0.75)
@@ -306,6 +363,7 @@ struct ContentView: View {
                         Text("has \(viewModel.outlierCount) outliers")
                     }
                 }
+                ScrollViewReader { scroller in
                 VStack {
                     HStack {
                         if !running {
@@ -323,52 +381,75 @@ struct ContentView: View {
                                 Text("START").font(.largeTitle)
                             }.buttonStyle(PlainButtonStyle())
                         } else {
+                            // previous button
                             Button(action: {
-                                // XXX move this task to a method somewhere else
-                                let foobar = viewModel.frame
-                                viewModel.frame = nil
-                                viewModel.label_text = "loading..."
-                                // XXX set loading image here
-                                Task {
-                                    if let frame_to_remove = foobar {
-                                        //await viewModel.framesToCheck.remove(frame: frame_to_remove)
-                                        
-                                        if let eraser = viewModel.eraser,
-                                           let fp = eraser.final_processor
-                                        {
-                                            var finish_this_one = true
-                                            if let done_already = done_frames[frame_to_remove.frame_index],
-                                               done_already
-                                            {
-                                                finish_this_one = false
-                                            }
-                                            if finish_this_one {
-                                                // add to final queue
-                                                done_frames[frame_to_remove.frame_index] = true
-                                                await fp.final_queue.add(atIndex: frame_to_remove.frame_index) {
-                                                    Log.i("frame \(frame_to_remove.frame_index) finishing")
-                                                    try await frame_to_remove.finish()
-                                                    Log.i("frame \(frame_to_remove.frame_index) finished")
-                                                }
-                                            }
-                                        }
-                                    }
-                                    if let next_frame = viewModel.framesToCheck.nextFrame(),
-                                       let baseImage = try await next_frame.baseImage()
-                                    {
-                                        viewModel.frame = next_frame
-                                        viewModel.image = Image(nsImage: baseImage)
-                                        await viewModel.update()
-                                    } else {
-                                        viewModel.frame = nil
-                                        viewModel.outlierViews = []
-                                        viewModel.image = Image(systemName: "person")
-                                        await viewModel.update()
+        // XXX move this out 
+        //viewModel.frame = nil
+        //viewModel.label_text = "loading..."
+        // XXX set loading image here
+
+                                       
+                                if let frame_to_save = viewModel.frame {
+                                    Task {
+                                        await self.clearAndSave(frame: frame_to_save)
                                     }
                                 }
+
+                                let frame_view = viewModel.framesToCheck.previousFrame()
+                                if let next_frame = frame_view.frame,
+                                   let baseImage = frame_view.image
+                                {
+                                    viewModel.frame = next_frame
+                                    viewModel.image = Image(nsImage: baseImage)
+                                    scroller.scrollTo(next_frame.frame_index)
+                                } else {
+                                    viewModel.frame = nil
+                                    viewModel.outlierViews = []
+                                    viewModel.image = Image(systemName: "person")
+                                }
+                                Task { await viewModel.update() }
                             }) {
-                                Text("DONE").font(.largeTitle)
+                                Text("Previous").font(.largeTitle)
                             }.buttonStyle(PlainButtonStyle())
+                            //.keyboardShortcut(.rightArrow, modifiers: [])
+                            .keyboardShortcut("a", modifiers: [])
+                              .disabled(viewModel.frame == nil)
+
+                            // next button
+                            Button(action: {
+                                Log.d("next button pressed")
+        // XXX move this out 
+        //viewModel.frame = nil
+        //viewModel.label_text = "loading..."
+        // XXX set loading image here
+
+                                if let frame_to_save = viewModel.frame {
+                                    Task {
+                                        await self.clearAndSave(frame: frame_to_save)
+                                    }
+                                }
+                                Log.d("viewModel.framesToCheck.current_index = \(viewModel.framesToCheck.current_index)")
+                                let frame_view = viewModel.framesToCheck.nextFrame()
+                                if let next_frame = frame_view.frame,
+                                   let baseImage = frame_view.image
+                                {
+                                    Log.d("next button pressed for frame \(next_frame.frame_index)")
+                                    viewModel.frame = next_frame
+                                    viewModel.image = Image(nsImage: baseImage)
+                                    scroller.scrollTo(next_frame.frame_index)
+                                } else {
+                                    viewModel.frame = nil
+                                    viewModel.outlierViews = []
+                                    viewModel.image = Image(systemName: "person")
+                                }
+                                Task { await viewModel.update() }
+                            }) {
+                                Text("Next").font(.largeTitle)
+                            }
+                            // XXX why doesn't .rightArrow work?
+                            //.keyboardShortcut(KeyEquivalent.rightArrow, modifiers: [])
+                            .keyboardShortcut("s", modifiers: [])
+                            .buttonStyle(PlainButtonStyle())
                               .disabled(viewModel.frame == nil)
                         }
                         Button(action: {
@@ -379,6 +460,8 @@ struct ContentView: View {
                         }) {
                             Text("Paint All").font(.largeTitle)
                         }.buttonStyle(PlainButtonStyle())
+                         .keyboardShortcut("p", modifiers: [])
+                        
                         Button(action: {
                             Task {
                                 await viewModel.frame?.userSelectAllOutliers(toShouldPaint: false)
@@ -387,14 +470,16 @@ struct ContentView: View {
                         }) {
                             Text("Clear All").font(.largeTitle)
                         }.buttonStyle(PlainButtonStyle())
+                         .keyboardShortcut("c", modifiers: [])
                     }
                     HStack {
                         Toggle("show outliers", isOn: $showOutliers)
+                          .keyboardShortcut("o", modifiers: [])
                         Toggle("selection causes paint", isOn: $selection_causes_painting)
+                          .keyboardShortcut("t", modifiers: []) // XXX find better modifier
                     }
 
-                    if viewModel.image_sequence_size > 0 {
-                        // the filmstrip at the bottom
+                    // the filmstrip at the bottom
                         ScrollView(.horizontal) {
                             HStack(spacing: 5) {
                                 ForEach(0..<viewModel.image_sequence_size, id: \.self) { frame_index in
@@ -404,24 +489,6 @@ struct ContentView: View {
                             }
                         }.frame(maxWidth: .infinity, maxHeight: 50)
                     }
-
-                    
-                /*
-                 this looks bad and barely works, replace it with a filmstrip
-                HStack {
-                    Text("\(viewModel.number_unprocessed) unprocessed")
-                    Text("\(viewModel.number_loadingImages) loadingImages")
-                    Text("\(viewModel.number_detectingOutliers) detectingOutliers")
-                    Text("\(viewModel.number_readyForInterFrameProcessing) readyForInterFrameProcessing")
-                    Text("\(viewModel.number_interFrameProcessing) interFrameProcessing")
-                    Text("\(viewModel.number_outlierProcessingComplete) outlierProcessingComplete")
-                    // XXX add gui check step?
-                    Text("\(viewModel.number_reloadingImages) reloadingImages")
-                    Text("\(viewModel.number_painting) painting")
-                    Text("\(viewModel.number_writingOutputFile) writingOutputFile")
-                    Text("\(viewModel.number_complete) complete")
-                    }
-                 */
                 }
             }.frame(maxWidth: .infinity, maxHeight: .infinity)
               .padding()

@@ -34,7 +34,9 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
 
     public var final_processor: FinalProcessor?    
 
-    public init(with config: Config, callbacks: Callbacks) throws {
+    public init(with config: Config,
+                callbacks: Callbacks,
+                processExistingFiles: Bool) throws {
         self.config = config
         self.callbacks = callbacks
 
@@ -48,7 +50,8 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
                        outputDirname: "\(config.outputPath)/\(basename)",
                        maxConcurrent: config.numConcurrentRenders,
                        supported_image_file_types: config.supported_image_file_types,
-                       number_final_processing_neighbors_needed: config.number_final_processing_neighbors_needed);
+                       number_final_processing_neighbors_needed: config.number_final_processing_neighbors_needed,
+                       processExistingFiles: processExistingFiles);
 
         let image_sequence_size = /*self.*/image_sequence.filenames.count
 

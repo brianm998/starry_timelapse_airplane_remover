@@ -363,7 +363,9 @@ struct Ntar: ParsableCommand {
                 let local_dispatch = DispatchGroup()
                 local_dispatch.enter()
                 Task {
-                    let eraser = try NighttimeAirplaneRemover(with: config, callbacks: callbacks)
+                    let eraser = try NighttimeAirplaneRemover(with: config,
+                                                              callbacks: callbacks,
+                                                              processExistingFiles: false)
 
                     var upm: UpdatableProgressMonitor?
 

@@ -31,41 +31,100 @@ import NtarCore
   - when a frame is left, for any reason, save it
   - whan a saved frame is re-visited, re-open it
   - have a render all button
+  - add filter options by frame state to constrain the filmstrip
   
  */
+
+class FrameView {
+    var frame: FrameAirplaneRemover?
+
+    // don't keep these all the time
+    var image: NSImage? 
+    
+    var preview_image: NSImage? 
+}
+
+extension Array {
+    public init(count: Int, elementMaker: () -> Element) {
+        self = (0 ..< count).map { _ in elementMaker() }
+    }
+}
+
 class FramesToCheck {
-    var frames: [FrameAirplaneRemover?] = []
-    var current_index = 0
+    var frames: [FrameView] = []
+    var current_index = 0      
     
     init() { }
+
+    var currentFrame: FrameAirplaneRemover? {
+        return frames[current_index].frame
+    }
     
-    init(number: Int) {
-        frames = Array<FrameAirplaneRemover?>(repeating: nil, count: number)
+    var currentImage: NSImage? {
+        return frames[current_index].image
     }
 
+    var currentPreviewImage: NSImage? {
+        return frames[current_index].preview_image
+    }
+    
+    init(number: Int) {
+        frames = Array<FrameView>(count: number) { FrameView() }
+    }
+    
     func isDone() -> Bool {
         return current_index >= frames.count
     }
 
     func append(frame: FrameAirplaneRemover) {
-        self.frames[frame.frame_index] = frame
+        Log.d("appending frame \(frame.frame_index)")
+        self.frames[frame.frame_index].frame = frame
+        
+        Log.d("set self.frames[\(frame.frame_index)].frame")
+        // wait for this task
+        let preview_size = NSSize(width: 80, height: 50)
+        let local_dispatch = DispatchGroup()
+        local_dispatch.enter()
+        Task {
+            if let pixImage = try await frame.pixelatedImage() {
+                // generate images here
+                self.frames[frame.frame_index].image = pixImage.baseImage
+                self.frames[frame.frame_index].preview_image =
+                  pixImage.baseImage(ofSize: preview_size)
+
+                // XXX refresh ui?
+            }
+            local_dispatch.leave()
+        }
+        local_dispatch.wait()
     }
 
     func frame(atIndex index: Int) -> FrameAirplaneRemover? {
         if index < 0 { return nil }
         if index >= frames.count { return nil }
-        return frames[index]
+        return frames[index].frame
     }
     
-    func nextFrame() -> FrameAirplaneRemover? {
-        if current_index < frames.count,
-           let frame = frames[current_index]
-        {
-            Log.d("returning next frame @ \(current_index) should equal \(frame.frame_index)")
+    func nextFrame() -> FrameView {
+        if current_index < frames.count - 1 {
             current_index += 1
-            return frame
         }
-        return nil
+        Log.d("next frame returning frame from index \(current_index)")
+        if let frame = frames[current_index].frame {
+            Log.d("frame has index \(frame.frame_index)")
+        } else {
+            Log.d("NO FRAME")
+        }
+        return frames[current_index]
+    }
+
+    func previousFrame() -> FrameView {
+        if current_index > 0 {
+            current_index -= 1
+        } else {
+            current_index = 0
+        }
+        return frames[current_index]
     }
 }
 
@@ -92,18 +151,18 @@ class ntar_gui_app: App {
     required init() {
         viewModel = ViewModel(framesToCheck: FramesToCheck())
         Log.handlers[.console] = ConsoleLogHandler(at: .debug)
-        Log.w("Starting Up")
+        Log.i("Starting Up")
 
-        var use_json = false
+        var use_json = true
 
         if use_json {
             // this path reads a saved json config file, along with potentially
             // a set of saved outlier groups for each frame
             
             //let outlier_dirname = "/pp/tmp/LRT_12_22_2022-a9-2-aurora-topaz-ntar-v-0_1_3-outliers"
-            let outlier_dirname = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/test_small_medium-ntar-v-0_1_3-outliers"
+            //let outlier_dirname = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/test_small_medium-ntar-v-0_1_3-outliers"
 
-            //let outlier_dirname = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/test_a7sii_100-ntar-v-0_1_3-outliers"
+            let outlier_dirname = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/test_a7sii_100-ntar-v-0_1_3-outliers"
 
             //let outlier_dirname = "/qp/tmp/LRT_09_24_2022-a7iv-2-aurora-topaz-ntar-v-0_1_3-outliers"
             
@@ -130,7 +189,9 @@ class ntar_gui_app: App {
 
                 let callbacks = make_callbacks()
                 
-                let eraser = try NighttimeAirplaneRemover(with: config, callbacks: callbacks)
+                let eraser = try NighttimeAirplaneRemover(with: config,
+                                                          callbacks: callbacks,
+                                                          processExistingFiles: true)
                 self.viewModel.eraser = eraser // XXX rename this crap
                 
             } catch {
@@ -199,7 +260,9 @@ class ntar_gui_app: App {
             let callbacks = make_callbacks()
             Log.i("have config")
             do {
-                let eraser = try NighttimeAirplaneRemover(with: config, callbacks: callbacks)
+                let eraser = try NighttimeAirplaneRemover(with: config,
+                                                          callbacks: callbacks,
+                                                          processExistingFiles: true)
                 //                        await Log.dispatchGroup = eraser.dispatchGroup.dispatch_group
                 self.viewModel.eraser = eraser // XXX rename this crap
                 //                            try eraser.run()
@@ -238,7 +301,6 @@ class ntar_gui_app: App {
             Task {
                 await MainActor.run {
                     self.frame_states[frame.frame_index] = state
-                    self.condense_frame_states_into_view_model()
                     self.viewModel.objectWillChange.send()
                 }
             }
@@ -263,72 +325,22 @@ class ntar_gui_app: App {
     }
 
     func addToViewModel(frame new_frame: FrameAirplaneRemover) async {
+        Log.d("addToViewModel(frame: \(new_frame.frame_index))")
         self.viewModel.framesToCheck.append(frame: new_frame)
 
-        // XXX do this when the user clicks on the filmstrip
+        Log.d("addToViewModel self.viewModel.frame \(self.viewModel.frame)")
         if self.viewModel.frame == nil,
            self.viewModel.framesToCheck.current_index == new_frame.frame_index,
-           let frame = self.viewModel.framesToCheck.nextFrame()
+           let image = self.viewModel.framesToCheck.currentImage
         {
-            Log.d("frameCheckClosure 3")
-            Log.i("got frame index \(frame)")
-            do {
-                Log.d("frameCheckClosure 4")
-                if let baseImage = try await frame.baseImage() {
-                    self.viewModel.image = Image(nsImage: baseImage)
-                    self.viewModel.frame = frame
-                    await self.viewModel.update()
-                    
-                    Log.d("XXX self.viewModel.image = \(self.viewModel.image)")
-                    // Perform UI updates
-                }
-            } catch {
-                Log.e("\(error)")
-            }
-        }
-    }
-    
-    // change the mapping of frame to state
-    // to a mapping of state to frame count,
-    // and put it in the view model
-    func condense_frame_states_into_view_model() {
-        viewModel.number_unprocessed = 0
-        viewModel.number_loadingImages = 0
-        viewModel.number_detectingOutliers = 0
-        viewModel.number_readyForInterFrameProcessing = 0
-        viewModel.number_interFrameProcessing = 0
-        viewModel.number_outlierProcessingComplete = 0
-        // XXX add gui check step?
-        viewModel.number_reloadingImages = 0
-        viewModel.number_painting = 0
-        viewModel.number_writingOutputFile = 0
-        viewModel.number_complete = 0
-        
-        for (frame_index, state) in frame_states {
-            switch state {
-            case .unprocessed:
-                viewModel.number_unprocessed += 1
-            case .loadingImages:    
-                viewModel.number_loadingImages += 1
-            case .detectingOutliers:
-                viewModel.number_detectingOutliers += 1
-            case .readyForInterFrameProcessing:
-                viewModel.number_readyForInterFrameProcessing += 1
-            case .interFrameProcessing:
-                viewModel.number_interFrameProcessing += 1
-            case .outlierProcessingComplete:
-                viewModel.number_outlierProcessingComplete += 1
-                // XXX add gui check step?
-                // XXX add gui check step?
-            case .reloadingImages:
-                viewModel.number_reloadingImages += 1
-            case .painting:
-                viewModel.number_painting += 1
-            case .writingOutputFile:
-                viewModel.number_writingOutputFile += 1
-            case .complete:
-                viewModel.number_complete += 1
-            }
+            Log.i("got frame index \(new_frame.frame_index)")
+            self.viewModel.image = Image(nsImage: image)
+            self.viewModel.frame = new_frame
+            // Perform UI updates
+            await self.viewModel.update()
+            
+            Log.d("XXX self.viewModel.image = \(self.viewModel.image)")
+
         }
     }
     

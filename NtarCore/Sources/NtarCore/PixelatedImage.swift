@@ -91,8 +91,12 @@ public class PixelatedImage {
         }
         return pixel
     }
+    
+    public func baseImage(ofSize size: NSSize) -> NSImage? {
+        return self.baseImage?.resized(to: size)
+    }
 
-    var baseImage: NSImage? {
+    public var baseImage: NSImage? {
         do {
             if let base = try image(fromData: raw_image_data) {
                 return NSImage(cgImage: base, size: .zero)
@@ -155,6 +159,28 @@ public class PixelatedImage {
                 Log.d("FUCK")
             }
         }
+    }
+}
+
+extension NSImage {
+    func resized(to newSize: NSSize) -> NSImage? {
+        if let bitmapRep = NSBitmapImageRep(
+            bitmapDataPlanes: nil, pixelsWide: Int(newSize.width), pixelsHigh: Int(newSize.height),
+            bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+            colorSpaceName: .calibratedRGB, bytesPerRow: 0, bitsPerPixel: 0
+        ) {
+            bitmapRep.size = newSize
+            NSGraphicsContext.saveGraphicsState()
+            NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: bitmapRep)
+            draw(in: NSRect(x: 0, y: 0, width: newSize.width, height: newSize.height), from: .zero, operation: .copy, fraction: 1.0)
+            NSGraphicsContext.restoreGraphicsState()
+
+            let resizedImage = NSImage(size: newSize)
+            resizedImage.addRepresentation(bitmapRep)
+            return resizedImage
+        }
+
+        return nil
     }
 }
 
