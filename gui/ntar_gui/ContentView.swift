@@ -463,8 +463,6 @@ struct ContentView: View {
                             Text("Clear All").font(.largeTitle)
                         }.buttonStyle(PlainButtonStyle())
                          .keyboardShortcut("c", modifiers: [])
-                    }
-                    HStack {
                         Toggle("show outliers", isOn: $showOutliers)
                           .keyboardShortcut("o", modifiers: [])
                         Toggle("selection causes paint", isOn: $selection_causes_painting)
