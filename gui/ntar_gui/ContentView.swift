@@ -88,8 +88,6 @@ class ViewModel: ObservableObject {
                     frame_height = new_frame_height
                 }
                 Log.w("INITIAL SIZE [\(frame_width), \(frame_height)]")
-            } else {
-                Log.e("NO INITIAL SIZE :(")
             }
         }
     }
@@ -147,7 +145,7 @@ struct ContentView: View {
     @State private var isDragging = false
     @State private var background_brightness: Double = 0.33
     @State private var background_color: Color = .gray
-    
+
     init(viewModel: ViewModel) {
         self.viewModel = viewModel
     }
@@ -477,12 +475,14 @@ struct ContentView: View {
                     from old_frame: FrameAirplaneRemover?,
                     withScroll scroller: ScrollViewProxy? = nil)
     {
-        Log.d("pergatory transition from \(viewModel.frame)")
+        Log.d("transition from \(viewModel.frame)")
         
         viewModel.label_text = "frame \(new_frame_view.frame_index)"
 
-        if let frame_to_save = old_frame {
-            self.clearAndSave(frame: frame_to_save)
+        if !scrubMode {
+            if let frame_to_save = old_frame {
+                self.clearAndSave(frame: frame_to_save)
+            }
         }
         
         if let next_frame = new_frame_view.frame {

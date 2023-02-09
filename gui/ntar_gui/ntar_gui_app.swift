@@ -38,7 +38,15 @@ import NtarCore
   - of both rendered and original
 
   - outlier groups get wrong when scrolling
-   
+    - kindof fixed it
+
+  - let shift + forward and back move 10-100 spaces instead of one
+  - shortcut to go to the beginning and to the end of the sequence
+  - play button with frame rate slider
+
+  - rename previews/scrub and add and preview size to config
+  - add config option to write out previews of both original and modified images to file
+  - upon load, use the previews if they exist
   
   NEW UI:
 
@@ -146,9 +154,11 @@ class FramesToCheck {
 
                         self.frames[frame.frame_index].outlierViews.append(groupView)
                     } else {
-                        Log.e("NO FUCKING IMAGE")
+                        Log.e("frame \(frame.frame_index) outlier group no image")
                     }
                 }
+            } else {
+                Log.e("frame \(frame.frame_index) no image")
             }
             
             // refresh ui
@@ -227,7 +237,7 @@ class ntar_gui_app: App {
             //let outlier_dirname = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/test_small_medium-ntar-v-0_1_3-outliers"
 
             //let outlier_dirname = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/test_a7sii_100-ntar-v-0_1_3-outliers"
-
+            
             //let outlier_dirname = "/qp/tmp/LRT_09_24_2022-a7iv-2-aurora-topaz-ntar-v-0_1_3-outliers"
             
             outlier_json_startup(with: outlier_dirname)
@@ -256,8 +266,8 @@ class ntar_gui_app: App {
                 
                 let eraser = try NighttimeAirplaneRemover(with: config,
                                                           callbacks: callbacks,
-                                                          processExistingFiles: true,
-                                                          maxResidentImages: 32)
+                                                          processExistingFiles: true/*,
+                                                          maxResidentImages: 32*/)
                 self.viewModel.eraser = eraser // XXX rename this crap
 
                 if let fp = eraser.final_processor {
@@ -334,8 +344,8 @@ class ntar_gui_app: App {
             do {
                 let eraser = try NighttimeAirplaneRemover(with: config,
                                                           callbacks: callbacks,
-                                                          processExistingFiles: true,
-                                                          maxResidentImages: 32)
+                                                          processExistingFiles: true/*,
+                                                          maxResidentImages: 32*/)
                 //                        await Log.dispatchGroup = eraser.dispatchGroup.dispatch_group
                 self.viewModel.eraser = eraser // XXX rename this crap
                 //                            try eraser.run()
