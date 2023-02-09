@@ -40,7 +40,8 @@ public class ImageSequenceProcessor<T> {
          maxConcurrent max_concurrent: Int = 5,
          supported_image_file_types: [String],
          number_final_processing_neighbors_needed: Int,
-         processExistingFiles: Bool) throws
+         processExistingFiles: Bool,
+         max_images: Int? = nil) throws
     {
         self.number_running = NumberRunning(in: " frames processing outliers",
                                             max: max_concurrent,
@@ -50,7 +51,8 @@ public class ImageSequenceProcessor<T> {
         self.output_dirname = output_dirname
         self.number_final_processing_neighbors_needed = number_final_processing_neighbors_needed
         self.image_sequence = try ImageSequence(dirname: image_sequence_dirname,
-                                                supported_image_file_types: supported_image_file_types)
+                                                supported_image_file_types: supported_image_file_types,
+                                                max_images: max_images)
         self.should_process = [Bool](repeating: processExistingFiles, count: image_sequence.filenames.count)
         self.existing_output_files = [Bool](repeating: false, count: image_sequence.filenames.count)
         self.method_list = try assembleMethodList()

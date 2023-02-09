@@ -53,8 +53,8 @@ class FrameView {
     
     let frame_index: Int
     var frame: FrameAirplaneRemover?
-    var preview_image: NSImage? 
-    var scrub_image: NSImage? 
+    var preview_image: Image? 
+    var scrub_image: Image? 
 }
 
 // allow intiazliation of an array with objects of some type that know their index
@@ -81,7 +81,7 @@ class FramesToCheck {
         return frames[current_index].frame
     }
     
-    var currentPreviewImage: NSImage? {
+    var currentPreviewImage: Image? {
         return frames[current_index].preview_image
     }
     
@@ -100,9 +100,9 @@ class FramesToCheck {
         Log.d("set self.frames[\(frame.frame_index)].frame")
         // wait for this task
         let preview_size = NSSize(width: 66, height: 60)
-        //let scrub_size = NSSize(width: 800, height: 600)
+        let scrub_size = NSSize(width: 800, height: 600)
         //let scrub_size = NSSize(width: 1200, height: 900)
-        let scrub_size = NSSize(width: 1600, height: 1200)
+        //let scrub_size = NSSize(width: 1600, height: 1200)
         let local_dispatch = DispatchGroup()
         local_dispatch.enter()
         Task {
@@ -112,13 +112,15 @@ class FramesToCheck {
                 // load the view frames from the main image
 
                 // XXX cache these scrub previews?
-                
-                self.frames[frame.frame_index].preview_image =
-                  baseImage.resized(to: preview_size)
 
-                self.frames[frame.frame_index].scrub_image =
-                  baseImage.resized(to: scrub_size)
-
+                if let preview_base = baseImage.resized(to: preview_size) {
+                    self.frames[frame.frame_index].preview_image =
+                      Image(nsImage: preview_base)
+                }
+                if let scrub_base = baseImage.resized(to: scrub_size) {
+                    self.frames[frame.frame_index].scrub_image =
+                      Image(nsImage: scrub_base)
+                }
 //                await MainActor.run {
                     self.viewModel?.objectWillChange.send()
 //                }
@@ -193,9 +195,9 @@ class ntar_gui_app: App {
             // a set of saved outlier groups for each frame
             
             //let outlier_dirname = "/pp/tmp/LRT_12_22_2022-a9-2-aurora-topaz-ntar-v-0_1_3-outliers"
-            //let outlier_dirname = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/test_small_medium-ntar-v-0_1_3-outliers"
+            let outlier_dirname = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/test_small_medium-ntar-v-0_1_3-outliers"
 
-            let outlier_dirname = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/test_a7sii_100-ntar-v-0_1_3-outliers"
+            //let outlier_dirname = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/test_a7sii_100-ntar-v-0_1_3-outliers"
 
             //let outlier_dirname = "/qp/tmp/LRT_09_24_2022-a7iv-2-aurora-topaz-ntar-v-0_1_3-outliers"
             
@@ -224,7 +226,8 @@ class ntar_gui_app: App {
                 
                 let eraser = try NighttimeAirplaneRemover(with: config,
                                                           callbacks: callbacks,
-                                                          processExistingFiles: true)
+                                                          processExistingFiles: true,
+                                                          maxResidentImages: 10)
                 self.viewModel.eraser = eraser // XXX rename this crap
 
                 if let fp = eraser.final_processor {
@@ -301,7 +304,8 @@ class ntar_gui_app: App {
             do {
                 let eraser = try NighttimeAirplaneRemover(with: config,
                                                           callbacks: callbacks,
-                                                          processExistingFiles: true)
+                                                          processExistingFiles: true,
+                                                          maxResidentImages: 10)
                 //                        await Log.dispatchGroup = eraser.dispatchGroup.dispatch_group
                 self.viewModel.eraser = eraser // XXX rename this crap
                 //                            try eraser.run()

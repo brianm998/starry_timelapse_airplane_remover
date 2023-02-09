@@ -175,8 +175,6 @@ struct ContentView: View {
     @State private var selection_causes_painting = true
     @State private var running = false
 
-    @State private var zstack_frame: CGSize = .zero
-
     // this sets the original scale factor of the frame zoom view
     // it would be best to calculate this based upon the size of the
     // frame vs the size of the are to show it in
@@ -308,7 +306,7 @@ struct ContentView: View {
                 } else {
                     // highlight the selected frame
                     let opacity = viewModel.framesToCheck.current_index == frame_index ? 0.4 : 0
-                    Image(nsImage: frameView.preview_image!)
+                    frameView.preview_image!
                       .overlay(
                         Rectangle()
                           .foregroundColor(.orange).opacity(opacity)
@@ -319,7 +317,7 @@ struct ContentView: View {
                     Rectangle()
                       .foregroundColor(bg_color)
                 } else {
-                    Image(nsImage: frameView.preview_image!)
+                    frameView.preview_image!
                 }
             }
             Text("\(frame_index)")
@@ -524,7 +522,7 @@ struct ContentView: View {
 
             // stick the scrub image in there first if we have it
             if let scrub_image = new_frame_view.scrub_image {
-                viewModel.image = Image(nsImage: scrub_image).resizable()
+                viewModel.image = scrub_image.resizable()
                 Task {
                     await viewModel.update()
                 }

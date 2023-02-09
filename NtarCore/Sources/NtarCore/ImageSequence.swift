@@ -37,9 +37,12 @@ public actor ImageLoader {
 @available(macOS 10.15, *)
 public actor ImageSequence {
 
-    init(dirname: String, supported_image_file_types: [String]) throws {
+    init(dirname: String,
+         supported_image_file_types: [String],
+         max_images: Int? = nil) throws
+    {
+        self.max_images = max_images
         var image_files: [String] = []
-
         let contents = try file_manager.contentsOfDirectory(atPath: dirname)
         contents.forEach { file in
             supported_image_file_types.forEach { type in
@@ -76,7 +79,7 @@ public actor ImageSequence {
 
     private var loaded_filenames: [String] = []
 
-    private var max_images: Int?
+    private var max_images: Int? // XXX set this low for gui, eating more ram than necessary
     
     func getImage(withName filename: String) -> ImageLoader {
         Log.d("getImage(withName: \(filename))")
