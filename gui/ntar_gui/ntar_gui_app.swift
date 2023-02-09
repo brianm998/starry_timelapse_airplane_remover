@@ -56,6 +56,7 @@ class FrameView {
     
     let frame_index: Int
     var frame: FrameAirplaneRemover?
+    var outlierViews: [OutlierGroupView] = []
     var preview_image: Image? 
     var scrub_image: Image? 
 }
@@ -112,10 +113,12 @@ class FramesToCheck {
             if let pixImage = try await frame.pixelatedImage(),
                let baseImage = pixImage.baseImage
             {
+                let outlierGroups = try await frame.outlierGroups()
+                let (frame_width, frame_height) = await (frame.width, frame.height)
                 // load the view frames from the main image
-
+                
                 // XXX cache these scrub previews?
-
+                
                 if let preview_base = baseImage.resized(to: preview_size) {
                     self.frames[frame.frame_index].preview_image =
                       Image(nsImage: preview_base)
@@ -124,12 +127,33 @@ class FramesToCheck {
                     self.frames[frame.frame_index].scrub_image =
                       Image(nsImage: scrub_base)
                 }
-//                await MainActor.run {
-                    self.viewModel?.objectWillChange.send()
-//                }
                 
-                // XXX refresh ui?
+                self.frames[frame.frame_index].outlierViews = []
+                for group in outlierGroups {
+                    if let cgImage = group.testImage() {
+                        var size = CGSize()
+                        size.width = CGFloat(cgImage.width)
+                        size.height = CGFloat(cgImage.height)
+                        let outlierImage = NSImage(cgImage: cgImage,
+                                                   size: size)
+                        
+                        let groupView = OutlierGroupView(group: group,
+                                                         name: group.name,
+                                                         bounds: group.bounds,
+                                                         image: outlierImage,
+                                                         frame_width: frame_width,
+                                                         frame_height: frame_height)
+
+                        self.frames[frame.frame_index].outlierViews.append(groupView)
+                    } else {
+                        Log.e("NO FUCKING IMAGE")
+                    }
+                }
             }
+            
+            // refresh ui
+            self.viewModel?.objectWillChange.send()
+            
             local_dispatch.leave()
         }
         local_dispatch.wait()

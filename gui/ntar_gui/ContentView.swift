@@ -110,52 +110,20 @@ class ViewModel: ObservableObject {
         self.framesToCheck.viewModel = self
     }
     
-    func update() async {
+    func update() {
         if framesToCheck.isDone() {
-            await MainActor.run {
-                frame = nil
-                outlierViews = []
-                image = Image(systemName: "globe").resizable()
-            }
+            frame = nil
+            outlierViews = []
+            image = Image(systemName: "globe").resizable()
         }
         if let frame = frame {
-            let (outlierGroups, frame_width, frame_height) =
-              await (frame.outlierGroups(), frame.width, frame.height)
+            let frameView = framesToCheck.frames[frame.frame_index]
             
-            Log.i("we have \(outlierGroups.count) outlierGroups")
-            await MainActor.run {
-                outlierViews = []
-            }
-            for group in outlierGroups {
-                if let cgImage = group.testImage() {
-                    var size = CGSize()
-                    size.width = CGFloat(cgImage.width)
-                    size.height = CGFloat(cgImage.height)
-                    let outlierImage = NSImage(cgImage: cgImage,
-                                               size: size)
-
-                    let groupView = OutlierGroupView(group: group,
-                                                     name: group.name,
-                                                     bounds: group.bounds,
-                                                     image: outlierImage,
-                                                     frame_width: frame_width,
-                                                     frame_height: frame_height)
-                    await MainActor.run {
-                        outlierViews.append(groupView)
-                    }
-                } else {
-                    Log.e("NO FUCKING IMAGE")
-                }
-            }
+            outlierViews = frameView.outlierViews
+            Log.i("we have \(outlierViews.count) outlierGroups")
         }
-        Task {
-//            try? await Task.sleep(nanoseconds: 5_000_000_000)
-            await MainActor.run
-            {                   // XXX this VVV isn't always right, it changes sometimes
-                outlierCount = outlierViews.count
-                self.objectWillChange.send()
-            }
-        }
+        outlierCount = outlierViews.count
+        self.objectWillChange.send()
     }
 }
 
@@ -213,7 +181,7 @@ struct ContentView: View {
                                       outlierViewModel.group.shouldPaint(reason)
                                       
                                       // update the view model so it shows up on screen
-                                      await self.viewModel.update()
+                                      self.viewModel.update()
                                   } else {
                                       Log.e("WTF, not already set to paint??")
                                   }
@@ -272,7 +240,7 @@ struct ContentView: View {
                                await viewModel.frame?.userSelectAllOutliers(toShouldPaint: selection_causes_painting,
                                                                             between: drag_start,
                                                                             and: end_location)
-                               await viewModel.update()
+                               viewModel.update()
                            }
                        }
                        drag_start = nil
@@ -441,7 +409,7 @@ struct ContentView: View {
                         Button(action: {
                             Task {
                                 await viewModel.frame?.userSelectAllOutliers(toShouldPaint: true)
-                                await viewModel.update()
+                                viewModel.update()
                             }
                         }) {
                             Text("Paint All").font(.largeTitle)
@@ -451,7 +419,7 @@ struct ContentView: View {
                         Button(action: {
                             Task {
                                 await viewModel.frame?.userSelectAllOutliers(toShouldPaint: false)
-                                await viewModel.update()
+                                viewModel.update()
                             }
                         }) {
                             Text("Clear All").font(.largeTitle)
@@ -470,7 +438,7 @@ struct ContentView: View {
                                           do {
                                               if let baseImage = try await current_frame.baseImage() {
                                                   viewModel.image = Image(nsImage: baseImage)
-                                                  await viewModel.update()
+                                                  viewModel.update()
                                               }
                                           } catch {
                                               Log.e("error")
@@ -523,9 +491,7 @@ struct ContentView: View {
             // stick the scrub image in there first if we have it
             if let scrub_image = new_frame_view.scrub_image {
                 viewModel.image = scrub_image.resizable()
-                Task {
-                    await viewModel.update()
-                }
+                viewModel.update()
             }
             if !scrubMode {
                 // get the full resolution image async from the frame
@@ -533,7 +499,7 @@ struct ContentView: View {
                     do {
                         if let baseImage = try await next_frame.baseImage() {
                             viewModel.image = Image(nsImage: baseImage)
-                            await viewModel.update()
+                            viewModel.update()
                         }
                     } catch {
                         Log.e("error")
@@ -547,7 +513,7 @@ struct ContentView: View {
             viewModel.frame = nil
             viewModel.outlierViews = []
             //viewModel.image = Image(systemName: "person").resizable()
-            Task { await viewModel.update() }
+            viewModel.update()
         }
     }
 }
