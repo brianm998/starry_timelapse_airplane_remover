@@ -796,6 +796,8 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
         Log.i("frame \(self.frame_index) finishing")
         let image = try await image_sequence.getImage(withName: image_sequence.filenames[frame_index]).image()
 
+        // maybe write out pre-updated scaled preview image here?
+        
         var otherFrames: [PixelatedImage] = []
 
         // only load the first other frame for painting
@@ -840,6 +842,8 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
         
         Log.d("frame \(self.frame_index) writing output files")
 
+        // maybe write out post-update scaled preview image here?
+        
         do {
             self.state = .writingOutputFile
             try await self.writeTestFile(withData: test_paint_data)

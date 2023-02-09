@@ -177,7 +177,9 @@ struct ContentView: View {
     @State private var drag_start: CGPoint?
     @State private var drag_end: CGPoint?
     @State private var isDragging = false
-
+    @State private var background_brightness: Double = 0.33
+    @State private var background_color: Color = .gray
+    
     init(viewModel: ViewModel) {
         self.viewModel = viewModel
     }
@@ -188,6 +190,7 @@ struct ContentView: View {
             image
 
             if showOutliers {
+                // XXX these VVV are wrong VVV somehow
                 ForEach(0 ..< viewModel.outlierViews.count, id: \.self) { idx in
                     if idx < viewModel.outlierViews.count {
                         let outlierViewModel = viewModel.outlierViews[idx]
@@ -463,21 +466,26 @@ struct ContentView: View {
                           .onChange(of: scrubMode) { scrubbing in
                               if !scrubbing {
                                   if let current_frame = viewModel.framesToCheck.currentFrame {
-                Task {
-                    do {
-                        if let baseImage = try await current_frame.baseImage() {
-                            viewModel.image = Image(nsImage: baseImage)
-                            await viewModel.update()
-                        }
-                    } catch {
-                        Log.e("error")
-                    }
-                }
-                                      
+                                      Task {
+                                          do {
+                                              if let baseImage = try await current_frame.baseImage() {
+                                                  viewModel.image = Image(nsImage: baseImage)
+                                                  await viewModel.update()
+                                              }
+                                          } catch {
+                                              Log.e("error")
+                                          }
+                                      }
                                   }
                               }
-                              // XXX 
                           }
+                        Text("background")
+                        Slider(value: $background_brightness, in: 0...100) { editing in
+                            Log.d("editing \(editing) background_brightness \(background_brightness)")
+                            background_color = Color(white: background_brightness/100)
+                            viewModel.objectWillChange.send()
+                        }
+                        .frame(maxWidth: 100, maxHeight: 30)
                     }
 
                     // the filmstrip at the bottom
@@ -493,7 +501,7 @@ struct ContentView: View {
                 }
             }.frame(maxWidth: .infinity, maxHeight: .infinity)
               .padding()
-              .background(.gray)
+              .background(background_color)
         }
     }
 
@@ -532,7 +540,9 @@ struct ContentView: View {
                     }
                 }
             }
-            scroller?.scrollTo(next_frame.frame_index)
+            if !scrubMode {
+                scroller?.scrollTo(next_frame.frame_index)
+            }
         } else {
             viewModel.frame = nil
             viewModel.outlierViews = []

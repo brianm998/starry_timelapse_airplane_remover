@@ -34,8 +34,11 @@ import NtarCore
 
   - allow showing changed frames too
 
-  - use bigger preview to try to enable smooth scrool scrubbing of the video,
-    and maybe playing it too
+  - try a play button for playing a preview
+  - of both rendered and original
+
+  - outlier groups get wrong when scrolling
+   
   
   NEW UI:
 
@@ -193,9 +196,11 @@ class ntar_gui_app: App {
         if use_json {
             // this path reads a saved json config file, along with potentially
             // a set of saved outlier groups for each frame
+
+            let outlier_dirname = "/pp/tmp/TEST_12_22_2022-a9-2-aurora-topaz-500-ntar-v-0_1_3-outliers"
             
             //let outlier_dirname = "/pp/tmp/LRT_12_22_2022-a9-2-aurora-topaz-ntar-v-0_1_3-outliers"
-            let outlier_dirname = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/test_small_medium-ntar-v-0_1_3-outliers"
+            //let outlier_dirname = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/test_small_medium-ntar-v-0_1_3-outliers"
 
             //let outlier_dirname = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/test_a7sii_100-ntar-v-0_1_3-outliers"
 
@@ -206,8 +211,9 @@ class ntar_gui_app: App {
         } else {
             // this path starts from a image sequence only
             
+            let image_sequence_dirname = "/pp/tmp/TEST_12_22_2022-a9-2-aurora-topaz-500"
             // XXX take this from the input somehow
-            let image_sequence_dirname = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/test_small_medium"
+            //let image_sequence_dirname = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/test_small_medium"
             //let image_sequence_dirname = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/test_small_lots"
             //let image_sequence_dirname = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/test_small_fix_error"
             //let image_sequence_dirname = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/test_a7sii_10"        
@@ -227,7 +233,7 @@ class ntar_gui_app: App {
                 let eraser = try NighttimeAirplaneRemover(with: config,
                                                           callbacks: callbacks,
                                                           processExistingFiles: true,
-                                                          maxResidentImages: 10)
+                                                          maxResidentImages: 32)
                 self.viewModel.eraser = eraser // XXX rename this crap
 
                 if let fp = eraser.final_processor {
@@ -292,7 +298,7 @@ class ntar_gui_app: App {
                                 outlierMaxThreshold: self.outlierMaxThreshold,
                                 outlierMinThreshold: self.outlierMinThreshold,
                                 minGroupSize: self.minGroupSize,
-                                numConcurrentRenders: 10,//self.numConcurrentRenders,
+                                numConcurrentRenders: self.numConcurrentRenders,
                                 test_paint: self.test_paint,
                                 test_paint_output_path: test_paint_output_path,
                                 imageSequenceName: input_image_sequence_name,
@@ -305,7 +311,7 @@ class ntar_gui_app: App {
                 let eraser = try NighttimeAirplaneRemover(with: config,
                                                           callbacks: callbacks,
                                                           processExistingFiles: true,
-                                                          maxResidentImages: 10)
+                                                          maxResidentImages: 32)
                 //                        await Log.dispatchGroup = eraser.dispatchGroup.dispatch_group
                 self.viewModel.eraser = eraser // XXX rename this crap
                 //                            try eraser.run()
