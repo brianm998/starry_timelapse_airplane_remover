@@ -174,17 +174,9 @@ struct ContentView: View {
     @State private var scrubMode = true
     @State private var selection_causes_painting = true
     @State private var running = false
-
-    // this sets the original scale factor of the frame zoom view
-    // it would be best to calculate this based upon the size of the
-    // frame vs the size of the are to show it in
-    @State private var scale: CGFloat = 0.25
-
     @State private var drag_start: CGPoint?
     @State private var drag_end: CGPoint?
     @State private var isDragging = false
-      
-    @State private var done_frames: [Int: Bool] = [:] // frame_index to done
 
     init(viewModel: ViewModel) {
         self.viewModel = viewModel
