@@ -171,6 +171,7 @@ struct OutlierGroupView {
 struct ContentView: View {
     @ObservedObject var viewModel: ViewModel
     @State private var showOutliers = true
+    @State private var scrubMode = false
     @State private var selection_causes_painting = true
     @State private var running = false
 
@@ -467,6 +468,26 @@ struct ContentView: View {
                           .keyboardShortcut("o", modifiers: [])
                         Toggle("selection causes paint", isOn: $selection_causes_painting)
                           .keyboardShortcut("t", modifiers: []) // XXX find better modifier
+                        Toggle("scrub mode", isOn: $scrubMode)
+                          .keyboardShortcut("b", modifiers: [])
+                          .onChange(of: scrubMode) { scrubbing in
+                              if !scrubbing {
+                                  if let current_frame = viewModel.framesToCheck.currentFrame {
+                Task {
+                    do {
+                        if let baseImage = try await current_frame.baseImage() {
+                            viewModel.image = Image(nsImage: baseImage)
+                            await viewModel.update()
+                        }
+                    } catch {
+                        Log.e("error")
+                    }
+                }
+                                      
+                                  }
+                              }
+                              // XXX 
+                          }
                     }
 
                     // the filmstrip at the bottom
@@ -508,19 +529,19 @@ struct ContentView: View {
                     await viewModel.update()
                 }
             }
-            
-            // get the full resolution image async from the frame
-            Task {
-                do {
-                    if let baseImage = try await next_frame.baseImage() {
-                        viewModel.image = Image(nsImage: baseImage)
-                        await viewModel.update()
+            if !scrubMode {
+                // get the full resolution image async from the frame
+                Task {
+                    do {
+                        if let baseImage = try await next_frame.baseImage() {
+                            viewModel.image = Image(nsImage: baseImage)
+                            await viewModel.update()
+                        }
+                    } catch {
+                        Log.e("error")
                     }
-                } catch {
-                    Log.e("error")
                 }
             }
-            
             scroller?.scrollTo(next_frame.frame_index)
         } else {
             viewModel.frame = nil
