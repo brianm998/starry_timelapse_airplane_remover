@@ -54,6 +54,7 @@ class FrameView {
     let frame_index: Int
     var frame: FrameAirplaneRemover?
     var preview_image: NSImage? 
+    var scrub_image: NSImage? 
 }
 
 // allow intiazliation of an array with objects of some type that know their index
@@ -98,14 +99,25 @@ class FramesToCheck {
         
         Log.d("set self.frames[\(frame.frame_index)].frame")
         // wait for this task
-        let preview_size = NSSize(width: 80, height: 50)
+        let preview_size = NSSize(width: 66, height: 60)
+        //let scrub_size = NSSize(width: 800, height: 600)
+        //let scrub_size = NSSize(width: 1200, height: 900)
+        let scrub_size = NSSize(width: 1600, height: 1200)
         let local_dispatch = DispatchGroup()
         local_dispatch.enter()
         Task {
-            if let pixImage = try await frame.pixelatedImage() {
-                // generate images here
+            if let pixImage = try await frame.pixelatedImage(),
+               let baseImage = pixImage.baseImage
+            {
+                // load the view frames from the main image
+
+                // XXX cache these scrub previews?
+                
                 self.frames[frame.frame_index].preview_image =
-                  pixImage.baseImage(ofSize: preview_size)
+                  baseImage.resized(to: preview_size)
+
+                self.frames[frame.frame_index].scrub_image =
+                  baseImage.resized(to: scrub_size)
 
 //                await MainActor.run {
                     self.viewModel?.objectWillChange.send()
@@ -183,9 +195,9 @@ class ntar_gui_app: App {
             //let outlier_dirname = "/pp/tmp/LRT_12_22_2022-a9-2-aurora-topaz-ntar-v-0_1_3-outliers"
             //let outlier_dirname = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/test_small_medium-ntar-v-0_1_3-outliers"
 
-            //let outlier_dirname = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/test_a7sii_100-ntar-v-0_1_3-outliers"
+            let outlier_dirname = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/test_a7sii_100-ntar-v-0_1_3-outliers"
 
-            let outlier_dirname = "/qp/tmp/LRT_09_24_2022-a7iv-2-aurora-topaz-ntar-v-0_1_3-outliers"
+            //let outlier_dirname = "/qp/tmp/LRT_09_24_2022-a7iv-2-aurora-topaz-ntar-v-0_1_3-outliers"
             
             outlier_json_startup(with: outlier_dirname)
             

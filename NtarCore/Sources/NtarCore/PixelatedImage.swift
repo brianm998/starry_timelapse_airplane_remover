@@ -162,7 +162,7 @@ public class PixelatedImage {
 }
 
 extension NSImage {
-    func resized(to newSize: NSSize) -> NSImage? {
+    public func resized(to newSize: NSSize) -> NSImage? {
         if let bitmapRep = NSBitmapImageRep(
             bitmapDataPlanes: nil, pixelsWide: Int(newSize.width), pixelsHigh: Int(newSize.height),
             bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,

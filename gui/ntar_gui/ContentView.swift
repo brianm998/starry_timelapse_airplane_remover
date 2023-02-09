@@ -171,7 +171,7 @@ struct OutlierGroupView {
 struct ContentView: View {
     @ObservedObject var viewModel: ViewModel
     @State private var showOutliers = true
-    @State private var scrubMode = false
+    @State private var scrubMode = true
     @State private var selection_causes_painting = true
     @State private var running = false
 
@@ -522,9 +522,9 @@ struct ContentView: View {
         if let next_frame = new_frame_view.frame {
             viewModel.frame = next_frame
 
-            // stick the preview image in there if we have it
-            if let preview_image = new_frame_view.preview_image {
-                viewModel.image = Image(nsImage: preview_image).resizable()
+            // stick the scrub image in there first if we have it
+            if let scrub_image = new_frame_view.scrub_image {
+                viewModel.image = Image(nsImage: scrub_image).resizable()
                 Task {
                     await viewModel.update()
                 }
