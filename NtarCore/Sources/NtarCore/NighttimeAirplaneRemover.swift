@@ -130,7 +130,25 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
     }
 
     // called by the superclass at startup
-    override func startup_hook() throws {
+    override func startup_hook() async throws {
+
+        if image_width == nil ||
+           image_height == nil ||
+           image_bytesPerPixel == nil
+        {
+            Log.d("loading first frame to get sizes")
+            do {
+                let test_image = try await image_sequence.getImage(withName: image_sequence.filenames[0]).image()
+                image_width = test_image.width
+                image_height = test_image.height
+                image_bytesPerPixel = test_image.bytesPerPixel
+                Log.d("first frame to get sizes: image_width \(image_width) image_height \(image_height) image_bytesPerPixel \(image_bytesPerPixel)")
+            } catch {
+                Log.e("first frame to get size: \(error)")
+            }
+        }
+
+        
         if config.test_paint { try mkdir(test_paint_output_dirname) }
         if config.writeOutlierGroupFiles {
             try mkdir(outlier_output_dirname)
@@ -147,7 +165,6 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
     // called by the superclass to process each frame
     // called async check access to shared data
     override func processFrame(number index: Int,
-                               image: PixelatedImage,
                                output_filename: String,
                                base_name: String) async throws -> FrameAirplaneRemover
     {
@@ -165,6 +182,7 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
         
         let test_paint_filename = self.config.test_paint ?
           "\(self.test_paint_output_dirname)/\(base_name)" : nil
+
         
         // the other frames that we use to detect outliers and repaint from
         let frame_plane_remover =
@@ -172,10 +190,17 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
                                      otherFrameIndexes: otherFrameIndexes,
                                      output_filename: "\(self.output_dirname)/\(base_name)",
                                      base_name: base_name,
-                                     test_paint_filename: test_paint_filename)
+                                     test_paint_filename: test_paint_filename,
+                                     image_width: image_width!,
+                                     image_height: image_height!,
+                                     image_bytesPerPixel: image_bytesPerPixel!)
 
         return frame_plane_remover
     }
+
+    public var image_width: Int?
+    public var image_height: Int?
+    public var image_bytesPerPixel: Int? // XXX bad name
 
     override func result_hook(with result: FrameAirplaneRemover) async {
 
@@ -206,7 +231,10 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
                      otherFrameIndexes: [Int],
                      output_filename: String, // full path
                      base_name: String,       // just filename
-                     test_paint_filename tpfo: String?) async throws -> FrameAirplaneRemover
+                     test_paint_filename tpfo: String?,
+                     image_width: Int,
+                     image_height: Int,
+                     image_bytesPerPixel: Int) async throws -> FrameAirplaneRemover
     {
         var outlier_groups_for_this_frame: OutlierGroups?
         
@@ -240,6 +268,9 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
         }
         
         return try await FrameAirplaneRemover(with: config,
+                                              width: image_width,
+                                              height: image_height,
+                                              bytesPerPixel: image_bytesPerPixel,
                                               callbacks: callbacks,
                                               imageSequence: image_sequence,
                                               atIndex: frame_index,

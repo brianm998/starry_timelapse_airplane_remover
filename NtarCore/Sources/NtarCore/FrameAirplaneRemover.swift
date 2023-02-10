@@ -87,10 +87,9 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
             
             if let scaledImage = image.resized(to: preview_size),
                let imageData = scaledImage.jpegData,
-               let preview_output_dirname = preview_output_dirname
+               let filename = self.previewFilename
             {
                 do {
-                    let filename = "\(preview_output_dirname)/\(base_name).jpg"
                     if file_manager.fileExists(atPath: filename) {
                         Log.w("overwriting already existing filename \(filename)")
                         try file_manager.removeItem(atPath: filename)
@@ -121,10 +120,9 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
             
             if let scaledImage = image.resized(to: thumbnail_size),
                let imageData = scaledImage.jpegData,
-               let thumbnail_output_dirname = thumbnail_output_dirname
+               let filename = self.thumbnailFilename
             {
                 do {
-                    let filename = "\(thumbnail_output_dirname)/\(base_name).jpg"
                     if file_manager.fileExists(atPath: filename) {
                         Log.w("overwriting already existing filename \(filename)")
                         try file_manager.removeItem(atPath: filename)
@@ -222,8 +220,25 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
     public let callbacks: Callbacks
 
     public let base_name: String
+
+    nonisolated public var previewFilename: String? {
+        if let preview_output_dirname = preview_output_dirname {
+            return "\(preview_output_dirname)/\(base_name).jpg"
+        }
+        return nil
+    }
+    
+    nonisolated public var thumbnailFilename: String? {
+        if let thumbnail_output_dirname = thumbnail_output_dirname {
+            return "\(thumbnail_output_dirname)/\(base_name).jpg"
+        }
+        return nil
+    }
     
     init(with config: Config,
+         width: Int,
+         height: Int,
+         bytesPerPixel: Int,
          callbacks: Callbacks,
          imageSequence image_sequence: ImageSequence,
          atIndex frame_index: Int,
@@ -239,7 +254,10 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
         self.config = config
         self.base_name = baseName
         self.callbacks = callbacks
-        let image = try await image_sequence.getImage(withName: image_sequence.filenames[frame_index]).image()
+
+        // XXX this is now only used here for getting the image width, height and bpp
+        // XXX this is a waste time
+        //let image = try await image_sequence.getImage(withName: image_sequence.filenames[frame_index]).image()
         self.image_sequence = image_sequence
         self.frame_index = frame_index // frame index in the image sequence
         self.otherFrameIndexes = otherFrameIndexes
@@ -252,17 +270,17 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
         self.outlier_output_dirname = outlier_output_dirname
         self.preview_output_dirname = preview_output_dirname
         self.thumbnail_output_dirname = thumbnail_output_dirname
-        self.width = image.width
-        self.height = image.height
+        self.width = width
+        self.height = height
 
         if ImageSequence.image_width == 0 {
-            ImageSequence.image_width = image.width
+            ImageSequence.image_width = width
         }
         if ImageSequence.image_height == 0 {
-            ImageSequence.image_height = image.height
+            ImageSequence.image_height = height
         }
         
-        self.bytesPerPixel = image.bytesPerPixel
+        self.bytesPerPixel = bytesPerPixel
         self.bytesPerRow = width*bytesPerPixel
 
         // XXX avoid this following step when loading outlier data from file 

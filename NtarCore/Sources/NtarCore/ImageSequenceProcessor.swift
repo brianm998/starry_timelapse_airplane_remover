@@ -69,7 +69,6 @@ public class ImageSequenceProcessor<T> {
     }
 
     func processFrame(number index: Int,
-                      image: PixelatedImage,
                       output_filename: String,
                       base_name: String) async throws -> T? 
     {
@@ -118,9 +117,8 @@ public class ImageSequenceProcessor<T> {
                 _method_list[index] = {
                     // this method is run async later                                           
                     Log.i("loading \(image_filename)")
-                    let image = await self.image_sequence.getImage(withName: image_filename)
+                    //let image = await self.image_sequence.getImage(withName: image_filename)
                     if let result = try await self.processFrame(number: index,
-                                                                image: image.image(),
                                                                 output_filename: output_filename,
                                                                 base_name: basename) {
                         await self.number_running.decrement()
@@ -136,7 +134,7 @@ public class ImageSequenceProcessor<T> {
         return MethodList<T>(list: _method_list, removeClosure: remaining_images_closure)
     }
 
-    func startup_hook() throws {
+    func startup_hook() async throws {
         // can be overridden
     }
     
@@ -150,7 +148,13 @@ public class ImageSequenceProcessor<T> {
     
     public func run() throws {
         Log.d("run")
-        try startup_hook()
+        let local_dispatch = DispatchGroup()
+        local_dispatch.enter()
+        Task {
+            try await startup_hook()
+            local_dispatch.leave()
+        }
+        local_dispatch.wait()
 
         try mkdir(output_dirname)
 

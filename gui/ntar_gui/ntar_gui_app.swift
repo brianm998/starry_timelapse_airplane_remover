@@ -107,7 +107,7 @@ class FramesToCheck {
         return current_index >= frames.count
     }
 
-    func append(frame: FrameAirplaneRemover, viewModel: ViewModel) {
+    func append(frame: FrameAirplaneRemover, viewModel: ViewModel) async {
         Log.d("appending frame \(frame.frame_index)")
         self.frames[frame.frame_index].frame = frame
         
@@ -122,56 +122,78 @@ class FramesToCheck {
         let preview_size = NSSize(width: preview_width, height: preview_height)
         
         Task {
-            if let pixImage = try await frame.pixelatedImage(),
-               let baseImage = pixImage.baseImage
+            var pixImage: PixelatedImage?
+            var baseImage: NSImage?
+            let outlierGroups = try await frame.outlierGroups()
+            let (frame_width, frame_height) = await (frame.width, frame.height)
+            // load the view frames from the main image
+            
+            // XXX cache these scrub previews?
+            // look for saved versions of these
+            
+            if let preview_filename = frame.previewFilename,
+               let preview_image = NSImage(contentsOf: URL(fileURLWithPath: preview_filename))
             {
-                let outlierGroups = try await frame.outlierGroups()
-                let (frame_width, frame_height) = await (frame.width, frame.height)
-                // load the view frames from the main image
-                
-                // XXX cache these scrub previews?
-                // look for saved versions of these
-                
-                if let thumbnail_base = baseImage.resized(to: thumbnail_size) {
-                    self.frames[frame.frame_index].thumbnail_image =
-                      Image(nsImage: thumbnail_base)
-                }
-                if let preview_base = baseImage.resized(to: preview_size) {
+                Log.d("loaded preview for self.frames[\(frame.frame_index)] from jpeg")
+                self.frames[frame.frame_index].preview_image =
+                  Image(nsImage: preview_image)
+            } else {
+                if pixImage == nil { pixImage = try await frame.pixelatedImage() }
+                if baseImage == nil { baseImage = pixImage!.baseImage }
+                if let baseImage = baseImage,
+                   let preview_base = baseImage.resized(to: preview_size)
+                {
                     Log.d("set preview image for self.frames[\(frame.frame_index)].frame")
                     self.frames[frame.frame_index].preview_image =
                       Image(nsImage: preview_base)
+                } else {
+                    Log.w("set unable to load preview image for self.frames[\(frame.frame_index)].frame")
                 }
-                
-                self.frames[frame.frame_index].outlierViews = []
-                for group in outlierGroups {
-                    if let cgImage = group.testImage() {
-                        var size = CGSize()
-                        size.width = CGFloat(cgImage.width)
-                        size.height = CGFloat(cgImage.height)
-                        let outlierImage = NSImage(cgImage: cgImage,
-                                                   size: size)
-                        
-                        let groupView = OutlierGroupView(group: group,
-                                                         name: group.name,
-                                                         bounds: group.bounds,
-                                                         image: outlierImage,
-                                                         frame_width: frame_width,
-                                                         frame_height: frame_height)
-
-                        self.frames[frame.frame_index].outlierViews.append(groupView)
-                    } else {
-                        Log.e("frame \(frame.frame_index) outlier group no image")
-                    }
-                }
-            } else {
-                Log.e("frame \(frame.frame_index) no image")
             }
             
-            // refresh ui 
-            Task {
-                await MainActor.run {
-                    viewModel.objectWillChange.send()
+            if let thumbnail_filename = frame.thumbnailFilename,
+               let thumbnail_image = NSImage(contentsOf: URL(fileURLWithPath: thumbnail_filename))
+            {
+                Log.d("loaded thumbnail for self.frames[\(frame.frame_index)] from jpeg")
+                self.frames[frame.frame_index].thumbnail_image =
+                  Image(nsImage: thumbnail_image)
+            } else {
+                if pixImage == nil { pixImage = try await frame.pixelatedImage() }
+                if baseImage == nil { baseImage = pixImage!.baseImage }
+                if let baseImage = baseImage,
+                   let thumbnail_base = baseImage.resized(to: thumbnail_size)
+                {
+                    self.frames[frame.frame_index].thumbnail_image =
+                      Image(nsImage: thumbnail_base)
+                } else {
+                    Log.w("set unable to load thumbnail image for self.frames[\(frame.frame_index)].frame")
                 }
+            }
+                
+            self.frames[frame.frame_index].outlierViews = []
+            for group in outlierGroups {
+                if let cgImage = group.testImage() {
+                    var size = CGSize()
+                    size.width = CGFloat(cgImage.width)
+                    size.height = CGFloat(cgImage.height)
+                    let outlierImage = NSImage(cgImage: cgImage,
+                                               size: size)
+                    
+                    let groupView = OutlierGroupView(group: group,
+                                                     name: group.name,
+                                                     bounds: group.bounds,
+                                                     image: outlierImage,
+                                                     frame_width: frame_width,
+                                                     frame_height: frame_height)
+                    
+                    self.frames[frame.frame_index].outlierViews.append(groupView)
+                } else {
+                    Log.e("frame \(frame.frame_index) outlier group no image")
+                }
+            }
+            // refresh ui 
+            await MainActor.run {
+                viewModel.objectWillChange.send()
             }
         }
     }
@@ -432,7 +454,7 @@ class ntar_gui_app: App {
             self.viewModel.framesToCheck.config = self.viewModel.config
         }
         
-        self.viewModel.framesToCheck.append(frame: new_frame, viewModel: self.viewModel)
+        await self.viewModel.framesToCheck.append(frame: new_frame, viewModel: self.viewModel)
 
         Log.d("addToViewModel self.viewModel.frame \(self.viewModel.frame)")
 
