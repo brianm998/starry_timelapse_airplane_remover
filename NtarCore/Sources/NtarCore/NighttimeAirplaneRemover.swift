@@ -1,5 +1,6 @@
 import Foundation
 import CoreGraphics
+import BinaryCodable
 import Cocoa
 
 /*
@@ -237,32 +238,55 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
                      image_bytesPerPixel: Int) async throws -> FrameAirplaneRemover
     {
         var outlier_groups_for_this_frame: OutlierGroups?
-        
+        let start_time = Date().timeIntervalSinceReferenceDate
         if self.config.writeOutlierGroupFiles {
             // look inside outlier_output_dirname for json
             // XXX check for 1_outlier.json file in outliers dir
 
-            let frame_outliers_json_filename = "\(outlier_output_dirname)/\(frame_index)_outliers.json"
-            
+            let frame_outliers_json_filename = "\(outlier_output_dirname)/\(frame_index)_outliers.bin"
             if file_manager.fileExists(atPath: frame_outliers_json_filename) {
+
                 do {
                     let url = NSURL(fileURLWithPath: frame_outliers_json_filename, isDirectory: false) as URL
                     let (data, _) = try await URLSession.shared.data(for: URLRequest(url: url))
-                    let decoder = JSONDecoder()
-                    decoder.nonConformingFloatDecodingStrategy = .convertFromString(
-                      positiveInfinity: "inf",
-                      negativeInfinity: "-inf",
-                      nan: "nan")
+                    let decoder = BinaryDecoder()
                     
                     outlier_groups_for_this_frame = try decoder.decode(OutlierGroups.self, from: data)
+                    Log.i("loading frame \(frame_index) with outlier groups from binary file")
                 } catch {
                     Log.e("frame \(frame_index) error decoding file \(frame_outliers_json_filename): \(error)")
                 }
+
+
+            } else {
+                // try json
+            
+            
+                let frame_outliers_json_filename = "\(outlier_output_dirname)/\(frame_index)_outliers.json"
+                
+                if file_manager.fileExists(atPath: frame_outliers_json_filename) {
+                    do {
+                        let url = NSURL(fileURLWithPath: frame_outliers_json_filename, isDirectory: false) as URL
+                        let (data, _) = try await URLSession.shared.data(for: URLRequest(url: url))
+                        let decoder = JSONDecoder()
+                        decoder.nonConformingFloatDecodingStrategy = .convertFromString(
+                          positiveInfinity: "inf",
+                          negativeInfinity: "-inf",
+                          nan: "nan")
+                        
+                        outlier_groups_for_this_frame = try decoder.decode(OutlierGroups.self, from: data)
+                        Log.i("loading frame \(frame_index) with outlier groups from json file")
+                    } catch {
+                        Log.e("frame \(frame_index) error decoding file \(frame_outliers_json_filename): \(error)")
+                    }
+                }
             }
         }
+        let end_time = Date().timeIntervalSinceReferenceDate
+        Log.d("took \(end_time - start_time) seconds to load outlier group json for frame \(frame_index)")
 
         if let _ = outlier_groups_for_this_frame  {
-            Log.i("loading frame \(frame_index) with outlier groups from json")
+            Log.i("loading frame \(frame_index) with outlier groups from file")
         } else {
             Log.d("loading frame \(frame_index)")
         }

@@ -1,5 +1,6 @@
 import Foundation
 import CoreGraphics
+import BinaryCodable
 import Cocoa
 
 /*
@@ -143,6 +144,31 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
             Log.d("frame \(self.frame_index) no config")
         }
     }
+
+    public func writeOutliersBinary() {
+        if config.writeOutlierGroupFiles,
+           let output_dirname = self.outlier_output_dirname
+        {
+            // write to binary outlier data
+            let data = self.outlierBinaryData()
+            //Log.e(json_string)
+            
+            let filename = "\(self.frame_index)_outliers.bin"
+            let full_path = "\(output_dirname)/\(filename)"
+            do {
+                if file_manager.fileExists(atPath: full_path) {
+                    try file_manager.removeItem(atPath: full_path)
+                    // make this overwrite for new user changes to existing data
+                    Log.i("overwriting \(full_path)")
+                } 
+                Log.i("creating \(full_path)")                      
+                file_manager.createFile(atPath: full_path, contents: data, attributes: nil)
+            } catch {
+                Log.e("\(error)")
+            }
+        }
+    }
+    
     public func writeOutliersJson() {
         if config.writeOutlierGroupFiles,
            let output_dirname = self.outlier_output_dirname
@@ -314,6 +340,21 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
         }
     }
     
+    func readOutliers(fromBinary data: Data) throws {
+        let decoder = BinaryDecoder()
+        self.outlier_groups = try decoder.decode(OutlierGroups.self, from: data)
+    }
+    
+    func outlierBinaryData() -> Data {
+        let encoder = BinaryEncoder()
+        do {
+            return try encoder.encode(outlier_groups)
+        } catch {
+            Log.e("\(error)")
+        }
+        return Data()
+    }
+
     func outlierJsonData() -> Data {
         let encoder = JSONEncoder()
         encoder.nonConformingFloatEncodingStrategy = .convertToString(positiveInfinity: "inf",
@@ -885,7 +926,8 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
     // run after should_paint has been set for each group, 
     // does the final painting and then writes out the output files
     public func finish() async throws {
-        self.writeOutliersJson()
+        self.writeOutliersBinary()
+        //self.writeOutliersJson()
         
         self.state = .reloadingImages
         
