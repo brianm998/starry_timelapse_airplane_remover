@@ -164,9 +164,15 @@ public class PixelatedImage {
 extension NSImage {
     public func resized(to newSize: NSSize) -> NSImage? {
         if let bitmapRep = NSBitmapImageRep(
-            bitmapDataPlanes: nil, pixelsWide: Int(newSize.width), pixelsHigh: Int(newSize.height),
-            bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
-            colorSpaceName: .calibratedRGB, bytesPerRow: 0, bitsPerPixel: 0
+             bitmapDataPlanes: nil,
+             pixelsWide: Int(newSize.width),
+             pixelsHigh: Int(newSize.height),
+             bitsPerSample: 8,
+             samplesPerPixel: 4,
+             hasAlpha: true,
+             isPlanar: false,
+             colorSpaceName: .calibratedRGB,
+             bytesPerRow: 0, bitsPerPixel: 0
         ) {
             bitmapRep.size = newSize
             NSGraphicsContext.saveGraphicsState()
@@ -179,6 +185,17 @@ extension NSImage {
             return resizedImage
         }
 
+        return nil
+    }
+}
+
+public extension NSImage {
+    var jpegData: Data? {
+        let cgImage = self.cgImage(forProposedRect: nil, context: nil, hints: nil)!
+        let bitmapRep = NSBitmapImageRep(cgImage: cgImage)
+        if let data = bitmapRep.representation(using: NSBitmapImageRep.FileType.jpeg, properties: [:]) {
+            return data
+        }
         return nil
     }
 }

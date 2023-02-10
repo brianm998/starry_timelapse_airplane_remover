@@ -17,7 +17,7 @@ class FrameSaveQueue {
         var timer: Timer
         let frame: FrameAirplaneRemover
         let block: @Sendable (Timer) -> Void
-        let wait_time: TimeInterval = 60 // minimum time to wait in purgatory
+        let wait_time: TimeInterval = 5 // minimum time to wait in purgatory
         
         init(frame: FrameAirplaneRemover, block: @escaping @Sendable (Timer) -> Void) {
             self.frame = frame
@@ -73,6 +73,7 @@ class FrameSaveQueue {
 }
 
 class ViewModel: ObservableObject {
+    var config: Config?
     var framesToCheck: FramesToCheck
     var eraser: NighttimeAirplaneRemover?
     var frameSaveQueue: FrameSaveQueue?
@@ -87,7 +88,7 @@ class ViewModel: ObservableObject {
                 if frame_height != new_frame_height {
                     frame_height = new_frame_height
                 }
-                Log.w("INITIAL SIZE [\(frame_width), \(frame_height)]")
+                //Log.w("INITIAL SIZE [\(frame_width), \(frame_height)]")
             }
         }
     }
@@ -104,11 +105,12 @@ class ViewModel: ObservableObject {
     var image_sequence_size: Int = 0
     
     init(framesToCheck: FramesToCheck) {
+        Log.w("VIEW MODEL INIT")
         self.framesToCheck = framesToCheck
-        self.framesToCheck.viewModel = self
+        //self.framesToCheck.viewModel = self
     }
     
-    func update() {
+    @MainActor func update() {
         if framesToCheck.isDone() {
             frame = nil
             outlierViews = []
@@ -118,9 +120,10 @@ class ViewModel: ObservableObject {
             let frameView = framesToCheck.frames[frame.frame_index]
             
             outlierViews = frameView.outlierViews
-            Log.i("we have \(outlierViews.count) outlierGroups")
+            //Log.i("we have \(outlierViews.count) outlierGroups")
         }
         outlierCount = outlierViews.count
+
         self.objectWillChange.send()
     }
 }
@@ -171,7 +174,7 @@ struct ContentView: View {
                                   y: CGFloat(outlier_center.y - frame_center_y))
                           // tap gesture toggles paintability of the tapped group
                           .onTapGesture {
-                              Task {
+//                              Task {
                                   if let origShouldPaint = outlierViewModel.group.shouldPaint {
                                       // change the paintability of this outlier group
                                       // set it to user selected opposite previous value
@@ -183,7 +186,7 @@ struct ContentView: View {
                                   } else {
                                       Log.e("WTF, not already set to paint??")
                                   }
-                              }
+  //                            }
                           }
                      }
                 }
@@ -262,23 +265,23 @@ struct ContentView: View {
             let frameView = viewModel.framesToCheck.frames[frame_index]
 
             if viewModel.framesToCheck.current_index == frame_index {            
-                if frameView.preview_image == nil {
+                if frameView.thumbnail_image == nil {
                     Rectangle().foregroundColor(.orange)
                 } else {
                     // highlight the selected frame
                     let opacity = viewModel.framesToCheck.current_index == frame_index ? 0.4 : 0
-                    frameView.preview_image!
+                    frameView.thumbnail_image!
                       .overlay(
                         Rectangle()
                           .foregroundColor(.orange).opacity(opacity)
                       )
                 }
             } else {
-                if frameView.preview_image == nil {
+                if frameView.thumbnail_image == nil {
                     Rectangle()
                       .foregroundColor(bg_color)
                 } else {
-                    frameView.preview_image!
+                    frameView.thumbnail_image!
                 }
             }
             Text("\(frame_index)")
@@ -489,8 +492,8 @@ struct ContentView: View {
             viewModel.frame = next_frame
 
             // stick the scrub image in there first if we have it
-            if let scrub_image = new_frame_view.scrub_image {
-                viewModel.image = scrub_image.resizable()
+            if let preview_image = new_frame_view.preview_image {
+                viewModel.image = preview_image.resizable()
                 viewModel.update()
             }
             if !scrubMode {

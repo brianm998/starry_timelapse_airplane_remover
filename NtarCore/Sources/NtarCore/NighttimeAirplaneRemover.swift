@@ -32,6 +32,12 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
     // the name of the directory to create when writing outlier group files
     let outlier_output_dirname: String
 
+    // the name of the directory to create when writing frame previews
+    let preview_output_dirname: String
+
+    // the name of the directory to create when writing frame thumbnails (small previews)
+    let thumbnail_output_dirname: String
+
     public var final_processor: FinalProcessor?    
 
     public init(with config: Config,
@@ -46,6 +52,8 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
         basename = basename.replacingOccurrences(of: ".", with: "_")
         test_paint_output_dirname = "\(config.test_paint_output_path)/\(basename)-test-paint"
         outlier_output_dirname = "\(config.outputPath)/\(basename)-outliers"
+        preview_output_dirname = "\(config.outputPath)/\(basename)-previews"
+        thumbnail_output_dirname = "\(config.outputPath)/\(basename)-thumbnails"
 
 
         try super.init(imageSequenceDirname: "\(config.image_sequence_path)/\(config.image_sequence_dirname)",
@@ -128,6 +136,12 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
             try mkdir(outlier_output_dirname)
             config.writeJson(to: outlier_output_dirname)
         }
+        if config.writeFramePreviewFiles {
+            try mkdir(preview_output_dirname) 
+        }
+        if config.writeFrameThumbnailFiles {
+            try mkdir(thumbnail_output_dirname)
+        }
     }
     
     // called by the superclass to process each frame
@@ -157,6 +171,7 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
           try await self.createFrame(atIndex: index,
                                      otherFrameIndexes: otherFrameIndexes,
                                      output_filename: "\(self.output_dirname)/\(base_name)",
+                                     base_name: base_name,
                                      test_paint_filename: test_paint_filename)
 
         return frame_plane_remover
@@ -189,7 +204,8 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
     // of what outliers is has, and whether or not should paint over them.
     func createFrame(atIndex frame_index: Int,
                      otherFrameIndexes: [Int],
-                     output_filename: String,
+                     output_filename: String, // full path
+                     base_name: String,       // just filename
                      test_paint_filename tpfo: String?) async throws -> FrameAirplaneRemover
     {
         var outlier_groups_for_this_frame: OutlierGroups?
@@ -230,7 +246,10 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
                                               otherFrameIndexes: otherFrameIndexes,
                                               outputFilename: output_filename,
                                               testPaintFilename: tpfo,
+                                              baseName: base_name,
                                               outlierOutputDirname: outlier_output_dirname,
+                                              previewOutputDirname: preview_output_dirname,
+                                              thumbnailOutputDirname: thumbnail_output_dirname,
                                               outlierGroups: outlier_groups_for_this_frame)
    }        
 }

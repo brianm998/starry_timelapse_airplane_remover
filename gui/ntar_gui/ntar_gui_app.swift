@@ -65,8 +65,8 @@ class FrameView {
     let frame_index: Int
     var frame: FrameAirplaneRemover?
     var outlierViews: [OutlierGroupView] = []
+    var thumbnail_image: Image? 
     var preview_image: Image? 
-    var scrub_image: Image? 
 }
 
 // allow intiazliation of an array with objects of some type that know their index
@@ -78,8 +78,8 @@ extension Array {
 
 // view model used for the entire sequence
 class FramesToCheck {
-    // overall view model
-    var viewModel: ViewModel? = nil
+
+    var config: Config?
 
     // view class for each frame in the sequence in order
     var frames: [FrameView] = []
@@ -87,14 +87,16 @@ class FramesToCheck {
     // currently selected index in the sequence
     var current_index = 0      
     
-    init() { }
+    init() {
+
+    }
 
     var currentFrame: FrameAirplaneRemover? {
         return frames[current_index].frame
     }
     
-    var currentPreviewImage: Image? {
-        return frames[current_index].preview_image
+    var currentThumbnailImage: Image? {
+        return frames[current_index].thumbnail_image
     }
     
     init(number: Int) {
@@ -105,18 +107,20 @@ class FramesToCheck {
         return current_index >= frames.count
     }
 
-    func append(frame: FrameAirplaneRemover) {
+    func append(frame: FrameAirplaneRemover, viewModel: ViewModel) {
         Log.d("appending frame \(frame.frame_index)")
         self.frames[frame.frame_index].frame = frame
         
         Log.d("set self.frames[\(frame.frame_index)].frame")
-        // wait for this task
-        let preview_size = NSSize(width: 66, height: 60)
-        let scrub_size = NSSize(width: 800, height: 600)
-        //let scrub_size = NSSize(width: 1200, height: 900)
-        //let scrub_size = NSSize(width: 1600, height: 1200)
-        let local_dispatch = DispatchGroup()
-        local_dispatch.enter()
+
+        let thumbnail_width = config?.thumbnail_width ?? Config.default_thumbnail_width
+        let thumbnail_height = config?.thumbnail_height ?? Config.default_thumbnail_height
+        let thumbnail_size = NSSize(width: thumbnail_width, height: thumbnail_height)
+
+        let preview_width = config?.preview_width ?? Config.default_preview_width
+        let preview_height = config?.preview_height ?? Config.default_preview_height
+        let preview_size = NSSize(width: preview_width, height: preview_height)
+        
         Task {
             if let pixImage = try await frame.pixelatedImage(),
                let baseImage = pixImage.baseImage
@@ -127,13 +131,14 @@ class FramesToCheck {
                 
                 // XXX cache these scrub previews?
                 
+                if let thumbnail_base = baseImage.resized(to: thumbnail_size) {
+                    self.frames[frame.frame_index].thumbnail_image =
+                      Image(nsImage: thumbnail_base)
+                }
                 if let preview_base = baseImage.resized(to: preview_size) {
+                    Log.d("set preview image for self.frames[\(frame.frame_index)].frame")
                     self.frames[frame.frame_index].preview_image =
                       Image(nsImage: preview_base)
-                }
-                if let scrub_base = baseImage.resized(to: scrub_size) {
-                    self.frames[frame.frame_index].scrub_image =
-                      Image(nsImage: scrub_base)
                 }
                 
                 self.frames[frame.frame_index].outlierViews = []
@@ -161,12 +166,13 @@ class FramesToCheck {
                 Log.e("frame \(frame.frame_index) no image")
             }
             
-            // refresh ui
-            self.viewModel?.objectWillChange.send()
-            
-            local_dispatch.leave()
+            // refresh ui 
+            Task {
+                await MainActor.run {
+                    viewModel.objectWillChange.send()
+                }
+            }
         }
-        local_dispatch.wait()
     }
 
     func frame(atIndex index: Int) -> FrameAirplaneRemover? {
@@ -220,7 +226,6 @@ class ntar_gui_app: App {
     
     required init() {
         viewModel = ViewModel(framesToCheck: FramesToCheck())
-
         
         Log.handlers[.console] = ConsoleLogHandler(at: .debug)
         Log.i("Starting Up")
@@ -261,6 +266,9 @@ class ntar_gui_app: App {
         Task {
             do {
                 let config = try await Config.read(fromJsonDirname: outlier_dirname)
+
+                viewModel.config = config
+                viewModel.framesToCheck.config = config
 
                 let callbacks = make_callbacks()
                 
@@ -337,8 +345,14 @@ class ntar_gui_app: App {
                                 test_paint_output_path: test_paint_output_path,
                                 imageSequenceName: input_image_sequence_name,
                                 imageSequencePath: input_image_sequence_path,
-                                writeOutlierGroupFiles: self.should_write_outlier_group_files)
+                                writeOutlierGroupFiles: self.should_write_outlier_group_files,
+                                writeFramePreviewFiles: true,
+                                writeFrameThumbnailFiles: true)
 
+
+            viewModel.config = config
+            viewModel.framesToCheck.config = config
+            
             let callbacks = make_callbacks()
             Log.i("have config")
             do {
@@ -410,7 +424,14 @@ class ntar_gui_app: App {
 
     func addToViewModel(frame new_frame: FrameAirplaneRemover) async {
         Log.d("addToViewModel(frame: \(new_frame.frame_index))")
-        self.viewModel.framesToCheck.append(frame: new_frame)
+
+        if self.viewModel.framesToCheck.config == nil {
+            // XXX why this doesn't work initially befounds me,
+            // but without doing this here there is no config present...
+            self.viewModel.framesToCheck.config = self.viewModel.config
+        }
+        
+        self.viewModel.framesToCheck.append(frame: new_frame, viewModel: self.viewModel)
 
         Log.d("addToViewModel self.viewModel.frame \(self.viewModel.frame)")
 

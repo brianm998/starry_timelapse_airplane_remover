@@ -30,6 +30,8 @@ public struct Config: Codable {
         self.image_sequence_dirname = ""
         self.image_sequence_path = ""
         self.writeOutlierGroupFiles = false
+        self.writeFramePreviewFiles = false
+        self.writeFrameThumbnailFiles = false
 
         // XXX 16 bit hardcode
         self.min_pixel_distance = sixteenBitVersion(ofPercentage: outlierMaxThreshold)
@@ -48,7 +50,7 @@ public struct Config: Codable {
 
         return config
     }
-    
+
     public init(outputPath: String?,
                 outlierMaxThreshold: Double,
                 outlierMinThreshold: Double,
@@ -58,7 +60,9 @@ public struct Config: Codable {
                 test_paint_output_path: String,
                 imageSequenceName: String,
                 imageSequencePath: String,
-                writeOutlierGroupFiles: Bool)
+                writeOutlierGroupFiles: Bool,
+                writeFramePreviewFiles: Bool,
+                writeFrameThumbnailFiles: Bool)
     {
         if let outputPath = outputPath {
             self.outputPath = outputPath
@@ -74,6 +78,8 @@ public struct Config: Codable {
         self.image_sequence_dirname = imageSequenceName
         self.image_sequence_path = imageSequencePath
         self.writeOutlierGroupFiles = writeOutlierGroupFiles
+        self.writeFramePreviewFiles = writeFramePreviewFiles
+        self.writeFrameThumbnailFiles = writeFrameThumbnailFiles
 
         // XXX 16 bit hardcode
         self.min_pixel_distance = sixteenBitVersion(ofPercentage: outlierMaxThreshold)
@@ -118,6 +124,12 @@ public struct Config: Codable {
     // write out individual outlier group images
     public var writeOutlierGroupFiles: Bool
 
+    // write out a preview file for each frame
+    public var writeFramePreviewFiles: Bool
+
+    // write out a small thumbnail preview file for each frame
+    public var writeFrameThumbnailFiles: Bool
+
     public var medium_hough_line_score: Double = 0.4 // close to being a line, not really far
     // how far in each direction do we go when doing final processing?
     public var number_final_processing_neighbors_needed = 1 // in each direction
@@ -159,6 +171,18 @@ public struct Config: Codable {
     // used by updatable log
     public var progress_bar_length = 50
 
+    public var preview_width: Int = default_preview_width
+    public var preview_height: Int = default_preview_height
+
+    public static var default_preview_width: Int = 600
+    public static var default_preview_height: Int = 450
+    
+    public var thumbnail_width: Int = default_thumbnail_width
+    public var thumbnail_height: Int = default_thumbnail_height
+
+    public static var default_thumbnail_width: Int = 80
+    public static var default_thumbnail_height: Int = 60
+    
     // 0.0.2 added more detail group hough transormation analysis, based upon a data set
     // 0.0.3 included the data set analysis to include group size and fill, and to use histograms
     // 0.0.4 included .inStreak final processing

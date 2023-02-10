@@ -67,6 +67,8 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
     var test_paint = false               // should we test paint?  helpful for debugging
 
     public let outlier_output_dirname: String?
+    public let preview_output_dirname: String?
+    public let thumbnail_output_dirname: String?
 
     // populated by pruning
     private var outlier_groups: OutlierGroups
@@ -75,6 +77,74 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
         return outlier_groups.groups.map {$0.value}
     }
 
+    public func writePreviewFile(_ image: NSImage) {
+        Log.d("frame \(self.frame_index) doing preview")
+        if config.writeFramePreviewFiles {
+            Log.d("frame \(self.frame_index) doing preview")
+            let preview_width = config.preview_width ?? Config.default_preview_width
+            let preview_height = config.preview_height ?? Config.default_preview_height
+            let preview_size = NSSize(width: preview_width, height: preview_height)
+            
+            if let scaledImage = image.resized(to: preview_size),
+               let imageData = scaledImage.jpegData,
+               let preview_output_dirname = preview_output_dirname
+            {
+                do {
+                    let filename = "\(preview_output_dirname)/\(base_name).jpg"
+                    if file_manager.fileExists(atPath: filename) {
+                        Log.w("overwriting already existing filename \(filename)")
+                        try file_manager.removeItem(atPath: filename)
+                    }
+
+                    // write to file
+                    file_manager.createFile(atPath: filename,
+                                            contents: imageData,
+                                            attributes: nil)
+                    Log.i("frame \(self.frame_index) wrote preview to \(filename)")
+                } catch {
+                    Log.e("\(error)")
+                }
+            } else {
+                Log.w("frame \(self.frame_index) WTF")
+            }
+        } else {
+            Log.d("frame \(self.frame_index) no config")
+        }
+    }
+    public func writeThumbnailFile(_ image: NSImage) {
+        Log.d("frame \(self.frame_index) doing preview")
+        if config.writeFrameThumbnailFiles {
+            Log.d("frame \(self.frame_index) doing thumbnail")
+            let thumbnail_width = config.thumbnail_width ?? Config.default_thumbnail_width
+            let thumbnail_height = config.thumbnail_height ?? Config.default_thumbnail_height
+            let thumbnail_size = NSSize(width: thumbnail_width, height: thumbnail_height)
+            
+            if let scaledImage = image.resized(to: thumbnail_size),
+               let imageData = scaledImage.jpegData,
+               let thumbnail_output_dirname = thumbnail_output_dirname
+            {
+                do {
+                    let filename = "\(thumbnail_output_dirname)/\(base_name).jpg"
+                    if file_manager.fileExists(atPath: filename) {
+                        Log.w("overwriting already existing filename \(filename)")
+                        try file_manager.removeItem(atPath: filename)
+                    }
+
+                    // write to file
+                    file_manager.createFile(atPath: filename,
+                                            contents: imageData,
+                                            attributes: nil)
+                    Log.i("frame \(self.frame_index) wrote thumbnail to \(filename)")
+                } catch {
+                    Log.e("\(error)")
+                }
+            } else {
+                Log.w("frame \(self.frame_index) WTF")
+            }
+        } else {
+            Log.d("frame \(self.frame_index) no config")
+        }
+    }
     public func writeOutliersJson() {
         if config.writeOutlierGroupFiles,
            let output_dirname = self.outlier_output_dirname
@@ -150,6 +220,8 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
 
     public let config: Config
     public let callbacks: Callbacks
+
+    public let base_name: String
     
     init(with config: Config,
          callbacks: Callbacks,
@@ -158,10 +230,14 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
          otherFrameIndexes: [Int],
          outputFilename output_filename: String,
          testPaintFilename tpfo: String?,
+         baseName: String,       // source filename without path
          outlierOutputDirname outlier_output_dirname: String?,
+         previewOutputDirname preview_output_dirname: String?,
+         thumbnailOutputDirname thumbnail_output_dirname: String?,
          outlierGroups: OutlierGroups?) async throws
     {
         self.config = config
+        self.base_name = baseName
         self.callbacks = callbacks
         let image = try await image_sequence.getImage(withName: image_sequence.filenames[frame_index]).image()
         self.image_sequence = image_sequence
@@ -174,6 +250,8 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
         }
 
         self.outlier_output_dirname = outlier_output_dirname
+        self.preview_output_dirname = preview_output_dirname
+        self.thumbnail_output_dirname = thumbnail_output_dirname
         self.width = image.width
         self.height = image.height
 
@@ -790,12 +868,25 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
     // does the final painting and then writes out the output files
     public func finish() async throws {
         self.writeOutliersJson()
-
+        
         self.state = .reloadingImages
         
         Log.i("frame \(self.frame_index) finishing")
         let image = try await image_sequence.getImage(withName: image_sequence.filenames[frame_index]).image()
 
+
+        if config.writeFramePreviewFiles ||
+           config.writeFrameThumbnailFiles
+        {
+            Log.d("frame \(self.frame_index) doing preview")
+            if let baseImage = image.baseImage {
+                self.writePreviewFile(baseImage)
+                self.writeThumbnailFile(baseImage)
+            } else {
+                Log.w("frame \(self.frame_index) NO BASE IMAGE")
+            }
+        }
+        
         // maybe write out pre-updated scaled preview image here?
         
         var otherFrames: [PixelatedImage] = []

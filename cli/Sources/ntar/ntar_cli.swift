@@ -323,7 +323,10 @@ struct Ntar: ParsableCommand {
                             test_paint_output_path: test_paint_output_path,
                             imageSequenceName: input_image_sequence_name,
                             imageSequencePath: input_image_sequence_path,
-                            writeOutlierGroupFiles: should_write_outlier_group_files)
+                            writeOutlierGroupFiles: should_write_outlier_group_files,
+                            // maybe make a separate command line parameter for these VVV? 
+                            writeFramePreviewFiles: should_write_outlier_group_files,
+                            writeFrameThumbnailFiles: should_write_outlier_group_files)
 
             Log.name = "ntar-log"
             Log.nameSuffix = input_image_sequence_name
