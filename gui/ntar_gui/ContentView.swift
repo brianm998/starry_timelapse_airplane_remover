@@ -40,6 +40,22 @@ class FrameSaveQueue {
     init(_ finalProcessor: FinalProcessor) {
         self.finalProcessor = finalProcessor
     }
+
+    // no purgatory
+    func saveNow(frame: FrameAirplaneRemover) {
+        Log.w("actually saving frame \(frame.frame_index)")
+        self.saving[frame.frame_index] = frame
+        Task {
+            await self.finalProcessor.final_queue.add(atIndex: frame.frame_index) {
+                Log.i("frame \(frame.frame_index) finishing")
+                try await frame.finish()
+                await MainActor.run {
+                    self.saving[frame.frame_index] = nil
+                }
+                Log.i("frame \(frame.frame_index) finished")
+            }
+        }
+    }
     
     func readyToSave(frame: FrameAirplaneRemover) {
         Log.w("frame \(frame.frame_index) entering pergatory")
@@ -53,19 +69,7 @@ class FrameSaveQueue {
                     // go back to pergatory
                     self.readyToSave(frame: frame)
                 } else {
-                    // advance to saving state
-                    Log.w("actually saving frame \(frame.frame_index)")
-                    self.saving[frame.frame_index] = frame
-                    Task {
-                        await self.finalProcessor.final_queue.add(atIndex: frame.frame_index) {
-                            Log.i("frame \(frame.frame_index) finishing")
-                            try await frame.finish()
-                            await MainActor.run {
-                                self.saving[frame.frame_index] = nil
-                            }
-                            Log.i("frame \(frame.frame_index) finished")
-                        }
-                    }
+                    self.saveNow(frame: frame)
                 }
             }
         }
@@ -305,7 +309,7 @@ struct ContentView: View {
     }
 
     // used when advancing between frames
-    func clearAndSave(frame frame_to_save: FrameAirplaneRemover) {
+    func saveToFile(frame frame_to_save: FrameAirplaneRemover) {
         if let frameSaveQueue = viewModel.frameSaveQueue {
             frameSaveQueue.readyToSave(frame: frame_to_save)
         } else {
@@ -454,7 +458,21 @@ struct ContentView: View {
                             background_color = Color(white: background_brightness/100)
                             viewModel.objectWillChange.send()
                         }
-                        .frame(maxWidth: 100, maxHeight: 30)
+                          .frame(maxWidth: 100, maxHeight: 30)
+                        Button(action: {
+                            Task {
+                                for frameView in viewModel.framesToCheck.frames {
+                                    if let frame = frameView.frame,
+                                       let frameSaveQueue = viewModel.frameSaveQueue
+                                    {
+                                        frameSaveQueue.saveNow(frame: frame)
+                                    }
+                                }
+                            }
+                        }) {
+                            Text("Save All").font(.largeTitle)
+                        }.buttonStyle(PlainButtonStyle())
+                        
                     }
 
                     // the filmstrip at the bottom
@@ -484,7 +502,7 @@ struct ContentView: View {
 
         if !scrubMode {
             if let frame_to_save = old_frame {
-                self.clearAndSave(frame: frame_to_save)
+                self.saveToFile(frame: frame_to_save)
             }
         }
         

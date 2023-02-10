@@ -130,6 +130,7 @@ class FramesToCheck {
                 // load the view frames from the main image
                 
                 // XXX cache these scrub previews?
+                // look for saved versions of these
                 
                 if let thumbnail_base = baseImage.resized(to: thumbnail_size) {
                     self.frames[frame.frame_index].thumbnail_image =
