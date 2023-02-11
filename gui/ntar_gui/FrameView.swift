@@ -6,16 +6,16 @@ import NtarCore
 
 
 // UI view class used for each frame
-class FrameView {
+class FrameView: ObservableObject {
     init(_ frame_index: Int) {
         self.frame_index = frame_index
     }
     
     let frame_index: Int
     var frame: FrameAirplaneRemover?
-    var outlierViews: [OutlierGroupView] = []
-    var image: Image?
-    var thumbnail_image: Image? 
-    var preview_image: Image? 
+    @Published var outlierViews: [OutlierGroupView] = []
+    @Published var image: Image?
+    @Published var thumbnail_image: Image? 
+    @Published var preview_image: Image? 
 }
 

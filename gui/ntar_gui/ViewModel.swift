@@ -17,7 +17,7 @@ class ViewModel: ObservableObject {
     var label_text: String = "Started"
 
     // view class for each frame in the sequence in order
-    var frames: [FrameView] = []
+    @Published var frames: [FrameView] = []
 
     // currently selected index in the sequence
     var current_index = 0      
@@ -46,7 +46,15 @@ class ViewModel: ObservableObject {
     }
     
     @MainActor func update() {
-        self.objectWillChange.send()
+
+        Task {
+            if let frame = frames[current_index].frame {
+                // without this, clicking on an outlier doesn't change in the view right away 
+                await self.setOutlierGroups(forFrame: frame)
+            }
+            self.objectWillChange.send()
+        }
+        
     }
 
 
