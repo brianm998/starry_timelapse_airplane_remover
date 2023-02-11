@@ -192,6 +192,8 @@ struct ContentView: View {
             fatalError("SETUP WRONG")
         }
     }
+
+    let button_size: CGFloat = 50
     
     var body: some View {
         let scaling_anchor = UnitPoint(x: 0.75, y: 0.75)
@@ -250,44 +252,99 @@ struct ContentView: View {
                                   .progressViewStyle(CircularProgressViewStyle(tint: .yellow))
                             }
                             
-                            // previous button
-                            Button(action: {
-        // XXX move this out 
-        viewModel.label_text = "loading..."
-        // XXX set loading image here
+                            let start_shortcut_key: KeyEquivalent = "b"
 
+                            // start button
+                            button(named: "arrow.left.to.line.compact",
+                                   shortcutKey: start_shortcut_key,
+                                   toolTip: "go to start of sequence (keyboard '\(start_shortcut_key)'")
+                            {
+                                let current_frame = viewModel.currentFrame
+                                let new_frame_view = viewModel.frames[0]
+                                viewModel.current_index = new_frame_view.frame_index
+                                self.transition(toFrame: new_frame_view,
+                                                from: current_frame,
+                                                withScroll: scroller)
+                            }
+
+                            // fast previous button
+                            button(named: "chevron.backward.2",
+                                   shortcutKey: "z",
+                                   toolTip: "FUCK YOU")
+                            {
+                                let current_frame = viewModel.currentFrame
+
+                                var new_index = viewModel.current_index - 10 // XXX make this a paramenter somewhere
+                                if new_index < 0 {
+                                    new_index = 0
+                                }
+                                let new_frame_view = viewModel.frames[new_index]
+                                viewModel.current_index = new_index
+                                
+                                self.transition(toFrame: new_frame_view,
+                                                from: current_frame,
+                                                withScroll: scrubMode ? nil : scroller)
+                            }
+                            
+                            // previous button
+                            button(named: "chevron.backward",
+                                   shortcutKey: .leftArrow,
+                                   toolTip: "FUCK YOU")
+                            {
                                 let current_frame = viewModel.currentFrame
                                 let new_frame_view = viewModel.previousFrame()
                                 self.transition(toFrame: new_frame_view,
                                                 from: current_frame,
-                                                withScroll: scroller)
-                            }) {
-                                Text("Previous").font(.largeTitle)
-                            }.buttonStyle(PlainButtonStyle())
-                            //.keyboardShortcut(.rightArrow, modifiers: [])
-                            .keyboardShortcut("a", modifiers: [])
+                                                withScroll: scrubMode ? nil : scroller)
+                            }
 
-                            // next button
-                            Button(action: {
+                          // next button
+                            button(named: "chevron.forward",
+                                   shortcutKey: .rightArrow,
+                                   toolTip: "FUCK YOU")
+                            {
                                 Log.d("next button pressed")
-        // XXX move this out 
-        viewModel.label_text = "loading..."
-        // XXX set loading image here
-
                                 Log.d("viewModel.current_index = \(viewModel.current_index)")
                                 let current_frame = viewModel.currentFrame
                                 let frame_view = viewModel.nextFrame()
                                 
                                 self.transition(toFrame: frame_view,
                                                 from: current_frame,
-                                                withScroll: scroller)
-                            }) {
-                                Text("Next").font(.largeTitle)
+                                                withScroll: scrubMode ? nil : scroller)
                             }
-                            // XXX why doesn't .rightArrow work?
-                            //.keyboardShortcut(KeyEquivalent.rightArrow, modifiers: [])
-                            .keyboardShortcut("s", modifiers: [])
-                            .buttonStyle(PlainButtonStyle())
+
+                            // fast next button
+                            button(named: "chevron.forward.2",
+                                   shortcutKey: "x",
+                                   toolTip: "FUCK YOU")
+                            {
+                                let current_frame = viewModel.currentFrame
+
+                                var new_index = viewModel.current_index + 10 // XXX make this a paramenter somewhere
+                                if new_index >= viewModel.frames.count {
+                                    new_index = viewModel.frames.count-1
+                                }
+                                let new_frame_view = viewModel.frames[new_index]
+                                viewModel.current_index = new_index
+                                
+                                self.transition(toFrame: new_frame_view,
+                                                from: current_frame,
+                                                withScroll: scrubMode ? nil : scroller)
+                            }
+
+                            // end button
+                            button(named: "arrow.right.to.line.compact",
+                                   shortcutKey: "e",
+                                   toolTip: "FUCK YOU")
+                            {
+                                let current_frame = viewModel.currentFrame
+                                let new_frame_view = viewModel.frames[viewModel.frames.count-1]
+                                viewModel.current_index = new_frame_view.frame_index
+                                self.transition(toFrame: new_frame_view,
+                                                from: current_frame,
+                                                withScroll: scroller)
+                            }
+                                   
                         }
                         Button(action: {
                             Task {
@@ -458,10 +515,38 @@ struct ContentView: View {
                         viewModel.update()
                     }
                 }
-                scroller?.scrollTo(next_frame.frame_index)
             }
+            scroller?.scrollTo(next_frame.frame_index)
         } else {
             viewModel.update()
+        }
+    }
+
+    func buttonImage(_ name: String) -> some View {
+        return Image(systemName: name)
+          .resizable()
+          .aspectRatio(contentMode: .fit)
+          .frame(maxWidth: button_size, maxHeight: button_size)
+    }
+    
+    func button(named button_name: String,
+                shortcutKey: KeyEquivalent,
+                modifiers: EventModifiers = [],
+                toolTip: String,
+                action: @escaping () -> Void) -> some View
+    {
+        Log.d("button \(button_name) using modifiers \(modifiers)")
+        return ZStack {
+            Button("", action: action)
+              .opacity(0)
+              .keyboardShortcut(shortcutKey, modifiers: modifiers)
+            
+            Button(action: action) {
+                buttonImage(button_name)
+            }
+              .buttonStyle(PlainButtonStyle())                            
+              .help(toolTip)
+            
         }
     }
 }
@@ -471,5 +556,4 @@ struct ContentView_Previews: PreviewProvider {
         ContentView(viewModel: ViewModel())
     }
 }
-
 
