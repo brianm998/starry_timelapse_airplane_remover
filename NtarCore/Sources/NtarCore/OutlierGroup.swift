@@ -39,7 +39,6 @@ public class OutlierGroup: CustomStringConvertible, Hashable, Equatable, Compara
     public let bounds: BoundingBox     // a bounding box on the image that contains this group
     public let brightness: UInt        // the average amount per pixel of brightness over the limit 
     public var lines: [Line]           // sorted lines from the hough transform of this outlier group
-//    public let frame: FrameAirplaneRemover
     public let pixels: [UInt32]        // indexed by y * bounds.width + x, true if part of this group
                                 // zero if pixel if not part of group, brightness value otherwise
     public let max_pixel_distance: UInt16
@@ -176,24 +175,21 @@ public class OutlierGroup: CustomStringConvertible, Hashable, Equatable, Compara
             for y in 0 ..< self.bounds.height {
                 let pixel_index = y*self.bounds.width + x
                 var pixel = Pixel()
-                if self.pixels[pixel_index] != 0 {                    
-                    if let reason = self.shouldPaint {
-                        if reason.willPaint {
-                            pixel.red = 0xFFFF
-                            pixel.alpha = 0xFFFF
-                          } else {
-                            pixel.green = 0xFFFF
-                            pixel.alpha = 0xFFFF
-                        }
+                if self.pixels[pixel_index] != 0 {
+                    // the real color is set in the view layer 
+                    pixel.red = 0xFFFF
+                    pixel.green = 0xFFFF
+                    pixel.blue = 0xFFFF
+                    pixel.alpha = 0xFFFF
 
-                        var nextValue = pixel.value
-                        
-                        let offset = (Int(y) * bytesPerPixel*self.bounds.width) + (Int(x) * bytesPerPixel)
-                        
-                        image_data.replaceSubrange(offset ..< offset+bytesPerPixel,
-                                                   with: &nextValue,
-                                                   count: bytesPerPixel)
-                    }
+                    var nextValue = pixel.value
+                    
+                    let offset = (Int(y) * bytesPerPixel*self.bounds.width) + (Int(x) * bytesPerPixel)
+                    
+                    image_data.replaceSubrange(offset ..< offset+bytesPerPixel,
+                                               with: &nextValue,
+                                               count: bytesPerPixel)
+
                 }
             }
         }

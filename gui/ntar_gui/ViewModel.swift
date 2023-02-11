@@ -50,16 +50,7 @@ class ViewModel: ObservableObject {
     }
     
     @MainActor func update() {
-
-        Task {
-            if let frame = frames[current_index].frame {
-                // without this, clicking on an outlier doesn't change in the view right away 
-                await self.setOutlierGroups(forFrame: frame)
-                // XXX maybe try just changing a property in the view instead 
-            }
-            self.objectWillChange.send()
-        }
-        
+        Task { self.objectWillChange.send() }
     }
 
 

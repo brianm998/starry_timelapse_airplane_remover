@@ -43,29 +43,26 @@ struct ContentView: View {
                         let frame_center_x = outlierViewModel.frame_width/2
                         let frame_center_y = outlierViewModel.frame_height/2
                         let outlier_center = outlierViewModel.bounds.center
-                        
+                        let will_paint = outlierViewModel.group.shouldPaint?.willPaint ?? false
                         Image(nsImage: outlierViewModel.image)
-                        // offset from the center of parent view
+                          .renderingMode(.template)
+                          .foregroundColor(will_paint ? .red : .green)
                           .offset(x: CGFloat(outlier_center.x - frame_center_x),
                                   y: CGFloat(outlier_center.y - frame_center_y))
                           // tap gesture toggles paintability of the tapped group
                           .onTapGesture {
-                              Log.d("t1")
-//                              Task {
-                              Log.d("t2")
-                                  if let origShouldPaint = outlierViewModel.group.shouldPaint {
-                                      // change the paintability of this outlier group
-                                      // set it to user selected opposite previous value
-                                      let reason = PaintReason.userSelected(!origShouldPaint.willPaint)
-                                      Log.d("t3 reason \(reason)")
-                                      outlierViewModel.group.shouldPaint(reason)
-                                      
-                                      // update the view model so it shows up on screen
-                                      self.viewModel.update()
-                                  } else {
-                                      Log.e("WTF, not already set to paint??")
-                                  }
-  //                            }
+                              if let origShouldPaint = outlierViewModel.group.shouldPaint {
+                                  // change the paintability of this outlier group
+                                  // set it to user selected opposite previous value
+                                  let reason = PaintReason.userSelected(!origShouldPaint.willPaint)
+                                  Log.d("t3 reason \(reason)")
+                                  outlierViewModel.group.shouldPaint(reason)
+                                  
+                                  // update the view model so it shows up on screen
+                                  self.viewModel.update()
+                              } else {
+                                  Log.e("WTF, not already set to paint??")
+                              }
                           }
                      }
                 }
@@ -143,30 +140,31 @@ struct ContentView: View {
         }
 
         return ZStack {
-            let frameView = viewModel.frames[frame_index]
+            if frame_index >= 0 && frame_index < viewModel.frames.count {
+                let frameView = viewModel.frames[frame_index]
 
-            if viewModel.current_index == frame_index {            
-                if frameView.thumbnail_image == nil {
-                    Rectangle().foregroundColor(.orange)
+                if viewModel.current_index == frame_index {            
+                    if frameView.thumbnail_image == nil {
+                        Rectangle().foregroundColor(.orange)
+                    } else {
+                        // highlight the selected frame
+                        let opacity = viewModel.current_index == frame_index ? 0.4 : 0
+                        frameView.thumbnail_image!
+                          .overlay(
+                            Rectangle()
+                              .foregroundColor(.orange).opacity(opacity)
+                          )
+                    }
                 } else {
-                    // highlight the selected frame
-                    let opacity = viewModel.current_index == frame_index ? 0.4 : 0
-                    frameView.thumbnail_image!
-                      .overlay(
+                    if frameView.thumbnail_image == nil {
                         Rectangle()
-                          .foregroundColor(.orange).opacity(opacity)
-                      )
+                          .foregroundColor(bg_color)
+                    } else {
+                        frameView.thumbnail_image!
+                    }
                 }
-            } else {
-                if frameView.thumbnail_image == nil {
-                    Rectangle()
-                      .foregroundColor(bg_color)
-                } else {
-                    frameView.thumbnail_image!
-                }
+                Text("\(frame_index)")
             }
-            Text("\(frame_index)")
-
         }
           .frame(width: 80, height: 50)
           .onTapGesture {
