@@ -72,10 +72,10 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
     public let thumbnail_output_dirname: String?
 
     // populated by pruning
-    private var outlier_groups: OutlierGroups
+    private var outlier_groups: OutlierGroups?
 
     public func outlierGroups() -> [OutlierGroup] {
-        return outlier_groups.groups.map {$0.value}
+        return outlier_groups?.groups.map {$0.value} ?? []
     }
 
     public func writePreviewFile(_ image: NSImage) {
@@ -236,7 +236,7 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
     // only used for test painting
     private var ignored_outlier_groups: [String: OutlierGroup] = [:] // keyed by group name
 
-    var outlierGroupCount: Int { return outlier_groups.groups.count }
+    var outlierGroupCount: Int { return outlier_groups?.groups.count ?? 0 }
     
     public let output_filename: String
 
@@ -260,6 +260,10 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
         }
         return nil
     }
+
+    let outlierGroupLoader: () async -> OutlierGroups?
+
+    let fully_process: Bool
     
     init(with config: Config,
          width: Int,
@@ -275,12 +279,15 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
          outlierOutputDirname outlier_output_dirname: String?,
          previewOutputDirname preview_output_dirname: String?,
          thumbnailOutputDirname thumbnail_output_dirname: String?,
-         outlierGroups: OutlierGroups?) async throws
+         outlierGroupLoader: @escaping () async -> OutlierGroups?,
+         fullyProcess: Bool = true) async throws
     {
+        self.fully_process = fullyProcess
         self.config = config
         self.base_name = baseName
         self.callbacks = callbacks
-
+        self.outlierGroupLoader = outlierGroupLoader
+        
         // XXX this is now only used here for getting the image width, height and bpp
         // XXX this is a waste time
         //let image = try await image_sequence.getImage(withName: image_sequence.filenames[frame_index]).image()
@@ -309,24 +316,34 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
         self.bytesPerPixel = bytesPerPixel
         self.bytesPerRow = width*bytesPerPixel
 
-        // XXX avoid this following step when loading outlier data from file 
-
-        if let outlierGroups = outlierGroups {
-            Log.i("loaded outlier groups for frame \(frame_index)")
-            self.outlier_groups = outlierGroups
-            self.state = .outlierProcessingComplete
+        // this takes a long time, and the gui does it later
+        if fullyProcess {
+            try await loadOutliers()
+            Log.i("frame \(frame_index) done detecting outlier groups")
         } else {
-            Log.i("calculating outlier groups for frame \(frame_index)")
-            self.outlier_groups = OutlierGroups(frame_index: frame_index)
-            // find outlying bright pixels between frames,
-            // and group neighboring outlying pixels into groups
-            // this can take a long time
-            try await self.findOutliers()
+            Log.i("frame \(frame_index) loaded without outlier groups")
         }
 
-        Log.i("frame \(frame_index) detected outlier groups")
     }
 
+    public func loadOutliers() async throws {
+        Log.d("frame \(frame_index) loading outliers")
+        if self.outlier_groups == nil {
+            if let outlierGroups = await outlierGroupLoader() {
+                self.outlier_groups = outlierGroups
+                self.state = .outlierProcessingComplete
+                Log.i("loaded \(self.outlier_groups?.groups.count) outlier groups for frame \(frame_index)")
+            } else {
+                Log.i("calculating outlier groups for frame \(frame_index)")
+                self.outlier_groups = OutlierGroups(frame_index: frame_index)
+                // find outlying bright pixels between frames,
+                // and group neighboring outlying pixels into groups
+                // this can take a long time
+                try await self.findOutliers()
+            }
+        }
+    }
+    
     func readOutliers(fromJson json: String) throws {
         if let jsonData = json.data(using: .utf8) {
             let decoder = JSONDecoder()
@@ -375,14 +392,16 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
     }
 
     func outlierGroup(named outlier_name: String) -> OutlierGroup? {
-        return outlier_groups.groups[outlier_name]
+        return outlier_groups?.groups[outlier_name]
     }
     
     func foreachOutlierGroup(_ closure: (OutlierGroup)async->LoopReturn) async {
-        for (_, group) in self.outlier_groups.groups {
-            let result = await closure(group)
-            if result == .break { break }
-        }
+        if let outlier_groups = self.outlier_groups {
+            for (_, group) in outlier_groups.groups {
+                let result = await closure(group)
+                if result == .break { break }
+            }
+        } 
     }
     
     // this is still a slow part of the process, but is now about 10x faster than before
@@ -752,13 +771,13 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
                 } else {
                     //Log.w("frame \(frame_index) adding outlier \(new_outlier) with hough score \(hough_score) satsr \(satsr) surface_area_score \(surface_area_score)")
                     // add this new outlier to the set to analyize
-                    outlier_groups.groups[group_name] = new_outlier
+                    outlier_groups?.groups[group_name] = new_outlier
                 }
                   
             }
         }
         self.state = .readyForInterFrameProcessing
-        Log.i("frame \(frame_index) has found \(outlier_groups.groups.count) outlier groups to consider")
+        Log.i("frame \(frame_index) has found \(outlier_groups?.groups.count) outlier groups to consider")
     }
 
     private func testPaintOutliers(from outliers: [String:OutlierGroup], toData test_paint_data: inout Data) async {
@@ -790,7 +809,9 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
     private func testPaintOutliers(toData test_paint_data: inout Data) async {
         Log.d("frame \(frame_index) painting outliers green")
 
-        await self.testPaintOutliers(from: outlier_groups.groups, toData: &test_paint_data)
+        if let outlier_groups = outlier_groups {
+            await self.testPaintOutliers(from: outlier_groups.groups, toData: &test_paint_data)
+        }
         await self.testPaintOutliers(from: ignored_outlier_groups, toData: &test_paint_data)
     }
 
@@ -819,6 +840,11 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
         let image = try await image_sequence.getImage(withName: image_sequence.filenames[frame_index]).image()
 
         // paint over every outlier in the paint list with pixels from the adjecent frames
+        guard let outlier_groups = outlier_groups else {
+            Log.e("cannot paint without outlier groups")
+            return
+        }
+        
         for (group_name, group) in outlier_groups.groups {
             if let reason = group.shouldPaint {
                 if reason.willPaint {

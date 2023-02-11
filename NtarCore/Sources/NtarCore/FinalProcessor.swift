@@ -82,7 +82,9 @@ public actor FinalProcessor {
         Task {
             let frame_state = await frame.processingState()
             Log.d("add frame \(frame.frame_index) with state \(frame_state)")
-            if frame_state == .outlierProcessingComplete {
+            if frame_state == .outlierProcessingComplete ||
+              !frame.fully_process
+            {
                 // these frames have already been inter-frame processed,
                 // likely from saved json outlier groups
                 await self.finish(frame: frame)

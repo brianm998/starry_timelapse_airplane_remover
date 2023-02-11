@@ -35,13 +35,18 @@ public class ImageSequenceProcessor<T> {
 
     var remaining_images_closure: ((Int) -> Void)?
 
+    // if this is true, outliers are detected, inter-frame processing is done
+    // if false, frames are handed back without outliers detected
+    let fully_process: Bool
+    
     init(imageSequenceDirname image_sequence_dirname: String,
          outputDirname output_dirname: String,
          maxConcurrent max_concurrent: Int = 5,
          supported_image_file_types: [String],
          number_final_processing_neighbors_needed: Int,
          processExistingFiles: Bool,
-         max_images: Int? = nil) throws
+         max_images: Int? = nil,
+         fullyProcess: Bool = true) throws
     {
         self.number_running = NumberRunning(in: " frames processing outliers",
                                             max: max_concurrent,
@@ -55,6 +60,7 @@ public class ImageSequenceProcessor<T> {
                                                 max_images: max_images)
         self.should_process = [Bool](repeating: processExistingFiles, count: image_sequence.filenames.count)
         self.existing_output_files = [Bool](repeating: false, count: image_sequence.filenames.count)
+        self.fully_process = fullyProcess
         self.method_list = try assembleMethodList()
     }
 

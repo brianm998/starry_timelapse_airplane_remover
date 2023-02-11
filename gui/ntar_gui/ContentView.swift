@@ -48,6 +48,7 @@ class FrameSaveQueue {
         Task {
             await self.finalProcessor.final_queue.add(atIndex: frame.frame_index) {
                 Log.i("frame \(frame.frame_index) finishing")
+                try await frame.loadOutliers()
                 try await frame.finish()
                 await MainActor.run {
                     self.saving[frame.frame_index] = nil
@@ -441,6 +442,9 @@ struct ContentView: View {
                                   if let current_frame = viewModel.framesToCheck.currentFrame {
                                       Task {
                                           do {
+                                              if viewModel.framesToCheck.frames[current_frame.frame_index].outlierViews.count == 0 {
+                                                  await viewModel.framesToCheck.setOutlierGroups(forFrame: current_frame)
+                                              }
                                               if let baseImage = try await current_frame.baseImage() {
                                                   viewModel.image = Image(nsImage: baseImage)
                                                   viewModel.update()
@@ -528,6 +532,10 @@ struct ContentView: View {
                 }
             }
             if !scrubMode {
+                Task {
+                    await viewModel.framesToCheck.setOutlierGroups(forFrame: next_frame)
+                    viewModel.update()
+                }
                 scroller?.scrollTo(next_frame.frame_index)
             }
         } else {

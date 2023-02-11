@@ -38,7 +38,7 @@ public class OutlierGroup: CustomStringConvertible, Hashable, Equatable, Compara
     public let size: UInt              // number of pixels in this outlier group
     public let bounds: BoundingBox     // a bounding box on the image that contains this group
     public let brightness: UInt        // the average amount per pixel of brightness over the limit 
-    public let lines: [Line]           // sorted lines from the hough transform of this outlier group
+    public var lines: [Line]           // sorted lines from the hough transform of this outlier group
 //    public let frame: FrameAirplaneRemover
     public let pixels: [UInt32]        // indexed by y * bounds.width + x, true if part of this group
                                 // zero if pixel if not part of group, brightness value otherwise
@@ -82,7 +82,7 @@ public class OutlierGroup: CustomStringConvertible, Hashable, Equatable, Compara
                                        input_data: pixels,
                                        max_pixel_distance: max_pixel_distance)
         
-        self.lines = transform.lines(min_count: 1)
+        self.lines = transform.lines(min_count: 1, number_of_lines_returned: 10)
 
         if self.shouldPaint == nil,
            self.paintScoreFromHoughTransformLines > 0.5

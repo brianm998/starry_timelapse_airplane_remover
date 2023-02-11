@@ -47,6 +47,8 @@ import NtarCore
   - rename previews/scrub and add and preview size to config
   - add config option to write out previews of both original and modified images to file
   - upon load, use the previews if they exist
+
+  - add a button that calls frame.outlierGroups() on all frames to load their outliers
   
   NEW UI:
 
@@ -124,8 +126,6 @@ class FramesToCheck {
         Task {
             var pixImage: PixelatedImage?
             var baseImage: NSImage?
-            let outlierGroups = try await frame.outlierGroups()
-            let (frame_width, frame_height) = await (frame.width, frame.height)
             // load the view frames from the main image
             
             // XXX cache these scrub previews?
@@ -169,28 +169,8 @@ class FramesToCheck {
                     Log.w("set unable to load thumbnail image for self.frames[\(frame.frame_index)].frame")
                 }
             }
-                
-            self.frames[frame.frame_index].outlierViews = []
-            for group in outlierGroups {
-                if let cgImage = group.testImage() {
-                    var size = CGSize()
-                    size.width = CGFloat(cgImage.width)
-                    size.height = CGFloat(cgImage.height)
-                    let outlierImage = NSImage(cgImage: cgImage,
-                                               size: size)
-                    
-                    let groupView = OutlierGroupView(group: group,
-                                                     name: group.name,
-                                                     bounds: group.bounds,
-                                                     image: outlierImage,
-                                                     frame_width: frame_width,
-                                                     frame_height: frame_height)
-                    
-                    self.frames[frame.frame_index].outlierViews.append(groupView)
-                } else {
-                    Log.e("frame \(frame.frame_index) outlier group no image")
-                }
-            }
+
+            await setOutlierGroups(forFrame: frame)
             // refresh ui 
             await MainActor.run {
                 viewModel.objectWillChange.send()
@@ -198,6 +178,32 @@ class FramesToCheck {
         }
     }
 
+    func setOutlierGroups(forFrame frame: FrameAirplaneRemover) async {
+        self.frames[frame.frame_index].outlierViews = []
+        let outlierGroups = await frame.outlierGroups()
+        let (frame_width, frame_height) = (frame.width, frame.height)
+        for group in outlierGroups {
+            if let cgImage = group.testImage() {
+                var size = CGSize()
+                size.width = CGFloat(cgImage.width)
+                size.height = CGFloat(cgImage.height)
+                let outlierImage = NSImage(cgImage: cgImage,
+                                           size: size)
+                
+                let groupView = OutlierGroupView(group: group,
+                                                 name: group.name,
+                                                 bounds: group.bounds,
+                                                 image: outlierImage,
+                                                 frame_width: frame_width,
+                                                 frame_height: frame_height)
+                
+                self.frames[frame.frame_index].outlierViews.append(groupView)
+            } else {
+                Log.e("frame \(frame.frame_index) outlier group no image")
+            }
+        }
+    }
+    
     func frame(atIndex index: Int) -> FrameAirplaneRemover? {
         if index < 0 { return nil }
         if index >= frames.count { return nil }
@@ -297,8 +303,9 @@ class ntar_gui_app: App {
                 
                 let eraser = try NighttimeAirplaneRemover(with: config,
                                                           callbacks: callbacks,
-                                                          processExistingFiles: true/*,
-                                                          maxResidentImages: 32*/)
+                                                          processExistingFiles: true,/*,
+                                                                                       maxResidentImages: 32*/
+                                                          fullyProcess: false)
                 self.viewModel.eraser = eraser // XXX rename this crap
 
                 if let fp = eraser.final_processor {
