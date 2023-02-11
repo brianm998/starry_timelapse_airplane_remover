@@ -45,7 +45,7 @@ struct ContentView: View {
                         let outlier_center = outlierViewModel.bounds.center
                         let will_paint = outlierViewModel.group.shouldPaint?.willPaint ?? false
                         Image(nsImage: outlierViewModel.image)
-                          .renderingMode(.template)
+                          .renderingMode(.template) // makes this VV color work
                           .foregroundColor(will_paint ? .red : .green)
                           .offset(x: CGFloat(outlier_center.x - frame_center_x),
                                   y: CGFloat(outlier_center.y - frame_center_y))
@@ -55,7 +55,6 @@ struct ContentView: View {
                                   // change the paintability of this outlier group
                                   // set it to user selected opposite previous value
                                   let reason = PaintReason.userSelected(!origShouldPaint.willPaint)
-                                  Log.d("t3 reason \(reason)")
                                   outlierViewModel.group.shouldPaint(reason)
                                   
                                   // update the view model so it shows up on screen
@@ -310,6 +309,8 @@ struct ContentView: View {
                                       Task {
                                           do {
                                               if viewModel.frames[current_frame.frame_index].outlierViews.count == 0 {
+                                                  // only set them if they're not present
+                                                  let _ = try await current_frame.loadOutliers()
                                                   await viewModel.setOutlierGroups(forFrame: current_frame)
                                               }
                                               if let baseImage = try await current_frame.baseImage() {
@@ -320,6 +321,8 @@ struct ContentView: View {
                                               Log.e("error")
                                           }
                                       }
+                                  } else {
+                                      Log.i("not scrubbing with NO frame")
                                   }
                               }
                           }
@@ -438,8 +441,11 @@ struct ContentView: View {
             }
             if !scrubMode {
                 Task {
-                    await viewModel.setOutlierGroups(forFrame: next_frame)
-                    viewModel.update()
+                    if viewModel.frames[next_frame.frame_index].outlierViews.count == 0 {
+                        let _ = try await next_frame.loadOutliers()
+                        await viewModel.setOutlierGroups(forFrame: next_frame)
+                        viewModel.update()
+                    }
                 }
                 scroller?.scrollTo(next_frame.frame_index)
             }

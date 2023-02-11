@@ -126,14 +126,14 @@ class ViewModel: ObservableObject {
     func setOutlierGroups(forFrame frame: FrameAirplaneRemover) async {
         self.frames[frame.frame_index].outlierViews = []
         let outlierGroups = await frame.outlierGroups()
+        Log.d("got \(outlierGroups.count) groups for frame \(frame.frame_index)")
         let (frame_width, frame_height) = (frame.width, frame.height)
         for group in outlierGroups {
             if let cgImage = group.testImage() {
                 var size = CGSize()
                 size.width = CGFloat(cgImage.width)
                 size.height = CGFloat(cgImage.height)
-                let outlierImage = NSImage(cgImage: cgImage,
-                                           size: size)
+                let outlierImage = NSImage(cgImage: cgImage, size: size)
                 
                 let groupView = OutlierGroupView(group: group,
                                                  name: group.name,
