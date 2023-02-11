@@ -78,8 +78,17 @@ class ntar_gui_app: App {
     // the state of each frame indexed by frame #
     var frame_states: [Int: FrameProcessingState] = [:]
     
+    let input_queue: FinalQueue
+    
     required init() {
         viewModel = ViewModel()
+        let dispatch_handler = DispatchHandler()
+        input_queue = FinalQueue(max_concurrent: 10, // XXX get this number right
+                                 dispatchGroup: dispatch_handler)
+
+        Task(priority: .high) {
+            try await input_queue.start()
+        }
         
         Log.handlers[.console] = ConsoleLogHandler(at: .debug)
         Log.i("Starting Up")
@@ -93,11 +102,11 @@ class ntar_gui_app: App {
             //let outlier_dirname = "/pp/tmp/TEST_12_22_2022-a9-2-aurora-topaz-500-ntar-v-0_1_3-outliers"
             
             //let outlier_dirname = "/pp/tmp/LRT_12_22_2022-a9-2-aurora-topaz-ntar-v-0_1_3-outliers"
-            let outlier_dirname = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/test_small_medium-ntar-v-0_1_3-outliers"
+            //let outlier_dirname = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/test_small_medium-ntar-v-0_1_3-outliers"
 
             //let outlier_dirname = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/test_a7sii_100-ntar-v-0_1_3-outliers"
             
-            //let outlier_dirname = "/qp/tmp/LRT_09_24_2022-a7iv-2-aurora-topaz-ntar-v-0_1_3-outliers"
+            let outlier_dirname = "/qp/tmp/LRT_09_24_2022-a7iv-2-aurora-topaz-ntar-v-0_1_3-outliers"
             
             outlier_json_startup(with: outlier_dirname)
             
@@ -267,8 +276,13 @@ class ntar_gui_app: App {
         // called when we should check a frame
         callbacks.frameCheckClosure = { new_frame in
             Log.d("frameCheckClosure for frame \(new_frame.frame_index)")
+
+            // XXX we may need to introduce some kind of queue here to avoid hitting
+            // too many open files on larger sequences :(
             Task {
-                await self.addToViewModel(frame: new_frame)
+                await self.input_queue.add(atIndex: new_frame.frame_index) {
+                    await self.addToViewModel(frame: new_frame)
+                }
             }
         }
         
@@ -313,6 +327,11 @@ class ntar_gui_app: App {
             //self.viewModel.frame = new_frame
             // Perform UI updates
             await self.viewModel.update()
+        } else {
+            await MainActor.run {
+                self.viewModel.objectWillChange.send()
+            }
+            // update view for thumbnails
         }
     }
     

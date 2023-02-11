@@ -29,7 +29,7 @@ public actor FinalQueue {
 
     let dispatch_group: DispatchHandler
 
-    init(max_concurrent: Int = 8, dispatchGroup dispatch_group: DispatchHandler) {
+    public init(max_concurrent: Int = 8, dispatchGroup dispatch_group: DispatchHandler) {
         self.max_concurrent = max_concurrent
         self.dispatch_group = dispatch_group
         self.number_running = NumberRunning(in: "frames finishing",
@@ -60,7 +60,7 @@ public actor FinalQueue {
         return should_run || number_running > 0 || count > 0
     }
     
-    nonisolated func start() async throws {
+    public nonisolated func start() async throws {
         let name = "final queue running"
         await self.dispatch_group.enter(name)
         Log.d("starting")

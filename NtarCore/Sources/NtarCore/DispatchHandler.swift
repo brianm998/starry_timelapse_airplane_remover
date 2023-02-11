@@ -11,7 +11,7 @@ public actor DispatchHandler {
     var running: [String:Bool] = [:] // could be a set
     public let dispatch_group = DispatchGroup()
     
-    init() { }
+    public init() { }
     
     func enter(_ name: String) {
         //Log.d("enter \(name) with \(count)")

@@ -535,7 +535,7 @@ struct ContentView: View {
                 toolTip: String,
                 action: @escaping () -> Void) -> some View
     {
-        Log.d("button \(button_name) using modifiers \(modifiers)")
+        //Log.d("button \(button_name) using modifiers \(modifiers)")
         return ZStack {
             Button("", action: action)
               .opacity(0)
