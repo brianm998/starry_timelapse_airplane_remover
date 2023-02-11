@@ -179,11 +179,14 @@ struct ContentView: View {
                                   y: CGFloat(outlier_center.y - frame_center_y))
                           // tap gesture toggles paintability of the tapped group
                           .onTapGesture {
+                              Log.d("t1")
 //                              Task {
+                              Log.d("t2")
                                   if let origShouldPaint = outlierViewModel.group.shouldPaint {
                                       // change the paintability of this outlier group
                                       // set it to user selected opposite previous value
                                       let reason = PaintReason.userSelected(!origShouldPaint.willPaint)
+                                      Log.d("t3")
                                       outlierViewModel.group.shouldPaint(reason)
                                       
                                       // update the view model so it shows up on screen
@@ -463,6 +466,38 @@ struct ContentView: View {
                             viewModel.objectWillChange.send()
                         }
                           .frame(maxWidth: 100, maxHeight: 30)
+                        Button(action: {
+                            Task {
+                                do {
+                                    let start_time = Date().timeIntervalSinceReferenceDate
+                                    await withThrowingTaskGroup(of: Void.self) { taskGroup in
+                                        
+                                        Log.d("foobar starting")
+                                        // XXX try using a task group?
+                                        for frameView in viewModel.framesToCheck.frames {
+                                            if let frame = frameView.frame {
+                                                taskGroup.addTask(priority: .userInitiated) {
+                                                    // XXX style the button during this flow?
+                                                    try await frame.loadOutliers()
+                                                }
+                                            } 
+                                        }
+                                        do {
+                                            try await taskGroup.waitForAll()
+                                        } catch {
+                                            Log.e("\(error)")
+                                        }
+
+                                        let end_time = Date().timeIntervalSinceReferenceDate
+                                        Log.d("foobar loaded outliers for \(viewModel.framesToCheck.frames.count) frames in \(end_time - start_time) seconds")
+                                    }                                 
+                                } catch {
+                                    Log.e("\(error)")
+                                }
+                            }
+                        }) {
+                            Text("Load All Outliers").font(.largeTitle)
+                        }.buttonStyle(PlainButtonStyle())
                         Button(action: {
                             Task {
                                 for frameView in viewModel.framesToCheck.frames {
