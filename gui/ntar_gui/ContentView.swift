@@ -11,6 +11,7 @@ import Cocoa
 import NtarCore
 import Zoomable
 
+// the overall level of the app
 struct ContentView: View {
     @ObservedObject var viewModel: ViewModel
     @State private var showOutliers = true
@@ -26,7 +27,7 @@ struct ContentView: View {
     init(viewModel: ViewModel) {
         self.viewModel = viewModel
     }
-
+    
     // this is the frame with outliers on top of it
     func frameView( _ image: Image) -> some View {
         return ZStack {
@@ -34,9 +35,10 @@ struct ContentView: View {
 
             if showOutliers {
                 // XXX these VVV are wrong VVV somehow
-                ForEach(0 ..< viewModel.outlierViews.count, id: \.self) { idx in
-                    if idx < viewModel.outlierViews.count {
-                        let outlierViewModel = viewModel.outlierViews[idx]
+                let outlierViews = viewModel.framesToCheck.currentFrameView.outlierViews
+                ForEach(0 ..< outlierViews.count, id: \.self) { idx in
+                    if idx < outlierViews.count {
+                        let outlierViewModel = outlierViews[idx]
                         
                         let frame_center_x = outlierViewModel.frame_width/2
                         let frame_center_y = outlierViewModel.frame_height/2
@@ -115,9 +117,11 @@ struct ContentView: View {
                        if let drag_start = drag_start {
                            Log.d("end location \(end_location) drag start \(drag_start)")
                            Task {
-                               await viewModel.frame?.userSelectAllOutliers(toShouldPaint: selection_causes_painting,
-                                                                            between: drag_start,
-                                                                            and: end_location)
+                               if let frame = viewModel.framesToCheck.currentFrame {
+                                   await frame.userSelectAllOutliers(toShouldPaint: selection_causes_painting,
+                                                                     between: drag_start,
+                                                                     and: end_location)
+                               }
                                viewModel.update()
                            }
                        }
@@ -167,8 +171,6 @@ struct ContentView: View {
           .frame(width: 80, height: 50)
           .onTapGesture {
         // XXX move this out 
-        viewModel.frame = nil
-        viewModel.image = nil
         viewModel.label_text = "loading..."
         // XXX set loading image here
               // grab frame and try to show it
@@ -195,7 +197,7 @@ struct ContentView: View {
         let scaling_anchor = UnitPoint(x: 0.75, y: 0.75)
         GeometryReader { top_geometry in
             VStack {
-                if let frame_image = viewModel.image {
+                if let frame_image = viewModel.framesToCheck.currentFrameView.image {
                     GeometryReader { geometry in
                         let min = geometry.size.height/viewModel.frame_height
                         let max = min < 1 ? 1 : min
@@ -217,8 +219,9 @@ struct ContentView: View {
                 }
                 HStack {
                     Text(viewModel.label_text)
-                    if viewModel.outlierCount > 0 {
-                        Text("has \(viewModel.outlierCount) outliers")
+                    let count = viewModel.framesToCheck.currentFrameView.outlierViews.count
+                    if count > 0 {
+                        Text("has \(count) outliers")
                     }
                 }
                 ScrollViewReader { scroller in
@@ -242,8 +245,6 @@ struct ContentView: View {
                             // previous button
                             Button(action: {
         // XXX move this out 
-        viewModel.frame = nil
-        viewModel.image = nil
         viewModel.label_text = "loading..."
         // XXX set loading image here
 
@@ -257,14 +258,11 @@ struct ContentView: View {
                             }.buttonStyle(PlainButtonStyle())
                             //.keyboardShortcut(.rightArrow, modifiers: [])
                             .keyboardShortcut("a", modifiers: [])
-                              .disabled(viewModel.frame == nil)
 
                             // next button
                             Button(action: {
                                 Log.d("next button pressed")
         // XXX move this out 
-        viewModel.frame = nil
-        viewModel.image = nil
         viewModel.label_text = "loading..."
         // XXX set loading image here
 
@@ -282,11 +280,10 @@ struct ContentView: View {
                             //.keyboardShortcut(KeyEquivalent.rightArrow, modifiers: [])
                             .keyboardShortcut("s", modifiers: [])
                             .buttonStyle(PlainButtonStyle())
-                              .disabled(viewModel.frame == nil)
                         }
                         Button(action: {
                             Task {
-                                await viewModel.frame?.userSelectAllOutliers(toShouldPaint: true)
+                                await viewModel.framesToCheck.currentFrame?.userSelectAllOutliers(toShouldPaint: true)
                                 viewModel.update()
                             }
                         }) {
@@ -296,7 +293,7 @@ struct ContentView: View {
                         
                         Button(action: {
                             Task {
-                                await viewModel.frame?.userSelectAllOutliers(toShouldPaint: false)
+                                await viewModel.framesToCheck.currentFrame?.userSelectAllOutliers(toShouldPaint: false)
                                 viewModel.update()
                             }
                         }) {
@@ -318,7 +315,7 @@ struct ContentView: View {
                                                   await viewModel.framesToCheck.setOutlierGroups(forFrame: current_frame)
                                               }
                                               if let baseImage = try await current_frame.baseImage() {
-                                                  viewModel.image = Image(nsImage: baseImage)
+                                                  viewModel.framesToCheck.currentFrameView.image = Image(nsImage: baseImage)
                                                   viewModel.update()
                                               }
                                           } catch {
@@ -404,7 +401,7 @@ struct ContentView: View {
                     from old_frame: FrameAirplaneRemover?,
                     withScroll scroller: ScrollViewProxy? = nil)
     {
-        Log.d("transition from \(viewModel.frame)")
+        Log.d("transition from \(viewModel.framesToCheck.currentFrame)")
         
         viewModel.label_text = "frame \(new_frame_view.frame_index)"
 
@@ -415,11 +412,10 @@ struct ContentView: View {
         }
         
         if let next_frame = new_frame_view.frame {
-            viewModel.frame = next_frame
 
             // stick the scrub image in there first if we have it
             if let preview_image = new_frame_view.preview_image {
-                viewModel.image = preview_image.resizable()
+                viewModel.framesToCheck.currentFrameView.image = preview_image.resizable()
                 viewModel.update()
             }
             if !scrubMode {
@@ -427,7 +423,7 @@ struct ContentView: View {
                 Task {
                     do {
                         if let baseImage = try await next_frame.baseImage() {
-                            viewModel.image = Image(nsImage: baseImage)
+                            viewModel.framesToCheck.currentFrameView.image = Image(nsImage: baseImage)
                             viewModel.update()
                         }
                     } catch {
@@ -443,9 +439,6 @@ struct ContentView: View {
                 scroller?.scrollTo(next_frame.frame_index)
             }
         } else {
-            viewModel.frame = nil
-            viewModel.outlierViews = []
-            //viewModel.image = Image(systemName: "person").resizable()
             viewModel.update()
         }
     }

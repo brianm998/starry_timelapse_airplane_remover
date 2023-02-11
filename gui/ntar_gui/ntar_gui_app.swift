@@ -285,15 +285,18 @@ class ntar_gui_app: App {
             // but without doing this here there is no config present...
             self.viewModel.framesToCheck.config = self.viewModel.config
         }
-        
+        if self.viewModel.frame_width != CGFloat(new_frame.width) ||
+           self.viewModel.frame_height != CGFloat(new_frame.height)
+        {
+            self.viewModel.frame_width = CGFloat(new_frame.width)
+            self.viewModel.frame_height = CGFloat(new_frame.height)
+        }
         await self.viewModel.framesToCheck.append(frame: new_frame, viewModel: self.viewModel)
 
-        Log.d("addToViewModel self.viewModel.frame \(self.viewModel.frame)")
+       // Log.d("addToViewModel self.viewModel.frame \(self.viewModel.frame)")
 
         // is this the currently selected frame?
-        if self.viewModel.frame == nil,
-           self.viewModel.framesToCheck.current_index == new_frame.frame_index
-        {
+        if self.viewModel.framesToCheck.current_index == new_frame.frame_index {
             self.viewModel.label_text = "frame \(new_frame.frame_index)"
 
             Log.i("got frame index \(new_frame.frame_index)")
@@ -302,18 +305,16 @@ class ntar_gui_app: App {
             
             do {
                 if let baseImage = try await new_frame.baseImage() {
-                    self.viewModel.image = Image(nsImage: baseImage)
+                    self.viewModel.framesToCheck.currentFrameView.image = Image(nsImage: baseImage)
                     await self.viewModel.update()
                 }
             } catch {
                 Log.e("error")
             }
 
-            self.viewModel.frame = new_frame
+            //self.viewModel.frame = new_frame
             // Perform UI updates
             await self.viewModel.update()
-            
-            Log.d("XXX self.viewModel.image = \(self.viewModel.image)")
         }
     }
     
