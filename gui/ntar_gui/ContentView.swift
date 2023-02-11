@@ -43,7 +43,10 @@ struct ContentView: View {
                         let frame_center_x = outlierViewModel.frame_width/2
                         let frame_center_y = outlierViewModel.frame_height/2
                         let outlier_center = outlierViewModel.bounds.center
-                        let will_paint = outlierViewModel.group.shouldPaint?.willPaint ?? false
+
+                        let will_paint = outlierViewModel.group.shouldPaint == nil ? false :
+                          outlierViewModel.group.shouldPaint!.willPaint
+
                         Image(nsImage: outlierViewModel.image)
                           .renderingMode(.template) // makes this VV color work
                           .foregroundColor(will_paint ? .red : .green)
