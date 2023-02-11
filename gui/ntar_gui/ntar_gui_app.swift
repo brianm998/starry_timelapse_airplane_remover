@@ -79,7 +79,7 @@ class ntar_gui_app: App {
     var frame_states: [Int: FrameProcessingState] = [:]
     
     required init() {
-        viewModel = ViewModel(framesToCheck: FramesToCheck())
+        viewModel = ViewModel()
         
         Log.handlers[.console] = ConsoleLogHandler(at: .debug)
         Log.i("Starting Up")
@@ -122,7 +122,6 @@ class ntar_gui_app: App {
                 let config = try await Config.read(fromJsonDirname: outlier_dirname)
 
                 viewModel.config = config
-                viewModel.framesToCheck.config = config
 
                 let callbacks = make_callbacks()
                 
@@ -206,7 +205,6 @@ class ntar_gui_app: App {
 
 
             viewModel.config = config
-            viewModel.framesToCheck.config = config
             
             let callbacks = make_callbacks()
             Log.i("have config")
@@ -243,7 +241,7 @@ class ntar_gui_app: App {
         callbacks.imageSequenceSizeClosure = { image_sequence_size in
             self.viewModel.image_sequence_size = image_sequence_size
             Log.e("read image_sequence_size \(image_sequence_size)")
-            self.viewModel.framesToCheck = FramesToCheck(number: image_sequence_size)
+            self.viewModel.set(numberOfFrames: image_sequence_size)
         }
         
         // count numbers here for max running
@@ -280,10 +278,10 @@ class ntar_gui_app: App {
     func addToViewModel(frame new_frame: FrameAirplaneRemover) async {
         Log.d("addToViewModel(frame: \(new_frame.frame_index))")
 
-        if self.viewModel.framesToCheck.config == nil {
+        if self.viewModel.config == nil {
             // XXX why this doesn't work initially befounds me,
             // but without doing this here there is no config present...
-            self.viewModel.framesToCheck.config = self.viewModel.config
+            self.viewModel.config = self.viewModel.config
         }
         if self.viewModel.frame_width != CGFloat(new_frame.width) ||
            self.viewModel.frame_height != CGFloat(new_frame.height)
@@ -291,12 +289,12 @@ class ntar_gui_app: App {
             self.viewModel.frame_width = CGFloat(new_frame.width)
             self.viewModel.frame_height = CGFloat(new_frame.height)
         }
-        await self.viewModel.framesToCheck.append(frame: new_frame, viewModel: self.viewModel)
+        await self.viewModel.append(frame: new_frame, viewModel: self.viewModel)
 
        // Log.d("addToViewModel self.viewModel.frame \(self.viewModel.frame)")
 
         // is this the currently selected frame?
-        if self.viewModel.framesToCheck.current_index == new_frame.frame_index {
+        if self.viewModel.current_index == new_frame.frame_index {
             self.viewModel.label_text = "frame \(new_frame.frame_index)"
 
             Log.i("got frame index \(new_frame.frame_index)")
@@ -305,7 +303,7 @@ class ntar_gui_app: App {
             
             do {
                 if let baseImage = try await new_frame.baseImage() {
-                    self.viewModel.framesToCheck.currentFrameView.image = Image(nsImage: baseImage)
+                    self.viewModel.currentFrameView.image = Image(nsImage: baseImage)
                     await self.viewModel.update()
                 }
             } catch {

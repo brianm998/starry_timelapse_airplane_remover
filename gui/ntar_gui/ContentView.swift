@@ -35,7 +35,7 @@ struct ContentView: View {
 
             if showOutliers {
                 // XXX these VVV are wrong VVV somehow
-                let outlierViews = viewModel.framesToCheck.currentFrameView.outlierViews
+                let outlierViews = viewModel.currentFrameView.outlierViews
                 ForEach(0 ..< outlierViews.count, id: \.self) { idx in
                     if idx < outlierViews.count {
                         let outlierViewModel = outlierViews[idx]
@@ -117,7 +117,7 @@ struct ContentView: View {
                        if let drag_start = drag_start {
                            Log.d("end location \(end_location) drag start \(drag_start)")
                            Task {
-                               if let frame = viewModel.framesToCheck.currentFrame {
+                               if let frame = viewModel.currentFrame {
                                    await frame.userSelectAllOutliers(toShouldPaint: selection_causes_painting,
                                                                      between: drag_start,
                                                                      and: end_location)
@@ -134,7 +134,7 @@ struct ContentView: View {
     // the view for each frame in the filmstrip at the bottom
     func filmStripView(forFrame frame_index: Int) -> some View {
         var bg_color: Color = .yellow
-        if let frame = viewModel.framesToCheck.frame(atIndex: frame_index) {
+        if let frame = viewModel.frame(atIndex: frame_index) {
 //            if frame.outlierGroupCount() > 0 {
 //                bg_color = .red
 //            } else {
@@ -143,14 +143,14 @@ struct ContentView: View {
         }
 
         return ZStack {
-            let frameView = viewModel.framesToCheck.frames[frame_index]
+            let frameView = viewModel.frames[frame_index]
 
-            if viewModel.framesToCheck.current_index == frame_index {            
+            if viewModel.current_index == frame_index {            
                 if frameView.thumbnail_image == nil {
                     Rectangle().foregroundColor(.orange)
                 } else {
                     // highlight the selected frame
-                    let opacity = viewModel.framesToCheck.current_index == frame_index ? 0.4 : 0
+                    let opacity = viewModel.current_index == frame_index ? 0.4 : 0
                     frameView.thumbnail_image!
                       .overlay(
                         Rectangle()
@@ -174,10 +174,10 @@ struct ContentView: View {
         viewModel.label_text = "loading..."
         // XXX set loading image here
               // grab frame and try to show it
-              let frame_view = viewModel.framesToCheck.frames[frame_index]
-              viewModel.framesToCheck.current_index = frame_index
+              let frame_view = viewModel.frames[frame_index]
+              viewModel.current_index = frame_index
 
-              let current_frame = viewModel.framesToCheck.currentFrame
+              let current_frame = viewModel.currentFrame
               self.transition(toFrame: frame_view, from: current_frame)
           }
 
@@ -197,7 +197,7 @@ struct ContentView: View {
         let scaling_anchor = UnitPoint(x: 0.75, y: 0.75)
         GeometryReader { top_geometry in
             VStack {
-                if let frame_image = viewModel.framesToCheck.currentFrameView.image {
+                if let frame_image = viewModel.currentFrameView.image {
                     GeometryReader { geometry in
                         let min = geometry.size.height/viewModel.frame_height
                         let max = min < 1 ? 1 : min
@@ -219,7 +219,7 @@ struct ContentView: View {
                 }
                 HStack {
                     Text(viewModel.label_text)
-                    let count = viewModel.framesToCheck.currentFrameView.outlierViews.count
+                    let count = viewModel.currentFrameView.outlierViews.count
                     if count > 0 {
                         Text("has \(count) outliers")
                     }
@@ -248,8 +248,8 @@ struct ContentView: View {
         viewModel.label_text = "loading..."
         // XXX set loading image here
 
-                                let current_frame = viewModel.framesToCheck.currentFrame
-                                let new_frame_view = viewModel.framesToCheck.previousFrame()
+                                let current_frame = viewModel.currentFrame
+                                let new_frame_view = viewModel.previousFrame()
                                 self.transition(toFrame: new_frame_view,
                                                 from: current_frame,
                                                 withScroll: scroller)
@@ -266,9 +266,9 @@ struct ContentView: View {
         viewModel.label_text = "loading..."
         // XXX set loading image here
 
-                                Log.d("viewModel.framesToCheck.current_index = \(viewModel.framesToCheck.current_index)")
-                                let current_frame = viewModel.framesToCheck.currentFrame
-                                let frame_view = viewModel.framesToCheck.nextFrame()
+                                Log.d("viewModel.current_index = \(viewModel.current_index)")
+                                let current_frame = viewModel.currentFrame
+                                let frame_view = viewModel.nextFrame()
                                 
                                 self.transition(toFrame: frame_view,
                                                 from: current_frame,
@@ -283,7 +283,7 @@ struct ContentView: View {
                         }
                         Button(action: {
                             Task {
-                                await viewModel.framesToCheck.currentFrame?.userSelectAllOutliers(toShouldPaint: true)
+                                await viewModel.currentFrame?.userSelectAllOutliers(toShouldPaint: true)
                                 viewModel.update()
                             }
                         }) {
@@ -293,7 +293,7 @@ struct ContentView: View {
                         
                         Button(action: {
                             Task {
-                                await viewModel.framesToCheck.currentFrame?.userSelectAllOutliers(toShouldPaint: false)
+                                await viewModel.currentFrame?.userSelectAllOutliers(toShouldPaint: false)
                                 viewModel.update()
                             }
                         }) {
@@ -308,14 +308,14 @@ struct ContentView: View {
                           .keyboardShortcut("b", modifiers: [])
                           .onChange(of: scrubMode) { scrubbing in
                               if !scrubbing {
-                                  if let current_frame = viewModel.framesToCheck.currentFrame {
+                                  if let current_frame = viewModel.currentFrame {
                                       Task {
                                           do {
-                                              if viewModel.framesToCheck.frames[current_frame.frame_index].outlierViews.count == 0 {
-                                                  await viewModel.framesToCheck.setOutlierGroups(forFrame: current_frame)
+                                              if viewModel.frames[current_frame.frame_index].outlierViews.count == 0 {
+                                                  await viewModel.setOutlierGroups(forFrame: current_frame)
                                               }
                                               if let baseImage = try await current_frame.baseImage() {
-                                                  viewModel.framesToCheck.currentFrameView.image = Image(nsImage: baseImage)
+                                                  viewModel.currentFrameView.image = Image(nsImage: baseImage)
                                                   viewModel.update()
                                               }
                                           } catch {
@@ -340,7 +340,7 @@ struct ContentView: View {
                                         
                                         Log.d("foobar starting")
                                         // XXX try using a task group?
-                                        for frameView in viewModel.framesToCheck.frames {
+                                        for frameView in viewModel.frames {
                                             if let frame = frameView.frame {
                                                 taskGroup.addTask(priority: .userInitiated) {
                                                     // XXX style the button during this flow?
@@ -355,7 +355,7 @@ struct ContentView: View {
                                         }
 
                                         let end_time = Date().timeIntervalSinceReferenceDate
-                                        Log.d("foobar loaded outliers for \(viewModel.framesToCheck.frames.count) frames in \(end_time - start_time) seconds")
+                                        Log.d("foobar loaded outliers for \(viewModel.frames.count) frames in \(end_time - start_time) seconds")
                                     }                                 
                                 } catch {
                                     Log.e("\(error)")
@@ -366,7 +366,7 @@ struct ContentView: View {
                         }.buttonStyle(PlainButtonStyle())
                         Button(action: {
                             Task {
-                                for frameView in viewModel.framesToCheck.frames {
+                                for frameView in viewModel.frames {
                                     if let frame = frameView.frame,
                                        let frameSaveQueue = viewModel.frameSaveQueue
                                     {
@@ -401,7 +401,7 @@ struct ContentView: View {
                     from old_frame: FrameAirplaneRemover?,
                     withScroll scroller: ScrollViewProxy? = nil)
     {
-        Log.d("transition from \(viewModel.framesToCheck.currentFrame)")
+        Log.d("transition from \(viewModel.currentFrame)")
         
         viewModel.label_text = "frame \(new_frame_view.frame_index)"
 
@@ -415,7 +415,7 @@ struct ContentView: View {
 
             // stick the scrub image in there first if we have it
             if let preview_image = new_frame_view.preview_image {
-                viewModel.framesToCheck.currentFrameView.image = preview_image.resizable()
+                viewModel.currentFrameView.image = preview_image.resizable()
                 viewModel.update()
             }
             if !scrubMode {
@@ -423,7 +423,7 @@ struct ContentView: View {
                 Task {
                     do {
                         if let baseImage = try await next_frame.baseImage() {
-                            viewModel.framesToCheck.currentFrameView.image = Image(nsImage: baseImage)
+                            viewModel.currentFrameView.image = Image(nsImage: baseImage)
                             viewModel.update()
                         }
                     } catch {
@@ -433,7 +433,7 @@ struct ContentView: View {
             }
             if !scrubMode {
                 Task {
-                    await viewModel.framesToCheck.setOutlierGroups(forFrame: next_frame)
+                    await viewModel.setOutlierGroups(forFrame: next_frame)
                     viewModel.update()
                 }
                 scroller?.scrollTo(next_frame.frame_index)
@@ -446,7 +446,7 @@ struct ContentView: View {
 
 struct ContentView_Previews: PreviewProvider {
     static var previews: some View {
-        ContentView(viewModel: ViewModel(framesToCheck: FramesToCheck()))
+        ContentView(viewModel: ViewModel())
     }
 }
 
