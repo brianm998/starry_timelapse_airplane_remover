@@ -19,6 +19,8 @@ class ViewModel: ObservableObject {
     // view class for each frame in the sequence in order
     @Published var frames: [FrameView] = [FrameView(0)]
 
+    @Published var initial_load_in_progress = false
+    
     // currently selected index in the sequence
     var current_index = 0      
     
@@ -57,7 +59,22 @@ class ViewModel: ObservableObject {
     func append(frame: FrameAirplaneRemover, viewModel: ViewModel) async {
         Log.d("appending frame \(frame.frame_index)")
         self.frames[frame.frame_index].frame = frame
-        
+
+        if self.initial_load_in_progress {
+            var have_all = true
+            for frame in self.frames {
+                if frame.frame == nil {
+                    have_all = false
+                    break
+                }
+            }
+            if have_all {
+                Log.d("WE HAVE THEM ALL")
+                await MainActor.run {
+                    self.initial_load_in_progress = false
+                }
+            }
+        }
         Log.d("set self.frames[\(frame.frame_index)].frame")
 
         let thumbnail_width = config?.thumbnail_width ?? Config.default_thumbnail_width
@@ -176,5 +193,4 @@ class ViewModel: ObservableObject {
         }
         return frames[current_index]
     }
-    
 }

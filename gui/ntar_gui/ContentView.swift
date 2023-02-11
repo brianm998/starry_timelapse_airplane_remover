@@ -230,6 +230,7 @@ struct ContentView: View {
                         if !running {
                             let action = {
                                 running = true
+                                viewModel.initial_load_in_progress = true
                                 Task.detached(priority: .background) {
                                     do {
                                         try await viewModel.eraser?.run()
@@ -242,6 +243,13 @@ struct ContentView: View {
                                 Text("START").font(.largeTitle)
                             }.buttonStyle(PlainButtonStyle())
                         } else {
+
+                            if viewModel.initial_load_in_progress {
+                                ProgressView()
+                                  .scaleEffect(1, anchor: .center)
+                                  .progressViewStyle(CircularProgressViewStyle(tint: .yellow))
+                            }
+                            
                             // previous button
                             Button(action: {
         // XXX move this out 
