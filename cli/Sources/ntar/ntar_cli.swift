@@ -272,64 +272,85 @@ struct Ntar: ParsableCommand {
             
             return
         }
+
+        // /// make this work for saved json file
         
         if var input_image_sequence_dirname = image_sequence_dirname {
 
-            while input_image_sequence_dirname.hasSuffix("/") {
-                // remove any trailing '/' chars,
-                // otherwise our created output dir(s) will end up inside this dir,
-                // not alongside it
-                _ = input_image_sequence_dirname.removeLast()
-            }
-
-            if !input_image_sequence_dirname.hasPrefix("/") {
-                let full_path =
-                  file_manager.currentDirectoryPath + "/" + 
-                  input_image_sequence_dirname
-                input_image_sequence_dirname = full_path
-            }
-            
-            var filename_paths = input_image_sequence_dirname.components(separatedBy: "/")
             var input_image_sequence_path: String = ""
             var input_image_sequence_name: String = ""
-            if let last_element = filename_paths.last {
-                filename_paths.removeLast()
-                input_image_sequence_path = filename_paths.joined(separator: "/")
-                if input_image_sequence_path.count == 0 { input_image_sequence_path = "/" }
-                input_image_sequence_name = last_element
+            if input_image_sequence_dirname.hasSuffix("config.json") {
+                // here we are reading a previously saved config
+                input_image_sequence_path = input_image_sequence_dirname
+
+                let fuck = input_image_sequence_dirname
+                
+                let dispatch_group = DispatchGroup()
+                dispatch_group.enter()
+
+                Task {
+                    config = try await Config.read(fromFilename: fuck)
+                    dispatch_group.leave()
+                }
+                dispatch_group.wait()
             } else {
-                input_image_sequence_path = "/"
-                input_image_sequence_name = input_image_sequence_dirname
-            }
+                // here we are processing a new image sequence 
+                while input_image_sequence_dirname.hasSuffix("/") {
+                    // remove any trailing '/' chars,
+                    // otherwise our created output dir(s) will end up inside this dir,
+                    // not alongside it
+                    _ = input_image_sequence_dirname.removeLast()
+                }
 
-            var output_path = ""
-            if let outputPath = outputPath {
-                output_path = outputPath
-            } else {
-                output_path = input_image_sequence_path
-            }
+                if !input_image_sequence_dirname.hasPrefix("/") {
+                    let full_path =
+                      file_manager.currentDirectoryPath + "/" + 
+                      input_image_sequence_dirname
+                    input_image_sequence_dirname = full_path
+                }
+                
+                var filename_paths = input_image_sequence_dirname.components(separatedBy: "/")
+                if let last_element = filename_paths.last {
+                    filename_paths.removeLast()
+                    input_image_sequence_path = filename_paths.joined(separator: "/")
+                    if input_image_sequence_path.count == 0 { input_image_sequence_path = "/" }
+                    input_image_sequence_name = last_element
+                } else {
+                    input_image_sequence_path = "/"
+                    input_image_sequence_name = input_image_sequence_dirname
+                }
 
-            var test_paint_output_path = output_path
-            if let testPaintOutputPath = testPaintOutputPath {
-                test_paint_output_path = testPaintOutputPath
-            }
+                var output_path = ""
+                if let outputPath = outputPath {
+                    output_path = outputPath
+                } else {
+                    output_path = input_image_sequence_path
+                }
 
-            config = Config(outputPath: output_path,
-                            outlierMaxThreshold: outlierMaxThreshold,
-                            outlierMinThreshold: outlierMinThreshold,
-                            minGroupSize: minGroupSize,
-                            numConcurrentRenders: numConcurrentRenders,
-                            test_paint: test_paint,
-                            test_paint_output_path: test_paint_output_path,
-                            imageSequenceName: input_image_sequence_name,
-                            imageSequencePath: input_image_sequence_path,
-                            writeOutlierGroupFiles: should_write_outlier_group_files,
-                            // maybe make a separate command line parameter for these VVV? 
-                            writeFramePreviewFiles: should_write_outlier_group_files,
-                            writeFrameThumbnailFiles: should_write_outlier_group_files)
+                var test_paint_output_path = output_path
+                if let testPaintOutputPath = testPaintOutputPath {
+                    test_paint_output_path = testPaintOutputPath
+                }
+
+                config = Config(outputPath: output_path,
+                                outlierMaxThreshold: outlierMaxThreshold,
+                                outlierMinThreshold: outlierMinThreshold,
+                                minGroupSize: minGroupSize,
+                                numConcurrentRenders: numConcurrentRenders,
+                                test_paint: test_paint,
+                                test_paint_output_path: test_paint_output_path,
+                                imageSequenceName: input_image_sequence_name,
+                                imageSequencePath: input_image_sequence_path,
+                                writeOutlierGroupFiles: should_write_outlier_group_files,
+                                // maybe make a separate command line parameter for these VVV? 
+                                writeFramePreviewFiles: should_write_outlier_group_files,
+                                writeFrameThumbnailFiles: should_write_outlier_group_files)
+
+                Log.nameSuffix = input_image_sequence_name
+                // no name suffix on json config path
+            }
 
             Log.name = "ntar-log"
-            Log.nameSuffix = input_image_sequence_name
 
             if let terminalLogLevel = terminalLogLevel {
                 // use console logging
