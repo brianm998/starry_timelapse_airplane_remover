@@ -250,6 +250,8 @@ struct ContentView: View {
                                 ProgressView()
                                   .scaleEffect(1, anchor: .center)
                                   .progressViewStyle(CircularProgressViewStyle(tint: .yellow))
+                                Spacer()
+                                  .frame(maxWidth: 50)
                             }
                             
                             let start_shortcut_key: KeyEquivalent = "b"
@@ -257,7 +259,10 @@ struct ContentView: View {
                             // start button
                             button(named: "arrow.left.to.line.compact",
                                    shortcutKey: start_shortcut_key,
-                                   toolTip: "go to start of sequence (keyboard '\(start_shortcut_key)'")
+                                   toolTip: """
+                                     go to start of sequence
+                                     (keyboard shortcut '\(start_shortcut_key.character)')
+                                     """)
                             {
                                 let current_frame = viewModel.currentFrame
                                 let new_frame_view = viewModel.frames[0]
@@ -267,17 +272,21 @@ struct ContentView: View {
                                                 withScroll: scroller)
                             }
 
+                            let fast_previous_shortut_key: KeyEquivalent = "z"
+                            let fast_skip_amount = 10
+                            
                             // fast previous button
                             button(named: "chevron.backward.2",
-                                   shortcutKey: "z",
-                                   toolTip: "FUCK YOU")
+                                   shortcutKey: fast_previous_shortut_key,
+                                   toolTip: """
+                                     skip back by \(fast_skip_amount) frames
+                                     (keyboard shortcut '\(fast_previous_shortut_key.character)')
+                                     """)
                             {
                                 let current_frame = viewModel.currentFrame
 
-                                var new_index = viewModel.current_index - 10 // XXX make this a paramenter somewhere
-                                if new_index < 0 {
-                                    new_index = 0
-                                }
+                                var new_index = viewModel.current_index - fast_skip_amount
+                                if new_index < 0 { new_index = 0 }
                                 let new_frame_view = viewModel.frames[new_index]
                                 viewModel.current_index = new_index
                                 
@@ -285,11 +294,16 @@ struct ContentView: View {
                                                 from: current_frame,
                                                 withScroll: scrubMode ? nil : scroller)
                             }
+
+                            let previous_shortut_key: KeyEquivalent = .leftArrow
                             
                             // previous button
                             button(named: "chevron.backward",
-                                   shortcutKey: .leftArrow,
-                                   toolTip: "FUCK YOU")
+                                   shortcutKey: previous_shortut_key,
+                                   toolTip: """
+                                     skip back one frame
+                                     (keyboard shortcut left arrow)
+                                     """)
                             {
                                 let current_frame = viewModel.currentFrame
                                 let new_frame_view = viewModel.previousFrame()
@@ -301,7 +315,10 @@ struct ContentView: View {
                           // next button
                             button(named: "chevron.forward",
                                    shortcutKey: .rightArrow,
-                                   toolTip: "FUCK YOU")
+                                   toolTip: """
+                                     step forward one frame
+                                     (keyboard shortcut right arrow)
+                                     """)
                             {
                                 Log.d("next button pressed")
                                 Log.d("viewModel.current_index = \(viewModel.current_index)")
@@ -313,14 +330,19 @@ struct ContentView: View {
                                                 withScroll: scrubMode ? nil : scroller)
                             }
 
+                            let fast_next_shortcut_key: KeyEquivalent = "x"
+                            
                             // fast next button
                             button(named: "chevron.forward.2",
-                                   shortcutKey: "x",
-                                   toolTip: "FUCK YOU")
+                                   shortcutKey: fast_next_shortcut_key,
+                                   toolTip: """
+                                     skip forward by \(fast_skip_amount) frames
+                                     (keyboard shortcut '\(fast_next_shortcut_key.character)')
+                                     """)
                             {
                                 let current_frame = viewModel.currentFrame
 
-                                var new_index = viewModel.current_index + 10 // XXX make this a paramenter somewhere
+                                var new_index = viewModel.current_index + fast_skip_amount
                                 if new_index >= viewModel.frames.count {
                                     new_index = viewModel.frames.count-1
                                 }
@@ -332,10 +354,15 @@ struct ContentView: View {
                                                 withScroll: scrubMode ? nil : scroller)
                             }
 
+                            let end_button_shortcut_key: KeyEquivalent = "e"
+                            
                             // end button
                             button(named: "arrow.right.to.line.compact",
-                                   shortcutKey: "e",
-                                   toolTip: "FUCK YOU")
+                                   shortcutKey: end_button_shortcut_key,
+                                   toolTip: """
+                                     advance to end of sequence
+                                     (keyboard shortcut '\(end_button_shortcut_key.character)')
+                                     """)
                             {
                                 let current_frame = viewModel.currentFrame
                                 let new_frame_view = viewModel.frames[viewModel.frames.count-1]
