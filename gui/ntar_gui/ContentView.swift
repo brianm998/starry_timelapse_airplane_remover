@@ -335,18 +335,25 @@ struct ContentView: View {
                         Button(action: {
                             Task {
                                 do {
+                                    var current_running = 0
                                     let start_time = Date().timeIntervalSinceReferenceDate
-                                    await withThrowingTaskGroup(of: Void.self) { taskGroup in
-                                        
+                                    try await withThrowingTaskGroup(of: Void.self) { taskGroup in
+                                        let max_concurrent = viewModel.config?.numConcurrentRenders ?? 10
+                                        // this gets "Too many open files" with more than 2000 images :(
                                         Log.d("foobar starting")
-                                        // XXX try using a task group?
                                         for frameView in viewModel.frames {
-                                            if let frame = frameView.frame {
-                                                taskGroup.addTask(priority: .userInitiated) {
-                                                    // XXX style the button during this flow?
-                                                    try await frame.loadOutliers()
+                                            if current_running < max_concurrent {
+                                                if let frame = frameView.frame {
+                                                    current_running += 1
+                                                    taskGroup.addTask(priority: .userInitiated) {
+                                                        // XXX style the button during this flow?
+                                                        try await frame.loadOutliers()
+                                                    }
                                                 }
-                                            } 
+                                            } else {
+                                                try await taskGroup.next()
+                                                current_running -= 1
+                                            }
                                         }
                                         do {
                                             try await taskGroup.waitForAll()

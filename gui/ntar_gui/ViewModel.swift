@@ -17,7 +17,7 @@ class ViewModel: ObservableObject {
     var label_text: String = "Started"
 
     // view class for each frame in the sequence in order
-    @Published var frames: [FrameView] = []
+    @Published var frames: [FrameView] = [FrameView(0)]
 
     // currently selected index in the sequence
     var current_index = 0      
@@ -33,9 +33,13 @@ class ViewModel: ObservableObject {
     var currentThumbnailImage: Image? {
         return frames[current_index].thumbnail_image
     }
-    
+
     func set(numberOfFrames: Int) {
-        frames = Array<FrameView>(count: numberOfFrames) { i in FrameView(i) }
+        Task {
+            await MainActor.run {
+                frames = Array<FrameView>(count: numberOfFrames) { i in FrameView(i) }
+            }
+        }
     }
     
     var image_sequence_size: Int = 0
@@ -51,6 +55,7 @@ class ViewModel: ObservableObject {
             if let frame = frames[current_index].frame {
                 // without this, clicking on an outlier doesn't change in the view right away 
                 await self.setOutlierGroups(forFrame: frame)
+                // XXX maybe try just changing a property in the view instead 
             }
             self.objectWillChange.send()
         }
