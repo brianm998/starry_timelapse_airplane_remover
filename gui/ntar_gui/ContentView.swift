@@ -175,7 +175,6 @@ struct ContentView: View {
         // XXX set loading image here
               // grab frame and try to show it
               let frame_view = viewModel.frames[frame_index]
-              viewModel.current_index = frame_index
 
               let current_frame = viewModel.currentFrame
               self.transition(toFrame: frame_view, from: current_frame)
@@ -266,7 +265,6 @@ struct ContentView: View {
                             {
                                 let current_frame = viewModel.currentFrame
                                 let new_frame_view = viewModel.frames[0]
-                                viewModel.current_index = new_frame_view.frame_index
                                 self.transition(toFrame: new_frame_view,
                                                 from: current_frame,
                                                 withScroll: scroller)
@@ -283,15 +281,7 @@ struct ContentView: View {
                                      (keyboard shortcut '\(fast_previous_shortut_key.character)')
                                      """)
                             {
-                                let current_frame = viewModel.currentFrame
-
-                                var new_index = viewModel.current_index - fast_skip_amount
-                                if new_index < 0 { new_index = 0 }
-                                let new_frame_view = viewModel.frames[new_index]
-                                viewModel.current_index = new_index
-                                
-                                self.transition(toFrame: new_frame_view,
-                                                from: current_frame,
+                                self.transition(numberOfFrames: -fast_skip_amount,
                                                 withScroll: scrubMode ? nil : scroller)
                             }
 
@@ -305,10 +295,7 @@ struct ContentView: View {
                                      (keyboard shortcut left arrow)
                                      """)
                             {
-                                let current_frame = viewModel.currentFrame
-                                let new_frame_view = viewModel.previousFrame()
-                                self.transition(toFrame: new_frame_view,
-                                                from: current_frame,
+                                self.transition(numberOfFrames: -1,
                                                 withScroll: scrubMode ? nil : scroller)
                             }
 
@@ -320,14 +307,7 @@ struct ContentView: View {
                                      (keyboard shortcut right arrow)
                                      """)
                             {
-                                Log.d("next button pressed")
-                                Log.d("viewModel.current_index = \(viewModel.current_index)")
-                                let current_frame = viewModel.currentFrame
-                                let frame_view = viewModel.nextFrame()
-                                
-                                self.transition(toFrame: frame_view,
-                                                from: current_frame,
-                                                withScroll: scrubMode ? nil : scroller)
+                                self.transition(numberOfFrames: 1, withScroll: scrubMode ? nil : scroller)
                             }
 
                             let fast_next_shortcut_key: KeyEquivalent = "x"
@@ -340,17 +320,7 @@ struct ContentView: View {
                                      (keyboard shortcut '\(fast_next_shortcut_key.character)')
                                      """)
                             {
-                                let current_frame = viewModel.currentFrame
-
-                                var new_index = viewModel.current_index + fast_skip_amount
-                                if new_index >= viewModel.frames.count {
-                                    new_index = viewModel.frames.count-1
-                                }
-                                let new_frame_view = viewModel.frames[new_index]
-                                viewModel.current_index = new_index
-                                
-                                self.transition(toFrame: new_frame_view,
-                                                from: current_frame,
+                                self.transition(numberOfFrames: fast_skip_amount,
                                                 withScroll: scrubMode ? nil : scroller)
                             }
 
@@ -366,7 +336,6 @@ struct ContentView: View {
                             {
                                 let current_frame = viewModel.currentFrame
                                 let new_frame_view = viewModel.frames[viewModel.frames.count-1]
-                                viewModel.current_index = new_frame_view.frame_index
                                 self.transition(toFrame: new_frame_view,
                                                 from: current_frame,
                                                 withScroll: scroller)
@@ -391,36 +360,38 @@ struct ContentView: View {
                         }) {
                             Text("Clear All").font(.largeTitle)
                         }.buttonStyle(PlainButtonStyle())
-                         .keyboardShortcut("c", modifiers: [])
-                        Toggle("show outliers", isOn: $showOutliers)
-                          .keyboardShortcut("o", modifiers: [])
-                        Toggle("selection causes paint", isOn: $selection_causes_painting)
-                          .keyboardShortcut("t", modifiers: []) // XXX find better modifier
-                        Toggle("scrub mode", isOn: $scrubMode)
-                          .keyboardShortcut("b", modifiers: [])
-                          .onChange(of: scrubMode) { scrubbing in
-                              if !scrubbing {
-                                  if let current_frame = viewModel.currentFrame {
-                                      Task {
-                                          do {
-                                              if viewModel.frames[current_frame.frame_index].outlierViews.count == 0 {
-                                                  // only set them if they're not present
-                                                  let _ = try await current_frame.loadOutliers()
-                                                  await viewModel.setOutlierGroups(forFrame: current_frame)
+                          .keyboardShortcut("c", modifiers: [])
+                        VStack(alignment: .leading) {
+                            Toggle("show outliers", isOn: $showOutliers)
+                              .keyboardShortcut("o", modifiers: [])
+                            Toggle("selection causes paint", isOn: $selection_causes_painting)
+                              .keyboardShortcut("t", modifiers: []) // XXX find better modifier
+                            Toggle("scrub mode", isOn: $scrubMode)
+                              .keyboardShortcut("b", modifiers: [])
+                              .onChange(of: scrubMode) { scrubbing in
+                                  if !scrubbing {
+                                      if let current_frame = viewModel.currentFrame {
+                                          Task {
+                                              do {
+                                                  if viewModel.frames[current_frame.frame_index].outlierViews.count == 0 {
+                                                      // only set them if they're not present
+                                                      let _ = try await current_frame.loadOutliers()
+                                                      await viewModel.setOutlierGroups(forFrame: current_frame)
+                                                  }
+                                                  if let baseImage = try await current_frame.baseImage() {
+                                                      viewModel.currentFrameView.image = Image(nsImage: baseImage)
+                                                      viewModel.update()
+                                                  }
+                                              } catch {
+                                                  Log.e("error")
                                               }
-                                              if let baseImage = try await current_frame.baseImage() {
-                                                  viewModel.currentFrameView.image = Image(nsImage: baseImage)
-                                                  viewModel.update()
-                                              }
-                                          } catch {
-                                              Log.e("error")
                                           }
+                                      } else {
+                                          Log.i("not scrubbing with NO frame")
                                       }
-                                  } else {
-                                      Log.i("not scrubbing with NO frame")
                                   }
                               }
-                          }
+                        }
                         Text("background")
                         Slider(value: $background_brightness, in: 0...100) { editing in
                             Log.d("editing \(editing) background_brightness \(background_brightness)")
@@ -500,6 +471,23 @@ struct ContentView: View {
         }
     }
 
+    func transition(numberOfFrames: Int,
+                    withScroll scroller: ScrollViewProxy? = nil)
+    {
+        let current_frame = viewModel.currentFrame
+
+        var new_index = viewModel.current_index + numberOfFrames
+        if new_index < 0 { new_index = 0 }
+        if new_index >= viewModel.frames.count {
+            new_index = viewModel.frames.count-1
+        }
+        let new_frame_view = viewModel.frames[new_index]
+        
+        self.transition(toFrame: new_frame_view,
+                        from: current_frame,
+                        withScroll: scroller)
+    }
+    
     func transition(toFrame new_frame_view: FrameView,
                     from old_frame: FrameAirplaneRemover?,
                     withScroll scroller: ScrollViewProxy? = nil)
@@ -507,7 +495,9 @@ struct ContentView: View {
         Log.d("transition from \(viewModel.currentFrame)")
         
         viewModel.label_text = "frame \(new_frame_view.frame_index)"
-
+        viewModel.current_index = new_frame_view.frame_index
+        scroller?.scrollTo(viewModel.current_index)
+        
         if !scrubMode {
             if let frame_to_save = old_frame {
                 self.saveToFile(frame: frame_to_save)
@@ -543,7 +533,6 @@ struct ContentView: View {
                     }
                 }
             }
-            scroller?.scrollTo(next_frame.frame_index)
         } else {
             viewModel.update()
         }
