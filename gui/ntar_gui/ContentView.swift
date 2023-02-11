@@ -11,137 +11,6 @@ import Cocoa
 import NtarCore
 import Zoomable
 
-class FrameSaveQueue {
-
-    class Pergatory {
-        var timer: Timer
-        let frame: FrameAirplaneRemover
-        let block: @Sendable (Timer) -> Void
-        let wait_time: TimeInterval = 5 // minimum time to wait in purgatory
-        
-        init(frame: FrameAirplaneRemover, block: @escaping @Sendable (Timer) -> Void) {
-            self.frame = frame
-            self.timer = Timer.scheduledTimer(withTimeInterval: wait_time,
-                                              repeats: false, block: block)
-            self.block = block
-        }
-
-        func retainLonger() {
-            self.timer = Timer.scheduledTimer(withTimeInterval: wait_time,
-                                              repeats: false, block: block)
-        }
-    }
-
-    var pergatory: [Int: Pergatory] = [:] // both indexed by frame_index
-    var saving: [Int: FrameAirplaneRemover] = [:]
-
-    let finalProcessor: FinalProcessor
-    
-    init(_ finalProcessor: FinalProcessor) {
-        self.finalProcessor = finalProcessor
-    }
-
-    // no purgatory
-    func saveNow(frame: FrameAirplaneRemover) {
-        Log.w("actually saving frame \(frame.frame_index)")
-        self.saving[frame.frame_index] = frame
-        Task {
-            await self.finalProcessor.final_queue.add(atIndex: frame.frame_index) {
-                Log.i("frame \(frame.frame_index) finishing")
-                try await frame.loadOutliers()
-                try await frame.finish()
-                await MainActor.run {
-                    self.saving[frame.frame_index] = nil
-                }
-                Log.i("frame \(frame.frame_index) finished")
-            }
-        }
-    }
-    
-    func readyToSave(frame: FrameAirplaneRemover) {
-        Log.w("frame \(frame.frame_index) entering pergatory")
-        if let candidate = pergatory[frame.frame_index] {
-            candidate.retainLonger()
-        } else {
-            let candidate = Pergatory(frame: frame) { timer in
-                Log.w("pergatory has ended for frame \(frame.frame_index)")
-                self.pergatory[frame.frame_index] = nil
-                if let _ = self.saving[frame.frame_index] {
-                    // go back to pergatory
-                    self.readyToSave(frame: frame)
-                } else {
-                    self.saveNow(frame: frame)
-                }
-            }
-        }
-    }
-}
-
-class ViewModel: ObservableObject {
-    var config: Config?
-    var framesToCheck: FramesToCheck
-    var eraser: NighttimeAirplaneRemover?
-    var frameSaveQueue: FrameSaveQueue?
-    var frame: FrameAirplaneRemover? {
-        didSet {
-            if let frame = frame {
-                let new_frame_width = CGFloat(frame.width)
-                let new_frame_height = CGFloat(frame.height)
-                if frame_width != new_frame_width {
-                    frame_width = new_frame_width
-                }
-                if frame_height != new_frame_height {
-                    frame_height = new_frame_height
-                }
-                //Log.w("INITIAL SIZE [\(frame_width), \(frame_height)]")
-            }
-        }
-    }
-    var outlierViews: [OutlierGroupView] = []
-    var outlierCount: Int = 0
-    var image: Image?
-    var no_image_explaination_text: String = "Loading..."
-
-    var frame_width: CGFloat = 300
-    var frame_height: CGFloat = 300
-    
-    var label_text: String = "Started"
-
-    var image_sequence_size: Int = 0
-    
-    init(framesToCheck: FramesToCheck) {
-        Log.w("VIEW MODEL INIT")
-        self.framesToCheck = framesToCheck
-        //self.framesToCheck.viewModel = self
-    }
-    
-    @MainActor func update() {
-        if framesToCheck.isDone() {
-            frame = nil
-            outlierViews = []
-            image = Image(systemName: "globe").resizable()
-        }
-        if let frame = frame {
-            let frameView = framesToCheck.frames[frame.frame_index]
-            
-            outlierViews = frameView.outlierViews
-            //Log.i("we have \(outlierViews.count) outlierGroups")
-        }
-        outlierCount = outlierViews.count
-
-        self.objectWillChange.send()
-    }
-}
-
-struct OutlierGroupView {
-    let group: OutlierGroup
-    let name: String
-    let bounds: BoundingBox
-    let image: NSImage
-    let frame_width: Int
-    let frame_height: Int
-}
-
 struct ContentView: View {
     @ObservedObject var viewModel: ViewModel
     @State private var showOutliers = true
@@ -186,7 +55,7 @@ struct ContentView: View {
                                       // change the paintability of this outlier group
                                       // set it to user selected opposite previous value
                                       let reason = PaintReason.userSelected(!origShouldPaint.willPaint)
-                                      Log.d("t3")
+                                      Log.d("t3 reason \(reason)")
                                       outlierViewModel.group.shouldPaint(reason)
                                       
                                       // update the view model so it shows up on screen

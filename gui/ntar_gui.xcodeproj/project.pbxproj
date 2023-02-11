@@ -8,6 +8,11 @@
 
 /* Begin PBXBuildFile section */
 		5950D2092E1D060BC9275E66 /* Pods_ntar_gui.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0B0453DB24E8A23144C66A23 /* Pods_ntar_gui.framework */; };
+		D31F9FBF299736740001CD0C /* ViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D31F9FBC299736730001CD0C /* ViewModel.swift */; };
+		D31F9FC0299736740001CD0C /* FrameSaveQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = D31F9FBD299736730001CD0C /* FrameSaveQueue.swift */; };
+		D31F9FC1299736740001CD0C /* OutlierGroupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D31F9FBE299736730001CD0C /* OutlierGroupView.swift */; };
+		D31F9FC42997370C0001CD0C /* FrameView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D31F9FC22997370C0001CD0C /* FrameView.swift */; };
+		D31F9FC52997370C0001CD0C /* FramesToCheck.swift in Sources */ = {isa = PBXBuildFile; fileRef = D31F9FC32997370C0001CD0C /* FramesToCheck.swift */; };
 		D386FA11298B617300878B56 /* ntar_gui_app.swift in Sources */ = {isa = PBXBuildFile; fileRef = D386FA10298B617300878B56 /* ntar_gui_app.swift */; };
 		D386FA13298B617300878B56 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D386FA12298B617300878B56 /* ContentView.swift */; };
 		D386FA15298B617400878B56 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = D386FA14298B617400878B56 /* Assets.xcassets */; };
@@ -38,6 +43,11 @@
 		0B0453DB24E8A23144C66A23 /* Pods_ntar_gui.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_ntar_gui.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		540415BAD54DC7E2F8297DCF /* Pods-ntar_gui.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-ntar_gui.release.xcconfig"; path = "Target Support Files/Pods-ntar_gui/Pods-ntar_gui.release.xcconfig"; sourceTree = "<group>"; };
 		5F0FA5BFD47E6F6D97B17603 /* Pods-ntar_gui.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-ntar_gui.debug.xcconfig"; path = "Target Support Files/Pods-ntar_gui/Pods-ntar_gui.debug.xcconfig"; sourceTree = "<group>"; };
+		D31F9FBC299736730001CD0C /* ViewModel.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ViewModel.swift; sourceTree = "<group>"; };
+		D31F9FBD299736730001CD0C /* FrameSaveQueue.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = FrameSaveQueue.swift; sourceTree = "<group>"; };
+		D31F9FBE299736730001CD0C /* OutlierGroupView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = OutlierGroupView.swift; sourceTree = "<group>"; };
+		D31F9FC22997370C0001CD0C /* FrameView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = FrameView.swift; sourceTree = "<group>"; };
+		D31F9FC32997370C0001CD0C /* FramesToCheck.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = FramesToCheck.swift; sourceTree = "<group>"; };
 		D386FA0D298B617300878B56 /* ntar_gui.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ntar_gui.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		D386FA10298B617300878B56 /* ntar_gui_app.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ntar_gui_app.swift; sourceTree = "<group>"; };
 		D386FA12298B617300878B56 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
@@ -91,7 +101,6 @@
 				5F0FA5BFD47E6F6D97B17603 /* Pods-ntar_gui.debug.xcconfig */,
 				540415BAD54DC7E2F8297DCF /* Pods-ntar_gui.release.xcconfig */,
 			);
-			name = Pods;
 			path = Pods;
 			sourceTree = "<group>";
 		};
@@ -120,8 +129,13 @@
 		D386FA0F298B617300878B56 /* ntar_gui */ = {
 			isa = PBXGroup;
 			children = (
+				D31F9FC32997370C0001CD0C /* FramesToCheck.swift */,
+				D31F9FC22997370C0001CD0C /* FrameView.swift */,
 				D386FA10298B617300878B56 /* ntar_gui_app.swift */,
 				D386FA12298B617300878B56 /* ContentView.swift */,
+				D31F9FBD299736730001CD0C /* FrameSaveQueue.swift */,
+				D31F9FBE299736730001CD0C /* OutlierGroupView.swift */,
+				D31F9FBC299736730001CD0C /* ViewModel.swift */,
 				D386FA14298B617400878B56 /* Assets.xcassets */,
 				D386FA19298B617400878B56 /* ntar_gui.entitlements */,
 				D386FA16298B617400878B56 /* Preview Content */,
@@ -328,7 +342,12 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D31F9FC42997370C0001CD0C /* FrameView.swift in Sources */,
+				D31F9FC52997370C0001CD0C /* FramesToCheck.swift in Sources */,
 				D386FA13298B617300878B56 /* ContentView.swift in Sources */,
+				D31F9FC1299736740001CD0C /* OutlierGroupView.swift in Sources */,
+				D31F9FBF299736740001CD0C /* ViewModel.swift in Sources */,
+				D31F9FC0299736740001CD0C /* FrameSaveQueue.swift in Sources */,
 				D386FA11298B617300878B56 /* ntar_gui_app.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
