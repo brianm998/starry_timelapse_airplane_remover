@@ -14,7 +14,15 @@ class FrameView: ObservableObject {
     let frame_index: Int
     var frame: FrameAirplaneRemover?
     @Published var outlierViews: [OutlierGroupView] = []
-    @Published var image: Image?
+    @Published var image: Image? {
+        didSet {
+            // save memory by not keeping the full resolution images in ram constantly
+            Timer.scheduledTimer(withTimeInterval: 60, repeats: false) { _ in 
+                Log.d("frame \(self.frame_index) setting image to nil")
+                self.image = nil
+            }
+        }
+    }
     @Published var thumbnail_image: Image? 
     @Published var preview_image: Image? 
 }
