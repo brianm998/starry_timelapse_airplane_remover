@@ -263,10 +263,8 @@ struct ContentView: View {
                                      (keyboard shortcut '\(start_shortcut_key.character)')
                                      """)
                             {
-                                let current_frame = viewModel.currentFrame
-                                let new_frame_view = viewModel.frames[0]
-                                self.transition(toFrame: new_frame_view,
-                                                from: current_frame,
+                                self.transition(toFrame: viewModel.frames[0],
+                                                from: viewModel.currentFrame,
                                                 withScroll: scroller)
                             }
 
@@ -307,7 +305,8 @@ struct ContentView: View {
                                      (keyboard shortcut right arrow)
                                      """)
                             {
-                                self.transition(numberOfFrames: 1, withScroll: scrubMode ? nil : scroller)
+                                self.transition(numberOfFrames: 1,
+                                                withScroll: scrubMode ? nil : scroller)
                             }
 
                             let fast_next_shortcut_key: KeyEquivalent = "x"
@@ -334,13 +333,10 @@ struct ContentView: View {
                                      (keyboard shortcut '\(end_button_shortcut_key.character)')
                                      """)
                             {
-                                let current_frame = viewModel.currentFrame
-                                let new_frame_view = viewModel.frames[viewModel.frames.count-1]
-                                self.transition(toFrame: new_frame_view,
-                                                from: current_frame,
+                                self.transition(toFrame: viewModel.frames[viewModel.frames.count-1],
+                                                from: viewModel.currentFrame,
                                                 withScroll: scroller)
                             }
-                                   
                         }
                         Button(action: {
                             Task {
