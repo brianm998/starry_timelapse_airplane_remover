@@ -252,91 +252,8 @@ struct ContentView: View {
                                 Spacer()
                                   .frame(maxWidth: 50)
                             }
-                            
-                            let start_shortcut_key: KeyEquivalent = "b"
 
-                            // start button
-                            button(named: "arrow.left.to.line.compact",
-                                   shortcutKey: start_shortcut_key,
-                                   toolTip: """
-                                     go to start of sequence
-                                     (keyboard shortcut '\(start_shortcut_key.character)')
-                                     """)
-                            {
-                                self.transition(toFrame: viewModel.frames[0],
-                                                from: viewModel.currentFrame,
-                                                withScroll: scroller)
-                            }
-
-                            let fast_previous_shortut_key: KeyEquivalent = "z"
-                            let fast_skip_amount = 10
-                            
-                            // fast previous button
-                            button(named: "chevron.backward.2",
-                                   shortcutKey: fast_previous_shortut_key,
-                                   toolTip: """
-                                     skip back by \(fast_skip_amount) frames
-                                     (keyboard shortcut '\(fast_previous_shortut_key.character)')
-                                     """)
-                            {
-                                self.transition(numberOfFrames: -fast_skip_amount,
-                                                withScroll: scrubMode ? nil : scroller)
-                            }
-
-                            let previous_shortut_key: KeyEquivalent = .leftArrow
-                            
-                            // previous button
-                            button(named: "chevron.backward",
-                                   shortcutKey: previous_shortut_key,
-                                   toolTip: """
-                                     skip back one frame
-                                     (keyboard shortcut left arrow)
-                                     """)
-                            {
-                                self.transition(numberOfFrames: -1,
-                                                withScroll: scrubMode ? nil : scroller)
-                            }
-
-                          // next button
-                            button(named: "chevron.forward",
-                                   shortcutKey: .rightArrow,
-                                   toolTip: """
-                                     step forward one frame
-                                     (keyboard shortcut right arrow)
-                                     """)
-                            {
-                                self.transition(numberOfFrames: 1,
-                                                withScroll: scrubMode ? nil : scroller)
-                            }
-
-                            let fast_next_shortcut_key: KeyEquivalent = "x"
-                            
-                            // fast next button
-                            button(named: "chevron.forward.2",
-                                   shortcutKey: fast_next_shortcut_key,
-                                   toolTip: """
-                                     skip forward by \(fast_skip_amount) frames
-                                     (keyboard shortcut '\(fast_next_shortcut_key.character)')
-                                     """)
-                            {
-                                self.transition(numberOfFrames: fast_skip_amount,
-                                                withScroll: scrubMode ? nil : scroller)
-                            }
-
-                            let end_button_shortcut_key: KeyEquivalent = "e"
-                            
-                            // end button
-                            button(named: "arrow.right.to.line.compact",
-                                   shortcutKey: end_button_shortcut_key,
-                                   toolTip: """
-                                     advance to end of sequence
-                                     (keyboard shortcut '\(end_button_shortcut_key.character)')
-                                     """)
-                            {
-                                self.transition(toFrame: viewModel.frames[viewModel.frames.count-1],
-                                                from: viewModel.currentFrame,
-                                                withScroll: scroller)
-                            }
+                            playButtons(scroller)
                         }
                         Button(action: {
                             Task {
@@ -532,6 +449,98 @@ struct ContentView: View {
         } else {
             viewModel.update()
         }
+    }
+
+    // an HStack of buttons to advance backwards and fowards through the sequence
+    func playButtons(_ scroller: ScrollViewProxy) -> some View {
+
+        let start_shortcut_key: KeyEquivalent = "b"
+        let fast_previous_shortut_key: KeyEquivalent = "z"
+        let fast_skip_amount = 10
+        
+        let previous_shortut_key: KeyEquivalent = .leftArrow
+
+        let fast_next_shortcut_key: KeyEquivalent = "x"
+        let end_button_shortcut_key: KeyEquivalent = "e"
+        
+        return HStack {
+            // start button
+            button(named: "arrow.left.to.line.compact",
+                   shortcutKey: start_shortcut_key,
+                   toolTip: """
+                     go to start of sequence
+                     (keyboard shortcut '\(start_shortcut_key.character)')
+                     """)
+            {
+                self.transition(toFrame: viewModel.frames[0],
+                                from: viewModel.currentFrame,
+                                withScroll: scroller)
+            }
+            
+            
+            // fast previous button
+            button(named: "chevron.backward.2",
+                   shortcutKey: fast_previous_shortut_key,
+                   toolTip: """
+                     skip back by \(fast_skip_amount) frames
+                     (keyboard shortcut '\(fast_previous_shortut_key.character)')
+                     """)
+            {
+                self.transition(numberOfFrames: -fast_skip_amount,
+                                withScroll: scrubMode ? nil : scroller)
+            }
+            
+            // previous button
+            button(named: "chevron.backward",
+                   shortcutKey: previous_shortut_key,
+                   toolTip: """
+                     skip back one frame
+                     (keyboard shortcut left arrow)
+                     """)
+            {
+                self.transition(numberOfFrames: -1,
+                                withScroll: scrubMode ? nil : scroller)
+            }
+            
+            // next button
+            button(named: "chevron.forward",
+                   shortcutKey: .rightArrow,
+                   toolTip: """
+                     step forward one frame
+                     (keyboard shortcut right arrow)
+                     """)
+            {
+                self.transition(numberOfFrames: 1,
+                                withScroll: scrubMode ? nil : scroller)
+            }
+            
+            // fast next button
+            button(named: "chevron.forward.2",
+                   shortcutKey: fast_next_shortcut_key,
+                   toolTip: """
+                     skip forward by \(fast_skip_amount) frames
+                     (keyboard shortcut '\(fast_next_shortcut_key.character)')
+                     """)
+            {
+                self.transition(numberOfFrames: fast_skip_amount,
+                                withScroll: scrubMode ? nil : scroller)
+            }
+            
+            
+            // end button
+            button(named: "arrow.right.to.line.compact",
+                   shortcutKey: end_button_shortcut_key,
+                   toolTip: """
+                     advance to end of sequence
+                     (keyboard shortcut '\(end_button_shortcut_key.character)')
+                     """)
+            {
+                self.transition(toFrame: viewModel.frames[viewModel.frames.count-1],
+                                from: viewModel.currentFrame,
+                                withScroll: scroller)
+            }
+        }
+        
     }
 
     func buttonImage(_ name: String) -> some View {
