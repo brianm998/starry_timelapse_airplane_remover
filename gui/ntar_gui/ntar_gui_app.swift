@@ -249,7 +249,7 @@ class ntar_gui_app: App {
         // get the full number of images in the sequcne
         callbacks.imageSequenceSizeClosure = { image_sequence_size in
             self.viewModel.image_sequence_size = image_sequence_size
-            Log.e("read image_sequence_size \(image_sequence_size)")
+            Log.i("read image_sequence_size \(image_sequence_size)")
             self.viewModel.set(numberOfFrames: image_sequence_size)
         }
         

@@ -28,9 +28,111 @@ struct ContentView: View {
         self.viewModel = viewModel
     }
     
-    // this is the frame with outliers on top of it
+    var body: some View {
+        let scaling_anchor = UnitPoint(x: 0.75, y: 0.75)
+        GeometryReader { top_geometry in
+            ScrollViewReader { scroller in
+                VStack {
+                    currentFrameView()
+                    HStack {
+                        Text(viewModel.label_text).font(.largeTitle)
+                        let count = viewModel.currentFrameView.outlierViews.count
+                        if count > 0 {
+                            Text("has \(count) outliers").font(.largeTitle)
+                        }
+                    }
+                    VStack {
+                        HStack {
+                            if !running {
+                                let action = {
+                                    running = true
+                                    viewModel.initial_load_in_progress = true
+                                    Task.detached(priority: .background) {
+                                        do {
+                                            try await viewModel.eraser?.run()
+                                        } catch {
+                                            Log.e("\(error)")
+                                        }
+                                    }
+                                }
+                                Button(action: action) {
+                                    Text("START").font(.largeTitle)
+                                }.buttonStyle(PlainButtonStyle())
+                            } else {
+                                
+                                if viewModel.initial_load_in_progress {
+                                    ProgressView()
+                                      .scaleEffect(1, anchor: .center)
+                                      .progressViewStyle(CircularProgressViewStyle(tint: .yellow))
+                                    Spacer()
+                                      .frame(maxWidth: 50)
+                                }
+                                
+                                playButtons(scroller)
+                            }
+                            paintAllButton()
+                            clearAllButton()
+
+                            toggleViews()
+                            
+                            Text("background")
+                            Slider(value: $background_brightness, in: 0...100) { editing in
+                                Log.d("editing \(editing) background_brightness \(background_brightness)")
+                                background_color = Color(white: background_brightness/100)
+                                viewModel.objectWillChange.send()
+                            }
+                              .frame(maxWidth: 100, maxHeight: 30)
+                            
+                            //load all outlier button
+                            //loadAllOutliersButton()
+                            
+                            saveAllButton()
+                            
+                        }
+                        Spacer().frame(maxHeight: 30)
+                        // the filmstrip at the bottom
+                        filmstrip()
+                        Spacer().frame(maxHeight: 10)
+                    }
+                }
+            }.frame(maxWidth: .infinity, maxHeight: .infinity)
+              .padding()
+              .background(background_color)
+        }
+    }
+
+    // shows either a zoomable view of the current frame
+    // or a place holder when we have no image for it yet
+    func currentFrameView() -> some View {
+        HStack {
+            if let frame_image = viewModel.currentFrameView.image {
+                GeometryReader { geometry in
+                    let min = geometry.size.height/viewModel.frame_height
+                    let max = min < 1 ? 1 : min
+                    ZoomableView(size: CGSize(width: viewModel.frame_width,
+                                              height: viewModel.frame_height),
+                                 min: min,
+                                 max: max,
+                                 showsIndicators: true)
+                    {
+                        // the currently visible frame
+                        self.frameView(frame_image)
+                    }
+                }
+            } else {
+                ZStack {
+                    Rectangle()
+                      .foregroundColor(.yellow)
+                      .frame(maxWidth: viewModel.frame_width, maxHeight: viewModel.frame_height)
+                    Text(viewModel.no_image_explaination_text)
+                }
+            }
+        }
+    }
+    
+    // this is the main frame with outliers on top of it
     func frameView( _ image: Image) -> some View {
-        return ZStack {
+        ZStack {
             image
 
             if showOutliers {
@@ -199,100 +301,6 @@ struct ContentView: View {
 
     let button_size: CGFloat = 50
     
-    var body: some View {
-        let scaling_anchor = UnitPoint(x: 0.75, y: 0.75)
-        GeometryReader { top_geometry in
-            VStack {
-                if let frame_image = viewModel.currentFrameView.image {
-                    GeometryReader { geometry in
-                        let min = geometry.size.height/viewModel.frame_height
-                        let max = min < 1 ? 1 : min
-                        ZoomableView(size: CGSize(width: viewModel.frame_width,
-                                                  height: viewModel.frame_height),
-                                     min: min,
-                                     max: max,
-                                     showsIndicators: true)
-                        {
-                            // the currently visible frame
-                            self.frameView(frame_image)
-                        }
-                    }
-                } else {
-                    ZStack {
-                        Rectangle()
-                          .foregroundColor(.yellow)
-                          .frame(maxWidth: viewModel.frame_width, maxHeight: viewModel.frame_height)
-                        Text(viewModel.no_image_explaination_text)
-                    }
-                }
-                HStack {
-                    Text(viewModel.label_text).font(.largeTitle)
-                    let count = viewModel.currentFrameView.outlierViews.count
-                    if count > 0 {
-                        Text("has \(count) outliers").font(.largeTitle)
-                    }
-                }
-                ScrollViewReader { scroller in
-                    VStack {
-                        HStack {
-                            if !running {
-                                let action = {
-                                    running = true
-                                    viewModel.initial_load_in_progress = true
-                                    Task.detached(priority: .background) {
-                                        do {
-                                            try await viewModel.eraser?.run()
-                                        } catch {
-                                            Log.e("\(error)")
-                                        }
-                                    }
-                                }
-                                Button(action: action) {
-                                    Text("START").font(.largeTitle)
-                                }.buttonStyle(PlainButtonStyle())
-                            } else {
-                                
-                                if viewModel.initial_load_in_progress {
-                                    ProgressView()
-                                      .scaleEffect(1, anchor: .center)
-                                      .progressViewStyle(CircularProgressViewStyle(tint: .yellow))
-                                    Spacer()
-                                      .frame(maxWidth: 50)
-                                }
-                                
-                                playButtons(scroller)
-                            }
-                            paintAllButton()
-                            clearAllButton()
-
-                            toggleViews()
-                            
-                            Text("background")
-                            Slider(value: $background_brightness, in: 0...100) { editing in
-                                Log.d("editing \(editing) background_brightness \(background_brightness)")
-                                background_color = Color(white: background_brightness/100)
-                                viewModel.objectWillChange.send()
-                            }
-                              .frame(maxWidth: 100, maxHeight: 30)
-                            
-                            //load all outlier button
-                            //loadAllOutliersButton()
-                            
-                            saveAllButton()
-                            
-                        }
-                        Spacer().frame(maxHeight: 30)
-                        // the filmstrip at the bottom
-                        filmstrip()
-                        Spacer().frame(maxHeight: 10)
-                    }
-                }
-            }.frame(maxWidth: .infinity, maxHeight: .infinity)
-              .padding()
-              .background(background_color)
-        }
-    }
-
     func clearAllButton() -> some View {
         Button(action: {
             Task {
