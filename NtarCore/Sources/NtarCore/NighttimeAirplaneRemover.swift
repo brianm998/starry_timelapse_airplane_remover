@@ -246,63 +246,60 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
             var end_time_1: Double = 0
             var start_time_1: Double = 0
 
-            if self.config.writeOutlierGroupFiles {
-                // look inside outlier_output_dirname for json
-                // XXX check for 1_outlier.json file in outliers dir
+            // look inside outlier_output_dirname for json
+            // XXX check for 1_outlier.json file in outliers dir
+            
+            let frame_outliers_json_filename = "\(self.outlier_output_dirname)/\(frame_index)_outliers.bin"
+            if file_manager.fileExists(atPath: frame_outliers_json_filename) {
                 
-                let frame_outliers_json_filename = "\(self.outlier_output_dirname)/\(frame_index)_outliers.bin"
-                // XXX see if json is faster (it's not)
-                if /*false && */file_manager.fileExists(atPath: frame_outliers_json_filename) {
+                do {
+                    let url = NSURL(fileURLWithPath: frame_outliers_json_filename, isDirectory: false) as URL
+                    let (data, _) = try await URLSession.shared.data(for: URLRequest(url: url))
+                    let decoder = BinaryDecoder()
                     
+                    start_time_1 = Date().timeIntervalSinceReferenceDate
+                    outlier_groups_for_this_frame = try decoder.decode(OutlierGroups.self, from: data)
+                    end_time_1 = Date().timeIntervalSinceReferenceDate
+                    Log.d("binary decode took \(end_time_1 - start_time_1) seconds to load binary outlier group data for frame \(frame_index)")
+                    Log.i("loading frame \(frame_index) with outlier groups from binary file")
+                } catch {
+                    Log.e("frame \(frame_index) error decoding file \(frame_outliers_json_filename): \(error)")
+                }
+            } else {
+                // try json
+                
+                
+                let frame_outliers_json_filename = "\(self.outlier_output_dirname)/\(frame_index)_outliers.json"
+                
+                if file_manager.fileExists(atPath: frame_outliers_json_filename) {
                     do {
                         let url = NSURL(fileURLWithPath: frame_outliers_json_filename, isDirectory: false) as URL
                         let (data, _) = try await URLSession.shared.data(for: URLRequest(url: url))
-                        let decoder = BinaryDecoder()
+                        let decoder = JSONDecoder()
+                        decoder.nonConformingFloatDecodingStrategy = .convertFromString(
+                          positiveInfinity: "inf",
+                          negativeInfinity: "-inf",
+                          nan: "nan")
                         
-                        start_time_1 = Date().timeIntervalSinceReferenceDate
                         outlier_groups_for_this_frame = try decoder.decode(OutlierGroups.self, from: data)
-                        end_time_1 = Date().timeIntervalSinceReferenceDate
-                        Log.d("binary decode took \(end_time_1 - start_time_1) seconds to load binary outlier group data for frame \(frame_index)")
-                        Log.i("loading frame \(frame_index) with outlier groups from binary file")
+                        
+                        if let outlier_groups_for_this_frame = outlier_groups_for_this_frame {
+                            // trim the number of lines in each group
+                            for group in outlier_groups_for_this_frame.groups.values {
+                                group.lines = Array(group.lines.prefix(10))
+                            }
+                        }
+                        
+                        Log.i("loading frame \(frame_index) with outlier groups from json file")
                     } catch {
                         Log.e("frame \(frame_index) error decoding file \(frame_outliers_json_filename): \(error)")
-                    }
-                } else {
-                    // try json
-                    
-                    
-                    let frame_outliers_json_filename = "\(self.outlier_output_dirname)/\(frame_index)_outliers.json"
-                    
-                    if file_manager.fileExists(atPath: frame_outliers_json_filename) {
-                        do {
-                            let url = NSURL(fileURLWithPath: frame_outliers_json_filename, isDirectory: false) as URL
-                            let (data, _) = try await URLSession.shared.data(for: URLRequest(url: url))
-                            let decoder = JSONDecoder()
-                            decoder.nonConformingFloatDecodingStrategy = .convertFromString(
-                              positiveInfinity: "inf",
-                              negativeInfinity: "-inf",
-                              nan: "nan")
-                            
-                            outlier_groups_for_this_frame = try decoder.decode(OutlierGroups.self, from: data)
-
-                            if let outlier_groups_for_this_frame = outlier_groups_for_this_frame {
-                                // trim the number of lines in each group
-                                for group in outlier_groups_for_this_frame.groups.values {
-                                    group.lines = Array(group.lines.prefix(10))
-                                }
-                            }
-                            
-                            Log.i("loading frame \(frame_index) with outlier groups from json file")
-                        } catch {
-                            Log.e("frame \(frame_index) error decoding file \(frame_outliers_json_filename): \(error)")
-                        }
                     }
                 }
             }
             let end_time = Date().timeIntervalSinceReferenceDate
             Log.d("took \(end_time - start_time) seconds to load outlier group data for frame \(frame_index)")
             Log.d("TIMES \(start_time_1 - start_time) - \(end_time_1 - start_time_1) - \(end_time - end_time_1) reading outlier group data for frame \(frame_index)")
-
+            
             
             if let _ = outlier_groups_for_this_frame  {
                 Log.i("loading frame \(frame_index) with outlier groups from file")
