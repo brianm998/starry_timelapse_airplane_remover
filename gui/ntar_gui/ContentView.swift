@@ -11,6 +11,10 @@ import Cocoa
 import NtarCore
 import Zoomable
 
+// XXX Fing global :(
+fileprivate var video_play_timer: Timer?
+    
+
 // the overall level of the app
 struct ContentView: View {
     @ObservedObject var viewModel: ViewModel
@@ -25,6 +29,9 @@ struct ContentView: View {
     @State private var background_color: Color = .gray
     @State private var loading_outliers = false
     @State private var fast_skip_amount = 20
+    @State private var video_playing = false
+
+    @State private var current_frame_image: Image?
     
     init(viewModel: ViewModel) {
         self.viewModel = viewModel
@@ -36,11 +43,13 @@ struct ContentView: View {
             ScrollViewReader { scroller in
                 VStack {
                     currentFrameView()
-                    HStack {
-                        Text(viewModel.label_text).font(.largeTitle)
-                        let count = viewModel.currentFrameView.outlierViews.count
-                        if count > 0 {
-                            Text("has \(count) outliers").font(.largeTitle)
+                    if !scrubMode {
+                        HStack {
+                            Text(viewModel.label_text).font(.largeTitle)
+                            let count = viewModel.currentFrameView.outlierViews.count
+                            if count > 0 {
+                                Text("has \(count) outliers").font(.largeTitle)
+                            }
                         }
                     }
                     VStack {
@@ -74,6 +83,7 @@ struct ContentView: View {
                             }
 
                             VStack {
+                                /*
                                 Picker("go to frame", selection: $viewModel.current_index) {
                                     ForEach(0 ..< viewModel.frames.count, id: \.self) {
                                         Text("frame \($0)")
@@ -86,7 +96,7 @@ struct ContentView: View {
                                                       from: viewModel.currentFrame,
                                                       withScroll: scroller)
                                   }
-                                
+                                */
                                 Picker("Fast Skip", selection: $fast_skip_amount) {
                                     ForEach(0 ..< 51) {
                                         Text("\($0) frames")
@@ -129,7 +139,8 @@ struct ContentView: View {
     // or a place holder when we have no image for it yet
     func currentFrameView() -> some View {
         HStack {
-            if let frame_image = viewModel.currentFrameView.image {
+            //if let frame_image = viewModel.frames[viewModel.current_index].image {
+            if let frame_image = current_frame_image {//viewModel.frames[viewModel.current_index].image {
                 GeometryReader { geometry in
                     let min = geometry.size.height/viewModel.frame_height
                     let max = min < 1 ? 1 : min
@@ -475,13 +486,14 @@ struct ContentView: View {
             }
 
             // play/pause button
-            button(named: "play.fill", // pause.fill
-                   shortcutKey: previous_shortut_key,
+            button(named: video_playing ? "pause.fill" : "play.fill", // pause.fill
+                   shortcutKey: " ",
                    color: .yellow,
                    toolTip: """
                      Play / Pause
                      """)
             {
+                self.togglePlay()
                 Log.w("play button not yet implemented")
             }
             
@@ -529,6 +541,24 @@ struct ContentView: View {
         
     }
 
+    func togglePlay() {
+        self.video_playing = !self.video_playing
+        if video_playing {
+            Log.d("playing")
+            video_play_timer = Timer.scheduledTimer(withTimeInterval: 1/20/*1/30*/, // XXX hardcoded play rate 
+                                                    repeats: true) { timer in
+                self.transition(numberOfFrames: 1)
+            }
+            
+        } else {
+            Log.d("not playing")
+            if let video_play_timer = video_play_timer {
+                video_play_timer.invalidate()
+            }
+        }
+    }
+
+    
     func toggleViews() -> some View {
         VStack(alignment: .leading) {
             Toggle("show outliers", isOn: $showOutliers)
@@ -613,7 +643,7 @@ struct ContentView: View {
                     from old_frame: FrameAirplaneRemover?,
                     withScroll scroller: ScrollViewProxy? = nil)
     {
-        Log.d("transition from \(viewModel.currentFrame)")
+        //Log.d("transition from \(viewModel.currentFrame)")
         
         viewModel.label_text = "frame \(new_frame_view.frame_index)"
         viewModel.current_index = new_frame_view.frame_index
@@ -628,26 +658,31 @@ struct ContentView: View {
         if let next_frame = new_frame_view.frame {
             // stick the preview image in there first if we have it
             if let preview_image = new_frame_view.preview_image {
-                viewModel.currentFrameView.image = preview_image.resizable()
+                current_frame_image = preview_image.resizable()
+                //viewModel.frames[new_frame_view.frame_index].image = 
                 viewModel.update()
             } else if let thumbnail_image = new_frame_view.thumbnail_image {
-                viewModel.currentFrameView.image = thumbnail_image.resizable()
+                // fallback to the thumbnail if nothing else
+                current_frame_image = thumbnail_image.resizable()
+                //viewModel.frames[new_frame_view.frame_index].image = thumbnail_image.resizable()
                 viewModel.update()
             }
             if !scrubMode {
                 // get the full resolution image async from the frame
                 Task {
                     do {
-                        if let baseImage = try await next_frame.baseImage() {
-                            viewModel.currentFrameView.image = Image(nsImage: baseImage)
-                            viewModel.update()
+                        if next_frame.frame_index == viewModel.current_index {
+                            if let baseImage = try await next_frame.baseImage() {
+                                if next_frame.frame_index == viewModel.current_index {
+                                    current_frame_image = Image(nsImage: baseImage)
+                                    viewModel.update()
+                                }
+                            }
                         }
                     } catch {
                         Log.e("error")
                     }
                 }
-            }
-            if !scrubMode {
                 Task {
                     if viewModel.frames[next_frame.frame_index].outlierViews.count == 0 {
                         // XXX here set flag for waiting upon loading outloaders
