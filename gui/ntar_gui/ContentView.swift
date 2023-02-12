@@ -208,6 +208,7 @@ struct ContentView: View {
                                      max: max,
                                      showsIndicators: true)
                         {
+                            // the currently visible frame
                             self.frameView(frame_image)
                         }
                     }
@@ -215,6 +216,7 @@ struct ContentView: View {
                     ZStack {
                         Rectangle()
                           .foregroundColor(.yellow)
+                          .frame(maxWidth: viewModel.frame_width, maxHeight: viewModel.frame_height)
                         Text(viewModel.no_image_explaination_text)
                     }
                 }
@@ -312,70 +314,16 @@ struct ContentView: View {
                             viewModel.objectWillChange.send()
                         }
                           .frame(maxWidth: 100, maxHeight: 30)
-                        Button(action: {
-                            Task {
-                                do {
-                                    var current_running = 0
-                                    let start_time = Date().timeIntervalSinceReferenceDate
-                                    try await withThrowingTaskGroup(of: Void.self) { taskGroup in
-                                        let max_concurrent = viewModel.config?.numConcurrentRenders ?? 10
-                                        // this gets "Too many open files" with more than 2000 images :(
-                                        Log.d("foobar starting")
-                                        for frameView in viewModel.frames {
-                                            if current_running < max_concurrent {
-                                                if let frame = frameView.frame {
-                                                    current_running += 1
-                                                    taskGroup.addTask(priority: .userInitiated) {
-                                                        // XXX style the button during this flow?
-                                                        try await frame.loadOutliers()
-                                                    }
-                                                }
-                                            } else {
-                                                try await taskGroup.next()
-                                                current_running -= 1
-                                            }
-                                        }
-                                        do {
-                                            try await taskGroup.waitForAll()
-                                        } catch {
-                                            Log.e("\(error)")
-                                        }
 
-                                        let end_time = Date().timeIntervalSinceReferenceDate
-                                        Log.d("foobar loaded outliers for \(viewModel.frames.count) frames in \(end_time - start_time) seconds")
-                                    }                                 
-                                } catch {
-                                    Log.e("\(error)")
-                                }
-                            }
-                        }) {
-                            Text("Load All Outliers").font(.largeTitle)
-                        }.buttonStyle(PlainButtonStyle())
-                        Button(action: {
-                            Task {
-                                for frameView in viewModel.frames {
-                                    if let frame = frameView.frame,
-                                       let frameSaveQueue = viewModel.frameSaveQueue
-                                    {
-                                        frameSaveQueue.saveNow(frame: frame)
-                                    }
-                                }
-                            }
-                        }) {
-                            Text("Save All").font(.largeTitle)
-                        }.buttonStyle(PlainButtonStyle())
+                        //load all outlier button
+                        //loadAllOutliersButton()
+
+                        saveAllButton()
                         
                     }
 
                     // the filmstrip at the bottom
-                        ScrollView(.horizontal) {
-                            HStack(spacing: 5) {
-                                ForEach(0..<viewModel.image_sequence_size, id: \.self) { frame_index in
-                                    self.filmStripView(forFrame: frame_index)
-                                    
-                                }
-                            }
-                        }.frame(maxWidth: .infinity, maxHeight: 50)
+                    filmstrip()
                     }
                 }
             }.frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -384,6 +332,79 @@ struct ContentView: View {
         }
     }
 
+    func filmstrip() -> some View {
+        ScrollView(.horizontal) {
+            HStack(spacing: 5) {
+                ForEach(0..<viewModel.image_sequence_size, id: \.self) { frame_index in
+                    self.filmStripView(forFrame: frame_index)
+                    
+                }
+            }
+        }.frame(maxWidth: .infinity, maxHeight: 50)
+    }
+
+    func saveAllButton() -> some View {
+        let action: () -> Void = {
+            Task {
+                for frameView in viewModel.frames {
+                    if let frame = frameView.frame,
+                       let frameSaveQueue = viewModel.frameSaveQueue
+                    {
+                        frameSaveQueue.saveNow(frame: frame)
+                    }
+                }
+            }
+        }
+        
+        return Button(action: action) {
+            Text("Save All").font(.largeTitle)
+        }.buttonStyle(PlainButtonStyle())
+    }
+    
+    func loadAllOutliersButton() -> some View {
+        let action: () -> Void = {
+            Task {
+                do {
+                    var current_running = 0
+                    let start_time = Date().timeIntervalSinceReferenceDate
+                    try await withThrowingTaskGroup(of: Void.self) { taskGroup in
+                        let max_concurrent = viewModel.config?.numConcurrentRenders ?? 10
+                        // this gets "Too many open files" with more than 2000 images :(
+                        Log.d("foobar starting")
+                        for frameView in viewModel.frames {
+                            if current_running < max_concurrent {
+                                if let frame = frameView.frame {
+                                    current_running += 1
+                                    taskGroup.addTask(priority: .userInitiated) {
+                                        // XXX style the button during this flow?
+                                        try await frame.loadOutliers()
+                                    }
+                                }
+                            } else {
+                                try await taskGroup.next()
+                                current_running -= 1
+                            }
+                        }
+                        do {
+                            try await taskGroup.waitForAll()
+                        } catch {
+                            Log.e("\(error)")
+                        }
+                        
+                        let end_time = Date().timeIntervalSinceReferenceDate
+                        Log.d("foobar loaded outliers for \(viewModel.frames.count) frames in \(end_time - start_time) seconds")
+                    }                                 
+                } catch {
+                    Log.e("\(error)")
+                }
+            }
+        }
+        
+        return Button(action: action) {
+            Text("Load All Outliers").font(.largeTitle)
+        }.buttonStyle(PlainButtonStyle())
+    }
+    
     func transition(numberOfFrames: Int,
                     withScroll scroller: ScrollViewProxy? = nil)
     {
@@ -456,7 +477,7 @@ struct ContentView: View {
 
         let start_shortcut_key: KeyEquivalent = "b"
         let fast_previous_shortut_key: KeyEquivalent = "z"
-        let fast_skip_amount = 10
+        let fast_skip_amount = 20 // XXX make this configurable
         
         let previous_shortut_key: KeyEquivalent = .leftArrow
 
@@ -465,8 +486,9 @@ struct ContentView: View {
         
         return HStack {
             // start button
-            button(named: "arrow.left.to.line.compact",
+            button(named: "backward.end.fill",
                    shortcutKey: start_shortcut_key,
+                   color: .white,
                    toolTip: """
                      go to start of sequence
                      (keyboard shortcut '\(start_shortcut_key.character)')
@@ -479,10 +501,11 @@ struct ContentView: View {
             
             
             // fast previous button
-            button(named: "chevron.backward.2",
+            button(named: "backward.fill",
                    shortcutKey: fast_previous_shortut_key,
+                   color: .white,
                    toolTip: """
-                     skip back by \(fast_skip_amount) frames
+                     back \(fast_skip_amount) frames
                      (keyboard shortcut '\(fast_previous_shortut_key.character)')
                      """)
             {
@@ -491,22 +514,35 @@ struct ContentView: View {
             }
             
             // previous button
-            button(named: "chevron.backward",
+            button(named: "backward.frame.fill",
                    shortcutKey: previous_shortut_key,
+                   color: .white,
                    toolTip: """
-                     skip back one frame
+                     back one frame
                      (keyboard shortcut left arrow)
                      """)
             {
                 self.transition(numberOfFrames: -1,
                                 withScroll: scrubMode ? nil : scroller)
             }
+
+            // play/pause button
+            button(named: "play.fill", // pause.fill
+                   shortcutKey: previous_shortut_key,
+                   color: .yellow,
+                   toolTip: """
+                     Play / Pause
+                     """)
+            {
+                Log.w("play button not yet implemented")
+            }
             
             // next button
-            button(named: "chevron.forward",
+            button(named: "forward.frame.fill",
                    shortcutKey: .rightArrow,
+                   color: .white,
                    toolTip: """
-                     step forward one frame
+                     forward one frame
                      (keyboard shortcut right arrow)
                      """)
             {
@@ -515,10 +551,11 @@ struct ContentView: View {
             }
             
             // fast next button
-            button(named: "chevron.forward.2",
+            button(named: "forward.fill",
                    shortcutKey: fast_next_shortcut_key,
+                   color: .white,
                    toolTip: """
-                     skip forward by \(fast_skip_amount) frames
+                     forward \(fast_skip_amount) frames
                      (keyboard shortcut '\(fast_next_shortcut_key.character)')
                      """)
             {
@@ -528,8 +565,9 @@ struct ContentView: View {
             
             
             // end button
-            button(named: "arrow.right.to.line.compact",
+            button(named: "forward.end.fill",
                    shortcutKey: end_button_shortcut_key,
+                   color: .white,
                    toolTip: """
                      advance to end of sequence
                      (keyboard shortcut '\(end_button_shortcut_key.character)')
@@ -553,6 +591,7 @@ struct ContentView: View {
     func button(named button_name: String,
                 shortcutKey: KeyEquivalent,
                 modifiers: EventModifiers = [],
+                color: Color,
                 toolTip: String,
                 action: @escaping () -> Void) -> some View
     {
@@ -567,7 +606,7 @@ struct ContentView: View {
             }
               .buttonStyle(PlainButtonStyle())                            
               .help(toolTip)
-            
+              .foregroundColor(color)
         }
     }
 }

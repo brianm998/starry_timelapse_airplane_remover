@@ -11,8 +11,8 @@ class ViewModel: ObservableObject {
     var frameSaveQueue: FrameSaveQueue?
     var no_image_explaination_text: String = "Loading..."
 
-    var frame_width: CGFloat = 300
-    var frame_height: CGFloat = 300
+    @Published var frame_width: CGFloat = 600
+    @Published var frame_height: CGFloat = 450
     
     var label_text: String = "Started"
 
