@@ -22,7 +22,12 @@ class ViewModel: ObservableObject {
     @Published var initial_load_in_progress = false
     
     // currently selected index in the sequence
-    var current_index = 0      
+    var current_index = 0 {
+        willSet {
+            frames[current_index].isCurrentFrame = false
+            frames[newValue].isCurrentFrame = true
+        }
+    }
     
     var currentFrame: FrameAirplaneRemover? {
         return frames[current_index].frame

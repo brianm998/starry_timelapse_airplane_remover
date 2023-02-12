@@ -92,7 +92,7 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
             {
                 do {
                     if file_manager.fileExists(atPath: filename) {
-                        Log.w("overwriting already existing filename \(filename)")
+                        Log.i("overwriting already existing filename \(filename)")
                         try file_manager.removeItem(atPath: filename)
                     }
 
@@ -125,7 +125,7 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
             {
                 do {
                     if file_manager.fileExists(atPath: filename) {
-                        Log.w("overwriting already existing filename \(filename)")
+                        Log.i("overwriting already existing filename \(filename)")
                         try file_manager.removeItem(atPath: filename)
                     }
 
