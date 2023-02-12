@@ -277,6 +277,9 @@ struct Ntar: ParsableCommand {
         
         if var input_image_sequence_dirname = image_sequence_dirname {
 
+            // XXX there is a bug w/ saved configs where the 'image_sequence_path' is '.'
+            // and the 'image_sequence_dirname' starts with '/', won't start up properly
+            
             var input_image_sequence_path: String = ""
             var input_image_sequence_name: String = ""
             if input_image_sequence_dirname.hasSuffix("config.json") {
@@ -387,10 +390,12 @@ struct Ntar: ParsableCommand {
                 let local_dispatch = DispatchGroup()
                 local_dispatch.enter()
                 Task {
+                    Log.i("fuck 1")
                     let eraser = try NighttimeAirplaneRemover(with: config,
                                                               callbacks: callbacks,
                                                               processExistingFiles: false)
 
+                    Log.i("fuck 2")
                     var upm: UpdatableProgressMonitor?
 
                     if let _ = eraser.callbacks.updatable {

@@ -11,6 +11,9 @@ class ViewModel: ObservableObject {
     var frameSaveQueue: FrameSaveQueue?
     var no_image_explaination_text: String = "Loading..."
 
+    @Published var current_frame_image: Image?
+    
+
     @Published var frame_width: CGFloat = 600
     @Published var frame_height: CGFloat = 450
     
@@ -22,25 +25,20 @@ class ViewModel: ObservableObject {
     @Published var initial_load_in_progress = false
     
     // currently selected index in the sequence
-    var current_index = 0 {
-        willSet {
-            frames[current_index].isCurrentFrame = false
-            frames[newValue].isCurrentFrame = true
-        }
+    var currentFrameView: FrameView {
+        return frames[current_index]
     }
-    
+/*    @Published*/ var current_index = 0
     var currentFrame: FrameAirplaneRemover? {
         return frames[current_index].frame
     }
     
-    var currentFrameView: FrameView {
-        return frames[current_index]
-    }
+    /*
     
     var currentThumbnailImage: Image? {
         return frames[current_index].thumbnail_image
     }
-
+*/
     func set(numberOfFrames: Int) {
         Task {
             await MainActor.run {
@@ -56,8 +54,8 @@ class ViewModel: ObservableObject {
       
     }
     
-    @MainActor func update() {
-        Task { self.objectWillChange.send() }
+  /*  @MainActor*/ func update() {
+//        Task { self.objectWillChange.send() }
     }
 
 
@@ -102,8 +100,11 @@ class ViewModel: ObservableObject {
                let preview_image = NSImage(contentsOf: URL(fileURLWithPath: preview_filename))
             {
                 Log.d("loaded preview for self.frames[\(frame.frame_index)] from jpeg")
-                self.frames[frame.frame_index].preview_image =
-                  Image(nsImage: preview_image)
+                let view_image = Image(nsImage: preview_image)
+                self.frames[frame.frame_index].preview_image = view_image
+                if current_index == frame.frame_index {
+                    current_frame_image = view_image
+                }
             } else {
                 if pixImage == nil { pixImage = try await frame.pixelatedImage() }
                 if baseImage == nil { baseImage = pixImage!.baseImage }
@@ -111,8 +112,11 @@ class ViewModel: ObservableObject {
                    let preview_base = baseImage.resized(to: preview_size)
                 {
                     Log.d("set preview image for self.frames[\(frame.frame_index)].frame")
-                    self.frames[frame.frame_index].preview_image =
-                      Image(nsImage: preview_base)
+                    let view_image = Image(nsImage: preview_base)
+                    self.frames[frame.frame_index].preview_image = view_image
+                    if current_index == frame.frame_index {
+                        current_frame_image = view_image
+                    }
                 } else {
                     Log.w("set unable to load preview image for self.frames[\(frame.frame_index)].frame")
                 }

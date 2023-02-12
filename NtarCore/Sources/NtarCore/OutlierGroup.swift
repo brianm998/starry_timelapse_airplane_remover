@@ -32,8 +32,15 @@ public struct OutlierGroups: Codable {
 
 // represents a single outler group in a frame
 @available(macOS 10.15, *) 
-public class OutlierGroup: CustomStringConvertible, Hashable, Equatable, Comparable, Codable {
-
+// might need to be a anctor still
+// heap corruption is the cause?
+// https://developer.apple.com/forums/thread/687624
+public class OutlierGroup: CustomStringConvertible,
+                           Hashable,
+                           Equatable,
+                           Comparable,
+                           Codable // can't be an actor and codable :(
+{
     public let name: String
     public let size: UInt              // number of pixels in this outlier group
     public let bounds: BoundingBox     // a bounding box on the image that contains this group

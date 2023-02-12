@@ -13,7 +13,8 @@ import Zoomable
 
 // XXX Fing global :(
 fileprivate var video_play_timer: Timer?
-    
+
+var fuck_timer = 0
 
 // the overall level of the app
 struct ContentView: View {
@@ -31,8 +32,6 @@ struct ContentView: View {
     @State private var fast_skip_amount = 20
     @State private var video_playing = false
 
-    @State private var current_frame_image: Image?
-    
     init(viewModel: ViewModel) {
         self.viewModel = viewModel
     }
@@ -140,7 +139,7 @@ struct ContentView: View {
     func currentFrameView() -> some View {
         HStack {
             //if let frame_image = viewModel.frames[viewModel.current_index].image {
-            if let frame_image = current_frame_image {//viewModel.frames[viewModel.current_index].image {
+            if let frame_image = viewModel.current_frame_image {//viewModel.frames[viewModel.current_index].image {
                 GeometryReader { geometry in
                     let min = geometry.size.height/viewModel.frame_height
                     let max = min < 1 ? 1 : min
@@ -493,7 +492,7 @@ struct ContentView: View {
                      Play / Pause
                      """)
             {
-                self.togglePlay()
+                self.togglePlay(scroller)
                 Log.w("play button not yet implemented")
             }
             
@@ -541,20 +540,37 @@ struct ContentView: View {
         
     }
 
-    func togglePlay() {
+    func togglePlay(_ scroller: ScrollViewProxy) {
         self.video_playing = !self.video_playing
         if video_playing {
             Log.d("playing")
+            fuck_timer = viewModel.current_index
             video_play_timer = Timer.scheduledTimer(withTimeInterval: 1/20/*1/30*/, // XXX hardcoded play rate 
                                                     repeats: true) { timer in
-                self.transition(numberOfFrames: 1)
+                //Log.d("fire")
+                /*
+                self.viewModel.current_frame_image = self.viewModel.frames[self.viewModel.current_index].preview_image
+                self.viewModel.current_index += 1
+                */
+                self.viewModel.current_frame_image = self.viewModel.frames[fuck_timer].preview_image?.resizable()
+                fuck_timer += 1
+                if fuck_timer >= self.viewModel.frames.count {
+                    viewModel.current_index = fuck_timer
+                    scroller.scrollTo(viewModel.current_index)
+                    video_play_timer?.invalidate()
+                    video_playing = false
+                    // scroller usage here
+                    // XXX sync fuck timer with current_index here
+                }
+                //self.transition(numberOfFrames: 1)
             }
             
         } else {
             Log.d("not playing")
-            if let video_play_timer = video_play_timer {
-                video_play_timer.invalidate()
-            }
+            // scroller usage here
+            viewModel.current_index = fuck_timer
+            scroller.scrollTo(viewModel.current_index)
+            video_play_timer?.invalidate()
         }
     }
 
@@ -644,12 +660,16 @@ struct ContentView: View {
                     withScroll scroller: ScrollViewProxy? = nil)
     {
         //Log.d("transition from \(viewModel.currentFrame)")
-        
-        viewModel.label_text = "frame \(new_frame_view.frame_index)"
+        let start_time = Date().timeIntervalSinceReferenceDate
+
+        viewModel.frames[viewModel.current_index].isCurrentFrame = false
+        viewModel.frames[new_frame_view.frame_index].isCurrentFrame = true
         viewModel.current_index = new_frame_view.frame_index
-        scroller?.scrollTo(viewModel.current_index)
         
         if !scrubMode {
+            viewModel.label_text = "frame \(new_frame_view.frame_index)"
+            scroller?.scrollTo(viewModel.current_index)
+        
             if let frame_to_save = old_frame {
                 self.saveToFile(frame: frame_to_save)
             }
@@ -658,14 +678,14 @@ struct ContentView: View {
         if let next_frame = new_frame_view.frame {
             // stick the preview image in there first if we have it
             if let preview_image = new_frame_view.preview_image {
-                current_frame_image = preview_image.resizable()
+                viewModel.current_frame_image = preview_image.resizable()
                 //viewModel.frames[new_frame_view.frame_index].image = 
-                viewModel.update()
+                //viewModel.update()
             } else if let thumbnail_image = new_frame_view.thumbnail_image {
                 // fallback to the thumbnail if nothing else
-                current_frame_image = thumbnail_image.resizable()
+                viewModel.current_frame_image = thumbnail_image.resizable()
                 //viewModel.frames[new_frame_view.frame_index].image = thumbnail_image.resizable()
-                viewModel.update()
+                //viewModel.update()
             }
             if !scrubMode {
                 // get the full resolution image async from the frame
@@ -674,7 +694,7 @@ struct ContentView: View {
                         if next_frame.frame_index == viewModel.current_index {
                             if let baseImage = try await next_frame.baseImage() {
                                 if next_frame.frame_index == viewModel.current_index {
-                                    current_frame_image = Image(nsImage: baseImage)
+                                    viewModel.current_frame_image = Image(nsImage: baseImage)
                                     viewModel.update()
                                 }
                             }
@@ -698,6 +718,8 @@ struct ContentView: View {
         } else {
             viewModel.update()
         }
+        let end_time = Date().timeIntervalSinceReferenceDate
+        Log.d("transition to frame \(new_frame_view.frame_index) took \(end_time - start_time) seconds")
     }
 }
 
