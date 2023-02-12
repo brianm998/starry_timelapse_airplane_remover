@@ -152,34 +152,28 @@ struct ContentView: View {
                 if viewModel.current_index == frame_index {            
                     if frameView.thumbnail_image == nil {
                         Rectangle().foregroundColor(.orange)
-                          .overlay(
-                            Rectangle()
-                              .stroke(style: StrokeStyle(lineWidth: stroke_width))
-                              .foregroundColor(.blue)
-                          )                
-
+                          .frame(maxWidth: CGFloat((viewModel.config?.thumbnail_width ?? 80)),
+                                 maxHeight: CGFloat((viewModel.config?.thumbnail_height ?? 50)))
                     } else {
-                        // highlight the selected frame
                         frameView.thumbnail_image!
-                          .overlay(
-                            Rectangle()
-                              .stroke(style: StrokeStyle(lineWidth: stroke_width))
-                              .foregroundColor(.blue)
-                          )                
                     }
                 } else {
                     if frameView.thumbnail_image == nil {
                         Rectangle()
                           .foregroundColor(bg_color)
+                          .frame(maxWidth: CGFloat((viewModel.config?.thumbnail_width ?? 80)),
+                                 maxHeight: CGFloat((viewModel.config?.thumbnail_height ?? 50)))
                     } else {
                         frameView.thumbnail_image!
                     }
                 }
             }
+            Spacer().frame(maxHeight: 8)
         }
-          .frame(minWidth: CGFloat((viewModel.config?.thumbnail_width ?? 80)),
-                 minHeight: CGFloat((viewModel.config?.thumbnail_height ?? 50) + 24))
-          .background(viewModel.current_index == frame_index ? .blue : .black)
+          .frame(minWidth: CGFloat((viewModel.config?.thumbnail_width ?? 80) + 8),
+                 minHeight: CGFloat((viewModel.config?.thumbnail_height ?? 50) + 30))
+           // highlight the selected frame
+          .background(viewModel.current_index == frame_index ? Color(white: 0.45) : Color(white: 0.22))
           .onTapGesture {
         // XXX move this out 
         viewModel.label_text = "loading..."
@@ -232,10 +226,10 @@ struct ContentView: View {
                     }
                 }
                 HStack {
-                    Text(viewModel.label_text)
+                    Text(viewModel.label_text).font(.largeTitle)
                     let count = viewModel.currentFrameView.outlierViews.count
                     if count > 0 {
-                        Text("has \(count) outliers")
+                        Text("has \(count) outliers").font(.largeTitle)
                     }
                 }
                 ScrollViewReader { scroller in
@@ -325,7 +319,7 @@ struct ContentView: View {
     
     func filmstrip() -> some View {
         ScrollView(.horizontal) {
-            HStack(spacing: 5) {
+            HStack(spacing: 0) {
                 ForEach(0..<viewModel.image_sequence_size, id: \.self) { frame_index in
                     self.filmStripView(forFrame: frame_index)
                 }
