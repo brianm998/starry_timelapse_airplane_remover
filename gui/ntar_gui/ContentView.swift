@@ -134,28 +134,38 @@ struct ContentView: View {
     func filmStripView(forFrame frame_index: Int) -> some View {
         var bg_color: Color = .yellow
         if let frame = viewModel.frame(atIndex: frame_index) {
-//            if frame.outlierGroupCount() > 0 {
-//                bg_color = .red
-//            } else {
-                bg_color = .green
-//            }
+            //            if frame.outlierGroupCount() > 0 {
+            //                bg_color = .red
+            //            } else {
+            bg_color = .green
+            //            }
         }
-
-        return ZStack {
+        return VStack(alignment: .leading) {
+            Spacer().frame(maxHeight: 8)
+            HStack{
+                Spacer().frame(maxWidth: 10)
+                Text("\(frame_index)").foregroundColor(.white)
+            }.frame(maxHeight: 10)
             if frame_index >= 0 && frame_index < viewModel.frames.count {
                 let frameView = viewModel.frames[frame_index]
-
+                let stroke_width: CGFloat = 4
                 if viewModel.current_index == frame_index {            
                     if frameView.thumbnail_image == nil {
                         Rectangle().foregroundColor(.orange)
+                          .overlay(
+                            Rectangle()
+                              .stroke(style: StrokeStyle(lineWidth: stroke_width))
+                              .foregroundColor(.blue)
+                          )                
+
                     } else {
                         // highlight the selected frame
-                        let opacity = viewModel.current_index == frame_index ? 0.4 : 0
                         frameView.thumbnail_image!
                           .overlay(
                             Rectangle()
-                              .foregroundColor(.orange).opacity(opacity)
-                          )
+                              .stroke(style: StrokeStyle(lineWidth: stroke_width))
+                              .foregroundColor(.blue)
+                          )                
                     }
                 } else {
                     if frameView.thumbnail_image == nil {
@@ -165,10 +175,11 @@ struct ContentView: View {
                         frameView.thumbnail_image!
                     }
                 }
-                Text("\(frame_index)")
             }
         }
-          .frame(width: 80, height: 50)
+          .frame(minWidth: CGFloat((viewModel.config?.thumbnail_width ?? 80)),
+                 minHeight: CGFloat((viewModel.config?.thumbnail_height ?? 50) + 24))
+          .background(viewModel.current_index == frame_index ? .blue : .black)
           .onTapGesture {
         // XXX move this out 
         viewModel.label_text = "loading..."
@@ -228,102 +239,58 @@ struct ContentView: View {
                     }
                 }
                 ScrollViewReader { scroller in
-                VStack {
-                    HStack {
-                        if !running {
-                            let action = {
-                                running = true
-                                viewModel.initial_load_in_progress = true
-                                Task.detached(priority: .background) {
-                                    do {
-                                        try await viewModel.eraser?.run()
-                                    } catch {
-                                        Log.e("\(error)")
+                    VStack {
+                        HStack {
+                            if !running {
+                                let action = {
+                                    running = true
+                                    viewModel.initial_load_in_progress = true
+                                    Task.detached(priority: .background) {
+                                        do {
+                                            try await viewModel.eraser?.run()
+                                        } catch {
+                                            Log.e("\(error)")
+                                        }
                                     }
                                 }
+                                Button(action: action) {
+                                    Text("START").font(.largeTitle)
+                                }.buttonStyle(PlainButtonStyle())
+                            } else {
+                                
+                                if viewModel.initial_load_in_progress {
+                                    ProgressView()
+                                      .scaleEffect(1, anchor: .center)
+                                      .progressViewStyle(CircularProgressViewStyle(tint: .yellow))
+                                    Spacer()
+                                      .frame(maxWidth: 50)
+                                }
+                                
+                                playButtons(scroller)
                             }
-                            Button(action: action) {
-                                Text("START").font(.largeTitle)
-                            }.buttonStyle(PlainButtonStyle())
-                        } else {
+                            paintAllButton()
+                            clearAllButton()
 
-                            if viewModel.initial_load_in_progress {
-                                ProgressView()
-                                  .scaleEffect(1, anchor: .center)
-                                  .progressViewStyle(CircularProgressViewStyle(tint: .yellow))
-                                Spacer()
-                                  .frame(maxWidth: 50)
+                            toggleViews()
+                            
+                            Text("background")
+                            Slider(value: $background_brightness, in: 0...100) { editing in
+                                Log.d("editing \(editing) background_brightness \(background_brightness)")
+                                background_color = Color(white: background_brightness/100)
+                                viewModel.objectWillChange.send()
                             }
-
-                            playButtons(scroller)
+                              .frame(maxWidth: 100, maxHeight: 30)
+                            
+                            //load all outlier button
+                            //loadAllOutliersButton()
+                            
+                            saveAllButton()
+                            
                         }
-                        Button(action: {
-                            Task {
-                                await viewModel.currentFrame?.userSelectAllOutliers(toShouldPaint: true)
-                                viewModel.update()
-                            }
-                        }) {
-                            Text("Paint All").font(.largeTitle)
-                        }.buttonStyle(PlainButtonStyle())
-                         .keyboardShortcut("p", modifiers: [])
-                        
-                        Button(action: {
-                            Task {
-                                await viewModel.currentFrame?.userSelectAllOutliers(toShouldPaint: false)
-                                viewModel.update()
-                            }
-                        }) {
-                            Text("Clear All").font(.largeTitle)
-                        }.buttonStyle(PlainButtonStyle())
-                          .keyboardShortcut("c", modifiers: [])
-                        VStack(alignment: .leading) {
-                            Toggle("show outliers", isOn: $showOutliers)
-                              .keyboardShortcut("o", modifiers: [])
-                            Toggle("selection causes paint", isOn: $selection_causes_painting)
-                              .keyboardShortcut("t", modifiers: []) // XXX find better modifier
-                            Toggle("scrub mode", isOn: $scrubMode)
-                              .keyboardShortcut("b", modifiers: [])
-                              .onChange(of: scrubMode) { scrubbing in
-                                  if !scrubbing {
-                                      if let current_frame = viewModel.currentFrame {
-                                          Task {
-                                              do {
-                                                  if viewModel.frames[current_frame.frame_index].outlierViews.count == 0 {
-                                                      // only set them if they're not present
-                                                      let _ = try await current_frame.loadOutliers()
-                                                      await viewModel.setOutlierGroups(forFrame: current_frame)
-                                                  }
-                                                  if let baseImage = try await current_frame.baseImage() {
-                                                      viewModel.currentFrameView.image = Image(nsImage: baseImage)
-                                                      viewModel.update()
-                                                  }
-                                              } catch {
-                                                  Log.e("error")
-                                              }
-                                          }
-                                      } else {
-                                          Log.i("not scrubbing with NO frame")
-                                      }
-                                  }
-                              }
-                        }
-                        Text("background")
-                        Slider(value: $background_brightness, in: 0...100) { editing in
-                            Log.d("editing \(editing) background_brightness \(background_brightness)")
-                            background_color = Color(white: background_brightness/100)
-                            viewModel.objectWillChange.send()
-                        }
-                          .frame(maxWidth: 100, maxHeight: 30)
-
-                        //load all outlier button
-                        //loadAllOutliersButton()
-
-                        saveAllButton()
-                        
-                    }
-
-                    // the filmstrip at the bottom
-                    filmstrip()
+                        Spacer().frame(maxHeight: 30)
+                        // the filmstrip at the bottom
+                        filmstrip()
+                        Spacer().frame(maxHeight: 10)
                     }
                 }
             }.frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -332,12 +299,35 @@ struct ContentView: View {
         }
     }
 
+    func clearAllButton() -> some View {
+        Button(action: {
+            Task {
+                await viewModel.currentFrame?.userSelectAllOutliers(toShouldPaint: false)
+                viewModel.update()
+            }
+        }) {
+            Text("Clear All").font(.largeTitle)
+        }.buttonStyle(PlainButtonStyle())
+          .keyboardShortcut("c", modifiers: [])
+    }
+    
+    func paintAllButton() -> some View {
+        Button(action: {
+            Task {
+                await viewModel.currentFrame?.userSelectAllOutliers(toShouldPaint: true)
+                viewModel.update()
+            }
+        }) {
+            Text("Paint All").font(.largeTitle)
+        }.buttonStyle(PlainButtonStyle())
+          .keyboardShortcut("p", modifiers: [])
+    }
+    
     func filmstrip() -> some View {
         ScrollView(.horizontal) {
             HStack(spacing: 5) {
                 ForEach(0..<viewModel.image_sequence_size, id: \.self) { frame_index in
                     self.filmStripView(forFrame: frame_index)
-                    
                 }
             }
         }.frame(maxWidth: .infinity, maxHeight: 50)
@@ -405,73 +395,6 @@ struct ContentView: View {
         }.buttonStyle(PlainButtonStyle())
     }
     
-    func transition(numberOfFrames: Int,
-                    withScroll scroller: ScrollViewProxy? = nil)
-    {
-        let current_frame = viewModel.currentFrame
-
-        var new_index = viewModel.current_index + numberOfFrames
-        if new_index < 0 { new_index = 0 }
-        if new_index >= viewModel.frames.count {
-            new_index = viewModel.frames.count-1
-        }
-        let new_frame_view = viewModel.frames[new_index]
-        
-        self.transition(toFrame: new_frame_view,
-                        from: current_frame,
-                        withScroll: scroller)
-    }
-    
-    func transition(toFrame new_frame_view: FrameView,
-                    from old_frame: FrameAirplaneRemover?,
-                    withScroll scroller: ScrollViewProxy? = nil)
-    {
-        Log.d("transition from \(viewModel.currentFrame)")
-        
-        viewModel.label_text = "frame \(new_frame_view.frame_index)"
-        viewModel.current_index = new_frame_view.frame_index
-        scroller?.scrollTo(viewModel.current_index)
-        
-        if !scrubMode {
-            if let frame_to_save = old_frame {
-                self.saveToFile(frame: frame_to_save)
-            }
-        }
-        
-        if let next_frame = new_frame_view.frame {
-
-            // stick the scrub image in there first if we have it
-            if let preview_image = new_frame_view.preview_image {
-                viewModel.currentFrameView.image = preview_image.resizable()
-                viewModel.update()
-            }
-            if !scrubMode {
-                // get the full resolution image async from the frame
-                Task {
-                    do {
-                        if let baseImage = try await next_frame.baseImage() {
-                            viewModel.currentFrameView.image = Image(nsImage: baseImage)
-                            viewModel.update()
-                        }
-                    } catch {
-                        Log.e("error")
-                    }
-                }
-            }
-            if !scrubMode {
-                Task {
-                    if viewModel.frames[next_frame.frame_index].outlierViews.count == 0 {
-                        let _ = try await next_frame.loadOutliers()
-                        await viewModel.setOutlierGroups(forFrame: next_frame)
-                        viewModel.update()
-                    }
-                }
-            }
-        } else {
-            viewModel.update()
-        }
-    }
-
     // an HStack of buttons to advance backwards and fowards through the sequence
     func playButtons(_ scroller: ScrollViewProxy) -> some View {
 
@@ -581,6 +504,40 @@ struct ContentView: View {
         
     }
 
+    func toggleViews() -> some View {
+        VStack(alignment: .leading) {
+            Toggle("show outliers", isOn: $showOutliers)
+              .keyboardShortcut("o", modifiers: [])
+            Toggle("selection causes paint", isOn: $selection_causes_painting)
+              .keyboardShortcut("t", modifiers: []) // XXX find better modifier
+            Toggle("scrub mode", isOn: $scrubMode)
+              .keyboardShortcut("b", modifiers: [])
+              .onChange(of: scrubMode) { scrubbing in
+                  if !scrubbing {
+                      if let current_frame = viewModel.currentFrame {
+                          Task {
+                              do {
+                                  if viewModel.frames[current_frame.frame_index].outlierViews.count == 0 {
+                                      // only set them if they're not present
+                                      let _ = try await current_frame.loadOutliers()
+                                      await viewModel.setOutlierGroups(forFrame: current_frame)
+                                  }
+                                  if let baseImage = try await current_frame.baseImage() {
+                                      viewModel.currentFrameView.image = Image(nsImage: baseImage)
+                                      viewModel.update()
+                                  }
+                              } catch {
+                                  Log.e("error")
+                              }
+                          }
+                      } else {
+                          Log.i("not scrubbing with NO frame")
+                      }
+                  }
+              }
+        }
+    }
+
     func buttonImage(_ name: String) -> some View {
         return Image(systemName: name)
           .resizable()
@@ -607,6 +564,73 @@ struct ContentView: View {
               .buttonStyle(PlainButtonStyle())                            
               .help(toolTip)
               .foregroundColor(color)
+        }
+    }
+
+    func transition(numberOfFrames: Int,
+                    withScroll scroller: ScrollViewProxy? = nil)
+    {
+        let current_frame = viewModel.currentFrame
+
+        var new_index = viewModel.current_index + numberOfFrames
+        if new_index < 0 { new_index = 0 }
+        if new_index >= viewModel.frames.count {
+            new_index = viewModel.frames.count-1
+        }
+        let new_frame_view = viewModel.frames[new_index]
+        
+        self.transition(toFrame: new_frame_view,
+                        from: current_frame,
+                        withScroll: scroller)
+    }
+    
+    func transition(toFrame new_frame_view: FrameView,
+                    from old_frame: FrameAirplaneRemover?,
+                    withScroll scroller: ScrollViewProxy? = nil)
+    {
+        Log.d("transition from \(viewModel.currentFrame)")
+        
+        viewModel.label_text = "frame \(new_frame_view.frame_index)"
+        viewModel.current_index = new_frame_view.frame_index
+        scroller?.scrollTo(viewModel.current_index)
+        
+        if !scrubMode {
+            if let frame_to_save = old_frame {
+                self.saveToFile(frame: frame_to_save)
+            }
+        }
+        
+        if let next_frame = new_frame_view.frame {
+
+            // stick the scrub image in there first if we have it
+            if let preview_image = new_frame_view.preview_image {
+                viewModel.currentFrameView.image = preview_image.resizable()
+                viewModel.update()
+            }
+            if !scrubMode {
+                // get the full resolution image async from the frame
+                Task {
+                    do {
+                        if let baseImage = try await next_frame.baseImage() {
+                            viewModel.currentFrameView.image = Image(nsImage: baseImage)
+                            viewModel.update()
+                        }
+                    } catch {
+                        Log.e("error")
+                    }
+                }
+            }
+            if !scrubMode {
+                Task {
+                    if viewModel.frames[next_frame.frame_index].outlierViews.count == 0 {
+                        let _ = try await next_frame.loadOutliers()
+                        await viewModel.setOutlierGroups(forFrame: next_frame)
+                        viewModel.update()
+                    }
+                }
+            }
+        } else {
+            viewModel.update()
         }
     }
 }
