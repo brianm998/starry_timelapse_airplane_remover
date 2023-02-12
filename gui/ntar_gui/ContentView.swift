@@ -23,7 +23,9 @@ struct ContentView: View {
     @State private var isDragging = false
     @State private var background_brightness: Double = 0.33
     @State private var background_color: Color = .gray
-
+    @State private var loading_outliers = false
+    @State private var fast_skip_amount = 20
+    
     init(viewModel: ViewModel) {
         self.viewModel = viewModel
     }
@@ -60,7 +62,7 @@ struct ContentView: View {
                                 }.buttonStyle(PlainButtonStyle())
                             } else {
                                 
-                                if viewModel.initial_load_in_progress {
+                                if viewModel.initial_load_in_progress || loading_outliers {
                                     ProgressView()
                                       .scaleEffect(1, anchor: .center)
                                       .progressViewStyle(CircularProgressViewStyle(tint: .yellow))
@@ -70,11 +72,33 @@ struct ContentView: View {
                                 
                                 playButtons(scroller)
                             }
+
+                            VStack {
+                                Picker("go to frame", selection: $viewModel.current_index) {
+                                    ForEach(0 ..< viewModel.frames.count, id: \.self) {
+                                        Text("frame \($0)")
+                                    }
+                                }
+                                  .frame(maxWidth: 200)
+                                  .onChange(of: viewModel.current_index) { pick in
+                                      Log.d("pick \(pick)")
+                                      self.transition(toFrame: viewModel.frames[pick],
+                                                      from: viewModel.currentFrame,
+                                                      withScroll: scroller)
+                                  }
+                                
+                                Picker("Fast Skip", selection: $fast_skip_amount) {
+                                    ForEach(0 ..< 51) {
+                                        Text("\($0) frames")
+                                    }
+                                }.frame(maxWidth: 200)
+                            }
+                            
                             paintAllButton()
                             clearAllButton()
 
                             toggleViews()
-                            
+/*                            
                             Text("background")
                             Slider(value: $background_brightness, in: 0...100) { editing in
                                 Log.d("editing \(editing) background_brightness \(background_brightness)")
@@ -82,9 +106,9 @@ struct ContentView: View {
                                 viewModel.objectWillChange.send()
                             }
                               .frame(maxWidth: 100, maxHeight: 30)
-                            
+  */                          
                             //load all outlier button
-                            //loadAllOutliersButton()
+                            loadAllOutliersButton()
                             
                             saveAllButton()
                             
@@ -402,7 +426,6 @@ struct ContentView: View {
 
         let start_shortcut_key: KeyEquivalent = "b"
         let fast_previous_shortut_key: KeyEquivalent = "z"
-        let fast_skip_amount = 20 // XXX make this configurable
         
         let previous_shortut_key: KeyEquivalent = .leftArrow
 
@@ -603,10 +626,12 @@ struct ContentView: View {
         }
         
         if let next_frame = new_frame_view.frame {
-
-            // stick the scrub image in there first if we have it
+            // stick the preview image in there first if we have it
             if let preview_image = new_frame_view.preview_image {
                 viewModel.currentFrameView.image = preview_image.resizable()
+                viewModel.update()
+            } else if let thumbnail_image = new_frame_view.thumbnail_image {
+                viewModel.currentFrameView.image = thumbnail_image.resizable()
                 viewModel.update()
             }
             if !scrubMode {
@@ -625,8 +650,12 @@ struct ContentView: View {
             if !scrubMode {
                 Task {
                     if viewModel.frames[next_frame.frame_index].outlierViews.count == 0 {
+                        // XXX here set flag for waiting upon loading outloaders
+                        loading_outliers = true
                         let _ = try await next_frame.loadOutliers()
                         await viewModel.setOutlierGroups(forFrame: next_frame)
+                        loading_outliers = false
+                        // XXX here clear flag for waiting upon loading outloaders
                         viewModel.update()
                     }
                 }

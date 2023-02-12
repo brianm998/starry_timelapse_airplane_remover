@@ -26,11 +26,6 @@ import NtarCore
   - the filmstrip doesn't update very quickly on its own
   - make it overwrite existing output files
   - fix final queue usage from UI so it doesn't crash by trying to save the same frame twice
-  - use something besides json for storying outlier groups to file?
-
-  - use https://github.com/christophhagen/BinaryCodable instead of json for outlier groups
-
-  - back/forward doesn't work on unloaded frames
 
   - allow showing changed frames too
 
@@ -49,6 +44,8 @@ import NtarCore
   - upon load, use the previews if they exist
 
   - add a button that calls frame.outlierGroups() on all frames to load their outliers
+
+  - have filmstrip show outlier group load status somehow
   
   NEW UI:
 
@@ -83,14 +80,14 @@ class ntar_gui_app: App {
     required init() {
         viewModel = ViewModel()
         let dispatch_handler = DispatchHandler()
-        input_queue = FinalQueue(max_concurrent: 10, // XXX get this number right
+        input_queue = FinalQueue(max_concurrent: 200, // XXX get this number right
                                  dispatchGroup: dispatch_handler)
 
         Task(priority: .high) {
             try await input_queue.start()
         }
         
-        Log.handlers[.console] = ConsoleLogHandler(at: .warn)
+        Log.handlers[.console] = ConsoleLogHandler(at: .debug)
         Log.i("Starting Up")
 
         var use_json = true
@@ -300,8 +297,10 @@ class ntar_gui_app: App {
         if self.viewModel.frame_width != CGFloat(new_frame.width) ||
            self.viewModel.frame_height != CGFloat(new_frame.height)
         {
-            self.viewModel.frame_width = CGFloat(new_frame.width)
-            self.viewModel.frame_height = CGFloat(new_frame.height)
+            await MainActor.run {
+                self.viewModel.frame_width = CGFloat(new_frame.width)
+                self.viewModel.frame_height = CGFloat(new_frame.height)
+            }
         }
         await self.viewModel.append(frame: new_frame, viewModel: self.viewModel)
 
