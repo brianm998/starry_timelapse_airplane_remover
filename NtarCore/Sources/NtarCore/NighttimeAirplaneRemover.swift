@@ -36,6 +36,12 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
     // the name of the directory to create when writing frame previews
     let preview_output_dirname: String
 
+    // the name of the directory to create when writing processed frame previews
+    let processed_preview_output_dirname: String
+
+    // the name of the directory to create when writing test paint frame previews
+    let test_paint_preview_output_dirname: String
+
     // the name of the directory to create when writing frame thumbnails (small previews)
     let thumbnail_output_dirname: String
 
@@ -55,6 +61,8 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
         test_paint_output_dirname = "\(config.test_paint_output_path)/\(basename)-test-paint"
         outlier_output_dirname = "\(config.outputPath)/\(basename)-outliers"
         preview_output_dirname = "\(config.outputPath)/\(basename)-previews"
+        processed_preview_output_dirname = "\(config.outputPath)/\(basename)-processed-previews"
+        test_paint_preview_output_dirname = "\(config.outputPath)/\(basename)-test-paint-previews"
         thumbnail_output_dirname = "\(config.outputPath)/\(basename)-thumbnails"
 
         try super.init(imageSequenceDirname: "\(config.image_sequence_path)/\(config.image_sequence_dirname)",
@@ -159,6 +167,15 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
         if config.writeFramePreviewFiles {
             try mkdir(preview_output_dirname) 
         }
+
+        if config.writeFrameProcessedPreviewFiles {
+            try mkdir(processed_preview_output_dirname)
+        }
+
+        if config.writeFrameTestPaintPreviewFiles {
+            try mkdir(test_paint_preview_output_dirname)
+        }
+        
         if config.writeFrameThumbnailFiles {
             try mkdir(thumbnail_output_dirname)
         }
@@ -322,6 +339,8 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
                                               baseName: base_name,
                                               outlierOutputDirname: outlier_output_dirname,
                                               previewOutputDirname: preview_output_dirname,
+                                              processedPreviewOutputDirname: processed_preview_output_dirname,
+                                              testPaintPreviewOutputDirname: test_paint_preview_output_dirname,
                                               thumbnailOutputDirname: thumbnail_output_dirname,
                                               outlierGroupLoader: loadOutliersFromFile,
                                               fullyProcess: fully_process)

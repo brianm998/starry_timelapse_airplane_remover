@@ -31,6 +31,8 @@ public struct Config: Codable {
         self.image_sequence_path = ""
         self.writeOutlierGroupFiles = false
         self.writeFramePreviewFiles = false
+        self.writeFrameProcessedPreviewFiles = false
+        self.writeFrameTestPaintPreviewFiles = false
         self.writeFrameThumbnailFiles = false
 
         // XXX 16 bit hardcode
@@ -66,6 +68,8 @@ public struct Config: Codable {
                 imageSequencePath: String,
                 writeOutlierGroupFiles: Bool,
                 writeFramePreviewFiles: Bool,
+                writeFrameProcessedPreviewFiles: Bool,
+                writeFrameTestPaintPreviewFiles: Bool,
                 writeFrameThumbnailFiles: Bool)
     {
         if let outputPath = outputPath {
@@ -83,6 +87,8 @@ public struct Config: Codable {
         self.image_sequence_path = imageSequencePath
         self.writeOutlierGroupFiles = writeOutlierGroupFiles
         self.writeFramePreviewFiles = writeFramePreviewFiles
+        self.writeFrameProcessedPreviewFiles = writeFrameProcessedPreviewFiles
+        self.writeFrameTestPaintPreviewFiles = writeFrameTestPaintPreviewFiles
         self.writeFrameThumbnailFiles = writeFrameThumbnailFiles
 
         // XXX 16 bit hardcode
@@ -130,6 +136,12 @@ public struct Config: Codable {
 
     // write out a preview file for each frame
     public var writeFramePreviewFiles: Bool
+
+    // write out a processed preview file for each frame
+    public var writeFrameProcessedPreviewFiles: Bool
+
+    // write out a processed test paint preview file for each frame
+    public var writeFrameTestPaintPreviewFiles: Bool    
 
     // write out a small thumbnail preview file for each frame
     public var writeFrameThumbnailFiles: Bool

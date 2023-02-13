@@ -347,6 +347,8 @@ struct Ntar: ParsableCommand {
                                 writeOutlierGroupFiles: should_write_outlier_group_files,
                                 // maybe make a separate command line parameter for these VVV? 
                                 writeFramePreviewFiles: should_write_outlier_group_files,
+                                writeFrameProcessedPreviewFiles: should_write_outlier_group_files,
+                                writeFrameTestPaintPreviewFiles: should_write_outlier_group_files,
                                 writeFrameThumbnailFiles: should_write_outlier_group_files)
 
                 Log.nameSuffix = input_image_sequence_name

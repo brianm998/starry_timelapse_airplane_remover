@@ -125,6 +125,18 @@ public class PixelatedImage {
             return nil          // doh
         }
     }
+
+    func baseImage(ofSize size: NSSize, fromData image_data: Data) -> NSImage? {
+        do {
+            if let new_image = try image(fromData: image_data) {
+                //                return NSImage(cgImage: new_image, size: <#NSSize#>).resized(to: size)
+                return NSImage(cgImage: new_image, size: size).resized(to: size)
+            }
+        } catch {
+            Log.e("\(error)")
+        }
+        return nil
+    }
     
     // write out the given image data as a 16 bit tiff file to the given filename
     // used when modifying the invariant original image data, and saying the edits to a file

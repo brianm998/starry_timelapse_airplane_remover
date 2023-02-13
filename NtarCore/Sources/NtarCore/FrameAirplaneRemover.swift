@@ -69,6 +69,8 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
 
     public let outlier_output_dirname: String?
     public let preview_output_dirname: String?
+    public let processed_preview_output_dirname: String?
+    public let test_paint_preview_output_dirname: String?
     public let thumbnail_output_dirname: String?
 
     // populated by pruning
@@ -78,13 +80,17 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
         return outlier_groups?.groups.map {$0.value} ?? []
     }
 
+    var previewSize: NSSize {
+        let preview_width = config.preview_width ?? Config.default_preview_width
+        let preview_height = config.preview_height ?? Config.default_preview_height
+        return NSSize(width: preview_width, height: preview_height)
+    }
+    
     public func writePreviewFile(_ image: NSImage) {
         Log.d("frame \(self.frame_index) doing preview")
         if config.writeFramePreviewFiles {
             Log.d("frame \(self.frame_index) doing preview")
-            let preview_width = config.preview_width ?? Config.default_preview_width
-            let preview_height = config.preview_height ?? Config.default_preview_height
-            let preview_size = NSSize(width: preview_width, height: preview_height)
+            let preview_size = self.previewSize
             
             if let scaledImage = image.resized(to: preview_size),
                let imageData = scaledImage.jpegData,
@@ -254,6 +260,20 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
         return nil
     }
     
+    nonisolated public var processedPreviewFilename: String? {
+        if let processed_preview_output_dirname = processed_preview_output_dirname {
+            return "\(processed_preview_output_dirname)/\(base_name).jpg"
+        }
+        return nil
+    }
+    
+    nonisolated public var testPaintPreviewFilename: String? {
+        if let test_paint_preview_output_dirname = test_paint_preview_output_dirname {
+            return "\(test_paint_preview_output_dirname)/\(base_name).jpg"
+        }
+        return nil
+    }
+    
     nonisolated public var thumbnailFilename: String? {
         if let thumbnail_output_dirname = thumbnail_output_dirname {
             return "\(thumbnail_output_dirname)/\(base_name).jpg"
@@ -278,6 +298,8 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
          baseName: String,       // source filename without path
          outlierOutputDirname outlier_output_dirname: String?,
          previewOutputDirname preview_output_dirname: String?,
+         processedPreviewOutputDirname processed_preview_output_dirname: String?,
+         testPaintPreviewOutputDirname test_paint_preview_output_dirname: String?,
          thumbnailOutputDirname thumbnail_output_dirname: String?,
          outlierGroupLoader: @escaping () async -> OutlierGroups?,
          fullyProcess: Bool = true) async throws
@@ -302,6 +324,8 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
 
         self.outlier_output_dirname = outlier_output_dirname
         self.preview_output_dirname = preview_output_dirname
+        self.processed_preview_output_dirname = processed_preview_output_dirname
+        self.test_paint_preview_output_dirname = test_paint_preview_output_dirname
         self.thumbnail_output_dirname = thumbnail_output_dirname
         self.width = width
         self.height = height
@@ -1018,11 +1042,68 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
                                           otherFrames: otherFrames)
         
         Log.d("frame \(self.frame_index) writing output files")
+        self.state = .writingOutputFile
 
-        // maybe write out post-update scaled preview image here?
+        // write out a preview of the processed file
+        if config.writeFrameProcessedPreviewFiles {
+            if let processed_preview_image = image.baseImage(ofSize: self.previewSize,
+                                                            fromData: output_data),
+               let imageData = processed_preview_image.jpegData,
+               let filename = self.processedPreviewFilename
+            {
+                do {
+                    if file_manager.fileExists(atPath: filename) {
+                        Log.i("overwriting already existing filename \(filename)")
+                        try file_manager.removeItem(atPath: filename)
+                    }
+
+                    // write to file
+                    file_manager.createFile(atPath: filename,
+                                            contents: imageData,
+                                            attributes: nil)
+                    Log.i("frame \(self.frame_index) wrote preview to \(filename)")
+                } catch {
+                    Log.e("\(error)")
+                }
+            } else {
+                Log.w("frame \(self.frame_index) WTF")
+            }
+
+            // write out post-update scaled preview image here?
+            // XXX do this XXX
+        }
         
+        // write out a preview of the processed file
+        if config.test_paint && config.writeFrameTestPaintPreviewFiles {
+            if let processed_preview_image = image.baseImage(ofSize: self.previewSize,
+                                                            fromData: test_paint_data),
+               let imageData = processed_preview_image.jpegData,
+               let filename = self.testPaintPreviewFilename
+            {
+                do {
+                    if file_manager.fileExists(atPath: filename) {
+                        Log.i("overwriting already existing filename \(filename)")
+                        try file_manager.removeItem(atPath: filename)
+                    }
+
+                    // write to file
+                    file_manager.createFile(atPath: filename,
+                                            contents: imageData,
+                                            attributes: nil)
+                    Log.i("frame \(self.frame_index) wrote preview to \(filename)")
+                } catch {
+                    Log.e("\(error)")
+                }
+            } else {
+                Log.w("frame \(self.frame_index) WTF")
+            }
+
+            // write out post-update scaled preview image here?
+            // XXX do this XXX
+        }
+        
+
         do {
-            self.state = .writingOutputFile
             try await self.writeTestFile(withData: test_paint_data)
             // write frame out as a tiff file after processing it
             try image.writeTIFFEncoding(ofData: output_data,  toFilename: self.output_filename)
