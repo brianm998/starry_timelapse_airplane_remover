@@ -78,8 +78,9 @@ struct ContentView: View {
                                     Spacer()
                                       .frame(maxWidth: 50)
                                 }
-                                
-                                playButtons(scroller)
+
+                                // video playback and frame advancement buttons
+                                videoPlaybackButtons(scroller)
                             }
 
                             VStack {
@@ -161,6 +162,7 @@ struct ContentView: View {
                     }
                 }
             } else {
+                // XXX pre-populate this crap as an image
                 ZStack {
                     Rectangle()
                       .foregroundColor(.yellow)
@@ -292,23 +294,13 @@ struct ContentView: View {
             if frame_index >= 0 && frame_index < viewModel.frames.count {
                 let frameView = viewModel.frames[frame_index]
                 let stroke_width: CGFloat = 4
-                if viewModel.current_index == frame_index {            
-                    if frameView.thumbnail_image == nil {
-                        Rectangle().foregroundColor(.orange)
-                          .frame(maxWidth: CGFloat((viewModel.config?.thumbnail_width ?? 80)),
-                                 maxHeight: CGFloat((viewModel.config?.thumbnail_height ?? 50)))
-                    } else {
-                        frameView.thumbnail_image!
-                    }
+                if viewModel.current_index == frame_index {
+
+                    frameView.thumbnail_image
+                      .foregroundColor(.orange)
+                    
                 } else {
-                    if frameView.thumbnail_image == nil {
-                        Rectangle()
-                          .foregroundColor(bg_color)
-                          .frame(maxWidth: CGFloat((viewModel.config?.thumbnail_width ?? 80)),
-                                 maxHeight: CGFloat((viewModel.config?.thumbnail_height ?? 50)))
-                    } else {
-                        frameView.thumbnail_image!
-                    }
+                    frameView.thumbnail_image
                 }
             }
             Spacer().frame(maxHeight: 8)
@@ -439,13 +431,12 @@ struct ContentView: View {
     }
     
     // an HStack of buttons to advance backwards and fowards through the sequence
-    func playButtons(_ scroller: ScrollViewProxy) -> some View {
+    func videoPlaybackButtons(_ scroller: ScrollViewProxy) -> some View {
 
+        // XXX these should really use modifiers but those don't work :(
         let start_shortcut_key: KeyEquivalent = "b"
         let fast_previous_shortut_key: KeyEquivalent = "z"
-        
         let previous_shortut_key: KeyEquivalent = .leftArrow
-
         let fast_next_shortcut_key: KeyEquivalent = "x"
         let end_button_shortcut_key: KeyEquivalent = "e"
         
@@ -475,7 +466,7 @@ struct ContentView: View {
                      """)
             {
                 self.transition(numberOfFrames: -fast_skip_amount,
-                                withScroll: scrubMode ? nil : scroller)
+                                withScroll: scroller)
             }
             
             // previous button
@@ -488,7 +479,7 @@ struct ContentView: View {
                      """)
             {
                 self.transition(numberOfFrames: -1,
-                                withScroll: scrubMode ? nil : scroller)
+                                withScroll: scroller)
             }
 
             // play/pause button
@@ -513,7 +504,7 @@ struct ContentView: View {
                      """)
             {
                 self.transition(numberOfFrames: 1,
-                                withScroll: scrubMode ? nil : scroller)
+                                withScroll: scroller)
             }
             
             // fast next button
@@ -526,7 +517,7 @@ struct ContentView: View {
                      """)
             {
                 self.transition(numberOfFrames: fast_skip_amount,
-                                withScroll: scrubMode ? nil : scroller)
+                                withScroll: scroller)
             }
             
             
@@ -555,7 +546,7 @@ struct ContentView: View {
             video_play_timer = Timer.scheduledTimer(withTimeInterval: 1/Double(video_playback_framerate),
                                                     repeats: true) { timer in
                 self.viewModel.current_frame_image =
-                  self.viewModel.frames[current_video_frame].preview_image?.resizable()
+                  self.viewModel.frames[current_video_frame].preview_image.resizable()
                 current_video_frame += 1
                 if current_video_frame >= self.viewModel.frames.count {
                     video_play_timer?.invalidate()
@@ -665,9 +656,10 @@ struct ContentView: View {
         viewModel.frames[new_frame_view.frame_index].isCurrentFrame = true
         viewModel.current_index = new_frame_view.frame_index
         
+        scroller?.scrollTo(viewModel.current_index)
+
         if !scrubMode {
             viewModel.label_text = "frame \(new_frame_view.frame_index)"
-            scroller?.scrollTo(viewModel.current_index)
         
             if let frame_to_save = old_frame {
                 self.saveToFile(frame: frame_to_save)
@@ -676,34 +668,36 @@ struct ContentView: View {
         
         if let next_frame = new_frame_view.frame {
             // stick the preview image in there first if we have it
-            if let preview_image = new_frame_view.preview_image {
-                viewModel.current_frame_image = preview_image.resizable()
-                //viewModel.frames[new_frame_view.frame_index].image = 
-                //viewModel.update()
-            } else if let thumbnail_image = new_frame_view.thumbnail_image {
-                // fallback to the thumbnail if nothing else
-                viewModel.current_frame_image = thumbnail_image.resizable()
-                //viewModel.frames[new_frame_view.frame_index].image = thumbnail_image.resizable()
-                //viewModel.update()
-            }
-            if !scrubMode {
-                // get the full resolution image async from the frame
-                Task {
-                    do {
-                        if next_frame.frame_index == viewModel.current_index {
-                            if let baseImage = try await next_frame.baseImage() {
-                                if next_frame.frame_index == viewModel.current_index {
-                                    viewModel.current_frame_image = Image(nsImage: baseImage)
-                                    viewModel.update()
+            if scrubMode {
+                viewModel.current_frame_image = new_frame_view.preview_image.resizable()
+            } else {
+                // not scrub mode
+                if let full_res_image = new_frame_view.image {
+                    // use the full resolution image if we have it
+                    viewModel.current_frame_image = full_res_image
+                } else {
+                    // otherwize fall back to the preview and load the full resolution image
+                    viewModel.current_frame_image = new_frame_view.preview_image
+
+                    // get the full resolution image async from the frame
+                    Task {
+                        do {
+                            if next_frame.frame_index == viewModel.current_index {
+                                if let baseImage = try await next_frame.baseImage() {
+                                    if next_frame.frame_index == viewModel.current_index {
+                                        viewModel.current_frame_image = Image(nsImage: baseImage)
+                                        viewModel.update()
+                                    }
                                 }
                             }
+                        } catch {
+                            Log.e("error")
                         }
-                    } catch {
-                        Log.e("error")
                     }
                 }
-                Task {
-                    if viewModel.frames[next_frame.frame_index].outlierViews.count == 0 {
+                // try loading outliers if there aren't any present
+                if viewModel.frames[next_frame.frame_index].outlierViews.count == 0 {
+                    Task {
                         loading_outliers = true
                         let _ = try await next_frame.loadOutliers()
                         await viewModel.setOutlierGroups(forFrame: next_frame)

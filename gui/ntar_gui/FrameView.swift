@@ -20,6 +20,7 @@ class FrameView: ObservableObject {
         didSet {
             if let image = image {
                 // save memory by not keeping the full resolution images in ram constantly
+                // maybe instead of a timer keep a pool of some fixed size?
                 Timer.scheduledTimer(withTimeInterval: 60, repeats: false) { _ in 
                     Log.d("frame \(self.frame_index) setting image to nil")
                     if self.isCurrentFrame {
@@ -32,7 +33,7 @@ class FrameView: ObservableObject {
             }
         }
     }
-    @Published var thumbnail_image: Image? 
-    @Published var preview_image: Image? 
+    @Published var thumbnail_image: Image = Image(systemName: "rectangle.fill").resizable()
+    @Published var preview_image: Image = Image(systemName: "rectangle.fill").resizable()
 }
 
