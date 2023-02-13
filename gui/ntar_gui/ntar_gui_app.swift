@@ -98,7 +98,8 @@ class ntar_gui_app: App {
 
             //let outlier_dirname = "/pp/tmp/TEST_12_22_2022-a9-2-aurora-topaz-500-ntar-v-0_1_3-outliers"
             
-            let outlier_dirname = "/pp/tmp/LRT_12_22_2022-a9-2-aurora-topaz-ntar-v-0_1_3-outliers"
+            //let outlier_dirname = "/pp/tmp/LRT_12_22_2022-a9-2-aurora-topaz-ntar-v-0_1_3-outliers"
+            let outlier_dirname = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/test_small_lots-ntar-v-0_2_0-outliers"
             //let outlier_dirname = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/test_small_medium-ntar-v-0_1_3-outliers"
 
             //let outlier_dirname = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/test_a7sii_100-ntar-v-0_1_3-outliers"
@@ -317,8 +318,12 @@ class ntar_gui_app: App {
             do {
                 if let baseImage = try await new_frame.baseImage() {
                     if self.viewModel.current_index == new_frame.frame_index {
-                        self.viewModel.current_frame_image = Image(nsImage: baseImage)
-                        await self.viewModel.update()
+                        await MainActor.run {
+                            Task {
+                                self.viewModel.current_frame_image = Image(nsImage: baseImage)
+                                await self.viewModel.update()
+                            }
+                        }
                     }
                 }
             } catch {

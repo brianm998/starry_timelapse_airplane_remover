@@ -11,9 +11,6 @@ class ViewModel: ObservableObject {
     var frameSaveQueue: FrameSaveQueue?
     var no_image_explaination_text: String = "Loading..."
 
-    @Published var current_frame_image: Image?
-    
-
     @Published var frame_width: CGFloat = 600
     @Published var frame_height: CGFloat = 450
     
@@ -21,11 +18,13 @@ class ViewModel: ObservableObject {
 
     // view class for each frame in the sequence in order
     @Published var frames: [FrameView] = [FrameView(0)]
-
+    @Published var current_frame_image: Image?
     @Published var initial_load_in_progress = false
     
     // currently selected index in the sequence
     var currentFrameView: FrameView {
+        if current_index < 0 { current_index = 0 }
+        if current_index >= frames.count { current_index = frames.count - 1 }
         return frames[current_index]
     }
 /*    @Published*/ var current_index = 0
@@ -54,8 +53,8 @@ class ViewModel: ObservableObject {
       
     }
     
-  /*  @MainActor*/ func update() {
-//        Task { self.objectWillChange.send() }
+    @MainActor func update() {
+        Task { self.objectWillChange.send() }
     }
 
 
@@ -103,7 +102,7 @@ class ViewModel: ObservableObject {
                 let view_image = Image(nsImage: preview_image)
                 self.frames[frame.frame_index].preview_image = view_image
                 if current_index == frame.frame_index {
-                    current_frame_image = view_image
+                    frames[current_index].image = view_image
                 }
             } else {
                 if pixImage == nil { pixImage = try await frame.pixelatedImage() }
@@ -115,7 +114,7 @@ class ViewModel: ObservableObject {
                     let view_image = Image(nsImage: preview_base)
                     self.frames[frame.frame_index].preview_image = view_image
                     if current_index == frame.frame_index {
-                        current_frame_image = view_image
+                        frames[current_index].image = view_image
                     }
                 } else {
                     Log.w("set unable to load preview image for self.frames[\(frame.frame_index)].frame")

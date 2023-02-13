@@ -14,7 +14,7 @@ import Zoomable
 // XXX Fing global :(
 fileprivate var video_play_timer: Timer?
 
-var fuck_timer = 0
+fileprivate var current_video_frame = 0
 
 // the overall level of the app
 struct ContentView: View {
@@ -30,6 +30,7 @@ struct ContentView: View {
     @State private var background_color: Color = .gray
     @State private var loading_outliers = false
     @State private var fast_skip_amount = 20
+    @State private var video_playback_framerate = 10
     @State private var video_playing = false
 
     init(viewModel: ViewModel) {
@@ -99,6 +100,12 @@ struct ContentView: View {
                                 Picker("Fast Skip", selection: $fast_skip_amount) {
                                     ForEach(0 ..< 51) {
                                         Text("\($0) frames")
+                                    }
+                                }.frame(maxWidth: 200)
+                                let frame_rates = [5, 10, 15, 20, 25, 30]
+                                Picker("Frame Rate", selection: $video_playback_framerate) {
+                                    ForEach(frame_rates, id: \.self) {
+                                        Text("\($0) fps")
                                     }
                                 }.frame(maxWidth: 200)
                             }
@@ -543,34 +550,26 @@ struct ContentView: View {
     func togglePlay(_ scroller: ScrollViewProxy) {
         self.video_playing = !self.video_playing
         if video_playing {
-            Log.d("playing")
-            fuck_timer = viewModel.current_index
-            video_play_timer = Timer.scheduledTimer(withTimeInterval: 1/20/*1/30*/, // XXX hardcoded play rate 
+            Log.d("playing @ \(video_playback_framerate) fps")
+            current_video_frame = viewModel.current_index
+            video_play_timer = Timer.scheduledTimer(withTimeInterval: 1/Double(video_playback_framerate),
                                                     repeats: true) { timer in
-                //Log.d("fire")
-                /*
-                self.viewModel.current_frame_image = self.viewModel.frames[self.viewModel.current_index].preview_image
-                self.viewModel.current_index += 1
-                */
-                self.viewModel.current_frame_image = self.viewModel.frames[fuck_timer].preview_image?.resizable()
-                fuck_timer += 1
-                if fuck_timer >= self.viewModel.frames.count {
-                    viewModel.current_index = fuck_timer
-                    scroller.scrollTo(viewModel.current_index)
+                self.viewModel.current_frame_image =
+                  self.viewModel.frames[current_video_frame].preview_image?.resizable()
+                current_video_frame += 1
+                if current_video_frame >= self.viewModel.frames.count {
                     video_play_timer?.invalidate()
+                    viewModel.current_index = current_video_frame
+                    scroller.scrollTo(viewModel.current_index)
                     video_playing = false
-                    // scroller usage here
-                    // XXX sync fuck timer with current_index here
                 }
-                //self.transition(numberOfFrames: 1)
             }
-            
         } else {
+            video_play_timer?.invalidate()
             Log.d("not playing")
             // scroller usage here
-            viewModel.current_index = fuck_timer
+            viewModel.current_index = current_video_frame
             scroller.scrollTo(viewModel.current_index)
-            video_play_timer?.invalidate()
         }
     }
 
@@ -705,12 +704,10 @@ struct ContentView: View {
                 }
                 Task {
                     if viewModel.frames[next_frame.frame_index].outlierViews.count == 0 {
-                        // XXX here set flag for waiting upon loading outloaders
                         loading_outliers = true
                         let _ = try await next_frame.loadOutliers()
                         await viewModel.setOutlierGroups(forFrame: next_frame)
                         loading_outliers = false
-                        // XXX here clear flag for waiting upon loading outloaders
                         viewModel.update()
                     }
                 }
