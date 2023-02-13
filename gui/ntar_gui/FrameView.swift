@@ -33,7 +33,10 @@ class FrameView: ObservableObject {
             }
         }
     }
-    @Published var thumbnail_image: Image = Image(systemName: "rectangle.fill").resizable()
-    @Published var preview_image: Image = Image(systemName: "rectangle.fill").resizable()
+    @Published var thumbnail_image: Image = initial_image
+    @Published var preview_image: Image = initial_image
+    @Published var processed_preview_image: Image = initial_image
+    @Published var test_paint_preview_image: Image = initial_image
 }
 
+fileprivate let initial_image = Image(systemName: "rectangle.fill").resizable()

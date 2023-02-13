@@ -20,7 +20,7 @@ fileprivate var current_video_frame = 0
 struct ContentView: View {
     @ObservedObject var viewModel: ViewModel
     @State private var showOutliers = true
-    @State private var scrubMode = true
+    @State private var showPreviewMode = true
     @State private var selection_causes_painting = true
     @State private var running = false
     @State private var drag_start: CGPoint?
@@ -43,7 +43,7 @@ struct ContentView: View {
             ScrollViewReader { scroller in
                 VStack {
                     currentFrameView()
-                    if !scrubMode {
+                    if !showPreviewMode {
                         HStack {
                             Text(viewModel.label_text).font(.largeTitle)
                             let count = viewModel.currentFrameView.outlierViews.count
@@ -571,10 +571,10 @@ struct ContentView: View {
               .keyboardShortcut("o", modifiers: [])
             Toggle("selection causes paint", isOn: $selection_causes_painting)
               .keyboardShortcut("t", modifiers: []) // XXX find better modifier
-            Toggle("scrub mode", isOn: $scrubMode)
+            Toggle("preview mode", isOn: $showPreviewMode)
               .keyboardShortcut("b", modifiers: [])
-              .onChange(of: scrubMode) { scrubbing in
-                  if !scrubbing {
+              .onChange(of: showPreviewMode) { preview_on in
+                  if !preview_on {
                       if let current_frame = viewModel.currentFrame {
                           Task {
                               do {
@@ -592,7 +592,7 @@ struct ContentView: View {
                               }
                           }
                       } else {
-                          Log.i("not scrubbing with NO frame")
+                          Log.i("not preview_on with NO frame")
                       }
                   }
               }
@@ -658,7 +658,7 @@ struct ContentView: View {
         
         scroller?.scrollTo(viewModel.current_index)
 
-        if !scrubMode {
+        if !showPreviewMode {
             viewModel.label_text = "frame \(new_frame_view.frame_index)"
         
             if let frame_to_save = old_frame {
@@ -668,10 +668,10 @@ struct ContentView: View {
         
         if let next_frame = new_frame_view.frame {
             // stick the preview image in there first if we have it
-            if scrubMode {
+            if showPreviewMode {
                 viewModel.current_frame_image = new_frame_view.preview_image.resizable()
             } else {
-                // not scrub mode
+                // not preview mode
                 if let full_res_image = new_frame_view.image {
                     // use the full resolution image if we have it
                     viewModel.current_frame_image = full_res_image

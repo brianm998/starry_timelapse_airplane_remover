@@ -94,6 +94,22 @@ class ViewModel: ObservableObject {
             
             // XXX cache these scrub previews?
             // look for saved versions of these
+
+            if let processed_preview_filename = frame.processedPreviewFilename,
+               let processed_preview_image = NSImage(contentsOf: URL(fileURLWithPath: processed_preview_filename))
+            {
+                Log.d("loaded processed preview for self.frames[\(frame.frame_index)] from jpeg")
+                let view_image = Image(nsImage: processed_preview_image)
+                self.frames[frame.frame_index].preview_image = view_image
+            }
+            
+            if let test_paint_preview_filename = frame.processedPreviewFilename,
+               let test_paint_preview_image = NSImage(contentsOf: URL(fileURLWithPath: test_paint_preview_filename))
+            {
+                Log.d("loaded test paint preview for self.frames[\(frame.frame_index)] from jpeg")
+                let view_image = Image(nsImage: test_paint_preview_image)
+                self.frames[frame.frame_index].preview_image = view_image
+            }
             
             if let preview_filename = frame.previewFilename,
                let preview_image = NSImage(contentsOf: URL(fileURLWithPath: preview_filename))
@@ -101,6 +117,7 @@ class ViewModel: ObservableObject {
                 Log.d("loaded preview for self.frames[\(frame.frame_index)] from jpeg")
                 let view_image = Image(nsImage: preview_image)
                 self.frames[frame.frame_index].preview_image = view_image
+                // XXX maybe only if scrubbing
                 if current_index == frame.frame_index {
                     frames[current_index].image = view_image
                 }
