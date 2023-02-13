@@ -19,8 +19,14 @@ fileprivate var current_video_frame = 0
 // the overall level of the app
 struct ContentView: View {
     @ObservedObject var viewModel: ViewModel
-    @State private var showOutliers = true
+    @State private var showOutliers = false
+
+    // XXX make these into an enum, they're mutually exclusive
     @State private var showPreviewMode = true
+    @State private var showFullResMode = false
+    @State private var showProcessedPreviewMode = false
+    @State private var showTestPaintPreviewMode = false
+    
     @State private var selection_causes_painting = true
     @State private var running = false
     @State private var drag_start: CGPoint?
@@ -43,7 +49,7 @@ struct ContentView: View {
             ScrollViewReader { scroller in
                 VStack {
                     currentFrameView()
-                    if !showPreviewMode {
+                    if showFullResMode {
                         HStack {
                             Text(viewModel.label_text).font(.largeTitle)
                             let count = viewModel.currentFrameView.outlierViews.count
@@ -545,8 +551,17 @@ struct ContentView: View {
             current_video_frame = viewModel.current_index
             video_play_timer = Timer.scheduledTimer(withTimeInterval: 1/Double(video_playback_framerate),
                                                     repeats: true) { timer in
-                self.viewModel.current_frame_image =
-                  self.viewModel.frames[current_video_frame].preview_image.resizable()
+
+
+            if showPreviewMode {
+                viewModel.current_frame_image = self.viewModel.frames[current_video_frame].preview_image.resizable()
+            } else if showProcessedPreviewMode {
+                viewModel.current_frame_image = self.viewModel.frames[current_video_frame].processed_preview_image.resizable()
+            } else if showTestPaintPreviewMode {
+                viewModel.current_frame_image = self.viewModel.frames[current_video_frame].test_paint_preview_image.resizable()
+            }                
+            //self.viewModel.current_frame_image =
+            //                  .preview_image.resizable()
                 current_video_frame += 1
                 if current_video_frame >= self.viewModel.frames.count {
                     video_play_timer?.invalidate()
@@ -566,36 +581,81 @@ struct ContentView: View {
 
     
     func toggleViews() -> some View {
-        VStack(alignment: .leading) {
-            Toggle("show outliers", isOn: $showOutliers)
-              .keyboardShortcut("o", modifiers: [])
-            Toggle("selection causes paint", isOn: $selection_causes_painting)
-              .keyboardShortcut("t", modifiers: []) // XXX find better modifier
-            Toggle("preview mode", isOn: $showPreviewMode)
-              .keyboardShortcut("b", modifiers: [])
-              .onChange(of: showPreviewMode) { preview_on in
-                  if !preview_on {
-                      if let current_frame = viewModel.currentFrame {
-                          Task {
-                              do {
-                                  if viewModel.frames[current_frame.frame_index].outlierViews.count == 0 {
-                                      // only set them if they're not present
-                                      let _ = try await current_frame.loadOutliers()
-                                      await viewModel.setOutlierGroups(forFrame: current_frame)
+        HStack() {
+            VStack(alignment: .leading) {
+                Toggle("show outliers", isOn: $showOutliers)
+                  .keyboardShortcut("o", modifiers: [])
+                Toggle("selection causes paint", isOn: $selection_causes_painting)
+                  .keyboardShortcut("t", modifiers: []) // XXX find better modifier
+            }
+            VStack(alignment: .leading) {
+
+                Toggle("full res mode", isOn: $showFullResMode)
+                  .onChange(of: showFullResMode) { mode_on in
+                      if mode_on {
+                          showOutliers = true
+                          showPreviewMode = false
+                          showProcessedPreviewMode = false
+                          showTestPaintPreviewMode = false
+
+                          // update current frame
+                          if let current_frame = viewModel.currentFrame {
+                              Task {
+                                  do {
+                                      if viewModel.frames[current_frame.frame_index].outlierViews.count == 0 {
+                                          // only set them if they're not present
+                                          let _ = try await current_frame.loadOutliers()
+                                          await viewModel.setOutlierGroups(forFrame: current_frame)
+                                      }
+                                      if let baseImage = try await current_frame.baseImage() {
+                                          viewModel.currentFrameView.image = Image(nsImage: baseImage)
+                                          viewModel.update()
+                                      }
+                                  } catch {
+                                      Log.e("error")
                                   }
-                                  if let baseImage = try await current_frame.baseImage() {
-                                      viewModel.currentFrameView.image = Image(nsImage: baseImage)
-                                      viewModel.update()
-                                  }
-                              } catch {
-                                  Log.e("error")
                               }
-                          }
-                      } else {
-                          Log.i("not preview_on with NO frame")
+                          } 
                       }
                   }
-              }
+
+                Toggle("preview mode", isOn: $showPreviewMode)
+                  .keyboardShortcut("b", modifiers: [])
+                  .onChange(of: showPreviewMode) { mode_on in
+                      if mode_on {
+                          showOutliers = false
+                          showProcessedPreviewMode = false
+                          showTestPaintPreviewMode = false
+                          showFullResMode = false
+
+                          viewModel.current_frame_image = viewModel.frames[viewModel.current_index].preview_image.resizable()
+                      } 
+                  }
+                
+                Toggle("processed mode", isOn: $showProcessedPreviewMode)
+                  .onChange(of: showProcessedPreviewMode) { mode_on in
+                      if mode_on {
+                          showOutliers = false
+                          showPreviewMode = false
+                          showTestPaintPreviewMode = false
+                          showFullResMode = false
+
+                          viewModel.current_frame_image = viewModel.frames[viewModel.current_index].processed_preview_image.resizable()
+                      }
+                  }                
+                Toggle("test paint mode", isOn: $showTestPaintPreviewMode)
+                  .onChange(of: showTestPaintPreviewMode) { mode_on in
+                      if mode_on {
+                          showOutliers = false
+                          showPreviewMode = false
+                          showProcessedPreviewMode = false
+                          showFullResMode = false
+                          viewModel.current_frame_image = viewModel.frames[viewModel.current_index].test_paint_preview_image.resizable()
+                      }
+
+                      
+                  }
+            }
         }
     }
 
@@ -658,7 +718,7 @@ struct ContentView: View {
         
         scroller?.scrollTo(viewModel.current_index)
 
-        if !showPreviewMode {
+        if showFullResMode {
             viewModel.label_text = "frame \(new_frame_view.frame_index)"
         
             if let frame_to_save = old_frame {
@@ -670,6 +730,10 @@ struct ContentView: View {
             // stick the preview image in there first if we have it
             if showPreviewMode {
                 viewModel.current_frame_image = new_frame_view.preview_image.resizable()
+            } else if showProcessedPreviewMode {
+                viewModel.current_frame_image = new_frame_view.processed_preview_image.resizable()
+            } else if showTestPaintPreviewMode {
+                viewModel.current_frame_image = new_frame_view.test_paint_preview_image.resizable()
             } else {
                 // not preview mode
                 if let full_res_image = new_frame_view.image {
@@ -677,7 +741,7 @@ struct ContentView: View {
                     viewModel.current_frame_image = full_res_image
                 } else {
                     // otherwize fall back to the preview and load the full resolution image
-                    viewModel.current_frame_image = new_frame_view.preview_image
+                    viewModel.current_frame_image = new_frame_view.preview_image.resizable()
 
                     // get the full resolution image async from the frame
                     Task {
