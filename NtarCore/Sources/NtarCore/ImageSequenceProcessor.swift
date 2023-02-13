@@ -162,6 +162,8 @@ public class ImageSequenceProcessor<T> {
         }
         local_dispatch.wait()
 
+        Log.d("done with startup hook")
+        
         try mkdir(output_dirname)
 
         // this dispatch group is only used for this task

@@ -212,6 +212,7 @@ class ntar_gui_app: App {
                                 writeFrameTestPaintPreviewFiles: self.should_write_outlier_group_files,
                                 writeFrameThumbnailFiles: self.should_write_outlier_group_files)
 
+            
             viewModel.config = config
             
             let callbacks = make_callbacks()

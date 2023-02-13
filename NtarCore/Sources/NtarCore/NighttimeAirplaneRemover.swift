@@ -141,7 +141,7 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
 
     // called by the superclass at startup
     override func startup_hook() async throws {
-
+        Log.d("startup hook starting")
         if image_width == nil ||
            image_height == nil ||
            image_bytesPerPixel == nil
@@ -157,28 +157,41 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
                 Log.e("first frame to get size: \(error)")
             }
         }
-
-        
-        if config.test_paint { try mkdir(test_paint_output_dirname) }
+        Log.d("1")
+        if config.test_paint {
+            try mkdir(test_paint_output_dirname)
+        }
+        Log.d("2")
         if config.writeOutlierGroupFiles {
-            try mkdir(outlier_output_dirname)
+            Log.d("2a \(outlier_output_dirname)")
+            // doesn't do mkdir -p, if a base dir is missing it just hangs :(
+            try mkdir(outlier_output_dirname) // XXX this can fail silently and pause the whole process :(
+            Log.d("2b")
             config.writeJson(to: outlier_output_dirname)
+            Log.d("2c")
         }
+        Log.d("3")
         if config.writeFramePreviewFiles {
+            Log.d("3a")
             try mkdir(preview_output_dirname) 
+            Log.d("3b")
         }
 
+        Log.d("4")
         if config.writeFrameProcessedPreviewFiles {
             try mkdir(processed_preview_output_dirname)
         }
+        Log.d("5")
 
         if config.writeFrameTestPaintPreviewFiles {
             try mkdir(test_paint_preview_output_dirname)
         }
+        Log.d("6")
         
         if config.writeFrameThumbnailFiles {
             try mkdir(thumbnail_output_dirname)
         }
+        Log.d("startup hook done")
     }
     
     // called by the superclass to process each frame
@@ -266,11 +279,15 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
             // look inside outlier_output_dirname for json
             // XXX check for 1_outlier.json file in outliers dir
             
-            let frame_outliers_json_filename = "\(self.outlier_output_dirname)/\(frame_index)_outliers.bin"
-            if file_manager.fileExists(atPath: frame_outliers_json_filename) {
-                
+            let frame_outliers_binary_filename = "\(self.outlier_output_dirname)/\(frame_index)_outliers.bin"
+
+            Log.i("frame \(frame_index) looking for binary file \(frame_outliers_binary_filename)")
+            
+            if file_manager.fileExists(atPath: frame_outliers_binary_filename) {
+                Log.i("frame \(frame_index) found binary file \(frame_outliers_binary_filename)")
+            
                 do {
-                    let url = NSURL(fileURLWithPath: frame_outliers_json_filename, isDirectory: false) as URL
+                    let url = NSURL(fileURLWithPath: frame_outliers_binary_filename, isDirectory: false) as URL
                     let (data, _) = try await URLSession.shared.data(for: URLRequest(url: url))
                     let decoder = BinaryDecoder()
                     
@@ -280,9 +297,10 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
                     Log.d("binary decode took \(end_time_1 - start_time_1) seconds to load binary outlier group data for frame \(frame_index)")
                     Log.i("loading frame \(frame_index) with outlier groups from binary file")
                 } catch {
-                    Log.e("frame \(frame_index) error decoding file \(frame_outliers_json_filename): \(error)")
+                    Log.e("frame \(frame_index) error decoding file \(frame_outliers_binary_filename): \(error)")
                 }
             } else {
+                    Log.i("frame \(frame_index) binary file \(frame_outliers_binary_filename) does not exist")
                 // try json
                 
                 

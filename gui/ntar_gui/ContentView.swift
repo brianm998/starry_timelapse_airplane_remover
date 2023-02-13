@@ -16,16 +16,31 @@ fileprivate var video_play_timer: Timer?
 
 fileprivate var current_video_frame = 0
 
+enum FrameViewMode: String, Equatable, CaseIterable {
+    case original
+    case processed
+    case testPainted
+
+    var localizedName: LocalizedStringKey {
+        LocalizedStringKey(rawValue)
+    }
+}
+
 // the overall level of the app
 struct ContentView: View {
     @ObservedObject var viewModel: ViewModel
     @State private var showOutliers = false
 
+
+    @State private var frameViewMode = FrameViewMode.original
+    @State private var previewMode = true // show only lower res previews instead of full res images
+    
     // XXX make these into an enum, they're mutually exclusive
+    /*
     @State private var showPreviewMode = true
-    @State private var showFullResMode = false
     @State private var showProcessedPreviewMode = false
     @State private var showTestPaintPreviewMode = false
+     */
     
     @State private var selection_causes_painting = true
     @State private var running = false
@@ -49,7 +64,7 @@ struct ContentView: View {
             ScrollViewReader { scroller in
                 VStack {
                     currentFrameView()
-                    if showFullResMode {
+                    if !previewMode {
                         HStack {
                             Text(viewModel.label_text).font(.largeTitle)
                             let count = viewModel.currentFrameView.outlierViews.count
@@ -547,19 +562,23 @@ struct ContentView: View {
     func togglePlay(_ scroller: ScrollViewProxy) {
         self.video_playing = !self.video_playing
         if video_playing {
+            self.showOutliers = false
             Log.d("playing @ \(video_playback_framerate) fps")
             current_video_frame = viewModel.current_index
             video_play_timer = Timer.scheduledTimer(withTimeInterval: 1/Double(video_playback_framerate),
                                                     repeats: true) { timer in
 
 
-            if showPreviewMode {
-                viewModel.current_frame_image = self.viewModel.frames[current_video_frame].preview_image.resizable()
-            } else if showProcessedPreviewMode {
-                viewModel.current_frame_image = self.viewModel.frames[current_video_frame].processed_preview_image.resizable()
-            } else if showTestPaintPreviewMode {
-                viewModel.current_frame_image = self.viewModel.frames[current_video_frame].test_paint_preview_image.resizable()
-            }                
+                let current_frame_view = self.viewModel.frames[current_video_frame]
+                
+                switch self.frameViewMode {
+                case .original:
+                    viewModel.current_frame_image = current_frame_view.preview_image.resizable()
+                case .processed:
+                    viewModel.current_frame_image = current_frame_view.processed_preview_image.resizable()
+                case .testPainted:
+                    viewModel.current_frame_image = current_frame_view.test_paint_preview_image.resizable()
+                }
             //self.viewModel.current_frame_image =
             //                  .preview_image.resizable()
                 current_video_frame += 1
@@ -571,6 +590,7 @@ struct ContentView: View {
                 }
             }
         } else {
+            self.showOutliers = true // XXX maybe track previous state before setting it off at start of video play?
             video_play_timer?.invalidate()
             Log.d("not playing")
             // scroller usage here
@@ -589,14 +609,30 @@ struct ContentView: View {
                   .keyboardShortcut("t", modifiers: []) // XXX find better modifier
             }
             VStack(alignment: .leading) {
+                let frameViewModes: [FrameViewMode] = [.original, .processed, .testPainted]
+                Picker("view mode", selection: $frameViewMode) {
+                    // XXX expand this to not use allCases, but only those that we have files for
+                    // i.e. don't show test-paint when the sequence wasn't test painted
+                    ForEach(FrameViewMode.allCases, id: \.self) { value in
+                        Text(value.localizedName).tag(value)
+                    }
+                }
+                  .frame(maxWidth: 200)
+                  .onChange(of: frameViewMode) { pick in
+                      Log.d("pick \(pick)")
+                      refreshCurrentFrame()
+                      /*
+                      self.transition(toFrame: viewModel.frames[pick],
+                                      from: viewModel.currentFrame,
+                                      withScroll: scroller)
+                                      */
+                    
+                  }
 
-                Toggle("full res mode", isOn: $showFullResMode)
-                  .onChange(of: showFullResMode) { mode_on in
-                      if mode_on {
-                          showOutliers = true
-                          showPreviewMode = false
-                          showProcessedPreviewMode = false
-                          showTestPaintPreviewMode = false
+                
+                Toggle("preview mode", isOn: $previewMode)
+                  .onChange(of: !previewMode) { mode_on in
+                      if !mode_on {
 
                           // update current frame
                           if let current_frame = viewModel.currentFrame {
@@ -618,7 +654,7 @@ struct ContentView: View {
                           } 
                       }
                   }
-
+/*
                 Toggle("preview mode", isOn: $showPreviewMode)
                   .keyboardShortcut("b", modifiers: [])
                   .onChange(of: showPreviewMode) { mode_on in
@@ -626,19 +662,17 @@ struct ContentView: View {
                           showOutliers = false
                           showProcessedPreviewMode = false
                           showTestPaintPreviewMode = false
-                          showFullResMode = false
+                          !previewMode = false
 
                           viewModel.current_frame_image = viewModel.frames[viewModel.current_index].preview_image.resizable()
                       } 
                   }
-                
                 Toggle("processed mode", isOn: $showProcessedPreviewMode)
                   .onChange(of: showProcessedPreviewMode) { mode_on in
                       if mode_on {
                           showOutliers = false
                           showPreviewMode = false
                           showTestPaintPreviewMode = false
-                          showFullResMode = false
 
                           viewModel.current_frame_image = viewModel.frames[viewModel.current_index].processed_preview_image.resizable()
                       }
@@ -649,12 +683,10 @@ struct ContentView: View {
                           showOutliers = false
                           showPreviewMode = false
                           showProcessedPreviewMode = false
-                          showFullResMode = false
                           viewModel.current_frame_image = viewModel.frames[viewModel.current_index].test_paint_preview_image.resizable()
                       }
-
-                      
-                  }
+                 }
+ */
             }
         }
     }
@@ -704,38 +736,29 @@ struct ContentView: View {
                         from: current_frame,
                         withScroll: scroller)
     }
-    
-    func transition(toFrame new_frame_view: FrameView,
-                    from old_frame: FrameAirplaneRemover?,
-                    withScroll scroller: ScrollViewProxy? = nil)
-    {
-        //Log.d("transition from \(viewModel.currentFrame)")
-        let start_time = Date().timeIntervalSinceReferenceDate
 
-        viewModel.frames[viewModel.current_index].isCurrentFrame = false
-        viewModel.frames[new_frame_view.frame_index].isCurrentFrame = true
-        viewModel.current_index = new_frame_view.frame_index
-        
-        scroller?.scrollTo(viewModel.current_index)
-
-        if showFullResMode {
-            viewModel.label_text = "frame \(new_frame_view.frame_index)"
-        
-            if let frame_to_save = old_frame {
-                self.saveToFile(frame: frame_to_save)
-            }
-        }
-        
+    func refreshCurrentFrame() {
+        // XXX maybe don't wait for frame?
+        let new_frame_view = viewModel.frames[viewModel.current_index]
         if let next_frame = new_frame_view.frame {
             // stick the preview image in there first if we have it
-            if showPreviewMode {
-                viewModel.current_frame_image = new_frame_view.preview_image.resizable()
-            } else if showProcessedPreviewMode {
-                viewModel.current_frame_image = new_frame_view.processed_preview_image.resizable()
-            } else if showTestPaintPreviewMode {
-                viewModel.current_frame_image = new_frame_view.test_paint_preview_image.resizable()
+
+            if previewMode {
+                switch self.frameViewMode {
+                case .original:
+                    viewModel.current_frame_image = new_frame_view.preview_image.resizable()
+                case .processed:
+                    viewModel.current_frame_image = new_frame_view.processed_preview_image.resizable()
+                case .testPainted:
+                    viewModel.current_frame_image = new_frame_view.test_paint_preview_image.resizable()
+                }
             } else {
                 // not preview mode
+
+                // XXX for now full res always loads the original
+
+                // XXX in the future make it also able to load processed and test paint full res too
+                
                 if let full_res_image = new_frame_view.image {
                     // use the full resolution image if we have it
                     viewModel.current_frame_image = full_res_image
@@ -773,6 +796,32 @@ struct ContentView: View {
         } else {
             viewModel.update()
         }
+    }
+    
+    
+    func transition(toFrame new_frame_view: FrameView,
+                    from old_frame: FrameAirplaneRemover?,
+                    withScroll scroller: ScrollViewProxy? = nil)
+    {
+        //Log.d("transition from \(viewModel.currentFrame)")
+        let start_time = Date().timeIntervalSinceReferenceDate
+
+        viewModel.frames[viewModel.current_index].isCurrentFrame = false
+        viewModel.frames[new_frame_view.frame_index].isCurrentFrame = true
+        viewModel.current_index = new_frame_view.frame_index
+        
+        scroller?.scrollTo(viewModel.current_index)
+
+        if !previewMode {
+            viewModel.label_text = "frame \(new_frame_view.frame_index)"
+        
+            if let frame_to_save = old_frame {
+                self.saveToFile(frame: frame_to_save)
+            }
+        }
+        
+        refreshCurrentFrame()
+
         let end_time = Date().timeIntervalSinceReferenceDate
         Log.d("transition to frame \(new_frame_view.frame_index) took \(end_time - start_time) seconds")
     }
