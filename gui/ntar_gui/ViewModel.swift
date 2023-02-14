@@ -117,26 +117,7 @@ class ViewModel: ObservableObject {
                 Log.d("loaded preview for self.frames[\(frame.frame_index)] from jpeg")
                 let view_image = Image(nsImage: preview_image)
                 self.frames[frame.frame_index].preview_image = view_image
-                // XXX maybe only if scrubbing
-                if current_index == frame.frame_index {
-                    frames[current_index].image = view_image
-                }
-            } else {
-                if pixImage == nil { pixImage = try await frame.pixelatedImage() }
-                if baseImage == nil { baseImage = pixImage!.baseImage }
-                if let baseImage = baseImage,
-                   let preview_base = baseImage.resized(to: preview_size)
-                {
-                    Log.d("set preview image for self.frames[\(frame.frame_index)].frame")
-                    let view_image = Image(nsImage: preview_base)
-                    self.frames[frame.frame_index].preview_image = view_image
-                    if current_index == frame.frame_index {
-                        frames[current_index].image = view_image
-                    }
-                } else {
-                    Log.w("set unable to load preview image for self.frames[\(frame.frame_index)].frame")
-                }
-            }
+            } 
             
             if let thumbnail_filename = frame.thumbnailFilename,
                let thumbnail_image = NSImage(contentsOf: URL(fileURLWithPath: thumbnail_filename))
