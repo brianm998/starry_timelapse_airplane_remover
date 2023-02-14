@@ -64,7 +64,7 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
     public let otherFrameIndexes: [Int] // used in found outliers and paint only
     nonisolated public let frame_index: Int
 
-    var test_paint_filename: String = "" // the filename to write out test paint data to
+    public var test_paint_filename: String = "" // the filename to write out test paint data to
     var test_paint = false               // should we test paint?  helpful for debugging
 
     public let outlier_output_dirname: String?
@@ -849,6 +849,16 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
         return try await image_sequence.getImage(withName: name).image().baseImage
     }
     
+    public func baseOutputImage() async throws -> NSImage? {
+        let name = self.output_filename
+        return try await image_sequence.getImage(withName: name).image().baseImage
+    }
+    
+    public func baseTestPaintImage() async throws -> NSImage? {
+        let name = self.test_paint_filename
+        return try await image_sequence.getImage(withName: name).image().baseImage
+    }
+    
     public func baseImage(ofSize size: NSSize) async throws -> NSImage? {
         let name = image_sequence.filenames[frame_index]
         return try await image_sequence.getImage(withName: name).image().baseImage(ofSize: size)
@@ -1068,9 +1078,6 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
             } else {
                 Log.w("frame \(self.frame_index) WTF")
             }
-
-            // write out post-update scaled preview image here?
-            // XXX do this XXX
         }
         
         // write out a preview of the processed file
@@ -1097,9 +1104,6 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
             } else {
                 Log.w("frame \(self.frame_index) WTF")
             }
-
-            // write out post-update scaled preview image here?
-            // XXX do this XXX
         }
         
 

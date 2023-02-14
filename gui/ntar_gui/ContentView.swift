@@ -742,47 +742,51 @@ struct ContentView: View {
         // XXX maybe don't wait for frame?
         let new_frame_view = viewModel.frames[viewModel.current_index]
         if let next_frame = new_frame_view.frame {
-            // stick the preview image in there first if we have it
+            // always stick the preview image in there first if we have it
 
-            if previewMode {
-                switch self.frameViewMode {
-                case .original:
-                    viewModel.current_frame_image = new_frame_view.preview_image.resizable()
-                case .processed:
-                    viewModel.current_frame_image = new_frame_view.processed_preview_image.resizable()
-                case .testPainted:
-                    viewModel.current_frame_image = new_frame_view.test_paint_preview_image.resizable()
-                }
-            } else {
-                // not preview mode
-
-                // XXX for now full res always loads the original
-
-                // XXX in the future make it also able to load processed and test paint full res too
-                
-                if let full_res_image = new_frame_view.image {
-                    // use the full resolution image if we have it
-                    viewModel.current_frame_image = full_res_image
-                } else {
-                    // otherwize fall back to the preview and load the full resolution image
-                    viewModel.current_frame_image = new_frame_view.preview_image.resizable()
-
-                    // get the full resolution image async from the frame
-                    Task {
-                        do {
-                            if next_frame.frame_index == viewModel.current_index {
+            switch self.frameViewMode {
+            case .original: // XXX do we need add .resizable() here, and is it slowing us down?
+                viewModel.current_frame_image = new_frame_view.preview_image.resizable()
+            case .processed:
+                viewModel.current_frame_image = new_frame_view.processed_preview_image.resizable()
+            case .testPainted:
+                viewModel.current_frame_image = new_frame_view.test_paint_preview_image.resizable()
+            }
+            if !previewMode {
+                do {
+                    if next_frame.frame_index == viewModel.current_index {
+                        switch self.frameViewMode {
+                        case .original:
+                            Task {
                                 if let baseImage = try await next_frame.baseImage() {
                                     if next_frame.frame_index == viewModel.current_index {
                                         viewModel.current_frame_image = Image(nsImage: baseImage)
-                                        viewModel.update()
                                     }
                                 }
                             }
-                        } catch {
-                            Log.e("error")
+
+                        case .processed:
+                            Task {
+                                if let baseImage = try await next_frame.baseOutputImage() {
+                                    if next_frame.frame_index == viewModel.current_index {
+                                        viewModel.current_frame_image = Image(nsImage: baseImage)
+                                    }
+                                }
+                            }
+                        case .testPainted:
+                            Task {
+                                if let baseImage = try await next_frame.baseTestPaintImage() {
+                                    if next_frame.frame_index == viewModel.current_index {
+                                        viewModel.current_frame_image = Image(nsImage: baseImage)
+                                    }
+                                }
+                            }
                         }
                     }
+                } catch {
+                    Log.e("error")
                 }
+                
                 // try loading outliers if there aren't any present
                 if viewModel.frames[next_frame.frame_index].outlierViews.count == 0 {
                     Task {
