@@ -43,8 +43,12 @@ struct ContentView: View {
     @State private var isDragging = false
     @State private var background_brightness: Double = 0.33
     @State private var background_color: Color = .gray
+
     @State private var loading_outliers = false
     @State private var loading_all_outliers = false
+    @State private var rendering_current_frame = false
+    @State private var rendering_all_frames = false
+
     @State private var fast_skip_amount = 20
     @State private var video_playback_framerate = 10
     @State private var video_playing = false
@@ -86,10 +90,11 @@ struct ContentView: View {
                                     Text("START").font(.largeTitle)
                                 }.buttonStyle(PlainButtonStyle())
                             } else {
-                                
                                 if viewModel.initial_load_in_progress ||
-                                   loading_outliers ||
-                                   loading_all_outliers
+                                   loading_outliers                   ||
+                                   loading_all_outliers               || 
+                                   rendering_current_frame            ||
+                                   rendering_all_frames
                                 {
                                     ProgressView()
                                       .scaleEffect(1, anchor: .center)
@@ -145,8 +150,8 @@ struct ContentView: View {
   */                          
                             //load all outlier button
                             loadAllOutliersButton()
-                            renderFrameButton()
-                            saveAllButton()
+                            renderCurrentFrameButton()
+                            renderAllFramesButton()
                             
                         }
                         Spacer().frame(maxHeight: 30)
@@ -357,6 +362,7 @@ struct ContentView: View {
         Button(action: {
             Task {
                 await viewModel.currentFrame?.userSelectAllOutliers(toShouldPaint: false)
+                await renderCurrentFrame()
                 viewModel.update()
             }
         }) {
@@ -369,6 +375,7 @@ struct ContentView: View {
         Button(action: {
             Task {
                 await viewModel.currentFrame?.userSelectAllOutliers(toShouldPaint: true)
+                await renderCurrentFrame()
                 viewModel.update()
             }
         }) {
@@ -387,42 +394,60 @@ struct ContentView: View {
         }.frame(maxWidth: .infinity, maxHeight: 50)
     }
 
-    func saveAllButton() -> some View {
+    func renderAllFramesButton() -> some View {
         let action: () -> Void = {
             Task {
+                var number_to_save = 0
+                self.rendering_all_frames = true
                 for frameView in viewModel.frames {
                     if let frame = frameView.frame,
                        let frameSaveQueue = viewModel.frameSaveQueue
                     {
+                        number_to_save += 1
                         frameSaveQueue.saveNow(frame: frame) {
                             await viewModel.refresh(frame: frame)
+                            /*
+                            if frame.frame_index == viewModel.current_index {
+                                refreshCurrentFrame()
+                                }
+                             */
+                            number_to_save -= 1
+                            if number_to_save == 0 {
+                                self.rendering_all_frames = false
+                            }
                         }
                     }
                 }
+                // XXX this executes almost immediately after being set to true above,
+                // need to wait until the frame save queue is done..
             }
         }
         
         return Button(action: action) {
-            Text("Save All").font(.largeTitle)
+            Text("Render All Frames").font(.largeTitle)
         }.buttonStyle(PlainButtonStyle())
     }
-    
-    func renderFrameButton() -> some View {
-        let action: () -> Void = {
-            Task {
-                if let frame = viewModel.currentFrame,
-                   let frameSaveQueue = viewModel.frameSaveQueue
-                {
-                    frameSaveQueue.saveNow(frame: frame) {
-                        await viewModel.refresh(frame: frame)
-                        refreshCurrentFrame()
-                    }
-                }
+
+    func renderCurrentFrame() async {
+        if let frame = viewModel.currentFrame,
+           let frameSaveQueue = viewModel.frameSaveQueue
+        {
+            self.rendering_current_frame = true
+            frameSaveQueue.saveNow(frame: frame) {
+                await viewModel.refresh(frame: frame)
+                refreshCurrentFrame()
+                self.rendering_current_frame = false
             }
+        }
+    }
+    
+    func renderCurrentFrameButton() -> some View {
+        let action: () -> Void = {
+            Task { await self.renderCurrentFrame() }
         }
         
         return Button(action: action) {
-            Text("Render Frame").font(.largeTitle)
+            Text("Render This Frame").font(.largeTitle)
         }.buttonStyle(PlainButtonStyle())
     }
     
@@ -647,6 +672,12 @@ struct ContentView: View {
             VStack(alignment: .leading) {
                 Toggle("show outliers", isOn: $showOutliers)
                   .keyboardShortcut("o", modifiers: [])
+                  .onChange(of: showOutliers) { shouldShow in
+                      Log.d("show outliers shouldShow \(shouldShow)")
+                      if shouldShow {
+                          refreshCurrentFrame()
+                      }
+                  }
                 Toggle("selection causes paint", isOn: $selection_causes_painting)
                   .keyboardShortcut("t", modifiers: []) // XXX find better modifier
             }
@@ -766,6 +797,11 @@ struct ContentView: View {
         if let next_frame = new_frame_view.frame {
             // always stick the preview image in there first if we have it
 
+            // XXX this can cause flashing sometimes when refresh is called too many times in a row
+
+            // keep track of the previous current frame and the previous frame view mode
+            // and if they're the same, then don't show the preview
+            
             switch self.frameViewMode {
             case .original: // XXX do we need add .resizable() here, and is it slowing us down?
                 viewModel.current_frame_image = new_frame_view.preview_image.resizable()
@@ -808,7 +844,9 @@ struct ContentView: View {
                 } catch {
                     Log.e("error")
                 }
-                
+            }
+
+            if showOutliers {
                 // try loading outliers if there aren't any present
                 if viewModel.frames[next_frame.frame_index].outlierViews.count == 0 {
                     Task {
