@@ -14,7 +14,11 @@ class FrameView: ObservableObject {
     var isCurrentFrame: Bool = false
     
     let frame_index: Int
-    var frame: FrameAirplaneRemover?
+    var frame: FrameAirplaneRemover? {
+        didSet {
+            Log.d("frame \(frame_index) set frame to \(frame)")
+        }
+    }
     @Published var outlierViews: [OutlierGroupView] = []
 
     // we don't keep full resolution images here

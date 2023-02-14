@@ -107,10 +107,10 @@ class ntar_gui_app: App {
             //let outlier_dirname = "/pp/tmp/TEST_12_22_2022-a9-2-aurora-topaz-500-ntar-v-0_1_3-outliers"
             
             //let outlier_dirname = "/pp/tmp/LRT_12_22_2022-a9-2-aurora-topaz-ntar-v-0_1_3-outliers"
-            let outlier_dirname = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/test_small_lots-ntar-v-0_2_0-outliers"
+            //let outlier_dirname = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/test_small_lots-ntar-v-0_2_0-outliers"
             //let outlier_dirname = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/test_small_medium-ntar-v-0_1_3-outliers"
 
-            //let outlier_dirname = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/test_a7sii_100-ntar-v-0_1_3-outliers"
+            let outlier_dirname = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/test_a7sii_100-ntar-v-0_2_0-outliers"
             
             //let outlier_dirname = "/qp/tmp/LRT_09_24_2022-a7iv-2-aurora-topaz-ntar-v-0_1_3-outliers"
             
@@ -313,7 +313,7 @@ class ntar_gui_app: App {
                 self.viewModel.frame_height = CGFloat(new_frame.height)
             }
         }
-        await self.viewModel.append(frame: new_frame, viewModel: self.viewModel)
+        await self.viewModel.append(frame: new_frame)
 
        // Log.d("addToViewModel self.viewModel.frame \(self.viewModel.frame)")
 

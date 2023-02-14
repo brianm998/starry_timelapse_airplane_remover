@@ -57,28 +57,8 @@ class ViewModel: ObservableObject {
         Task { self.objectWillChange.send() }
     }
 
-
-    func append(frame: FrameAirplaneRemover, viewModel: ViewModel) async {
-        Log.d("appending frame \(frame.frame_index)")
-        self.frames[frame.frame_index].frame = frame
-
-        if self.initial_load_in_progress {
-            var have_all = true
-            for frame in self.frames {
-                if frame.frame == nil {
-                    have_all = false
-                    break
-                }
-            }
-            if have_all {
-                Log.d("WE HAVE THEM ALL")
-                await MainActor.run {
-                    self.initial_load_in_progress = false
-                }
-            }
-        }
-        Log.d("set self.frames[\(frame.frame_index)].frame")
-
+    func refresh(frame: FrameAirplaneRemover) async {
+        Log.d("refreshing frame \(frame.frame_index)")
         let thumbnail_width = config?.thumbnail_width ?? Config.default_thumbnail_width
         let thumbnail_height = config?.thumbnail_height ?? Config.default_thumbnail_height
         let thumbnail_size = NSSize(width: thumbnail_width, height: thumbnail_height)
@@ -92,7 +72,6 @@ class ViewModel: ObservableObject {
             var baseImage: NSImage?
             // load the view frames from the main image
             
-            // XXX cache these scrub previews?
             // look for saved versions of these
 
             if let processed_preview_filename = frame.processedPreviewFilename,
@@ -141,9 +120,33 @@ class ViewModel: ObservableObject {
             await setOutlierGroups(forFrame: frame)
             // refresh ui 
             await MainActor.run {
-                viewModel.objectWillChange.send()
+                self.objectWillChange.send()
             }
         }
+    }
+
+    func append(frame: FrameAirplaneRemover) async {
+        Log.d("appending frame \(frame.frame_index)")
+        self.frames[frame.frame_index].frame = frame
+
+        if self.initial_load_in_progress {
+            var have_all = true
+            for frame in self.frames {
+                if frame.frame == nil {
+                    have_all = false
+                    break
+                }
+            }
+            if have_all {
+                Log.d("WE HAVE THEM ALL")
+                await MainActor.run {
+                    self.initial_load_in_progress = false
+                }
+            }
+        }
+        Log.d("set self.frames[\(frame.frame_index)].frame")
+
+        await refresh(frame: frame)
     }
 
     func setOutlierGroups(forFrame frame: FrameAirplaneRemover) async {

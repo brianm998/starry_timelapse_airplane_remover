@@ -35,7 +35,7 @@ class FrameSaveQueue {
     }
 
     // no purgatory
-    func saveNow(frame: FrameAirplaneRemover) {
+    func saveNow(frame: FrameAirplaneRemover, completionClosure: @escaping () async -> Void) {
         Log.w("actually saving frame \(frame.frame_index)")
         self.saving[frame.frame_index] = frame
         Task {
@@ -43,15 +43,26 @@ class FrameSaveQueue {
                 Log.i("frame \(frame.frame_index) finishing")
                 try await frame.loadOutliers()
                 try await frame.finish()
+                Log.i("frame \(frame.frame_index) finished")
+                let dispatchGroup = DispatchGroup()
+                dispatchGroup.enter()
                 await MainActor.run {
                     self.saving[frame.frame_index] = nil
+                    Task {
+                        Log.i("frame \(frame.frame_index) about to purge output files")
+                        await frame.purgeCachedOutputFiles()
+                        Log.i("frame \(frame.frame_index) about to call completion closure")
+                        await completionClosure()
+                        Log.i("frame \(frame.frame_index) completion closure called")
+                        dispatchGroup.leave()
+                    }
                 }
-                Log.i("frame \(frame.frame_index) finished")
+                dispatchGroup.wait()
             }
         }
     }
     
-    func readyToSave(frame: FrameAirplaneRemover) {
+    func readyToSave(frame: FrameAirplaneRemover, completionClosure: @escaping () async -> Void) {
         Log.w("frame \(frame.frame_index) entering pergatory")
         if let candidate = pergatory[frame.frame_index] {
             candidate.retainLonger()
@@ -61,9 +72,9 @@ class FrameSaveQueue {
                 self.pergatory[frame.frame_index] = nil
                 if let _ = self.saving[frame.frame_index] {
                     // go back to pergatory
-                    self.readyToSave(frame: frame)
+                    self.readyToSave(frame: frame, completionClosure: completionClosure)
                 } else {
-                    self.saveNow(frame: frame)
+                    self.saveNow(frame: frame, completionClosure: completionClosure)
                 }
             }
         }

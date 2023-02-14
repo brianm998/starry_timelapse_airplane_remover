@@ -864,6 +864,22 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
         let name = image_sequence.filenames[frame_index]
         return try await image_sequence.getImage(withName: name).image().baseImage(ofSize: size)
     }
+
+    public func purgeCachedOutputFiles() async {
+        Log.d("frame \(frame_index) purging output files")
+        let dispatchGroup = DispatchGroup()
+//        dispatchGroup.enter()
+        Task {
+            await image_sequence.removeValue(forKey: self.output_filename)
+            let test_paint_name = self.test_paint_filename
+            if test_paint_name != "" {
+                await image_sequence.removeValue(forKey: test_paint_name)
+            }
+//            dispatchGroup.leave()
+        }
+//        dispatchGroup.wait()
+        Log.d("frame \(frame_index) purged output files")
+    }
     
     // actually paint over outlier groups that have been selected as airplane tracks
     private func paintOverAirplanes(toData data: inout Data,

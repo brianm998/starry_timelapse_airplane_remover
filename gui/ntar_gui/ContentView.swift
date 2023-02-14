@@ -145,7 +145,7 @@ struct ContentView: View {
   */                          
                             //load all outlier button
                             loadAllOutliersButton()
-                            
+                            renderFrameButton()
                             saveAllButton()
                             
                         }
@@ -342,9 +342,9 @@ struct ContentView: View {
     }
 
     // used when advancing between frames
-    func saveToFile(frame frame_to_save: FrameAirplaneRemover) {
+    func saveToFile(frame frame_to_save: FrameAirplaneRemover, completionClosure: @escaping () -> Void) {
         if let frameSaveQueue = viewModel.frameSaveQueue {
-            frameSaveQueue.readyToSave(frame: frame_to_save)
+            frameSaveQueue.readyToSave(frame: frame_to_save, completionClosure: completionClosure)
         } else {
             Log.e("FUCK")
             fatalError("SETUP WRONG")
@@ -394,7 +394,9 @@ struct ContentView: View {
                     if let frame = frameView.frame,
                        let frameSaveQueue = viewModel.frameSaveQueue
                     {
-                        frameSaveQueue.saveNow(frame: frame)
+                        frameSaveQueue.saveNow(frame: frame) {
+                            await viewModel.refresh(frame: frame)
+                        }
                     }
                 }
             }
@@ -402,6 +404,25 @@ struct ContentView: View {
         
         return Button(action: action) {
             Text("Save All").font(.largeTitle)
+        }.buttonStyle(PlainButtonStyle())
+    }
+    
+    func renderFrameButton() -> some View {
+        let action: () -> Void = {
+            Task {
+                if let frame = viewModel.currentFrame,
+                   let frameSaveQueue = viewModel.frameSaveQueue
+                {
+                    frameSaveQueue.saveNow(frame: frame) {
+                        await viewModel.refresh(frame: frame)
+                        refreshCurrentFrame()
+                    }
+                }
+            }
+        }
+        
+        return Button(action: action) {
+            Text("Render Frame").font(.largeTitle)
         }.buttonStyle(PlainButtonStyle())
     }
     
@@ -740,6 +761,7 @@ struct ContentView: View {
 
     func refreshCurrentFrame() {
         // XXX maybe don't wait for frame?
+        Log.d("refreshCurrentFrame \(viewModel.current_index)")
         let new_frame_view = viewModel.frames[viewModel.current_index]
         if let next_frame = new_frame_view.frame {
             // always stick the preview image in there first if we have it
@@ -799,6 +821,7 @@ struct ContentView: View {
                 }
             }
         } else {
+            Log.d("WTF for frame \(viewModel.current_index)")
             viewModel.update()
         }
     }
@@ -821,7 +844,20 @@ struct ContentView: View {
             viewModel.label_text = "frame \(new_frame_view.frame_index)"
         
             if let frame_to_save = old_frame {
-                self.saveToFile(frame: frame_to_save)
+                self.saveToFile(frame: frame_to_save) {
+                    Log.d("completion closure called for frame \(frame_to_save.frame_index)")
+                    Task {
+                        Log.d("refreshing saved frame \(frame_to_save.frame_index)")
+                        await viewModel.refresh(frame: frame_to_save)
+                        refreshCurrentFrame()
+                        Log.d("refreshing for frame \(frame_to_save.frame_index) complete")
+                    }
+                }
+                // refresh the view model so we get the new images
+                // XXX maybe don't let these go to file?
+
+                // XXX this should happen after the save
+                // also kick out processed and test paint images from image sequence
             }
         }
         
