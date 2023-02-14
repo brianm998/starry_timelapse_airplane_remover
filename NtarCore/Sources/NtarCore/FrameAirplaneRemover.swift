@@ -856,6 +856,7 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
     
     public func baseTestPaintImage() async throws -> NSImage? {
         let name = self.test_paint_filename
+        if name == "" { return nil } // we don't have one
         return try await image_sequence.getImage(withName: name).image().baseImage
     }
     
