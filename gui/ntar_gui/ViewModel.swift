@@ -167,11 +167,14 @@ class ViewModel: ObservableObject {
 
     func setOutlierGroups(forFrame frame: FrameAirplaneRemover) async {
         self.frames[frame.frame_index].outlierViews = []
+
+        var new_outlier_groups: [OutlierGroupView] = []
+        
         let outlierGroups = await frame.outlierGroups()
         Log.d("got \(outlierGroups.count) groups for frame \(frame.frame_index)")
         let (frame_width, frame_height) = (frame.width, frame.height)
         for group in outlierGroups {
-            if let cgImage = group.testImage() {
+            if let cgImage = group.testImage() { // XXX heap corruption here :(
                 var size = CGSize()
                 size.width = CGFloat(cgImage.width)
                 size.height = CGFloat(cgImage.height)
@@ -183,12 +186,12 @@ class ViewModel: ObservableObject {
                                                  image: outlierImage,
                                                  frame_width: frame_width,
                                                  frame_height: frame_height)
-                
-                self.frames[frame.frame_index].outlierViews.append(groupView)
+                new_outlier_groups.append(groupView)
             } else {
                 Log.e("frame \(frame.frame_index) outlier group no image")
             }
         }
+        self.frames[frame.frame_index].outlierViews = new_outlier_groups
     }
     
     func frame(atIndex index: Int) -> FrameAirplaneRemover? {

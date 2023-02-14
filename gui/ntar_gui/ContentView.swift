@@ -31,16 +31,10 @@ struct ContentView: View {
     @ObservedObject var viewModel: ViewModel
     @State private var showOutliers = false
 
-
+    // enum for how we show each frame
     @State private var frameViewMode = FrameViewMode.original
-    @State private var previewMode = true // show only lower res previews instead of full res images
-    
-    // XXX make these into an enum, they're mutually exclusive
-    /*
-    @State private var showPreviewMode = true
-    @State private var showProcessedPreviewMode = false
-    @State private var showTestPaintPreviewMode = false
-     */
+    // show only lower res previews instead of full res images
+    @State private var previewMode = true
     
     @State private var selection_causes_painting = true
     @State private var running = false
@@ -50,6 +44,7 @@ struct ContentView: View {
     @State private var background_brightness: Double = 0.33
     @State private var background_color: Color = .gray
     @State private var loading_outliers = false
+    @State private var loading_all_outliers = false
     @State private var fast_skip_amount = 20
     @State private var video_playback_framerate = 10
     @State private var video_playing = false
@@ -92,7 +87,10 @@ struct ContentView: View {
                                 }.buttonStyle(PlainButtonStyle())
                             } else {
                                 
-                                if viewModel.initial_load_in_progress || loading_outliers {
+                                if viewModel.initial_load_in_progress ||
+                                   loading_outliers ||
+                                   loading_all_outliers
+                                {
                                     ProgressView()
                                       .scaleEffect(1, anchor: .center)
                                       .progressViewStyle(CircularProgressViewStyle(tint: .yellow))
@@ -416,19 +414,41 @@ struct ContentView: View {
                     try await withThrowingTaskGroup(of: Void.self) { taskGroup in
                         let max_concurrent = viewModel.config?.numConcurrentRenders ?? 10
                         // this gets "Too many open files" with more than 2000 images :(
+                        loading_all_outliers = true
                         Log.d("foobar starting")
                         for frameView in viewModel.frames {
-                            if current_running < max_concurrent {
-                                if let frame = frameView.frame {
-                                    current_running += 1
-                                    taskGroup.addTask(priority: .userInitiated) {
-                                        // XXX style the button during this flow?
-                                        try await frame.loadOutliers()
+                            Log.d("frame \(frameView.frame_index) attempting to load outliers")
+                            var did_load = false
+                            while(!did_load) {
+                                if current_running < max_concurrent {
+                                    Log.d("frame \(frameView.frame_index) attempting to load outliers")
+                                    if let frame = frameView.frame {
+                                        Log.d("frame \(frameView.frame_index) adding task to load outliers")
+                                        current_running += 1
+                                        did_load = true
+                                        taskGroup.addTask(priority: .userInitiated) {
+                                            // XXX style the button during this flow?
+                                            Log.d("actually loading outliers for frame \(frame.frame_index)")
+                                            try await frame.loadOutliers()
+                                            // XXX set this in the view model
+
+                                            Task {
+                                                await MainActor.run {
+                                                    Task {
+                                                        await viewModel.setOutlierGroups(forFrame: frame)
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    } else {
+                                        Log.d("frame \(frameView.frame_index) no frame, can't load outliers")
                                     }
+                                } else {
+                                    Log.d("frame \(frameView.frame_index) waiting \(current_running)")
+                                    try await taskGroup.next()
+                                    current_running -= 1
+                                    Log.d("frame \(frameView.frame_index) done waiting \(current_running)")
                                 }
-                            } else {
-                                try await taskGroup.next()
-                                current_running -= 1
                             }
                         }
                         do {
@@ -438,6 +458,7 @@ struct ContentView: View {
                         }
                         
                         let end_time = Date().timeIntervalSinceReferenceDate
+                        loading_all_outliers = false
                         Log.d("foobar loaded outliers for \(viewModel.frames.count) frames in \(end_time - start_time) seconds")
                     }                                 
                 } catch {
@@ -455,11 +476,11 @@ struct ContentView: View {
     func videoPlaybackButtons(_ scroller: ScrollViewProxy) -> some View {
 
         // XXX these should really use modifiers but those don't work :(
-        let start_shortcut_key: KeyEquivalent = "b"
+        let start_shortcut_key: KeyEquivalent = "b" // make this bottom arror
         let fast_previous_shortut_key: KeyEquivalent = "z"
         let previous_shortut_key: KeyEquivalent = .leftArrow
         let fast_next_shortcut_key: KeyEquivalent = "x"
-        let end_button_shortcut_key: KeyEquivalent = "e"
+        let end_button_shortcut_key: KeyEquivalent = "e" // make this top arror
         
         return HStack {
             // start button
@@ -632,27 +653,7 @@ struct ContentView: View {
                 
                 Toggle("preview mode", isOn: $previewMode)
                   .onChange(of: !previewMode) { mode_on in
-                      if !mode_on {
-
-                          // update current frame
-                          if let current_frame = viewModel.currentFrame {
-                              Task {
-                                  do {
-                                      if viewModel.frames[current_frame.frame_index].outlierViews.count == 0 {
-                                          // only set them if they're not present
-                                          let _ = try await current_frame.loadOutliers()
-                                          await viewModel.setOutlierGroups(forFrame: current_frame)
-                                      }
-                                      if let baseImage = try await current_frame.baseImage() {
-                                          viewModel.currentFrameView.image = Image(nsImage: baseImage)
-                                          viewModel.update()
-                                      }
-                                  } catch {
-                                      Log.e("error")
-                                  }
-                              }
-                          } 
-                      }
+                      refreshCurrentFrame()
                   }
 /*
                 Toggle("preview mode", isOn: $showPreviewMode)

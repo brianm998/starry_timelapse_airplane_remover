@@ -53,6 +53,14 @@ import NtarCore
   - add filter options by frame state to constrain the filmstrip
   - make filmstrip sizeable by dragging the top of it
   - make it possible to play the video based upon previews
+
+  - make sure processed previews get updated in UI after change
+  - get full-res images working for processed and test paint
+  - add status flags for frames
+    - don't have outliers
+    - loading outliers
+    - have outliers
+    - saving
  */
 
 @main
@@ -98,8 +106,8 @@ class ntar_gui_app: App {
 
             //let outlier_dirname = "/pp/tmp/TEST_12_22_2022-a9-2-aurora-topaz-500-ntar-v-0_1_3-outliers"
             
-            let outlier_dirname = "/pp/tmp/LRT_12_22_2022-a9-2-aurora-topaz-ntar-v-0_1_3-outliers"
-            //let outlier_dirname = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/test_small_lots-ntar-v-0_2_0-outliers"
+            //let outlier_dirname = "/pp/tmp/LRT_12_22_2022-a9-2-aurora-topaz-ntar-v-0_1_3-outliers"
+            let outlier_dirname = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/test_small_lots-ntar-v-0_2_0-outliers"
             //let outlier_dirname = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/test_small_medium-ntar-v-0_1_3-outliers"
 
             //let outlier_dirname = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/test_a7sii_100-ntar-v-0_1_3-outliers"

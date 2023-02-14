@@ -904,7 +904,7 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
                         }
                     }
                 } else {
-                    Log.d("frame \(frame_index) NOT painting over group \(group) for reason \(reason)")
+                    Log.v("frame \(frame_index) NOT painting over group \(group) for reason \(reason)")
                 }
             }
         }
