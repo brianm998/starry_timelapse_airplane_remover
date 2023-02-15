@@ -200,11 +200,12 @@ struct ContentView: View {
     // this is the main frame with outliers on top of it
     func frameView( _ image: Image) -> some View {
         ZStack {
+            // the main image shown
             image
 
             if showOutliers {
-                // XXX these VVV are wrong VVV somehow
-                let outlierViews = viewModel.currentFrameView.outlierViews
+                let current_frame_view = viewModel.currentFrameView
+                let outlierViews = current_frame_view.outlierViews
                 ForEach(0 ..< outlierViews.count, id: \.self) { idx in
                     if idx < outlierViews.count {
                         let outlierViewModel = outlierViews[idx]
@@ -216,9 +217,11 @@ struct ContentView: View {
                         let will_paint = outlierViewModel.group.shouldPaint == nil ? false :
                           outlierViewModel.group.shouldPaint!.willPaint
 
+                        let paint_color: Color = will_paint ? .red : .green
+                        
                         Image(nsImage: outlierViewModel.image)
                           .renderingMode(.template) // makes this VV color work
-                          .foregroundColor(will_paint ? .red : .green)
+                          .foregroundColor(paint_color)
                           .offset(x: CGFloat(outlier_center.x - frame_center_x),
                                   y: CGFloat(outlier_center.y - frame_center_y))
                           // tap gesture toggles paintability of the tapped group
@@ -227,10 +230,24 @@ struct ContentView: View {
                                   // change the paintability of this outlier group
                                   // set it to user selected opposite previous value
                                   let reason = PaintReason.userSelected(!origShouldPaint.willPaint)
-                                  outlierViewModel.group.shouldPaint(reason)
-                                  
-                                  // update the view model so it shows up on screen
+
+                                  // update the view model to show the change quickly
+                                  outlierViewModel.group.shouldPaint = reason
                                   self.viewModel.update()
+                                  
+                                  Task {
+                                      if let frame = viewModel.currentFrame,
+                                         let outlier_groups = await frame.outlier_groups,
+                                         let outlier_group = outlier_groups.groups[outlierViewModel.group.name]
+                                      {
+                                          // update the actor in the background
+                                          await outlier_group.shouldPaint(reason)
+                                          self.viewModel.update()
+                                      } else {
+                                          Log.e("HOLY FUCK")
+                                      }
+                                  }
+                                  // update the view model so it shows up on screen
                               } else {
                                   Log.e("WTF, not already set to paint??")
                               }

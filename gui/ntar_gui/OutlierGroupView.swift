@@ -9,7 +9,7 @@ import Zoomable
 
 class OutlierGroupView: ObservableObject {
 
-    init (group: OutlierGroup,
+    init (group: OutlierGroupEncodable,
           name: String,
           bounds: BoundingBox,
           image: NSImage,
@@ -24,7 +24,7 @@ class OutlierGroupView: ObservableObject {
         self.frame_height = frame_height
     }
     
-    let group: OutlierGroup
+    let group: OutlierGroupEncodable
     let name: String
     let bounds: BoundingBox
     let image: NSImage

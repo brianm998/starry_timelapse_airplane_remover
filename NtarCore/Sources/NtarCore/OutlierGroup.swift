@@ -25,21 +25,46 @@ enum PaintScoreType {
 
 
 @available(macOS 10.15, *) 
-public struct OutlierGroups: Codable {
-    let frame_index: Int
-    var groups: [String: OutlierGroup] = [:] // keyed by name
+public class OutlierGroups: Codable {
+    public let frame_index: Int
+    public var groups: [String: OutlierGroup] = [:] // keyed by name
+
+    public init(frame_index: Int,
+                groups: [String: OutlierGroup] = [:])
+    {
+        self.frame_index = frame_index
+        self.groups = groups
+    }
+    
+    public var encodable_groups: [String: OutlierGroupEncodable] = [:]
+    
+    enum CodingKeys: String, CodingKey {
+        case frame_index
+        case groups
+    }
+
+    public func prepareForEncoding() {
+        for (key, value) in self.groups {
+            Task {
+                encodable_groups[key] = await value.encodable() // XXX not isolated, async???
+            }
+        }
+    }
+    
+    public func encode(to encoder: Encoder) throws {
+	var container = encoder.container(keyedBy: CodingKeys.self)
+	try container.encode(frame_index, forKey: .frame_index)
+	try container.encode(encodable_groups, forKey: .groups)
+    }
 }
 
 // represents a single outler group in a frame
 @available(macOS 10.15, *) 
-// might need to be a anctor still
-// heap corruption is the cause?
-// https://developer.apple.com/forums/thread/687624
-public class OutlierGroup: CustomStringConvertible,
+public actor OutlierGroup: CustomStringConvertible,
                            Hashable,
                            Equatable,
                            Comparable,
-                           Codable // can't be an actor and codable :(
+                           Decodable // can't be an actor and codable :(
 {
     public let name: String
     public let size: UInt              // number of pixels in this outlier group
@@ -54,8 +79,8 @@ public class OutlierGroup: CustomStringConvertible,
     // after init, shouldPaint is usually set to a base value based upon different statistics 
     public var shouldPaint: PaintReason? // should we paint this group, and why?
 
-    let frame_index: Int
-
+    public let frame_index: Int
+    
     // returns the first, most likely line, if any
     var firstLine: Line? {
         if lines.count > 0 {
@@ -406,8 +431,88 @@ public class OutlierGroup: CustomStringConvertible,
             }
         }
     }
+
+    // manual Decodable conformance so this class can be an actor
+    // Encodable conformance is left to the non-actor class OutlierGroupEncodable
+    enum CodingKeys: String, CodingKey {
+        case name
+        case size
+        case bounds
+        case brightness
+        case lines
+        case pixels
+        case max_pixel_distance
+        case surfaceAreaToSizeRatio
+        case shouldPaint
+        case frame_index
+    }
+    
+    init(from decoder: Decoder) async throws {
+	let data = try decoder.container(keyedBy: CodingKeys.self)
+
+        self.name = try data.decode(String.self, forKey: .name)
+        self.size = try data.decode(UInt.self, forKey: .size)
+        self.bounds = try data.decode(BoundingBox.self, forKey: .bounds)
+        self.brightness = try data.decode(UInt.self, forKey: .brightness)
+        self.lines = try data.decode(Array<Line>.self, forKey: .lines)
+        self.pixels = try data.decode(Array<UInt32>.self, forKey: .pixels)
+        self.max_pixel_distance = try data.decode(UInt16.self, forKey: .max_pixel_distance)
+        self.surfaceAreaToSizeRatio = try data.decode(Double.self, forKey: .surfaceAreaToSizeRatio)
+        self.shouldPaint = try data.decode(PaintReason.self, forKey: .shouldPaint)
+        self.frame_index = try data.decode(Int.self, forKey: .frame_index)
+    }
+
+    public func encodable() -> OutlierGroupEncodable {
+        return OutlierGroupEncodable(name: self.name,
+                                     size: self.size,
+                                     bounds: self.bounds,
+                                     brightness: self.brightness,
+                                     lines: self.lines,
+                                     pixels: self.pixels,
+                                     max_pixel_distance: self.max_pixel_distance,
+                                     surfaceAreaToSizeRatio: self.surfaceAreaToSizeRatio,
+                                     shouldPaint: self.shouldPaint,
+                                     frame_index: self.frame_index)
+    }
 }
 
+// this class is a property by property copy of an OutlierGroup,
+// but not an actor so it's both encodable and usable by the view layer
+public class OutlierGroupEncodable: Encodable {
+    public let name: String
+    public let size: UInt
+    public let bounds: BoundingBox
+    public let brightness: UInt   
+    public let lines: [Line]      
+    public let pixels: [UInt32]   
+    public let max_pixel_distance: UInt16
+    public let surfaceAreaToSizeRatio: Double
+    public var shouldPaint: PaintReason?
+    public let frame_index: Int
+
+    public init(name: String,
+                size: UInt,
+                bounds: BoundingBox,
+                brightness: UInt,
+                lines: [Line],
+                pixels: [UInt32],
+                max_pixel_distance: UInt16,
+                surfaceAreaToSizeRatio: Double,
+                shouldPaint: PaintReason?,
+                frame_index: Int)
+    {
+        self.name = name
+        self.size = size
+        self.bounds = bounds
+        self.brightness = brightness
+        self.lines = lines
+        self.pixels = pixels
+        self.max_pixel_distance = max_pixel_distance
+        self.surfaceAreaToSizeRatio = surfaceAreaToSizeRatio
+        self.shouldPaint = shouldPaint
+        self.frame_index = frame_index
+    }
+}
 
 func histogram_lookup(ofValue value: Double,
                       minValue min_value: Double,

@@ -74,15 +74,15 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
     public let thumbnail_output_dirname: String?
 
     // populated by pruning
-    private var outlier_groups: OutlierGroups?
+    public var outlier_groups: OutlierGroups?
 
     public func outlierGroups() -> [OutlierGroup] {
         return outlier_groups?.groups.map {$0.value} ?? []
     }
 
     var previewSize: NSSize {
-        let preview_width = config.preview_width ?? Config.default_preview_width
-        let preview_height = config.preview_height ?? Config.default_preview_height
+        let preview_width = config.preview_width
+        let preview_height = config.preview_height
         return NSSize(width: preview_width, height: preview_height)
     }
     
@@ -121,8 +121,8 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
         Log.d("frame \(self.frame_index) doing preview")
         if config.writeFrameThumbnailFiles {
             Log.d("frame \(self.frame_index) doing thumbnail")
-            let thumbnail_width = config.thumbnail_width ?? Config.default_thumbnail_width
-            let thumbnail_height = config.thumbnail_height ?? Config.default_thumbnail_height
+            let thumbnail_width = config.thumbnail_width
+            let thumbnail_height = config.thumbnail_height
             let thumbnail_size = NSSize(width: thumbnail_width, height: thumbnail_height)
             
             if let scaledImage = image.resized(to: thumbnail_size),
@@ -226,7 +226,7 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
             if gesture_bounds.contains(other: group.bounds) {
                 // check to make sure this outlier's bounding box is fully contained
                 // otherwise don't change paint status
-                group.shouldPaint(.userSelected(should_paint))
+                await group.shouldPaint(.userSelected(should_paint))
             }
             return .continue
         }
@@ -234,7 +234,7 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
     
     public func userSelectAllOutliers(toShouldPaint should_paint: Bool) async {
         await foreachOutlierGroup() { group in
-            group.shouldPaint(.userSelected(should_paint))
+            await group.shouldPaint(.userSelected(should_paint))
             return .continue
         }
     }
@@ -588,7 +588,7 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
                 //Log.d("pending_outlier_insert_index \(pending_outlier_insert_index) pending_outlier_access_index \(pending_outlier_access_index)")
                 loop_count += 1
                 if loop_count % 1000 == 0 {
-                    Log.d("frame \(frame_index) looping \(loop_count) times group_size \(group_size)")
+                    Log.v("frame \(frame_index) looping \(loop_count) times group_size \(group_size)")
                 }
                 
                 let next_outlier_index = pending_outliers[pending_outlier_access_index]
@@ -748,7 +748,7 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
                         let min_size_for_this_group = config.minGroupSize + Int(Double(config.min_group_size_at_top - config.minGroupSize) * how_close_to_top)
                         Log.v("min_size_for_this_group \(min_size_for_this_group) how_close_to_top \(how_close_to_top) group_center_y \(group_center_y) height \(height)")
                         if group_size < min_size_for_this_group {
-                            Log.d("frame \(frame_index) skipping group of size \(group_size) < \(min_size_for_this_group) @ center_y \(group_center_y)")
+                            Log.v("frame \(frame_index) skipping group of size \(group_size) < \(min_size_for_this_group) @ center_y \(group_center_y)")
                             continue
                         }
                     }
@@ -778,7 +778,7 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
                                                      frame: self,
                                                      pixels: outlier_amounts,
                                                      max_pixel_distance: config.max_pixel_distance)
-                let hough_score = new_outlier.paintScore(from: .houghTransform)
+                let hough_score = await new_outlier.paintScore(from: .houghTransform)
                 //let surface_area_score = await new_outlier.paintScore(from: .surfaceAreaRatio)
 
                 if group_size < config.max_must_look_like_line_size,
@@ -789,7 +789,7 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
                     //Log.e("frame \(frame_index) ignoring outlier \(new_outlier) with hough score \(hough_score) satsr \(satsr) surface_area_score \(surface_area_score)")
                     if test_paint {
                         // allow test painting of these ignored groups
-                        new_outlier.shouldPaint(.smallNonLinear)
+                        await new_outlier.shouldPaint(.smallNonLinear)
                         ignored_outlier_groups[group_name] = new_outlier
                     }
                 } else {
@@ -811,7 +811,7 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
                     let pixel_index = (y-group.bounds.min.y)*group.bounds.width + (x - group.bounds.min.x)
                     if group.pixels[pixel_index] != 0 {                    
                         var nextPixel = Pixel()
-                        if let reason = group.shouldPaint,
+                        if let reason = await group.shouldPaint,
                            !reason.willPaint
                         {
                             nextPixel.value = reason.testPaintPixel.value
@@ -897,7 +897,7 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
         }
         
         for (group_name, group) in outlier_groups.groups {
-            if let reason = group.shouldPaint {
+            if let reason = await group.shouldPaint {
                 if reason.willPaint {
                     Log.d("frame \(frame_index) painting over group \(group) for reason \(reason)")
                     //let x = index % width;

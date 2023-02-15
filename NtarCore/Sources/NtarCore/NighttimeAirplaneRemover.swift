@@ -318,13 +318,6 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
                         
                         outlier_groups_for_this_frame = try decoder.decode(OutlierGroups.self, from: data)
                         
-                        if let outlier_groups_for_this_frame = outlier_groups_for_this_frame {
-                            // trim the number of lines in each group
-                            for group in outlier_groups_for_this_frame.groups.values {
-                                group.lines = Array(group.lines.prefix(10))
-                            }
-                        }
-                        
                         Log.i("loading frame \(frame_index) with outlier groups from json file")
                     } catch {
                         Log.e("frame \(frame_index) error decoding file \(frame_outliers_json_filename): \(error)")

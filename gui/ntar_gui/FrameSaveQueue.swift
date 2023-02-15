@@ -10,11 +10,14 @@ class FrameSaveQueue {
         var timer: Timer
         let frame: FrameAirplaneRemover
         let block: @Sendable (Timer) -> Void
-        let wait_time: TimeInterval = 5 // minimum time to wait in purgatory
+        let wait_time: TimeInterval // minimum time to wait in purgatory
         
-        init(frame: FrameAirplaneRemover, block: @escaping @Sendable (Timer) -> Void) {
+        init(frame: FrameAirplaneRemover,
+             waitTime: TimeInterval = 5,
+             block: @escaping @Sendable (Timer) -> Void) {
             self.frame = frame
-            self.timer = Timer.scheduledTimer(withTimeInterval: wait_time,
+            self.wait_time = waitTime
+            self.timer = Timer.scheduledTimer(withTimeInterval: waitTime,
                                               repeats: false, block: block)
             self.block = block
         }
@@ -36,38 +39,48 @@ class FrameSaveQueue {
 
     // no purgatory
     func saveNow(frame: FrameAirplaneRemover, completionClosure: @escaping () async -> Void) {
-        Log.w("actually saving frame \(frame.frame_index)")
-        self.saving[frame.frame_index] = frame
-        Task {
-            await self.finalProcessor.final_queue.add(atIndex: frame.frame_index) {
-                Log.i("frame \(frame.frame_index) finishing")
-                try await frame.loadOutliers()
-                try await frame.finish()
-                Log.i("frame \(frame.frame_index) finished")
-                let dispatchGroup = DispatchGroup()
-                dispatchGroup.enter()
-                await MainActor.run {
-                    self.saving[frame.frame_index] = nil
-                    Task {
-                        Log.i("frame \(frame.frame_index) about to purge output files")
-                        await frame.purgeCachedOutputFiles()
-                        Log.i("frame \(frame.frame_index) about to call completion closure")
-                        await completionClosure()
-                        Log.i("frame \(frame.frame_index) completion closure called")
-                        dispatchGroup.leave()
+        Log.i("saveNow for frame \(frame.frame_index)")
+        // check to see if it's not already being saved
+        if self.saving[frame.frame_index] != nil {
+            // another save is in progress
+            Log.d("setting frame \(frame.frame_index) to readyToSave because already saving frame \(frame.frame_index)")
+            self.readyToSave(frame: frame, waitTime: 0.01, completionClosure: completionClosure)
+        } else {
+            Log.d("actually saving frame \(frame.frame_index)")
+            self.saving[frame.frame_index] = frame
+            Task {
+                await self.finalProcessor.final_queue.add(atIndex: frame.frame_index) {
+                    Log.i("frame \(frame.frame_index) finishing")
+                    try await frame.loadOutliers()
+                    try await frame.finish()
+                    Log.i("frame \(frame.frame_index) finished")
+                    let dispatchGroup = DispatchGroup()
+                    dispatchGroup.enter()
+                    await MainActor.run {
+                        self.saving[frame.frame_index] = nil
+                        Task {
+                            Log.i("frame \(frame.frame_index) about to purge output files")
+                            await frame.purgeCachedOutputFiles()
+                            Log.i("frame \(frame.frame_index) about to call completion closure")
+                            await completionClosure()
+                            Log.i("frame \(frame.frame_index) completion closure called")
+                            dispatchGroup.leave()
+                        }
                     }
+                    dispatchGroup.wait()
                 }
-                dispatchGroup.wait()
             }
         }
     }
     
-    func readyToSave(frame: FrameAirplaneRemover, completionClosure: @escaping () async -> Void) {
+    func readyToSave(frame: FrameAirplaneRemover,
+                     waitTime: TimeInterval = 5,
+                     completionClosure: @escaping () async -> Void) {
         Log.w("frame \(frame.frame_index) entering pergatory")
         if let candidate = pergatory[frame.frame_index] {
             candidate.retainLonger()
         } else {
-            let candidate = Pergatory(frame: frame) { timer in
+            let candidate = Pergatory(frame: frame, waitTime: waitTime) { timer in
                 Log.w("pergatory has ended for frame \(frame.frame_index)")
                 self.pergatory[frame.frame_index] = nil
                 if let _ = self.saving[frame.frame_index] {
