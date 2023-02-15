@@ -76,8 +76,14 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
     // populated by pruning
     public var outlier_groups: OutlierGroups?
 
-    public func outlierGroups() -> [OutlierGroup] {
-        return outlier_groups?.groups.map {$0.value} ?? []
+    public func outlierGroups() -> [OutlierGroup]? {
+        Log.d("frame \(frame_index) has \(outlier_groups)")
+        if let outlier_groups = outlier_groups,
+           let groups = outlier_groups.groups
+        {
+            return groups.map {$0.value}
+        }
+        return nil
     }
 
     var previewSize: NSSize {
@@ -156,21 +162,23 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
            let output_dirname = self.outlier_output_dirname
         {
             // write to binary outlier data
-            let data = self.outlierBinaryData()
-            //Log.e(json_string)
-            
-            let filename = "\(self.frame_index)_outliers.bin"
-            let full_path = "\(output_dirname)/\(filename)"
-            do {
-                if file_manager.fileExists(atPath: full_path) {
-                    try file_manager.removeItem(atPath: full_path)
-                    // make this overwrite for new user changes to existing data
-                    Log.i("overwriting \(full_path)")
-                } 
-                Log.i("creating \(full_path)")                      
-                file_manager.createFile(atPath: full_path, contents: data, attributes: nil)
-            } catch {
-                Log.e("\(error)")
+            self.outlier_groups?.prepareForEncoding()
+            if let data = self.outlierBinaryData() {
+                let filename = "\(self.frame_index)_outliers.bin"
+                let full_path = "\(output_dirname)/\(filename)"
+                do {
+                    if file_manager.fileExists(atPath: full_path) {
+                        try file_manager.removeItem(atPath: full_path)
+                        // make this overwrite for new user changes to existing data
+                        Log.i("overwriting \(full_path)")
+                    } 
+                    Log.i("creating \(full_path)")                      
+                    file_manager.createFile(atPath: full_path, contents: data, attributes: nil)
+                } catch {
+                    Log.e("\(error)")
+                }
+            } else {
+                Log.e("frame \(frame_index) has no outlier binary data :(")
             }
         }
     }
@@ -242,7 +250,7 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
     // only used for test painting
     private var ignored_outlier_groups: [String: OutlierGroup] = [:] // keyed by group name
 
-    var outlierGroupCount: Int { return outlier_groups?.groups.count ?? 0 }
+    var outlierGroupCount: Int { return outlier_groups?.groups?.count ?? 0 }
     
     public let output_filename: String
 
@@ -351,15 +359,17 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
     }
 
     public func loadOutliers() async throws {
-        Log.d("frame \(frame_index) loading outliers")
         if self.outlier_groups == nil {
+            Log.d("frame \(frame_index) loading outliers")
             if let outlierGroups = await outlierGroupLoader() {
                 self.outlier_groups = outlierGroups
                 self.state = .outlierProcessingComplete
-                Log.i("loaded \(self.outlier_groups?.groups.count) outlier groups for frame \(frame_index)")
+                Log.i("loaded \(self.outlier_groups?.groups?.count) outlier groups for frame \(frame_index)")
             } else {
+                self.outlier_groups = OutlierGroups(frame_index: frame_index,
+                                                    groups: [:])
+
                 Log.i("calculating outlier groups for frame \(frame_index)")
-                self.outlier_groups = OutlierGroups(frame_index: frame_index)
                 // find outlying bright pixels between frames,
                 // and group neighboring outlying pixels into groups
                 // this can take a long time
@@ -386,14 +396,20 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
         self.outlier_groups = try decoder.decode(OutlierGroups.self, from: data)
     }
     
-    func outlierBinaryData() -> Data {
+    func outlierBinaryData() -> Data? {
         let encoder = BinaryEncoder()
-        do {
-            return try encoder.encode(outlier_groups)
-        } catch {
-            Log.e("\(error)")
+        Log.d("frame \(frame_index) about to encode outlier data")
+        if let outlier_groups = outlier_groups {
+            do {
+                Log.i("frame \(frame_index) REALLY about to encode outlier data \(outlier_groups.encodable_groups?.count)")
+                return try encoder.encode(outlier_groups)
+            } catch {
+                Log.e("\(error)")
+            }
+        } else {
+            Log.e("no outlier groups to encode to binary data")
         }
-        return Data()
+        return nil
     }
 
     func outlierJsonData() -> Data {
@@ -416,12 +432,14 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
     }
 
     func outlierGroup(named outlier_name: String) -> OutlierGroup? {
-        return outlier_groups?.groups[outlier_name]
+        return outlier_groups?.groups?[outlier_name]
     }
     
     func foreachOutlierGroup(_ closure: (OutlierGroup)async->LoopReturn) async {
-        if let outlier_groups = self.outlier_groups {
-            for (_, group) in outlier_groups.groups {
+        if let outlier_groups = self.outlier_groups,
+           let groups = outlier_groups.groups 
+        {
+            for (_, group) in groups {
                 let result = await closure(group)
                 if result == .break { break }
             }
@@ -431,6 +449,8 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
     // this is still a slow part of the process, but is now about 10x faster than before
     func findOutliers() async throws {
 
+        Log.d("frame \(frame_index) finding outliers)")
+        
         self.state = .loadingImages
         
         let image = try await image_sequence.getImage(withName: image_sequence.filenames[frame_index]).image()
@@ -795,13 +815,13 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
                 } else {
                     //Log.w("frame \(frame_index) adding outlier \(new_outlier) with hough score \(hough_score) satsr \(satsr) surface_area_score \(surface_area_score)")
                     // add this new outlier to the set to analyize
-                    outlier_groups?.groups[group_name] = new_outlier
+                    outlier_groups?.groups?[group_name] = new_outlier
                 }
                   
             }
         }
         self.state = .readyForInterFrameProcessing
-        Log.i("frame \(frame_index) has found \(outlier_groups?.groups.count) outlier groups to consider")
+        Log.i("frame \(frame_index) has found \(outlier_groups?.groups?.count) outlier groups to consider")
     }
 
     private func testPaintOutliers(from outliers: [String:OutlierGroup], toData test_paint_data: inout Data) async {
@@ -833,8 +853,10 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
     private func testPaintOutliers(toData test_paint_data: inout Data) async {
         Log.d("frame \(frame_index) painting outliers green")
 
-        if let outlier_groups = outlier_groups {
-            await self.testPaintOutliers(from: outlier_groups.groups, toData: &test_paint_data)
+        if let outlier_groups = outlier_groups,
+           let groups = outlier_groups.groups
+        {
+            await self.testPaintOutliers(from: groups, toData: &test_paint_data)
         }
         await self.testPaintOutliers(from: ignored_outlier_groups, toData: &test_paint_data)
     }
@@ -896,7 +918,12 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
             return
         }
         
-        for (group_name, group) in outlier_groups.groups {
+        guard let groups = outlier_groups.groups else {
+            Log.e("cannot paint without outlier groups")
+            return
+        }
+        
+        for (group_name, group) in groups {
             if let reason = await group.shouldPaint {
                 if reason.willPaint {
                     Log.d("frame \(frame_index) painting over group \(group) for reason \(reason)")

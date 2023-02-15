@@ -154,31 +154,33 @@ class ViewModel: ObservableObject {
     func setOutlierGroups(forFrame frame: FrameAirplaneRemover) async {
         self.frames[frame.frame_index].outlierViews = []
 
-        var new_outlier_groups: [OutlierGroupView] = []
         
         let outlierGroups = await frame.outlierGroups()
-        Log.d("got \(outlierGroups.count) groups for frame \(frame.frame_index)")
         let (frame_width, frame_height) = (frame.width, frame.height)
-        for group in outlierGroups {
-            let encodable_group = await group.encodable()
-            if let cgImage = await group.testImage() { // XXX heap corruption here :(
-                var size = CGSize()
-                size.width = CGFloat(cgImage.width)
-                size.height = CGFloat(cgImage.height)
-                let outlierImage = NSImage(cgImage: cgImage, size: size)
-                
-                let groupView = await OutlierGroupView(group: encodable_group,
-                                                       name: group.name,
-                                                       bounds: group.bounds,
-                                                       image: outlierImage,
-                                                       frame_width: frame_width,
-                                                       frame_height: frame_height)
-                new_outlier_groups.append(groupView)
-            } else {
-                Log.e("frame \(frame.frame_index) outlier group no image")
+        if let outlierGroups = outlierGroups {
+            Log.d("got \(outlierGroups.count) groups for frame \(frame.frame_index)")
+            var new_outlier_groups: [OutlierGroupView] = []
+            for group in outlierGroups {
+                let encodable_group = await group.encodable()
+                if let cgImage = await group.testImage() { // XXX heap corruption here :(
+                    var size = CGSize()
+                    size.width = CGFloat(cgImage.width)
+                    size.height = CGFloat(cgImage.height)
+                    let outlierImage = NSImage(cgImage: cgImage, size: size)
+                    
+                    let groupView = await OutlierGroupView(group: encodable_group,
+                                                           name: group.name,
+                                                           bounds: group.bounds,
+                                                           image: outlierImage,
+                                                           frame_width: frame_width,
+                                                           frame_height: frame_height)
+                    new_outlier_groups.append(groupView)
+                } else {
+                    Log.e("frame \(frame.frame_index) outlier group no image")
+                }
             }
+            self.frames[frame.frame_index].outlierViews = new_outlier_groups
         }
-        self.frames[frame.frame_index].outlierViews = new_outlier_groups
     }
     
     func frame(atIndex index: Int) -> FrameAirplaneRemover? {

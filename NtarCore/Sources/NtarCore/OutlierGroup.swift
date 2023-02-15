@@ -27,16 +27,16 @@ enum PaintScoreType {
 @available(macOS 10.15, *) 
 public class OutlierGroups: Codable {
     public let frame_index: Int
-    public var groups: [String: OutlierGroup] = [:] // keyed by name
+    public var groups: [String: OutlierGroup]?  // keyed by name
 
     public init(frame_index: Int,
-                groups: [String: OutlierGroup] = [:])
+                groups: [String: OutlierGroup]? = nil)
     {
         self.frame_index = frame_index
         self.groups = groups
     }
     
-    public var encodable_groups: [String: OutlierGroupEncodable] = [:]
+    public var encodable_groups: [String: OutlierGroupEncodable]? = nil
     
     enum CodingKeys: String, CodingKey {
         case frame_index
@@ -44,17 +44,35 @@ public class OutlierGroups: Codable {
     }
 
     public func prepareForEncoding() {
-        for (key, value) in self.groups {
-            Task {
-                encodable_groups[key] = await value.encodable() // XXX not isolated, async???
+        Log.d("frame \(frame_index) about to prepare for encoding")
+        let dispatchGroup = DispatchGroup()
+        dispatchGroup.enter()
+        Task {
+            Log.d("frame \(frame_index) preparing for encoding")
+            var encodable: [String: OutlierGroupEncodable] = [:]
+            if let groups = self.groups {
+                for (key, value) in groups {
+                    encodable[key] = await value.encodable()
+                }
+                self.encodable_groups = encodable
+            } else {
+                Log.w("frame \(frame_index) has no group")
             }
+            Log.d("frame \(frame_index) done with encoding")
+            dispatchGroup.leave()
         }
+        dispatchGroup.wait()
     }
     
     public func encode(to encoder: Encoder) throws {
 	var container = encoder.container(keyedBy: CodingKeys.self)
 	try container.encode(frame_index, forKey: .frame_index)
-	try container.encode(encodable_groups, forKey: .groups)
+        if let encodable_groups = encodable_groups {
+            Log.d("frame \(frame_index) encodable_groups.count \(encodable_groups.count)")
+	    try container.encode(encodable_groups, forKey: .groups)
+        } else {
+            Log.e("frame \(frame_index) NIL encodable_groups during encode!!!")
+        }
     }
 }
 
@@ -382,7 +400,7 @@ public actor OutlierGroup: CustomStringConvertible,
         let aspect_ratio = Double(self.bounds.width) / Double(self.bounds.height)
         if aspect_ratio < OAS_AIRPLANES_MIN_ASPECT_RATIO     { return 1 }
         if aspect_ratio > OAS_NON_AIRPLANES_MAX_ASPECT_RATIO { return 0 }
-
+        
         let airplane_score =
           histogram_lookup(ofValue: Double(aspect_ratio),
                            minValue: OAS_AIRPLANES_MIN_ASPECT_RATIO, 
