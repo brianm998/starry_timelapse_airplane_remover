@@ -130,8 +130,17 @@ public actor OutlierGroup: CustomStringConvertible,
                                        data_height: bounds.height,
                                        input_data: pixels,
                                        max_pixel_distance: max_pixel_distance)
+
+        /*
+         problem here:
+
+          - if we set number_of_lines_returned to any reasonable value
+          - then the hough transform histogram always returns a bad score
+          - but the number of lines returned causes much larger saved outlier groups (approx 4x),
+            leading to UI lag when loading them
+         */
         
-        self.lines = transform.lines(min_count: 1, number_of_lines_returned: 10)
+        self.lines = transform.lines(min_count: 1/*, number_of_lines_returned: 1000*/) // XXX problem here
 
         if self.shouldPaint == nil,
            self.paintScoreFromHoughTransformLines > 0.5
@@ -282,7 +291,8 @@ public actor OutlierGroup: CustomStringConvertible,
         if let _paint_score_from_lines = _paint_score_from_lines {
             return _paint_score_from_lines
         }
-        if lines.count < 10 { return 0 }
+        // XXX the 10 line limit may have f'd the old histogram values :(
+//        if lines.count < 10 { return 0 }
         
         let first_count = lines[0].count
         let last_count = lines[lines.count-1].count

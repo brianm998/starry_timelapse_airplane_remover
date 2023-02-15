@@ -123,6 +123,7 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
             Log.d("frame \(self.frame_index) no config")
         }
     }
+
     public func writeThumbnailFile(_ image: NSImage) {
         Log.d("frame \(self.frame_index) doing preview")
         if config.writeFrameThumbnailFiles {
