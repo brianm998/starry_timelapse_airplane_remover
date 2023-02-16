@@ -32,7 +32,7 @@ struct ContentView: View {
     @State private var showOutliers = false
 
     // enum for how we show each frame
-    @State private var frameViewMode = FrameViewMode.original
+    @State private var frameViewMode = FrameViewMode.processed
 
     // should we show full resolution images on the main frame?
     // faster low res previews otherwise
@@ -115,27 +115,37 @@ struct ContentView: View {
                     }*/
                     VStack {
                         HStack {
-                            if !running {
-                                let action = {
-                                    running = true
-                                    viewModel.initial_load_in_progress = true
-                                    Task.detached(priority: .background) {
-                                        do {
-                                            try await viewModel.eraser?.run()
-                                        } catch {
-                                            Log.e("\(error)")
+
+                            ZStack {
+
+                                if !running {
+                                    let action = {
+                                        running = true
+                                        viewModel.initial_load_in_progress = true
+                                        Task.detached(priority: .background) {
+                                            do {
+                                                try await viewModel.eraser?.run()
+                                            } catch {
+                                                Log.e("\(error)")
+                                            }
                                         }
                                     }
+                                    Button(action: action) {
+                                        Text("START").font(.largeTitle)
+                                    }.buttonStyle(ShrinkingButton())
+                                      .frame(maxWidth: .infinity, alignment: .leading)
+                                    
                                 }
-                                Button(action: action) {
-                                    Text("START").font(.largeTitle)
-                                }.buttonStyle(ShrinkingButton())
-                            } else {
-                                // video playback and frame advancement buttons
-                                videoPlaybackButtons(scroller) // XXX center
-                                  .frame(maxWidth: .infinity, alignment: .center)
-                            }
 
+                                
+                                videoPlaybackButtons(scroller) // XXX not really centered
+                                  .frame(maxWidth: .infinity, alignment: .center)
+
+                                if running {
+                                    toggleViews()
+                                      .frame(maxWidth: .infinity, alignment: .trailing)
+                                }
+                            }
                                 /*
                             VStack {
                                 Picker("go to frame", selection: $viewModel.current_index) {
@@ -153,8 +163,6 @@ struct ContentView: View {
                             }
                                 */
                             
-                            toggleViews()
-                              .frame(maxWidth: .infinity, alignment: .trailing)
 /*                            
                             Text("background")
                             Slider(value: $background_brightness, in: 0...100) { editing in
@@ -171,7 +179,7 @@ struct ContentView: View {
                         // the filmstrip at the bottom
                         filmstrip()
                           .frame(maxWidth: .infinity, alignment: .bottom)
-                        Spacer().frame(maxHeight: 10, alighment: .bottom)
+                        Spacer().frame(maxHeight: 10, alignment: .bottom)
                     }
                 }
             }.frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -388,27 +396,38 @@ struct ContentView: View {
         }
     }
 
-    func clearAllButton() -> some View {
-        Button(action: {
-            Task {
-                await viewModel.currentFrame?.userSelectAllOutliers(toShouldPaint: false)
-                await renderCurrentFrame()
-                viewModel.update()
-            }
-        }) {
-            Text("Clear All").font(.largeTitle)
+    func setAllCurrentFrameOutliers(to shouldPaint: Bool) {
+
+        let reason = PaintReason.userSelected(shouldPaint)
+
+        // update the view model first
+        let current_frame_view = viewModel.currentFrameView
+        let outlierViews = current_frame_view.outlierViews
+        outlierViews.forEach { outlierView in
+            outlierView.group.shouldPaint = reason
         }
-          .buttonStyle(ShrinkingButton())
-          .keyboardShortcut("c", modifiers: [])
+
+        if let frame = current_frame_view.frame {
+            // update the real actor in the background
+            Task {
+                await frame.userSelectAllOutliers(toShouldPaint: shouldPaint)
+                // XXX need to update view model still
+                await renderCurrentFrame() {
+                    Task {
+                        await viewModel.refresh(frame: frame)
+                        refreshCurrentFrame()
+                        viewModel.update()
+                    }
+                }
+            }
+        } else {
+            Log.w("frame \(current_frame_view.frame_index) has no frame")
+        }
     }
     
     func paintAllButton() -> some View {
         Button(action: {
-            Task {
-                await viewModel.currentFrame?.userSelectAllOutliers(toShouldPaint: true)
-                await renderCurrentFrame()
-                viewModel.update()
-            }
+            setAllCurrentFrameOutliers(to: true)
         }) {
             Text("Paint All").font(.largeTitle)
         }
@@ -416,6 +435,16 @@ struct ContentView: View {
         .keyboardShortcut("p", modifiers: [])
     }
     
+    func clearAllButton() -> some View {
+        Button(action: {
+            setAllCurrentFrameOutliers(to: false)
+        }) {
+            Text("Clear All").font(.largeTitle)
+        }
+          .buttonStyle(ShrinkingButton())
+          .keyboardShortcut("c", modifiers: [])
+    }
+
     func filmstrip() -> some View {
         ScrollView(.horizontal) {
             HStack(spacing: 0) {
@@ -460,7 +489,7 @@ struct ContentView: View {
         }.buttonStyle(ShrinkingButton())
     }
 
-    func renderCurrentFrame() async {
+    func renderCurrentFrame(_ closure: (() -> Void)? = nil) async {
         if let frame = viewModel.currentFrame,
            let frameSaveQueue = viewModel.frameSaveQueue
         {
@@ -469,6 +498,7 @@ struct ContentView: View {
                 await viewModel.refresh(frame: frame)
                 refreshCurrentFrame()
                 self.rendering_current_frame = false
+                closure?()
             }
         }
     }
@@ -730,7 +760,6 @@ struct ContentView: View {
                   .keyboardShortcut("t", modifiers: []) // XXX find better modifier
             }
             VStack(alignment: .leading) {
-                let frameViewModes: [FrameViewMode] = [.original, .processed, .testPainted]
                 Picker("show", selection: $frameViewMode) {
                     // XXX expand this to not use allCases, but only those that we have files for
                     // i.e. don't show test-paint when the sequence wasn't test painted
@@ -738,7 +767,7 @@ struct ContentView: View {
                         Text(value.localizedName).tag(value)
                     }
                 }
-                  .frame(maxWidth: 120)
+                  .frame(maxWidth: 180)
                   .onChange(of: frameViewMode) { pick in
                       Log.d("pick \(pick)")
                       refreshCurrentFrame()
