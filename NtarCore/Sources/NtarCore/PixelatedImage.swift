@@ -143,7 +143,7 @@ public class PixelatedImage {
     // XXX make this async
     func writeTIFFEncoding(ofData image_data: Data, toFilename image_filename: String) throws {
         if file_manager.fileExists(atPath: image_filename) {
-            Log.w("overwriting already existing filename \(image_filename)")
+            Log.i("overwriting already existing filename \(image_filename)")
             try file_manager.removeItem(atPath: image_filename)
         }
         

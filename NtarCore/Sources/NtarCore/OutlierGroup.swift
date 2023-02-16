@@ -43,10 +43,8 @@ public class OutlierGroups: Codable {
         case groups
     }
 
-    public func prepareForEncoding() {
+    public func prepareForEncoding(_ closure: @escaping () -> Void) {
         Log.d("frame \(frame_index) about to prepare for encoding")
-        let dispatchGroup = DispatchGroup()
-        dispatchGroup.enter()
         Task {
             Log.d("frame \(frame_index) preparing for encoding")
             var encodable: [String: OutlierGroupEncodable] = [:]
@@ -59,9 +57,8 @@ public class OutlierGroups: Codable {
                 Log.w("frame \(frame_index) has no group")
             }
             Log.d("frame \(frame_index) done with encoding")
-            dispatchGroup.leave()
+            closure()
         }
-        dispatchGroup.wait()
     }
     
     public func encode(to encoder: Encoder) throws {

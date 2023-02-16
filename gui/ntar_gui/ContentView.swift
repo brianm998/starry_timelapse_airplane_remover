@@ -59,10 +59,28 @@ struct ContentView: View {
     
     var body: some View {
         let scaling_anchor = UnitPoint(x: 0.75, y: 0.75)
+
+        
         GeometryReader { top_geometry in
             ScrollViewReader { scroller in
                 VStack {
+                    let should_show_progress =
+                      viewModel.initial_load_in_progress ||
+                      loading_outliers                   ||
+                      loading_all_outliers               || 
+                      rendering_current_frame            ||
+                      rendering_all_frames
+
                     currentFrameView()
+                      .overlay(
+                        ProgressView()
+                          .scaleEffect(8, anchor: .center) // this is blocky scaled up 
+                          .progressViewStyle(CircularProgressViewStyle(tint: .yellow))
+                          .frame(maxWidth: 200, maxHeight: 200)
+                          .opacity(should_show_progress ? 0.8 : 0)
+                      )
+                      
+                    /*
                     if !previewMode {
                         HStack {
                             Text(viewModel.label_text).font(.largeTitle)
@@ -71,7 +89,7 @@ struct ContentView: View {
                                 Text("has \(count) outliers").font(.largeTitle)
                             }
                         }
-                    }
+                    }*/
                     VStack {
                         HStack {
                             if !running {
@@ -90,19 +108,6 @@ struct ContentView: View {
                                     Text("START").font(.largeTitle)
                                 }.buttonStyle(PlainButtonStyle())
                             } else {
-                                if viewModel.initial_load_in_progress ||
-                                   loading_outliers                   ||
-                                   loading_all_outliers               || 
-                                   rendering_current_frame            ||
-                                   rendering_all_frames
-                                {
-                                    ProgressView()
-                                      .scaleEffect(1, anchor: .center)
-                                      .progressViewStyle(CircularProgressViewStyle(tint: .yellow))
-                                    Spacer()
-                                      .frame(maxWidth: 50)
-                                }
-
                                 // video playback and frame advancement buttons
                                 videoPlaybackButtons(scroller)
                             }
@@ -653,9 +658,9 @@ struct ContentView: View {
             video_play_timer = Timer.scheduledTimer(withTimeInterval: 1/Double(video_playback_framerate),
                                                     repeats: true) { timer in
 
-
+                // play each frame of the video in sequence
                 let current_frame_view = self.viewModel.frames[current_video_frame]
-                
+
                 switch self.frameViewMode {
                 case .original:
                     viewModel.current_frame_image = current_frame_view.preview_image.resizable()
@@ -813,54 +818,76 @@ struct ContentView: View {
         Log.d("refreshCurrentFrame \(viewModel.current_index)")
         let new_frame_view = viewModel.frames[viewModel.current_index]
         if let next_frame = new_frame_view.frame {
-            // always stick the preview image in there first if we have it
 
-            // XXX this can cause flashing sometimes when refresh is called too many times in a row
+            // usually stick the preview image in there first if we have it
+            var show_preview = true
 
-            // keep track of the previous current frame and the previous frame view mode
-            // and if they're the same, then don't show the preview
-            
-            switch self.frameViewMode {
-            case .original: // XXX do we need add .resizable() here, and is it slowing us down?
-                viewModel.current_frame_image = new_frame_view.preview_image.resizable()
-            case .processed:
-                viewModel.current_frame_image = new_frame_view.processed_preview_image.resizable()
-            case .testPainted:
-                viewModel.current_frame_image = new_frame_view.test_paint_preview_image.resizable()
+            /*
+            Log.d("previewMode \(previewMode)")
+            Log.d("viewModel.current_frame_image_index \(viewModel.current_frame_image_index)")
+            Log.d("new_frame_view.frame_index \(new_frame_view.frame_index)")
+            Log.d("viewModel.current_frame_image_view_mode \(viewModel.current_frame_image_view_mode)")
+            Log.d("self.frameViewMode \(self.frameViewMode)")
+            Log.d("viewModel.current_frame_image_was_preview \(viewModel.current_frame_image_was_preview)")
+             */
+
+            if !previewMode &&
+               viewModel.current_frame_image_index == new_frame_view.frame_index &&
+               viewModel.current_frame_image_view_mode == self.frameViewMode &&
+               !viewModel.current_frame_image_was_preview
+            {
+                // showing the preview in this case causes flickering
+                show_preview = false
+            }
+                 
+            if show_preview {
+                viewModel.current_frame_image_index = new_frame_view.frame_index
+                viewModel.current_frame_image_was_preview = true
+                viewModel.current_frame_image_view_mode = self.frameViewMode
+
+                switch self.frameViewMode {
+                case .original: // XXX do we need add .resizable() here, and is it slowing us down?
+                    viewModel.current_frame_image = new_frame_view.preview_image.resizable()
+                case .processed:
+                    viewModel.current_frame_image = new_frame_view.processed_preview_image.resizable()
+                case .testPainted:
+                    viewModel.current_frame_image = new_frame_view.test_paint_preview_image.resizable()
+                }
             }
             if !previewMode {
-                do {
-                    if next_frame.frame_index == viewModel.current_index {
-                        switch self.frameViewMode {
-                        case .original:
-                            Task {
+                if next_frame.frame_index == viewModel.current_index {
+                    Task {
+                        do {
+                            viewModel.current_frame_image_index = new_frame_view.frame_index
+                            viewModel.current_frame_image_was_preview = false
+                            viewModel.current_frame_image_view_mode = self.frameViewMode
+                            
+                            switch self.frameViewMode {
+                            case .original:
                                 if let baseImage = try await next_frame.baseImage() {
                                     if next_frame.frame_index == viewModel.current_index {
                                         viewModel.current_frame_image = Image(nsImage: baseImage)
                                     }
                                 }
-                            }
-
-                        case .processed:
-                            Task {
+                                
+                            case .processed:
                                 if let baseImage = try await next_frame.baseOutputImage() {
                                     if next_frame.frame_index == viewModel.current_index {
                                         viewModel.current_frame_image = Image(nsImage: baseImage)
                                     }
                                 }
-                            }
-                        case .testPainted:
-                            Task {
+                                
+                            case .testPainted:
                                 if let baseImage = try await next_frame.baseTestPaintImage() {
                                     if next_frame.frame_index == viewModel.current_index {
                                         viewModel.current_frame_image = Image(nsImage: baseImage)
                                     }
                                 }
                             }
+                        } catch {
+                            Log.e("error")
                         }
                     }
-                } catch {
-                    Log.e("error")
                 }
             }
 

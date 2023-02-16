@@ -94,11 +94,13 @@ public actor FinalProcessor {
                 // these frames have already been inter-frame processed,
                 // likely from saved json outlier groups
 
+                // XXX this logic works, but is wonky and could be less complex
                 if frame.fully_process {
                     frames[index] = frame
+                } else {
+                    Log.d("finishing frame \(frame.frame_index)")
+                    await self.finish(frame: frame)
                 }
-                
-                await self.finish(frame: frame)
             } else {
                 // this frame needs inter-frame processing still
                 Log.i("FINAL THREAD frame \(index) added for final inter-frame analysis \(max_added_index)")
@@ -199,7 +201,7 @@ public actor FinalProcessor {
         // if we have a frame check closure, we allow the user to check the frame here
         // but only if there are some outliers to check, otherwise just finish it.
 
-        Log.d("finish(frame: \(frame.frame_index)")
+        Log.d("finish frame \(frame.frame_index)")
         
         if let frameCheckClosure = callbacks.frameCheckClosure
         {

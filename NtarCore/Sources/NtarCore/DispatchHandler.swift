@@ -13,12 +13,16 @@ public actor DispatchHandler {
     
     public init() { }
     
-    func enter(_ name: String) {
+    func enter(_ name: String) -> Bool {
         //Log.d("enter \(name) with \(count)")
         count += 1
-        if let _ = running[name] { fatalError("more than one \(name) not allowed") }
+        if let _ = running[name] {
+            Log.e("Error - more than one \(name) not allowed")
+            return false
+        }
         running[name] = true
         self.dispatch_group.enter()
+        return true
     }
 
     func leave(_ name: String) {

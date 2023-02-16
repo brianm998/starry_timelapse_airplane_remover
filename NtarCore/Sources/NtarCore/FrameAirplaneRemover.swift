@@ -163,23 +163,24 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
            let output_dirname = self.outlier_output_dirname
         {
             // write to binary outlier data
-            self.outlier_groups?.prepareForEncoding()
-            if let data = self.outlierBinaryData() {
-                let filename = "\(self.frame_index)_outliers.bin"
-                let full_path = "\(output_dirname)/\(filename)"
-                do {
-                    if file_manager.fileExists(atPath: full_path) {
-                        try file_manager.removeItem(atPath: full_path)
-                        // make this overwrite for new user changes to existing data
-                        Log.i("overwriting \(full_path)")
-                    } 
-                    Log.i("creating \(full_path)")                      
-                    file_manager.createFile(atPath: full_path, contents: data, attributes: nil)
-                } catch {
-                    Log.e("\(error)")
+            self.outlier_groups?.prepareForEncoding() {
+                if let data = self.outlierBinaryData() {
+                    let filename = "\(self.frame_index)_outliers.bin"
+                    let full_path = "\(output_dirname)/\(filename)"
+                    do {
+                        if file_manager.fileExists(atPath: full_path) {
+                            try file_manager.removeItem(atPath: full_path)
+                            // make this overwrite for new user changes to existing data
+                            Log.i("overwriting \(full_path)")
+                        } 
+                        Log.i("creating \(full_path)")                      
+                        file_manager.createFile(atPath: full_path, contents: data, attributes: nil)
+                    } catch {
+                        Log.e("\(error)")
+                    }
+                } else {
+                    Log.e("frame \(self.frame_index) has no outlier binary data :(")
                 }
-            } else {
-                Log.e("frame \(frame_index) has no outlier binary data :(")
             }
         }
     }

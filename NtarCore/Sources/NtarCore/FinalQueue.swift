@@ -74,13 +74,16 @@ public actor FinalQueue {
                    let method = await self.value(forKey: next_key)
                 {
                     let dispatch_name = "final queue frame \(next_key)"
-                    await self.dispatch_group.enter(dispatch_name)
-                    await self.removeValue(forKey: next_key)
-                    await self.number_running.increment()
-                    group.addTask(priority: .medium) {
-                        try await method()
-                        await self.number_running.decrement()
-                        await self.dispatch_group.leave(dispatch_name)
+                    if await self.dispatch_group.enter(dispatch_name) {
+                        await self.removeValue(forKey: next_key)
+                        await self.number_running.increment()
+                        group.addTask(priority: .medium) {
+                            try await method()
+                            await self.number_running.decrement()
+                            await self.dispatch_group.leave(dispatch_name)
+                        }
+                    } else {
+                        Log.w("could not queue frame \(next_key), it's being saved right now")
                     }
                 } else {
                     try await Task.sleep(nanoseconds: 1_000_000_000)

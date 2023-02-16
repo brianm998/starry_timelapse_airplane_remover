@@ -18,8 +18,26 @@ class ViewModel: ObservableObject {
 
     // view class for each frame in the sequence in order
     @Published var frames: [FrameView] = [FrameView(0)]
+
+    // the image we're showing to the user right now
     @Published var current_frame_image: Image?
+
+    // the frame index of the image that produced the current_frame_image
+    var current_frame_image_index: Int = 0
+
+    // the frame index of the image that produced the current_frame_image
+    var current_frame_image_was_preview = false
+
+    // the view mode that we set this image with
+    var current_frame_image_view_mode: FrameViewMode = .original // XXX really orig?
+
     @Published var initial_load_in_progress = false
+
+    // the frame number of the frame we're currently showing
+    var current_index = 0
+
+    // number of frames in the sequence we're processing
+    var image_sequence_size: Int = 0
     
     // currently selected index in the sequence
     var currentFrameView: FrameView {
@@ -27,7 +45,8 @@ class ViewModel: ObservableObject {
         if current_index >= frames.count { current_index = frames.count - 1 }
         return frames[current_index]
     }
-/*    @Published*/ var current_index = 0
+    /*    @Published*/
+    
     var currentFrame: FrameAirplaneRemover? {
         return frames[current_index].frame
     }
@@ -45,8 +64,6 @@ class ViewModel: ObservableObject {
             }
         }
     }
-    
-    var image_sequence_size: Int = 0
     
     init() {
         Log.w("VIEW MODEL INIT")
@@ -117,12 +134,17 @@ class ViewModel: ObservableObject {
                 }
             }
 
-            await frame.outlier_groups?.prepareForEncoding()
-            await setOutlierGroups(forFrame: frame)
+            if self.frames[frame.frame_index].outlierViews.count == 0 {
+                await frame.outlier_groups?.prepareForEncoding() {
+                    Task {
+                        await self.setOutlierGroups(forFrame: frame)
 
-            // refresh ui 
-            await MainActor.run {
-                self.objectWillChange.send()
+                        // refresh ui 
+                        await MainActor.run {
+                            self.objectWillChange.send()
+                        }
+                    } 
+                }
             }
         }
     }
