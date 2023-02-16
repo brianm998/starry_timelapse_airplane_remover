@@ -106,7 +106,7 @@ struct ContentView: View {
                                 }
                                 Button(action: action) {
                                     Text("START").font(.largeTitle)
-                                }.buttonStyle(PlainButtonStyle())
+                                }.buttonStyle(ShrinkingButton())
                             } else {
                                 // video playback and frame advancement buttons
                                 videoPlaybackButtons(scroller)
@@ -390,7 +390,8 @@ struct ContentView: View {
             }
         }) {
             Text("Clear All").font(.largeTitle)
-        }.buttonStyle(PlainButtonStyle())
+        }
+          .buttonStyle(ShrinkingButton())
           .keyboardShortcut("c", modifiers: [])
     }
     
@@ -403,8 +404,9 @@ struct ContentView: View {
             }
         }) {
             Text("Paint All").font(.largeTitle)
-        }.buttonStyle(PlainButtonStyle())
-          .keyboardShortcut("p", modifiers: [])
+        }
+        .buttonStyle(ShrinkingButton())
+        .keyboardShortcut("p", modifiers: [])
     }
     
     func filmstrip() -> some View {
@@ -448,7 +450,7 @@ struct ContentView: View {
         
         return Button(action: action) {
             Text("Render All Frames").font(.largeTitle)
-        }.buttonStyle(PlainButtonStyle())
+        }.buttonStyle(ShrinkingButton())
     }
 
     func renderCurrentFrame() async {
@@ -471,7 +473,7 @@ struct ContentView: View {
         
         return Button(action: action) {
             Text("Render This Frame").font(.largeTitle)
-        }.buttonStyle(PlainButtonStyle())
+        }.buttonStyle(ShrinkingButton())
     }
     
     func loadAllOutliersButton() -> some View {
@@ -538,7 +540,7 @@ struct ContentView: View {
         
         return Button(action: action) {
             Text("Load All Outliers").font(.largeTitle)
-        }.buttonStyle(PlainButtonStyle())
+        }.buttonStyle(ShrinkingButton())
     }
     
     // an HStack of buttons to advance backwards and fowards through the sequence
@@ -550,12 +552,15 @@ struct ContentView: View {
         let previous_shortut_key: KeyEquivalent = .leftArrow
         let fast_next_shortcut_key: KeyEquivalent = "x"
         let end_button_shortcut_key: KeyEquivalent = "e" // make this top arror
+
+        // ugh, this color could be better
+        let button_color = Color(red: 203/256, green: 62/256, blue: 48/256)
         
         return HStack {
             // start button
             button(named: "backward.end.fill",
                    shortcutKey: start_shortcut_key,
-                   color: .white,
+                   color: button_color,
                    toolTip: """
                      go to start of sequence
                      (keyboard shortcut '\(start_shortcut_key.character)')
@@ -570,7 +575,7 @@ struct ContentView: View {
             // fast previous button
             button(named: "backward.fill",
                    shortcutKey: fast_previous_shortut_key,
-                   color: .white,
+                   color: button_color,
                    toolTip: """
                      back \(fast_skip_amount) frames
                      (keyboard shortcut '\(fast_previous_shortut_key.character)')
@@ -583,7 +588,7 @@ struct ContentView: View {
             // previous button
             button(named: "backward.frame.fill",
                    shortcutKey: previous_shortut_key,
-                   color: .white,
+                   color: button_color,
                    toolTip: """
                      back one frame
                      (keyboard shortcut left arrow)
@@ -596,7 +601,7 @@ struct ContentView: View {
             // play/pause button
             button(named: video_playing ? "pause.fill" : "play.fill", // pause.fill
                    shortcutKey: " ",
-                   color: .yellow,
+                   color: button_color,
                    toolTip: """
                      Play / Pause
                      """)
@@ -608,7 +613,7 @@ struct ContentView: View {
             // next button
             button(named: "forward.frame.fill",
                    shortcutKey: .rightArrow,
-                   color: .white,
+                   color: button_color,
                    toolTip: """
                      forward one frame
                      (keyboard shortcut right arrow)
@@ -621,7 +626,7 @@ struct ContentView: View {
             // fast next button
             button(named: "forward.fill",
                    shortcutKey: fast_next_shortcut_key,
-                   color: .white,
+                   color: button_color,
                    toolTip: """
                      forward \(fast_skip_amount) frames
                      (keyboard shortcut '\(fast_next_shortcut_key.character)')
@@ -635,7 +640,7 @@ struct ContentView: View {
             // end button
             button(named: "forward.end.fill",
                    shortcutKey: end_button_shortcut_key,
-                   color: .white,
+                   color: button_color,
                    toolTip: """
                      advance to end of sequence
                      (keyboard shortcut '\(end_button_shortcut_key.character)')
@@ -771,7 +776,7 @@ struct ContentView: View {
         return Image(systemName: name)
           .resizable()
           .aspectRatio(contentMode: .fit)
-          .frame(maxWidth: button_size, maxHeight: button_size)
+          .frame(maxWidth: button_size, maxHeight: button_size, alignment: .center)
     }
     
     func button(named button_name: String,
@@ -957,3 +962,15 @@ struct ContentView_Previews: PreviewProvider {
     }
 }
 
+struct ShrinkingButton: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .padding()
+            .background(Color(red: 75/256, green: 80/256, blue: 147/256))
+            .foregroundColor(.white)
+            .clipShape(Capsule())
+            .scaleEffect(configuration.isPressed ? 0.9 : 1)
+            .animation(.easeOut(duration: 0.15),
+                       value: configuration.isPressed)
+    }
+}
