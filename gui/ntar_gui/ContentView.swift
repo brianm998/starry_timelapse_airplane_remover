@@ -33,8 +33,10 @@ struct ContentView: View {
 
     // enum for how we show each frame
     @State private var frameViewMode = FrameViewMode.original
-    // show only lower res previews instead of full res images
-    @State private var previewMode = true
+
+    // should we show full resolution images on the main frame?
+    // faster low res previews otherwise
+    @State private var showFullResolution = false
     
     @State private var selection_causes_painting = true
     @State private var running = false
@@ -71,7 +73,10 @@ struct ContentView: View {
                       rendering_current_frame            ||
                       rendering_all_frames
 
-                    currentFrameView()
+                    ZStack {
+                    
+                      currentFrameView()
+                         .frame(maxWidth: .infinity, alignment: .center)
                       .overlay(
                         ProgressView()
                           .scaleEffect(8, anchor: .center) // this is blocky scaled up 
@@ -79,9 +84,27 @@ struct ContentView: View {
                           .frame(maxWidth: 200, maxHeight: 200)
                           .opacity(should_show_progress ? 0.8 : 0)
                       )
-                      
+                    }.overlay(
+                          VStack {
+                            paintAllButton()
+                              .frame(maxWidth: .infinity, alignment: .bottomTrailing)
+                            clearAllButton()
+                              .frame(maxWidth: .infinity, alignment: .bottomTrailing)
+                            loadAllOutliersButton()
+                              .frame(maxWidth: .infinity, alignment: .bottomTrailing)
+                            renderCurrentFrameButton()
+                              .frame(maxWidth: .infinity, alignment: .bottomTrailing)
+                            renderAllFramesButton()
+                              .frame(maxWidth: .infinity, alignment: .bottomTrailing)
+                          }//.background(.green)
+//                            .frame(maxWidth: .infinity, alignment: .center)
+//                            .frame(maxWidth: .infinity, alignment: .bottomTrailing)
+//                      }.background(.red)
+//                        .frame(maxWidth: .infinity, alignment: .bottomTrailing)
+                             , alignment: .bottom)
+
                     /*
-                    if !previewMode {
+                    if showFullResolution {
                         HStack {
                             Text(viewModel.label_text).font(.largeTitle)
                             let count = viewModel.currentFrameView.outlierViews.count
@@ -109,11 +132,12 @@ struct ContentView: View {
                                 }.buttonStyle(ShrinkingButton())
                             } else {
                                 // video playback and frame advancement buttons
-                                videoPlaybackButtons(scroller)
+                                videoPlaybackButtons(scroller) // XXX center
+                                  .frame(maxWidth: .infinity, alignment: .center)
                             }
 
-                            VStack {
                                 /*
+                            VStack {
                                 Picker("go to frame", selection: $viewModel.current_index) {
                                     ForEach(0 ..< viewModel.frames.count, id: \.self) {
                                         Text("frame \($0)")
@@ -126,24 +150,11 @@ struct ContentView: View {
                                                       from: viewModel.currentFrame,
                                                       withScroll: scroller)
                                   }
-                                */
-                                Picker("Fast Skip", selection: $fast_skip_amount) {
-                                    ForEach(0 ..< 51) {
-                                        Text("\($0) frames")
-                                    }
-                                }.frame(maxWidth: 200)
-                                let frame_rates = [5, 10, 15, 20, 25, 30]
-                                Picker("Frame Rate", selection: $video_playback_framerate) {
-                                    ForEach(frame_rates, id: \.self) {
-                                        Text("\($0) fps")
-                                    }
-                                }.frame(maxWidth: 200)
                             }
+                                */
                             
-                            paintAllButton()
-                            clearAllButton()
-
                             toggleViews()
+                              .frame(maxWidth: .infinity, alignment: .trailing)
 /*                            
                             Text("background")
                             Slider(value: $background_brightness, in: 0...100) { editing in
@@ -154,15 +165,13 @@ struct ContentView: View {
                               .frame(maxWidth: 100, maxHeight: 30)
   */                          
                             //load all outlier button
-                            loadAllOutliersButton()
-                            renderCurrentFrameButton()
-                            renderAllFramesButton()
                             
                         }
                         Spacer().frame(maxHeight: 30)
                         // the filmstrip at the bottom
                         filmstrip()
-                        Spacer().frame(maxHeight: 10)
+                          .frame(maxWidth: .infinity, alignment: .bottom)
+                        Spacer().frame(maxHeight: 10, alighment: .bottom)
                     }
                 }
             }.frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -379,8 +388,6 @@ struct ContentView: View {
         }
     }
 
-    let button_size: CGFloat = 50
-    
     func clearAllButton() -> some View {
         Button(action: {
             Task {
@@ -602,6 +609,7 @@ struct ContentView: View {
             button(named: video_playing ? "pause.fill" : "play.fill", // pause.fill
                    shortcutKey: " ",
                    color: button_color,
+                   size: 40,
                    toolTip: """
                      Play / Pause
                      """)
@@ -693,12 +701,24 @@ struct ContentView: View {
             scroller.scrollTo(viewModel.current_index)
         }
     }
-
     
     func toggleViews() -> some View {
         HStack() {
             VStack(alignment: .leading) {
-                Toggle("show outliers", isOn: $showOutliers)
+                Picker("Fast Skip", selection: $fast_skip_amount) {
+                    ForEach(0 ..< 51) {
+                        Text("\($0) frames")
+                    }
+                }.frame(maxWidth: 200)
+                let frame_rates = [5, 10, 15, 20, 25, 30]
+                Picker("Frame Rate", selection: $video_playback_framerate) {
+                    ForEach(frame_rates, id: \.self) {
+                        Text("\($0) fps")
+                    }
+                }.frame(maxWidth: 200)
+            }
+            VStack(alignment: .leading) {
+                Toggle("modify outliers", isOn: $showOutliers)
                   .keyboardShortcut("o", modifiers: [])
                   .onChange(of: showOutliers) { shouldShow in
                       Log.d("show outliers shouldShow \(shouldShow)")
@@ -711,28 +731,21 @@ struct ContentView: View {
             }
             VStack(alignment: .leading) {
                 let frameViewModes: [FrameViewMode] = [.original, .processed, .testPainted]
-                Picker("view mode", selection: $frameViewMode) {
+                Picker("show", selection: $frameViewMode) {
                     // XXX expand this to not use allCases, but only those that we have files for
                     // i.e. don't show test-paint when the sequence wasn't test painted
                     ForEach(FrameViewMode.allCases, id: \.self) { value in
                         Text(value.localizedName).tag(value)
                     }
                 }
-                  .frame(maxWidth: 200)
+                  .frame(maxWidth: 120)
                   .onChange(of: frameViewMode) { pick in
                       Log.d("pick \(pick)")
                       refreshCurrentFrame()
-                      /*
-                      self.transition(toFrame: viewModel.frames[pick],
-                                      from: viewModel.currentFrame,
-                                      withScroll: scroller)
-                                      */
-                    
                   }
-
                 
-                Toggle("preview mode", isOn: $previewMode)
-                  .onChange(of: !previewMode) { mode_on in
+                Toggle("full resolution", isOn: $showFullResolution)
+                  .onChange(of: showFullResolution) { mode_on in
                       refreshCurrentFrame()
                   }
 /*
@@ -743,7 +756,7 @@ struct ContentView: View {
                           showOutliers = false
                           showProcessedPreviewMode = false
                           showTestPaintPreviewMode = false
-                          !previewMode = false
+                          showFullResolution = false
 
                           viewModel.current_frame_image = viewModel.frames[viewModel.current_index].preview_image.resizable()
                       } 
@@ -772,17 +785,20 @@ struct ContentView: View {
         }
     }
 
-    func buttonImage(_ name: String) -> some View {
+    func buttonImage(_ name: String, size: CGFloat) -> some View {
         return Image(systemName: name)
           .resizable()
           .aspectRatio(contentMode: .fit)
-          .frame(maxWidth: button_size, maxHeight: button_size, alignment: .center)
+          .frame(maxWidth: size,
+                 maxHeight: size,
+                 alignment: .center)
     }
     
     func button(named button_name: String,
                 shortcutKey: KeyEquivalent,
                 modifiers: EventModifiers = [],
                 color: Color,
+                size: CGFloat = 30,
                 toolTip: String,
                 action: @escaping () -> Void) -> some View
     {
@@ -793,7 +809,7 @@ struct ContentView: View {
               .keyboardShortcut(shortcutKey, modifiers: modifiers)
             
             Button(action: action) {
-                buttonImage(button_name)
+                buttonImage(button_name, size: size)
             }
               .buttonStyle(PlainButtonStyle())                            
               .help(toolTip)
@@ -828,7 +844,7 @@ struct ContentView: View {
             var show_preview = true
 
             /*
-            Log.d("previewMode \(previewMode)")
+            Log.d("showFullResolution \(showFullResolution)")
             Log.d("viewModel.current_frame_image_index \(viewModel.current_frame_image_index)")
             Log.d("new_frame_view.frame_index \(new_frame_view.frame_index)")
             Log.d("viewModel.current_frame_image_view_mode \(viewModel.current_frame_image_view_mode)")
@@ -836,7 +852,7 @@ struct ContentView: View {
             Log.d("viewModel.current_frame_image_was_preview \(viewModel.current_frame_image_was_preview)")
              */
 
-            if !previewMode &&
+            if showFullResolution &&
                viewModel.current_frame_image_index == new_frame_view.frame_index &&
                viewModel.current_frame_image_view_mode == self.frameViewMode &&
                !viewModel.current_frame_image_was_preview
@@ -859,7 +875,7 @@ struct ContentView: View {
                     viewModel.current_frame_image = new_frame_view.test_paint_preview_image.resizable()
                 }
             }
-            if !previewMode {
+            if showFullResolution {
                 if next_frame.frame_index == viewModel.current_index {
                     Task {
                         do {
@@ -928,7 +944,7 @@ struct ContentView: View {
         
         scroller?.scrollTo(viewModel.current_index)
 
-        if !previewMode {
+        if showFullResolution {
             viewModel.label_text = "frame \(new_frame_view.frame_index)"
         
             if let frame_to_save = old_frame {
