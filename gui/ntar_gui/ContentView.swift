@@ -590,8 +590,7 @@ struct ContentView: View {
         let fast_next_shortcut_key: KeyEquivalent = "x"
         let end_button_shortcut_key: KeyEquivalent = "e" // make this top arror
 
-        // ugh, this color could be better
-        let button_color = Color(red: 203/256, green: 62/256, blue: 48/256)
+        let button_color = Color(white: 202/256)
         
         return HStack {
             // start button
