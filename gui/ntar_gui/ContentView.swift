@@ -26,6 +26,98 @@ enum FrameViewMode: String, Equatable, CaseIterable {
     }
 }
 
+struct SettingsSheetView: View {
+    @Binding var isVisible: Bool
+    @Binding var fast_skip_amount: Int
+    @Binding var video_playback_framerate: Int
+    
+    var body: some View {
+        VStack {
+            Spacer()
+            Text("Settings")
+            HStack {
+                Spacer()
+                VStack(alignment: .leading) {
+                    Picker("Fast Skip", selection: $fast_skip_amount) {
+                        ForEach(0 ..< 51) {
+                            Text("\($0) frames")
+                        }
+                    }.frame(maxWidth: 200)
+                    let frame_rates = [5, 10, 15, 20, 25, 30]
+                    Picker("Frame Rate", selection: $video_playback_framerate) {
+                        ForEach(frame_rates, id: \.self) {
+                            Text("\($0) fps")
+                        }
+                    }.frame(maxWidth: 200)
+                }
+                Spacer()
+            }
+                
+            Button("Done") {
+                self.isVisible = false
+            }
+            Spacer()
+        }
+          //.frame(width: 300, height: 150)
+    }
+}
+
+struct MassivePaintSheetView: View {
+    @Binding var isVisible: Bool
+    @ObservedObject var viewModel: ViewModel
+    var closure: (Bool, Int, Int) -> Void
+
+    @State var start_index: Int = 0
+    @State var end_index: Int = 1   // XXX 1
+    @State var should_paint = false
+
+    init(isVisible: Binding<Bool>,
+         viewModel: ViewModel,
+         closure: @escaping (Bool, Int, Int) -> Void)
+    {
+        self._isVisible = isVisible
+        self.closure = closure
+        self.viewModel = viewModel
+    }
+    
+    var body: some View {
+        HStack {
+
+            Spacer()
+            VStack {
+                Spacer()
+                Text((should_paint ? "Paint" : "Clear") + " \(end_index-start_index) frames from")
+                Spacer()
+                Picker("start frame", selection: $start_index) {
+                    ForEach(0 ..< viewModel.frames.count, id: \.self) {
+                        Text("frame \($0)")
+                    }
+                }
+                Spacer()
+                Picker("to end frame", selection: $end_index) {
+                    ForEach(0 ..< viewModel.frames.count, id: \.self) {
+                        Text("frame \($0)")
+                    }
+                }
+                Toggle("should paint", isOn: $should_paint)
+
+                HStack {
+                    Button("Cancel") {
+                        self.isVisible = false
+                    }
+                    
+                    Button(should_paint ? "Paint All" : "Clear All") {
+                        self.isVisible = false
+                        closure(should_paint, start_index, end_index)
+                    }
+                }
+                Spacer()
+            }
+            Spacer()
+        }
+    }
+}
+
 // the overall level of the app
 struct ContentView: View {
     @ObservedObject var viewModel: ViewModel
@@ -50,18 +142,22 @@ struct ContentView: View {
     @State private var loading_all_outliers = false
     @State private var rendering_current_frame = false
     @State private var rendering_all_frames = false
+    @State private var updating_frame_batch = false
 
     @State private var fast_skip_amount = 20
     @State private var video_playback_framerate = 10
     @State private var video_playing = false
 
+    @State private var settings_sheet_showing = false
+    @State private var paint_sheet_showing = false
+    
+    
     init(viewModel: ViewModel) {
         self.viewModel = viewModel
     }
     
     var body: some View {
-        let scaling_anchor = UnitPoint(x: 0.75, y: 0.75)
-
+        //let scaling_anchor = UnitPoint(x: 0.75, y: 0.75)
         
         GeometryReader { top_geometry in
             ScrollViewReader { scroller in
@@ -71,6 +167,7 @@ struct ContentView: View {
                       loading_outliers                   ||
                       loading_all_outliers               || 
                       rendering_current_frame            ||
+                      updating_frame_batch               ||
                       rendering_all_frames
 
                     ZStack {
@@ -141,11 +238,67 @@ struct ContentView: View {
                                 videoPlaybackButtons(scroller) // XXX not really centered
                                   .frame(maxWidth: .infinity, alignment: .center)
 
-                                if running {
+                                // rectangle.split.3x1
+                                // 
+                                HStack {
+   
+                                    let paint_action = {
+                                        Log.d("PAINT")
+                                        paint_sheet_showing = !paint_sheet_showing
+                                    }
+                                    Button(action: paint_action) {
+                                        buttonImage("square.stack.3d.forward.dottedline", size: 44)
+
+                                    }
+                                      .buttonStyle(PlainButtonStyle())           
+                                      .frame(alignment: .trailing)
+                                    
+
+                                    let gear_action = {
+                                        Log.d("GEAR")
+                                        settings_sheet_showing = !settings_sheet_showing
+                                    }
+                                    Button(action: gear_action) {
+                                        buttonImage("gearshape.fill", size: 44)
+
+                                    }
+                                      .buttonStyle(PlainButtonStyle())           
+                                      .frame(alignment: .trailing)
+
+                                    /*
+                                     if running {
+                                     Menu("FUCKING MENU"/*buttonImage("gearshape.fill", size: 30)*/) {
+                                     
+                                     }
+                                }*/
                                     toggleViews()
-                                      .frame(maxWidth: .infinity, alignment: .trailing)
                                 }
-                            }
+                                  .frame(maxWidth: .infinity, alignment: .trailing)
+                                  .sheet(isPresented: $settings_sheet_showing) {
+                                      SettingsSheetView(isVisible: self.$settings_sheet_showing,
+                                                        fast_skip_amount: self.$fast_skip_amount,
+                                                        video_playback_framerate: self.$video_playback_framerate)
+                                  }
+                                  .sheet(isPresented: $paint_sheet_showing) {
+                                      MassivePaintSheetView(isVisible: self.$paint_sheet_showing,
+                                                            viewModel: viewModel)
+                                      { should_paint, start_index, end_index in
+
+                                          updating_frame_batch = true
+                                          
+                                          for idx in start_index ... end_index {
+                                              // XXX use a task group?
+                                              setAllFrameOutliers(in: viewModel.frames[idx], to: should_paint)
+                                          }
+                                          // XXX 
+                                          updating_frame_batch = false
+                                          
+                                          // XXX iterate through start->end
+                                          // setFrameOutliers()
+                                          Log.d("should_paint \(should_paint), start_index \(start_index), end_index \(end_index)")
+                                      }
+                                  }
+                            }//.background(.green)
                                 /*
                             VStack {
                                 Picker("go to frame", selection: $viewModel.current_index) {
@@ -324,13 +477,21 @@ struct ContentView: View {
                        let end_location = gesture.location
                        if let drag_start = drag_start {
                            Log.d("end location \(end_location) drag start \(drag_start)")
-                           Task {
-                               if let frame = viewModel.currentFrame {
+                           
+                           let frameView = viewModel.currentFrameView
+                           frameView.userSelectAllOutliers(toShouldPaint: selection_causes_painting,
+                                                           between: drag_start,
+                                                           and: end_location)
+
+                           if let frame = frameView.frame {
+                               Task {
+                                   // is view layer updated? (NO)
                                    await frame.userSelectAllOutliers(toShouldPaint: selection_causes_painting,
                                                                      between: drag_start,
                                                                      and: end_location)
+                                   refreshCurrentFrame()
+                                   viewModel.update()
                                }
-                               viewModel.update()
                            }
                        }
                        drag_start = nil
@@ -397,31 +558,38 @@ struct ContentView: View {
     }
 
     func setAllCurrentFrameOutliers(to shouldPaint: Bool) {
+        let current_frame_view = viewModel.currentFrameView
+        setAllFrameOutliers(in: current_frame_view, to: shouldPaint)
+    }
 
+    func setAllFrameOutliers(in frame_view: FrameView, to shouldPaint: Bool) {
+        Log.d("setAllFrameOutliers in frame \(frame_view.frame_index) to should paint \(shouldPaint)")
         let reason = PaintReason.userSelected(shouldPaint)
 
         // update the view model first
-        let current_frame_view = viewModel.currentFrameView
-        let outlierViews = current_frame_view.outlierViews
+        let outlierViews = frame_view.outlierViews
         outlierViews.forEach { outlierView in
             outlierView.group.shouldPaint = reason
         }
 
-        if let frame = current_frame_view.frame {
+        if let frame = frame_view.frame {
             // update the real actor in the background
             Task {
                 await frame.userSelectAllOutliers(toShouldPaint: shouldPaint)
-                // XXX need to update view model still
-                await renderCurrentFrame() {
+
+                // XXX make render here an option in settings
+                await render(frame: frame) {
                     Task {
                         await viewModel.refresh(frame: frame)
-                        refreshCurrentFrame()
+                        if frame.frame_index == viewModel.current_index {
+                            refreshCurrentFrame() // XXX not always current
+                        }
                         viewModel.update()
                     }
                 }
             }
         } else {
-            Log.w("frame \(current_frame_view.frame_index) has no frame")
+            Log.w("frame \(frame_view.frame_index) has no frame")
         }
     }
     
@@ -490,10 +658,15 @@ struct ContentView: View {
     }
 
     func renderCurrentFrame(_ closure: (() -> Void)? = nil) async {
-        if let frame = viewModel.currentFrame,
-           let frameSaveQueue = viewModel.frameSaveQueue
+        if let frame = viewModel.currentFrame {
+            await render(frame: frame, closure: closure)
+        }
+    }
+    
+    func render(frame: FrameAirplaneRemover, closure: (() -> Void)? = nil) async {
+        if let frameSaveQueue = viewModel.frameSaveQueue
         {
-            self.rendering_current_frame = true
+            self.rendering_current_frame = true // XXX might not be right anymore
             frameSaveQueue.saveNow(frame: frame) {
                 await viewModel.refresh(frame: frame)
                 refreshCurrentFrame()
@@ -717,7 +890,7 @@ struct ContentView: View {
                 if current_video_frame >= self.viewModel.frames.count {
                     video_play_timer?.invalidate()
                     viewModel.current_index = current_video_frame
-                    scroller.scrollTo(viewModel.current_index)
+                    scroller.scrollTo(viewModel.current_index, anchor: .center)
                     video_playing = false
                 }
             }
@@ -727,25 +900,12 @@ struct ContentView: View {
             Log.d("not playing")
             // scroller usage here
             viewModel.current_index = current_video_frame
-            scroller.scrollTo(viewModel.current_index)
+            scroller.scrollTo(viewModel.current_index, anchor: .center)
         }
     }
     
     func toggleViews() -> some View {
         HStack() {
-            VStack(alignment: .leading) {
-                Picker("Fast Skip", selection: $fast_skip_amount) {
-                    ForEach(0 ..< 51) {
-                        Text("\($0) frames")
-                    }
-                }.frame(maxWidth: 200)
-                let frame_rates = [5, 10, 15, 20, 25, 30]
-                Picker("Frame Rate", selection: $video_playback_framerate) {
-                    ForEach(frame_rates, id: \.self) {
-                        Text("\($0) fps")
-                    }
-                }.frame(maxWidth: 200)
-            }
             VStack(alignment: .leading) {
                 Toggle("modify outliers", isOn: $showOutliers)
                   .keyboardShortcut("o", modifiers: [])
@@ -970,7 +1130,7 @@ struct ContentView: View {
         viewModel.frames[new_frame_view.frame_index].isCurrentFrame = true
         viewModel.current_index = new_frame_view.frame_index
         
-        scroller?.scrollTo(viewModel.current_index)
+        scroller?.scrollTo(viewModel.current_index, anchor: .center)
 
         if showFullResolution {
             viewModel.label_text = "frame \(new_frame_view.frame_index)"

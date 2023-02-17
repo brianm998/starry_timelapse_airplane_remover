@@ -5,6 +5,11 @@ public struct BoundingBox: Codable {
     public let min: Coord
     public let max: Coord
 
+    public init(min: Coord, max: Coord) {
+        self.min = min
+        self.max = max
+    }
+    
     public var width:  Int { self.max.x - self.min.x + 1 }
     public var height: Int { return self.max.y - self.min.y + 1 }
     public var size:   Int { width * height }
