@@ -18,6 +18,7 @@ You should have received a copy of the GNU General Public License along with nta
 public class UpdatableLogHandler: LogHandler {
     public func log(message: String,
                     at fileLocation: String,
+                    on threadName: String,
                     with data: LogData?,
                     at logLevel: Log.Level)
     {

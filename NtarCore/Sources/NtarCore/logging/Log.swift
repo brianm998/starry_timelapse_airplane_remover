@@ -866,6 +866,9 @@ fileprivate extension Log {
                                _ function: String,
                                _ line: Int)
     {
+
+        let threadName = Thread.current.threadName
+        
         // start background task
 #if !os(macOS)
 /*
@@ -876,8 +879,7 @@ fileprivate extension Log {
         backgroundTask = newBackgroundTask
 */
 #endif        
-//        logQueue.async {
-
+        logQueue.async {
             var string = ""
 
             if let message = message {
@@ -912,12 +914,13 @@ fileprivate extension Log {
                 {
                     handler.log(message: string,
                                 at: fileLocation,
+                                on: threadName,
                                 with: extraData,
                                 at: logLevel)
                 }
             }
         }
-//    }
+    }
     
     static func parseFileName(_ file: String) -> String {
         let filename = file.components(separatedBy: "/").last ?? file
@@ -927,7 +930,7 @@ fileprivate extension Log {
 }
 
 
-//fileprivate let logQueue = DispatchQueue(label: "logging")
+fileprivate let logQueue = DispatchQueue(label: "logging")
 #if !os(macOS)
 //fileprivate var backgroundTask: BackgroundTask?
 #endif
@@ -958,3 +961,22 @@ fileprivate struct LogTest: Codable {
 public func LOG_ABORT() {}
 #endif
 
+extension Thread {
+    var threadName: String {
+        if isMainThread {
+            return "Main Thread"
+        } else {
+            let desc = description
+            if let start_idx = desc.firstIndex(of: "="),
+               let end_idx = desc.firstIndex(of: ",")
+            {
+                // parsing a string like this for this VV number
+                // <NSThread: 0x600001668900>{number = 11, name = (null)}
+                let number = String(desc[start_idx..<end_idx]).dropFirst(2)
+                return "Thread \(number)"
+            } else {
+                return description
+            }
+        }
+    }
+}

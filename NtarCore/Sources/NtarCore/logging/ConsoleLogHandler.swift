@@ -25,6 +25,7 @@ public class ConsoleLogHandler: LogHandler {
     
     public func log(message: String,
                     at fileLocation: String,
+                    on threadName: String,
                     with data: LogData?,
                     at logLevel: Log.Level)
     {
@@ -32,9 +33,9 @@ public class ConsoleLogHandler: LogHandler {
             let dateString = self.dateFormatter.string(from: Date())
             
             if let data = data {
-                print("\(dateString) | \(logLevel.emo) \(logLevel) | \(fileLocation): \(message) | \(data.description)")
+                print("\(dateString) | \(logLevel.emo) \(logLevel) | \(threadName) | \(fileLocation): \(message) | \(data.description)")
             } else {
-                print("\(dateString) | \(logLevel.emo) \(logLevel) | \(fileLocation): \(message)")
+                print("\(dateString) | \(logLevel.emo) \(logLevel) | \(threadName) | \(fileLocation): \(message)")
             }
 //        }
     }
