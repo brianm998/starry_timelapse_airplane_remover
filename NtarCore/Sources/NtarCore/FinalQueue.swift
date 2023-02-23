@@ -68,7 +68,7 @@ public actor FinalQueue {
             while(await self.should_run()) {
                 let current_running = await self.number_running.currentValue()
 
-                Log.d("current_running \(current_running)")
+                Log.v("current_running \(current_running)")
                 if current_running < max_concurrent,
                    let next_key = await self.method_list.nextKey,
                    let method = await self.value(forKey: next_key)
