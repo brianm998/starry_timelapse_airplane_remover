@@ -30,19 +30,30 @@ struct SettingsSheetView: View {
     @Binding var isVisible: Bool
     @Binding var fast_skip_amount: Int
     @Binding var video_playback_framerate: Int
+    @Binding var skipEmpties: Bool
     
     var body: some View {
         VStack {
             Spacer()
             Text("Settings")
+            Spacer()
             HStack {
                 Spacer()
                 VStack(alignment: .leading) {
-                    Picker("Fast Skip", selection: $fast_skip_amount) {
-                        ForEach(0 ..< 51) {
-                            Text("\($0) frames")
-                        }
-                    }.frame(maxWidth: 200)
+                    Text(skipEmpties ?
+                           "Fast Forward and Reverse skip empties" :
+                           "Fast Forward and Reverse move by \(fast_skip_amount) frames")
+                    
+                    Toggle(skipEmpties ? "change to # of frames" : "change to skip empties",
+                           isOn: $skipEmpties)
+
+                    if !skipEmpties {
+                        Picker("Fast Skip", selection: $fast_skip_amount) {
+                            ForEach(0 ..< 51) {
+                                Text("\($0) frames")
+                            }
+                        }.frame(maxWidth: 200)
+                    }
                     let frame_rates = [5, 10, 15, 20, 25, 30]
                     Picker("Frame Rate", selection: $video_playback_framerate) {
                         ForEach(frame_rates, id: \.self) {
@@ -52,13 +63,13 @@ struct SettingsSheetView: View {
                 }
                 Spacer()
             }
-                
+            
             Button("Done") {
                 self.isVisible = false
             }
             Spacer()
         }
-          //.frame(width: 300, height: 150)
+        //.frame(width: 300, height: 150)
     }
 }
 
@@ -122,10 +133,10 @@ struct MassivePaintSheetView: View {
 struct ContentView: View {
     @ObservedObject var viewModel: ViewModel
     @State private var showOutliers = false
-
+    
     // enum for how we show each frame
     @State private var frameViewMode = FrameViewMode.processed
-
+    
     // should we show full resolution images on the main frame?
     // faster low res previews otherwise
     @State private var showFullResolution = false
@@ -144,9 +155,12 @@ struct ContentView: View {
     @State private var rendering_all_frames = false
     @State private var updating_frame_batch = false
 
-    @State private var fast_skip_amount = 20
     @State private var video_playback_framerate = 10
     @State private var video_playing = false
+
+    @State private var skipEmpties = false
+    // if not skip empties, fast forward and reverse do a set number of frames
+    @State private var fast_skip_amount = 20
 
     @State private var settings_sheet_showing = false
     @State private var paint_sheet_showing = false
@@ -169,10 +183,10 @@ struct ContentView: View {
                       rendering_current_frame            ||
                       updating_frame_batch               ||
                       rendering_all_frames
-
-                    ZStack {
                     
-                      currentFrameView()
+                    ZStack {
+                        
+                        currentFrameView()
                          .frame(maxWidth: .infinity, alignment: .center)
                       .overlay(
                         ProgressView()
@@ -233,15 +247,15 @@ struct ContentView: View {
                                       .frame(maxWidth: .infinity, alignment: .leading)
                                     
                                 }
-
+                                
                                 
                                 videoPlaybackButtons(scroller) // XXX not really centered
                                   .frame(maxWidth: .infinity, alignment: .center)
-
+                                
                                 // rectangle.split.3x1
                                 // 
                                 HStack {
-   
+                                    
                                     let paint_action = {
                                         Log.d("PAINT")
                                         paint_sheet_showing = !paint_sheet_showing
@@ -277,7 +291,8 @@ struct ContentView: View {
                                   .sheet(isPresented: $settings_sheet_showing) {
                                       SettingsSheetView(isVisible: self.$settings_sheet_showing,
                                                         fast_skip_amount: self.$fast_skip_amount,
-                                                        video_playback_framerate: self.$video_playback_framerate)
+                                                        video_playback_framerate: self.$video_playback_framerate,
+                                                        skipEmpties: self.$skipEmpties)
                                   }
                                   .sheet(isPresented: $paint_sheet_showing) {
                                       MassivePaintSheetView(isVisible: self.$paint_sheet_showing,
@@ -340,7 +355,7 @@ struct ContentView: View {
               .background(background_color)
         }
     }
-
+    
     // shows either a zoomable view of the current frame
     // or a place holder when we have no image for it yet
     func currentFrameView() -> some View {
@@ -520,7 +535,7 @@ struct ContentView: View {
                 let frameView = viewModel.frames[frame_index]
                 let stroke_width: CGFloat = 4
                 if viewModel.current_index == frame_index {
-
+                    
                     frameView.thumbnail_image
                       .foregroundColor(.orange)
                     
@@ -532,21 +547,21 @@ struct ContentView: View {
         }
           .frame(minWidth: CGFloat((viewModel.config?.thumbnail_width ?? 80) + 8),
                  minHeight: CGFloat((viewModel.config?.thumbnail_height ?? 50) + 30))
-           // highlight the selected frame
+        // highlight the selected frame
           .background(viewModel.current_index == frame_index ? Color(white: 0.45) : Color(white: 0.22))
           .onTapGesture {
-        // XXX move this out 
-        viewModel.label_text = "loading..."
-        // XXX set loading image here
+              // XXX move this out 
+              viewModel.label_text = "loading..."
+              // XXX set loading image here
               // grab frame and try to show it
               let frame_view = viewModel.frames[frame_index]
-
+              
               let current_frame = viewModel.currentFrame
               self.transition(toFrame: frame_view, from: current_frame)
           }
-
+        
     }
-
+    
     // used when advancing between frames
     func saveToFile(frame frame_to_save: FrameAirplaneRemover, completionClosure: @escaping () -> Void) {
         if let frameSaveQueue = viewModel.frameSaveQueue {
@@ -556,16 +571,23 @@ struct ContentView: View {
             fatalError("SETUP WRONG")
         }
     }
-
-    func setAllCurrentFrameOutliers(to shouldPaint: Bool) {
+    
+    func setAllCurrentFrameOutliers(to shouldPaint: Bool,
+                                    renderImmediately: Bool = true)
+    {
         let current_frame_view = viewModel.currentFrameView
-        setAllFrameOutliers(in: current_frame_view, to: shouldPaint)
+        setAllFrameOutliers(in: current_frame_view,
+                            to: shouldPaint,
+                            renderImmediately: renderImmediately)
     }
-
-    func setAllFrameOutliers(in frame_view: FrameView, to shouldPaint: Bool) {
+    
+    func setAllFrameOutliers(in frame_view: FrameView,
+                             to shouldPaint: Bool,
+                             renderImmediately: Bool = true)
+    {
         Log.d("setAllFrameOutliers in frame \(frame_view.frame_index) to should paint \(shouldPaint)")
         let reason = PaintReason.userSelected(shouldPaint)
-
+        
         // update the view model first
         let outlierViews = frame_view.outlierViews
         outlierViews.forEach { outlierView in
@@ -577,15 +599,22 @@ struct ContentView: View {
             Task {
                 await frame.userSelectAllOutliers(toShouldPaint: shouldPaint)
 
-                // XXX make render here an option in settings
-                await render(frame: frame) {
-                    Task {
-                        await viewModel.refresh(frame: frame)
-                        if frame.frame_index == viewModel.current_index {
-                            refreshCurrentFrame() // XXX not always current
+                if renderImmediately {
+                    // XXX make render here an option in settings
+                    await render(frame: frame) {
+                        Task {
+                            await viewModel.refresh(frame: frame)
+                            if frame.frame_index == viewModel.current_index {
+                                refreshCurrentFrame() // XXX not always current
+                            }
+                            viewModel.update()
                         }
-                        viewModel.update()
                     }
+                } else {
+                    if frame.frame_index == viewModel.current_index {
+                        refreshCurrentFrame() // XXX not always current
+                    }
+                    viewModel.update()
                 }
             }
         } else {
@@ -595,7 +624,7 @@ struct ContentView: View {
     
     func paintAllButton() -> some View {
         Button(action: {
-            setAllCurrentFrameOutliers(to: true)
+                   setAllCurrentFrameOutliers(to: true, renderImmediately: false)
         }) {
             Text("Paint All").font(.largeTitle)
         }
@@ -605,7 +634,7 @@ struct ContentView: View {
     
     func clearAllButton() -> some View {
         Button(action: {
-            setAllCurrentFrameOutliers(to: false)
+            setAllCurrentFrameOutliers(to: false, renderImmediately: false)
         }) {
             Text("Clear All").font(.largeTitle)
         }
@@ -790,8 +819,16 @@ struct ContentView: View {
                      (keyboard shortcut '\(fast_previous_shortut_key.character)')
                      """)
             {
-                self.transition(numberOfFrames: -fast_skip_amount,
-                                withScroll: scroller)
+                if skipEmpties {
+                    if let current_frame = viewModel.currentFrame {
+                        self.transitionUntilNotEmpty(from: current_frame,
+                                                     forwards: false,
+                                                     withScroll: scroller)
+                    }
+                } else {
+                    self.transition(numberOfFrames: -fast_skip_amount,
+                                                      withScroll: scroller)
+                }
             }
             
             // previous button
@@ -842,8 +879,16 @@ struct ContentView: View {
                      (keyboard shortcut '\(fast_next_shortcut_key.character)')
                      """)
             {
-                self.transition(numberOfFrames: fast_skip_amount,
-                                withScroll: scroller)
+                if skipEmpties {
+                    if let current_frame = viewModel.currentFrame {
+                        self.transitionUntilNotEmpty(from: current_frame,
+                                                     forwards: true,
+                                                     withScroll: scroller)
+                    }
+                } else {
+                    self.transition(numberOfFrames: fast_skip_amount,
+                                    withScroll: scroller)
+                }
             }
             
             
@@ -1006,7 +1051,7 @@ struct ContentView: View {
     }
 
     func transition(numberOfFrames: Int,
-                    withScroll scroller: ScrollViewProxy? = nil)
+                                      withScroll scroller: ScrollViewProxy? = nil)
     {
         let current_frame = viewModel.currentFrame
 
@@ -1021,7 +1066,50 @@ struct ContentView: View {
                         from: current_frame,
                         withScroll: scroller)
     }
-
+    
+    func transitionUntilNotEmpty(from frame: FrameAirplaneRemover,
+                                 forwards: Bool,
+                                 currentIndex: Int? = nil,
+                                 withScroll scroller: ScrollViewProxy? = nil)
+    {
+        var frame_index: Int = 0
+        if let currentIndex = currentIndex {
+            frame_index = currentIndex
+        } else {
+            frame_index = frame.frame_index
+        }
+        
+        if (!forwards && frame_index == 0) ||  
+           (forwards && frame_index >= viewModel.frames.count - 1)
+        {
+            if frame_index != frame.frame_index {
+                self.transition(toFrame: viewModel.frames[frame_index],
+                                from: frame,
+                                withScroll: scroller)
+            }
+            return
+        }
+        
+        var next_frame_index = 0
+        if forwards {
+            next_frame_index = frame_index + 1
+        } else {
+            next_frame_index = frame_index - 1
+        }
+        let next_frame_view = viewModel.frames[next_frame_index]
+        if next_frame_view.outlierViews.count == 0 {
+            // skip this one
+            self.transitionUntilNotEmpty(from: frame,
+                                         forwards: forwards,
+                                         currentIndex: next_frame_index,
+                                         withScroll: scroller)
+        } else {
+            self.transition(toFrame: next_frame_view,
+                            from: frame,
+                            withScroll: scroller)
+        }
+    }
+    
     func refreshCurrentFrame() {
         // XXX maybe don't wait for frame?
         Log.d("refreshCurrentFrame \(viewModel.current_index)")
