@@ -1051,7 +1051,7 @@ struct ContentView: View {
     }
 
     func transition(numberOfFrames: Int,
-                                      withScroll scroller: ScrollViewProxy? = nil)
+                    withScroll scroller: ScrollViewProxy? = nil)
     {
         let current_frame = viewModel.currentFrame
 
@@ -1218,26 +1218,21 @@ struct ContentView: View {
         viewModel.frames[new_frame_view.frame_index].isCurrentFrame = true
         viewModel.current_index = new_frame_view.frame_index
         
-        scroller?.scrollTo(viewModel.current_index, anchor: .center)
+        if let scroller = scroller {
+            scroller.scrollTo(viewModel.current_index, anchor: .center)
 
-        if showFullResolution {
             viewModel.label_text = "frame \(new_frame_view.frame_index)"
-        
+
+            // only save frame when we are also scrolling (i.e. not scrubbing)
             if let frame_to_save = old_frame {
                 self.saveToFile(frame: frame_to_save) {
                     Log.d("completion closure called for frame \(frame_to_save.frame_index)")
                     Task {
                         Log.d("refreshing saved frame \(frame_to_save.frame_index)")
                         await viewModel.refresh(frame: frame_to_save)
-                        refreshCurrentFrame()
                         Log.d("refreshing for frame \(frame_to_save.frame_index) complete")
                     }
                 }
-                // refresh the view model so we get the new images
-                // XXX maybe don't let these go to file?
-
-                // XXX this should happen after the save
-                // also kick out processed and test paint images from image sequence
             }
         }
         
