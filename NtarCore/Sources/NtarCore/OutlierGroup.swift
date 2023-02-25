@@ -175,7 +175,7 @@ public actor OutlierGroup: CustomStringConvertible,
     }
 
     // we derive a Double value from each of these
-    public enum DecisionTreeCharacteristic: CaseIterable {
+    public enum DecisionTreeCharacteristic: CaseIterable, Hashable {
         case size
         case width
         case height

@@ -150,19 +150,142 @@ struct decision_tree_generator: ParsableCommand {
                           should_not_paint_test_data: [OutlierGroupValues],
                           indent: Int) -> DecisionTree
     {
-
+        if should_paint_test_data.count == 0 {
+            return ShouldNotPaintDecision(indent: indent+1)
+        }
+        // XXX what if they're both zero?
+        if should_not_paint_test_data.count == 0 {
+            return ShouldPaintDecision(indent: indent+1)
+        }
+        
         // collate should paint and not paint test data by characteristic
         // look for boundries where we can further isolate 
 
+        // raw values for each characteristic
+        var should_paint_values: [OutlierGroup.DecisionTreeCharacteristic: [Double]] = [:]
+        var should_not_paint_values: [OutlierGroup.DecisionTreeCharacteristic: [Double]] = [:]
         
-        let tree = DecisionTreeNode(characteristic: .size,
-                                    value: 10,
-                                    lessThan: ShouldPaintDecision(indent: indent + 1),
-                                    greaterThan: ShouldNotPaintDecision(indent: indent + 1),
-                                    indent: indent)
+        for characteristic in OutlierGroup.DecisionTreeCharacteristic.allCases {
+            for test_data in should_paint_test_data {
+                if let value = test_data.values[characteristic] {
+                    if var list = should_paint_values[characteristic] {
+                        list.append(value)
+                    } else {
+                        should_paint_values[characteristic] = [value]
+                    }
+                } 
+            }
+        }
 
+        for characteristic in OutlierGroup.DecisionTreeCharacteristic.allCases {
+            for test_data in should_not_paint_test_data {
+                if let value = test_data.values[characteristic] {
+                    if var list = should_not_paint_values[characteristic] {
+                        list.append(value)
+                    } else {
+                        should_not_paint_values[characteristic] = [value]
+                    }
+                }
+            }
+        }
+
+        // value distributions for each characteristic
+        var should_paint_dist: [OutlierGroup.DecisionTreeCharacteristic: ValueDistribution] = [:]
+        var should_not_paint_dist: [OutlierGroup.DecisionTreeCharacteristic: ValueDistribution] = [:]
+        
+        // for each characteristic, calculate a min/max/mean/median for both paint and not
+        for characteristic in OutlierGroup.DecisionTreeCharacteristic.allCases {
+            var min = Double.greatestFiniteMagnitude
+            var max = -Double.greatestFiniteMagnitude
+            var sum = 0.0
+            if let all_values = should_paint_values[characteristic] {
+                for value in all_values {
+                    if value < min { min = value }
+                    if value > max { max = value }
+                    sum += value
+                }
+                sum /= Double(all_values.count)
+                let median = all_values.sorted()[all_values.count/2]
+                let dist = ValueDistribution(min: min, max: max, mean: sum, median: median)
+                should_paint_dist[characteristic] = dist
+            } else {
+                Log.e("WTF")
+            }
+        }
+
+        // XXX dupe above for not paint
+        for characteristic in OutlierGroup.DecisionTreeCharacteristic.allCases {
+            var min = Double.greatestFiniteMagnitude
+            var max = -Double.greatestFiniteMagnitude
+            var sum = 0.0
+            if let all_values = should_not_paint_values[characteristic] {
+                for value in all_values {
+                    if value < min { min = value }
+                    if value > max { max = value }
+                    sum += value
+                }
+                sum /= Double(all_values.count)
+                let median = all_values.sorted()[all_values.count/2]
+                let dist = ValueDistribution(min: min, max: max, mean: sum, median: median)
+                should_not_paint_dist[characteristic] = dist
+            } else {
+                Log.e("WTF")
+            }
+        }
+
+        var bestCharacteristic: OutlierGroup.DecisionTreeCharacteristic = .size
+        var bestValue: Double = 0
+        var lessThanTree: DecisionTree = ShouldNotPaintDecision(indent: 0)
+        var greaterThanTree: DecisionTree = ShouldNotPaintDecision(indent: 0)
+        
+        for characteristic in OutlierGroup.DecisionTreeCharacteristic.allCases {
+            //if characteristic == bestCharacteristic { continue }
+            if let paint_dist = should_paint_dist[characteristic],
+               let not_paint_dist = should_not_paint_dist[characteristic]
+            {
+                if paint_dist.max < not_paint_dist.min {
+                    bestCharacteristic = characteristic
+                    bestValue = (paint_dist.max + not_paint_dist.min) / 2
+                    lessThanTree = ShouldPaintDecision(indent: indent + 1)
+                    greaterThanTree = ShouldNotPaintDecision(indent: indent + 1)
+                    break
+                } else if not_paint_dist.max < paint_dist.min {
+                    bestCharacteristic = characteristic
+                    bestValue = (paint_dist.max + not_paint_dist.min) / 2
+                    lessThanTree = ShouldNotPaintDecision(indent: indent + 1)
+                    greaterThanTree = ShouldPaintDecision(indent: indent + 1)
+                    break
+                } else {
+                    
+                    Log.e("FUCK, IMPLEMENT THIS")
+
+
+                    /*
+                     here we need to keep track of how good a match this would have been,
+                     then decide upon the best one
+                     */
+                }
+            } else {
+                Log.e("WTF")
+            }
+        }
+        // choose the characteristic with the best distribution 
+        // that will generate the shortest tree
+        
+        let tree = DecisionTreeNode(characteristic: bestCharacteristic,
+                                    value: bestValue,
+                                    lessThan: lessThanTree,
+                                    greaterThan: greaterThanTree,
+                                    indent: indent)
         return tree
     }
+}
+
+struct ValueDistribution {
+    let min: Double
+    let max: Double
+    let mean: Double
+    let median: Double
 }
 
 protocol DecisionTree {
