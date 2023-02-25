@@ -27,6 +27,7 @@ struct decision_tree_generator: ParsableCommand {
         let dispatch_group = DispatchGroup()
         dispatch_group.enter()
         Task {
+            // test data gathered from all inputs
             var should_paint_test_data: [OutlierGroupValues] = []
             var should_not_paint_test_data: [OutlierGroupValues] = []
             
@@ -455,6 +456,7 @@ protocol DecisionTree {
     func writeNode() -> String 
 }
 
+// end leaf node which always returns true
 struct ShouldPaintDecision: DecisionTree {
     let indent: Int
     func writeNode() -> String {
@@ -464,6 +466,7 @@ struct ShouldPaintDecision: DecisionTree {
     }
 }
 
+// end leaf node which always returns false
 struct ShouldNotPaintDecision: DecisionTree {
     let indent: Int
     func writeNode() -> String {
@@ -473,6 +476,7 @@ struct ShouldNotPaintDecision: DecisionTree {
     }
 }
 
+// intermediate node which decides based upon the value of a particular type
 @available(macOS 10.15, *) 
 struct DecisionTreeNode: DecisionTree {
     let type: OutlierGroup.TreeDecisionType
@@ -494,4 +498,5 @@ struct DecisionTreeNode: DecisionTree {
           """
     }
 }
+
 fileprivate let file_manager = FileManager.default
