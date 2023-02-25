@@ -30,6 +30,8 @@ public class ImageSequenceProcessor<T> {
     
     public let dispatchGroup = DispatchHandler()
 
+    public var shouldRun = true
+    
     var should_process: [Bool] = []       // indexed by frame number
     var existing_output_files: [Bool] = [] // indexed by frame number
 
@@ -225,10 +227,12 @@ public class ImageSequenceProcessor<T> {
                 local_dispatch_group.leave()
             }
         }
-
+        Log.d("DONE")
+        
         local_dispatch_group.wait()
+        Log.d("DONE WAITING")
         let rename_me = self.dispatchGroup.dispatch_group
-        while (rename_me.wait(timeout: DispatchTime.now().advanced(by: .seconds(3))) == .timedOut) {
+        while (shouldRun && rename_me.wait(timeout: DispatchTime.now().advanced(by: .seconds(3))) == .timedOut) {
             Task {
                 let count = await self.dispatchGroup.count
                 if count < 8 {      // XXX hardcoded constant
