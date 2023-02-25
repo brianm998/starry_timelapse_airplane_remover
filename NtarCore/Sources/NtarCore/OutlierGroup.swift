@@ -182,6 +182,26 @@ public actor OutlierGroup: CustomStringConvertible,
         case centerX
         case centerY
         // XXX add a lot more
+
+        case aspectRatio
+        case fillAmount
+        case surfaceAreaRatio
+        case brightness
+        /*
+         aspect ratio
+
+         
+         number of hough lines
+         some more numbers about hough lines
+         brightness levels
+         
+         fillAmount
+
+
+         
+         surfaceAreaRatio
+
+         */
     }
 
     public func decisionTreeValue(for type: TreeDecisionType) -> Double {
@@ -196,6 +216,14 @@ public actor OutlierGroup: CustomStringConvertible,
             return Double(self.bounds.center.x)
         case .centerY:
             return Double(self.bounds.center.y)
+        case .aspectRatio:
+            return Double(self.bounds.width) / Double(self.bounds.height)
+        case .fillAmount:
+            return Double(size)/(Double(self.bounds.width)*Double(self.bounds.height))
+        case .surfaceAreaRatio:
+            return self.surfaceAreaToSizeRatio
+        case .brightness:
+            return Double(self.brightness)
         }
     }
     

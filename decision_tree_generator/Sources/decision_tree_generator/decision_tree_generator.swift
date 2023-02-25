@@ -94,16 +94,16 @@ struct decision_tree_generator: ParsableCommand {
                                         for type in OutlierGroup.TreeDecisionType.allCases {
                                             let value = await outlier_group.decisionTreeValue(for: type)
                                             switch type {
-                                            case .size:
-                                                values.values[type] = value
-                                            case .width:
-                                                values.values[type] = value
-                                            case .height:
-                                                values.values[type] = value
+                                            // some decision types are related to image size
+                                            // normalize them here 
                                             case .centerX:
                                                 values.values[type] = value/Double(image_width)
                                             case .centerY:
                                                 values.values[type] = value/Double(image_height)
+
+                                            // pass most others on unaltered
+                                            default:
+                                                values.values[type] = value
                                             }
                                         }
                                         if will_paint {
