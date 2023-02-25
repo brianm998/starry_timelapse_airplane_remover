@@ -103,7 +103,7 @@ public actor FinalProcessor {
                 }
             } else {
                 // this frame needs inter-frame processing still
-                Log.i("FINAL THREAD frame \(index) added for final inter-frame analysis \(max_added_index)")
+                Log.d("FINAL THREAD frame \(index) added for final inter-frame analysis \(max_added_index)")
                 frames[index] = frame
                 log()
             }
@@ -213,9 +213,9 @@ public actor FinalProcessor {
         // cli and not checked frames go to the finish queue
         Log.d("adding frame \(frame.frame_index) to the final queue")
         await self.final_queue.add(atIndex: frame.frame_index) {
-            Log.i("frame \(frame.frame_index) finishing")
+            Log.d("frame \(frame.frame_index) finishing")
             try await frame.finish()
-            Log.i("frame \(frame.frame_index) finished")
+            Log.d("frame \(frame.frame_index) finished")
         }
 
     }
@@ -331,7 +331,7 @@ public actor FinalProcessor {
             // XXX make this better
             try await Task.sleep(nanoseconds: 3_000_000_000)
             
-            Log.i("FINAL THREAD check closure")
+            Log.d("FINAL THREAD check closure")
 
             // XXX look for method to call here
             
@@ -339,9 +339,9 @@ public actor FinalProcessor {
 
             if let countOfFramesToCheck = callbacks.countOfFramesToCheck {
                 var count = await countOfFramesToCheck()
-                Log.i("FINAL THREAD countOfFramesToCheck \(count)")
+                Log.d("FINAL THREAD countOfFramesToCheck \(count)")
                 while(count > 0) {
-                    Log.i("FINAL THREAD sleeping with count \(count)")
+                    Log.d("FINAL THREAD sleeping with count \(count)")
                     try await Task.sleep(nanoseconds: 1_000_000_000)
                     count = await countOfFramesToCheck()
                 }
@@ -494,15 +494,15 @@ func really_final_streak_processing(onFrame frame: FrameAirplaneRemover,
 fileprivate func run_final_pass(frames: [FrameAirplaneRemover],
                                 config: Config) async
 {
-    Log.i("final pass on \(frames.count) frames doing streak analysis")
+    Log.d("final pass on \(frames.count) frames doing streak analysis")
 
     await run_final_streak_pass(frames: frames, config: config) // XXX not actually the final streak pass anymore..
 
-    Log.i("running overlap pass on \(frames.count) frames")
+    Log.d("running overlap pass on \(frames.count) frames")
 
     await run_final_overlap_pass(frames: frames, config: config)
 
-    Log.i("done with final pass on \(frames.count) frames")
+    Log.d("done with final pass on \(frames.count) frames")
 }
 
 var GLOBAL_last_overlap_frame_number = 0 // XXX
@@ -532,12 +532,12 @@ fileprivate func run_final_overlap_pass(frames: [FrameAirplaneRemover],
             {
                 switch reason {
                 case .looksLikeALine(let amount):
-                    Log.i("frame \(frame.frame_index) skipping \(group) because of \(reason)") 
+                    Log.d("frame \(frame.frame_index) skipping \(group) because of \(reason)") 
                     return .continue
                 case .inStreak(let size):
                     if size > 2 {
                         return .continue
-                        //Log.i("frame \(frame.frame_index) skipping \(group_name) because of \(reason)") 
+                        //Log.d("frame \(frame.frame_index) skipping \(group_name) because of \(reason)") 
                         // XXX this skips streaks that it shouldn't
                     }
                 default:
