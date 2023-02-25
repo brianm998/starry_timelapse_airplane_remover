@@ -37,7 +37,7 @@ struct decision_tree_generator: ParsableCommand {
                     let config = try await Config.read(fromFilename: json_config_file_name)
                     Log.d("got config from \(json_config_file_name)")
                     
-                    var callbacks = Callbacks()
+                    let callbacks = Callbacks()
 
                     var frames: [FrameAirplaneRemover] = []
                     
@@ -256,7 +256,7 @@ struct decision_tree_generator: ParsableCommand {
             var max = -Double.greatestFiniteMagnitude
             var sum = 0.0
             if let all_values = should_paint_values[characteristic] {
-                Log.d("all values for paint \(characteristic): \(all_values)")
+                //Log.d("all values for paint \(characteristic): \(all_values)")
                 for value in all_values {
                     if value < min { min = value }
                     if value > max { max = value }
