@@ -130,16 +130,8 @@ public actor OutlierGroup: CustomStringConvertible,
                                        input_data: pixels,
                                        max_pixel_distance: max_pixel_distance)
 
-        /*
-         problem here:
-
-          - if we set number_of_lines_returned to any reasonable value
-          - then the hough transform histogram always returns a bad score
-          - but the number of lines returned causes much larger saved outlier groups (approx 4x),
-            leading to UI lag when loading them
-         */
-        
-        self.lines = transform.lines(min_count: 1/*, number_of_lines_returned: 1000*/) // XXX problem here
+        // we want all the lines, all of them.
+        self.lines = transform.lines(min_count: 1)
 
         if self.shouldPaint == nil,
            self.paintScoreFromHoughTransformLines > 0.5
@@ -181,25 +173,17 @@ public actor OutlierGroup: CustomStringConvertible,
         case height
         case centerX
         case centerY
-        // XXX add a lot more
-
         case aspectRatio
         case fillAmount
         case surfaceAreaRatio
         case brightness
+        case numberOfHoughLines
+        case avgCountOfFirst10HoughLines
+        case maxThetaDiffOfFirst10HoughLines
+        case maxRhoDiffOfFirst10HoughLines
         /*
-         aspect ratio
-
          
-         number of hough lines
          some more numbers about hough lines
-         brightness levels
-         
-         fillAmount
-
-
-         
-         surfaceAreaRatio
 
          */
     }
@@ -224,9 +208,50 @@ public actor OutlierGroup: CustomStringConvertible,
             return self.surfaceAreaToSizeRatio
         case .brightness:
             return Double(self.brightness)
+        case .numberOfHoughLines:
+            return Double(self.lines.count)
+        case .avgCountOfFirst10HoughLines:
+            return self.avgCountOfFirst10HoughLines()
+        case .maxThetaDiffOfFirst10HoughLines:
+            return self.maxThetaDiffOfFirst10HoughLines()
+        case .maxRhoDiffOfFirst10HoughLines:
+            return self.maxRhoDiffOfFirst10HoughLines()
         }
     }
+
+    func maxThetaDiffOfFirst10HoughLines() -> Double {
+        var max_diff = 0.0
+        let first_theta = self.lines[0].theta
+        for i in 1..<10 {
+            let this_theta = self.lines[i].theta
+            let this_diff = abs(this_theta - first_theta)
+            if this_diff > max_diff { max_diff = this_diff }
+        }
+        return max_diff
+    }
     
+    func maxRhoDiffOfFirst10HoughLines() -> Double {
+        var max_diff = 0.0
+        let first_rho = self.lines[0].rho
+        for i in 1..<10 {
+            let this_rho = self.lines[i].rho
+            let this_diff = abs(this_rho - first_rho)
+            if this_diff > max_diff { max_diff = this_diff }
+        }
+        return max_diff
+    }
+    
+    func avgCountOfFirst10HoughLines() -> Double {
+        var sum = 0.0
+        var divisor = 0.0
+        for i in 0..<10 {
+            if i < self.lines.count {
+                sum += Double(self.lines[i].count)/Double(self.size)
+                divisor += 1
+            }
+        }
+        return sum/divisor
+    }
     
     public func shouldPaint(_ should_paint: PaintReason) {
         //Log.d("\(self) should paint \(should_paint)")
