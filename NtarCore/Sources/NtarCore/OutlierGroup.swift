@@ -24,8 +24,10 @@ enum PaintScoreType {
 }
 
 
+
 @available(macOS 10.15, *) 
 public class OutlierGroups: Codable {
+    
     public let frame_index: Int
     public var groups: [String: OutlierGroup]?  // keyed by name
 
@@ -172,6 +174,32 @@ public actor OutlierGroup: CustomStringConvertible,
         hasher.combine(frame_index)
     }
 
+    // we derive a Double value from each of these
+    public enum DecisionTreeCharacteristic: CaseIterable {
+        case size
+        case width
+        case height
+        case centerX
+        case centerY
+        // XXX add a lot more
+    }
+
+    public func decisionTreeValue(for characteristic: DecisionTreeCharacteristic) -> Double {
+        switch characteristic {
+        case .size:
+            return Double(self.size)
+        case .width:
+            return Double(self.bounds.width)
+        case .height:
+            return Double(self.bounds.height)
+        case .centerX:
+            return Double(self.bounds.center.x)
+        case .centerY:
+            return Double(self.bounds.center.y)
+        }
+    }
+    
+    
     public func shouldPaint(_ should_paint: PaintReason) {
         //Log.d("\(self) should paint \(should_paint)")
         self.shouldPaint = should_paint
