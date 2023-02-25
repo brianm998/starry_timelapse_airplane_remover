@@ -33,7 +33,7 @@ todo:
 
  - using too much memory problems :(
    better, but still uses lots of ram
-
+   
  - specific out of memory issue with initial processing queue overloading the single final processing thread
    use some tool like this to avoid forcing a reboot:
    https://stackoverflow.com/questions/71209362/how-to-check-system-memory-usage-with-swift
@@ -392,12 +392,10 @@ struct Ntar: ParsableCommand {
                 let local_dispatch = DispatchGroup()
                 local_dispatch.enter()
                 Task {
-                    Log.i("fuck 1")
                     let eraser = try NighttimeAirplaneRemover(with: config,
                                                               callbacks: callbacks,
                                                               processExistingFiles: false)
 
-                    Log.i("fuck 2")
                     var upm: UpdatableProgressMonitor?
 
                     if let _ = eraser.callbacks.updatable {
