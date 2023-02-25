@@ -129,32 +129,40 @@ struct decision_tree_generator: ParsableCommand {
             }
             Log.i("Calculating decision tree with \(should_paint_test_data.count) should paint \(should_not_paint_test_data.count) should not paint test data outlier groups")
             
-            writeTree(should_paint_test_data: should_paint_test_data,
-                      should_not_paint_test_data: should_not_paint_test_data)
+            let tree_swift_code = generateTree(with: should_paint_test_data,
+                                               and: should_not_paint_test_data)
 
+            print(tree_swift_code)
+            
+            // XXX save this to some sort of file
+            
             dispatch_group.leave()
         }
         dispatch_group.wait()
     }
 
-    func writeTree(should_paint_test_data: [OutlierGroupValues],
-                   should_not_paint_test_data: [OutlierGroupValues])
+    // top level func that writes a compiliable function around the root tree node 
+    func generateTree(with should_paint_test_data: [OutlierGroupValues],
+                      and should_not_paint_test_data: [OutlierGroupValues]) -> String
     {
-
-        let tree = decisionTreeNode(should_paint_test_data: should_paint_test_data,
-                                    should_not_paint_test_data: should_not_paint_test_data,
+        // the root tree node with all of the test data 
+        let tree = decisionTreeNode(with: should_paint_test_data,
+                                    and: should_not_paint_test_data,
                                     indent: 1)
 
-        print("""
-                @available(macOS 10.15, *)
-                func shouldPaint(outlier_group: OutlierGroup) async -> Bool {
-                \(tree.writeNode())
-                }
-                """)
+        return """
+          import NtarCore
+          
+          @available(macOS 10.15, *)
+          func shouldPaint(outlier_group: OutlierGroup) async -> Bool {
+          \(tree.writeNode())
+          }
+          """
     }
 
-    func decisionTreeNode(should_paint_test_data: [OutlierGroupValues],
-                          should_not_paint_test_data: [OutlierGroupValues],
+    // recursively return a decision tree that differentiates the test data
+    func decisionTreeNode(with should_paint_test_data: [OutlierGroupValues],
+                          and should_not_paint_test_data: [OutlierGroupValues],
                           indent: Int) -> DecisionTree
     {
         Log.i("decisionTreeNode with indent \(indent)")
@@ -166,11 +174,15 @@ struct decision_tree_generator: ParsableCommand {
             fatalError("two zeros not allowed")
         }
         if should_paint_test_data.count == 0 {
+            // func was called without any data to paint, return don't paint it all
             return ShouldNotPaintDecision(indent: indent)
         }
         if should_not_paint_test_data.count == 0 {
+            // func was called without any data to not paint, return paint it all
             return ShouldPaintDecision(indent: indent)
         }
+
+        // we have non zero test data of both kinds
         
         // collate should paint and not paint test data by characteristic
         // look for boundries where we can further isolate 
@@ -178,10 +190,11 @@ struct decision_tree_generator: ParsableCommand {
         // raw values for each characteristic
         var should_paint_values: [OutlierGroup.DecisionTreeCharacteristic: [Double]] = [:]
         var should_not_paint_values: [OutlierGroup.DecisionTreeCharacteristic: [Double]] = [:]
+        /*
         for characteristic in OutlierGroup.DecisionTreeCharacteristic.allCases {
             should_paint_values[characteristic] = []
             should_not_paint_values[characteristic] = []
-        }
+        }*/
         
         for characteristic in OutlierGroup.DecisionTreeCharacteristic.allCases {
             for test_data in should_paint_test_data {
@@ -240,7 +253,7 @@ struct decision_tree_generator: ParsableCommand {
             var max = -Double.greatestFiniteMagnitude
             var sum = 0.0
             if let all_values = should_not_paint_values[characteristic] {
-                Log.d("all values for not paint \(characteristic): \(all_values)")
+                //Log.d("all values for not paint \(characteristic): \(all_values)")
                 for value in all_values {
                     if value < min { min = value }
                     if value > max { max = value }
@@ -385,12 +398,12 @@ struct decision_tree_generator: ParsableCommand {
             // output a tree node with this characteristic and value
 
             // first recurse on both sides of the decision tree with differentated test data
-            let less_tree = self.decisionTreeNode(should_paint_test_data: less_than_should_paint_test_data,
-                                                  should_not_paint_test_data: less_than_should_not_paint_test_data,
+            let less_tree = self.decisionTreeNode(with: less_than_should_paint_test_data,
+                                                  and: less_than_should_not_paint_test_data,
                                                   indent: indent + 1)
 
-            let greater_tree = self.decisionTreeNode(should_paint_test_data: greater_than_should_paint_test_data,
-                                                     should_not_paint_test_data: greater_than_should_not_paint_test_data,
+            let greater_tree = self.decisionTreeNode(with: greater_than_should_paint_test_data,
+                                                     and: greater_than_should_not_paint_test_data,
                                                      indent: indent + 1)
 
             
