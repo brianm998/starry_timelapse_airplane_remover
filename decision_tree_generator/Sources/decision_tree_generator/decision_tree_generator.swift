@@ -141,46 +141,46 @@ struct decision_tree_generator: ParsableCommand {
         print("""
                 @available(macOS 10.15, *)
                 func shouldPaint(outlier_group: OutlierGroup) async -> Bool {
-                \(tree.writeFunction())
+                \(tree.writeNode())
                 }
                 """)
     }
 
     func decisionTreeNode(should_paint_test_data: [OutlierGroupValues],
                           should_not_paint_test_data: [OutlierGroupValues],
-                          indent: Int) -> Treeable
+                          indent: Int) -> DecisionTree
     {
 
         // collate should paint and not paint test data by characteristic
         // look for boundries where we can further isolate 
 
         
-        let tree = DecisionTree(characteristic: .size,
-                                value: 10,
-                                lessThan: ShouldPaintDecision(indent: indent + 1),
-                                greaterThan: ShouldNotPaintDecision(indent: indent + 1),
-                                indent: indent)
+        let tree = DecisionTreeNode(characteristic: .size,
+                                    value: 10,
+                                    lessThan: ShouldPaintDecision(indent: indent + 1),
+                                    greaterThan: ShouldNotPaintDecision(indent: indent + 1),
+                                    indent: indent)
 
         return tree
     }
 }
 
-protocol Treeable {
-    func writeFunction() -> String 
+protocol DecisionTree {
+    func writeNode() -> String 
 }
 
-struct ShouldPaintDecision: Treeable {
+struct ShouldPaintDecision: DecisionTree {
     let indent: Int
-    func writeFunction() -> String {
+    func writeNode() -> String {
         var indentation = ""
         for _ in 0..<indent { indentation += "    " }
         return "\(indentation)return true"
     }
 }
 
-struct ShouldNotPaintDecision: Treeable {
+struct ShouldNotPaintDecision: DecisionTree {
     let indent: Int
-    func writeFunction() -> String {
+    func writeNode() -> String {
         var indentation = ""
         for _ in 0..<indent { indentation += "    " }
         return "\(indentation)return false"
@@ -188,22 +188,22 @@ struct ShouldNotPaintDecision: Treeable {
 }
 
 @available(macOS 10.15, *) 
-struct DecisionTree: Treeable {
+struct DecisionTreeNode: DecisionTree {
     let characteristic: OutlierGroup.DecisionTreeCharacteristic
     let value: Double
-    let lessThan: Treeable
-    let greaterThan: Treeable
+    let lessThan: DecisionTree
+    let greaterThan: DecisionTree
     let indent: Int
     
     // assumes outlier_group variable
-    func writeFunction() -> String {
+    func writeNode() -> String {
         var indentation = ""
         for _ in 0..<indent { indentation += "    " }
         return """
           \(indentation)if await outlier_group.decisionTreeValue(for: .\(characteristic)) < \(value) {
-          \(lessThan.writeFunction())
+          \(lessThan.writeNode())
           \(indentation)} else {
-          \(greaterThan.writeFunction())
+          \(greaterThan.writeNode())
           \(indentation)}
           """
     }
