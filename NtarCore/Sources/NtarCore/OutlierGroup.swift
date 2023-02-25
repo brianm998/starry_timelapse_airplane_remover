@@ -175,7 +175,7 @@ public actor OutlierGroup: CustomStringConvertible,
     }
 
     // we derive a Double value from each of these
-    public enum DecisionTreeCharacteristic: CaseIterable, Hashable {
+    public enum TreeDecisionType: CaseIterable, Hashable {
         case size
         case width
         case height
@@ -184,8 +184,8 @@ public actor OutlierGroup: CustomStringConvertible,
         // XXX add a lot more
     }
 
-    public func decisionTreeValue(for characteristic: DecisionTreeCharacteristic) -> Double {
-        switch characteristic {
+    public func decisionTreeValue(for type: TreeDecisionType) -> Double {
+        switch type {
         case .size:
             return Double(self.size)
         case .width:

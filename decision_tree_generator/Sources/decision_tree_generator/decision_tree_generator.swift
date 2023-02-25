@@ -4,7 +4,7 @@ import ArgumentParser
 
 @available(macOS 10.15, *) 
 struct OutlierGroupValues {
-    var values: [OutlierGroup.DecisionTreeCharacteristic: Double] = [:]
+    var values: [OutlierGroup.TreeDecisionType: Double] = [:]
 }
 
 @main
@@ -91,19 +91,19 @@ struct decision_tree_generator: ParsableCommand {
                                         let will_paint = should_paint.willPaint
                                         var values = OutlierGroupValues()
                                         
-                                        for characteristic in OutlierGroup.DecisionTreeCharacteristic.allCases {
-                                            let value = await outlier_group.decisionTreeValue(for: characteristic)
-                                            switch characteristic {
+                                        for type in OutlierGroup.TreeDecisionType.allCases {
+                                            let value = await outlier_group.decisionTreeValue(for: type)
+                                            switch type {
                                             case .size:
-                                                values.values[characteristic] = value
+                                                values.values[type] = value
                                             case .width:
-                                                values.values[characteristic] = value
+                                                values.values[type] = value
                                             case .height:
-                                                values.values[characteristic] = value
+                                                values.values[type] = value
                                             case .centerX:
-                                                values.values[characteristic] = value/Double(image_width)
+                                                values.values[type] = value/Double(image_width)
                                             case .centerY:
-                                                values.values[characteristic] = value/Double(image_height)
+                                                values.values[type] = value/Double(image_height)
                                             }
                                         }
                                         if will_paint {
@@ -208,55 +208,55 @@ struct decision_tree_generator: ParsableCommand {
 
         // we have non zero test data of both kinds
         
-        // collate should paint and not paint test data by characteristic
+        // collate should paint and not paint test data by type
         // look for boundries where we can further isolate 
 
-        // raw values for each characteristic
-        var should_paint_values: [OutlierGroup.DecisionTreeCharacteristic: [Double]] = [:]
-        var should_not_paint_values: [OutlierGroup.DecisionTreeCharacteristic: [Double]] = [:]
+        // raw values for each type
+        var should_paint_values: [OutlierGroup.TreeDecisionType: [Double]] = [:]
+        var should_not_paint_values: [OutlierGroup.TreeDecisionType: [Double]] = [:]
         /*
-        for characteristic in OutlierGroup.DecisionTreeCharacteristic.allCases {
-            should_paint_values[characteristic] = []
-            should_not_paint_values[characteristic] = []
+        for type in OutlierGroup.TreeDecisionType.allCases {
+            should_paint_values[type] = []
+            should_not_paint_values[type] = []
         }*/
         
-        for characteristic in OutlierGroup.DecisionTreeCharacteristic.allCases {
+        for type in OutlierGroup.TreeDecisionType.allCases {
             for test_data in should_paint_test_data {
-                if let value = test_data.values[characteristic] {
-                    if var list = should_paint_values[characteristic] {
+                if let value = test_data.values[type] {
+                    if var list = should_paint_values[type] {
                         list.append(value)
-                        should_paint_values[characteristic] = list
+                        should_paint_values[type] = list
                     } else {
-                        should_paint_values[characteristic] = [value]
+                        should_paint_values[type] = [value]
                     }
                 } 
             }
         }
 
-        for characteristic in OutlierGroup.DecisionTreeCharacteristic.allCases {
+        for type in OutlierGroup.TreeDecisionType.allCases {
             for test_data in should_not_paint_test_data {
-                if let value = test_data.values[characteristic] {
-                    if var list = should_not_paint_values[characteristic] {
+                if let value = test_data.values[type] {
+                    if var list = should_not_paint_values[type] {
                         list.append(value)
-                        should_not_paint_values[characteristic] = list
+                        should_not_paint_values[type] = list
                     } else {
-                        should_not_paint_values[characteristic] = [value]
+                        should_not_paint_values[type] = [value]
                     }
                 }
             }
         }
 
-        // value distributions for each characteristic
-        var should_paint_dist: [OutlierGroup.DecisionTreeCharacteristic: ValueDistribution] = [:]
-        var should_not_paint_dist: [OutlierGroup.DecisionTreeCharacteristic: ValueDistribution] = [:]
+        // value distributions for each type
+        var should_paint_dist: [OutlierGroup.TreeDecisionType: ValueDistribution] = [:]
+        var should_not_paint_dist: [OutlierGroup.TreeDecisionType: ValueDistribution] = [:]
         
-        // for each characteristic, calculate a min/max/mean/median for both paint and not
-        for characteristic in OutlierGroup.DecisionTreeCharacteristic.allCases {
+        // for each type, calculate a min/max/mean/median for both paint and not
+        for type in OutlierGroup.TreeDecisionType.allCases {
             var min = Double.greatestFiniteMagnitude
             var max = -Double.greatestFiniteMagnitude
             var sum = 0.0
-            if let all_values = should_paint_values[characteristic] {
-                //Log.d("all values for paint \(characteristic): \(all_values)")
+            if let all_values = should_paint_values[type] {
+                //Log.d("all values for paint \(type): \(all_values)")
                 for value in all_values {
                     if value < min { min = value }
                     if value > max { max = value }
@@ -265,19 +265,19 @@ struct decision_tree_generator: ParsableCommand {
                 sum /= Double(all_values.count)
                 let median = all_values.sorted()[all_values.count/2]
                 let dist = ValueDistribution(min: min, max: max, mean: sum, median: median)
-                should_paint_dist[characteristic] = dist
+                should_paint_dist[type] = dist
             } else {
                 Log.e("WTF")
             }
         }
 
         // XXX dupe above for not paint
-        for characteristic in OutlierGroup.DecisionTreeCharacteristic.allCases {
+        for type in OutlierGroup.TreeDecisionType.allCases {
             var min = Double.greatestFiniteMagnitude
             var max = -Double.greatestFiniteMagnitude
             var sum = 0.0
-            if let all_values = should_not_paint_values[characteristic] {
-                //Log.d("all values for not paint \(characteristic): \(all_values)")
+            if let all_values = should_not_paint_values[type] {
+                //Log.d("all values for not paint \(type): \(all_values)")
                 for value in all_values {
                     if value < min { min = value }
                     if value > max { max = value }
@@ -286,14 +286,14 @@ struct decision_tree_generator: ParsableCommand {
                 sum /= Double(all_values.count)
                 let median = all_values.sorted()[all_values.count/2]
                 let dist = ValueDistribution(min: min, max: max, mean: sum, median: median)
-                should_not_paint_dist[characteristic] = dist
+                should_not_paint_dist[type] = dist
             } else {
                 Log.e("WTF")
             }
         }
 
         // vars used to construct the next tree node
-        var bestCharacteristic: OutlierGroup.DecisionTreeCharacteristic?
+        var bestType: OutlierGroup.TreeDecisionType?
         var bestValue: Double = 0
         var less_than_should_paint_test_data: [OutlierGroupValues] = []
         var less_than_should_not_paint_test_data: [OutlierGroupValues] = []
@@ -302,18 +302,18 @@ struct decision_tree_generator: ParsableCommand {
 
         var biggest_split = 0.0
 
-        // iterate ofer all decision tree characteristics to pick the best one
+        // iterate ofer all decision tree types to pick the best one
         // that differentiates the test data
-        for characteristic in OutlierGroup.DecisionTreeCharacteristic.allCases {
-            if let paint_dist = should_paint_dist[characteristic],
-               let not_paint_dist = should_not_paint_dist[characteristic]
+        for type in OutlierGroup.TreeDecisionType.allCases {
+            if let paint_dist = should_paint_dist[type],
+               let not_paint_dist = should_not_paint_dist[type]
             {
-                Log.d("characteristic \(characteristic)")
+                Log.d("type \(type)")
                 if paint_dist.max < not_paint_dist.min {
                     // we have a clear distinction between all provided test data
                     // this is an end leaf node, both paths after decision lead to a result
                     Log.d("clear distinction \(paint_dist.max) < \(not_paint_dist.min)")
-                    return DecisionTreeNode(characteristic: characteristic,
+                    return DecisionTreeNode(type: type,
                                             value: (paint_dist.max + not_paint_dist.min) / 2,
                                             lessThan: ShouldPaintDecision(indent: indent + 1),
                                             greaterThan: ShouldNotPaintDecision(indent: indent + 1),
@@ -322,7 +322,7 @@ struct decision_tree_generator: ParsableCommand {
                     Log.d("clear distinction \(not_paint_dist.max) < \(paint_dist.min)")
                     // we have a clear distinction between all provided test data
                     // this is an end leaf node, both paths after decision lead to a result
-                    return DecisionTreeNode(characteristic: characteristic,
+                    return DecisionTreeNode(type: type,
                                             value: (not_paint_dist.max + paint_dist.min) / 2,
                                             lessThan: ShouldNotPaintDecision(indent: indent + 1),
                                             greaterThan: ShouldPaintDecision(indent: indent + 1),
@@ -330,10 +330,10 @@ struct decision_tree_generator: ParsableCommand {
                 } else {
                     Log.d("no clear distinction, need new node at indent \(indent)")
                     // we do not have a clear distinction between all provided test data
-                    // we need to figure out what characteristic is best to segarate
+                    // we need to figure out what type is best to segarate
                     // the test data further
 
-                    // test this characteristic to see how much we can split the data based upon it
+                    // test this type to see how much we can split the data based upon it
 
                     // for now, center between their medians
                     // possible improvement is to decide based upon something else
@@ -348,7 +348,7 @@ struct decision_tree_generator: ParsableCommand {
 
                     // calculate how the data would split if we used the above decision value
                     for group_values in should_paint_test_data {
-                        if let group_value = group_values.values[characteristic] {
+                        if let group_value = group_values.values[type] {
                             if group_value < decisionValue {
                                 lessThanShouldPaint.append(group_values)
                             } else {
@@ -361,7 +361,7 @@ struct decision_tree_generator: ParsableCommand {
                     }
                     
                     for group_values in should_not_paint_test_data {
-                        if let group_value = group_values.values[characteristic] {
+                        if let group_value = group_values.values[type] {
                             if group_value < decisionValue {
                                 lessThanShouldNotPaint.append(group_values)
                             } else {
@@ -384,7 +384,7 @@ struct decision_tree_generator: ParsableCommand {
 
                     var we_are_best = false
                     
-                    // choose the characteristic with the best distribution 
+                    // choose the type with the best distribution 
                     // that will generate the shortest tree
                     if less_than_split > original_split,
                        less_than_split - original_split > biggest_split
@@ -400,8 +400,8 @@ struct decision_tree_generator: ParsableCommand {
                         we_are_best = true
                     }
                     if we_are_best {
-                        // record this characteristic as best so far
-                        bestCharacteristic = characteristic
+                        // record this type as best so far
+                        bestType = type
                         bestValue = decisionValue
                         less_than_should_paint_test_data = lessThanShouldPaint
                         less_than_should_not_paint_test_data = lessThanShouldNotPaint
@@ -409,17 +409,17 @@ struct decision_tree_generator: ParsableCommand {
                         greater_than_should_not_paint_test_data = greaterThanShouldNotPaint
                     }
                     
-                    Log.i("for characteristic \(characteristic) original split is \(original_split) less than split is \(less_than_split) greater than split is \(greater_than_split)")
+                    Log.i("for type \(type) original split is \(original_split) less than split is \(less_than_split) greater than split is \(greater_than_split)")
                 }
             } else {
                 Log.e("WTF")
-                fatalError("no best characteristic")
+                fatalError("no best type")
             }
         }
 
-        if let bestCharacteristic = bestCharacteristic {
-            // we've identified the best characteristic to differentiate the test data
-            // output a tree node with this characteristic and value
+        if let bestType = bestType {
+            // we've identified the best type to differentiate the test data
+            // output a tree node with this type and value
 
             // first recurse on both sides of the decision tree with differentated test data
             let less_tree = self.decisionTreeNode(with: less_than_should_paint_test_data,
@@ -431,14 +431,14 @@ struct decision_tree_generator: ParsableCommand {
                                                      indent: indent + 1)
 
             
-            return DecisionTreeNode(characteristic: bestCharacteristic,
+            return DecisionTreeNode(type: bestType,
                                     value: bestValue,
                                     lessThan: less_tree,
                                     greaterThan: greater_tree,
                                     indent: indent)
         } else {
-            Log.e("no best characteristic")
-            fatalError("no best characteristic")
+            Log.e("no best type")
+            fatalError("no best type")
         }
         
     }
@@ -475,7 +475,7 @@ struct ShouldNotPaintDecision: DecisionTree {
 
 @available(macOS 10.15, *) 
 struct DecisionTreeNode: DecisionTree {
-    let characteristic: OutlierGroup.DecisionTreeCharacteristic
+    let type: OutlierGroup.TreeDecisionType
     let value: Double
     let lessThan: DecisionTree
     let greaterThan: DecisionTree
@@ -486,7 +486,7 @@ struct DecisionTreeNode: DecisionTree {
         var indentation = ""
         for _ in 0..<indent { indentation += "    " }
         return """
-          \(indentation)if self.decisionTreeValue(for: .\(characteristic)) < \(value) {
+          \(indentation)if self.decisionTreeValue(for: .\(type)) < \(value) {
           \(lessThan.writeNode())
           \(indentation)} else {
           \(greaterThan.writeNode())
