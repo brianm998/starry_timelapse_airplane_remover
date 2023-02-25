@@ -188,7 +188,7 @@ struct decision_tree_generator: ParsableCommand {
               // define a computed property which decides the paintability 
               // of this OutlierGroup with a decision tree
               var shouldPaintFromDecisionTree: Bool {
-          \(tree.writeNode())
+          \(tree.swiftCode)
               }
           }
           """
@@ -461,14 +461,16 @@ struct ValueDistribution {
     let median: Double
 }
 
+// represents an abstract node in the decision tree
+// that knows how to render itself as a String of swift code
 protocol DecisionTree {
-    func writeNode() -> String 
+    var swiftCode: String { get }
 }
 
 // end leaf node which always returns true
 struct ShouldPaintDecision: DecisionTree {
     let indent: Int
-    func writeNode() -> String {
+    var swiftCode: String {
         var indentation = ""
         for _ in 0..<indent { indentation += "    " }
         return "\(indentation)return true"
@@ -478,7 +480,7 @@ struct ShouldPaintDecision: DecisionTree {
 // end leaf node which always returns false
 struct ShouldNotPaintDecision: DecisionTree {
     let indent: Int
-    func writeNode() -> String {
+    var swiftCode: String {
         var indentation = ""
         for _ in 0..<indent { indentation += "    " }
         return "\(indentation)return false"
@@ -495,14 +497,14 @@ struct DecisionTreeNode: DecisionTree {
     let indent: Int
     
     // assumes outlier_group variable
-    func writeNode() -> String {
+    var swiftCode: String {
         var indentation = ""
         for _ in 0..<indent { indentation += "    " }
         return """
           \(indentation)if self.decisionTreeValue(for: .\(type)) < \(value) {
-          \(lessThan.writeNode())
+          \(lessThan.swiftCode)
           \(indentation)} else {
-          \(greaterThan.writeNode())
+          \(greaterThan.swiftCode)
           \(indentation)}
           """
     }
