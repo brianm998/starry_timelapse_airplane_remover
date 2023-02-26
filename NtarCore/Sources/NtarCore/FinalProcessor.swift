@@ -82,20 +82,14 @@ public actor FinalProcessor {
         Task {
             let frame_state = await frame.processingState()
             Log.d("add frame \(frame.frame_index) with state \(frame_state)")
-
+            
             let index = frame.frame_index
             if index > max_added_index {
                 max_added_index = index
             }
 
-            if frame.fully_process {
-                Log.d("frame \(index) added for final inter-frame analysis \(max_added_index)")
-                frames[index] = frame
-            } else {
-                Log.d("finishing frame \(frame.frame_index)")
-                await self.finish(frame: frame)
-
-            }
+            Log.d("frame \(index) added for final inter-frame analysis \(max_added_index)")
+            frames[index] = frame
             log()
         }
     }
@@ -166,6 +160,8 @@ public actor FinalProcessor {
     func finishAll() async throws {
         Log.d("finishing all")
         var count = 0
+        // XXX necessary here???
+        //doublyLink(frames: frames)    
         for (index, frame) in frames.enumerated() {
             if let frame = frame {
                 count += 1
@@ -226,12 +222,16 @@ public actor FinalProcessor {
             }
             
             let index_to_process = await current_frame_index
+            /*
+
+             will we now overwrite existing files?
+             
             if !shouldProcess[index_to_process] {
                 Log.d("not processing \(index_to_process)")
                 await self.incrementCurrentFrameIndex()
                 continue
             }
-            
+            */
             var images_to_process: [FrameAirplaneRemover] = []
             
             var start_index = index_to_process - config.number_final_processing_neighbors_needed
@@ -271,16 +271,18 @@ public actor FinalProcessor {
                        let next_frame = await self.frame(at: immutable_start)
                     {
                         await self.clearFrame(at: immutable_start - 1)
+                        if frame_to_finish.fully_process {
 
-                        // identify all existing streaks with length of only 2
-                        // try to find other nearby streaks, if not found,
-                        //then skip for new not paint reason
-                        await frame_to_finish.set(state: .interFrameProcessing)
-                        
-                        Log.d("running final streak processing on frame \(frame_to_finish.frame_index)")
+                            // identify all existing streaks with length of only 2
+                            // try to find other nearby streaks, if not found,
+                            //then skip for new not paint reason
+                            await frame_to_finish.set(state: .interFrameProcessing)
+                            
+                            Log.d("running final streak processing on frame \(frame_to_finish.frame_index)")
 
-                        await really_final_streak_processing(onFrame: frame_to_finish,
-                                                             nextFrame: next_frame)
+                            await really_final_streak_processing(onFrame: frame_to_finish,
+                                                                 nextFrame: next_frame)
+                        }
 
                         Log.d("running final streak processing on frame \(frame_to_finish.frame_index)")
                         //let final_frame_group_name = "final frame \(frame_to_finish.frame_index)"
@@ -290,7 +292,7 @@ public actor FinalProcessor {
 
 
                         // here we need to see if we are in gui or cli mode
-
+                        
                         // gui needs to have the user look at each image now and
                         // validate it, maybe making painting changes
 
@@ -313,7 +315,7 @@ public actor FinalProcessor {
         }
 
         Log.i("FINAL THREAD finishing all remaining frames")
-        try await self.finishAll()
+        try await self.finishAll() 
 
         if let frameCheckClosure = callbacks.frameCheckClosure {
             // XXX there is a race condition here if we are in gui
@@ -471,6 +473,22 @@ func really_final_streak_processing(onFrame frame: FrameAirplaneRemover,
     }
 }
 
+@available(macOS 10.15, *)
+fileprivate func doublyLink(frames: [FrameAirplaneRemover]) async {
+    // doubly link frames here so that the decision tree can have acess to other frames
+    for (i, frame) in frames.enumerated() {
+        if await frames[i].previousFrame == nil,
+           i > 0
+        {
+            await frame.setPreviousFrame(frames[i-1])
+        }
+        if await frames[i].nextFrame == nil,
+           i < frames.count - 1
+        {
+            await frame.setNextFrame(frames[i+1])
+        }
+    }
+}
 
 // this method does a final pass on a group of frames, using
 // the angle of outlier groups that don't overlap between frames
@@ -484,15 +502,18 @@ func really_final_streak_processing(onFrame frame: FrameAirplaneRemover,
 fileprivate func run_final_pass(frames: [FrameAirplaneRemover],
                                 config: Config) async
 {
-    Log.d("final pass on \(frames.count) frames doing streak analysis")
+    await doublyLink(frames: frames)    
+    if frames[0].fully_process {
+        Log.d("final pass on \(frames.count) frames doing streak analysis")
 
-    await run_final_streak_pass(frames: frames, config: config) // XXX not actually the final streak pass anymore..
+        await run_final_streak_pass(frames: frames, config: config) // XXX not actually the final streak pass anymore..
 
-    Log.d("running overlap pass on \(frames.count) frames")
+        Log.d("running overlap pass on \(frames.count) frames")
 
-    await run_final_overlap_pass(frames: frames, config: config)
+        await run_final_overlap_pass(frames: frames, config: config)
 
-    Log.d("done with final pass on \(frames.count) frames")
+        Log.d("done with final pass on \(frames.count) frames")
+    }
 }
 
 var GLOBAL_last_overlap_frame_number = 0 // XXX

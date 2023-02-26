@@ -292,6 +292,18 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
 
     let outlierGroupLoader: () async -> OutlierGroups?
 
+    // doubly linked list
+    var previousFrame: FrameAirplaneRemover?
+    var nextFrame: FrameAirplaneRemover?
+
+    func setPreviousFrame(_ frame: FrameAirplaneRemover) {
+        previousFrame = frame
+    }
+    
+    func setNextFrame(_ frame: FrameAirplaneRemover) {
+        nextFrame = frame
+    }
+    
     let fully_process: Bool
     
     init(with config: Config,
