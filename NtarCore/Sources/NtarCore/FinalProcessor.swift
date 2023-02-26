@@ -87,26 +87,16 @@ public actor FinalProcessor {
             if index > max_added_index {
                 max_added_index = index
             }
-            
-            if frame_state == .outlierProcessingComplete ||
-              !frame.fully_process
-            {
-                // these frames have already been inter-frame processed,
-                // likely from saved json outlier groups
 
-                // XXX this logic works, but is wonky and could be less complex
-                if frame.fully_process {
-                    frames[index] = frame
-                } else {
-                    Log.d("finishing frame \(frame.frame_index)")
-                    await self.finish(frame: frame)
-                }
-            } else {
-                // this frame needs inter-frame processing still
-                Log.d("FINAL THREAD frame \(index) added for final inter-frame analysis \(max_added_index)")
+            if frame.fully_process {
+                Log.d("frame \(index) added for final inter-frame analysis \(max_added_index)")
                 frames[index] = frame
-                log()
+            } else {
+                Log.d("finishing frame \(frame.frame_index)")
+                await self.finish(frame: frame)
+
             }
+            log()
         }
     }
 
