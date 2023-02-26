@@ -23,7 +23,9 @@ enum PaintScoreType {
     case combined       // a combination, not using fillAmount
 }
 
-
+// these need to be setup at startup so the decision tree values are right
+internal var IMAGE_WIDTH: Double?
+internal var IMAGE_HEIGHT: Double?
 
 @available(macOS 10.15, *) 
 public class OutlierGroups: Codable {
@@ -177,7 +179,6 @@ public actor OutlierGroup: CustomStringConvertible,
         case fillAmount
         case surfaceAreaRatio
         case brightness
-        case numberOfHoughLines
         case avgCountOfFirst10HoughLines
         case maxThetaDiffOfFirst10HoughLines
         case maxRhoDiffOfFirst10HoughLines
@@ -185,6 +186,9 @@ public actor OutlierGroup: CustomStringConvertible,
          
          some more numbers about hough lines
 
+         add some kind of decision based upon other outliers,
+         both within this frame, and in others
+         
          */
     }
 
@@ -197,9 +201,9 @@ public actor OutlierGroup: CustomStringConvertible,
         case .height:
             return Double(self.bounds.height)
         case .centerX:
-            return Double(self.bounds.center.x)
+            return Double(self.bounds.center.x)/IMAGE_WIDTH!
         case .centerY:
-            return Double(self.bounds.center.y)
+            return Double(self.bounds.center.y)/IMAGE_HEIGHT!
         case .aspectRatio:
             return Double(self.bounds.width) / Double(self.bounds.height)
         case .fillAmount:
@@ -208,8 +212,6 @@ public actor OutlierGroup: CustomStringConvertible,
             return self.surfaceAreaToSizeRatio
         case .brightness:
             return Double(self.brightness)
-        case .numberOfHoughLines:
-            return Double(self.lines.count)
         case .avgCountOfFirst10HoughLines:
             return self.avgCountOfFirst10HoughLines()
         case .maxThetaDiffOfFirst10HoughLines:
@@ -219,6 +221,14 @@ public actor OutlierGroup: CustomStringConvertible,
         }
     }
 
+    public func logDecisionTreeValues() {
+        var message = "decision tree values for \(self.name): "
+        for type in /*OutlierGroup.*/TreeDecisionType.allCases {
+            message += "\(type) = \(self.decisionTreeValue(for: type)) " 
+        }
+        Log.d(message)
+    }
+    
     func maxThetaDiffOfFirst10HoughLines() -> Double {
         var max_diff = 0.0
         let first_theta = self.lines[0].theta
@@ -545,6 +555,7 @@ public actor OutlierGroup: CustomStringConvertible,
         case size
         case bounds
         case brightness
+        // XXX maybe don't save lines
         case lines
         case pixels
         case max_pixel_distance
@@ -560,6 +571,7 @@ public actor OutlierGroup: CustomStringConvertible,
         self.size = try data.decode(UInt.self, forKey: .size)
         self.bounds = try data.decode(BoundingBox.self, forKey: .bounds)
         self.brightness = try data.decode(UInt.self, forKey: .brightness)
+        // XXX look into not saving the lines, and re-calculating them with hough transform upon reload
         self.lines = try data.decode(Array<Line>.self, forKey: .lines)
         self.pixels = try data.decode(Array<UInt32>.self, forKey: .pixels)
         self.max_pixel_distance = try data.decode(UInt16.self, forKey: .max_pixel_distance)

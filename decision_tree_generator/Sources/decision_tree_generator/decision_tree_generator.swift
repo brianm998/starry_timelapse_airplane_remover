@@ -96,7 +96,7 @@ struct decision_tree_generator: ParsableCommand {
                     }
                     for frame in frames {
                         // check all outlier groups 
-                        Log.w("SHOULD CHECK frame \(frame.frame_index)")
+                        Log.d("should check frame \(frame.frame_index)")
                         if let outlier_group_list = await frame.outlierGroups() {
                             for outlier_group in outlier_group_list {
                                 if let shouldPaint = await outlier_group.shouldPaint {
@@ -107,15 +107,17 @@ struct decision_tree_generator: ParsableCommand {
                                         num_similar_outlier_groups += 1
                                     } else {
                                         // bad
+                                        Log.w("outlier group \(outlier_group) decisionTreeShouldPaint \(decisionTreeShouldPaint) != shouldPaint.willPaint \(shouldPaint.willPaint)")
                                         num_different_outlier_groups += 1
                                     }
                                 } else {
                                     Log.e("WTF")
+                                    fatalError("DIED")
                                 }
                             }
                         } else {
                             Log.e("WTF")
-
+                            fatalError("DIED HERE")
                         }
                     }
                     let total = num_similar_outlier_groups + num_different_outlier_groups
@@ -200,19 +202,7 @@ struct decision_tree_generator: ParsableCommand {
                                         var values = OutlierGroupValues()
                                         
                                         for type in OutlierGroup.TreeDecisionType.allCases {
-                                            let value = await outlier_group.decisionTreeValue(for: type)
-                                            switch type {
-                                            // some decision types are related to image size
-                                            // normalize them here 
-                                            case .centerX:
-                                                values.values[type] = value/Double(image_width)
-                                            case .centerY:
-                                                values.values[type] = value/Double(image_height)
-
-                                            // pass most others on unaltered
-                                            default:
-                                                values.values[type] = value
-                                            }
+                                            values.values[type] = await outlier_group.decisionTreeValue(for: type)
                                         }
                                         if will_paint {
                                             should_paint_test_data.append(values)
@@ -221,18 +211,22 @@ struct decision_tree_generator: ParsableCommand {
                                         }
                                     } else {
                                         Log.e("outlier group \(name) has no shouldPaint value")
+                                        fatalError("outlier group \(name) has no shouldPaint value")
                                     }
                                 }
                             } else {
                                 Log.e("cannot get outlier groups for frame \(frame.frame_index)")
+                                fatalError("cannot get outlier groups for frame \(frame.frame_index)")
                             }
                         }
                     } else {
                         Log.e("couldn't read image height and/or width")
+                        fatalError("couldn't read image height and/or width")
                     }
                 } catch {
                     Log.w("couldn't get config from \(json_config_file_name)")
                     Log.e("\(error)")
+                    fatalError("couldn't get config from \(json_config_file_name)")
                 }
             }
             Log.i("Calculating decision tree with \(should_paint_test_data.count) should paint \(should_not_paint_test_data.count) should not paint test data outlier groups")
@@ -440,6 +434,7 @@ struct decision_tree_generator: ParsableCommand {
         // iterate ofer all decision tree types to pick the best one
         // that differentiates the test data
         for type in OutlierGroup.TreeDecisionType.allCases {
+            // XXX could use task group to paralelize this
             if let paint_dist = should_paint_dist[type],
                let not_paint_dist = should_not_paint_dist[type]
             {
@@ -592,7 +587,7 @@ struct decision_tree_generator: ParsableCommand {
                         greater_response = response
                     }
                 }
- */
+*/
                 taskGroup.addTask() {
                     let greater_tree = await self.decisionTreeNode(with: gtsptd,
                                                                    and: gtsnptd,

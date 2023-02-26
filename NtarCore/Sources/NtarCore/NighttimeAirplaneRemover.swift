@@ -151,6 +151,11 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
                 let test_image = try await image_sequence.getImage(withName: image_sequence.filenames[0]).image()
                 image_width = test_image.width
                 image_height = test_image.height
+
+                // in OutlierGroup.swift
+                IMAGE_WIDTH = Double(test_image.width)
+                IMAGE_HEIGHT = Double(test_image.height)
+
                 image_bytesPerPixel = test_image.bytesPerPixel
                 Log.d("first frame to get sizes: image_width \(image_width) image_height \(image_height) image_bytesPerPixel \(image_bytesPerPixel)")
             } catch {
