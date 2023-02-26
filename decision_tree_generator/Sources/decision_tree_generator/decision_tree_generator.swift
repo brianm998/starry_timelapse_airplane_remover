@@ -9,6 +9,7 @@ struct OutlierGroupValues {
 
 var start_time: Date = Date()
 
+// use this for with the taskgroup below
 @available(macOS 10.15, *) 
 struct DecisionResult {
     let type: OutlierGroup.TreeDecisionType
@@ -66,7 +67,9 @@ struct decision_tree_generator: ParsableCommand {
     var json_config_file_names: [String]
     
     mutating func run() throws {
+        Log.name = "decision_tree_generator-log"
         Log.handlers[.console] = ConsoleLogHandler(at: .debug)
+        Log.handlers[.file] = try FileLogHandler(at: .verbose) // XXX make this a command line parameter
 
         start_time = Date()
         Log.i("Starting")
@@ -195,9 +198,9 @@ struct decision_tree_generator: ParsableCommand {
                     
                     // called when we should check a frame
                     callbacks.frameCheckClosure = { new_frame in
+                        Log.d("frameCheckClosure for frame \(new_frame.frame_index)")
                         frames.append(new_frame)
                         endClosure()
-                        Log.d("frameCheckClosure for frame \(new_frame.frame_index)")
                     }
                     
                     // XXX is this VVV obsolete???
@@ -209,6 +212,7 @@ struct decision_tree_generator: ParsableCommand {
                                                               fullyProcess: false)
                     let sequence_size = await eraser.image_sequence.filenames.count
                     endClosure = {
+                        Log.d("end enclosure frames.count \(frames.count) sequence_size \(sequence_size)")
                         if frames.count == sequence_size {
                             eraser.shouldRun = false
                         }
@@ -307,7 +311,7 @@ struct decision_tree_generator: ParsableCommand {
         // the root tree node with all of the test data 
         let tree = await decisionTreeNode(with: should_paint_test_data,
                                           and: should_not_paint_test_data,
-                                          indent: 2)
+                                          indent: 3)
 
         let generated_swift_code = tree.swiftCode
 
@@ -346,7 +350,9 @@ struct decision_tree_generator: ParsableCommand {
               // define a computed property which decides the paintability 
               // of this OutlierGroup with a decision tree
               var shouldPaintFromDecisionTree: Bool {
+                  get async {
           \(generated_swift_code)
+                  }
               }
           }
           """
@@ -488,11 +494,15 @@ struct decision_tree_generator: ParsableCommand {
 
         // iterate ofer all decision tree types to pick the best one
         // that differentiates the test data
+
+        // XXX could use task group to paralelize this
+//        await withTaskGroup(of: DecisionResult.self) { taskGroup in
+        
         for type in OutlierGroup.TreeDecisionType.allCases {
-            // XXX could use task group to paralelize this
             if let paint_dist = should_paint_dist[type],
                let not_paint_dist = should_not_paint_dist[type]
             {
+  //              taskGroup.addTask() {
                 Log.d("type \(type)")
                 if paint_dist.max < not_paint_dist.min {
                     // we have a clear distinction between all provided test data
@@ -730,7 +740,7 @@ struct DecisionTreeNode: DecisionTree {
         var indentation = ""
         for _ in 0..<indent { indentation += "    " }
         return """
-          \(indentation)if self.decisionTreeValue(for: .\(type)) < \(value) {
+          \(indentation)if await self.decisionTreeValue(for: .\(type)) < \(value) {
           \(lessThan.swiftCode)
           \(indentation)} else {
           \(greaterThan.swiftCode)

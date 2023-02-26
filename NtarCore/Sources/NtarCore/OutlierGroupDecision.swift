@@ -40,7 +40,7 @@ public extension OutlierGroup {
          */
     }
 
-    func decisionTreeValue(for type: TreeDecisionType) -> Double {
+    func decisionTreeValue(for type: TreeDecisionType) async -> Double {
         switch type {
         case .size:
             return Double(self.size)
@@ -135,12 +135,13 @@ public extension OutlierGroup {
         }
         return sum/divisor
     }
-    
+
+    /*
     func logDecisionTreeValues() {
         var message = "decision tree values for \(self.name): "
         for type in /*OutlierGroup.*/TreeDecisionType.allCases {
             message += "\(type) = \(self.decisionTreeValue(for: type)) " 
         }
         Log.d(message)
-    }
+    }*/
 }
