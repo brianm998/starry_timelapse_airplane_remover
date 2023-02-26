@@ -77,7 +77,6 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
     public var outlier_groups: OutlierGroups?
 
     public func outlierGroups() -> [OutlierGroup]? {
-        Log.d("frame \(frame_index) has \(outlier_groups)")
         if let outlier_groups = outlier_groups,
            let groups = outlier_groups.groups
         {
@@ -353,9 +352,9 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
         // this takes a long time, and the gui does it later
         if fullyProcess {
             try await loadOutliers()
-            Log.i("frame \(frame_index) done detecting outlier groups")
+            Log.d("frame \(frame_index) done detecting outlier groups")
         } else {
-            Log.i("frame \(frame_index) loaded without outlier groups")
+            Log.d("frame \(frame_index) loaded without outlier groups")
         }
 
     }
@@ -1125,6 +1124,9 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
                 Log.w("frame \(self.frame_index) WTF")
             }
         }
+
+        // XXX write out a full frame image of all outliers w/ current paint values
+        // not including the image behind it
         
         // write out a preview of the processed file
         if config.test_paint && config.writeFrameTestPaintPreviewFiles {

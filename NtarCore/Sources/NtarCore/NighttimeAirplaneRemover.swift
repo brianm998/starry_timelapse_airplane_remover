@@ -330,12 +330,12 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
                     outlier_groups_for_this_frame = try decoder.decode(OutlierGroups.self, from: data)
                     end_time_1 = Date().timeIntervalSinceReferenceDate
                     Log.d("binary decode took \(end_time_1 - start_time_1) seconds to load binary outlier group data for frame \(frame_index)")
-                    Log.i("loading frame \(frame_index) with outlier groups from binary file")
+                    Log.d("loading frame \(frame_index) with outlier groups from binary file")
                 } catch {
                     Log.e("frame \(frame_index) error decoding file \(frame_outliers_binary_filename): \(error)")
                 }
             } else {
-                    Log.i("frame \(frame_index) binary file \(frame_outliers_binary_filename) does not exist")
+                Log.i("frame \(frame_index) binary file \(frame_outliers_binary_filename) does not exist")
                 // try json
                 
                 
@@ -353,7 +353,7 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
                         
                         outlier_groups_for_this_frame = try decoder.decode(OutlierGroups.self, from: data)
                         
-                        Log.i("loading frame \(frame_index) with outlier groups from json file")
+                        Log.d("loading frame \(frame_index) with outlier groups from json file")
                     } catch {
                         Log.e("frame \(frame_index) error decoding file \(frame_outliers_json_filename): \(error)")
                     }
