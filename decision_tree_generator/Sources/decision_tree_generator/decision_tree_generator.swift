@@ -12,7 +12,7 @@ var start_time: Date = Date()
 @main
 @available(macOS 10.15, *) 
 struct decision_tree_generator: ParsableCommand {
-/*
+
     @Flag(name: [.customShort("v"), .customLong("verify")],
           help:"""
             Verification mode
@@ -22,7 +22,7 @@ struct decision_tree_generator: ParsableCommand {
               2. how well decision tree matches a known group it was not tested on
             """)
     var verification_mode = false
-*/
+
     @Argument(help: """
         fill this shit in better sometime later
         """)
@@ -31,11 +31,106 @@ struct decision_tree_generator: ParsableCommand {
     mutating func run() throws {
         Log.handlers[.console] = ConsoleLogHandler(at: .debug)
 
-        Log.i("Starting")
         start_time = Date()
-        generate_tree()
+        Log.i("Starting")
+
+        if verification_mode {
+            run_verification()
+        } else {
+            generate_tree()
+        }
     }
 
+    func run_verification() {
+        let dispatch_group = DispatchGroup()
+        dispatch_group.enter()
+        Task {
+            for json_config_file_name in json_config_file_names {
+                do {
+                    var num_similar_outlier_groups = 0
+                    var num_different_outlier_groups = 0
+                    
+                    let config = try await Config.read(fromFilename: json_config_file_name)
+                    Log.d("got config from \(json_config_file_name)")
+                    
+                    let callbacks = Callbacks()
+
+                    var frames: [FrameAirplaneRemover] = []
+                    
+                    var endClosure: () -> Void = { }
+                    
+                    // called when we should check a frame
+                    callbacks.frameCheckClosure = { new_frame in
+                        frames.append(new_frame)
+                        endClosure()
+                        Log.d("frameCheckClosure for frame \(new_frame.frame_index)")
+                    }
+                    
+                    // XXX is this VVV obsolete???
+                    callbacks.countOfFramesToCheck = { 1 }
+
+                    let eraser = try NighttimeAirplaneRemover(with: config,
+                                                              callbacks: callbacks,
+                                                              processExistingFiles: true,
+                                                              fullyProcess: false)
+                    let sequence_size = await eraser.image_sequence.filenames.count
+                    endClosure = {
+                        if frames.count == sequence_size {
+                            eraser.shouldRun = false
+                        }
+                    }
+                    
+                    Log.i("got \(sequence_size) frames")
+                    // XXX run it and get the outlier groups
+
+                    try eraser.run()
+
+                    // load the outliers in parallel
+                    try await withThrowingTaskGroup(of: Void.self) { taskGroup in
+                        for frame in frames {
+                            taskGroup.addTask(/*priority: .medium*/) {
+                                try await frame.loadOutliers()
+                            }
+                        }
+                        try await taskGroup.waitForAll()
+                    }
+                    for frame in frames {
+                        // check all outlier groups 
+                        Log.w("SHOULD CHECK frame \(frame.frame_index)")
+                        if let outlier_group_list = await frame.outlierGroups() {
+                            for outlier_group in outlier_group_list {
+                                if let shouldPaint = await outlier_group.shouldPaint {
+
+                                    let decisionTreeShouldPaint = await outlier_group.shouldPaintFromDecisionTree
+                                    if decisionTreeShouldPaint == shouldPaint.willPaint {
+                                        // good
+                                        num_similar_outlier_groups += 1
+                                    } else {
+                                        // bad
+                                        num_different_outlier_groups += 1
+                                    }
+                                } else {
+                                    Log.e("WTF")
+                                }
+                            }
+                        } else {
+                            Log.e("WTF")
+
+                        }
+                    }
+                    let total = num_similar_outlier_groups + num_different_outlier_groups
+                    let percentage_good = Double(num_similar_outlier_groups)/Double(total)*100
+
+                    Log.i("for \(json_config_file_name), out of \(total) \(percentage_good)% success")
+                } catch {
+                    Log.e("\(error)")
+                }
+            }
+            dispatch_group.leave()
+        }
+        dispatch_group.wait()
+    }
+    
     func generate_tree() {
         let dispatch_group = DispatchGroup()
         dispatch_group.enter()
@@ -74,7 +169,6 @@ struct decision_tree_generator: ParsableCommand {
                     let sequence_size = await eraser.image_sequence.filenames.count
                     endClosure = {
                         if frames.count == sequence_size {
-                            Log.i("stopping that shit")
                             eraser.shouldRun = false
                         }
                     }
@@ -90,7 +184,7 @@ struct decision_tree_generator: ParsableCommand {
                         // load the outliers in parallel
                         try await withThrowingTaskGroup(of: Void.self) { taskGroup in
                             for frame in frames {
-                                taskGroup.addTask(/*priority: .medium*/) {
+                                taskGroup.addTask() {
                                     try await frame.loadOutliers()
                                 }
                             }
@@ -172,7 +266,8 @@ struct decision_tree_generator: ParsableCommand {
         dispatch_group.wait()
     }
 
-    // top level func that writes a compilable wrapper around the root tree node 
+    // top level func that writes a compilable wrapper around the root tree node
+    // XXX pass in input json configs to put into comments
     func generateTree(with should_paint_test_data: [OutlierGroupValues],
                       and should_not_paint_test_data: [OutlierGroupValues]) async -> String
     {
@@ -185,16 +280,27 @@ struct decision_tree_generator: ParsableCommand {
 
         let end_time = Date()
 
-        let duration_string = DateComponentsFormatter().string(from: start_time,
-                                                               to: end_time) ?? "??"
+        let formatter = DateComponentsFormatter()
+        formatter.calendar = Calendar.current
+        formatter.allowedUnits = [.day, .hour, .minute, .second]
+        formatter.unitsStyle = .full
+        let duration_string = formatter.string(from: start_time, to: end_time) ?? "??"
+
+        var input_files_string = ""
+        for json_config_file_name in json_config_file_names {
+            input_files_string += "     - \(json_config_file_name)\n"
+        }
         
         return """
           /*
-             auto generated by decision_tree_generator on \(Date()) in \(duration_string) seconds
+             auto generated by decision_tree_generator on \(Date()) in \(duration_string)
 
              with test data consisting of:
                - \(should_paint_test_data.count) groups known to be paintable
                - \(should_not_paint_test_data.count) groups known to not be paintable
+
+             from input data described by:
+          \(input_files_string)
           */
           
           // DO NOT EDIT THIS FILE
