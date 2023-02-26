@@ -10,7 +10,7 @@
 @available(macOS 10.15, *) 
 public extension OutlierGroup {
     // we derive a Double value from each of these
-    public enum TreeDecisionType: CaseIterable, Hashable {
+    enum TreeDecisionType: CaseIterable, Hashable {
         case size
         case width
         case height
@@ -24,7 +24,9 @@ public extension OutlierGroup {
         case aspectRatio
         case fillAmount
         case surfaceAreaRatio
-        case brightness
+        case averagebrightness
+        case medianBrightness
+        case maxBrightness
         case avgCountOfFirst10HoughLines
         case maxThetaDiffOfFirst10HoughLines
         case maxRhoDiffOfFirst10HoughLines
@@ -38,7 +40,7 @@ public extension OutlierGroup {
          */
     }
 
-    public func decisionTreeValue(for type: TreeDecisionType) -> Double {
+    func decisionTreeValue(for type: TreeDecisionType) -> Double {
         switch type {
         case .size:
             return Double(self.size)
@@ -66,19 +68,41 @@ public extension OutlierGroup {
             return Double(size)/(Double(self.bounds.width)*Double(self.bounds.height))
         case .surfaceAreaRatio:
             return self.surfaceAreaToSizeRatio
-        case .brightness:
+        case .averagebrightness:
             return Double(self.brightness)
+        case .medianBrightness:            
+            return self.medianBrightness
+        case .maxBrightness:    
+            return self.maxBrightness
         case .avgCountOfFirst10HoughLines:
-            return self.avgCountOfFirst10HoughLines()
+            return self.avgCountOfFirst10HoughLines
         case .maxThetaDiffOfFirst10HoughLines:
-            return self.maxThetaDiffOfFirst10HoughLines()
+            return self.maxThetaDiffOfFirst10HoughLines
         case .maxRhoDiffOfFirst10HoughLines:
-            return self.maxRhoDiffOfFirst10HoughLines()
+            return self.maxRhoDiffOfFirst10HoughLines
         }
     }
 
-
-    func maxThetaDiffOfFirst10HoughLines() -> Double {
+    private var maxBrightness: Double {
+        var max: UInt32 = 0
+        for pixel in pixels {
+            if pixel > max { max = pixel }
+        }
+        return Double(max)
+    }
+    
+    private var medianBrightness: Double {
+        var max: UInt32 = 0
+        var values: [UInt32] = []
+        for pixel in pixels {
+            if pixel > 0 {
+                values.append(pixel)
+            }
+        }
+        return Double(values.sorted()[values.count/2])
+    }
+    
+    private var maxThetaDiffOfFirst10HoughLines: Double {
         var max_diff = 0.0
         let first_theta = self.lines[0].theta
         for i in 1..<10 {
@@ -89,7 +113,7 @@ public extension OutlierGroup {
         return max_diff
     }
     
-    func maxRhoDiffOfFirst10HoughLines() -> Double {
+    private var maxRhoDiffOfFirst10HoughLines: Double {
         var max_diff = 0.0
         let first_rho = self.lines[0].rho
         for i in 1..<10 {
@@ -100,7 +124,7 @@ public extension OutlierGroup {
         return max_diff
     }
     
-    func avgCountOfFirst10HoughLines() -> Double {
+    private var avgCountOfFirst10HoughLines: Double {
         var sum = 0.0
         var divisor = 0.0
         for i in 0..<10 {
@@ -112,7 +136,7 @@ public extension OutlierGroup {
         return sum/divisor
     }
     
-    public func logDecisionTreeValues() {
+    func logDecisionTreeValues() {
         var message = "decision tree values for \(self.name): "
         for type in /*OutlierGroup.*/TreeDecisionType.allCases {
             message += "\(type) = \(self.decisionTreeValue(for: type)) " 

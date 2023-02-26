@@ -90,8 +90,11 @@ public actor OutlierGroup: CustomStringConvertible,
     public let bounds: BoundingBox     // a bounding box on the image that contains this group
     public let brightness: UInt        // the average amount per pixel of brightness over the limit 
     public var lines: [Line]           // sorted lines from the hough transform of this outlier group
-    public let pixels: [UInt32]        // indexed by y * bounds.width + x, true if part of this group
-                                // zero if pixel if not part of group, brightness value otherwise
+
+    // pixel value is zero if pixel is not part of group,
+    // otherwise it's the amount brighter this pixel was than those in the adjecent frames 
+    public let pixels: [UInt32]        // indexed by y * bounds.width + x
+
     public let max_pixel_distance: UInt16
     public let surfaceAreaToSizeRatio: Double
 
@@ -110,7 +113,7 @@ public actor OutlierGroup: CustomStringConvertible,
 
     init(name: String,
          size: UInt,
-         brightness: UInt,
+         brightness: UInt,      // average brightness
          bounds: BoundingBox,
          frame: FrameAirplaneRemover,
          pixels: [UInt32],
@@ -460,7 +463,6 @@ public actor OutlierGroup: CustomStringConvertible,
         case size
         case bounds
         case brightness
-        // XXX maybe don't save lines
         case lines
         case pixels
         case max_pixel_distance
@@ -469,20 +471,34 @@ public actor OutlierGroup: CustomStringConvertible,
         case frame_index
     }
     
-    init(from decoder: Decoder) async throws {
+    public init(from decoder: Decoder) throws {
 	let data = try decoder.container(keyedBy: CodingKeys.self)
 
         self.name = try data.decode(String.self, forKey: .name)
         self.size = try data.decode(UInt.self, forKey: .size)
         self.bounds = try data.decode(BoundingBox.self, forKey: .bounds)
         self.brightness = try data.decode(UInt.self, forKey: .brightness)
-        // XXX look into not saving the lines, and re-calculating them with hough transform upon reload
-        self.lines = try data.decode(Array<Line>.self, forKey: .lines)
         self.pixels = try data.decode(Array<UInt32>.self, forKey: .pixels)
         self.max_pixel_distance = try data.decode(UInt16.self, forKey: .max_pixel_distance)
         self.surfaceAreaToSizeRatio = try data.decode(Double.self, forKey: .surfaceAreaToSizeRatio)
         self.shouldPaint = try data.decode(PaintReason.self, forKey: .shouldPaint)
         self.frame_index = try data.decode(Int.self, forKey: .frame_index)
+
+        if false {
+            // XXX this calculates the lines instead of loading them
+            // however it appears to be slower
+            
+            // the lines are calculated from saved data, not saved themselves
+            let transform = HoughTransform(data_width: bounds.width,
+                                           data_height: bounds.height,
+                                           input_data: pixels,
+                                           max_pixel_distance: max_pixel_distance)
+
+            // we want all the lines, all of them.
+            self.lines = transform.lines(min_count: 1)
+        } else {
+            self.lines = try data.decode(Array<Line>.self, forKey: .lines)
+        }
     }
 
     public func encodable() -> OutlierGroupEncodable {
@@ -506,7 +522,7 @@ public class OutlierGroupEncodable: Encodable {
     public let size: UInt
     public let bounds: BoundingBox
     public let brightness: UInt   
-    public let lines: [Line]      
+    public let lines: [Line]
     public let pixels: [UInt32]   
     public let max_pixel_distance: UInt16
     public let surfaceAreaToSizeRatio: Double
