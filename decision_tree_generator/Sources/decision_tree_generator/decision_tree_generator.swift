@@ -324,7 +324,7 @@ struct decision_tree_generator: ParsableCommand {
                           and should_not_paint_test_data: [OutlierGroupValues],
                           indent: Int) async -> DecisionTree
     {
-        Log.i("decisionTreeNode with indent \(indent)")
+        Log.i("decisionTreeNode with indent \(indent) should_paint_test_data.count \(should_paint_test_data.count) should_not_paint_test_data.count \(should_not_paint_test_data.count)")
 
         if should_paint_test_data.count == 0,
            should_not_paint_test_data.count == 0
@@ -509,13 +509,19 @@ struct decision_tree_generator: ParsableCommand {
                     }
 
                     // this is the 0-1 percentage of should_paint
-                    let original_split = Double(should_paint_test_data.count)/Double(should_not_paint_test_data.count)
+                    let original_split =
+                      Double(should_paint_test_data.count) /
+                      Double(should_not_paint_test_data.count + should_paint_test_data.count)
 
                     // this is the 0-1 percentage of should_paint on the less than split
-                    let less_than_split = Double(lessThanShouldPaint.count)/Double(lessThanShouldNotPaint.count)
+                    let less_than_split =
+                      Double(lessThanShouldPaint.count) /
+                      Double(lessThanShouldNotPaint.count + lessThanShouldPaint.count)
 
                     // this is the 0-1 percentage of should_paint on the greater than split
-                    let greater_than_split = Double(greaterThanShouldPaint.count)/Double(greaterThanShouldNotPaint.count)
+                    let greater_than_split =
+                      Double(greaterThanShouldPaint.count) /
+                      Double(greaterThanShouldNotPaint.count + greaterThanShouldPaint.count)
 
                     var we_are_best = false
                     
@@ -542,9 +548,11 @@ struct decision_tree_generator: ParsableCommand {
                         less_than_should_not_paint_test_data = lessThanShouldNotPaint
                         greater_than_should_paint_test_data = greaterThanShouldPaint
                         greater_than_should_not_paint_test_data = greaterThanShouldNotPaint
+                        Log.i("best so far for type \(type) original split is \(original_split) less than split is \(less_than_split) greater than split is \(greater_than_split)")
+                    } else {
+                        Log.d("for type \(type) original split is \(original_split) less than split is \(less_than_split) greater than split is \(greater_than_split)")
                     }
                     
-                    Log.i("for type \(type) original split is \(original_split) less than split is \(less_than_split) greater than split is \(greater_than_split)")
                 }
             } else {
                 Log.e("WTF")
@@ -573,6 +581,18 @@ struct decision_tree_generator: ParsableCommand {
                                                                 indent: indent + 1)
                     return TreeResponse(treeNode: less_tree, position: .less)
                 }
+                // uncomment this to make it serial (for easier debugging)
+                // comment it to make it parallel
+/*
+                while let response = await taskGroup.next() {
+                    switch response.position {
+                    case .less:
+                        less_response = response
+                    case .greater:
+                        greater_response = response
+                    }
+                }
+ */
                 taskGroup.addTask() {
                     let greater_tree = await self.decisionTreeNode(with: gtsptd,
                                                                    and: gtsnptd,
