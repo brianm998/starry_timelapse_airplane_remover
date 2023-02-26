@@ -105,6 +105,10 @@ public actor OutlierGroup: CustomStringConvertible,
 
     // has to be optional so we can read OuterlierGroups as codable
     public var frame: FrameAirplaneRemover?
+
+    public func setFrame(_ frame: FrameAirplaneRemover) {
+        self.frame = frame
+    }
     
     // returns the first, most likely line, if any
     var firstLine: Line? {

@@ -363,7 +363,12 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
         if self.outlier_groups == nil {
             Log.d("frame \(frame_index) loading outliers")
             if let outlierGroups = await outlierGroupLoader() {
-                outlierGroups.forEach { outlier in outlier.frame = self }
+                if let groups = outlierGroups.groups {
+                    for outlier in groups.values {
+                        await outlier.setFrame(self) 
+                    }
+                }
+                                                                  
                 self.outlier_groups = outlierGroups
                 self.state = .outlierProcessingComplete
                 Log.i("loaded \(self.outlier_groups?.groups?.count) outlier groups for frame \(frame_index)")
