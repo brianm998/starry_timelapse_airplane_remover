@@ -102,6 +102,9 @@ public actor OutlierGroup: CustomStringConvertible,
     public var shouldPaint: PaintReason? // should we paint this group, and why?
 
     public let frame_index: Int
+
+    // has to be optional so we can read OuterlierGroups as codable
+    public var frame: FrameAirplaneRemover?
     
     // returns the first, most likely line, if any
     var firstLine: Line? {
@@ -124,6 +127,7 @@ public actor OutlierGroup: CustomStringConvertible,
         self.brightness = brightness
         self.bounds = bounds
         self.frame_index = frame.frame_index
+        self.frame = frame
         self.pixels = pixels
         self.max_pixel_distance = max_pixel_distance
         self.surfaceAreaToSizeRatio = surface_area_to_size_ratio(of: pixels,

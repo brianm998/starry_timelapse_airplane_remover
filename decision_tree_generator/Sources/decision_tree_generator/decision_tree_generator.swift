@@ -9,6 +9,43 @@ struct OutlierGroupValues {
 
 var start_time: Date = Date()
 
+@available(macOS 10.15, *) 
+struct DecisionResult {
+    let type: OutlierGroup.TreeDecisionType
+    let value: Double
+    let lessThanShouldPaint: [OutlierGroupValues]
+    let lessThanShouldNotPaint: [OutlierGroupValues]
+    let greaterThanShouldPaint: [OutlierGroupValues]
+    let greaterThanShouldNotPaint: [OutlierGroupValues]
+    let lessThanSplit: Double
+    let greaterThanSplit: Double
+
+    public init(type: OutlierGroup.TreeDecisionType,
+                value: Double = 0,
+                lessThanShouldPaint: [OutlierGroupValues],
+                lessThanShouldNotPaint: [OutlierGroupValues],
+                greaterThanShouldPaint: [OutlierGroupValues],
+                greaterThanShouldNotPaint: [OutlierGroupValues])
+    {
+
+        self.type = type
+        self.value = value
+        self.lessThanShouldPaint = lessThanShouldPaint
+        self.lessThanShouldNotPaint = lessThanShouldNotPaint
+        self.greaterThanShouldPaint = greaterThanShouldPaint
+        self.greaterThanShouldNotPaint = greaterThanShouldNotPaint
+        // this is the 0-1 percentage of should_paint on the less than split
+        self.lessThanSplit =
+          Double(lessThanShouldPaint.count) /
+          Double(lessThanShouldNotPaint.count + lessThanShouldPaint.count)
+
+        // this is the 0-1 percentage of should_paint on the greater than split
+        self.greaterThanSplit =
+          Double(greaterThanShouldPaint.count) /
+          Double(greaterThanShouldNotPaint.count + greaterThanShouldPaint.count)
+    }
+}
+
 @main
 @available(macOS 10.15, *) 
 struct decision_tree_generator: ParsableCommand {
@@ -41,6 +78,7 @@ struct decision_tree_generator: ParsableCommand {
         }
     }
 
+    // use an exising decision tree to see how well it does against a given sample
     func run_verification() {
         let dispatch_group = DispatchGroup()
         dispatch_group.enter()
@@ -132,7 +170,8 @@ struct decision_tree_generator: ParsableCommand {
         }
         dispatch_group.wait()
     }
-    
+
+    // actually generate a decision tree
     func generate_tree() {
         let dispatch_group = DispatchGroup()
         dispatch_group.enter()
@@ -335,6 +374,11 @@ struct decision_tree_generator: ParsableCommand {
             return ShouldPaintDecision(indent: indent)
         }
 
+        // this is the 0-1 percentage of should_paint
+        let original_split =
+          Double(should_paint_test_data.count) /
+          Double(should_not_paint_test_data.count + should_paint_test_data.count)
+
         // we have non zero test data of both kinds
         
         // collate should paint and not paint test data by type
@@ -429,6 +473,17 @@ struct decision_tree_generator: ParsableCommand {
         var greater_than_should_paint_test_data: [OutlierGroupValues] = []
         var greater_than_should_not_paint_test_data: [OutlierGroupValues] = []
 
+        /*
+        var type: OutlierGroup.TreeDecisionType?
+        var value: Double = 0
+        var lessThanShouldPaint: [OutlierGroupValues] = []
+        var lessThanShouldNotPaint: [OutlierGroupValues] = []
+
+        var greaterThanShouldPaint: [OutlierGroupValues] = []
+        var greaterThanShouldNotPaint: [OutlierGroupValues] = []
+        let less_than_split: Double
+        let greater_than_split: Double
+*/
         var biggest_split = 0.0
 
         // iterate ofer all decision tree types to pick the best one
@@ -503,11 +558,6 @@ struct decision_tree_generator: ParsableCommand {
                         }
                     }
 
-                    // this is the 0-1 percentage of should_paint
-                    let original_split =
-                      Double(should_paint_test_data.count) /
-                      Double(should_not_paint_test_data.count + should_paint_test_data.count)
-
                     // this is the 0-1 percentage of should_paint on the less than split
                     let less_than_split =
                       Double(lessThanShouldPaint.count) /
@@ -547,7 +597,6 @@ struct decision_tree_generator: ParsableCommand {
                     } else {
                         Log.d("for type \(type) original split is \(original_split) less than split is \(less_than_split) greater than split is \(greater_than_split)")
                     }
-                    
                 }
             } else {
                 Log.e("WTF")
