@@ -31,6 +31,7 @@ public extension OutlierGroup {
         case maxThetaDiffOfFirst10HoughLines
         case maxRhoDiffOfFirst10HoughLines
         case numberOfNearbyOutliersInSameFrame
+        case adjecentFrameNeighboringOutliersBestTheta
         /*
          
          some more numbers about hough lines
@@ -83,6 +84,8 @@ public extension OutlierGroup {
             return self.maxRhoDiffOfFirst10HoughLines
         case .numberOfNearbyOutliersInSameFrame:
             return await self.numberOfNearbyOutliersInSameFrame
+        case .adjecentFrameNeighboringOutliersBestTheta:
+            return await self.adjecentFrameNeighboringOutliersBestTheta
         }
     }
 
@@ -112,6 +115,46 @@ public extension OutlierGroup {
                 let nearby_groups = await frame.outlierGroups(within: 200, // XXX hardcoded constant
                                                               of: self.bounds)
                 return Double(nearby_groups.count)
+            } else {
+                fatalError("SHIT")
+            }
+        }
+    }
+
+    // tries to find the closest theta on any nearby outliers on adjecent frames
+    private var adjecentFrameNeighboringOutliersBestTheta: Double {
+        get async {
+            if let frame = frame {
+                let ret: Double = 0
+                let this_theta = self.firstLine?.theta ?? 180
+                var smallest_difference: Double = 360
+                if let previous_frame = await frame.previousFrame {
+                    let nearby_groups = await previous_frame.outlierGroups(within: 200, // XXX hardcoded constant
+                                                                           of: self.bounds)
+                    for group in nearby_groups {
+                        if let firstLine = await group.firstLine {
+                            let difference = Double(abs(this_theta - firstLine.theta))
+                            if difference < smallest_difference {
+                                smallest_difference = difference
+                            }
+                        }
+                    }
+                }
+
+                if let next_frame = await frame.nextFrame {
+                    let nearby_groups = await next_frame.outlierGroups(within: 200, // XXX hardcoded constant
+                                                                       of: self.bounds)
+                    for group in nearby_groups {
+                        if let firstLine = await group.firstLine {
+                            let difference = Double(abs(this_theta - firstLine.theta))
+                            if difference < smallest_difference {
+                                smallest_difference = difference
+                            }
+                        }
+                    }
+                }
+                
+                return smallest_difference
             } else {
                 fatalError("SHIT")
             }
