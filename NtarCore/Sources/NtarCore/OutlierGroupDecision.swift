@@ -40,9 +40,20 @@ public extension OutlierGroup {
          both within this frame, and in others
          
          */
+
+        public var needsAsync: Bool {
+            switch self {
+            case .numberOfNearbyOutliersInSameFrame:
+                return true
+            case .adjecentFrameNeighboringOutliersBestTheta:
+                return true
+            default:
+                return false
+            }
+        }
     }
 
-    func decisionTreeValue(for type: TreeDecisionType) async -> Double {
+    func nonAsyncDecisionTreeValue(for type: TreeDecisionType) -> Double {
         switch type {
         case .size:
             return Double(self.size)
@@ -82,10 +93,19 @@ public extension OutlierGroup {
             return self.maxThetaDiffOfFirst10HoughLines
         case .maxRhoDiffOfFirst10HoughLines:
             return self.maxRhoDiffOfFirst10HoughLines
+        default:
+            fatalError("called with bad value \(type)")
+        }
+    }
+    
+    func decisionTreeValue(for type: TreeDecisionType) async -> Double {
+        switch type {
         case .numberOfNearbyOutliersInSameFrame:
             return await self.numberOfNearbyOutliersInSameFrame
         case .adjecentFrameNeighboringOutliersBestTheta:
             return await self.adjecentFrameNeighboringOutliersBestTheta
+        default:
+            return self.nonAsyncDecisionTreeValue(for: type)
         }
     }
 
@@ -123,6 +143,13 @@ public extension OutlierGroup {
 
     // tries to find the closest theta on any nearby outliers on adjecent frames
     private var adjecentFrameNeighboringOutliersBestTheta: Double {
+        /*
+         instead of finding the closest theta, maybe use a probability distribution of thetas
+         weighted by line count
+
+         use this across all nearby outlier groups in adjecent frames, and notice if there
+         is only one good (or decent) match, or a slew of bad matches
+         */
         get async {
             if let frame = frame {
                 let ret: Double = 0
