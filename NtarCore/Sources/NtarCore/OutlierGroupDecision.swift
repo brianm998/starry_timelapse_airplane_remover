@@ -30,6 +30,7 @@ public extension OutlierGroup {
         case avgCountOfFirst10HoughLines
         case maxThetaDiffOfFirst10HoughLines
         case maxRhoDiffOfFirst10HoughLines
+        case numberOfNearbyOutliersInSameFrame
         /*
          
          some more numbers about hough lines
@@ -80,6 +81,8 @@ public extension OutlierGroup {
             return self.maxThetaDiffOfFirst10HoughLines
         case .maxRhoDiffOfFirst10HoughLines:
             return self.maxRhoDiffOfFirst10HoughLines
+        case .numberOfNearbyOutliersInSameFrame:
+            return await self.numberOfNearbyOutliersInSameFrame
         }
     }
 
@@ -101,7 +104,20 @@ public extension OutlierGroup {
         }
         return Double(values.sorted()[values.count/2])
     }
-    
+
+    private var numberOfNearbyOutliersInSameFrame: Double {
+        get async {
+            if let frame = frame {
+                let ret: Double = 0
+                let nearby_groups = await frame.outlierGroups(within: 200, // XXX hardcoded constant
+                                                              of: self.bounds)
+                return Double(nearby_groups.count)
+            } else {
+                fatalError("SHIT")
+            }
+        }
+    }
+
     private var maxThetaDiffOfFirst10HoughLines: Double {
         var max_diff = 0.0
         let first_theta = self.lines[0].theta

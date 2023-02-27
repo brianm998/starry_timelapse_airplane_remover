@@ -85,6 +85,20 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
         return nil
     }
 
+    public func outlierGroups(within distance: Double, of bounding_box: BoundingBox) -> [OutlierGroup] {
+        var ret: [OutlierGroup] = []
+        if let outlier_groups = outlier_groups,
+           let groups = outlier_groups.groups
+        {
+            for (_, group) in groups {
+                if group.bounds.centerDistance(to: bounding_box) < distance {
+                    ret.append(group)
+                }
+            }
+        }
+        return ret
+    }
+    
     var previewSize: NSSize {
         let preview_width = config.preview_width
         let preview_height = config.preview_height
