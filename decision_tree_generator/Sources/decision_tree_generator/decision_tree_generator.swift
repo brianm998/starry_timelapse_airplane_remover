@@ -9,6 +9,12 @@ struct OutlierGroupValues {
 
 var start_time: Date = Date()
 
+@available(macOS 10.15, *) 
+struct TreeDecisionTypeResult {
+    var decisionResult: DecisionResult?
+    var decisionTreeNode: DecisionTree?
+}
+
 // use this for with the taskgroup below
 @available(macOS 10.15, *) 
 struct DecisionResult {
@@ -20,7 +26,7 @@ struct DecisionResult {
     let greaterThanShouldNotPaint: [OutlierGroupValues]
     let lessThanSplit: Double
     let greaterThanSplit: Double
-
+    
     public init(type: OutlierGroup.TreeDecisionType,
                 value: Double = 0,
                 lessThanShouldPaint: [OutlierGroupValues],
@@ -471,6 +477,9 @@ struct decision_tree_generator: ParsableCommand {
             }
         }
 
+        var bestDecisionResult: DecisionResult?
+        var bestTreeNode: DecisionTree?
+        
         // vars used to construct the next tree node
         var bestType: OutlierGroup.TreeDecisionType?
         var bestValue: Double = 0
@@ -496,136 +505,159 @@ struct decision_tree_generator: ParsableCommand {
         // that differentiates the test data
 
         // XXX could use task group to paralelize this
-//        await withTaskGroup(of: DecisionResult.self) { taskGroup in
+        await withTaskGroup(of: TreeDecisionTypeResult.self) { taskGroup in
         
-        for type in OutlierGroup.TreeDecisionType.allCases {
-            if let paint_dist = should_paint_dist[type],
-               let not_paint_dist = should_not_paint_dist[type]
-            {
-  //              taskGroup.addTask() {
-                Log.d("type \(type)")
-                if paint_dist.max < not_paint_dist.min {
-                    // we have a clear distinction between all provided test data
-                    // this is an end leaf node, both paths after decision lead to a result
-                    Log.d("clear distinction \(paint_dist.max) < \(not_paint_dist.min)")
-                    return DecisionTreeNode(type: type,
-                                            value: (paint_dist.max + not_paint_dist.min) / 2,
-                                            lessThan: ShouldPaintDecision(indent: indent + 1),
-                                            greaterThan: ShouldNotPaintDecision(indent: indent + 1),
-                                            indent: indent)
-                } else if not_paint_dist.max < paint_dist.min {
-                    Log.d("clear distinction \(not_paint_dist.max) < \(paint_dist.min)")
-                    // we have a clear distinction between all provided test data
-                    // this is an end leaf node, both paths after decision lead to a result
-                    return DecisionTreeNode(type: type,
-                                            value: (not_paint_dist.max + paint_dist.min) / 2,
-                                            lessThan: ShouldNotPaintDecision(indent: indent + 1),
-                                            greaterThan: ShouldPaintDecision(indent: indent + 1),
-                                            indent: indent)
-                } else {
-                    Log.d("no clear distinction, need new node at indent \(indent)")
-                    // we do not have a clear distinction between all provided test data
-                    // we need to figure out what type is best to segarate
-                    // the test data further
-
-                    // test this type to see how much we can split the data based upon it
-
-                    // for now, center between their medians
-                    // possible improvement is to decide based upon something else
-                    // use this value to split the should_paint_test_data and not paint
-                    let decisionValue = (paint_dist.median + not_paint_dist.median) / 2
-
-                    var lessThanShouldPaint: [OutlierGroupValues] = []
-                    var lessThanShouldNotPaint: [OutlierGroupValues] = []
-
-                    var greaterThanShouldPaint: [OutlierGroupValues] = []
-                    var greaterThanShouldNotPaint: [OutlierGroupValues] = []
-
-                    // calculate how the data would split if we used the above decision value
-                    for group_values in should_paint_test_data {
-                        if let group_value = group_values.values[type] {
-                            if group_value < decisionValue {
-                                lessThanShouldPaint.append(group_values)
-                            } else {
-                                greaterThanShouldPaint.append(group_values)
-                            }
+            for type in OutlierGroup.TreeDecisionType.allCases {
+                if let paint_dist = should_paint_dist[type],
+                   let not_paint_dist = should_not_paint_dist[type]
+                {
+                    taskGroup.addTask() {
+                        Log.d("type \(type)")
+                        if paint_dist.max < not_paint_dist.min {
+                            // we have a clear distinction between all provided test data
+                            // this is an end leaf node, both paths after decision lead to a result
+                            Log.d("clear distinction \(paint_dist.max) < \(not_paint_dist.min)")
+                            
+                            var ret = TreeDecisionTypeResult()
+                            ret.decisionTreeNode =
+                              DecisionTreeNode(type: type,
+                                               value: (paint_dist.max + not_paint_dist.min) / 2,
+                                               lessThan: ShouldPaintDecision(indent: indent + 1),
+                                               greaterThan: ShouldNotPaintDecision(indent: indent + 1),
+                                               indent: indent)
+                            return ret
+                        } else if not_paint_dist.max < paint_dist.min {
+                            Log.d("clear distinction \(not_paint_dist.max) < \(paint_dist.min)")
+                            // we have a clear distinction between all provided test data
+                            // this is an end leaf node, both paths after decision lead to a result
+                            var ret = TreeDecisionTypeResult()
+                            ret.decisionTreeNode =
+                              DecisionTreeNode(type: type,
+                                               value: (not_paint_dist.max + paint_dist.min) / 2,
+                                               lessThan: ShouldNotPaintDecision(indent: indent + 1),
+                                               greaterThan: ShouldPaintDecision(indent: indent + 1),
+                                               indent: indent)
+                            return ret
                         } else {
-                            Log.e("FUCK")
-                            fatalError("SHIT")
+                            Log.d("no clear distinction, need new node at indent \(indent)")
+                            // we do not have a clear distinction between all provided test data
+                            // we need to figure out what type is best to segarate
+                            // the test data further
+                            
+                            // test this type to see how much we can split the data based upon it
+                            
+                            // for now, center between their medians
+                            // possible improvement is to decide based upon something else
+                            // use this value to split the should_paint_test_data and not paint
+                            let decisionValue = (paint_dist.median + not_paint_dist.median) / 2
+                            
+                            var lessThanShouldPaint: [OutlierGroupValues] = []
+                            var lessThanShouldNotPaint: [OutlierGroupValues] = []
+                            
+                            var greaterThanShouldPaint: [OutlierGroupValues] = []
+                            var greaterThanShouldNotPaint: [OutlierGroupValues] = []
+                            
+                            // calculate how the data would split if we used the above decision value
+                            for group_values in should_paint_test_data {
+                                if let group_value = group_values.values[type] {
+                                    if group_value < decisionValue {
+                                        lessThanShouldPaint.append(group_values)
+                                    } else {
+                                        greaterThanShouldPaint.append(group_values)
+                                    }
+                                } else {
+                                    Log.e("FUCK")
+                                    fatalError("SHIT")
+                                }
+                            }
+                            
+                            for group_values in should_not_paint_test_data {
+                                if let group_value = group_values.values[type] {
+                                    if group_value < decisionValue {
+                                        lessThanShouldNotPaint.append(group_values)
+                                    } else {
+                                        greaterThanShouldNotPaint.append(group_values)
+                                    }
+                                } else {
+                                    Log.e("FUCK")
+                                    fatalError("SHIT")
+                                }
+                            }
+                            /*
+                            // this is the 0-1 percentage of should_paint on the less than split
+                            let less_than_split =
+                              Double(lessThanShouldPaint.count) /
+                              Double(lessThanShouldNotPaint.count + lessThanShouldPaint.count)
+                            
+                            // this is the 0-1 percentage of should_paint on the greater than split
+                            let greater_than_split =
+                              Double(greaterThanShouldPaint.count) /
+                              Double(greaterThanShouldNotPaint.count + greaterThanShouldPaint.count)
+                             */
+                            var ret = TreeDecisionTypeResult()
+                            ret.decisionResult =
+                              DecisionResult(type: type,
+                                             value: decisionValue,
+                                             lessThanShouldPaint: lessThanShouldPaint,
+                                             lessThanShouldNotPaint: lessThanShouldNotPaint,
+                                             greaterThanShouldPaint: greaterThanShouldPaint,
+                                             greaterThanShouldNotPaint: greaterThanShouldNotPaint)
+                            return ret
                         }
                     }
-                    
-                    for group_values in should_not_paint_test_data {
-                        if let group_value = group_values.values[type] {
-                            if group_value < decisionValue {
-                                lessThanShouldNotPaint.append(group_values)
-                            } else {
-                                greaterThanShouldNotPaint.append(group_values)
-                            }
-                        } else {
-                            Log.e("FUCK")
-                            fatalError("SHIT")
-                        }
-                    }
+                }
+            }
+            var responses: [TreeDecisionTypeResult] = []
+            while let response = await taskGroup.next() {
+                responses.append(response)
+            }
 
-                    // this is the 0-1 percentage of should_paint on the less than split
-                    let less_than_split =
-                      Double(lessThanShouldPaint.count) /
-                      Double(lessThanShouldNotPaint.count + lessThanShouldPaint.count)
-
-                    // this is the 0-1 percentage of should_paint on the greater than split
-                    let greater_than_split =
-                      Double(greaterThanShouldPaint.count) /
-                      Double(greaterThanShouldNotPaint.count + greaterThanShouldPaint.count)
-
+            // look through them all
+            for response in responses {
+                if let decisionTreeNode = response.decisionTreeNode {
+                    // these are tree nodes ready to go
+                    bestTreeNode = decisionTreeNode
+                } else if let decisionResult = response.decisionResult {
+                    // these are tree nodes that require recursion
                     var we_are_best = false
                     
                     // choose the type with the best distribution 
                     // that will generate the shortest tree
-                    if less_than_split > original_split,
-                       less_than_split - original_split > biggest_split
+                    if decisionResult.lessThanSplit > original_split,
+                       decisionResult.lessThanSplit - original_split > biggest_split
                     {
                         // the less than split is biggest so far
-                        biggest_split = less_than_split - original_split
+                        biggest_split = decisionResult.lessThanSplit - original_split
                         we_are_best = true
-                    } else if greater_than_split > original_split,
-                              greater_than_split - original_split > biggest_split
+                    } else if decisionResult.greaterThanSplit > original_split,
+                              decisionResult.greaterThanSplit - original_split > biggest_split
                     {
                         // the greater than split is biggest so far
-                        biggest_split = greater_than_split - original_split
+                        biggest_split = decisionResult.greaterThanSplit - original_split
                         we_are_best = true
                     }
+
                     if we_are_best {
-                        // record this type as best so far
-                        bestType = type
-                        bestValue = decisionValue
-                        less_than_should_paint_test_data = lessThanShouldPaint
-                        less_than_should_not_paint_test_data = lessThanShouldNotPaint
-                        greater_than_should_paint_test_data = greaterThanShouldPaint
-                        greater_than_should_not_paint_test_data = greaterThanShouldNotPaint
-                        Log.i("best so far for type \(type) original split is \(original_split) less than split is \(less_than_split) greater than split is \(greater_than_split)")
-                    } else {
-                        Log.d("for type \(type) original split is \(original_split) less than split is \(less_than_split) greater than split is \(greater_than_split)")
+                        bestDecisionResult = decisionResult
                     }
                 }
-            } else {
-                Log.e("WTF")
-                fatalError("no best type")
             }
         }
 
-        if let bestType = bestType {
+        if let decisionTreeNode = bestTreeNode { return decisionTreeNode }
+        if let bestDecisionResult = bestDecisionResult { 
+
             // we've identified the best type to differentiate the test data
             // output a tree node with this type and value
 
             var less_response: TreeResponse?
             var greater_response: TreeResponse?
 
-            // these are here to get around concurrency mutability errors
-            let ltsptd = less_than_should_paint_test_data
-            let ltsnptd = less_than_should_not_paint_test_data
-            let gtsptd = greater_than_should_paint_test_data
-            let gtsnptd = greater_than_should_not_paint_test_data
+            // these are here to get around concurrency mutability errors (that may be gone now)
+            let ltsptd = bestDecisionResult.lessThanShouldPaint
+            let ltsnptd = bestDecisionResult.lessThanShouldNotPaint
+            let gtsptd = bestDecisionResult.greaterThanShouldPaint
+            let gtsnptd = bestDecisionResult.greaterThanShouldNotPaint
             
             // first recurse on both sides of the decision tree with differentated test data
             await withTaskGroup(of: TreeResponse.self) { taskGroup in
@@ -666,8 +698,8 @@ struct decision_tree_generator: ParsableCommand {
             if let less_response = less_response,
                let greater_response = greater_response
             {
-                return DecisionTreeNode(type: bestType,
-                                        value: bestValue,
+                return DecisionTreeNode(type: bestDecisionResult.type,
+                                        value: bestDecisionResult.value,
                                         lessThan: less_response.treeNode,
                                         greaterThan: greater_response.treeNode,
                                         indent: indent)
@@ -677,9 +709,8 @@ struct decision_tree_generator: ParsableCommand {
             }
         } else {
             Log.e("no best type")
-            fatalError("no best type")
+            fatalError("no best result")
         }
-        
     }
 }
 
