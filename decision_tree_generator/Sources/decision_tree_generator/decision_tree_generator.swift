@@ -1,6 +1,7 @@
 import Foundation
 import NtarCore
 import ArgumentParser
+import CryptoKit
 
 @available(macOS 10.15, *) 
 struct OutlierGroupValues {
@@ -13,6 +14,12 @@ var start_time: Date = Date()
 struct TreeDecisionTypeResult {
     var decisionResult: DecisionResult?
     var decisionTreeNode: DecisionTree?
+}
+
+@available(macOS 10.15, *) 
+struct OutlierGroupValuesResult {
+    let should_paint_test_data: [OutlierGroupValues]
+    let should_not_paint_test_data: [OutlierGroupValues]
 }
 
 struct TreeTestResults {
@@ -136,6 +143,9 @@ struct decision_tree_generator: ParsableCommand {
 
                     try eraser.run()
 
+                    // after the eraser is done running we should have received all the frames
+                    // in the frame check callback
+
                     // load the outliers in parallel
                     try await withThrowingTaskGroup(of: Void.self) { taskGroup in
                         for frame in frames {
@@ -147,7 +157,6 @@ struct decision_tree_generator: ParsableCommand {
                     }
                     await withTaskGroup(of: TreeTestResults.self) { taskGroup in
                         for frame in frames {
-                            // XXX task group here too, it's really slow
                             // check all outlier groups 
                             taskGroup.addTask() {
                                 var number_good = 0
@@ -206,6 +215,7 @@ struct decision_tree_generator: ParsableCommand {
             var should_not_paint_test_data: [OutlierGroupValues] = []
             
             for json_config_file_name in json_config_file_names {
+                // XXX task group here too, load them all in parallel
                 Log.d("should read \(json_config_file_name)")
                 
                 do {
@@ -240,10 +250,15 @@ struct decision_tree_generator: ParsableCommand {
                         }
                     }
                     
-                    Log.i("got \(sequence_size) frames")
+                    Log.d("got \(sequence_size) frames")
                     // XXX run it and get the outlier groups
 
                     try eraser.run()
+
+                    Log.d("eraser done running")
+                    
+                    // after the eraser is done running we should have received all the frames
+                    // in the frame check callback
 
                     if let image_width = eraser.image_width,
                        let image_height = eraser.image_height
@@ -257,31 +272,47 @@ struct decision_tree_generator: ParsableCommand {
                             }
                             try await taskGroup.waitForAll()
                         }
-                        for frame in frames {
-                            // iterate through all outliers
-                            if let outlier_groups = await frame.outlierGroups() {
-                                for outlier_group in outlier_groups {
-                                    let name = await outlier_group.name
-                                    if let should_paint = await outlier_group.shouldPaint {
-                                        let will_paint = should_paint.willPaint
-                                        var values = OutlierGroupValues()
-                                        
-                                        for type in OutlierGroup.TreeDecisionType.allCases {
-                                            values.values[type] = await outlier_group.decisionTreeValue(for: type)
-                                        }
-                                        if will_paint {
-                                            should_paint_test_data.append(values)
-                                        } else {
-                                            should_not_paint_test_data.append(values)
+                        Log.d("outliers loaded")
+                        await withTaskGroup(of: OutlierGroupValuesResult.self) { taskGroup in
+                            for frame in frames {
+                                // iterate through all outliers
+                                taskGroup.addTask() {
+                                    var local_should_paint_test_data: [OutlierGroupValues] = []
+                                    var local_should_not_paint_test_data: [OutlierGroupValues] = []
+                                    if let outlier_groups = await frame.outlierGroups() {
+                                        for outlier_group in outlier_groups {
+                                            let name = await outlier_group.name
+                                            if let should_paint = await outlier_group.shouldPaint {
+                                                let will_paint = should_paint.willPaint
+                                                var values = OutlierGroupValues()
+                                                
+                                                for type in OutlierGroup.TreeDecisionType.allCases {
+                                                    values.values[type] = await outlier_group.decisionTreeValue(for: type)
+                                                }
+                                                if will_paint {
+                                                    local_should_paint_test_data.append(values)
+                                                } else {
+                                                    local_should_not_paint_test_data.append(values)
+                                                }
+                                            } else {
+                                                Log.e("outlier group \(name) has no shouldPaint value")
+                                                fatalError("outlier group \(name) has no shouldPaint value")
+                                            }
                                         }
                                     } else {
-                                        Log.e("outlier group \(name) has no shouldPaint value")
-                                        fatalError("outlier group \(name) has no shouldPaint value")
+                                        Log.e("cannot get outlier groups for frame \(frame.frame_index)")
+                                        fatalError("cannot get outlier groups for frame \(frame.frame_index)")
                                     }
+                                    return OutlierGroupValuesResult(
+                                      should_paint_test_data: local_should_paint_test_data,
+                                      should_not_paint_test_data: local_should_not_paint_test_data)
+
                                 }
-                            } else {
-                                Log.e("cannot get outlier groups for frame \(frame.frame_index)")
-                                fatalError("cannot get outlier groups for frame \(frame.frame_index)")
+                            }
+
+                            while let response = await taskGroup.next() {
+                                should_paint_test_data += response.should_paint_test_data
+                                should_not_paint_test_data += response.should_not_paint_test_data
                             }
                         }
                     } else {
@@ -326,7 +357,6 @@ struct decision_tree_generator: ParsableCommand {
     }
 
     // top level func that writes a compilable wrapper around the root tree node
-    // XXX pass in input json configs to put into comments
     func generateTree(with should_paint_test_data: [OutlierGroupValues],
                       and should_not_paint_test_data: [OutlierGroupValues]) async -> String
     {
@@ -345,14 +375,40 @@ struct decision_tree_generator: ParsableCommand {
         formatter.unitsStyle = .full
         let duration_string = formatter.string(from: start_time, to: end_time) ?? "??"
 
+        let indentation = "    "
+        var digest = SHA256()
+        
         var input_files_string = ""
+        var input_files_array = "\(indentation)["
         for json_config_file_name in json_config_file_names {
             input_files_string += "     - \(json_config_file_name)\n"
+            input_files_array += "\n\(indentation)    \"\(json_config_file_name)\","
+            if let data = json_config_file_name.data(using: .utf8) {
+                digest.update(data: data)
+            } else {
+                Log.e("FUCK")
+                fatalError("SHIT")
+            }
         }
-        
+        input_files_array.removeLast()
+        input_files_array += "\n\(indentation)]\n"
+
+        let generation_date = Date()
+
+        if let data = "\(generation_date)".data(using: .utf8) {
+            digest.update(data: data)
+        } else {
+            Log.e("FUCK")
+            fatalError("SHIT")
+        }
+
+        let tree_hash = digest.finalize()
+        let tree_hash_string = tree_hash.compactMap { String(format: "%02x", $0) }.joined()
+        let generation_date_since_1970 = generation_date.timeIntervalSince1970
+
         return """
           /*
-             auto generated by decision_tree_generator on \(Date()) in \(duration_string)
+             auto generated by decision_tree_generator on \(generation_date) in \(duration_string)
 
              with test data consisting of:
                - \(should_paint_test_data.count) groups known to be paintable
@@ -366,9 +422,16 @@ struct decision_tree_generator: ParsableCommand {
           // DO NOT EDIT THIS FILE
           // DO NOT EDIT THIS FILE
 
+          public let decisionTreeGenerationSecondsSince1970 = \(generation_date_since_1970)
+
+          public let decisionTreeInputSequences =
+          \(input_files_array)
+
+          public let decisionTreeSha256 = "\(tree_hash_string)"
+          
           @available(macOS 10.15, *)
           public extension OutlierGroup {
-          
+
               // define a computed property which decides the paintability 
               // of this OutlierGroup with a decision tree
               var shouldPaintFromDecisionTree: Bool {
@@ -521,10 +584,6 @@ struct decision_tree_generator: ParsableCommand {
 
         Log.i("decisionTreeNode checkpoint 2 with indent \(indent) should_paint_test_data.count \(should_paint_test_data.count) should_not_paint_test_data.count \(should_not_paint_test_data.count)")
 
-        var bestDecisionResult: DecisionResult?
-        var bestTreeNode: DecisionTree?
-        var biggest_split = 0.0
-
         // iterate ofer all decision tree types to pick the best one
         // that differentiates the test data
 
@@ -625,10 +684,19 @@ struct decision_tree_generator: ParsableCommand {
                 responses.append(response)
             }
 
+            var bestDecisionResult: DecisionResult?
+            var bestTreeNode: DecisionTree?
+            var biggest_split = 0.0
+
             // look through them all
             for response in responses {
+                Log.d("got decision response \(response)")
                 if let decisionTreeNode = response.decisionTreeNode {
                     // these are tree nodes ready to go
+
+                    // XXX we may have more than one of them,
+                    // right now we're just choosing randomly
+                    // choose the best split
                     bestTreeNode = decisionTreeNode
                 } else if let decisionResult = response.decisionResult {
                     // these are tree nodes that require recursion
@@ -658,6 +726,7 @@ struct decision_tree_generator: ParsableCommand {
         }
 
         // return a direct tree node if we have it (no recursion)
+        // XXX make sure we choose the best one of theese
         if let decisionTreeNode = bestTreeNode { return decisionTreeNode }
 
         // if not, setup to recurse
