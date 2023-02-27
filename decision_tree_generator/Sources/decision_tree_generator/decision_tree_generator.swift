@@ -440,50 +440,66 @@ struct decision_tree_generator: ParsableCommand {
         // value distributions for each type
         var should_paint_dist: [OutlierGroup.TreeDecisionType: ValueDistribution] = [:]
         var should_not_paint_dist: [OutlierGroup.TreeDecisionType: ValueDistribution] = [:]
+
+        let _should_paint_values: [OutlierGroup.TreeDecisionType: [Double]] = should_paint_values
         
-        // for each type, calculate a min/max/mean/median for both paint and not
-        for type in OutlierGroup.TreeDecisionType.allCases {
-            // XXX task group here
-            var min = Double.greatestFiniteMagnitude
-            var max = -Double.greatestFiniteMagnitude
-            var sum = 0.0
-            if let all_values = should_paint_values[type] {
-                //Log.d("all values for paint \(type): \(all_values)")
-                for value in all_values {
-                    if value < min { min = value }
-                    if value > max { max = value }
-                    sum += value
+        await withTaskGroup(of: ValueDistribution.self) { taskGroup in
+            // for each type, calculate a min/max/mean/median for both paint and not
+            for type in OutlierGroup.TreeDecisionType.allCases {
+                taskGroup.addTask() {
+                    var min = Double.greatestFiniteMagnitude
+                    var max = -Double.greatestFiniteMagnitude
+                    var sum = 0.0
+                    if let all_values = _should_paint_values[type] {
+                        //Log.d("all values for paint \(type): \(all_values)")
+                        for value in all_values {
+                            if value < min { min = value }
+                            if value > max { max = value }
+                            sum += value
+                        }
+                        sum /= Double(all_values.count)
+                        let median = all_values.sorted()[all_values.count/2]
+                        return ValueDistribution(type: type, min: min, max: max, mean: sum, median: median)
+                    } else {
+                        Log.e("WTF")
+                        fatalError("FUCKED")
+                    }
                 }
-                sum /= Double(all_values.count)
-                let median = all_values.sorted()[all_values.count/2]
-                let dist = ValueDistribution(min: min, max: max, mean: sum, median: median)
-                should_paint_dist[type] = dist
-            } else {
-                Log.e("WTF")
+            }
+            while let response = await taskGroup.next() {
+                should_paint_dist[response.type] = response
             }
         }
 
         Log.i("decisionTreeNode checkpoint 1.5 with indent \(indent) should_paint_test_data.count \(should_paint_test_data.count) should_not_paint_test_data.count \(should_not_paint_test_data.count)")
 
+        let _should_not_paint_values: [OutlierGroup.TreeDecisionType: [Double]] = should_not_paint_values
+
         // XXX dupe above for not paint
-        for type in OutlierGroup.TreeDecisionType.allCases {
-            // XXX task group here
-            var min = Double.greatestFiniteMagnitude
-            var max = -Double.greatestFiniteMagnitude
-            var sum = 0.0
-            if let all_values = should_not_paint_values[type] {
-                //Log.d("all values for not paint \(type): \(all_values)")
-                for value in all_values {
-                    if value < min { min = value }
-                    if value > max { max = value }
-                    sum += value
+        await withTaskGroup(of: ValueDistribution.self) { taskGroup in
+            for type in OutlierGroup.TreeDecisionType.allCases {
+                taskGroup.addTask() {
+                    var min = Double.greatestFiniteMagnitude
+                    var max = -Double.greatestFiniteMagnitude
+                    var sum = 0.0
+                    if let all_values = _should_not_paint_values[type] {
+                        //Log.d("all values for not paint \(type): \(all_values)")
+                        for value in all_values {
+                            if value < min { min = value }
+                            if value > max { max = value }
+                            sum += value
+                        }
+                        sum /= Double(all_values.count)
+                        let median = all_values.sorted()[all_values.count/2]
+                        return ValueDistribution(type: type, min: min, max: max, mean: sum, median: median)
+                    } else {
+                        Log.e("WTF")
+                        fatalError("FUCK")
+                    }
                 }
-                sum /= Double(all_values.count)
-                let median = all_values.sorted()[all_values.count/2]
-                let dist = ValueDistribution(min: min, max: max, mean: sum, median: median)
-                should_not_paint_dist[type] = dist
-            } else {
-                Log.e("WTF")
+            }
+            while let response: ValueDistribution = await taskGroup.next() {
+                should_not_paint_dist[response.type] = response
             }
         }
 
@@ -702,7 +718,9 @@ struct TreeResponse {
     let position: Place
 }
     
+@available(macOS 10.15, *) 
 struct ValueDistribution {
+    let type: OutlierGroup.TreeDecisionType
     let min: Double
     let max: Double
     let mean: Double
