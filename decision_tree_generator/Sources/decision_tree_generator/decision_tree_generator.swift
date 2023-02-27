@@ -15,6 +15,11 @@ struct TreeDecisionTypeResult {
     var decisionTreeNode: DecisionTree?
 }
 
+struct TreeTestResults {
+    let numberGood: Int
+    let numberBad: Int
+}
+
 // use this for with the taskgroup below
 @available(macOS 10.15, *) 
 struct DecisionResult {
@@ -96,7 +101,6 @@ struct decision_tree_generator: ParsableCommand {
                 do {
                     var num_similar_outlier_groups = 0
                     var num_different_outlier_groups = 0
-                    
                     let config = try await Config.read(fromFilename: json_config_file_name)
                     Log.d("got config from \(json_config_file_name)")
                     
@@ -141,35 +145,47 @@ struct decision_tree_generator: ParsableCommand {
                         }
                         try await taskGroup.waitForAll()
                     }
-                    for frame in frames {
-                        // check all outlier groups 
-                        Log.d("should check frame \(frame.frame_index)")
-                        if let outlier_group_list = await frame.outlierGroups() {
-                            for outlier_group in outlier_group_list {
-                                if let shouldPaint = await outlier_group.shouldPaint {
-
-                                    let decisionTreeShouldPaint = await outlier_group.shouldPaintFromDecisionTree
-                                    if decisionTreeShouldPaint == shouldPaint.willPaint {
-                                        // good
-                                        num_similar_outlier_groups += 1
-                                    } else {
-                                        // bad
-                                        Log.w("outlier group \(outlier_group) decisionTreeShouldPaint \(decisionTreeShouldPaint) != shouldPaint.willPaint \(shouldPaint.willPaint)")
-                                        num_different_outlier_groups += 1
+                    await withTaskGroup(of: TreeTestResults.self) { taskGroup in
+                        for frame in frames {
+                            // XXX task group here too, it's really slow
+                            // check all outlier groups 
+                            taskGroup.addTask() {
+                                var number_good = 0
+                                var number_bad = 0
+                                //Log.d("should check frame \(frame.frame_index)")
+                                if let outlier_group_list = await frame.outlierGroups() {
+                                    for outlier_group in outlier_group_list {
+                                        if let numberGood = await outlier_group.shouldPaint {
+                                            let decisionTreeShouldPaint = await outlier_group.shouldPaintFromDecisionTree
+                                            if decisionTreeShouldPaint == numberGood.willPaint {
+                                                // good
+                                                number_good += 1
+                                            } else {
+                                                // bad
+                                                //Log.w("outlier group \(outlier_group) decisionTreeShouldPaint \(decisionTreeShouldPaint) != numberGood.willPaint \(numberGood.willPaint)")
+                                                number_bad += 1
+                                            }
+                                        } else {
+                                            Log.e("WTF")
+                                            fatalError("DIED")
+                                        }
                                     }
                                 } else {
                                     Log.e("WTF")
-                                    fatalError("DIED")
+                                    fatalError("DIED HERE")
                                 }
+                                return TreeTestResults(numberGood: number_good,
+                                                       numberBad: number_bad)
                             }
-                        } else {
-                            Log.e("WTF")
-                            fatalError("DIED HERE")
+                        }
+                        while let response = await taskGroup.next() {
+                            num_similar_outlier_groups += response.numberGood
+                            num_different_outlier_groups += response.numberBad
                         }
                     }
+                        
                     let total = num_similar_outlier_groups + num_different_outlier_groups
                     let percentage_good = Double(num_similar_outlier_groups)/Double(total)*100
-
                     Log.i("for \(json_config_file_name), out of \(total) \(percentage_good)% success")
                 } catch {
                     Log.e("\(error)")
