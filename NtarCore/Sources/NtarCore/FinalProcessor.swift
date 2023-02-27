@@ -403,8 +403,8 @@ func really_final_streak_processing(onFrame frame: FrameAirplaneRemover,
                         if let first_member_group_line = await first_member.group.firstLine,
                            let last_other_airplane_streak_group_line = await last_other_airplane_streak.group.firstLine
                         {
-                            let distance = await distance(from: last_other_airplane_streak.group,
-                                                          to: first_member.group)
+                            let distance = distance(from: last_other_airplane_streak.group,
+                                                    to: first_member.group)
                             
                             let theta_diff = abs(last_other_airplane_streak_group_line.theta -
                                                    first_member_group_line.theta)
@@ -424,8 +424,8 @@ func really_final_streak_processing(onFrame frame: FrameAirplaneRemover,
                            let first_other_airplane_streak_group_line = await first_other_airplane_streak.group.firstLine
                         {
                             // found a streak that starts right after this one ends
-                            let distance = await distance(from: last_member.group,
-                                                          to: first_other_airplane_streak.group)
+                            let distance = distance(from: last_member.group,
+                                                    to: first_other_airplane_streak.group)
                             
                             let theta_diff = abs(first_other_airplane_streak_group_line.theta -
                                                    last_member_group_line.theta)
@@ -821,7 +821,7 @@ func streak_from(group: OutlierGroup,
             // really we want the distance between the nearest pixels of each group
             // this isn't close enough for real
 
-            let distance = await distance(from: last_group, to: other_group)
+            let distance = distance(from: last_group, to: other_group)
 
             let last_group_hypo = last_hypo//last_group.bounds.hypotenuse
             let other_group_hypo = other_group.bounds.hypotenuse
@@ -1034,11 +1034,11 @@ func pixel_overlap(group_1: OutlierGroup,
 
 // XXX this is likely causing false positives by being innacurate
 @available(macOS 10.15, *) 
-func distance(from group1: OutlierGroup, to group2: OutlierGroup) async -> Double {
+func distance(from group1: OutlierGroup, to group2: OutlierGroup) -> Double {
 
     return group1.bounds.edgeDistance(to: group2.bounds)
-/*
 
+/*
     let group1_hypo = group1.bounds.hypotenuse
     let group2_hypo = group2.bounds.hypotenuse
 
