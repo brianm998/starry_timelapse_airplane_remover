@@ -9,6 +9,14 @@
 
 @available(macOS 10.15, *) 
 public extension OutlierGroup {
+
+    var shouldPaintFromDecisionTree: Bool {
+        get async {
+            // XXX have the generator modify this?
+            return await self.shouldPaintFromDecisionTree_2f017d7c
+        }
+    }
+    
     // we derive a Double value from each of these
     enum TreeDecisionType: CaseIterable, Hashable {
         case size

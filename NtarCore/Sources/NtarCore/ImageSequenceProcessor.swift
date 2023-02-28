@@ -87,7 +87,7 @@ public class ImageSequenceProcessor<T> {
            read all existing output files 
            sort them into frame order
            remove ones within number_final_processing_neighbors_needed frames of holes
-           make sure these re-runs done't bork on existing file later
+           make sure these re-runs doesn't bork on existing files later
            only process below based upon this info
         */
     
