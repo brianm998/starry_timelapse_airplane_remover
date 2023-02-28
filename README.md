@@ -34,10 +34,10 @@ These three applications are all based upon the same core logic and data models.
 
 At a high level, ntar operates in a number of steps:
 
-1 - look at every pixel in every frame and look for pixels that are markedly brighter than those in adjecnt frames.  These are called outliers.
-2 - within each frame, group these pixels into groups, discarding some smaller ones.  These are called outlier groups.
-3 - apply some selection criteria to determine which outlier groups to paint over
-4 - paint over selected outlier groups in each frame with pixel values from an adjecent frame 
+1. look at every pixel in every frame and look for pixels that are markedly brighter than those in adjecnt frames.  These are called outliers.
+2. within each frame, group these pixels into groups, discarding some smaller ones.  These are called outlier groups.
+3. apply some selection criteria to determine which outlier groups to paint over
+4. paint over selected outlier groups in each frame with pixel values from an adjecent frame 
 
 The tricky part is step #3, trying to decide what parts of the image are airplane streaks.
 
