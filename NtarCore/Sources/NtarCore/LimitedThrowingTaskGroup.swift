@@ -59,7 +59,7 @@ public class LimitedThrowingTaskGroup<T,E> where E : Error{
 @available(macOS 10.15, *)
 public func withLimitedThrowingTaskGroup<ChildTaskResult, GroupResult>(
   of childTaskResultType: ChildTaskResult.Type,
-  limitedTo maxConcurrent: Int = 10,
+  limitedTo maxConcurrent: Int = ProcessInfo.processInfo.activeProcessorCount,
   returning returnType: GroupResult.Type = GroupResult.self,
   body: (inout LimitedThrowingTaskGroup<ChildTaskResult, any Error>) async throws -> GroupResult
 ) async throws -> GroupResult where ChildTaskResult : Sendable

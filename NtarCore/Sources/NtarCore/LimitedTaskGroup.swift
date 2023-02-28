@@ -58,7 +58,7 @@ public class LimitedTaskGroup<T> {
 @available(macOS 10.15, *)
 public func withLimitedTaskGroup<ChildTaskResult, GroupResult>(
   of childTaskResultType: ChildTaskResult.Type,
-  limitedTo maxConcurrent: Int = 10,
+  limitedTo maxConcurrent: Int = ProcessInfo.processInfo.activeProcessorCount,
   returning returnType: GroupResult.Type = GroupResult.self,
   body: (inout LimitedTaskGroup<ChildTaskResult>) async -> GroupResult
 ) async -> GroupResult where ChildTaskResult : Sendable
