@@ -147,7 +147,7 @@ public class Log {
     public static var name: String = "log"
     public static var nameSuffix: String?
 
-    public static var dispatchGroup: DispatchGroup
+    public static var dispatchGroup = DispatchGroup()
     
     public enum Level: String,
                      CustomStringConvertible,
