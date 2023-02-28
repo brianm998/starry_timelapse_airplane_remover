@@ -14,6 +14,14 @@ var start_time: Date = Date()
 struct TreeDecisionTypeResult {
     var decisionResult: DecisionResult?
     var decisionTreeNode: DecisionTree?
+    var should_paint_dist: ValueDistribution?
+    var should_not_paint_dist: ValueDistribution?
+}
+
+@available(macOS 10.15, *) 
+struct DecisionTypeValuesResult {
+    let type: OutlierGroup.TreeDecisionType
+    let values: [Double]
 }
 
 @available(macOS 10.15, *) 
@@ -124,7 +132,6 @@ struct decision_tree_generator: ParsableCommand {
                         Log.d("frameCheckClosure for frame \(new_frame.frame_index)")
                     }
                     
-                    // XXX is this VVV obsolete???
                     callbacks.countOfFramesToCheck = { 1 }
 
                     let eraser = try NighttimeAirplaneRemover(with: config,
@@ -143,6 +150,8 @@ struct decision_tree_generator: ParsableCommand {
 
                     try eraser.run()
 
+
+                    Log.i("loading outliers")
                     // after the eraser is done running we should have received all the frames
                     // in the frame check callback
 
@@ -155,9 +164,34 @@ struct decision_tree_generator: ParsableCommand {
                         }
                         try await taskGroup.waitForAll()
                     }
+
+
+                        // how many methods are running right now
+                        let number_running = NumberRunning(in: "decision tree generator",
+                                                           max: 32, // also not used
+                                                           position: 666) // not used
+
+                        let REAL_MAX = 30
+                    
+                    Log.i("checkpoint before loading tree test results")
                     await withTaskGroup(of: TreeTestResults.self) { taskGroup in
                         for frame in frames {
-                            // check all outlier groups 
+                            // check all outlier groups
+
+                            var current_running = await number_running.currentValue()
+                            while current_running > REAL_MAX {
+                                Log.d("waiting, \(current_running) are currently running")
+                                do {
+                                    try await Task.sleep(nanoseconds: 1_000_000_000)
+                                } catch {
+                                    Log.e("\(error)")
+                                }
+                                current_running = await number_running.currentValue()
+                                Log.d("awaking \(current_running) are still running")
+                            }
+                            Log.d("starting another task with \(current_running)")
+                            await number_running.increment()
+                            
                             taskGroup.addTask() {
                                 var number_good = 0
                                 var number_bad = 0
@@ -168,6 +202,7 @@ struct decision_tree_generator: ParsableCommand {
                                             let decisionTreeShouldPaint = await outlier_group.shouldPaintFromDecisionTree
                                             if decisionTreeShouldPaint == numberGood.willPaint {
                                                 // good
+                                                //Log.d("good")
                                                 number_good += 1
                                             } else {
                                                 // bad
@@ -175,24 +210,28 @@ struct decision_tree_generator: ParsableCommand {
                                                 number_bad += 1
                                             }
                                         } else {
-                                            Log.e("WTF")
-                                            fatalError("DIED")
+                                            //Log.e("WTF")
+                                            //fatalError("DIED")
                                         }
                                     }
                                 } else {
-                                    Log.e("WTF")
-                                    fatalError("DIED HERE")
+                                    //Log.e("WTF")
+                                    //fatalError("DIED HERE")
                                 }
+                                //Log.d("number_good \(number_good) number_bad \(number_bad)")
+                                await number_running.decrement()
                                 return TreeTestResults(numberGood: number_good,
                                                        numberBad: number_bad)
                             }
                         }
+                        Log.d("waiting for all")
                         while let response = await taskGroup.next() {
+                            Log.d("got response response.numberGood \(response.numberGood) response.numberBad \(response.numberBad) ")
                             num_similar_outlier_groups += response.numberGood
                             num_different_outlier_groups += response.numberBad
                         }
                     }
-                        
+                    Log.d("checkpoint at end")
                     let total = num_similar_outlier_groups + num_different_outlier_groups
                     let percentage_good = Double(num_similar_outlier_groups)/Double(total)*100
                     Log.i("for \(json_config_file_name), out of \(total) \(percentage_good)% success")
@@ -235,7 +274,6 @@ struct decision_tree_generator: ParsableCommand {
                         endClosure()
                     }
                     
-                    // XXX is this VVV obsolete???
                     callbacks.countOfFramesToCheck = { 1 }
 
                     let eraser = try NighttimeAirplaneRemover(with: config,
@@ -273,10 +311,33 @@ struct decision_tree_generator: ParsableCommand {
                             try await taskGroup.waitForAll()
                         }
                         Log.d("outliers loaded")
+
+                        // how many methods are running right now
+                        let number_running = NumberRunning(in: "decision tree generator",
+                                                           max: 32, // also not used
+                                                           position: 666) // not used
+
+                        let REAL_MAX = 30
+                        
                         await withTaskGroup(of: OutlierGroupValuesResult.self) { taskGroup in
                             for frame in frames {
+                                
                                 // iterate through all outliers
+                                var current_running = await number_running.currentValue()
+                                while current_running > REAL_MAX {
+                                    Log.d("waiting, \(current_running) are currently running")
+                                    do {
+                                        try await Task.sleep(nanoseconds: 1_000_000_000)
+                                    } catch {
+                                        Log.e("\(error)")
+                                    }
+                                    current_running = await number_running.currentValue()
+                                    Log.d("awaking \(current_running) are still running")
+                                }
+                                Log.d("starting another task with \(current_running)")
+                                await number_running.increment()
                                 taskGroup.addTask() {
+                                    
                                     var local_should_paint_test_data: [OutlierGroupValues] = []
                                     var local_should_not_paint_test_data: [OutlierGroupValues] = []
                                     if let outlier_groups = await frame.outlierGroups() {
@@ -303,6 +364,7 @@ struct decision_tree_generator: ParsableCommand {
                                         Log.e("cannot get outlier groups for frame \(frame.frame_index)")
                                         fatalError("cannot get outlier groups for frame \(frame.frame_index)")
                                     }
+                                    await number_running.decrement()
                                     return OutlierGroupValuesResult(
                                       should_paint_test_data: local_should_paint_test_data,
                                       should_not_paint_test_data: local_should_not_paint_test_data)
@@ -484,33 +546,40 @@ struct decision_tree_generator: ParsableCommand {
             should_not_paint_values[type] = []
         }*/
         
-        for type in OutlierGroup.TreeDecisionType.allCases {
-            // XXX task group here
-            for test_data in should_paint_test_data {
-                if let value = test_data.values[type] {
-                    if var list = should_paint_values[type] {
-                        list.append(value)
-                        should_paint_values[type] = list
-                    } else {
-                        should_paint_values[type] = [value]
+        await withTaskGroup(of: DecisionTypeValuesResult.self) { taskGroup in
+            for type in OutlierGroup.TreeDecisionType.allCases {
+                taskGroup.addTask() {
+                    var list: [Double] = []
+                    for test_data in should_paint_test_data {
+                        if let value = test_data.values[type] {
+                            list.append(value)
+                        }
                     }
-                } 
+                    return DecisionTypeValuesResult(type: type, values: list)
+                }
+            }
+            while let response = await taskGroup.next() {
+                should_paint_values[response.type] = response.values
             }
         }
 
         Log.i("decisionTreeNode checkpoint 0.5 with indent \(indent) should_paint_test_data.count \(should_paint_test_data.count) should_not_paint_test_data.count \(should_not_paint_test_data.count)")
 
-        for type in OutlierGroup.TreeDecisionType.allCases {
-            // XXX task group here
-            for test_data in should_not_paint_test_data {
-                if let value = test_data.values[type] {
-                    if var list = should_not_paint_values[type] {
-                        list.append(value)
-                        should_not_paint_values[type] = list
-                    } else {
-                        should_not_paint_values[type] = [value]
+        // XXX task group here XXX seeing slowdown at this spot
+        await withTaskGroup(of: DecisionTypeValuesResult.self) { taskGroup in
+            for type in OutlierGroup.TreeDecisionType.allCases {
+                taskGroup.addTask() {
+                    var list: [Double] = []
+                    for test_data in should_not_paint_test_data {
+                        if let value = test_data.values[type] {
+                            list.append(value)
+                        }
                     }
+                    return DecisionTypeValuesResult(type: type, values: list)
                 }
+            }
+            while let response = await taskGroup.next() {
+                should_not_paint_values[response.type] = response.values
             }
         }
 
@@ -586,6 +655,11 @@ struct decision_tree_generator: ParsableCommand {
 
         // iterate ofer all decision tree types to pick the best one
         // that differentiates the test data
+        var bestDecisionResult: DecisionResult?
+        var bestTreeNode: DecisionTree?
+        var biggest_split = 0.0
+        var biggest_direct_split = 0.0
+
 
         await withTaskGroup(of: TreeDecisionTypeResult.self) { taskGroup in
         
@@ -599,7 +673,7 @@ struct decision_tree_generator: ParsableCommand {
                             // we have a clear distinction between all provided test data
                             // this is an end leaf node, both paths after decision lead to a result
                             Log.d("clear distinction \(paint_dist.max) < \(not_paint_dist.min)")
-                            
+
                             var ret = TreeDecisionTypeResult()
                             ret.decisionTreeNode =
                               DecisionTreeNode(type: type,
@@ -607,6 +681,8 @@ struct decision_tree_generator: ParsableCommand {
                                                lessThan: ShouldPaintDecision(indent: indent + 1),
                                                greaterThan: ShouldNotPaintDecision(indent: indent + 1),
                                                indent: indent)
+                            ret.should_paint_dist = paint_dist
+                            ret.should_not_paint_dist = not_paint_dist
                             return ret
                         } else if not_paint_dist.max < paint_dist.min {
                             Log.d("clear distinction \(not_paint_dist.max) < \(paint_dist.min)")
@@ -619,6 +695,8 @@ struct decision_tree_generator: ParsableCommand {
                                                lessThan: ShouldNotPaintDecision(indent: indent + 1),
                                                greaterThan: ShouldPaintDecision(indent: indent + 1),
                                                indent: indent)
+                            ret.should_paint_dist = paint_dist
+                            ret.should_not_paint_dist = not_paint_dist
                             return ret
                         } else {
                             Log.d("no clear distinction, need new node at indent \(indent)")
@@ -679,48 +757,75 @@ struct decision_tree_generator: ParsableCommand {
                     }
                 }
             }
-            var responses: [TreeDecisionTypeResult] = []
+
+            var decisionResults: [DecisionResult] = []
+            var decisionTreeNodes: [TreeDecisionTypeResult] = []
             while let response = await taskGroup.next() {
-                responses.append(response)
+                if let result = response.decisionResult {
+                    decisionResults.append(result)
+                }
+                if let _ = response.decisionTreeNode,
+                   let _ = response.should_paint_dist,
+                   let _ = response.should_not_paint_dist
+                {
+                    decisionTreeNodes.append(response)
+                }
             }
 
-            var bestDecisionResult: DecisionResult?
-            var bestTreeNode: DecisionTree?
-            var biggest_split = 0.0
+            for response in decisionTreeNodes {
+                if let decisionTreeNode = response.decisionTreeNode,
+                   let paint_dist = response.should_paint_dist,
+                   let not_paint_dist = response.should_not_paint_dist
+                {
+                    // check each direct decision result and choose the best one
+                    // based upon the difference between their edges and their means
+                    if paint_dist.max < not_paint_dist.min {
+                        let split =
+                          (not_paint_dist.min - paint_dist.max) /
+                          (not_paint_dist.median - paint_dist.median)
+                          
+                        if split > biggest_direct_split {
+                            biggest_direct_split = split
+                            bestTreeNode = decisionTreeNode
+                        }
+                    } else if not_paint_dist.max < paint_dist.min {
+                        let split =
+                          (paint_dist.min - not_paint_dist.max) /
+                          (paint_dist.median - not_paint_dist.median)
 
-            // look through them all
-            for response in responses {
-                Log.d("got decision response \(response)")
-                if let decisionTreeNode = response.decisionTreeNode {
-                    // these are tree nodes ready to go
-
-                    // XXX we may have more than one of them,
-                    // right now we're just choosing randomly
-                    // choose the best split
-                    bestTreeNode = decisionTreeNode
-                } else if let decisionResult = response.decisionResult {
-                    // these are tree nodes that require recursion
-                    var we_are_best = false
-                    
-                    // choose the type with the best distribution 
-                    // that will generate the shortest tree
-                    if decisionResult.lessThanSplit > original_split,
-                       decisionResult.lessThanSplit - original_split > biggest_split
-                    {
-                        // the less than split is biggest so far
-                        biggest_split = decisionResult.lessThanSplit - original_split
-                        we_are_best = true
-                    } else if decisionResult.greaterThanSplit > original_split,
-                              decisionResult.greaterThanSplit - original_split > biggest_split
-                    {
-                        // the greater than split is biggest so far
-                        biggest_split = decisionResult.greaterThanSplit - original_split
-                        we_are_best = true
+                        if split > biggest_direct_split {
+                            biggest_direct_split = split
+                            bestTreeNode = decisionTreeNode
+                        }
+                    } else {
+                        Log.e("FUCK")
+                        fatalError("SHOULDN'T END UP HERE")
                     }
+                }
+            }
 
-                    if we_are_best {
-                        bestDecisionResult = decisionResult
-                    }
+            for decisionResult in decisionResults {
+                // these are tree nodes that require recursion
+                var we_are_best = false
+                
+                // choose the type with the best distribution 
+                // that will generate the shortest tree
+                if decisionResult.lessThanSplit > original_split,
+                   decisionResult.lessThanSplit - original_split > biggest_split
+                {
+                    // the less than split is biggest so far
+                    biggest_split = decisionResult.lessThanSplit - original_split
+                    we_are_best = true
+                } else if decisionResult.greaterThanSplit > original_split,
+                          decisionResult.greaterThanSplit - original_split > biggest_split
+                {
+                    // the greater than split is biggest so far
+                    biggest_split = decisionResult.greaterThanSplit - original_split
+                    we_are_best = true
+                }
+
+                if we_are_best {
+                    bestDecisionResult = decisionResult
                 }
             }
         }
