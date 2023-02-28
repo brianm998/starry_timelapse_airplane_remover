@@ -32,9 +32,7 @@ public actor FinalQueue {
     public init(max_concurrent: Int = 8, dispatchGroup dispatch_group: DispatchHandler) {
         self.max_concurrent = max_concurrent
         self.dispatch_group = dispatch_group
-        self.number_running = NumberRunning(in: "frames finishing",
-                                            max: max_concurrent,
-                                            position: 2) 
+        self.number_running = NumberRunning(in: "frames finishing")
     }
 
     func finish() {

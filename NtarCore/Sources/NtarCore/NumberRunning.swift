@@ -12,17 +12,13 @@ You should have received a copy of the GNU General Public License along with nta
 
 */
 @available(macOS 10.15, *)
-actor NumberRunning {
+public actor NumberRunning {
     private var count: UInt = 0
 
     let name: String
-    let max: Int
-    let position: Double
     
-    init(in name: String, max: Int, position: Double) {
+    public init(in name: String) {
         self.name = name
-        self.max = max
-        self.position = position
     }
     
     public func increment() { count += 1 }

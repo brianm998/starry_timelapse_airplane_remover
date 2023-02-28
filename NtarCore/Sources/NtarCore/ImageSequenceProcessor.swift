@@ -50,9 +50,7 @@ public class ImageSequenceProcessor<T> {
          max_images: Int? = nil,
          fullyProcess: Bool = true) throws
     {
-        self.number_running = NumberRunning(in: " frames processing outliers",
-                                            max: max_concurrent,
-                                            position: 0) 
+        self.number_running = NumberRunning(in: " frames processing outliers")
         self.max_concurrent_renders = max_concurrent
         self.image_sequence_dirname = image_sequence_dirname
         self.output_dirname = output_dirname

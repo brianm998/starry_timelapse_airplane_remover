@@ -167,9 +167,7 @@ struct decision_tree_generator: ParsableCommand {
 
 
                         // how many methods are running right now
-                        let number_running = NumberRunning(in: "decision tree generator",
-                                                           max: 32, // also not used
-                                                           position: 666) // not used
+                        let number_running = NumberRunning(in: "decision tree generator")
 
                         let REAL_MAX = 30
                     
@@ -313,10 +311,8 @@ struct decision_tree_generator: ParsableCommand {
                         Log.d("outliers loaded")
 
                         // how many methods are running right now
-                        let number_running = NumberRunning(in: "decision tree generator",
-                                                           max: 32, // also not used
-                                                           position: 666) // not used
-
+                        let number_running = NumberRunning(in: "decision tree generator")
+                                                   
                         let REAL_MAX = 30
                         
                         await withTaskGroup(of: OutlierGroupValuesResult.self) { taskGroup in
