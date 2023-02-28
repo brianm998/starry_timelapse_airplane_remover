@@ -36,7 +36,7 @@ actor MethodList<T> {
     }
     
     func removeValue(forKey key: Int) {
-        Log.d("removeValue(\(self.count))")
+        Log.v("removeValue(\(self.count))")
         list.removeValue(forKey: key)
         if let removeClosure = removeClosure {
             Log.v("removeClosure(\(self.count))")
