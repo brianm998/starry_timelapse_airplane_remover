@@ -108,6 +108,7 @@ struct decision_tree_generator: ParsableCommand {
         } else {
             generate_tree()
         }
+        Log.dispatchGroup.wait()
     }
 
     // use an exising decision tree to see how well it does against a given sample

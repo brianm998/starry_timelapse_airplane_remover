@@ -428,6 +428,7 @@ struct Ntar: ParsableCommand {
         } else {
             throw ValidationError("need to provide input")
         }
+        Log.dispatchGroup.wait()
     }
 }
 
