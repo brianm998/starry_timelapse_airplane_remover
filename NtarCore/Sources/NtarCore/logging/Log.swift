@@ -122,6 +122,7 @@ import Foundation
 
 */
 
+@available(macOS 10.15, *)
 public class Log {
 
     /*
@@ -146,8 +147,7 @@ public class Log {
     public static var name: String = "log"
     public static var nameSuffix: String?
 
-    @available(macOS 10.15, *)
-    public static var dispatchGroup: DispatchGroup?
+    public static var dispatchGroup: DispatchGroup
     
     public enum Level: String,
                      CustomStringConvertible,
@@ -211,6 +211,7 @@ public class Log {
     }
 }
 
+@available(macOS 10.15, *)
 extension Log {                 
     /*
        Log.verbose()
@@ -271,6 +272,7 @@ extension Log {
     }
 }
 
+@available(macOS 10.15, *)
 extension Log {                 
     /*
        Log.v()
@@ -332,6 +334,7 @@ extension Log {
 }
 
 
+@available(macOS 10.15, *)
 extension Log {                 
     /*
        Log.debug()
@@ -392,6 +395,7 @@ extension Log {
     }
 }
 
+@available(macOS 10.15, *)
 extension Log {                 
     /*
        Log.d()
@@ -452,6 +456,7 @@ extension Log {
     }
 }
 
+@available(macOS 10.15, *)
 extension Log {                 // info
     /*
        Log.info()
@@ -512,6 +517,7 @@ extension Log {                 // info
     }
 }
 
+@available(macOS 10.15, *)
 extension Log {                 // i
     /*
        Log.i()
@@ -572,6 +578,7 @@ extension Log {                 // i
     }
 }
 
+@available(macOS 10.15, *)
 extension Log {
     /*
        Log.warn()
@@ -632,6 +639,7 @@ extension Log {
     }
 }
 
+@available(macOS 10.15, *)
 extension Log {
     /*
        Log.w()
@@ -692,6 +700,7 @@ extension Log {
     }
 }
 
+@available(macOS 10.15, *)
 extension Log {
     /*
        Log.error()
@@ -767,6 +776,7 @@ extension Log {
 
 }
 
+@available(macOS 10.15, *)
 extension Log {
     /*
        Log.e()
@@ -839,7 +849,6 @@ extension Log {
     {
         logInternal(with: data, at: .error, file, function, line)
     }
-
 }
 
 // after here are the internal implemenation details
@@ -848,6 +857,7 @@ extension Log {
 fileprivate let backgroundTask = BackgroundTask.start(named: "log")
 #endif        
 
+@available(macOS 10.15, *)
 fileprivate extension Log {
     
     static func logInternal(_ message: String? = nil,
@@ -866,7 +876,7 @@ fileprivate extension Log {
                                _ function: String,
                                _ line: Int)
     {
-
+        Log.dispatchGroup.enter()
         let threadName = Thread.current.threadName
         
         // start background task
@@ -878,8 +888,8 @@ fileprivate extension Log {
         
         backgroundTask = newBackgroundTask
 */
-#endif        
-        logQueue.async {
+#endif
+        Task {
             var string = ""
 
             if let message = message {
@@ -919,6 +929,7 @@ fileprivate extension Log {
                                 at: logLevel)
                 }
             }
+            Log.dispatchGroup.leave()
         }
     }
     
@@ -930,7 +941,8 @@ fileprivate extension Log {
 }
 
 
-fileprivate let logQueue = DispatchQueue(label: "logging")
+
+//fileprivate let logQueue = DispatchQueue(label: "logging")
 #if !os(macOS)
 //fileprivate var backgroundTask: BackgroundTask?
 #endif
@@ -939,17 +951,18 @@ fileprivate let logQueue = DispatchQueue(label: "logging")
 
 #if DEBUG
 // this is helpful when testing logging, to see a few test lines, and then avoid further spew 
+@available(macOS 10.15, *)
 public func LOG_ABORT() {
-//    logQueue.async {
-        Log.handlers[.console]?.dispatchQueue.async {
-            print("\n\n")
-            print("☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️")
-            print("☠️☠️☠️ was asked to abort ☠️☠️☠️")
-            print("☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️")
-            print("\n\n")
-            abort()
-        }
-//    }
+    Log.dispatchGroup.enter()
+    Task {
+        print("\n\n")
+        print("☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️")
+        print("☠️☠️☠️ was asked to abort ☠️☠️☠️")
+        print("☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️")
+        print("\n\n")
+        Log.dispatchGroup.leave()
+        abort()
+    }
 }
 
 fileprivate struct LogTest: Codable {

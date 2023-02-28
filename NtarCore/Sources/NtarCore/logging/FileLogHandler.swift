@@ -16,7 +16,6 @@ import Foundation
 public class FileLogHandler: LogHandler {
     
     let dateFormatter = DateFormatter()
-    public let dispatchQueue: DispatchQueue
     public var level: Log.Level?
     //private let logfilename: String
     public let full_log_path: String
@@ -41,8 +40,6 @@ public class FileLogHandler: LogHandler {
             throw "no full log path"
         }
 
-        self.dispatchQueue = DispatchQueue(label: "consoleLogging")
-
         // this is for log lines
         dateFormatter.dateFormat = "H:mm:ss.SSSS"
     }
@@ -53,9 +50,8 @@ public class FileLogHandler: LogHandler {
                     with data: LogData?,
                     at logLevel: Log.Level)
     {
-        let dispatch_group = Log.dispatchGroup
-        dispatch_group?.enter()
-        dispatchQueue.async {
+        Log.dispatchGroup.enter()
+        Task {
             let dateString = self.dateFormatter.string(from: Date())
             
             if let data = data {
@@ -63,7 +59,7 @@ public class FileLogHandler: LogHandler {
             } else {
                 self.writeToLogFile("\(dateString) | \(logLevel) | \(threadName) | \(fileLocation): \(message)\n")
             }
-            dispatch_group?.leave()
+            Log.dispatchGroup.leave()
         }
     }
 

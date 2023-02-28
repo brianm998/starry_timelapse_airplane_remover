@@ -12,6 +12,7 @@ You should have received a copy of the GNU General Public License along with nta
 
 import Foundation
 
+@available(macOS 10.15, *)
 public protocol LogHandler {
     func log(message: String,
              at fileLocation: String,
@@ -19,7 +20,6 @@ public protocol LogHandler {
              with data: LogData?,
              at logLevel: Log.Level)
     
-    var dispatchQueue: DispatchQueue { get }
     var level: Log.Level? { get set }
 }
 
