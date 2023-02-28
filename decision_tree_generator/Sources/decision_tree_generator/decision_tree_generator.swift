@@ -156,41 +156,21 @@ struct decision_tree_generator: ParsableCommand {
                     // in the frame check callback
 
                     // load the outliers in parallel
-                    try await withThrowingTaskGroup(of: Void.self) { taskGroup in
+                    try await withLimitedThrowingTaskGroup(of: Void.self) { taskGroup in
                         for frame in frames {
-                            taskGroup.addTask(/*priority: .medium*/) {
+                            await taskGroup.addTask(/*priority: .medium*/) {
                                 try await frame.loadOutliers()
                             }
                         }
                         try await taskGroup.waitForAll()
                     }
 
-
-                        // how many methods are running right now
-                        let number_running = NumberRunning(in: "decision tree generator")
-
-                        let REAL_MAX = 30
-                    
                     Log.i("checkpoint before loading tree test results")
-                    await withTaskGroup(of: TreeTestResults.self) { taskGroup in
+                    await withLimitedTaskGroup(of: TreeTestResults.self) { taskGroup in
                         for frame in frames {
                             // check all outlier groups
-
-                            var current_running = await number_running.currentValue()
-                            while current_running > REAL_MAX {
-                                Log.d("waiting, \(current_running) are currently running")
-                                do {
-                                    try await Task.sleep(nanoseconds: 1_000_000_000)
-                                } catch {
-                                    Log.e("\(error)")
-                                }
-                                current_running = await number_running.currentValue()
-                                Log.d("awaking \(current_running) are still running")
-                            }
-                            Log.d("starting another task with \(current_running)")
-                            await number_running.increment()
                             
-                            taskGroup.addTask() {
+                            await taskGroup.addTask() {
                                 var number_good = 0
                                 var number_bad = 0
                                 //Log.d("should check frame \(frame.frame_index)")
@@ -217,7 +197,6 @@ struct decision_tree_generator: ParsableCommand {
                                     //fatalError("DIED HERE")
                                 }
                                 //Log.d("number_good \(number_good) number_bad \(number_bad)")
-                                await number_running.decrement()
                                 return TreeTestResults(numberGood: number_good,
                                                        numberBad: number_bad)
                             }
@@ -300,9 +279,9 @@ struct decision_tree_generator: ParsableCommand {
                        let image_height = eraser.image_height
                     {
                         // load the outliers in parallel
-                        try await withThrowingTaskGroup(of: Void.self) { taskGroup in
+                        try await withLimitedThrowingTaskGroup(of: Void.self) { taskGroup in
                             for frame in frames {
-                                taskGroup.addTask() {
+                                await taskGroup.addTask() {
                                     try await frame.loadOutliers()
                                 }
                             }
@@ -310,29 +289,9 @@ struct decision_tree_generator: ParsableCommand {
                         }
                         Log.d("outliers loaded")
 
-                        // how many methods are running right now
-                        let number_running = NumberRunning(in: "decision tree generator")
-                                                   
-                        let REAL_MAX = 30
-                        
-                        await withTaskGroup(of: OutlierGroupValuesResult.self) { taskGroup in
+                        await withLimitedTaskGroup(of: OutlierGroupValuesResult.self) { taskGroup in
                             for frame in frames {
-                                
-                                // iterate through all outliers
-                                var current_running = await number_running.currentValue()
-                                while current_running > REAL_MAX {
-                                    Log.d("waiting, \(current_running) are currently running")
-                                    do {
-                                        try await Task.sleep(nanoseconds: 1_000_000_000)
-                                    } catch {
-                                        Log.e("\(error)")
-                                    }
-                                    current_running = await number_running.currentValue()
-                                    Log.d("awaking \(current_running) are still running")
-                                }
-                                Log.d("starting another task with \(current_running)")
-                                await number_running.increment()
-                                taskGroup.addTask() {
+                                await taskGroup.addTask() {
                                     
                                     var local_should_paint_test_data: [OutlierGroupValues] = []
                                     var local_should_not_paint_test_data: [OutlierGroupValues] = []
@@ -360,7 +319,6 @@ struct decision_tree_generator: ParsableCommand {
                                         Log.e("cannot get outlier groups for frame \(frame.frame_index)")
                                         fatalError("cannot get outlier groups for frame \(frame.frame_index)")
                                     }
-                                    await number_running.decrement()
                                     return OutlierGroupValuesResult(
                                       should_paint_test_data: local_should_paint_test_data,
                                       should_not_paint_test_data: local_should_not_paint_test_data)

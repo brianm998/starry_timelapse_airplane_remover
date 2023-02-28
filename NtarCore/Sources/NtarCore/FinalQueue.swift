@@ -32,7 +32,7 @@ public actor FinalQueue {
     public init(max_concurrent: Int = 8, dispatchGroup dispatch_group: DispatchHandler) {
         self.max_concurrent = max_concurrent
         self.dispatch_group = dispatch_group
-        self.number_running = NumberRunning(in: "frames finishing")
+        self.number_running = NumberRunning()
     }
 
     func finish() {
@@ -62,6 +62,7 @@ public actor FinalQueue {
         let name = "final queue running"
         await self.dispatch_group.enter(name)
         Log.d("starting")
+        // move to withLimitedThrowingTaskGroup
         try await withThrowingTaskGroup(of: Void.self) { group in
             while(await self.should_run()) {
                 let current_running = await self.number_running.currentValue()

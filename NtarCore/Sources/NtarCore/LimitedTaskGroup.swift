@@ -12,6 +12,9 @@ You should have received a copy of the GNU General Public License along with nta
 
 */
 
+// a wrapper around the ThrowingTaskGroup that has keeps too many groups from
+// running concurrently
+
 @available(macOS 10.15, *)
 public class LimitedTaskGroup<T> {
     var taskGroup: TaskGroup<T>
@@ -21,7 +24,7 @@ public class LimitedTaskGroup<T> {
     public init(taskGroup: TaskGroup<T>, maxConcurrent: Int) {
         self.taskGroup = taskGroup
         self.maxConcurrent = maxConcurrent
-        self.number_running = NumberRunning(in: "decision tree generator")
+        self.number_running = NumberRunning()
     }
 
     public func next() async ->  T? {

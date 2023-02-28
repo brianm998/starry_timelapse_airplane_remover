@@ -15,11 +15,7 @@ You should have received a copy of the GNU General Public License along with nta
 public actor NumberRunning {
     private var count: UInt = 0
 
-    let name: String
-    
-    public init(in name: String) {
-        self.name = name
-    }
+    public init() { }
     
     public func increment() { count += 1 }
     public func decrement() { count -= 1 }
