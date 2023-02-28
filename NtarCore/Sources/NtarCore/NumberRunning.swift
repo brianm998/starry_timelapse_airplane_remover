@@ -25,4 +25,3 @@ public actor NumberRunning {
     public func decrement() { count -= 1 }
     public func currentValue() -> UInt { count }
 }
-
