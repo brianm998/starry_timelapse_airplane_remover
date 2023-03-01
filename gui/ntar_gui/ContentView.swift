@@ -16,6 +16,7 @@ fileprivate var video_play_timer: Timer?
 
 fileprivate var current_video_frame = 0
 
+
 enum FrameViewMode: String, Equatable, CaseIterable {
     case original
     case processed
@@ -1014,6 +1015,7 @@ struct ContentView: View {
             
             HStack {
                 // XXX this one will go away
+                /*
                 let run = {
                     running = true
                     viewModel.initial_load_in_progress = true
@@ -1028,6 +1030,7 @@ struct ContentView: View {
                 Button(action: run) {
                     Text("START").font(.largeTitle)
                 }.buttonStyle(ShrinkingButton())
+                 */
                 // XXX this one will go away
 
                 let loadConfig = {
@@ -1040,8 +1043,24 @@ struct ContentView: View {
                     openPanel.canChooseFiles = true
                     let response = openPanel.runModal()
                     if response == .OK {
-                        let returnedUrl = openPanel.url
-                        Log.d("returnedUrl \(returnedUrl)")
+                        if let returnedUrl = openPanel.url
+                        {
+                            let path = returnedUrl.path
+                            Log.d("url path \(path) viewModel.app \(viewModel.app)")
+                            viewModel.app?.outlier_json_startup(with: path)
+
+                            running = true
+                            viewModel.initial_load_in_progress = true
+                            
+                            Task.detached(priority: .background) {
+                                do {
+                                    Log.d("viewModel.eraser \(await viewModel.eraser)")
+                                    try await viewModel.eraser?.run()
+                                } catch {
+                                    Log.e("\(error)")
+                                }
+                            }
+                        }
                     }
                 }
                 
@@ -1059,8 +1078,22 @@ struct ContentView: View {
                     openPanel.canChooseFiles = false
                     let response = openPanel.runModal()
                     if response == .OK {
-                        let returnedUrl = openPanel.url
-                        Log.d("returnedUrl \(returnedUrl)")
+                        if let returnedUrl = openPanel.url
+                        {
+                            let path = returnedUrl.path
+                            Log.d("url path \(path)")
+                            viewModel.app?.startup(with: path)
+
+                            running = true
+                            viewModel.initial_load_in_progress = true
+                            Task.detached(priority: .background) {
+                                do {
+                                    try await viewModel.eraser?.run()
+                                } catch {
+                                    Log.e("\(error)")
+                                }
+                            }
+                        }
                     }
                 }
                 
@@ -1072,7 +1105,10 @@ struct ContentView: View {
                 let loadRecent = {
                     Log.d("load image sequence")
 
-                    // XXX implement a recent list, probably just previous json config files
+                    // XXX testing code
+                    let prefs = UserPreferences.shared
+                    prefs.recentlyOpenedSequencelist[204.2] = "foo"
+                    // XXX testing code
                 }
                 
                 Button(action: loadRecent) {
@@ -1327,3 +1363,5 @@ struct ShrinkingButton: ButtonStyle {
                        value: configuration.isPressed)
     }
 }
+
+

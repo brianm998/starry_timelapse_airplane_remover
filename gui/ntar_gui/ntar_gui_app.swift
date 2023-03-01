@@ -90,6 +90,7 @@ class ntar_gui_app: App {
         input_queue = FinalQueue(max_concurrent: 200, // XXX get this number right
                                  dispatchGroup: dispatch_handler)
 
+        viewModel.app = self
         Task(priority: .high) {
             try await input_queue.start()
         }
@@ -97,26 +98,27 @@ class ntar_gui_app: App {
         Log.handlers[.console] = ConsoleLogHandler(at: .debug)
         Log.i("Starting Up")
 
+        /*
         var use_json = true
 
         if use_json {
             // this path reads a saved json config file, along with potentially
             // a set of saved outlier groups for each frame
 
-            //let outlier_dirname = "/pp/tmp/TEST_12_22_2022-a9-2-aurora-topaz-500-ntar-v-0_1_3-outliers"
+            //let outlier_dirname = "/pp/tmp/TEST_12_22_2022-a9-2-aurora-topaz-500-ntar-v-0_1_3-outliers/config.json"
 
-            let outlier_dirname = "/qp/ntar_validated/LRT_09_24_2022-a7iv-2-aurora-topaz-ntar-v-0_1_3-outliers"
+            let outlier_dirname = "/qp/ntar_validated/LRT_09_24_2022-a7iv-2-aurora-topaz-ntar-v-0_1_3-outliers/config.json"
             
-            //let outlier_dirname = "/pp/tmp/LRT_12_22_2022-a9-2-aurora-topaz-ntar-v-0_2_0-outliers"
-            //let outlier_dirname = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/test_small_lots-ntar-v-0_2_0-outliers"
-            //let outlier_dirname = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/test_small_medium-ntar-v-0_1_3-outliers"
+            //let outlier_dirname = "/pp/tmp/LRT_12_22_2022-a9-2-aurora-topaz-ntar-v-0_2_0-outliers/config.json"
+            //let outlier_dirname = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/test_small_lots-ntar-v-0_2_0-outliers/config.json"
+            //let outlier_dirname = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/test_small_medium-ntar-v-0_1_3-outliers/config.json"
 
-            //let outlier_dirname = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/test_a7sii_100-ntar-v-0_2_0-outliers"
+            //let outlier_dirname = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/test_a7sii_100-ntar-v-0_2_0-outliers/config.json"
             
-            //let outlier_dirname = "/qp/tmp/LRT_09_24_2022-a7iv-2-aurora-topaz-ntar-v-0_1_3-outliers"
+            //let outlier_dirname = "/qp/tmp/LRT_09_24_2022-a7iv-2-aurora-topaz-ntar-v-0_1_3-outliers/config.json"
 
-            //let outlier_dirname = "/rp/tmp/LRT_02_18_2023-a7sii-2-aurora-topaz-ntar-v-0_2_0-outliers"
-            //let outlier_dirname = "/rp/tmp/LRT_02_18_2023-a7iv-2-aurora-topaz-ntar-v-0_2_0-outliers"
+            //let outlier_dirname = "/rp/tmp/LRT_02_18_2023-a7sii-2-aurora-topaz-ntar-v-0_2_0-outliers/config.json"
+            //let outlier_dirname = "/rp/tmp/LRT_02_18_2023-a7iv-2-aurora-topaz-ntar-v-0_2_0-outliers/config.json"
             
             
             outlier_json_startup(with: outlier_dirname)
@@ -132,14 +134,19 @@ class ntar_gui_app: App {
             //let image_sequence_dirname = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/test_a7sii_10"        
             //let image_sequence_dirname = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/test_a9_20"        
             startup(with: image_sequence_dirname)
-        }
+            }
+         */
     }
 
     func outlier_json_startup(with outlier_dirname: String) {
+        Log.d("outlier_json_startup with \(outlier_dirname)")
         // first read config from json
+        let dispatchGroup = DispatchGroup()
+        dispatchGroup.enter()
         Task {
             do {
-                let config = try await Config.read(fromJsonDirname: outlier_dirname)
+                //let config = try await Config.read(fromJsonDirname: outlier_dirname)
+                let config = try await Config.read(fromFilename: outlier_dirname)
 
                 viewModel.config = config
 
@@ -158,11 +165,13 @@ class ntar_gui_app: App {
                 } else {
                     fatalError("fucking fix this")
                 }
-                
+                Log.d("outlier json startup done")
             } catch {
                 Log.e("\(error)")
             }
+            dispatchGroup.leave()
         }
+        dispatchGroup.wait()
     }
     
     func startup(with image_sequence_dirname: String) {
@@ -231,6 +240,7 @@ class ntar_gui_app: App {
             
             let callbacks = make_callbacks()
             Log.i("have config")
+
             do {
                 let eraser = try NighttimeAirplaneRemover(with: config,
                                                           callbacks: callbacks,
