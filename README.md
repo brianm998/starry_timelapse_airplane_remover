@@ -3,15 +3,19 @@
 
 The Nighttime Timelapse Airplane Remover (ntar) is a software package that performs the removal of airplane streaks from night time timelapse videos.
 
-## Comparison videos from the panamint valley in California:
+## Comparison videos from northern esmerelda counth, Nevada, USA
+
+It was this nearly cloudless night last year that kicked off this project for me.
+
+The processed video was run through the command line ntar first, and then hand edited with the new gui version of ntar frame by frame for some corrections.
 
 ### original video
 
-https://vimeo.com/775341167
+https://vimeo.com/803304507
 
-### processed with ntar 0.0.8
+### processed with ntar 0.2.0
 
-https://vimeo.com/775330768
+https://vimeo.com/803303679
 
 ## Description
 
@@ -19,16 +23,20 @@ NTar operates upon a still image sequence, and outputs a modified sequence which
 
 To operate directly on video files, the ntar.pl script is included to use ffmpeg to de-code the given video and then re-encode the ntar results into a video.
 
-The purpose of ntar is to remove airplane and satellite streaks from overnight timelapse videos.  These can be distrating to viewers, who often assume them to be 'shooting stars', because the move so fast in a timelapse.  For years I've accepted airplanes in the night sky in my timelapses, and even like them when they can be seen landing.  But when out in really dark skies in the middle of nowhere, IMO the airplanes stick out too much, and the video would benefit from their removal.
+The purpose of ntar is to remove airplane and satellite streaks from overnight timelapse videos.  These can be distrating to viewers, who often assume them to be 'shooting stars', because the move so fast in a timelapse.  For years I've accepted airplanes in the night sky in my timelapses.  When using shorter shutter speeds, I like them when they can be seen landing.  But when out in really dark skies in the middle of nowhere, I don't like them to show up, and I think such videos often benefit from removing airplanes.
 
-Be aware that meteor trails will be removed as well, these can be re-added later with the gui front end.
+Be aware that meteor trails will be removed as well, these can be re-added later with the gui front end, but flash on a single frame usually.  I've considered adding a meteor enhancing feature to spread out selected meteors over a few frames, but have yet to do so.
+
+## Software
 
 NTar contains three applications:
  - the ntar command line application
- - a new gui front end
+ - a gui front end
  - a machine learning decision tree generator
 
 These three applications are all based upon the same core logic and data models.
+
+The code is all written in swift.
 
 ### Algorithm
 
@@ -39,15 +47,15 @@ At a high level, ntar operates in a number of steps:
 3. apply some selection criteria to determine which outlier groups to paint over
 4. paint over selected outlier groups in each frame with pixel values from an adjecent frame 
 
-The tricky part is step #3, trying to decide what parts of the image are airplane streaks.
+The tricky part is step #3, trying to decide what outlier groups in the image are airplane streaks.
 
 #### Original Approach
 
 My first approach was very iterative, and after much iteration ended up in a place where it worked 'pretty good'.  This means that it got almost all of the airplane streaks, and not too many other things.
 
-I applied a buch of things, like data from the Hough Transform, as well as an initial histogram based statistical approach to outlier groups based upon things like size and how much the hough transform data looks like a line.  I then did a few more passes of analyzing the outlier groups between neighboring frames, to catch smaller airplane streaks closer to the horizon based upon a similar outlier group in other frames.
+I applied many different approaches, like data from the Hough Transform, as well as an initial histogram based statistical approach to outlier groups based upon things like size and how much the hough transform data looks like a line.  I then did a few more passes of analyzing the outlier groups between neighboring frames, to catch smaller airplane streaks closer to the horizon based upon a similar outlier group in other frames.
 
-While this approach was getting better results, I ended up with a bunch of magic numbers and hard coded decisions about what should or should not be painted over.  Without any real source of what is or what is not an airplane streak, there was a lot of guessing involved.
+While this approach was getting better results, I ended up with a bunch of magic numbers and hard coded decisions about edge cases.  Without any real source of what is or what is not an airplane streak, there was a lot of guessing involved.
 
 #### Manual Visual Determination
 
@@ -57,19 +65,13 @@ This gui application is still in development, but allows a user to load up an im
 
 This both allows you to render the given video with as many airplanes removed as possible, and also generates a data set of outlier groups where we know a-priori if they are airplanes or not.
 
-#### Machine Learning Approach
+#### Teach the Machine
 
 After I went through a few image sequences and manually validated every frame, I had a start for a test data set for machine learning.
 
 Still under development is a decision tree generator which gathers and crunches a bunch of outlier test data to write out a decision tree that can be used to determine outlier group paintability.
 
 The idea is to generate a large data set, create more outlier group decision parameters, and tweak the decision tree generation logic further to get better results.  Work in progress.
-
-## Technical Details
-
-NTar is written in swift, and the command line uses only the Foundation, CoreGraphics, Cocoa and ArgumentParser frameworks.  Any swift installation that has these frameworks should be able to compile and run this software.  I've developed it on macos, and can provide binaries for any desktop mac architecture.  It _might_ compile on windows and or linux, let me know if it works for you.
-
-The gui version is a swift ui layer over the same code that the cli application uses.  It likely only works on macos. 
 
 ## Getting Started
 
