@@ -500,6 +500,8 @@ func process_outlier_groups(dirname: String,
 }
 
 // needs ArgumentParser, so it's here in cli land
+// allows the log level to be expressed on the command line as an argument
+@available(macOS 10.15, *) 
 extension Log.Level: ExpressibleByArgument { }
 
 fileprivate let file_manager = FileManager.default
