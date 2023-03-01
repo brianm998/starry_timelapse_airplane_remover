@@ -48,7 +48,12 @@ class ViewModel: ObservableObject {
     /*    @Published*/
     
     var currentFrame: FrameAirplaneRemover? {
-        return frames[current_index].frame
+        if current_index > 0,
+           current_index < frames.count
+        {
+            return frames[current_index].frame
+        }
+        return nil
     }
     
     /*
