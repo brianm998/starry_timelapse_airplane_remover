@@ -172,6 +172,10 @@ struct ContentView: View {
     
     var body: some View {
         //let scaling_anchor = UnitPoint(x: 0.75, y: 0.75)
+
+        if !running {
+            initialView()
+        } else {
         
         GeometryReader { top_geometry in
             ScrollViewReader { scroller in
@@ -228,97 +232,77 @@ struct ContentView: View {
                         HStack {
 
                             ZStack {
-
-                                if !running {
-                                    let action = {
-                                        running = true
-                                        viewModel.initial_load_in_progress = true
-                                        Task.detached(priority: .background) {
-                                            do {
-                                                try await viewModel.eraser?.run()
-                                            } catch {
-                                                Log.e("\(error)")
-                                            }
-                                        }
-                                    }
-                                    Button(action: action) {
-                                        Text("START").font(.largeTitle)
-                                    }.buttonStyle(ShrinkingButton())
-                                      .frame(maxWidth: .infinity, alignment: .leading)
-                                    
-                                }
                                 
-                                
-                                videoPlaybackButtons(scroller) // XXX not really centered
-                                  .frame(maxWidth: .infinity, alignment: .center)
+                                    videoPlaybackButtons(scroller) // XXX not really centered
+                                      .frame(maxWidth: .infinity, alignment: .center)
                                 
                                 // rectangle.split.3x1
                                 // 
-                                HStack {
-                                    
-                                    let paint_action = {
-                                        Log.d("PAINT")
-                                        paint_sheet_showing = !paint_sheet_showing
+                                    HStack {
+                                        
+                                        let paint_action = {
+                                            Log.d("PAINT")
+                                            paint_sheet_showing = !paint_sheet_showing
+                                        }
+                                        Button(action: paint_action) {
+                                            buttonImage("square.stack.3d.forward.dottedline", size: 44)
+                                            
+                                        }
+                                          .buttonStyle(PlainButtonStyle())           
+                                          .frame(alignment: .trailing)
+                                        
+                                        
+                                        let gear_action = {
+                                            Log.d("GEAR")
+                                            settings_sheet_showing = !settings_sheet_showing
+                                        }
+                                        Button(action: gear_action) {
+                                            buttonImage("gearshape.fill", size: 44)
+                                            
+                                        }
+                                          .buttonStyle(PlainButtonStyle())           
+                                          .frame(alignment: .trailing)
+                                        
+                                        /*
+                                         if running {
+                                         Menu("FUCKING MENU"/*buttonImage("gearshape.fill", size: 30)*/) {
+                                         
+                                         }
+                                         }*/
+                                        toggleViews()
                                     }
-                                    Button(action: paint_action) {
-                                        buttonImage("square.stack.3d.forward.dottedline", size: 44)
-
-                                    }
-                                      .buttonStyle(PlainButtonStyle())           
-                                      .frame(alignment: .trailing)
-                                    
-
-                                    let gear_action = {
-                                        Log.d("GEAR")
-                                        settings_sheet_showing = !settings_sheet_showing
-                                    }
-                                    Button(action: gear_action) {
-                                        buttonImage("gearshape.fill", size: 44)
-
-                                    }
-                                      .buttonStyle(PlainButtonStyle())           
-                                      .frame(alignment: .trailing)
-
-                                    /*
-                                     if running {
-                                     Menu("FUCKING MENU"/*buttonImage("gearshape.fill", size: 30)*/) {
-                                     
-                                     }
-                                }*/
-                                    toggleViews()
-                                }
-                                  .frame(maxWidth: .infinity, alignment: .trailing)
-                                  .sheet(isPresented: $settings_sheet_showing) {
-                                      SettingsSheetView(isVisible: self.$settings_sheet_showing,
-                                                        fast_skip_amount: self.$fast_skip_amount,
-                                                        video_playback_framerate: self.$video_playback_framerate,
-                                                        skipEmpties: self.$skipEmpties)
-                                  }
-                                  .sheet(isPresented: $paint_sheet_showing) {
-                                      MassivePaintSheetView(isVisible: self.$paint_sheet_showing,
-                                                            viewModel: viewModel)
-                                      { should_paint, start_index, end_index in
-
-                                          updating_frame_batch = true
-                                          
-                                          for idx in start_index ... end_index {
-                                              // XXX use a task group?
-                                              setAllFrameOutliers(in: viewModel.frames[idx], to: should_paint)
-                                          }
-                                          // XXX 
-                                          updating_frame_batch = false
-                                          
-                                          // XXX iterate through start->end
-                                          // setFrameOutliers()
-                                          Log.d("should_paint \(should_paint), start_index \(start_index), end_index \(end_index)")
+                                      .frame(maxWidth: .infinity, alignment: .trailing)
+                                      .sheet(isPresented: $settings_sheet_showing) {
+                                          SettingsSheetView(isVisible: self.$settings_sheet_showing,
+                                                            fast_skip_amount: self.$fast_skip_amount,
+                                                            video_playback_framerate: self.$video_playback_framerate,
+                                                            skipEmpties: self.$skipEmpties)
                                       }
-                                  }
-                            }//.background(.green)
+                                      .sheet(isPresented: $paint_sheet_showing) {
+                                          MassivePaintSheetView(isVisible: self.$paint_sheet_showing,
+                                                                viewModel: viewModel)
+                                          { should_paint, start_index, end_index in
+                                              
+                                              updating_frame_batch = true
+                                              
+                                              for idx in start_index ... end_index {
+                                                  // XXX use a task group?
+                                                  setAllFrameOutliers(in: viewModel.frames[idx], to: should_paint)
+                                              }
+                                              // XXX 
+                                              updating_frame_batch = false
+                                              
+                                              // XXX iterate through start->end
+                                              // setFrameOutliers()
+                                              Log.d("should_paint \(should_paint), start_index \(start_index), end_index \(end_index)")
+                                          }
+                                      }
+                                }//.background(.green)
                                 /*
-                            VStack {
-                                Picker("go to frame", selection: $viewModel.current_index) {
-                                    ForEach(0 ..< viewModel.frames.count, id: \.self) {
-                                        Text("frame \($0)")
+                                 VStack {
+                                 Picker("go to frame", selection: $viewModel.current_index) {
+                                 ForEach(0 ..< viewModel.frames.count, id: \.self) {
+                                 Text("frame \($0)")
                                     }
                                 }
                                   .frame(maxWidth: 200)
@@ -342,7 +326,8 @@ struct ContentView: View {
   */                          
                             //load all outlier button
                             
-                        }
+                            }
+                        
                         Spacer().frame(maxHeight: 30)
                         // the filmstrip at the bottom
                         filmstrip()
@@ -353,6 +338,7 @@ struct ContentView: View {
             }.frame(maxWidth: .infinity, maxHeight: .infinity)
               .padding()
               .background(background_color)
+        }
         }
     }
     
@@ -1016,6 +1002,86 @@ struct ContentView: View {
  */
             }
         }
+    }
+
+    func initialView() -> some View {
+        VStack {
+            Text("Welcome to the Nighttime Timelapse Airplane Remover")
+              .font(.largeTitle)
+            Spacer()
+              .frame(maxHeight: 200)
+            Text("Choose an option to get started")
+            
+            HStack {
+                // XXX this one will go away
+                let run = {
+                    running = true
+                    viewModel.initial_load_in_progress = true
+                    Task.detached(priority: .background) {
+                        do {
+                            try await viewModel.eraser?.run()
+                        } catch {
+                            Log.e("\(error)")
+                        }
+                    }
+                }
+                Button(action: run) {
+                    Text("START").font(.largeTitle)
+                }.buttonStyle(ShrinkingButton())
+                // XXX this one will go away
+
+                let loadConfig = {
+                    Log.d("load config")
+
+                    let openPanel = NSOpenPanel()
+                    openPanel.allowedFileTypes = ["json"]
+                    openPanel.allowsMultipleSelection = false
+                    openPanel.canChooseDirectories = false
+                    openPanel.canChooseFiles = true
+                    let response = openPanel.runModal()
+                    if response == .OK {
+                        let returnedUrl = openPanel.url
+                        Log.d("returnedUrl \(returnedUrl)")
+                    }
+                }
+                
+                Button(action: loadConfig) {
+                    Text("Load Config").font(.largeTitle)
+                }.buttonStyle(ShrinkingButton())
+                  .help("Load a json config file from a previous run of ntar")
+
+                let loadImageSequence = {
+                    Log.d("load image sequence")
+                    let openPanel = NSOpenPanel()
+                    //openPanel.allowedFileTypes = ["json"]
+                    openPanel.allowsMultipleSelection = false
+                    openPanel.canChooseDirectories = true
+                    openPanel.canChooseFiles = false
+                    let response = openPanel.runModal()
+                    if response == .OK {
+                        let returnedUrl = openPanel.url
+                        Log.d("returnedUrl \(returnedUrl)")
+                    }
+                }
+                
+                Button(action: loadImageSequence) {
+                    Text("Load Image Sequence").font(.largeTitle)
+                }.buttonStyle(ShrinkingButton())
+                  .help("Load an image sequence yet to be processed by ntar")
+
+                let loadRecent = {
+                    Log.d("load image sequence")
+
+                    // XXX implement a recent list, probably just previous json config files
+                }
+                
+                Button(action: loadRecent) {
+                    Text("Open Recent").font(.largeTitle)
+                }.buttonStyle(ShrinkingButton())
+                  .help("open a recently processed sequence")
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
     }
 
     func buttonImage(_ name: String, size: CGFloat) -> some View {
