@@ -53,9 +53,8 @@ import NtarCore
   - add filter options by frame state to constrain the filmstrip
   - make filmstrip sizeable by dragging the top of it
   - make it possible to play the video based upon previews
-
-  - make sure processed previews get updated in UI after change
-  - get full-res images working for processed and test paint
+    - could be faster
+  
   - add status flags for frames
     - don't have outliers
     - loading outliers
@@ -105,14 +104,20 @@ class ntar_gui_app: App {
             // a set of saved outlier groups for each frame
 
             //let outlier_dirname = "/pp/tmp/TEST_12_22_2022-a9-2-aurora-topaz-500-ntar-v-0_1_3-outliers"
+
+            let outlier_dirname = "/qp/ntar_validated/LRT_09_24_2022-a7iv-2-aurora-topaz-ntar-v-0_1_3-outliers"
             
-            //let outlier_dirname = "/pp/tmp/LRT_12_22_2022-a9-2-aurora-topaz-ntar-v-0_1_3-outliers"
+            //let outlier_dirname = "/pp/tmp/LRT_12_22_2022-a9-2-aurora-topaz-ntar-v-0_2_0-outliers"
             //let outlier_dirname = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/test_small_lots-ntar-v-0_2_0-outliers"
             //let outlier_dirname = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/test_small_medium-ntar-v-0_1_3-outliers"
 
-            let outlier_dirname = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/test_a7sii_100-ntar-v-0_2_0-outliers"
+            //let outlier_dirname = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/test_a7sii_100-ntar-v-0_2_0-outliers"
             
             //let outlier_dirname = "/qp/tmp/LRT_09_24_2022-a7iv-2-aurora-topaz-ntar-v-0_1_3-outliers"
+
+            //let outlier_dirname = "/rp/tmp/LRT_02_18_2023-a7sii-2-aurora-topaz-ntar-v-0_2_0-outliers"
+            //let outlier_dirname = "/rp/tmp/LRT_02_18_2023-a7iv-2-aurora-topaz-ntar-v-0_2_0-outliers"
+            
             
             outlier_json_startup(with: outlier_dirname)
             
@@ -144,7 +149,8 @@ class ntar_gui_app: App {
                                                           callbacks: callbacks,
                                                           processExistingFiles: true,/*,
                                                                                        maxResidentImages: 32*/
-                                                          fullyProcess: false)
+                                                          fullyProcess: false,
+                                                          isGUI: true)
                 self.viewModel.eraser = eraser // XXX rename this crap
 
                 if let fp = eraser.final_processor {
@@ -228,12 +234,10 @@ class ntar_gui_app: App {
             do {
                 let eraser = try NighttimeAirplaneRemover(with: config,
                                                           callbacks: callbacks,
-                                                          processExistingFiles: true/*,
-                                                          maxResidentImages: 32*/)
-                //                        await Log.dispatchGroup = eraser.dispatchGroup.dispatch_group
-                self.viewModel.eraser = eraser // XXX rename this crap
-                //                            try eraser.run()
+                                                          processExistingFiles: true,
+                                                          isGUI: true)
 
+                self.viewModel.eraser = eraser // XXX rename this crap
 
                 if let fp = eraser.final_processor {
                     self.viewModel.frameSaveQueue = FrameSaveQueue(fp)

@@ -47,14 +47,19 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
 
     public var final_processor: FinalProcessor?    
 
+    // are we running on the gui?
+    public var is_gui: Bool
+    
     public init(with config: Config,
                 callbacks: Callbacks,
                 processExistingFiles: Bool,
                 maxResidentImages: Int? = nil,
-                fullyProcess: Bool = true) throws
+                fullyProcess: Bool = true,
+                isGUI: Bool = false) throws
     {
         self.config = config
         self.callbacks = callbacks
+        self.is_gui = isGUI
         
         var basename = "\(config.image_sequence_dirname)-ntar-v-\(config.ntar_version)"
         basename = basename.replacingOccurrences(of: ".", with: "_")
@@ -394,7 +399,8 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
                                               testPaintPreviewOutputDirname: test_paint_preview_output_dirname,
                                               thumbnailOutputDirname: thumbnail_output_dirname,
                                               outlierGroupLoader: loadOutliersFromFile,
-                                              fullyProcess: fully_process)
+                                              fullyProcess: fully_process,
+                                              isGUI: is_gui)
    }        
 }
               

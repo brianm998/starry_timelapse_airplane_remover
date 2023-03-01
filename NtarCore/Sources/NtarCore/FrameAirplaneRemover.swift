@@ -175,6 +175,7 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
         if config.writeOutlierGroupFiles,
            let output_dirname = self.outlier_output_dirname
         {
+            Log.d("frame \(frame_index) writing outliers to binary")
             // write to binary outlier data
             self.outlier_groups?.prepareForEncoding() {
                 if let data = self.outlierBinaryData() {
@@ -276,6 +277,11 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
 
     public let base_name: String
 
+    // did we load our outliers from a file?
+    private var outliersLoadedFromFile = false
+
+    public func didLoadOutliersFromFile() -> Bool { outliersLoadedFromFile }
+    
     nonisolated public var previewFilename: String? {
         if let preview_output_dirname = preview_output_dirname {
             return "\(preview_output_dirname)/\(base_name).jpg"
@@ -319,6 +325,8 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
     }
     
     let fully_process: Bool
+
+    let is_gui: Bool
     
     init(with config: Config,
          width: Int,
@@ -337,9 +345,11 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
          testPaintPreviewOutputDirname test_paint_preview_output_dirname: String?,
          thumbnailOutputDirname thumbnail_output_dirname: String?,
          outlierGroupLoader: @escaping () async -> OutlierGroups?,
-         fullyProcess: Bool = true) async throws
+         fullyProcess: Bool = true,
+         isGUI: Bool = false) async throws
     {
         self.fully_process = fullyProcess
+        self.is_gui = isGUI
         self.config = config
         self.base_name = baseName
         self.callbacks = callbacks
@@ -384,7 +394,7 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
         }
 
     }
-
+    
     public func loadOutliers() async throws {
         if self.outlier_groups == nil {
             Log.d("frame \(frame_index) loading outliers")
@@ -397,6 +407,7 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
                                                                   
                 self.outlier_groups = outlierGroups
                 self.state = .outlierProcessingComplete
+                self.outliersLoadedFromFile = true
                 Log.i("loaded \(self.outlier_groups?.groups?.count) outlier groups for frame \(frame_index)")
             } else {
                 self.outlier_groups = OutlierGroups(frame_index: frame_index,
@@ -1063,8 +1074,16 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
     // run after should_paint has been set for each group, 
     // does the final painting and then writes out the output files
     public func finish() async throws {
-        self.writeOutliersBinary()
-        //self.writeOutliersJson()
+
+        if self.outliersLoadedFromFile {
+            // if we've loaded outliers from a file, only save again if we're in gui mode
+            // in GUI mode the user may have made an explicit decision
+            if self.is_gui {
+                self.writeOutliersBinary()
+            }
+        } else {
+            self.writeOutliersBinary()
+        }
         
         self.state = .reloadingImages
         

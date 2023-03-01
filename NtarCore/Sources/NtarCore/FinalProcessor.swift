@@ -271,8 +271,12 @@ public actor FinalProcessor {
                        let next_frame = await self.frame(at: immutable_start)
                     {
                         await self.clearFrame(at: immutable_start - 1)
-                        if frame_to_finish.fully_process {
 
+                        // if the outloaders were loaded from a file, then further processing
+                        // is not a good thing
+                        let outliers_loaded_from_file = await frame_to_finish.didLoadOutliersFromFile()
+                        
+                        if frame_to_finish.fully_process && !outliers_loaded_from_file {
                             // identify all existing streaks with length of only 2
                             // try to find other nearby streaks, if not found,
                             //then skip for new not paint reason
@@ -282,21 +286,9 @@ public actor FinalProcessor {
 
                             await really_final_streak_processing(onFrame: frame_to_finish,
                                                                  nextFrame: next_frame)
+
+                            await frame_to_finish.set(state: .outlierProcessingComplete)
                         }
-
-                        Log.d("running final streak processing on frame \(frame_to_finish.frame_index)")
-                        //let final_frame_group_name = "final frame \(frame_to_finish.frame_index)"
-                        Log.d("frame \(frame_to_finish.frame_index) adding at index ")
-                        await frame_to_finish.set(state: .outlierProcessingComplete)
-                        // XXX lots of images are getting blocked up here for some reason
-
-
-                        // here we need to see if we are in gui or cli mode
-                        
-                        // gui needs to have the user look at each image now and
-                        // validate it, maybe making painting changes
-
-                        // cli needs to go straight to the final queue as seen here
 
                         await self.finish(frame: frame_to_finish)
                     }
@@ -364,6 +356,13 @@ func really_final_streak_processing(onFrame frame: FrameAirplaneRemover,
     // if the streak has only two members, then:
     //   - look through all other streaks, and see if any of them might match up to it
     //     for both position and rough alignment of their members
+
+    if await frame.didLoadOutliersFromFile() {
+        // these have already been processed,
+        // and further processing may overwrite a user's choice in the gui
+        Log.d("frame \(frame.frame_index) had its outliers loaded from file, not processing further")
+        return
+    }
     
     for (streak_name, airplane_streak) in await airplane_streaks.streaks {
         if let last_member = airplane_streak.last {
@@ -522,6 +521,12 @@ var GLOBAL_last_overlap_frame_number = 0 // XXX
 fileprivate func run_final_overlap_pass(frames: [FrameAirplaneRemover],
                                         config: Config) async
 {
+    var should_process = true
+    for frame in frames {
+        // these have already been processed, don't process them further
+        if await frame.didLoadOutliersFromFile() { should_process = false }
+    }
+    if !should_process { return }
     for (index, frame) in frames.enumerated() {
         if frame.frame_index < GLOBAL_last_overlap_frame_number { continue }
         if index + 1 >= frames.count { continue }
