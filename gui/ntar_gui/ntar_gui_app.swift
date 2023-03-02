@@ -143,6 +143,9 @@ class ntar_gui_app: App {
         // first read config from json
         let dispatchGroup = DispatchGroup()
         dispatchGroup.enter()
+
+        UserPreferences.shared.justOpened(filename: outlier_dirname)
+        
         Task {
             do {
                 //let config = try await Config.read(fromJsonDirname: outlier_dirname)

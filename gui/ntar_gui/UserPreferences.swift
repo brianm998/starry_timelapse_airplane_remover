@@ -17,16 +17,18 @@ class UserPreferences: Codable {
     // other things can be saved here too if needed
     
     var recentlyOpenedSequencelist:
-      [TimeInterval:            // when it was last opened
-       String]                  // filename
-      = [:]
+      [String:              // filename
+       Double] = [:]  // when it was last opened
     {
         didSet {
+            // XXX Add logic here to limit the size of the list to some parameter
             self.save()
         }
     }
 
-    private static var instance: UserPreferences?
+    func justOpened(filename: String) {
+        self.recentlyOpenedSequencelist[filename] = Date().timeIntervalSince1970
+    }
     
     static var shared: UserPreferences { // XXX rename this
         get {
@@ -53,8 +55,10 @@ class UserPreferences: Codable {
             return ret
         }
     }
-    
-    static func load() async throws -> UserPreferences? {
+
+    private static var instance: UserPreferences?
+
+    private static func load() async throws -> UserPreferences? {
         if file_manager.fileExists(atPath: fullPath) {
             let url = NSURL(fileURLWithPath: fullPath, isDirectory: false) as URL
             let (data, _) = try await URLSession.shared.data(for: URLRequest(url: url))
@@ -69,7 +73,7 @@ class UserPreferences: Codable {
         return nil
     }
     
-    func save() {
+    private func save() {
         do {
             let encoder = JSONEncoder()
             encoder.outputFormatting = .prettyPrinted

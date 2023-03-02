@@ -27,6 +27,41 @@ enum FrameViewMode: String, Equatable, CaseIterable {
     }
 }
 
+struct ChoosePreviouslyOpenedSequenceSheetView: View { // XXX get rid of this
+    @Binding var isVisible: Bool
+    var choices: [String]
+
+    @Binding var choice: String
+    
+    var body: some View {
+        VStack {
+            Spacer()
+            VStack {
+                HStack {
+                    Spacer()
+
+                    Picker("Choose Previous", selection: $choice) {
+                        ForEach(choices, id: \.self) { option in
+                            Text(option)
+                        }
+                    }
+                    Spacer()
+                    Spacer()
+                }
+                HStack {
+                    Button("Load") {
+                        // actually load choice
+                        self.isVisible = false
+                    }
+                    Button("Cancel") {
+                        self.isVisible = false
+                    }
+                }
+            }
+        }
+    }
+}
+
 struct SettingsSheetView: View {
     @Binding var isVisible: Bool
     @Binding var fast_skip_amount: Int
@@ -165,10 +200,16 @@ struct ContentView: View {
 
     @State private var settings_sheet_showing = false
     @State private var paint_sheet_showing = false
+
+    @State private var previously_opened_sheet_showing = false
+    @State private var previously_opened_sheet_showing_item: String = "" // WTF with this one?
     
     
     init(viewModel: ViewModel) {
         self.viewModel = viewModel
+
+        let array = Array(UserPreferences.shared.recentlyOpenedSequencelist.keys)
+        previously_opened_sheet_showing_item = array[0]
     }
     
     var body: some View {
@@ -642,29 +683,32 @@ struct ContentView: View {
     func renderAllFramesButton() -> some View {
         let action: () -> Void = {
             Task {
-                var number_to_save = 0
-                self.rendering_all_frames = true
-                for frameView in viewModel.frames {
-                    if let frame = frameView.frame,
-                       let frameSaveQueue = viewModel.frameSaveQueue
-                    {
-                        number_to_save += 1
-                        frameSaveQueue.saveNow(frame: frame) {
-                            await viewModel.refresh(frame: frame)
-                            /*
-                            if frame.frame_index == viewModel.current_index {
-                                refreshCurrentFrame()
+                await withLimitedTaskGroup(of: Void.self) { taskGroup in
+                    var number_to_save = 0
+                    self.rendering_all_frames = true
+                    for frameView in viewModel.frames {
+                        if let frame = frameView.frame,
+                           let frameSaveQueue = viewModel.frameSaveQueue
+                        {
+                            await taskGroup.addTask() {
+                                number_to_save += 1
+                                frameSaveQueue.saveNow(frame: frame) {
+                                    await viewModel.refresh(frame: frame)
+                                    /*
+                                     if frame.frame_index == viewModel.current_index {
+                                     refreshCurrentFrame()
+                                     }
+                                     */
+                                    number_to_save -= 1
+                                    if number_to_save == 0 {
+                                        self.rendering_all_frames = false
+                                    }
                                 }
-                             */
-                            number_to_save -= 1
-                            if number_to_save == 0 {
-                                self.rendering_all_frames = false
                             }
                         }
                     }
+                    await taskGroup.waitForAll()
                 }
-                // XXX this executes almost immediately after being set to true above,
-                // need to wait until the frame save queue is done..
             }
         }
         
@@ -1102,22 +1146,58 @@ struct ContentView: View {
                 }.buttonStyle(ShrinkingButton())
                   .help("Load an image sequence yet to be processed by ntar")
 
-                let loadRecent = {
-                    Log.d("load image sequence")
+                if UserPreferences.shared.recentlyOpenedSequencelist.count > 0 {
+                    let loadRecent = {
+                        Log.d("load image sequence")
 
-                    // XXX testing code
-                    let prefs = UserPreferences.shared
-                    prefs.recentlyOpenedSequencelist[204.2] = "foo"
-                    // XXX testing code
+                        
+                        Log.d("have previously_opened_sheet_showing_item \(previously_opened_sheet_showing_item)")
+                        viewModel.app?.outlier_json_startup(with: previously_opened_sheet_showing_item)
+
+                        running = true
+                        viewModel.initial_load_in_progress = true
+                        Task.detached(priority: .background) {
+                            do {
+                                try await viewModel.eraser?.run()
+                            } catch {
+                                Log.e("\(error)")
+                            }
+                        }
+                        
+//                        previously_opened_sheet_showing = true
+                        // XXX testing code
+                        //let prefs = UserPreferences.shared
+                        //Log.d("recently opened \(prefs.recentlyOpenedSequencelist)")
+                        //prefs.recentlyOpenedSequencelist[204.2] = "foo"
+                        //prefs.recentlyOpenedSequencelist[20.2] = "bar"
+                        // XXX testing code
+                    }
+                    
+                    Button(action: loadRecent) {
+                        Text("Open Recent").font(.largeTitle)
+                    }.buttonStyle(ShrinkingButton())
+                      .help("open a recently processed sequence")
+
+                    Picker("Choose Previous", selection: $previously_opened_sheet_showing_item) {
+                        let array = Array(UserPreferences.shared.recentlyOpenedSequencelist.keys)
+                        ForEach(array, id: \.self) { option in
+                            Text(option)
+                        }
+                    }.frame(maxWidth: 500)
+                    
                 }
-                
-                Button(action: loadRecent) {
-                    Text("Open Recent").font(.largeTitle)
-                }.buttonStyle(ShrinkingButton())
-                  .help("open a recently processed sequence")
+                }
             }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+          .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+        /*
+          .sheet(isPresented: $previously_opened_sheet_showing) {
+              let array = Array(UserPreferences.shared.recentlyOpenedSequencelist.keys)
+              //previously_opened_sheet_showing_item = array[0]
+              ChoosePreviouslyOpenedSequenceSheetView(isVisible: self.$previously_opened_sheet_showing,
+                                                      choices: array,
+                                                      choice: $previously_opened_sheet_showing_item)
+                                                      }
+         */
     }
 
     func buttonImage(_ name: String, size: CGFloat) -> some View {
