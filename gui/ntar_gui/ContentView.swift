@@ -27,41 +27,6 @@ enum FrameViewMode: String, Equatable, CaseIterable {
     }
 }
 
-struct ChoosePreviouslyOpenedSequenceSheetView: View { // XXX get rid of this
-    @Binding var isVisible: Bool
-    var choices: [String]
-
-    @Binding var choice: String
-    
-    var body: some View {
-        VStack {
-            Spacer()
-            VStack {
-                HStack {
-                    Spacer()
-
-                    Picker("Choose Previous", selection: $choice) {
-                        ForEach(choices, id: \.self) { option in
-                            Text(option)
-                        }
-                    }
-                    Spacer()
-                    Spacer()
-                }
-                HStack {
-                    Button("Load") {
-                        // actually load choice
-                        self.isVisible = false
-                    }
-                    Button("Cancel") {
-                        self.isVisible = false
-                    }
-                }
-            }
-        }
-    }
-}
-
 struct SettingsSheetView: View {
     @Binding var isVisible: Bool
     @Binding var fast_skip_amount: Int
@@ -1058,25 +1023,6 @@ struct ContentView: View {
             Text("Choose an option to get started")
             
             HStack {
-                // XXX this one will go away
-                /*
-                let run = {
-                    running = true
-                    viewModel.initial_load_in_progress = true
-                    Task.detached(priority: .background) {
-                        do {
-                            try await viewModel.eraser?.run()
-                        } catch {
-                            Log.e("\(error)")
-                        }
-                    }
-                }
-                Button(action: run) {
-                    Text("START").font(.largeTitle)
-                }.buttonStyle(ShrinkingButton())
-                 */
-                // XXX this one will go away
-
                 let loadConfig = {
                     Log.d("load config")
 
@@ -1189,15 +1135,6 @@ struct ContentView: View {
                 }
             }
           .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-        /*
-          .sheet(isPresented: $previously_opened_sheet_showing) {
-              let array = Array(UserPreferences.shared.recentlyOpenedSequencelist.keys)
-              //previously_opened_sheet_showing_item = array[0]
-              ChoosePreviouslyOpenedSequenceSheetView(isVisible: self.$previously_opened_sheet_showing,
-                                                      choices: array,
-                                                      choice: $previously_opened_sheet_showing_item)
-                                                      }
-         */
     }
 
     func buttonImage(_ name: String, size: CGFloat) -> some View {
