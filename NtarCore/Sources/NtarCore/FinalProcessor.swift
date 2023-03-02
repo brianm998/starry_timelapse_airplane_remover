@@ -61,12 +61,17 @@ public actor FinalProcessor {
     
     var is_asleep = false
     
+    // are we running on the gui?
+    public let is_gui: Bool
+    
     init(with config: Config,
          callbacks: Callbacks,
          numberOfFrames frame_count: Int,
          dispatchGroup dispatch_group: DispatchHandler,
-         imageSequence: ImageSequence)
+         imageSequence: ImageSequence,
+         isGUI: Bool)
     {
+        self.is_gui = isGUI
         self.config = config
         self.callbacks = callbacks
         self.frames = [FrameAirplaneRemover?](repeating: nil, count: frame_count)
@@ -222,16 +227,15 @@ public actor FinalProcessor {
             }
             
             let index_to_process = await current_frame_index
-            /*
 
-             will we now overwrite existing files?
-             
-            if !shouldProcess[index_to_process] {
+            if !is_gui,         // always process on gui so we can see them all
+               !shouldProcess[index_to_process]
+            {
+                // don't process existing files on cli
                 Log.d("not processing \(index_to_process)")
                 await self.incrementCurrentFrameIndex()
                 continue
             }
-            */
             var images_to_process: [FrameAirplaneRemover] = []
             
             var start_index = index_to_process - config.number_final_processing_neighbors_needed
@@ -243,10 +247,13 @@ public actor FinalProcessor {
                 end_index = frame_count - 1
             }
 
+            Log.i("start_index \(start_index) end_index \(end_index)")
+            
             var have_enough_frames_to_inter_frame_process = true
             //var index_in_images_to_process_of_main_frame = 0
             //var index_in_images_to_process = 0
             for i in start_index ... end_index {
+                Log.v("looking for frame at \(i)")
                 if let next_frame = await self.frame(at: i) {
                     images_to_process.append(next_frame)
                 } else {
