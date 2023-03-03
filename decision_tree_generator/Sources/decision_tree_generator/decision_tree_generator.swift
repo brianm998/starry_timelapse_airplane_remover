@@ -10,6 +10,19 @@ struct OutlierGroupValues {
 
 var start_time: Date = Date()
 
+/*
+
+ IMPROVEMENTS:
+
+  - split out the outlier saving data to also gather all values for all outliers
+    and output that to a different kind of file that can then be digested
+    by this code to speed up generating decision trees.
+    This new data would then only need to be updated if the original data set is updated
+    or if we get new decision criteria.
+    
+   */
+
+
 @available(macOS 10.15, *) 
 struct TreeDecisionTypeResult {
     var decisionResult: DecisionResult?
@@ -457,6 +470,14 @@ struct decision_tree_generator: ParsableCommand {
               // decide the paintability of this OutlierGroup with a decision tree
               var shouldPaintFromDecisionTree_\(tree_hash_string.suffix(sha_suffix_size)): Bool {
                   get async {
+
+                      var values: [OutlierGroup.TreeDecisionType: Double] = [:]
+              
+                      for type in OutlierGroup.TreeDecisionType.allCases {
+                          let value = await self.decisionTreeValue(for: type)
+                          values[type] = value
+                      }
+                          
           \(generated_swift_code)
                   }
               }
@@ -914,18 +935,10 @@ struct DecisionTreeNode: DecisionTree {
     let indent: Int
 
     var swiftCode: String {
-
-        var methodInvocation = ""
-        if type.needsAsync {
-            methodInvocation = "if await self.decisionTreeValue"
-        } else {
-            methodInvocation = "if self.nonAsyncDecisionTreeValue"
-        }
-
         var indentation = ""
         for _ in 0..<indent { indentation += "    " }
         return """
-          \(indentation)\(methodInvocation)(for: .\(type)) < \(value) {
+          \(indentation)if values[type]! < \(value) {
           \(lessThan.swiftCode)
           \(indentation)} else {
           \(greaterThan.swiftCode)
