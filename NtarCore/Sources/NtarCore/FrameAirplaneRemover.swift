@@ -171,32 +171,12 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
         }
     }
 
-    public func writeOutliersBinary() async {
+    // write out just the OutlierGroupValueMatrix, which just what
+    // the decision tree needs, and not very large
+    public func writeOutlierValuesBinary() async {
         if config.writeOutlierGroupFiles,
            let output_dirname = self.outlier_output_dirname
         {
-            Log.d("frame \(frame_index) writing outliers to binary")
-            // write to binary outlier data
-            self.outlier_groups?.prepareForEncoding() {
-                if let data = self.outlierBinaryData() {
-                    let filename = "\(self.frame_index)_outliers.bin"
-                    let full_path = "\(output_dirname)/\(filename)"
-                    do {
-                        if file_manager.fileExists(atPath: full_path) {
-                            try file_manager.removeItem(atPath: full_path)
-                            // make this overwrite for new user changes to existing data
-                            Log.i("overwriting \(full_path)")
-                        } 
-                        Log.i("creating \(full_path)")                      
-                        file_manager.createFile(atPath: full_path, contents: data, attributes: nil)
-                    } catch {
-                        Log.e("\(error)")
-                    }
-                } else {
-                    Log.e("frame \(self.frame_index) has no outlier binary data :(")
-                }
-            }
-
             // write out the decision tree value matrix too
 
             let valueMatrix = OutlierGroupValueMatrix()
@@ -224,6 +204,37 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
             } catch {
                 Log.e("\(error)")
             }
+        }
+    }
+
+    // write out full OutlierGroup codable binary
+    // large, slow, but lots of data
+    public func writeOutliersBinary() {
+        if config.writeOutlierGroupFiles,
+           let output_dirname = self.outlier_output_dirname
+        {
+            Log.d("frame \(frame_index) writing outliers to binary")
+            // write to binary outlier data
+            self.outlier_groups?.prepareForEncoding() {
+                if let data = self.outlierBinaryData() {
+                    let filename = "\(self.frame_index)_outliers.bin"
+                    let full_path = "\(output_dirname)/\(filename)"
+                    do {
+                        if file_manager.fileExists(atPath: full_path) {
+                            try file_manager.removeItem(atPath: full_path)
+                            // make this overwrite for new user changes to existing data
+                            Log.i("overwriting \(full_path)")
+                        } 
+                        Log.i("creating \(full_path)")                      
+                        file_manager.createFile(atPath: full_path, contents: data, attributes: nil)
+                    } catch {
+                        Log.e("\(error)")
+                    }
+                } else {
+                    Log.e("frame \(self.frame_index) has no outlier binary data :(")
+                }
+            }
+
         }
     }
     
@@ -1107,11 +1118,14 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
             // if we've loaded outliers from a file, only save again if we're in gui mode
             // in GUI mode the user may have made an explicit decision
             if self.overwriteFileLoadedOutlierGroups {
-                await self.writeOutliersBinary()
+                self.writeOutliersBinary()
             }
         } else {
-            await self.writeOutliersBinary()
+            self.writeOutliersBinary()
         }
+
+        // these are derived from the outliers binary, and writing them out is ok
+        await writeOutlierValuesBinary()
         
         self.state = .reloadingImages
         
