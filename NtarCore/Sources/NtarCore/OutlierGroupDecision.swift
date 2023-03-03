@@ -8,8 +8,43 @@
  */
 
 @available(macOS 10.15, *) 
+public struct OutlierGroupValues {
+    public var values: [OutlierGroup.TreeDecisionType: Double] = [:]
+}
+
+@available(macOS 10.15, *) 
 public extension OutlierGroup {
 
+    // ordered by the list of types below
+    var decisionTreeValues: [Double] {
+        get async {
+            var ret: [Double] = []
+            for type in OutlierGroup.TreeDecisionType.allCases {
+                ret.append(await self.decisionTreeValue(for: type))
+            }
+            return ret
+        } 
+    }
+
+    // the ordering of the list of values above
+    var decisionTreeValueTypes: [OutlierGroup.TreeDecisionType] {
+        var ret: [OutlierGroup.TreeDecisionType] = []
+        for type in OutlierGroup.TreeDecisionType.allCases {
+            ret.append(type)
+        }
+        return ret
+    }
+
+    var decisionTreeGroupValues: OutlierGroupValues {
+        get async {
+            var values = OutlierGroupValues()
+            for type in OutlierGroup.TreeDecisionType.allCases {
+                values.values[type] = await self.decisionTreeValue(for: type)
+            }
+            return values
+        } 
+    }
+    
     var shouldPaintFromDecisionTree: Bool {
         get async {
             // XXX have the generator modify this?

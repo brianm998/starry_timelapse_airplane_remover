@@ -3,11 +3,6 @@ import NtarCore
 import ArgumentParser
 import CryptoKit
 
-@available(macOS 10.15, *) 
-struct OutlierGroupValues {
-    var values: [OutlierGroup.TreeDecisionType: Double] = [:]
-}
-
 var start_time: Date = Date()
 
 /*
@@ -317,15 +312,8 @@ struct decision_tree_generator: ParsableCommand {
                                             let name = await outlier_group.name
                                             if let should_paint = await outlier_group.shouldPaint {
                                                 let will_paint = should_paint.willPaint
-
-                                                // XXX move this into OutlierGroupDecision logic
-                                                var values = OutlierGroupValues()
                                                 
-                                                for type in OutlierGroup.TreeDecisionType.allCases {
-                                                    values.values[type] = await outlier_group.decisionTreeValue(for: type)
-                                                }
-                                                /// XXX use it for writing out a list of value vectors
-                                                
+                                                var values = await outlier_group.decisionTreeGroupValues
                                                 
                                                 if will_paint {
                                                     local_should_paint_test_data.append(values)
