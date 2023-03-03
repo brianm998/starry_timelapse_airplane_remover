@@ -233,6 +233,106 @@ struct decision_tree_generator: ParsableCommand {
         dispatch_group.wait()
     }
 
+
+    func read(fromConfig json_config_file_name: String) async throws -> ([OutlierGroupValueMap],
+                                                                         [OutlierGroupValueMap])
+    {
+        var should_paint_test_data: [OutlierGroupValueMap] = []
+        var should_not_paint_test_data: [OutlierGroupValueMap] = []
+        let config = try await Config.read(fromFilename: json_config_file_name)
+        Log.d("got config from \(json_config_file_name)")
+        
+        let callbacks = Callbacks()
+
+        var frames: [FrameAirplaneRemover] = []
+        
+        var endClosure: () -> Void = { }
+        
+        // called when we should check a frame
+        callbacks.frameCheckClosure = { new_frame in
+            Log.d("frameCheckClosure for frame \(new_frame.frame_index)")
+            frames.append(new_frame)
+            endClosure()
+        }
+        
+        callbacks.countOfFramesToCheck = { 1 }
+
+        let eraser = try NighttimeAirplaneRemover(with: config,
+                                                  callbacks: callbacks,
+                                                  processExistingFiles: true,
+                                                  fullyProcess: false)
+        let sequence_size = await eraser.image_sequence.filenames.count
+        endClosure = {
+            Log.d("end enclosure frames.count \(frames.count) sequence_size \(sequence_size)")
+            if frames.count == sequence_size {
+                eraser.shouldRun = false
+            }
+        }
+        
+        Log.d("got \(sequence_size) frames")
+        // XXX run it and get the outlier groups
+
+        try eraser.run()
+
+        Log.d("eraser done running")
+        
+        // after the eraser is done running we should have received all the frames
+        // in the frame check callback
+
+        // load the outliers in parallel
+        try await withLimitedThrowingTaskGroup(of: Void.self) { taskGroup in
+            for frame in frames {
+                await taskGroup.addTask() {
+                    try await frame.loadOutliers()
+                }
+            }
+            try await taskGroup.waitForAll()
+        }
+        Log.d("outliers loaded")
+
+        await withLimitedTaskGroup(of: OutlierGroupValueMapResult.self) { taskGroup in
+            for frame in frames {
+                await taskGroup.addTask() {
+                    
+                    var local_should_paint_test_data: [OutlierGroupValueMap] = []
+                    var local_should_not_paint_test_data: [OutlierGroupValueMap] = []
+                    if let outlier_groups = await frame.outlierGroups() {
+                        for outlier_group in outlier_groups {
+                            let name = await outlier_group.name
+                            if let should_paint = await outlier_group.shouldPaint {
+                                let will_paint = should_paint.willPaint
+
+                                var values = await outlier_group.decisionTreeGroupValues
+
+                                if will_paint {
+                                    local_should_paint_test_data.append(values)
+                                } else {
+                                    local_should_not_paint_test_data.append(values)
+                                }
+                            } else {
+                                Log.e("outlier group \(name) has no shouldPaint value")
+                                fatalError("outlier group \(name) has no shouldPaint value")
+                            }
+                        }
+                    } else {
+                        Log.e("cannot get outlier groups for frame \(frame.frame_index)")
+                        fatalError("cannot get outlier groups for frame \(frame.frame_index)")
+                    }
+                    return OutlierGroupValueMapResult(
+                      should_paint_test_data: local_should_paint_test_data,
+                      should_not_paint_test_data: local_should_not_paint_test_data)
+                }
+            }
+
+            while let response = await taskGroup.next() {
+                should_paint_test_data += response.should_paint_test_data
+                should_not_paint_test_data += response.should_not_paint_test_data
+            }
+        }    
+
+        return (should_paint_test_data, should_not_paint_test_data)
+    }
+
     // actually generate a decision tree
     func generate_tree() {
         let dispatch_group = DispatchGroup()
@@ -245,98 +345,13 @@ struct decision_tree_generator: ParsableCommand {
             for json_config_file_name in json_config_file_names {
                 // XXX task group here too, load them all in parallel
                 Log.d("should read \(json_config_file_name)")
-                
+
                 do {
-                    let config = try await Config.read(fromFilename: json_config_file_name)
-                    Log.d("got config from \(json_config_file_name)")
-                    
-                    let callbacks = Callbacks()
-
-                    var frames: [FrameAirplaneRemover] = []
-                    
-                    var endClosure: () -> Void = { }
-                    
-                    // called when we should check a frame
-                    callbacks.frameCheckClosure = { new_frame in
-                        Log.d("frameCheckClosure for frame \(new_frame.frame_index)")
-                        frames.append(new_frame)
-                        endClosure()
-                    }
-                    
-                    callbacks.countOfFramesToCheck = { 1 }
-
-                    let eraser = try NighttimeAirplaneRemover(with: config,
-                                                              callbacks: callbacks,
-                                                              processExistingFiles: true,
-                                                              fullyProcess: false)
-                    let sequence_size = await eraser.image_sequence.filenames.count
-                    endClosure = {
-                        Log.d("end enclosure frames.count \(frames.count) sequence_size \(sequence_size)")
-                        if frames.count == sequence_size {
-                            eraser.shouldRun = false
-                        }
-                    }
-                    
-                    Log.d("got \(sequence_size) frames")
-                    // XXX run it and get the outlier groups
-
-                    try eraser.run()
-
-                    Log.d("eraser done running")
-                    
-                    // after the eraser is done running we should have received all the frames
-                    // in the frame check callback
-
-                    // load the outliers in parallel
-                    try await withLimitedThrowingTaskGroup(of: Void.self) { taskGroup in
-                        for frame in frames {
-                            await taskGroup.addTask() {
-                                try await frame.loadOutliers()
-                            }
-                        }
-                        try await taskGroup.waitForAll()
-                    }
-                    Log.d("outliers loaded")
-
-                    await withLimitedTaskGroup(of: OutlierGroupValueMapResult.self) { taskGroup in
-                        for frame in frames {
-                            await taskGroup.addTask() {
-                                
-                                var local_should_paint_test_data: [OutlierGroupValueMap] = []
-                                var local_should_not_paint_test_data: [OutlierGroupValueMap] = []
-                                if let outlier_groups = await frame.outlierGroups() {
-                                    for outlier_group in outlier_groups {
-                                        let name = await outlier_group.name
-                                        if let should_paint = await outlier_group.shouldPaint {
-                                            let will_paint = should_paint.willPaint
-
-                                            var values = await outlier_group.decisionTreeGroupValues
-
-                                            if will_paint {
-                                                local_should_paint_test_data.append(values)
-                                            } else {
-                                                local_should_not_paint_test_data.append(values)
-                                            }
-                                        } else {
-                                            Log.e("outlier group \(name) has no shouldPaint value")
-                                            fatalError("outlier group \(name) has no shouldPaint value")
-                                        }
-                                    }
-                                } else {
-                                    Log.e("cannot get outlier groups for frame \(frame.frame_index)")
-                                    fatalError("cannot get outlier groups for frame \(frame.frame_index)")
-                                }
-                                return OutlierGroupValueMapResult(
-                                  should_paint_test_data: local_should_paint_test_data,
-                                  should_not_paint_test_data: local_should_not_paint_test_data)
-                            }
-                        }
-
-                        while let response = await taskGroup.next() {
-                            should_paint_test_data += response.should_paint_test_data
-                            should_not_paint_test_data += response.should_not_paint_test_data
-                        }
-                    }
+                    let (more_should_paint, more_should_not_paint) =
+                      try await read(fromConfig: json_config_file_name)
+                
+                    should_paint_test_data += more_should_paint
+                    should_not_paint_test_data += more_should_not_paint
                 } catch {
                     Log.w("couldn't get config from \(json_config_file_name)")
                     Log.e("\(error)")
@@ -354,7 +369,7 @@ struct decision_tree_generator: ParsableCommand {
             // save this generated swift code to a file
 
             // XXX make this better
-            let filename = "../NtarCore/Sources/NtarCore/OutlierGroupDecisionTree-\(sha_hash.suffix(sha_suffix_size)).swift"
+            let filename = "../NtarCore/Sources/NtarCore/OutlierGroupDecisionTree_\(sha_hash.suffix(sha_suffix_size)).swift"
             do {
                 if file_manager.fileExists(atPath: filename) {
                     Log.i("overwriting already existing filename \(filename)")
@@ -370,8 +385,6 @@ struct decision_tree_generator: ParsableCommand {
                 Log.e("\(error)")
             }
 
-            
-            
             dispatch_group.leave()
         }
         dispatch_group.wait()
