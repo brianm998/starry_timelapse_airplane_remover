@@ -83,6 +83,9 @@ public actor FinalQueue {
                         }
                     } else {
                         Log.w("could not queue frame \(next_key), it's being saved right now")
+
+                        // XXX maybe instead of remove, add to end?
+                        await self.removeValue(forKey: next_key)
                     }
                 } else {
                     try await Task.sleep(nanoseconds: 1_000_000_000)
