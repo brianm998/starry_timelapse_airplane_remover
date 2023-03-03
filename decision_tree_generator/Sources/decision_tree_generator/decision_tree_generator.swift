@@ -938,7 +938,7 @@ struct DecisionTreeNode: DecisionTree {
         var indentation = ""
         for _ in 0..<indent { indentation += "    " }
         return """
-          \(indentation)if values[type]! < \(value) {
+          \(indentation)if values[.\(type)]! < \(value) {
           \(lessThan.swiftCode)
           \(indentation)} else {
           \(greaterThan.swiftCode)
