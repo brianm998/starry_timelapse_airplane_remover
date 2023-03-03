@@ -171,7 +171,7 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
         }
     }
 
-    public func writeOutliersBinary() {
+    public func writeOutliersBinary() async {
         if config.writeOutlierGroupFiles,
            let output_dirname = self.outlier_output_dirname
         {
@@ -195,6 +195,34 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
                 } else {
                     Log.e("frame \(self.frame_index) has no outlier binary data :(")
                 }
+            }
+
+            // write out the decision tree value matrix too
+
+            let valueMatrix = OutlierGroupValueMatrix()
+
+            if let outliers = self.outlierGroups() {
+                for outlier in outliers {
+                    await valueMatrix.append(outlierGroup: outlier)
+                }
+            }
+
+            let filename = "\(self.frame_index)_outlier_values.bin"
+            let full_path = "\(output_dirname)/\(filename)"
+
+            let encoder = BinaryEncoder()
+            Log.d("frame \(frame_index) about to encode outlier data")
+            do {
+                let data = try encoder.encode(valueMatrix)
+                if file_manager.fileExists(atPath: full_path) {
+                    try file_manager.removeItem(atPath: full_path)
+                    // make this overwrite for new user changes to existing data
+                    Log.i("overwriting \(full_path)")
+                } 
+                Log.i("creating \(full_path)")                      
+                file_manager.createFile(atPath: full_path, contents: data, attributes: nil)
+            } catch {
+                Log.e("\(error)")
             }
         }
     }
@@ -1079,10 +1107,10 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
             // if we've loaded outliers from a file, only save again if we're in gui mode
             // in GUI mode the user may have made an explicit decision
             if self.overwriteFileLoadedOutlierGroups {
-                self.writeOutliersBinary()
+                await self.writeOutliersBinary()
             }
         } else {
-            self.writeOutliersBinary()
+            await self.writeOutliersBinary()
         }
         
         self.state = .reloadingImages

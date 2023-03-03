@@ -12,6 +12,19 @@ public struct OutlierGroupValues {
     public var values: [OutlierGroup.TreeDecisionType: Double] = [:]
 }
 
+
+// used for storing only decision tree data for a lot of outlier groups on file 
+@available(macOS 10.15, *) 
+public class OutlierGroupValueMatrix: Codable {
+    var types: [OutlierGroup.TreeDecisionType] = OutlierGroup.decisionTreeValueTypes
+
+    var values: [[Double]] = []      // indexed by outlier group first then types later
+
+    public func append(outlierGroup: OutlierGroup) async {
+        values.append(await outlierGroup.decisionTreeValues)
+    }
+}
+
 @available(macOS 10.15, *) 
 public extension OutlierGroup {
 
@@ -27,7 +40,7 @@ public extension OutlierGroup {
     }
 
     // the ordering of the list of values above
-    var decisionTreeValueTypes: [OutlierGroup.TreeDecisionType] {
+    static var decisionTreeValueTypes: [OutlierGroup.TreeDecisionType] {
         var ret: [OutlierGroup.TreeDecisionType] = []
         for type in OutlierGroup.TreeDecisionType.allCases {
             ret.append(type)
@@ -53,7 +66,7 @@ public extension OutlierGroup {
     }
     
     // we derive a Double value from each of these
-    enum TreeDecisionType: CaseIterable, Hashable {
+    enum TreeDecisionType: CaseIterable, Hashable, Codable {
         case size
         case width
         case height
