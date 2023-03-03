@@ -287,63 +287,55 @@ struct decision_tree_generator: ParsableCommand {
                     // after the eraser is done running we should have received all the frames
                     // in the frame check callback
 
-                    if let image_width = eraser.image_width,
-                       let image_height = eraser.image_height
-                    {
-                        // load the outliers in parallel
-                        try await withLimitedThrowingTaskGroup(of: Void.self) { taskGroup in
-                            for frame in frames {
-                                await taskGroup.addTask() {
-                                    try await frame.loadOutliers()
-                                }
+                    // load the outliers in parallel
+                    try await withLimitedThrowingTaskGroup(of: Void.self) { taskGroup in
+                        for frame in frames {
+                            await taskGroup.addTask() {
+                                try await frame.loadOutliers()
                             }
-                            try await taskGroup.waitForAll()
                         }
-                        Log.d("outliers loaded")
+                        try await taskGroup.waitForAll()
+                    }
+                    Log.d("outliers loaded")
 
-                        await withLimitedTaskGroup(of: OutlierGroupValuesResult.self) { taskGroup in
-                            for frame in frames {
-                                await taskGroup.addTask() {
-                                    
-                                    var local_should_paint_test_data: [OutlierGroupValues] = []
-                                    var local_should_not_paint_test_data: [OutlierGroupValues] = []
-                                    if let outlier_groups = await frame.outlierGroups() {
-                                        for outlier_group in outlier_groups {
-                                            let name = await outlier_group.name
-                                            if let should_paint = await outlier_group.shouldPaint {
-                                                let will_paint = should_paint.willPaint
-                                                
-                                                var values = await outlier_group.decisionTreeGroupValues
-                                                
-                                                if will_paint {
-                                                    local_should_paint_test_data.append(values)
-                                                } else {
-                                                    local_should_not_paint_test_data.append(values)
-                                                }
+                    await withLimitedTaskGroup(of: OutlierGroupValuesResult.self) { taskGroup in
+                        for frame in frames {
+                            await taskGroup.addTask() {
+                                
+                                var local_should_paint_test_data: [OutlierGroupValues] = []
+                                var local_should_not_paint_test_data: [OutlierGroupValues] = []
+                                if let outlier_groups = await frame.outlierGroups() {
+                                    for outlier_group in outlier_groups {
+                                        let name = await outlier_group.name
+                                        if let should_paint = await outlier_group.shouldPaint {
+                                            let will_paint = should_paint.willPaint
+
+                                            var values = await outlier_group.decisionTreeGroupValues
+
+                                            if will_paint {
+                                                local_should_paint_test_data.append(values)
                                             } else {
-                                                Log.e("outlier group \(name) has no shouldPaint value")
-                                                fatalError("outlier group \(name) has no shouldPaint value")
+                                                local_should_not_paint_test_data.append(values)
                                             }
+                                        } else {
+                                            Log.e("outlier group \(name) has no shouldPaint value")
+                                            fatalError("outlier group \(name) has no shouldPaint value")
                                         }
-                                    } else {
-                                        Log.e("cannot get outlier groups for frame \(frame.frame_index)")
-                                        fatalError("cannot get outlier groups for frame \(frame.frame_index)")
                                     }
-                                    return OutlierGroupValuesResult(
-                                      should_paint_test_data: local_should_paint_test_data,
-                                      should_not_paint_test_data: local_should_not_paint_test_data)
-
+                                } else {
+                                    Log.e("cannot get outlier groups for frame \(frame.frame_index)")
+                                    fatalError("cannot get outlier groups for frame \(frame.frame_index)")
                                 }
-                            }
-
-                            while let response = await taskGroup.next() {
-                                should_paint_test_data += response.should_paint_test_data
-                                should_not_paint_test_data += response.should_not_paint_test_data
+                                return OutlierGroupValuesResult(
+                                  should_paint_test_data: local_should_paint_test_data,
+                                  should_not_paint_test_data: local_should_not_paint_test_data)
                             }
                         }
-                    } else {
-                        Log.e("couldn't read image height and/or width")
-                        fatalError("couldn't read image height and/or width")
+
+                        while let response = await taskGroup.next() {
+                            should_paint_test_data += response.should_paint_test_data
+                            should_not_paint_test_data += response.should_not_paint_test_data
+                        }
                     }
                 } catch {
                     Log.w("couldn't get config from \(json_config_file_name)")
@@ -351,6 +343,9 @@ struct decision_tree_generator: ParsableCommand {
                     fatalError("couldn't get config from \(json_config_file_name)")
                 }
             }
+
+            // XXX here is where we could load the data
+            
             Log.i("Calculating decision tree with \(should_paint_test_data.count) should paint \(should_not_paint_test_data.count) should not paint test data outlier groups")
             
             let (tree_swift_code, sha_hash) = await generateTree(with: should_paint_test_data,
