@@ -326,7 +326,7 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
     
     let fully_process: Bool
 
-    let is_gui: Bool
+    let overwriteFileLoadedOutlierGroups: Bool
     
     init(with config: Config,
          width: Int,
@@ -346,10 +346,10 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
          thumbnailOutputDirname thumbnail_output_dirname: String?,
          outlierGroupLoader: @escaping () async -> OutlierGroups?,
          fullyProcess: Bool = true,
-         isGUI: Bool = false) async throws
+         overwriteFileLoadedOutlierGroups: Bool = false) async throws
     {
         self.fully_process = fullyProcess
-        self.is_gui = isGUI
+        self.overwriteFileLoadedOutlierGroups = overwriteFileLoadedOutlierGroups
         self.config = config
         self.base_name = baseName
         self.callbacks = callbacks
@@ -1078,7 +1078,7 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
         if self.outliersLoadedFromFile {
             // if we've loaded outliers from a file, only save again if we're in gui mode
             // in GUI mode the user may have made an explicit decision
-            if self.is_gui {
+            if self.overwriteFileLoadedOutlierGroups {
                 self.writeOutliersBinary()
             }
         } else {

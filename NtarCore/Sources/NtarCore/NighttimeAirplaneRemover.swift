@@ -59,7 +59,7 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
     {
         self.config = config
         self.callbacks = callbacks
-        self.is_gui = isGUI
+        self.is_gui = isGUI     // XXX make this better
         
         var basename = "\(config.image_sequence_dirname)-ntar-v-\(config.ntar_version)"
         basename = basename.replacingOccurrences(of: ".", with: "_")
@@ -108,8 +108,7 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
                                        numberOfFrames: image_sequence_size,
                                        dispatchGroup: dispatchGroup,
                                        imageSequence: image_sequence,
-                                       isGUI: is_gui)
-
+                                       isGUI: is_gui || processExistingFiles)
 
         final_processor = processor
     }
@@ -401,7 +400,7 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
                                               thumbnailOutputDirname: thumbnail_output_dirname,
                                               outlierGroupLoader: loadOutliersFromFile,
                                               fullyProcess: fully_process,
-                                              isGUI: is_gui)
+                                              overwriteFileLoadedOutlierGroups: is_gui)
    }        
 }
               
