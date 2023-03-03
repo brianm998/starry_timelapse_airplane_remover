@@ -8,20 +8,44 @@
  */
 
 @available(macOS 10.15, *) 
-public struct OutlierGroupValues {
+public struct OutlierGroupValueMap {
     public var values: [OutlierGroup.TreeDecisionType: Double] = [:]
 }
 
 
-// used for storing only decision tree data for a lot of outlier groups on file 
+// used for storing only decision tree data for all of the outlier groups in a frame
 @available(macOS 10.15, *) 
 public class OutlierGroupValueMatrix: Codable {
     var types: [OutlierGroup.TreeDecisionType] = OutlierGroup.decisionTreeValueTypes
 
-    var values: [[Double]] = []      // indexed by outlier group first then types later
+    public struct OutlierGroupValues: Codable {
+        let shouldPaint: Bool
+        let values: [Double]
+    }
+
+    var values: [OutlierGroupValues] = []      // indexed by outlier group first then types later
 
     public func append(outlierGroup: OutlierGroup) async {
-        values.append(await outlierGroup.decisionTreeValues)
+        let shouldPaint = await outlierGroup.shouldPaint!
+        values.append(OutlierGroupValues(shouldPaint: shouldPaint.willPaint,
+                                         values: await outlierGroup.decisionTreeValues))
+    }
+    
+    public var outlierGroupValues: ([OutlierGroupValueMap], [OutlierGroupValueMap]) {
+        var shouldPaintRet: [OutlierGroupValueMap] = []
+        var shoultNotPaintRet: [OutlierGroupValueMap] = []
+        for value in values {
+            var groupValues = OutlierGroupValueMap()
+            for (index, type) in types.enumerated() {
+                groupValues.values[type] = value.values[index]
+            }
+            if(value.shouldPaint) {
+                shouldPaintRet.append(groupValues)
+            } else {
+                shoultNotPaintRet.append(groupValues)
+            }
+        }
+        return (shouldPaintRet, shoultNotPaintRet)
     }
 }
 
@@ -48,9 +72,9 @@ public extension OutlierGroup {
         return ret
     }
 
-    var decisionTreeGroupValues: OutlierGroupValues {
+    var decisionTreeGroupValues: OutlierGroupValueMap {
         get async {
-            var values = OutlierGroupValues()
+            var values = OutlierGroupValueMap()
             for type in OutlierGroup.TreeDecisionType.allCases {
                 values.values[type] = await self.decisionTreeValue(for: type)
             }

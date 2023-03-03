@@ -33,9 +33,9 @@ struct DecisionTypeValuesResult {
 }
 
 @available(macOS 10.15, *) 
-struct OutlierGroupValuesResult {
-    let should_paint_test_data: [OutlierGroupValues]
-    let should_not_paint_test_data: [OutlierGroupValues]
+struct OutlierGroupValueMapResult {
+    let should_paint_test_data: [OutlierGroupValueMap]
+    let should_not_paint_test_data: [OutlierGroupValueMap]
 }
 
 struct TreeTestResults {
@@ -51,19 +51,19 @@ let sha_suffix_size = 8
 struct DecisionResult {
     let type: OutlierGroup.TreeDecisionType
     let value: Double
-    let lessThanShouldPaint: [OutlierGroupValues]
-    let lessThanShouldNotPaint: [OutlierGroupValues]
-    let greaterThanShouldPaint: [OutlierGroupValues]
-    let greaterThanShouldNotPaint: [OutlierGroupValues]
+    let lessThanShouldPaint: [OutlierGroupValueMap]
+    let lessThanShouldNotPaint: [OutlierGroupValueMap]
+    let greaterThanShouldPaint: [OutlierGroupValueMap]
+    let greaterThanShouldNotPaint: [OutlierGroupValueMap]
     let lessThanSplit: Double
     let greaterThanSplit: Double
     
     public init(type: OutlierGroup.TreeDecisionType,
                 value: Double = 0,
-                lessThanShouldPaint: [OutlierGroupValues],
-                lessThanShouldNotPaint: [OutlierGroupValues],
-                greaterThanShouldPaint: [OutlierGroupValues],
-                greaterThanShouldNotPaint: [OutlierGroupValues])
+                lessThanShouldPaint: [OutlierGroupValueMap],
+                lessThanShouldNotPaint: [OutlierGroupValueMap],
+                greaterThanShouldPaint: [OutlierGroupValueMap],
+                greaterThanShouldNotPaint: [OutlierGroupValueMap])
     {
 
         self.type = type
@@ -239,8 +239,8 @@ struct decision_tree_generator: ParsableCommand {
         dispatch_group.enter()
         Task {
             // test data gathered from all inputs
-            var should_paint_test_data: [OutlierGroupValues] = []
-            var should_not_paint_test_data: [OutlierGroupValues] = []
+            var should_paint_test_data: [OutlierGroupValueMap] = []
+            var should_not_paint_test_data: [OutlierGroupValueMap] = []
             
             for json_config_file_name in json_config_file_names {
                 // XXX task group here too, load them all in parallel
@@ -298,12 +298,12 @@ struct decision_tree_generator: ParsableCommand {
                     }
                     Log.d("outliers loaded")
 
-                    await withLimitedTaskGroup(of: OutlierGroupValuesResult.self) { taskGroup in
+                    await withLimitedTaskGroup(of: OutlierGroupValueMapResult.self) { taskGroup in
                         for frame in frames {
                             await taskGroup.addTask() {
                                 
-                                var local_should_paint_test_data: [OutlierGroupValues] = []
-                                var local_should_not_paint_test_data: [OutlierGroupValues] = []
+                                var local_should_paint_test_data: [OutlierGroupValueMap] = []
+                                var local_should_not_paint_test_data: [OutlierGroupValueMap] = []
                                 if let outlier_groups = await frame.outlierGroups() {
                                     for outlier_group in outlier_groups {
                                         let name = await outlier_group.name
@@ -326,7 +326,7 @@ struct decision_tree_generator: ParsableCommand {
                                     Log.e("cannot get outlier groups for frame \(frame.frame_index)")
                                     fatalError("cannot get outlier groups for frame \(frame.frame_index)")
                                 }
-                                return OutlierGroupValuesResult(
+                                return OutlierGroupValueMapResult(
                                   should_paint_test_data: local_should_paint_test_data,
                                   should_not_paint_test_data: local_should_not_paint_test_data)
                             }
@@ -378,8 +378,8 @@ struct decision_tree_generator: ParsableCommand {
     }
 
     // top level func that writes a compilable wrapper around the root tree node
-    func generateTree(with should_paint_test_data: [OutlierGroupValues],
-                      and should_not_paint_test_data: [OutlierGroupValues]) async -> (String, String)
+    func generateTree(with should_paint_test_data: [OutlierGroupValueMap],
+                      and should_not_paint_test_data: [OutlierGroupValueMap]) async -> (String, String)
     {
         // the root tree node with all of the test data 
         let tree = await decisionTreeNode(with: should_paint_test_data,
@@ -484,8 +484,8 @@ struct decision_tree_generator: ParsableCommand {
     }
 
     // recursively return a decision tree that differentiates the test data
-    func decisionTreeNode(with should_paint_test_data: [OutlierGroupValues],
-                          and should_not_paint_test_data: [OutlierGroupValues],
+    func decisionTreeNode(with should_paint_test_data: [OutlierGroupValueMap],
+                          and should_not_paint_test_data: [OutlierGroupValueMap],
                           indent: Int) async -> DecisionTree
     {
         Log.i("decisionTreeNode with indent \(indent) should_paint_test_data.count \(should_paint_test_data.count) should_not_paint_test_data.count \(should_not_paint_test_data.count)")
@@ -689,11 +689,11 @@ struct decision_tree_generator: ParsableCommand {
                             // use this value to split the should_paint_test_data and not paint
                             let decisionValue = (paint_dist.median + not_paint_dist.median) / 2
                             
-                            var lessThanShouldPaint: [OutlierGroupValues] = []
-                            var lessThanShouldNotPaint: [OutlierGroupValues] = []
+                            var lessThanShouldPaint: [OutlierGroupValueMap] = []
+                            var lessThanShouldNotPaint: [OutlierGroupValueMap] = []
                             
-                            var greaterThanShouldPaint: [OutlierGroupValues] = []
-                            var greaterThanShouldNotPaint: [OutlierGroupValues] = []
+                            var greaterThanShouldPaint: [OutlierGroupValueMap] = []
+                            var greaterThanShouldNotPaint: [OutlierGroupValueMap] = []
                             
                             // calculate how the data would split if we used the above decision value
                             for group_values in should_paint_test_data {
