@@ -48,7 +48,7 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
     public var final_processor: FinalProcessor?    
 
     // are we running on the gui?
-    public var is_gui: Bool
+    public let is_gui: Bool
     
     public init(with config: Config,
                 callbacks: Callbacks,
@@ -107,7 +107,8 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
                                        callbacks: callbacks,
                                        numberOfFrames: image_sequence_size,
                                        dispatchGroup: dispatchGroup,
-                                       imageSequence: image_sequence)
+                                       imageSequence: image_sequence,
+                                       isGUI: is_gui)
 
 
         final_processor = processor
@@ -295,7 +296,7 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
             }
             
         }
-        Log.v("max_concurrent_renders \(ret)")
+        //Log.v("max_concurrent_renders \(ret)")
         return ret
     }
     
