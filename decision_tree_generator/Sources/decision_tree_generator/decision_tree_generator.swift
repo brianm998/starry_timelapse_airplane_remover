@@ -486,8 +486,11 @@ struct decision_tree_generator: ParsableCommand {
               var shouldPaintFromDecisionTree_\(tree_hash_string.suffix(sha_suffix_size)): Bool {
                   get async {
 
+                      // gathering all values here keeps the number of await calls low
+                      // doing so is helpful to speed things up, both at compile and at run time
           \(initial_values)
                           
+                      // decide upon the values of this outlier group
           \(generated_swift_code)
                   }
               }
