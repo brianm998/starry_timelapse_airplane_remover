@@ -14,6 +14,39 @@ public struct OutlierGroupValueMap {
     public init() { }
 }
 
+public struct HoughLineHistogram {
+
+    let values: [Double]
+    let increment: Int          // degree difference between indexes of values above
+        
+    init(withDegreeIncrement increment: Int,
+         lines: [Line],
+         andGroupSize groupSize: UInt) {
+        self.increment = increment
+
+        var values = Array<Double>(repeating: 0, count: 360/increment)
+
+        for line in lines {
+            let index = Int(line.theta/Double(increment))
+            values[index] += Double(line.count)/Double(groupSize)
+        }
+
+        self.values = values
+    }
+
+    func matchScore(with other: HoughLineHistogram) -> Double {
+        if self.increment != other.increment { return 0 }
+
+        var ret = 0.0
+        
+        for (index, value) in values.enumerated() {
+            let other_value = other.values[index]
+            let min = min(value, other_value)
+            ret = max(min, ret)
+        }
+        return ret
+    }
+}
 
 // used for storing only decision tree data for all of the outlier groups in a frame
 @available(macOS 10.15, *) 
@@ -143,6 +176,7 @@ public extension OutlierGroup {
         case maxRhoDiffOfFirst10HoughLines
         case numberOfNearbyOutliersInSameFrame
         case adjecentFrameNeighboringOutliersBestTheta
+        case histogramStreakDetection
         /*
          
          some more numbers about hough lines
@@ -157,6 +191,8 @@ public extension OutlierGroup {
             case .numberOfNearbyOutliersInSameFrame:
                 return true
             case .adjecentFrameNeighboringOutliersBestTheta:
+                return true
+            case .histogramStreakDetection:
                 return true
             default:
                 return false
@@ -207,6 +243,8 @@ public extension OutlierGroup {
                 return 19
             case .adjecentFrameNeighboringOutliersBestTheta:
                 return 20
+            case .histogramStreakDetection:
+                return 21
 
             }
         }
@@ -273,6 +311,8 @@ public extension OutlierGroup {
             return await self.numberOfNearbyOutliersInSameFrame
         case .adjecentFrameNeighboringOutliersBestTheta:
             return await self.adjecentFrameNeighboringOutliersBestTheta
+        case .histogramStreakDetection:
+            return await self.histogramStreakDetection
         default:
             return self.nonAsyncDecisionTreeValue(for: type)
         }
@@ -308,6 +348,47 @@ public extension OutlierGroup {
         }
     }
 
+    // XXX use these to compare outliers in different frames
+    var houghLineHistogram: HoughLineHistogram {
+        return HoughLineHistogram(withDegreeIncrement: 5, // XXX hardcoded 5
+                                  lines: self.lines,
+                                  andGroupSize: self.size)
+    }
+
+    // tries to find a streak with hough line histograms
+    private var histogramStreakDetection: Double {
+        get async {
+            if let frame = frame {
+                var best_score = 0.0
+                let myHisto = self.houghLineHistogram
+
+                if let previous_frame = await frame.previousFrame {
+                    let nearby_groups = await previous_frame.outlierGroups(within: 300, // XXX hardcoded constant
+                                                                           of: self.bounds)
+                    for group in nearby_groups {
+                        let histo = await group.houghLineHistogram
+                        let score = histo.matchScore(with: myHisto)
+                        best_score = max(score, best_score)
+                    }
+                }
+                if let next_frame = await frame.nextFrame {
+                    let nearby_groups = await next_frame.outlierGroups(within: 300, // XXX hardcoded constant
+                                                                           of: self.bounds)
+                    for group in nearby_groups {
+                        // XXX apply some score to how close this theta
+                        // is to the direction it moves in
+                        let histo = await group.houghLineHistogram
+                        let score = histo.matchScore(with: myHisto)
+                        best_score = max(score, best_score)
+                    }
+                }
+                return best_score
+            } else {
+                fatalError("SHIT")
+            }
+        }
+    }
+    
     // tries to find the closest theta on any nearby outliers on adjecent frames
     private var adjecentFrameNeighboringOutliersBestTheta: Double {
         /*
