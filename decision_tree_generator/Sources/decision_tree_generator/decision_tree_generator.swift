@@ -21,6 +21,10 @@ var start_time: Date = Date()
 
 @available(macOS 10.15, *) 
 struct TreeDecisionTypeResult {
+    init(type: OutlierGroup.TreeDecisionType) {
+        self.type = type
+    }
+    let type: OutlierGroup.TreeDecisionType
     var decisionResult: DecisionResult?
     var decisionTreeNode: DecisionTree?
     var should_paint_dist: ValueDistribution?
@@ -42,6 +46,11 @@ struct OutlierGroupValueMapResult {
 struct TreeTestResults {
     let numberGood: Int
     let numberBad: Int
+}
+
+struct RankedResult<T> {
+    let rank: Double
+    let result: T
 }
 
 // how much do we truncate the sha256 hash when embedding it into code
@@ -261,9 +270,11 @@ struct decision_tree_generator: ParsableCommand {
                                     for values in matrix.values {
                                         //Log.d("frame \(frame_index) matrix \(matrix)")
                                         // XXX how to reference properly here ???
-                                        let decisionTreeShouldPaint = 
-                                          OutlierGroup.decisionTree_fdcf1329(types: matrix.types,
-                                                                             values: values.values)
+                                        let decisionTreeShouldPaint =  false
+                                        /*
+                                          OutlierGroup.decisionTree_7a157c44(types: matrix.types,
+                                          values: values.values)
+                                         */
                                         if decisionTreeShouldPaint == values.shouldPaint {
                                             number_good += 1
                                         } else {
@@ -361,7 +372,7 @@ struct decision_tree_generator: ParsableCommand {
                             if let should_paint = await outlier_group.shouldPaint {
                                 let will_paint = should_paint.willPaint
 
-                                var values = await outlier_group.decisionTreeGroupValues
+                                let values = await outlier_group.decisionTreeGroupValues
 
                                 if will_paint {
                                     local_should_paint_test_data.append(values)
@@ -419,49 +430,46 @@ struct decision_tree_generator: ParsableCommand {
                         fatalError("couldn't get config from \(json_config_file_name)")
                     }
                 } else {
-                    var isDir = true // just guess
                     // check to see if it's a dir
                     if file_manager.fileExists(atPath: json_config_file_name/*, isDirecotry: &isDir*/) {
-                        if isDir {
-                            var frame_index = 0
-                            var done = false
-
-                            // load a list of OutlierGroupValueMatrix
-                            // and get outlierGroupValues from them
-                            while(!done) {
-                                // XXX use a task group to speed this up
-                                let filename = "\(json_config_file_name)/\(frame_index)_outlier_values.bin"
-                                if file_manager.fileExists(atPath: filename) {
-                                    frame_index += 1
-                                    do {
-                                        // load data
-                                        // process a frames worth of outlier data
-                                        let imageURL = NSURL(fileURLWithPath: filename, isDirectory: false)
-
-                                        let (data, _) = try await URLSession.shared.data(for: URLRequest(url: imageURL as URL))
-
-                                        let decoder = BinaryDecoder()
-                                        let matrix = try decoder.decode(OutlierGroupValueMatrix.self, from: data)
-                                        //if let json = matrix.prettyJson { print(json) }
-                                        //Log.d("frame \(frame_index) matrix \(matrix)")
-                                        for values in matrix.values {
-                                            var valueMap = OutlierGroupValueMap()
-                                            for (index, type) in matrix.types.enumerated() {
-                                                valueMap.values[type] = values.values[index]
-                                            }
-                                            if values.shouldPaint {
-                                                should_paint_test_data.append(valueMap)
-                                            } else {
-                                                should_not_paint_test_data.append(valueMap)
-                                            }
+                        var frame_index = 0
+                        var done = false
+                        
+                        // load a list of OutlierGroupValueMatrix
+                        // and get outlierGroupValues from them
+                        while(!done) {
+                            // XXX use a task group to speed this up
+                            let filename = "\(json_config_file_name)/\(frame_index)_outlier_values.bin"
+                            if file_manager.fileExists(atPath: filename) {
+                                frame_index += 1
+                                do {
+                                    // load data
+                                    // process a frames worth of outlier data
+                                    let imageURL = NSURL(fileURLWithPath: filename, isDirectory: false)
+                                    
+                                    let (data, _) = try await URLSession.shared.data(for: URLRequest(url: imageURL as URL))
+                                    
+                                    let decoder = BinaryDecoder()
+                                    let matrix = try decoder.decode(OutlierGroupValueMatrix.self, from: data)
+                                    //if let json = matrix.prettyJson { print(json) }
+                                    //Log.d("frame \(frame_index) matrix \(matrix)")
+                                    for values in matrix.values {
+                                        var valueMap = OutlierGroupValueMap()
+                                        for (index, type) in matrix.types.enumerated() {
+                                            valueMap.values[type] = values.values[index]
                                         }
-                                    } catch {
-                                        Log.e("ERROR: \(error)")
+                                        if values.shouldPaint {
+                                            should_paint_test_data.append(valueMap)
+                                        } else {
+                                            should_not_paint_test_data.append(valueMap)
+                                        }
                                     }
-                                } else {
-                                    Log.i("loaded \(frame_index) frames from outlier values")
-                                    done = true
+                                } catch {
+                                    Log.e("ERROR: \(error)")
                                 }
+                            } else {
+                                Log.i("loaded \(frame_index) frames from outlier values")
+                                done = true
                             }
                         }
                     }
@@ -622,7 +630,7 @@ struct decision_tree_generator: ParsableCommand {
                }
 
               // a way to call into the decision tree without an OutlierGroup object
-              public static func decisionTree_\(hash_suffix) (
+              static func decisionTree_\(hash_suffix) (
                  types: [OutlierGroup.TreeDecisionType], // parallel
                  values: [Double]                        // arrays
                 ) -> Bool
@@ -638,7 +646,7 @@ struct decision_tree_generator: ParsableCommand {
               }
 
               // the actual tree resides here
-              public static func decisionTree_\(hash_suffix)(
+              static func decisionTree_\(hash_suffix)(
           \(function_signature)
                     ) -> Bool
                   {
@@ -800,11 +808,8 @@ struct decision_tree_generator: ParsableCommand {
 
         // iterate ofer all decision tree types to pick the best one
         // that differentiates the test data
-        var bestDecisionResult: DecisionResult?
-        var bestTreeNode: DecisionTree?
-        var biggest_split = 0.0
-        var biggest_direct_split = 0.0
-
+        var rankedDecisionResults: [RankedResult<DecisionResult>] = []
+        var bestTreeNodes: [RankedResult<DecisionTree>] = []
 
         await withTaskGroup(of: TreeDecisionTypeResult.self) { taskGroup in
         
@@ -819,9 +824,9 @@ struct decision_tree_generator: ParsableCommand {
                             // this is an end leaf node, both paths after decision lead to a result
                             //Log.d("clear distinction \(paint_dist.max) < \(not_paint_dist.min)")
 
-                            var ret = TreeDecisionTypeResult()
+                            var ret = TreeDecisionTypeResult(type: type)
                             ret.decisionTreeNode =
-                              DecisionTreeNode(type: type,
+                              DecisionTreeNode(realType: type,
                                                value: (paint_dist.max + not_paint_dist.min) / 2,
                                                lessThan: ShouldPaintDecision(indent: indent + 1),
                                                greaterThan: ShouldNotPaintDecision(indent: indent + 1),
@@ -833,9 +838,9 @@ struct decision_tree_generator: ParsableCommand {
                             //Log.d("clear distinction \(not_paint_dist.max) < \(paint_dist.min)")
                             // we have a clear distinction between all provided test data
                             // this is an end leaf node, both paths after decision lead to a result
-                            var ret = TreeDecisionTypeResult()
+                            var ret = TreeDecisionTypeResult(type: type)
                             ret.decisionTreeNode =
-                              DecisionTreeNode(type: type,
+                              DecisionTreeNode(realType: type,
                                                value: (not_paint_dist.max + paint_dist.min) / 2,
                                                lessThan: ShouldNotPaintDecision(indent: indent + 1),
                                                greaterThan: ShouldPaintDecision(indent: indent + 1),
@@ -889,7 +894,7 @@ struct decision_tree_generator: ParsableCommand {
                                 }
                             }
 
-                            var ret = TreeDecisionTypeResult()
+                            var ret = TreeDecisionTypeResult(type: type)
                             ret.decisionResult =
                               DecisionResult(type: type,
                                              value: decisionValue,
@@ -905,6 +910,7 @@ struct decision_tree_generator: ParsableCommand {
 
             var decisionResults: [DecisionResult] = []
             var decisionTreeNodes: [TreeDecisionTypeResult] = []
+
             while let response = await taskGroup.next() {
                 if let result = response.decisionResult {
                     decisionResults.append(result)
@@ -918,6 +924,7 @@ struct decision_tree_generator: ParsableCommand {
             }
 
             for response in decisionTreeNodes {
+                // these are direct splits that evenly cleave the input data into separate groups
                 if let decisionTreeNode = response.decisionTreeNode,
                    let paint_dist = response.should_paint_dist,
                    let not_paint_dist = response.should_not_paint_dist
@@ -929,123 +936,187 @@ struct decision_tree_generator: ParsableCommand {
                           (not_paint_dist.min - paint_dist.max) /
                           (not_paint_dist.median - paint_dist.median)
                           
-                        if split > biggest_direct_split {
-                            biggest_direct_split = split
-                            bestTreeNode = decisionTreeNode
-                        }
+                        bestTreeNodes.append(RankedResult(rank: split,
+                                                          result: decisionTreeNode))
                     } else if not_paint_dist.max < paint_dist.min {
                         let split =
                           (paint_dist.min - not_paint_dist.max) /
                           (paint_dist.median - not_paint_dist.median)
 
-                        if split > biggest_direct_split {
-                            biggest_direct_split = split
-                            bestTreeNode = decisionTreeNode
-                        }
-                    } else {
-                        Log.e("FUCK")
-                        fatalError("SHOULDN'T END UP HERE")
+                        bestTreeNodes.append(RankedResult(rank: split,
+                                                          result: decisionTreeNode))
                     }
                 }
             }
 
             for decisionResult in decisionResults {
                 // these are tree nodes that require recursion
-                var we_are_best = false
                 
                 // choose the type with the best distribution 
                 // that will generate the shortest tree
-                if decisionResult.lessThanSplit > original_split,
-                   decisionResult.lessThanSplit - original_split > biggest_split
-                {
+                if decisionResult.lessThanSplit > original_split {
                     // the less than split is biggest so far
-                    biggest_split = decisionResult.lessThanSplit - original_split
-                    we_are_best = true
-                } else if decisionResult.greaterThanSplit > original_split,
-                          decisionResult.greaterThanSplit - original_split > biggest_split
-                {
-                    // the greater than split is biggest so far
-                    biggest_split = decisionResult.greaterThanSplit - original_split
-                    we_are_best = true
-                }
+                    let split = decisionResult.lessThanSplit - original_split
 
-                if we_are_best {
-                    bestDecisionResult = decisionResult
+                    rankedDecisionResults.append(RankedResult(rank: split,
+                                                            result: decisionResult)) 
+
+                }
+                if decisionResult.greaterThanSplit > original_split {
+                    // the greater than split is biggest so far
+                    let split = decisionResult.greaterThanSplit - original_split
+
+                    rankedDecisionResults.append(RankedResult(rank: split,
+                                                            result: decisionResult)) 
                 }
             }
         }
 
         // return a direct tree node if we have it (no recursion)
-        // XXX make sure we choose the best one of theese
-        if let decisionTreeNode = bestTreeNode { return decisionTreeNode }
+        // make sure we choose the best one of theese
+        if bestTreeNodes.count != 0 {
+            if bestTreeNodes.count == 1 {
+                return bestTreeNodes[0].result
+            } else {
+                // here we need to determine between them
+                // current approach is to sort first by rank,
+                // grouping identical first ranks into a group
+                // which is then sorted now by type
 
-        // if not, setup to recurse
-        if let result = bestDecisionResult { 
-            Log.d("best at indent \(indent) was \(result.type) \(String(format: "%g", result.lessThanSplit)) \(String(format: "%g", result.greaterThanSplit)) \(String(format: "%g", result.value)) < Should \(result.lessThanShouldPaint.count) < ShouldNot \(result.lessThanShouldNotPaint.count) > Should  \(result.lessThanShouldPaint.count) > ShouldNot \(result.greaterThanShouldNotPaint.count)")
-
-            // we've identified the best type to differentiate the test data
-            // output a tree node with this type and value
-
-            var less_response: TreeResponse?
-            var greater_response: TreeResponse?
-
-            // first recurse on both sides of the decision tree with differentated test data
-            await withTaskGroup(of: TreeResponse.self) { taskGroup in
-                taskGroup.addTask() {
-                    let less_tree = await self.decisionTreeNode(with: result.lessThanShouldPaint,
-                                                                and: result.lessThanShouldNotPaint,
-                                                                indent: indent + 1)
-                    return TreeResponse(treeNode: less_tree, position: .less)
+                let sorted = bestTreeNodes.sorted { lhs, rhs in
+                    return lhs.rank > rhs.rank
                 }
-                // uncomment this to make it serial (for easier debugging)
-                // comment it to make it parallel
-/*
-                while let response = await taskGroup.next() {
-                    switch response.position {
-                    case .less:
-                        less_response = response
-                    case .greater:
-                        greater_response = response
+
+                var maxList: [RankedResult<DecisionTree>] = [sorted[0]]
+
+                for i in 1..<sorted.count {
+                    if sorted[i].rank == sorted[0].rank {
+                        maxList.append(sorted[i])
                     }
                 }
-*/
-                taskGroup.addTask() {
-                    let greater_tree = await self.decisionTreeNode(with: result.greaterThanShouldPaint,
-                                                                   and: result.greaterThanShouldNotPaint,
-                                                                   indent: indent + 1)
-                    return TreeResponse(treeNode: greater_tree, position: .greater)
-                }
-                while let response = await taskGroup.next() {
-                    switch response.position {
-                    case .less:
-                        less_response = response
-                    case .greater:
-                        greater_response = response
+
+                if maxList.count == 1 {
+                    return maxList[0].result
+                } else {
+                    // XXX future improvement is to sort by something else here
+
+                    // sort them by type
+
+                    let maxSort = maxList.sorted { lhs, rhs in
+                        return
+                          // XXX find a better way to deal with optionals below
+                          lhs.result.type ?? .numberOfNearbyOutliersInSameFrame <
+                          rhs.result.type ?? .adjecentFrameNeighboringOutliersBestTheta
                     }
+                    
+                    return maxSort[0].result
                 }
             }
+        }
 
-            
-            if let less_response = less_response,
-               let greater_response = greater_response
-            {
-
-                return DecisionTreeNode(type: result.type,
-                                        value: result.value,
-                                        lessThan: less_response.treeNode,
-                                        greaterThan: greater_response.treeNode,
-                                        indent: indent)
+        // if not, setup to recurse
+        if rankedDecisionResults.count != 0 {
+            if rankedDecisionResults.count == 1 {
+                Log.d("resursing on sole result")
+                return await recurseOn(result: rankedDecisionResults[0].result, indent: indent)
             } else {
-                Log.e("holy fuck")
-                fatalError("doh")
+                // choose the first one somehow
+                let sorted = rankedDecisionResults.sorted { lhs, rhs in
+                    return lhs.rank > rhs.rank
+                }
+                
+                for result in sorted {
+                    Log.d("result \(result.result.type) rank \(result.rank)")
+                }
+
+                var maxList: [RankedResult<DecisionResult>] = [sorted[0]]
+
+                for i in 1..<sorted.count {
+                    if sorted[i].rank == sorted[0].rank {
+                        maxList.append(sorted[i])
+                    }
+                }
+
+                if maxList.count == 1 {
+                    return await recurseOn(result: maxList[0].result, indent: indent) // XXX
+                } else {
+                    // sort them by type
+
+                    let maxSort = maxList.sorted { lhs, rhs in
+                        return lhs.result.type < rhs.result.type
+                    }
+                    
+                    return await recurseOn(result: maxSort[0].result, indent: indent) // XXX
+                }
             }
         } else {
             Log.e("no best type")
             fatalError("no best result")
         }
     }
+
+    func recurseOn(result: DecisionResult, indent: Int) async -> DecisionTreeNode {
+        Log.d("best at indent \(indent) was \(result.type) \(String(format: "%g", result.lessThanSplit)) \(String(format: "%g", result.greaterThanSplit)) \(String(format: "%g", result.value)) < Should \(result.lessThanShouldPaint.count) < ShouldNot \(result.lessThanShouldNotPaint.count) > Should  \(result.lessThanShouldPaint.count) > ShouldNot \(result.greaterThanShouldNotPaint.count)")
+
+        // we've identified the best type to differentiate the test data
+        // output a tree node with this type and value
+
+        var less_response: TreeResponse?
+        var greater_response: TreeResponse?
+
+        // first recurse on both sides of the decision tree with differentated test data
+        await withTaskGroup(of: TreeResponse.self) { taskGroup in
+            taskGroup.addTask() {
+                let less_tree = await self.decisionTreeNode(with: result.lessThanShouldPaint,
+                                                            and: result.lessThanShouldNotPaint,
+                                                            indent: indent + 1)
+                return TreeResponse(treeNode: less_tree, position: .less)
+            }
+            // uncomment this to make it serial (for easier debugging)
+            // comment it to make it parallel
+            /*
+            while let response = await taskGroup.next() {
+                switch response.position {
+                case .less:
+                    less_response = response
+                case .greater:
+                    greater_response = response
+                }
+             }
+             */
+            taskGroup.addTask() {
+                let greater_tree = await self.decisionTreeNode(with: result.greaterThanShouldPaint,
+                                                               and: result.greaterThanShouldNotPaint,
+                                                               indent: indent + 1)
+                return TreeResponse(treeNode: greater_tree, position: .greater)
+            }
+            while let response = await taskGroup.next() {
+                switch response.position {
+                case .less:
+                    less_response = response
+                case .greater:
+                    greater_response = response
+                }
+            }
+        }
+
+        
+        if let less_response = less_response,
+           let greater_response = greater_response
+        {
+            return DecisionTreeNode(realType: result.type,
+                                    value: result.value,
+                                    lessThan: less_response.treeNode,
+                                    greaterThan: greater_response.treeNode,
+                                    indent: indent)
+        } else {
+            Log.e("holy fuck")
+            fatalError("doh")
+        }
+    }
 }
 
+@available(macOS 10.15, *) 
 struct TreeResponse {
     enum Place {
         case less
@@ -1067,12 +1138,16 @@ struct ValueDistribution {
 
 // represents an abstract node in the decision tree
 // that knows how to render itself as a String of swift code
+@available(macOS 10.15, *) 
 protocol DecisionTree {
+    var type: OutlierGroup.TreeDecisionType? { get }
     var swiftCode: String { get }
 }
 
 // end leaf node which always returns true
+@available(macOS 10.15, *) 
 struct ShouldPaintDecision: DecisionTree {
+    var type: OutlierGroup.TreeDecisionType?
     let indent: Int
     var swiftCode: String {
         var indentation = ""
@@ -1082,7 +1157,9 @@ struct ShouldPaintDecision: DecisionTree {
 }
 
 // end leaf node which always returns false
+@available(macOS 10.15, *) 
 struct ShouldNotPaintDecision: DecisionTree {
+    var type: OutlierGroup.TreeDecisionType?
     let indent: Int
     var swiftCode: String {
         var indentation = ""
@@ -1094,17 +1171,19 @@ struct ShouldNotPaintDecision: DecisionTree {
 // intermediate node which decides based upon the value of a particular type
 @available(macOS 10.15, *) 
 struct DecisionTreeNode: DecisionTree {
-    let type: OutlierGroup.TreeDecisionType
+    let realType: OutlierGroup.TreeDecisionType
     let value: Double
     let lessThan: DecisionTree
     let greaterThan: DecisionTree
     let indent: Int
 
+    var type: OutlierGroup.TreeDecisionType? { realType }
+    
     var swiftCode: String {
         var indentation = ""
         for _ in 0..<indent { indentation += "    " }
         return """
-          \(indentation)if \(type) < \(value) {
+          \(indentation)if \(realType) < \(value) {
           \(lessThan.swiftCode)
           \(indentation)} else {
           \(greaterThan.swiftCode)

@@ -24,9 +24,9 @@ public class OutlierGroupValueMatrix: Codable {
         public let shouldPaint: Bool
         public let values: [Double]
     }
-
+    
     public var values: [OutlierGroupValues] = []      // indexed by outlier group first then types later
-
+    
     public func append(outlierGroup: OutlierGroup) async {
         let shouldPaint = await outlierGroup.shouldPaint!
         values.append(OutlierGroupValues(shouldPaint: shouldPaint.willPaint,
@@ -104,13 +104,13 @@ public extension OutlierGroup {
     var shouldPaintFromDecisionTree: Bool {
         get async {
             // XXX have the generator modify this?
-            return await self.shouldPaintFromDecisionTree_fdcf1329
+            //return await self.shouldPaintFromDecisionTree_fdcf1329
 
             // XXX XXX XXX
             // XXX XXX XXX
             // XXX XXX XXX
             // XXX XXX XXX
-            //return false        // XXX XXX XX
+            return false        // XXX XXX XX
             // XXX XXX XXX
             // XXX XXX XXX
             // XXX XXX XXX
@@ -121,7 +121,7 @@ public extension OutlierGroup {
     }
     
     // we derive a Double value from each of these
-    enum TreeDecisionType: CaseIterable, Hashable, Codable {
+    enum TreeDecisionType: CaseIterable, Hashable, Codable, Comparable {
         case size
         case width
         case height
@@ -162,6 +162,62 @@ public extension OutlierGroup {
                 return false
             }
         }
+
+        private var sortOrder: Int {
+            switch self {
+            case .size:
+                return 0
+            case .width:
+                return 1
+            case .height:
+                return 2
+            case .centerX:
+                return 3
+            case .centerY:
+                return 4
+            case .minX:
+                return 5
+            case .minY:
+                return 6
+            case .maxX:
+                return 7
+            case .maxY:
+                return 8
+            case .hypotenuse:
+                return 9
+            case .aspectRatio:
+                return 10
+            case .fillAmount:
+                return 11
+            case .surfaceAreaRatio:
+                return 12
+            case .averagebrightness:
+                return 13
+            case .medianBrightness:
+                return 14
+            case .maxBrightness:
+                return 15
+            case .avgCountOfFirst10HoughLines:
+                return 16
+            case .maxThetaDiffOfFirst10HoughLines:
+                return 17
+            case .maxRhoDiffOfFirst10HoughLines:
+                return 18
+            case .numberOfNearbyOutliersInSameFrame:
+                return 19
+            case .adjecentFrameNeighboringOutliersBestTheta:
+                return 20
+
+            }
+        }
+
+        public static func ==(lhs: TreeDecisionType, rhs: TreeDecisionType) -> Bool {
+            return lhs.sortOrder == rhs.sortOrder
+        }
+
+        public static func <(lhs: TreeDecisionType, rhs: TreeDecisionType) -> Bool {
+            return lhs.sortOrder < rhs.sortOrder
+        }        
     }
 
     func nonAsyncDecisionTreeValue(for type: TreeDecisionType) -> Double {
@@ -229,7 +285,6 @@ public extension OutlierGroup {
     }
     
     private var medianBrightness: Double {
-        var max: UInt32 = 0
         var values: [UInt32] = []
         for pixel in pixels {
             if pixel > 0 {
@@ -242,7 +297,6 @@ public extension OutlierGroup {
     private var numberOfNearbyOutliersInSameFrame: Double {
         get async {
             if let frame = frame {
-                let ret: Double = 0
                 let nearby_groups = await frame.outlierGroups(within: 200, // XXX hardcoded constant
                                                               of: self.bounds)
                 return Double(nearby_groups.count)
@@ -263,7 +317,6 @@ public extension OutlierGroup {
          */
         get async {
             if let frame = frame {
-                let ret: Double = 0
                 let this_theta = self.firstLine?.theta ?? 180
                 var smallest_difference: Double = 360
                 if let previous_frame = await frame.previousFrame {
