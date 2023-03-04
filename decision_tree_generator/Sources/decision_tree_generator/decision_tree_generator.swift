@@ -270,11 +270,9 @@ struct decision_tree_generator: ParsableCommand {
                                     for values in matrix.values {
                                         //Log.d("frame \(frame_index) matrix \(matrix)")
                                         // XXX how to reference properly here ???
-                                        let decisionTreeShouldPaint =  false
-                                        /*
-                                          OutlierGroup.decisionTree_7a157c44(types: matrix.types,
+                                        let decisionTreeShouldPaint =  
+                                          OutlierGroup.decisionTree_90babb26(types: matrix.types,
                                           values: values.values)
-                                         */
                                         if decisionTreeShouldPaint == values.shouldPaint {
                                             number_good += 1
                                         } else {
@@ -433,43 +431,59 @@ struct decision_tree_generator: ParsableCommand {
                     // check to see if it's a dir
                     if file_manager.fileExists(atPath: json_config_file_name/*, isDirecotry: &isDir*/) {
                         var frame_index = 0
-                        var done = false
-                        
-                        // load a list of OutlierGroupValueMatrix
-                        // and get outlierGroupValues from them
-                        while(!done) {
-                            // XXX use a task group to speed this up
-                            let filename = "\(json_config_file_name)/\(frame_index)_outlier_values.bin"
-                            if file_manager.fileExists(atPath: filename) {
-                                frame_index += 1
-                                do {
-                                    // load data
-                                    // process a frames worth of outlier data
-                                    let imageURL = NSURL(fileURLWithPath: filename, isDirectory: false)
+
+                        await withLimitedTaskGroup(of: OutlierGroupValueMapResult.self) { taskGroup in
+                            var done = false
+                            
+                            // load a list of OutlierGroupValueMatrix
+                            // and get outlierGroupValues from them
+                            while(!done) {
                                     
-                                    let (data, _) = try await URLSession.shared.data(for: URLRequest(url: imageURL as URL))
-                                    
-                                    let decoder = BinaryDecoder()
-                                    let matrix = try decoder.decode(OutlierGroupValueMatrix.self, from: data)
-                                    //if let json = matrix.prettyJson { print(json) }
-                                    //Log.d("frame \(frame_index) matrix \(matrix)")
-                                    for values in matrix.values {
-                                        var valueMap = OutlierGroupValueMap()
-                                        for (index, type) in matrix.types.enumerated() {
-                                            valueMap.values[type] = values.values[index]
+                                let filename = "\(json_config_file_name)/\(frame_index)_outlier_values.bin"
+                                if file_manager.fileExists(atPath: filename) {
+                                    frame_index += 1
+                                    await taskGroup.addTask() {
+                                        var local_should_paint_test_data: [OutlierGroupValueMap] = []
+                                        var local_should_not_paint_test_data: [OutlierGroupValueMap] = []
+                                        
+                                        do {
+                                            // load data
+                                            // process a frames worth of outlier data
+                                            let imageURL = NSURL(fileURLWithPath: filename, isDirectory: false)
+                                            
+                                            let (data, _) = try await URLSession.shared.data(for: URLRequest(url: imageURL as URL))
+                                            
+                                            let decoder = BinaryDecoder()
+                                            let matrix = try decoder.decode(OutlierGroupValueMatrix.self, from: data)
+                                            //if let json = matrix.prettyJson { print(json) }
+                                            //Log.d("frame \(frame_index) matrix \(matrix)")
+                                            for values in matrix.values {
+                                                var valueMap = OutlierGroupValueMap()
+                                                for (index, type) in matrix.types.enumerated() {
+                                                    valueMap.values[type] = values.values[index]
+                                                }
+                                                if values.shouldPaint {
+                                                    local_should_paint_test_data.append(valueMap)
+                                                } else {
+                                                    local_should_not_paint_test_data.append(valueMap)
+                                                }
+                                            }
+                                        } catch {
+                                            Log.e("ERROR: \(error)")
                                         }
-                                        if values.shouldPaint {
-                                            should_paint_test_data.append(valueMap)
-                                        } else {
-                                            should_not_paint_test_data.append(valueMap)
-                                        }
+
+                                        return OutlierGroupValueMapResult(
+                                          should_paint_test_data: local_should_paint_test_data,
+                                          should_not_paint_test_data: local_should_not_paint_test_data)
                                     }
-                                } catch {
-                                    Log.e("ERROR: \(error)")
+                                } else {
+                                    Log.i("loaded \(frame_index) frames from outlier values")
+                                    done = true
                                 }
-                            } else {
-                                Log.i("loaded \(frame_index) frames from outlier values")
-                                done = true
+                            }
+                            while let response = await taskGroup.next() {
+                                should_paint_test_data += response.should_paint_test_data
+                                should_not_paint_test_data += response.should_not_paint_test_data
                             }
                         }
                     }
@@ -1017,7 +1031,6 @@ struct decision_tree_generator: ParsableCommand {
         // if not, setup to recurse
         if rankedDecisionResults.count != 0 {
             if rankedDecisionResults.count == 1 {
-                Log.d("resursing on sole result")
                 return await recurseOn(result: rankedDecisionResults[0].result, indent: indent)
             } else {
                 // choose the first one somehow
@@ -1025,12 +1038,8 @@ struct decision_tree_generator: ParsableCommand {
                     return lhs.rank > rhs.rank
                 }
                 
-                for result in sorted {
-                    Log.d("result \(result.result.type) rank \(result.rank)")
-                }
-
                 var maxList: [RankedResult<DecisionResult>] = [sorted[0]]
-
+                
                 for i in 1..<sorted.count {
                     if sorted[i].rank == sorted[0].rank {
                         maxList.append(sorted[i])
@@ -1038,9 +1047,12 @@ struct decision_tree_generator: ParsableCommand {
                 }
 
                 if maxList.count == 1 {
+                    // sorting by rank gave us just one
                     return await recurseOn(result: maxList[0].result, indent: indent) // XXX
                 } else {
-                    // sort them by type
+                    // sort them by type next
+
+                    // XXX maybe sort by something else?
 
                     let maxSort = maxList.sorted { lhs, rhs in
                         return lhs.result.type < rhs.result.type
@@ -1056,7 +1068,7 @@ struct decision_tree_generator: ParsableCommand {
     }
 
     func recurseOn(result: DecisionResult, indent: Int) async -> DecisionTreeNode {
-        Log.d("best at indent \(indent) was \(result.type) \(String(format: "%g", result.lessThanSplit)) \(String(format: "%g", result.greaterThanSplit)) \(String(format: "%g", result.value)) < Should \(result.lessThanShouldPaint.count) < ShouldNot \(result.lessThanShouldNotPaint.count) > Should  \(result.lessThanShouldPaint.count) > ShouldNot \(result.greaterThanShouldNotPaint.count)")
+        //Log.d("best at indent \(indent) was \(result.type) \(String(format: "%g", result.lessThanSplit)) \(String(format: "%g", result.greaterThanSplit)) \(String(format: "%g", result.value)) < Should \(result.lessThanShouldPaint.count) < ShouldNot \(result.lessThanShouldNotPaint.count) > Should  \(result.lessThanShouldPaint.count) > ShouldNot \(result.greaterThanShouldNotPaint.count)")
 
         // we've identified the best type to differentiate the test data
         // output a tree node with this type and value

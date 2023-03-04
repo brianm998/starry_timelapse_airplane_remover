@@ -104,13 +104,13 @@ public extension OutlierGroup {
     var shouldPaintFromDecisionTree: Bool {
         get async {
             // XXX have the generator modify this?
-            //return await self.shouldPaintFromDecisionTree_fdcf1329
+            return await self.shouldPaintFromDecisionTree_90babb26
 
             // XXX XXX XXX
             // XXX XXX XXX
             // XXX XXX XXX
             // XXX XXX XXX
-            return false        // XXX XXX XX
+            //return false        // XXX XXX XX
             // XXX XXX XXX
             // XXX XXX XXX
             // XXX XXX XXX
