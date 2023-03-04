@@ -222,12 +222,14 @@ public extension OutlierGroup {
 
     func nonAsyncDecisionTreeValue(for type: TreeDecisionType) -> Double {
         switch type {
+            // attempt to normalize all pixel size related values
+            // divide by width and/or hight
         case .size:
-            return Double(self.size)
+            return Double(self.size)/(IMAGE_HEIGHT!*IMAGE_WIDTH!)
         case .width:
-            return Double(self.bounds.width)
+            return Double(self.bounds.width)/IMAGE_WIDTH!
         case .height:
-            return Double(self.bounds.height)
+            return Double(self.bounds.height)/IMAGE_HEIGHT!
         case .centerX:
             return Double(self.bounds.center.x)/IMAGE_WIDTH!
         case .minX:
