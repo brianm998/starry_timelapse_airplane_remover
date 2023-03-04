@@ -1,6 +1,7 @@
 import Foundation
 import NtarCore
 import ArgumentParser
+import BinaryCodable
 import CryptoKit
 
 var start_time: Date = Date()
@@ -114,118 +115,174 @@ struct decision_tree_generator: ParsableCommand {
         if verification_mode {
             run_verification()
         } else {
-            generate_tree()
+            generate_tree_from_json_config()
         }
         Log.dispatchGroup.wait()
     }
 
+    func runVerification(basedUpon json_config_file_name: String) async throws {
+
+        var num_similar_outlier_groups = 0
+        var num_different_outlier_groups = 0
+        let config = try await Config.read(fromFilename: json_config_file_name)
+        Log.d("got config from \(json_config_file_name)")
+        
+        let callbacks = Callbacks()
+
+        var frames: [FrameAirplaneRemover] = []
+        
+        var endClosure: () -> Void = { }
+        
+        // called when we should check a frame
+        callbacks.frameCheckClosure = { new_frame in
+            frames.append(new_frame)
+            endClosure()
+            Log.d("frameCheckClosure for frame \(new_frame.frame_index)")
+        }
+        
+        callbacks.countOfFramesToCheck = { 1 }
+
+        let eraser = try NighttimeAirplaneRemover(with: config,
+                                                  callbacks: callbacks,
+                                                  processExistingFiles: true,
+                                                  fullyProcess: false)
+        let sequence_size = await eraser.image_sequence.filenames.count
+        endClosure = {
+            if frames.count == sequence_size {
+                eraser.shouldRun = false
+            }
+        }
+        
+        Log.i("got \(sequence_size) frames")
+        // XXX run it and get the outlier groups
+
+        try eraser.run()
+
+
+        Log.i("loading outliers")
+        // after the eraser is done running we should have received all the frames
+        // in the frame check callback
+
+        // load the outliers in parallel
+        try await withLimitedThrowingTaskGroup(of: Void.self) { taskGroup in
+            for frame in frames {
+                await taskGroup.addTask(/*priority: .medium*/) {
+                    try await frame.loadOutliers()
+                }
+            }
+            try await taskGroup.waitForAll()
+        }
+
+        Log.i("checkpoint before loading tree test results")
+        await withLimitedTaskGroup(of: TreeTestResults.self) { taskGroup in
+            for frame in frames {
+                // check all outlier groups
+                
+                await taskGroup.addTask() {
+                    var number_good = 0
+                    var number_bad = 0
+                    //Log.d("should check frame \(frame.frame_index)")
+                    if let outlier_group_list = await frame.outlierGroups() {
+                        for outlier_group in outlier_group_list {
+                            if let numberGood = await outlier_group.shouldPaint {
+                                let decisionTreeShouldPaint = await outlier_group.shouldPaintFromDecisionTree
+                                if decisionTreeShouldPaint == numberGood.willPaint {
+                                    // good
+                                    //Log.d("good")
+                                    number_good += 1
+                                } else {
+                                    // bad
+                                    //Log.w("outlier group \(outlier_group) decisionTreeShouldPaint \(decisionTreeShouldPaint) != numberGood.willPaint \(numberGood.willPaint)")
+                                    number_bad += 1
+                                }
+                            } else {
+                                //Log.e("WTF")
+                                //fatalError("DIED")
+                            }
+                        }
+                    } else {
+                        //Log.e("WTF")
+                        //fatalError("DIED HERE")
+                    }
+                    //Log.d("number_good \(number_good) number_bad \(number_bad)")
+                    return TreeTestResults(numberGood: number_good,
+                                           numberBad: number_bad)
+                }
+            }
+            Log.d("waiting for all")
+            while let response = await taskGroup.next() {
+                Log.d("got response response.numberGood \(response.numberGood) response.numberBad \(response.numberBad) ")
+                num_similar_outlier_groups += response.numberGood
+                num_different_outlier_groups += response.numberBad
+            }
+        }
+        Log.d("checkpoint at end")
+        let total = num_similar_outlier_groups + num_different_outlier_groups
+        let percentage_good = Double(num_similar_outlier_groups)/Double(total)*100
+        Log.i("for \(json_config_file_name), out of \(total) \(percentage_good)% success")
+    }
+    
     // use an exising decision tree to see how well it does against a given sample
     func run_verification() {
         let dispatch_group = DispatchGroup()
         dispatch_group.enter()
         Task {
             for json_config_file_name in json_config_file_names {
-                do {
-                    var num_similar_outlier_groups = 0
-                    var num_different_outlier_groups = 0
-                    let config = try await Config.read(fromFilename: json_config_file_name)
-                    Log.d("got config from \(json_config_file_name)")
-                    
-                    let callbacks = Callbacks()
-
-                    var frames: [FrameAirplaneRemover] = []
-                    
-                    var endClosure: () -> Void = { }
-                    
-                    // called when we should check a frame
-                    callbacks.frameCheckClosure = { new_frame in
-                        frames.append(new_frame)
-                        endClosure()
-                        Log.d("frameCheckClosure for frame \(new_frame.frame_index)")
+                if json_config_file_name.hasSuffix("/config.json") {
+                    do {
+                        try await runVerification(basedUpon: json_config_file_name)
+                    } catch {
+                        Log.e("\(error)")
                     }
-                    
-                    callbacks.countOfFramesToCheck = { 1 }
+                } else {
+                    if file_manager.fileExists(atPath: json_config_file_name) {
+                        var frame_index = 0
+                        var done = false
 
-                    let eraser = try NighttimeAirplaneRemover(with: config,
-                                                              callbacks: callbacks,
-                                                              processExistingFiles: true,
-                                                              fullyProcess: false)
-                    let sequence_size = await eraser.image_sequence.filenames.count
-                    endClosure = {
-                        if frames.count == sequence_size {
-                            eraser.shouldRun = false
-                        }
-                    }
-                    
-                    Log.i("got \(sequence_size) frames")
-                    // XXX run it and get the outlier groups
+                        var number_good = 0
+                        var number_bad = 0
+                        
+                        // load a list of OutlierGroupValueMatrix
+                        // and get outlierGroupValues from them
+                        while(!done) {
+                            let filename = "\(json_config_file_name)/\(frame_index)_outlier_values.bin"
+                            if file_manager.fileExists(atPath: filename) {
+                                frame_index += 1
+                                do {
+                                    // load data
+                                    // process a frames worth of outlier data
+                                    let imageURL = NSURL(fileURLWithPath: filename, isDirectory: false)
 
-                    try eraser.run()
+                                    let (data, _) = try await URLSession.shared.data(for: URLRequest(url: imageURL as URL))
 
+                                    let decoder = BinaryDecoder()
+                                    let matrix = try decoder.decode(OutlierGroupValueMatrix.self, from: data)
 
-                    Log.i("loading outliers")
-                    // after the eraser is done running we should have received all the frames
-                    // in the frame check callback
-
-                    // load the outliers in parallel
-                    try await withLimitedThrowingTaskGroup(of: Void.self) { taskGroup in
-                        for frame in frames {
-                            await taskGroup.addTask(/*priority: .medium*/) {
-                                try await frame.loadOutliers()
-                            }
-                        }
-                        try await taskGroup.waitForAll()
-                    }
-
-                    Log.i("checkpoint before loading tree test results")
-                    await withLimitedTaskGroup(of: TreeTestResults.self) { taskGroup in
-                        for frame in frames {
-                            // check all outlier groups
-                            
-                            await taskGroup.addTask() {
-                                var number_good = 0
-                                var number_bad = 0
-                                //Log.d("should check frame \(frame.frame_index)")
-                                if let outlier_group_list = await frame.outlierGroups() {
-                                    for outlier_group in outlier_group_list {
-                                        if let numberGood = await outlier_group.shouldPaint {
-                                            let decisionTreeShouldPaint = await outlier_group.shouldPaintFromDecisionTree
-                                            if decisionTreeShouldPaint == numberGood.willPaint {
-                                                // good
-                                                //Log.d("good")
-                                                number_good += 1
-                                            } else {
-                                                // bad
-                                                //Log.w("outlier group \(outlier_group) decisionTreeShouldPaint \(decisionTreeShouldPaint) != numberGood.willPaint \(numberGood.willPaint)")
-                                                number_bad += 1
-                                            }
+                                    for values in matrix.values {
+                                        //Log.d("frame \(frame_index) matrix \(matrix)")
+                                        // XXX how to reference properly here ???
+                                        let decisionTreeShouldPaint = 
+                                          OutlierGroup.decisionTree_fdcf1329(types: matrix.types,
+                                                                             values: values.values)
+                                        if decisionTreeShouldPaint == values.shouldPaint {
+                                            number_good += 1
                                         } else {
-                                            //Log.e("WTF")
-                                            //fatalError("DIED")
+                                            number_bad += 1
                                         }
                                     }
-                                } else {
-                                    //Log.e("WTF")
-                                    //fatalError("DIED HERE")
+                                } catch {
+                                    Log.e("\(error)")
                                 }
-                                //Log.d("number_good \(number_good) number_bad \(number_bad)")
-                                return TreeTestResults(numberGood: number_good,
-                                                       numberBad: number_bad)
+                            } else {
+                                Log.i("loaded \(frame_index) frames from outlier values")
+                                done = true
                             }
                         }
-                        Log.d("waiting for all")
-                        while let response = await taskGroup.next() {
-                            Log.d("got response response.numberGood \(response.numberGood) response.numberBad \(response.numberBad) ")
-                            num_similar_outlier_groups += response.numberGood
-                            num_different_outlier_groups += response.numberBad
-                        }
+
+                        let total = number_good + number_bad
+                        let percentage_good = Double(number_good)/Double(total)*100
+                        Log.i("for \(json_config_file_name), out of \(total) \(percentage_good)% success")
                     }
-                    Log.d("checkpoint at end")
-                    let total = num_similar_outlier_groups + num_different_outlier_groups
-                    let percentage_good = Double(num_similar_outlier_groups)/Double(total)*100
-                    Log.i("for \(json_config_file_name), out of \(total) \(percentage_good)% success")
-                } catch {
-                    Log.e("\(error)")
                 }
             }
             dispatch_group.leave()
@@ -233,9 +290,11 @@ struct decision_tree_generator: ParsableCommand {
         dispatch_group.wait()
     }
 
-
-    func read(fromConfig json_config_file_name: String) async throws -> ([OutlierGroupValueMap],
-                                                                         [OutlierGroupValueMap])
+    // read outlier group values from a stored set of files listed by a config.json
+    // the reads the full outliers from file, and can be slow
+    private func read(fromConfig json_config_file_name: String) async throws
+      -> ([OutlierGroupValueMap], // should paint
+          [OutlierGroupValueMap]) // should not paint
     {
         var should_paint_test_data: [OutlierGroupValueMap] = []
         var should_not_paint_test_data: [OutlierGroupValueMap] = []
@@ -334,7 +393,7 @@ struct decision_tree_generator: ParsableCommand {
     }
 
     // actually generate a decision tree
-    func generate_tree() {
+    func generate_tree_from_json_config() {
         let dispatch_group = DispatchGroup()
         dispatch_group.enter()
         Task {
@@ -343,25 +402,79 @@ struct decision_tree_generator: ParsableCommand {
             var should_not_paint_test_data: [OutlierGroupValueMap] = []
             
             for json_config_file_name in json_config_file_names {
-                // XXX task group here too, load them all in parallel
-                Log.d("should read \(json_config_file_name)")
+                if json_config_file_name.hasSuffix("/config.json") {
+                    // here we are loading the full outlier groups and analyzing based upon that
+                    // comprehensive, but slow
+                    Log.d("should read \(json_config_file_name)")
 
-                do {
-                    let (more_should_paint, more_should_not_paint) =
-                      try await read(fromConfig: json_config_file_name)
-                
-                    should_paint_test_data += more_should_paint
-                    should_not_paint_test_data += more_should_not_paint
-                } catch {
-                    Log.w("couldn't get config from \(json_config_file_name)")
-                    Log.e("\(error)")
-                    fatalError("couldn't get config from \(json_config_file_name)")
+                    do {
+                        let (more_should_paint, more_should_not_paint) =
+                          try await read(fromConfig: json_config_file_name)
+                        
+                        should_paint_test_data += more_should_paint
+                        should_not_paint_test_data += more_should_not_paint
+                    } catch {
+                        Log.w("couldn't get config from \(json_config_file_name)")
+                        Log.e("\(error)")
+                        fatalError("couldn't get config from \(json_config_file_name)")
+                    }
+                } else {
+                    var isDir = true // just guess
+                    // check to see if it's a dir
+                    if file_manager.fileExists(atPath: json_config_file_name/*, isDirecotry: &isDir*/) {
+                        if isDir {
+                            var frame_index = 0
+                            var done = false
+
+                            // load a list of OutlierGroupValueMatrix
+                            // and get outlierGroupValues from them
+                            while(!done) {
+                                // XXX use a task group to speed this up
+                                let filename = "\(json_config_file_name)/\(frame_index)_outlier_values.bin"
+                                if file_manager.fileExists(atPath: filename) {
+                                    frame_index += 1
+                                    do {
+                                        // load data
+                                        // process a frames worth of outlier data
+                                        let imageURL = NSURL(fileURLWithPath: filename, isDirectory: false)
+
+                                        let (data, _) = try await URLSession.shared.data(for: URLRequest(url: imageURL as URL))
+
+                                        let decoder = BinaryDecoder()
+                                        let matrix = try decoder.decode(OutlierGroupValueMatrix.self, from: data)
+                                        //if let json = matrix.prettyJson { print(json) }
+                                        //Log.d("frame \(frame_index) matrix \(matrix)")
+                                        for values in matrix.values {
+                                            var valueMap = OutlierGroupValueMap()
+                                            for (index, type) in matrix.types.enumerated() {
+                                                valueMap.values[type] = values.values[index]
+                                            }
+                                            if values.shouldPaint {
+                                                should_paint_test_data.append(valueMap)
+                                            } else {
+                                                should_not_paint_test_data.append(valueMap)
+                                            }
+                                        }
+                                    } catch {
+                                        Log.e("ERROR: \(error)")
+                                    }
+                                } else {
+                                    Log.i("loaded \(frame_index) frames from outlier values")
+                                    done = true
+                                }
+                            }
+                        }
+                    }
                 }
             }
-
-            // XXX here is where we could load the data
             
             Log.i("Calculating decision tree with \(should_paint_test_data.count) should paint \(should_not_paint_test_data.count) should not paint test data outlier groups")
+
+            // XXX these are the same, but in different orders, not sure if that matters
+            //Log.d("should paint")
+            //log(valueMaps: should_paint_test_data)
+            //Log.d("should NOT paint")
+            //log(valueMaps: should_not_paint_test_data)
             
             let (tree_swift_code, sha_hash) = await generateTree(with: should_paint_test_data,
                                                                  and: should_not_paint_test_data)
@@ -390,6 +503,17 @@ struct decision_tree_generator: ParsableCommand {
         dispatch_group.wait()
     }
 
+    func log(valueMaps: [OutlierGroupValueMap]) {
+        for (index, valueMap) in valueMaps.enumerated() {
+            var log = "\(index) - "
+            for type in OutlierGroup.TreeDecisionType.allCases {
+                let value = valueMap.values[type]!
+                log += "\(String(format: "%.3g", value)) "
+            }
+            Log.d(log)
+        }
+    }
+    
     // top level func that writes a compilable wrapper around the root tree node
     func generateTree(with should_paint_test_data: [OutlierGroupValueMap],
                       and should_not_paint_test_data: [OutlierGroupValueMap]) async -> (String, String)
@@ -440,15 +564,23 @@ struct decision_tree_generator: ParsableCommand {
         let tree_hash_string = tree_hash.compactMap { String(format: "%02x", $0) }.joined()
         let generation_date_since_1970 = generation_date.timeIntervalSince1970
 
-        var initial_values = ""
+        var function_signature = ""
+        var function_parameters = ""
+        var function2_parameters = ""
         
         for type in OutlierGroup.TreeDecisionType.allCases {
-
-            initial_values += "            let \(type)_value = await self.decisionTreeValue(for: .\(type))\n"
-            
-            //initial_values += "\(indentation)    let \(type)_value = await self.decisionTreeValue(for: .\(type))!\n"
+            function_parameters += "                   \(type): await self.decisionTreeValue(for: .\(type)),\n"
+            function2_parameters += "         \(type): map[.\(type)]!,\n"
+            function_signature += "            \(type): Double,\n"
         }
+        function_signature.removeLast()        
+        function_signature.removeLast()
+        function_parameters.removeLast()
+        function_parameters.removeLast()
+        function2_parameters.removeLast()
+        function2_parameters.removeLast()
 
+        let hash_suffix = tree_hash_string.suffix(sha_suffix_size)
         
         let swift_string = """
           /*
@@ -466,7 +598,7 @@ struct decision_tree_generator: ParsableCommand {
           // DO NOT EDIT THIS FILE
           // DO NOT EDIT THIS FILE
 
-          public struct OutlierGroupDecisionTree_\(tree_hash_string.suffix(sha_suffix_size)) {
+          public struct OutlierGroupDecisionTree_\(hash_suffix) {
               public let sha256 = "\(tree_hash_string)"
           
               public let generationSecondsSince1970 = \(generation_date_since_1970)
@@ -477,20 +609,42 @@ struct decision_tree_generator: ParsableCommand {
           
           @available(macOS 10.15, *)
           public extension OutlierGroup {
-
+          
               // decide the paintability of this OutlierGroup with a decision tree
-              var shouldPaintFromDecisionTree_\(tree_hash_string.suffix(sha_suffix_size)): Bool {
+              var shouldPaintFromDecisionTree_\(hash_suffix): Bool {
                   get async {
 
-                      // gathering all values here keeps the number of await calls low
-                      // doing so is helpful to speed things up, both at compile and at run time
-          \(initial_values)
-                          
-                      // decide upon the values of this outlier group
+                      return OutlierGroup.decisionTree_\(hash_suffix)(
+          \(function_parameters)
+                          )
+                   }
+
+               }
+
+              // a way to call into the decision tree without an OutlierGroup object
+              public static func decisionTree_\(hash_suffix) (
+                 types: [OutlierGroup.TreeDecisionType], // parallel
+                 values: [Double]                        // arrays
+                ) -> Bool
+              {
+                var map: [OutlierGroup.TreeDecisionType:Double] = [:]
+                for (index, type) in types.enumerated() {
+                    let value = values[index]
+                    map[type] = value
+                }
+                return OutlierGroup.decisionTree_\(hash_suffix)(
+          \(function2_parameters)
+                )
+              }
+
+              // the actual tree resides here
+              public static func decisionTree_\(hash_suffix)(
+          \(function_signature)
+                    ) -> Bool
+                  {
           \(generated_swift_code)
                   }
               }
-          }
           """
 
         return (swift_string, tree_hash_string)
@@ -501,7 +655,7 @@ struct decision_tree_generator: ParsableCommand {
                           and should_not_paint_test_data: [OutlierGroupValueMap],
                           indent: Int) async -> DecisionTree
     {
-        Log.i("decisionTreeNode with indent \(indent) should_paint_test_data.count \(should_paint_test_data.count) should_not_paint_test_data.count \(should_not_paint_test_data.count)")
+        //Log.i("decisionTreeNode with indent \(indent) should_paint_test_data.count \(should_paint_test_data.count) should_not_paint_test_data.count \(should_not_paint_test_data.count)")
 
         if should_paint_test_data.count == 0,
            should_not_paint_test_data.count == 0
@@ -554,7 +708,7 @@ struct decision_tree_generator: ParsableCommand {
             }
         }
 
-        Log.i("decisionTreeNode checkpoint 0.5 with indent \(indent) should_paint_test_data.count \(should_paint_test_data.count) should_not_paint_test_data.count \(should_not_paint_test_data.count)")
+        //Log.i("decisionTreeNode checkpoint 0.5 with indent \(indent) should_paint_test_data.count \(should_paint_test_data.count) should_not_paint_test_data.count \(should_not_paint_test_data.count)")
 
         // XXX task group here XXX seeing slowdown at this spot
         await withTaskGroup(of: DecisionTypeValuesResult.self) { taskGroup in
@@ -574,7 +728,7 @@ struct decision_tree_generator: ParsableCommand {
             }
         }
 
-        Log.i("decisionTreeNode checkpoint 1 with indent \(indent) should_paint_test_data.count \(should_paint_test_data.count) should_not_paint_test_data.count \(should_not_paint_test_data.count)")
+        //Log.i("decisionTreeNode checkpoint 1 with indent \(indent) should_paint_test_data.count \(should_paint_test_data.count) should_not_paint_test_data.count \(should_not_paint_test_data.count)")
 
         // value distributions for each type
         var should_paint_dist: [OutlierGroup.TreeDecisionType: ValueDistribution] = [:]
@@ -610,7 +764,7 @@ struct decision_tree_generator: ParsableCommand {
             }
         }
 
-        Log.i("decisionTreeNode checkpoint 1.5 with indent \(indent) should_paint_test_data.count \(should_paint_test_data.count) should_not_paint_test_data.count \(should_not_paint_test_data.count)")
+        //Log.i("decisionTreeNode checkpoint 1.5 with indent \(indent) should_paint_test_data.count \(should_paint_test_data.count) should_not_paint_test_data.count \(should_not_paint_test_data.count)")
 
         let _should_not_paint_values: [OutlierGroup.TreeDecisionType: [Double]] = should_not_paint_values
 
@@ -642,7 +796,7 @@ struct decision_tree_generator: ParsableCommand {
             }
         }
 
-        Log.i("decisionTreeNode checkpoint 2 with indent \(indent) should_paint_test_data.count \(should_paint_test_data.count) should_not_paint_test_data.count \(should_not_paint_test_data.count)")
+        //Log.i("decisionTreeNode checkpoint 2 with indent \(indent) should_paint_test_data.count \(should_paint_test_data.count) should_not_paint_test_data.count \(should_not_paint_test_data.count)")
 
         // iterate ofer all decision tree types to pick the best one
         // that differentiates the test data
@@ -659,11 +813,11 @@ struct decision_tree_generator: ParsableCommand {
                    let not_paint_dist = should_not_paint_dist[type]
                 {
                     taskGroup.addTask() {
-                        Log.d("type \(type)")
+                        //Log.d("type \(type)")
                         if paint_dist.max < not_paint_dist.min {
                             // we have a clear distinction between all provided test data
                             // this is an end leaf node, both paths after decision lead to a result
-                            Log.d("clear distinction \(paint_dist.max) < \(not_paint_dist.min)")
+                            //Log.d("clear distinction \(paint_dist.max) < \(not_paint_dist.min)")
 
                             var ret = TreeDecisionTypeResult()
                             ret.decisionTreeNode =
@@ -676,7 +830,7 @@ struct decision_tree_generator: ParsableCommand {
                             ret.should_not_paint_dist = not_paint_dist
                             return ret
                         } else if not_paint_dist.max < paint_dist.min {
-                            Log.d("clear distinction \(not_paint_dist.max) < \(paint_dist.min)")
+                            //Log.d("clear distinction \(not_paint_dist.max) < \(paint_dist.min)")
                             // we have a clear distinction between all provided test data
                             // this is an end leaf node, both paths after decision lead to a result
                             var ret = TreeDecisionTypeResult()
@@ -690,7 +844,7 @@ struct decision_tree_generator: ParsableCommand {
                             ret.should_not_paint_dist = not_paint_dist
                             return ret
                         } else {
-                            Log.d("no clear distinction, need new node at indent \(indent)")
+                            //Log.d("no clear distinction, need new node at indent \(indent)")
                             // we do not have a clear distinction between all provided test data
                             // we need to figure out what type is best to segarate
                             // the test data further
@@ -827,6 +981,7 @@ struct decision_tree_generator: ParsableCommand {
 
         // if not, setup to recurse
         if let result = bestDecisionResult { 
+            Log.d("best at indent \(indent) was \(result.type) \(String(format: "%g", result.lessThanSplit)) \(String(format: "%g", result.greaterThanSplit)) \(String(format: "%g", result.value)) < Should \(result.lessThanShouldPaint.count) < ShouldNot \(result.lessThanShouldNotPaint.count) > Should  \(result.lessThanShouldPaint.count) > ShouldNot \(result.greaterThanShouldNotPaint.count)")
 
             // we've identified the best type to differentiate the test data
             // output a tree node with this type and value
@@ -870,9 +1025,11 @@ struct decision_tree_generator: ParsableCommand {
                 }
             }
 
+            
             if let less_response = less_response,
                let greater_response = greater_response
             {
+
                 return DecisionTreeNode(type: result.type,
                                         value: result.value,
                                         lessThan: less_response.treeNode,
@@ -947,7 +1104,7 @@ struct DecisionTreeNode: DecisionTree {
         var indentation = ""
         for _ in 0..<indent { indentation += "    " }
         return """
-          \(indentation)if \(type)_value < \(value) {
+          \(indentation)if \(type) < \(value) {
           \(lessThan.swiftCode)
           \(indentation)} else {
           \(greaterThan.swiftCode)

@@ -1,3 +1,4 @@
+import Foundation
 
 /*
  This OutlierGroup extention contains all of the decision tree specific logic.
@@ -10,20 +11,21 @@
 @available(macOS 10.15, *) 
 public struct OutlierGroupValueMap {
     public var values: [OutlierGroup.TreeDecisionType: Double] = [:]
+    public init() { }
 }
 
 
 // used for storing only decision tree data for all of the outlier groups in a frame
 @available(macOS 10.15, *) 
 public class OutlierGroupValueMatrix: Codable {
-    var types: [OutlierGroup.TreeDecisionType] = OutlierGroup.decisionTreeValueTypes
+    public var types: [OutlierGroup.TreeDecisionType] = OutlierGroup.decisionTreeValueTypes
 
     public struct OutlierGroupValues: Codable {
-        let shouldPaint: Bool
-        let values: [Double]
+        public let shouldPaint: Bool
+        public let values: [Double]
     }
 
-    var values: [OutlierGroupValues] = []      // indexed by outlier group first then types later
+    public var values: [OutlierGroupValues] = []      // indexed by outlier group first then types later
 
     public func append(outlierGroup: OutlierGroup) async {
         let shouldPaint = await outlierGroup.shouldPaint!
@@ -46,6 +48,21 @@ public class OutlierGroupValueMatrix: Codable {
             }
         }
         return (shouldPaintRet, shoultNotPaintRet)
+    }
+
+    public var prettyJson: String? {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .prettyPrinted
+        
+        do {
+            let data = try encoder.encode(self)
+            if let json_string = String(data: data, encoding: .utf8) {
+                return json_string
+            }
+        } catch {
+            Log.e("\(error)")
+        }
+        return nil
     }
 }
 
@@ -76,7 +93,9 @@ public extension OutlierGroup {
         get async {
             var values = OutlierGroupValueMap()
             for type in OutlierGroup.TreeDecisionType.allCases {
-                values.values[type] = await self.decisionTreeValue(for: type)
+                let value = await self.decisionTreeValue(for: type)
+                values.values[type] = value
+                //Log.d("frame \(frame_index) type \(type) value \(value)")
             }
             return values
         } 
@@ -85,7 +104,19 @@ public extension OutlierGroup {
     var shouldPaintFromDecisionTree: Bool {
         get async {
             // XXX have the generator modify this?
-            return await self.shouldPaintFromDecisionTree_2f017d7c
+            return await self.shouldPaintFromDecisionTree_fdcf1329
+
+            // XXX XXX XXX
+            // XXX XXX XXX
+            // XXX XXX XXX
+            // XXX XXX XXX
+            //return false        // XXX XXX XX
+            // XXX XXX XXX
+            // XXX XXX XXX
+            // XXX XXX XXX
+            // XXX XXX XXX
+
+            //return await self.shouldPaintFromDecisionTree_074081b0
         }
     }
     
