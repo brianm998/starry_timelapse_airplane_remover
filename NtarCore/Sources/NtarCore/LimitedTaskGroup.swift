@@ -45,7 +45,7 @@ public class LimitedTaskGroup<T> {
                 Log.e("\(error)")
             }
             current_running = await number_running.currentValue()
-            Log.d("awaking \(current_running) are still running")
+            //Log.d("awaking \(current_running) are still running")
         }
         await number_running.increment()
         
