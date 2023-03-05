@@ -19,7 +19,9 @@ class FrameView: ObservableObject {
             Log.d("frame \(frame_index) set frame to \(frame)")
         }
     }
-    @Published var outlierViews: [OutlierGroupView] = []
+
+    // maybe make this optional to distinguish between not loaded and empty list
+    @Published var outlierViews: [OutlierGroupView]?
 
     // we don't keep full resolution images here
     
@@ -53,7 +55,7 @@ class FrameView: ObservableObject {
         let gesture_bounds = BoundingBox(min: Coord(x: Int(min_x), y: Int(min_y)),
                                          max: Coord(x: Int(max_x), y: Int(max_y)))
         
-        outlierViews.forEach() { group in
+        outlierViews?.forEach() { group in
             if gesture_bounds.contains(other: group.bounds) {
                 // check to make sure this outlier's bounding box is fully contained
                 // otherwise don't change paint status

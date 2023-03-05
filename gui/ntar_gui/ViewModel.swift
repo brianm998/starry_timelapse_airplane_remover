@@ -140,7 +140,7 @@ class ViewModel: ObservableObject {
                 }
             }
 
-            if self.frames[frame.frame_index].outlierViews.count == 0 {
+            if self.frames[frame.frame_index].outlierViews == nil {
                 await frame.outlier_groups?.prepareForEncoding() {
                     Task {
                         await self.setOutlierGroups(forFrame: frame)
