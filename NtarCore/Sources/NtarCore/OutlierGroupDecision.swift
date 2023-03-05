@@ -101,7 +101,7 @@ public class OutlierGroupValueMatrix: Codable {
 
 @available(macOS 10.15, *) 
 public extension OutlierGroup {
-
+    
     // ordered by the list of types below
     var decisionTreeValues: [Double] {
         get async {
@@ -137,7 +137,7 @@ public extension OutlierGroup {
     var shouldPaintFromDecisionTree: Bool {
         get async {
             // XXX have the generator modify this?
-            return await self.shouldPaintFromDecisionTree_90babb26
+            return await self.shouldPaintFromDecisionTree_2db488e9
 
             // XXX XXX XXX
             // XXX XXX XXX
@@ -177,7 +177,13 @@ public extension OutlierGroup {
         case numberOfNearbyOutliersInSameFrame
         case adjecentFrameNeighboringOutliersBestTheta
         case histogramStreakDetection
+        case maxHoughTransformCount
+        case maxHoughTheta
+        case neighboringInterFrameOutlierThetaScore
         /*
+         add score based upon number of close with hough line histogram values
+         add score based upon how many overlapping outliers there are in
+             adjecent frames, and how close their thetas are 
          
          some more numbers about hough lines
 
@@ -193,6 +199,8 @@ public extension OutlierGroup {
             case .adjecentFrameNeighboringOutliersBestTheta:
                 return true
             case .histogramStreakDetection:
+                return true
+            case .neighboringInterFrameOutlierThetaScore:
                 return true
             default:
                 return false
@@ -245,7 +253,12 @@ public extension OutlierGroup {
                 return 20
             case .histogramStreakDetection:
                 return 21
-
+            case .maxHoughTransformCount:
+                return 22
+            case .maxHoughTheta:
+                return 23
+            case .neighboringInterFrameOutlierThetaScore:
+                return 24
             }
         }
 
@@ -300,6 +313,10 @@ public extension OutlierGroup {
             return self.maxThetaDiffOfFirst10HoughLines
         case .maxRhoDiffOfFirst10HoughLines:
             return self.maxRhoDiffOfFirst10HoughLines
+        case .maxHoughTransformCount:
+            return self.maxHoughTransformCount
+        case .maxHoughTheta:
+            return self.maxHoughTheta
         default:
             fatalError("called with bad value \(type)")
         }
@@ -313,6 +330,8 @@ public extension OutlierGroup {
             return await self.adjecentFrameNeighboringOutliersBestTheta
         case .histogramStreakDetection:
             return await self.histogramStreakDetection
+        case .neighboringInterFrameOutlierThetaScore:
+            return await self.neighboringInterFrameOutlierThetaScore
         default:
             return self.nonAsyncDecisionTreeValue(for: type)
         }
@@ -348,26 +367,40 @@ public extension OutlierGroup {
         }
     }
 
-    // XXX use these to compare outliers in different frames
+    // use these to compare outliers in same and different frames
     var houghLineHistogram: HoughLineHistogram {
         return HoughLineHistogram(withDegreeIncrement: 5, // XXX hardcoded 5
                                   lines: self.lines,
                                   andGroupSize: self.size)
     }
 
+    private var maxHoughTheta: Double {
+        if let firstLine = self.firstLine {
+            return Double(firstLine.theta)
+        }
+        return 0
+    }
+        
+    private var maxHoughTransformCount: Double {
+        if let firstLine = self.firstLine {
+            return Double(firstLine.count)/Double(self.size)
+        }
+        return 0
+    }
+    
     // tries to find a streak with hough line histograms
     private var histogramStreakDetection: Double {
         get async {
             if let frame = frame {
                 var best_score = 0.0
-                let myHisto = self.houghLineHistogram
+                let selfHisto = self.houghLineHistogram
 
                 if let previous_frame = await frame.previousFrame {
                     let nearby_groups = await previous_frame.outlierGroups(within: 300, // XXX hardcoded constant
                                                                            of: self.bounds)
                     for group in nearby_groups {
                         let histo = await group.houghLineHistogram
-                        let score = histo.matchScore(with: myHisto)
+                        let score = histo.matchScore(with: selfHisto)
                         best_score = max(score, best_score)
                     }
                 }
@@ -378,7 +411,7 @@ public extension OutlierGroup {
                         // XXX apply some score to how close this theta
                         // is to the direction it moves in
                         let histo = await group.houghLineHistogram
-                        let score = histo.matchScore(with: myHisto)
+                        let score = histo.matchScore(with: selfHisto)
                         best_score = max(score, best_score)
                     }
                 }
@@ -386,6 +419,32 @@ public extension OutlierGroup {
             } else {
                 fatalError("SHIT")
             }
+        }
+    }
+
+    private var neighboringInterFrameOutlierThetaScore: Double {
+
+        get async {
+            if let frame = frame {
+                let nearby_groups = await frame.outlierGroups(within: 300, // XXX hardcoded constant
+                                                              of: self.bounds)
+                let selfHisto = self.houghLineHistogram
+                var ret = 0.0
+                var count = 0
+                for group in nearby_groups {
+                    if group.name == self.name { continue }
+                    let otherHisto = self.houghLineHistogram
+                    let score = otherHisto.matchScore(with: selfHisto)
+                    // XXX modify this score by how close the theta of
+                    // the line between the outlier groups center points
+                    // is to the the theta of both of them
+                    ret += score
+                    count += 1
+                }
+                ret /= Double(count)
+                return ret
+            }
+            return 0
         }
     }
     
