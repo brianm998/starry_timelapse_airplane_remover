@@ -20,7 +20,7 @@ class FrameView: ObservableObject {
         }
     }
 
-    // maybe make this optional to distinguish between not loaded and empty list
+    // optional to distinguish between not loaded and empty list
     @Published var outlierViews: [OutlierGroupView]?
 
     // we don't keep full resolution images here
