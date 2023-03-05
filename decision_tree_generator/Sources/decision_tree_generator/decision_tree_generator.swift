@@ -133,7 +133,7 @@ struct decision_tree_generator: ParsableCommand {
 
         var num_similar_outlier_groups = 0
         var num_different_outlier_groups = 0
-        let config = try await Config.read(fromFilename: json_config_file_name)
+        let config = try await Config.read(fromJsonFilename: json_config_file_name)
         Log.d("got config from \(json_config_file_name)")
         
         let callbacks = Callbacks()
@@ -269,7 +269,7 @@ struct decision_tree_generator: ParsableCommand {
                                         // could search for classes that conform to a new protocol
                                         // that defines this specific method, but it's static :(
                                         let decisionTreeShouldPaint =  
-                                          OutlierGroup.decisionTree_6fd18897(types: matrix.types,
+                                          OutlierGroup.decisionTree_27fc9766(types: matrix.types,
                                                                              values: values.values)
                                         if decisionTreeShouldPaint == values.shouldPaint {
                                             number_good += 1
@@ -302,7 +302,7 @@ struct decision_tree_generator: ParsableCommand {
     {
         var should_paint_test_data: [OutlierGroupValueMap] = []
         var should_not_paint_test_data: [OutlierGroupValueMap] = []
-        let config = try await Config.read(fromFilename: json_config_file_name)
+        let config = try await Config.read(fromJsonFilename: json_config_file_name)
         Log.d("got config from \(json_config_file_name)")
         
         let callbacks = Callbacks()

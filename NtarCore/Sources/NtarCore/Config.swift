@@ -43,12 +43,7 @@ public struct Config: Codable {
     }
 
     // returns a stored json config file
-    public static func read(fromJsonDirname json_dirname: String) async throws -> Config {
-        let filename = "\(json_dirname)/config.json"
-        return try await Config.read(fromFilename: filename)
-    }
-
-    public static func read(fromFilename filename: String) async throws -> Config {
+    public static func read(fromJsonFilename filename: String) async throws -> Config {
         let config_url = NSURL(fileURLWithPath: filename, isDirectory: false) as URL
         let (config_data, _) = try await URLSession.shared.data(for: URLRequest(url: config_url))
         let decoder = JSONDecoder()

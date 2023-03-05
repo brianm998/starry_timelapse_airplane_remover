@@ -292,7 +292,7 @@ struct Ntar: ParsableCommand {
                 dispatch_group.enter()
 
                 Task {
-                    config = try await Config.read(fromFilename: fuck)
+                    config = try await Config.read(fromJsonFilename: fuck)
                     dispatch_group.leave()
                 }
                 dispatch_group.wait()

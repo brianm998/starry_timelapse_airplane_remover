@@ -138,18 +138,17 @@ class ntar_gui_app: App {
          */
     }
 
-    func outlier_json_startup(with outlier_dirname: String) {
-        Log.d("outlier_json_startup with \(outlier_dirname)")
+    func outlier_json_startup(with json_config_filename: String) {
+        Log.d("outlier_json_startup with \(json_config_filename)")
         // first read config from json
         let dispatchGroup = DispatchGroup()
         dispatchGroup.enter()
 
-        UserPreferences.shared.justOpened(filename: outlier_dirname)
+        UserPreferences.shared.justOpened(filename: json_config_filename)
         
         Task {
             do {
-                //let config = try await Config.read(fromJsonDirname: outlier_dirname)
-                let config = try await Config.read(fromFilename: outlier_dirname)
+                let config = try await Config.read(fromJsonFilename: json_config_filename)
 
                 viewModel.config = config
 
