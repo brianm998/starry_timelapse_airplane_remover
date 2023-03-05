@@ -197,6 +197,7 @@ public actor FinalProcessor {
         if let frameCheckClosure = callbacks.frameCheckClosure
         {
             // gui
+            Log.d("calling frameCheckClosure for frame \(frame.frame_index)")
             await frameCheckClosure(frame)
             return
         }            
@@ -228,14 +229,29 @@ public actor FinalProcessor {
             
             let index_to_process = await current_frame_index
 
+            Log.d("index_to_process \(index_to_process) shouldProcess[index_to_process] \(shouldProcess[index_to_process])")
+
+             
             if !is_gui,         // always process on gui so we can see them all
                !shouldProcess[index_to_process]
             {
+                if let frameCheckClosure = callbacks.frameCheckClosure {
+                    if let frame = await self.frame(at: index_to_process) {
+                        Log.d("calling frameCheckClosure for frame \(frame.frame_index)")
+                        await frameCheckClosure(frame)
+                    } else {
+                        Log.d("NOT calling frameCheckClosure for frame \(index_to_process)")
+                    }
+                } else {
+                    Log.d("NOT calling frameCheckClosure for frame \(index_to_process)")
+                }
+                
                 // don't process existing files on cli
                 Log.d("not processing \(index_to_process)")
                 await self.incrementCurrentFrameIndex()
                 continue
             }
+
             var images_to_process: [FrameAirplaneRemover] = []
             
             var start_index = index_to_process - config.number_final_processing_neighbors_needed
