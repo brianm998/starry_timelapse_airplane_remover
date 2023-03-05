@@ -477,7 +477,11 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
                 }
                                                                   
                 self.outlier_groups = outlierGroups
-                self.state = .outlierProcessingComplete
+                // while these have already decided outlier groups,
+                // we still need to inter frame process them so that
+                // frames are linked with their neighbors and outlier
+                // groups can use these links for decision tree values
+                self.state = .readyForInterFrameProcessing
                 self.outliersLoadedFromFile = true
                 Log.i("loaded \(self.outlier_groups?.groups?.count) outlier groups for frame \(frame_index)")
             } else {
