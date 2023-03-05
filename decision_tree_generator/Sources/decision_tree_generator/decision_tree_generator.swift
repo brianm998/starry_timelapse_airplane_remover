@@ -245,34 +245,32 @@ struct decision_tree_generator: ParsableCommand {
                     }
                 } else {
                     if file_manager.fileExists(atPath: json_config_file_name) {
-                        var frame_index = 0
-                        var done = false
-
                         var number_good = 0
                         var number_bad = 0
                         
                         // load a list of OutlierGroupValueMatrix
                         // and get outlierGroupValues from them
-                        while(!done) {
-                            let filename = "\(json_config_file_name)/\(frame_index)_outlier_values.bin"
-                            if file_manager.fileExists(atPath: filename) {
-                                frame_index += 1
+                        let contents = try file_manager.contentsOfDirectory(atPath: json_config_file_name)
+                        for file in contents {
+                            if file.hasSuffix("_outlier_values.bin") {
+                                let filename = "\(json_config_file_name)/\(file)"
                                 do {
                                     // load data
                                     // process a frames worth of outlier data
                                     let imageURL = NSURL(fileURLWithPath: filename, isDirectory: false)
-
+                                    
                                     let (data, _) = try await URLSession.shared.data(for: URLRequest(url: imageURL as URL))
 
                                     let decoder = BinaryDecoder()
                                     let matrix = try decoder.decode(OutlierGroupValueMatrix.self, from: data)
 
                                     for values in matrix.values {
-                                        //Log.d("frame \(frame_index) matrix \(matrix)")
-                                        // XXX how to reference properly here ???
+                                        // XXX how to reference hash properly here ???
+                                        // could search for classes that conform to a new protocol
+                                        // that defines this specific method, but it's static :(
                                         let decisionTreeShouldPaint =  
-                                          OutlierGroup.decisionTree_2db488e9(types: matrix.types,
-                                          values: values.values)
+                                          OutlierGroup.decisionTree_6fd18897(types: matrix.types,
+                                                                             values: values.values)
                                         if decisionTreeShouldPaint == values.shouldPaint {
                                             number_good += 1
                                         } else {
@@ -282,9 +280,6 @@ struct decision_tree_generator: ParsableCommand {
                                 } catch {
                                     Log.e("\(error)")
                                 }
-                            } else {
-                                Log.i("loaded \(frame_index) frames from outlier values")
-                                done = true
                             }
                         }
 
@@ -430,58 +425,50 @@ struct decision_tree_generator: ParsableCommand {
                 } else {
                     // check to see if it's a dir
                     if file_manager.fileExists(atPath: json_config_file_name/*, isDirecotry: &isDir*/) {
-                        var frame_index = 0
 
-                        await withLimitedTaskGroup(of: OutlierGroupValueMapResult.self) { taskGroup in
-                            var done = false
+                        try await withThrowingLimitedTaskGroup(of: OutlierGroupValueMapResult.self) { taskGroup in
                             
                             // load a list of OutlierGroupValueMatrix
                             // and get outlierGroupValues from them
-                            while(!done) {
+                            let contents = try file_manager.contentsOfDirectory(atPath: json_config_file_name)
+                            for file in contents {
+                                if file.hasSuffix("_outlier_values.bin") {
+                                    let filename = "\(json_config_file_name)/\(file)"
                                     
-                                let filename = "\(json_config_file_name)/\(frame_index)_outlier_values.bin"
-                                if file_manager.fileExists(atPath: filename) {
-                                    frame_index += 1
-                                    await taskGroup.addTask() {
+                                    try await taskGroup.addTask() {
                                         var local_should_paint_test_data: [OutlierGroupValueMap] = []
                                         var local_should_not_paint_test_data: [OutlierGroupValueMap] = []
                                         
-                                        do {
-                                            // load data
-                                            // process a frames worth of outlier data
-                                            let imageURL = NSURL(fileURLWithPath: filename, isDirectory: false)
-                                            
-                                            let (data, _) = try await URLSession.shared.data(for: URLRequest(url: imageURL as URL))
-                                            
-                                            let decoder = BinaryDecoder()
-                                            let matrix = try decoder.decode(OutlierGroupValueMatrix.self, from: data)
-                                            //if let json = matrix.prettyJson { print(json) }
-                                            //Log.d("frame \(frame_index) matrix \(matrix)")
-                                            for values in matrix.values {
-                                                var valueMap = OutlierGroupValueMap()
-                                                for (index, type) in matrix.types.enumerated() {
-                                                    valueMap.values[type] = values.values[index]
-                                                }
-                                                if values.shouldPaint {
-                                                    local_should_paint_test_data.append(valueMap)
-                                                } else {
-                                                    local_should_not_paint_test_data.append(valueMap)
-                                                }
-                                            }
-                                        } catch {
-                                            Log.e("ERROR: \(error)")
-                                        }
 
+                                        // load data
+                                        // process a frames worth of outlier data
+                                        let imageURL = NSURL(fileURLWithPath: filename, isDirectory: false)
+                                        
+                                        let (data, _) = try await URLSession.shared.data(for: URLRequest(url: imageURL as URL))
+                                        
+                                        let decoder = BinaryDecoder()
+                                        let matrix = try decoder.decode(OutlierGroupValueMatrix.self, from: data)
+                                        //if let json = matrix.prettyJson { print(json) }
+                                        //Log.d("frame \(frame_index) matrix \(matrix)")
+                                        for values in matrix.values {
+                                            var valueMap = OutlierGroupValueMap()
+                                            for (index, type) in matrix.types.enumerated() {
+                                                valueMap.values[type] = values.values[index]
+                                            }
+                                            if values.shouldPaint {
+                                                local_should_paint_test_data.append(valueMap)
+                                            } else {
+                                                local_should_not_paint_test_data.append(valueMap)
+                                            }
+                                        }
+                                        
                                         return OutlierGroupValueMapResult(
                                           should_paint_test_data: local_should_paint_test_data,
                                           should_not_paint_test_data: local_should_not_paint_test_data)
                                     }
-                                } else {
-                                    Log.i("loaded \(frame_index) frames from outlier values")
-                                    done = true
                                 }
                             }
-                            while let response = await taskGroup.next() {
+                            while let response = try await taskGroup.next() {
                                 should_paint_test_data += response.should_paint_test_data
                                 should_not_paint_test_data += response.should_not_paint_test_data
                             }
@@ -890,7 +877,7 @@ struct decision_tree_generator: ParsableCommand {
                                         greaterThanShouldPaint.append(group_values)
                                     }
                                 } else {
-                                    Log.e("FUCK")
+                                    Log.e("no value for type \(type)")
                                     fatalError("SHIT")
                                 }
                             }
