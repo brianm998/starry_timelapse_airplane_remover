@@ -214,9 +214,7 @@ public struct Config: Codable {
     public var ntar_version = "0.2.0"
 
 
-    public func writeJson(to dirname: String) {
-
-        if self.writeOutlierGroupFiles {
+    public func writeJson(named filename: String) {
         
             // write to config json
 
@@ -225,9 +223,8 @@ public struct Config: Codable {
 
             do {
                 let json_data = try encoder.encode(self)
-                
-                let filename = "config.json"
-                let full_path = "\(dirname)/\(filename)"
+
+                let full_path = "\(self.outputPath)/\(filename)"
                 if file_manager.fileExists(atPath: full_path) {
                     Log.w("cannot write to \(full_path), it already exists")
                 } else {
@@ -237,7 +234,7 @@ public struct Config: Codable {
             } catch {
                 Log.e("\(error)")
             }
-        }
+
     }
 }
 

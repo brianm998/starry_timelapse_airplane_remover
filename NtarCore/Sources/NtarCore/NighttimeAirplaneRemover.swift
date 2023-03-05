@@ -49,6 +49,8 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
 
     // are we running on the gui?
     public let is_gui: Bool
+
+    public let basename: String
     
     public init(with config: Config,
                 callbacks: Callbacks,
@@ -61,8 +63,8 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
         self.callbacks = callbacks
         self.is_gui = isGUI     // XXX make this better
         
-        var basename = "\(config.image_sequence_dirname)-ntar-v-\(config.ntar_version)"
-        basename = basename.replacingOccurrences(of: ".", with: "_")
+        var _basename = "\(config.image_sequence_dirname)-ntar-v-\(config.ntar_version)"
+        self.basename = _basename.replacingOccurrences(of: ".", with: "_")
         test_paint_output_dirname = "\(config.test_paint_output_path)/\(basename)-test-paint"
         outlier_output_dirname = "\(config.outputPath)/\(basename)-outliers"
         preview_output_dirname = "\(config.outputPath)/\(basename)-previews"
@@ -167,41 +169,38 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
                 Log.e("first frame to get size: \(error)")
             }
         }
-        Log.d("1")
         if config.test_paint {
             try mkdir(test_paint_output_dirname)
         }
-        Log.d("2")
         if config.writeOutlierGroupFiles {
-            Log.d("2a \(outlier_output_dirname)")
             // doesn't do mkdir -p, if a base dir is missing it just hangs :(
             try mkdir(outlier_output_dirname) // XXX this can fail silently and pause the whole process :(
-            Log.d("2b")
-            config.writeJson(to: outlier_output_dirname)
-            Log.d("2c")
         }
-        Log.d("3")
         if config.writeFramePreviewFiles {
-            Log.d("3a")
             try mkdir(preview_output_dirname) 
-            Log.d("3b")
         }
 
-        Log.d("4")
         if config.writeFrameProcessedPreviewFiles {
             try mkdir(processed_preview_output_dirname)
         }
-        Log.d("5")
 
         if config.writeFrameTestPaintPreviewFiles {
             try mkdir(test_paint_preview_output_dirname)
         }
-        Log.d("6")
         
         if config.writeFrameThumbnailFiles {
             try mkdir(thumbnail_output_dirname)
         }
-        Log.d("startup hook done")
+
+        if config.test_paint                      ||
+           config.writeOutlierGroupFiles          ||
+           config.writeFramePreviewFiles          ||
+           config.writeFrameProcessedPreviewFiles ||
+           config.writeFrameTestPaintPreviewFiles ||
+           config.writeFrameThumbnailFiles
+        {
+            config.writeJson(named: "\(self.basename)-config.json")
+         }
     }
     
     // called by the superclass to process each frame
