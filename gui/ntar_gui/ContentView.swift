@@ -341,7 +341,7 @@ struct ContentView: View {
                         
                         Spacer().frame(maxHeight: 30)
                         // the filmstrip at the bottom
-                        filmstrip()
+                        filmstrip(withScroll: scroller)
                           .frame(maxWidth: .infinity, alignment: .bottom)
                         Spacer().frame(maxHeight: 10, alignment: .bottom)
                     }
@@ -514,7 +514,7 @@ struct ContentView: View {
     }
 
     // the view for each frame in the filmstrip at the bottom
-    func filmStripView(forFrame frame_index: Int) -> some View {
+    func filmStripView(forFrame frame_index: Int, withScroll scroller: ScrollViewProxy) -> some View {
         var bg_color: Color = .yellow
         if let frame = viewModel.frame(atIndex: frame_index) {
             //            if frame.outlierGroupCount() > 0 {
@@ -555,13 +555,16 @@ struct ContentView: View {
               let frame_view = viewModel.frames[frame_index]
               
               let current_frame = viewModel.currentFrame
-              self.transition(toFrame: frame_view, from: current_frame)
+              self.transition(toFrame: frame_view,
+                              from: current_frame,
+                              withScroll: scroller)
           }
         
     }
     
     // used when advancing between frames
     func saveToFile(frame frame_to_save: FrameAirplaneRemover, completionClosure: @escaping () -> Void) {
+        Log.d("saveToFile frame \(frame_to_save.frame_index)")
         if let frameSaveQueue = viewModel.frameSaveQueue {
             frameSaveQueue.readyToSave(frame: frame_to_save, completionClosure: completionClosure)
         } else {
@@ -641,11 +644,11 @@ struct ContentView: View {
           .keyboardShortcut("c", modifiers: [])
     }
 
-    func filmstrip() -> some View {
+    func filmstrip(withScroll scroller: ScrollViewProxy) -> some View {
         ScrollView(.horizontal) {
             HStack(spacing: 0) {
                 ForEach(0..<viewModel.image_sequence_size, id: \.self) { frame_index in
-                    self.filmStripView(forFrame: frame_index)
+                    self.filmStripView(forFrame: frame_index, withScroll: scroller)
                 }
             }
         }.frame(maxWidth: .infinity, maxHeight: 50)
@@ -1393,7 +1396,7 @@ struct ContentView: View {
                     from old_frame: FrameAirplaneRemover?,
                     withScroll scroller: ScrollViewProxy? = nil)
     {
-        //Log.d("transition from \(viewModel.currentFrame)")
+        Log.d("transition from \(viewModel.currentFrame)")
         let start_time = Date().timeIntervalSinceReferenceDate
 
         viewModel.frames[viewModel.current_index].isCurrentFrame = false
@@ -1415,7 +1418,11 @@ struct ContentView: View {
                         Log.d("refreshing for frame \(frame_to_save.frame_index) complete")
                     }
                 }
+            } else {
+                Log.w("no old frame to save")
             }
+        } else {
+            Log.d("no scroller")
         }
         
         refreshCurrentFrame()

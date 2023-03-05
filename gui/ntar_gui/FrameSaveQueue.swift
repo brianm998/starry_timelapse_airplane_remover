@@ -85,7 +85,8 @@ class FrameSaveQueue {
                 self.pergatory[frame.frame_index] = nil
                 if let _ = self.saving[frame.frame_index] {
                     // go back to pergatory
-                    self.readyToSave(frame: frame, completionClosure: completionClosure)
+                    // going back to purgatory seems like hell, it never stops :(
+                    //self.readyToSave(frame: frame, completionClosure: completionClosure)
                 } else {
                     self.saveNow(frame: frame, completionClosure: completionClosure)
                 }
