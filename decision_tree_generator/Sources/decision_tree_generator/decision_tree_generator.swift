@@ -271,7 +271,7 @@ struct decision_tree_generator: ParsableCommand {
                                         //Log.d("frame \(frame_index) matrix \(matrix)")
                                         // XXX how to reference properly here ???
                                         let decisionTreeShouldPaint =  
-                                          OutlierGroup.decisionTree_90babb26(types: matrix.types,
+                                          OutlierGroup.decisionTree_2db488e9(types: matrix.types,
                                           values: values.values)
                                         if decisionTreeShouldPaint == values.shouldPaint {
                                             number_good += 1
