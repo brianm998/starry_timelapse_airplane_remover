@@ -6,19 +6,6 @@ import CryptoKit
 
 var start_time: Date = Date()
 
-/*
-
- IMPROVEMENTS:
-
-  - split out the outlier saving data to also gather all values for all outliers
-    and output that to a different kind of file that can then be digested
-    by this code to speed up generating decision trees.
-    This new data would then only need to be updated if the original data set is updated
-    or if we get new decision criteria.
-    
-   */
-
-
 @available(macOS 10.15, *) 
 struct TreeDecisionTypeResult {
     init(type: OutlierGroup.TreeDecisionType) {
@@ -237,7 +224,7 @@ struct decision_tree_generator: ParsableCommand {
         dispatch_group.enter()
         Task {
             for json_config_file_name in json_config_file_names {
-                if json_config_file_name.hasSuffix("/config.json") {
+                if json_config_file_name.hasSuffix("config.json") {
                     do {
                         try await runVerification(basedUpon: json_config_file_name)
                     } catch {
@@ -406,7 +393,7 @@ struct decision_tree_generator: ParsableCommand {
             var should_not_paint_test_data: [OutlierGroupValueMap] = []
             
             for json_config_file_name in json_config_file_names {
-                if json_config_file_name.hasSuffix("/config.json") {
+                if json_config_file_name.hasSuffix("config.json") {
                     // here we are loading the full outlier groups and analyzing based upon that
                     // comprehensive, but slow
                     Log.d("should read \(json_config_file_name)")
