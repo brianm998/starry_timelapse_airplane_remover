@@ -13,6 +13,10 @@ public enum PaintReason: Equatable, CaseIterable, Codable {
 
    case userSelected(Bool)      // true if should paint
 
+   case decisionTree(Bool)      // true if should paint
+
+   
+
    public var BasicColor: BasicColor {
         get {
             switch self {
@@ -34,10 +38,16 @@ public enum PaintReason: Equatable, CaseIterable, Codable {
                 } else {
                     return .green
                 }
+            case .decisionTree(let willPaint):
+                if willPaint {
+                    return .red
+                } else {
+                    return .green
+                }
             }
         }
    }
-
+   
    public var name: String {
         get {
             switch self {
@@ -48,6 +58,7 @@ public enum PaintReason: Equatable, CaseIterable, Codable {
             case .adjecentOverlap:   return "adjecent overlap"
             case .smallNonLinear:    return "small not linear"
             case .userSelected(let willPaint): return "user selected \(willPaint)"
+            case .decisionTree(let willPaint): return "decision tree \(willPaint)"
             }
         }
    }
@@ -83,6 +94,10 @@ These outlier groups were ignored for being too small and not linear enough.
                 return """
 These outlier groups were selected specifically by user in gui.
 """
+            case .decisionTree:
+                return """
+These outlier groups were selected specifically by user in gui.
+"""
             }
         }
    }
@@ -97,6 +112,8 @@ These outlier groups were selected specifically by user in gui.
             case .adjecentOverlap:   return false
             case .smallNonLinear:    return false
             case .userSelected(let willPaint):
+                return willPaint
+            case .decisionTree(let willPaint):
                 return willPaint
             }
         }
@@ -170,7 +187,14 @@ These outlier groups were selected specifically by user in gui.
           default:
               return false
           }
+      case .decisionTree(let lhsWillPaint):
+          switch rhs {
+          case .decisionTree(let rhsWillPaint):
+              return lhsWillPaint == rhsWillPaint
+          default:
+              return false
+          }
       }
-   }    
+   }
 }
-
+   

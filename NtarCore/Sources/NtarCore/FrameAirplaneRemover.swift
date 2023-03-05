@@ -190,6 +190,8 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
             let filename = "\(self.frame_index)_outlier_values.bin"
             let full_path = "\(output_dirname)/\(filename)"
 
+            //if let json = valueMatrix.prettyJson { print(json) }
+            
             let encoder = BinaryEncoder()
             Log.d("frame \(frame_index) about to encode outlier data")
             do {
@@ -291,6 +293,36 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
                 // otherwise don't change paint status
                 await group.shouldPaint(.userSelected(should_paint))
             }
+            return .continue
+        }
+    }
+
+    public func applyDecisionTreeToAutoSelectedOutliers() async {
+        await foreachOutlierGroup() { group in
+            let should_paint = await group.shouldPaintFromDecisionTree
+            var apply = true
+            if let shouldPaint = await group.shouldPaint {
+                switch shouldPaint {
+                case .userSelected(_):
+                    // leave user selected ones in place
+                    apply = false
+                default:
+                    break
+                }
+            }
+            if apply {
+                Log.d("applying decision tree")
+                await group.shouldPaint(.decisionTree(should_paint))
+            }
+            return .continue
+        }
+    }
+
+    public func applyDecisionTreeToAllOutliers() async {
+        await foreachOutlierGroup() { group in
+            let should_paint = await group.shouldPaintFromDecisionTree
+            Log.d("applying decision tree should_paint \(should_paint)")
+            await group.shouldPaint(.decisionTree(should_paint))
             return .continue
         }
     }
@@ -972,7 +1004,7 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
 
     public func purgeCachedOutputFiles() async {
         Log.d("frame \(frame_index) purging output files")
-        let dispatchGroup = DispatchGroup()
+//        let dispatchGroup = DispatchGroup()
 //        dispatchGroup.enter()
         Task {
             await image_sequence.removeValue(forKey: self.output_filename)
