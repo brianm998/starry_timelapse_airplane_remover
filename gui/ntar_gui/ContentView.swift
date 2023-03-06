@@ -26,109 +26,6 @@ enum FrameViewMode: String, Equatable, CaseIterable {
     }
 }
 
-struct SettingsSheetView: View {
-    @Binding var isVisible: Bool
-    @Binding var fast_skip_amount: Int
-    @Binding var video_playback_framerate: Int
-    @Binding var skipEmpties: Bool
-    
-    var body: some View {
-        VStack {
-            Spacer()
-            Text("Settings")
-            Spacer()
-            HStack {
-                Spacer()
-                VStack(alignment: .leading) {
-                    Text(skipEmpties ?
-                           "Fast Forward and Reverse skip empties" :
-                           "Fast Forward and Reverse move by \(fast_skip_amount) frames")
-                    
-                    Toggle(skipEmpties ? "change to # of frames" : "change to skip empties",
-                           isOn: $skipEmpties)
-
-                    if !skipEmpties {
-                        Picker("Fast Skip", selection: $fast_skip_amount) {
-                            ForEach(0 ..< 51) {
-                                Text("\($0) frames")
-                            }
-                        }.frame(maxWidth: 200)
-                    }
-                    let frame_rates = [5, 10, 15, 20, 25, 30]
-                    Picker("Frame Rate", selection: $video_playback_framerate) {
-                        ForEach(frame_rates, id: \.self) {
-                            Text("\($0) fps")
-                        }
-                    }.frame(maxWidth: 200)
-                }
-                Spacer()
-            }
-            
-            Button("Done") {
-                self.isVisible = false
-            }
-            Spacer()
-        }
-        //.frame(width: 300, height: 150)
-    }
-}
-
-struct MassivePaintSheetView: View {
-    @Binding var isVisible: Bool
-    @ObservedObject var viewModel: ViewModel
-    var closure: (Bool, Int, Int) -> Void
-
-    @State var start_index: Int = 0
-    @State var end_index: Int = 1   // XXX 1
-    @State var should_paint = false
-
-    init(isVisible: Binding<Bool>,
-         viewModel: ViewModel,
-         closure: @escaping (Bool, Int, Int) -> Void)
-    {
-        self._isVisible = isVisible
-        self.closure = closure
-        self.viewModel = viewModel
-    }
-    
-    var body: some View {
-        HStack {
-
-            Spacer()
-            VStack {
-                Spacer()
-                Text((should_paint ? "Paint" : "Clear") + " \(end_index-start_index) frames from")
-                Spacer()
-                Picker("start frame", selection: $start_index) {
-                    ForEach(0 ..< viewModel.frames.count, id: \.self) {
-                        Text("frame \($0)")
-                    }
-                }
-                Spacer()
-                Picker("to end frame", selection: $end_index) {
-                    ForEach(0 ..< viewModel.frames.count, id: \.self) {
-                        Text("frame \($0)")
-                    }
-                }
-                Toggle("should paint", isOn: $should_paint)
-
-                HStack {
-                    Button("Cancel") {
-                        self.isVisible = false
-                    }
-                    
-                    Button(should_paint ? "Paint All" : "Clear All") {
-                        self.isVisible = false
-                        closure(should_paint, start_index, end_index)
-                    }
-                }
-                Spacer()
-            }
-            Spacer()
-        }
-    }
-}
-
 // the overall level of the app
 struct ContentView: View {
     @ObservedObject var viewModel: ViewModel
@@ -184,7 +81,8 @@ struct ContentView: View {
         //let scaling_anchor = UnitPoint(x: 0.75, y: 0.75)
 
         if !running {
-            InitialView(viewModel: viewModel, running: $running,
+            InitialView(viewModel: viewModel,
+                        running: $running,
                         previously_opened_sheet_showing_item: $previously_opened_sheet_showing_item)
         } else {
             sequenceView()
@@ -1148,7 +1046,7 @@ struct ContentView: View {
                 viewModel.current_frame_image_view_mode = self.frameViewMode
 
                 switch self.frameViewMode {
-                case .original: // XXX do we need add .resizable() here, and is it slowing us down?
+                case .original:
                     viewModel.current_frame_image = new_frame_view.preview_image.resizable()
                 case .processed:
                     viewModel.current_frame_image = new_frame_view.processed_preview_image.resizable()
@@ -1248,18 +1146,4 @@ struct ContentView_Previews: PreviewProvider {
         ContentView(viewModel: ViewModel())
     }
 }
-
-struct ShrinkingButton: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .padding()
-            .background(Color(red: 75/256, green: 80/256, blue: 147/256))
-            .foregroundColor(.white)
-            .clipShape(Capsule())
-            .scaleEffect(configuration.isPressed ? 0.9 : 1)
-            .animation(.easeOut(duration: 0.15),
-                       value: configuration.isPressed)
-    }
-}
-
 
