@@ -745,7 +745,7 @@ struct ContentView: View {
             }
         }
         return Button(action: action) {
-            Text("Decision Tree Auto Only").font(.largeTitle)
+            Text("DT Auto Only").font(.largeTitle)
         }.buttonStyle(ShrinkingButton())
     }
     func applyAllDecisionTreeButton() -> some View {
@@ -1107,13 +1107,13 @@ struct ContentView: View {
                         {
                             let path = returnedUrl.path
                             Log.d("url path \(path) viewModel.app \(viewModel.app)")
-                            viewModel.app?.outlier_json_startup(with: path)
-
                             running = true
                             viewModel.initial_load_in_progress = true
                             
-                            Task.detached(priority: .background) {
+                            Task.detached(priority: .userInitiated) {
                                 do {
+                                    await viewModel.app?.outlier_json_startup(with: path)
+                            
                                     Log.d("viewModel.eraser \(await viewModel.eraser)")
                                     try await viewModel.eraser?.run()
                                 } catch {
@@ -1123,87 +1123,82 @@ struct ContentView: View {
                         }
                     }
                 }
-                
-                Button(action: loadConfig) {
-                    Text("Load Config").font(.largeTitle)
-                }.buttonStyle(ShrinkingButton())
-                  .help("Load a json config file from a previous run of ntar")
 
-                let loadImageSequence = {
-                    Log.d("load image sequence")
-                    let openPanel = NSOpenPanel()
-                    //openPanel.allowedFileTypes = ["json"]
-                    openPanel.allowsMultipleSelection = false
-                    openPanel.canChooseDirectories = true
-                    openPanel.canChooseFiles = false
-                    let response = openPanel.runModal()
-                    if response == .OK {
-                        if let returnedUrl = openPanel.url
-                        {
-                            let path = returnedUrl.path
-                            Log.d("url path \(path)")
-                            viewModel.app?.startup(with: path)
-
-                            running = true
-                            viewModel.initial_load_in_progress = true
-                            Task.detached(priority: .background) {
-                                do {
-                                    try await viewModel.eraser?.run()
-                                } catch {
-                                    Log.e("\(error)")
+                VStack {
+                    HStack {
+                        Button(action: loadConfig) {
+                            Text("Load Config").font(.largeTitle)
+                        }.buttonStyle(ShrinkingButton())
+                          .help("Load a json config file from a previous run of ntar")
+                        
+                        let loadImageSequence = {
+                            Log.d("load image sequence")
+                            let openPanel = NSOpenPanel()
+                            //openPanel.allowedFileTypes = ["json"]
+                            openPanel.allowsMultipleSelection = false
+                            openPanel.canChooseDirectories = true
+                            openPanel.canChooseFiles = false
+                            let response = openPanel.runModal()
+                            if response == .OK {
+                                if let returnedUrl = openPanel.url
+                                {
+                                    let path = returnedUrl.path
+                                    Log.d("url path \(path)")
+                                    
+                                    running = true
+                                    viewModel.initial_load_in_progress = true
+                                    Task.detached(priority: .userInitiated) {
+                                        do {
+                                            await viewModel.app?.startup(with: path)
+                                            try await viewModel.eraser?.run()
+                                        } catch {
+                                            Log.e("\(error)")
+                                        }
+                                    }
                                 }
                             }
                         }
-                    }
-                }
-                
-                Button(action: loadImageSequence) {
-                    Text("Load Image Sequence").font(.largeTitle)
-                }.buttonStyle(ShrinkingButton())
-                  .help("Load an image sequence yet to be processed by ntar")
-
-                if UserPreferences.shared.recentlyOpenedSequencelist.count > 0 {
-                    let loadRecent = {
-                        Log.d("load image sequence")
-
                         
-                        Log.d("have previously_opened_sheet_showing_item \(previously_opened_sheet_showing_item)")
-                        viewModel.app?.outlier_json_startup(with: previously_opened_sheet_showing_item)
-
-                        running = true
-                        viewModel.initial_load_in_progress = true
-                        Task.detached(priority: .background) {
-                            do {
-                                try await viewModel.eraser?.run()
-                            } catch {
-                                Log.e("\(error)")
+                        Button(action: loadImageSequence) {
+                            Text("Load Image Sequence").font(.largeTitle)
+                        }.buttonStyle(ShrinkingButton())
+                          .help("Load an image sequence yet to be processed by ntar")
+                    }
+                    if UserPreferences.shared.recentlyOpenedSequencelist.count > 0 {
+                        HStack {
+                            let loadRecent = {
+                                Log.d("load image sequence")
+                                
+                                running = true
+                                viewModel.initial_load_in_progress = true
+                                
+                                Task.detached(priority: .userInitiated) {
+                                    do {
+                                        await viewModel.app?.outlier_json_startup(with: previously_opened_sheet_showing_item)
+                                        try await viewModel.eraser?.run()
+                                    } catch {
+                                        Log.e("\(error)")
+                                    }
+                                }
                             }
+                            
+                            Button(action: loadRecent) {
+                                Text("Open Recent").font(.largeTitle)
+                            }.buttonStyle(ShrinkingButton())
+                              .help("open a recently processed sequence")
+                            
+                            Picker("\u{27F6}", selection: $previously_opened_sheet_showing_item) {
+                                let array = UserPreferences.shared.sortedSequenceList
+                                ForEach(array, id: \.self) { option in
+                                    Text(option)
+                                }
+                            }.frame(maxWidth: 500)
+                              .pickerStyle(.menu)
                         }
-                        
-//                        previously_opened_sheet_showing = true
-                        // XXX testing code
-                        //let prefs = UserPreferences.shared
-                        //Log.d("recently opened \(prefs.recentlyOpenedSequencelist)")
-                        //prefs.recentlyOpenedSequencelist[204.2] = "foo"
-                        //prefs.recentlyOpenedSequencelist[20.2] = "bar"
-                        // XXX testing code
                     }
-                    
-                    Button(action: loadRecent) {
-                        Text("Open Recent").font(.largeTitle)
-                    }.buttonStyle(ShrinkingButton())
-                      .help("open a recently processed sequence")
-
-                    Picker("Choose Previous", selection: $previously_opened_sheet_showing_item) {
-                        let array = UserPreferences.shared.sortedSequenceList
-                        ForEach(array, id: \.self) { option in
-                            Text(option)
-                        }
-                    }.frame(maxWidth: 500)
-                    
-                }
                 }
             }
+        }
           .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
     }
 
