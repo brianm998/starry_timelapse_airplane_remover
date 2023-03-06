@@ -35,8 +35,10 @@ struct TreeTestResults {
     let numberBad: Int
 }
 
+@available(macOS 10.15, *) 
 struct RankedResult<T> {
     let rank: Double
+    let type: OutlierGroup.TreeDecisionType
     let result: T
 }
 
@@ -814,7 +816,7 @@ struct decision_tree_generator: ParsableCommand {
 
                             var ret = TreeDecisionTypeResult(type: type)
                             ret.decisionTreeNode =
-                              DecisionTreeNode(realType: type,
+                              DecisionTreeNode(type: type,
                                                value: (paint_dist.max + not_paint_dist.min) / 2,
                                                lessThan: ShouldPaintDecision(indent: indent + 1),
                                                greaterThan: ShouldNotPaintDecision(indent: indent + 1),
@@ -828,7 +830,7 @@ struct decision_tree_generator: ParsableCommand {
                             // this is an end leaf node, both paths after decision lead to a result
                             var ret = TreeDecisionTypeResult(type: type)
                             ret.decisionTreeNode =
-                              DecisionTreeNode(realType: type,
+                              DecisionTreeNode(type: type,
                                                value: (not_paint_dist.max + paint_dist.min) / 2,
                                                lessThan: ShouldNotPaintDecision(indent: indent + 1),
                                                greaterThan: ShouldPaintDecision(indent: indent + 1),
@@ -925,6 +927,7 @@ struct decision_tree_generator: ParsableCommand {
                           (not_paint_dist.median - paint_dist.median)
                           
                         bestTreeNodes.append(RankedResult(rank: split,
+                                                          type: response.type,
                                                           result: decisionTreeNode))
                     } else if not_paint_dist.max < paint_dist.min {
                         let split =
@@ -932,6 +935,7 @@ struct decision_tree_generator: ParsableCommand {
                           (paint_dist.median - not_paint_dist.median)
 
                         bestTreeNodes.append(RankedResult(rank: split,
+                                                          type: response.type,
                                                           result: decisionTreeNode))
                     }
                 }
@@ -947,7 +951,8 @@ struct decision_tree_generator: ParsableCommand {
                     let split = decisionResult.lessThanSplit - original_split
 
                     rankedDecisionResults.append(RankedResult(rank: split,
-                                                            result: decisionResult)) 
+                                                              type: decisionResult.type,
+                                                              result: decisionResult)) 
 
                 }
                 if decisionResult.greaterThanSplit > original_split {
@@ -955,7 +960,8 @@ struct decision_tree_generator: ParsableCommand {
                     let split = decisionResult.greaterThanSplit - original_split
 
                     rankedDecisionResults.append(RankedResult(rank: split,
-                                                            result: decisionResult)) 
+                                                              type: decisionResult.type,
+                                                              result: decisionResult)) 
                 }
             }
         }
@@ -989,13 +995,7 @@ struct decision_tree_generator: ParsableCommand {
                     // XXX future improvement is to sort by something else here
 
                     // sort them by type
-
-                    let maxSort = maxList.sorted { lhs, rhs in
-                        return
-                          // XXX find a better way to deal with optionals below
-                          lhs.result.type ?? .numberOfNearbyOutliersInSameFrame <
-                          rhs.result.type ?? .adjecentFrameNeighboringOutliersBestTheta
-                    }
+                    let maxSort = maxList.sorted { $0.type < $1.type }
                     
                     return maxSort[0].result
                 }
@@ -1028,9 +1028,7 @@ struct decision_tree_generator: ParsableCommand {
 
                     // XXX maybe sort by something else?
 
-                    let maxSort = maxList.sorted { lhs, rhs in
-                        return lhs.result.type < rhs.result.type
-                    }
+                    let maxSort = maxList.sorted { $0.type < $1.type }
                     
                     return await recurseOn(result: maxSort[0].result, indent: indent) // XXX
                 }
@@ -1090,7 +1088,7 @@ struct decision_tree_generator: ParsableCommand {
         if let less_response = less_response,
            let greater_response = greater_response
         {
-            return DecisionTreeNode(realType: result.type,
+            return DecisionTreeNode(type: result.type,
                                     value: result.value,
                                     lessThan: less_response.treeNode,
                                     greaterThan: greater_response.treeNode,
@@ -1126,14 +1124,12 @@ struct ValueDistribution {
 // that knows how to render itself as a String of swift code
 @available(macOS 10.15, *) 
 protocol DecisionTree {
-    var type: OutlierGroup.TreeDecisionType? { get }
     var swiftCode: String { get }
 }
 
 // end leaf node which always returns true
 @available(macOS 10.15, *) 
 struct ShouldPaintDecision: DecisionTree {
-    var type: OutlierGroup.TreeDecisionType?
     let indent: Int
     var swiftCode: String {
         var indentation = ""
@@ -1145,7 +1141,6 @@ struct ShouldPaintDecision: DecisionTree {
 // end leaf node which always returns false
 @available(macOS 10.15, *) 
 struct ShouldNotPaintDecision: DecisionTree {
-    var type: OutlierGroup.TreeDecisionType?
     let indent: Int
     var swiftCode: String {
         var indentation = ""
@@ -1157,19 +1152,17 @@ struct ShouldNotPaintDecision: DecisionTree {
 // intermediate node which decides based upon the value of a particular type
 @available(macOS 10.15, *) 
 struct DecisionTreeNode: DecisionTree {
-    let realType: OutlierGroup.TreeDecisionType
+    let type: OutlierGroup.TreeDecisionType
     let value: Double
     let lessThan: DecisionTree
     let greaterThan: DecisionTree
     let indent: Int
 
-    var type: OutlierGroup.TreeDecisionType? { realType }
-    
     var swiftCode: String {
         var indentation = ""
         for _ in 0..<indent { indentation += "    " }
         return """
-          \(indentation)if \(realType) < \(value) {
+          \(indentation)if \(type) < \(value) {
           \(lessThan.swiftCode)
           \(indentation)} else {
           \(greaterThan.swiftCode)
