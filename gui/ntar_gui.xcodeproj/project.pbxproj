@@ -12,6 +12,7 @@
 		D31F9FC0299736740001CD0C /* FrameSaveQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = D31F9FBD299736730001CD0C /* FrameSaveQueue.swift */; };
 		D31F9FC1299736740001CD0C /* OutlierGroupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D31F9FBE299736730001CD0C /* OutlierGroupView.swift */; };
 		D31F9FC42997370C0001CD0C /* FrameView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D31F9FC22997370C0001CD0C /* FrameView.swift */; };
+		D332F6FF29B63DA2009E2796 /* InitialView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D332F6FE29B63DA2009E2796 /* InitialView.swift */; };
 		D386FA11298B617300878B56 /* ntar_gui_app.swift in Sources */ = {isa = PBXBuildFile; fileRef = D386FA10298B617300878B56 /* ntar_gui_app.swift */; };
 		D386FA13298B617300878B56 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D386FA12298B617300878B56 /* ContentView.swift */; };
 		D386FA15298B617400878B56 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = D386FA14298B617400878B56 /* Assets.xcassets */; };
@@ -47,6 +48,7 @@
 		D31F9FBD299736730001CD0C /* FrameSaveQueue.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = FrameSaveQueue.swift; sourceTree = "<group>"; };
 		D31F9FBE299736730001CD0C /* OutlierGroupView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = OutlierGroupView.swift; sourceTree = "<group>"; };
 		D31F9FC22997370C0001CD0C /* FrameView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = FrameView.swift; sourceTree = "<group>"; };
+		D332F6FE29B63DA2009E2796 /* InitialView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = InitialView.swift; sourceTree = "<group>"; };
 		D386FA0D298B617300878B56 /* ntar_gui.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ntar_gui.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		D386FA10298B617300878B56 /* ntar_gui_app.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ntar_gui_app.swift; sourceTree = "<group>"; };
 		D386FA12298B617300878B56 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
@@ -129,6 +131,7 @@
 		D386FA0F298B617300878B56 /* ntar_gui */ = {
 			isa = PBXGroup;
 			children = (
+				D332F6FE29B63DA2009E2796 /* InitialView.swift */,
 				D3A54A6E29AFAD2C00C50709 /* UserPreferences.swift */,
 				D31F9FC22997370C0001CD0C /* FrameView.swift */,
 				D386FA10298B617300878B56 /* ntar_gui_app.swift */,
@@ -343,6 +346,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				D31F9FC42997370C0001CD0C /* FrameView.swift in Sources */,
+				D332F6FF29B63DA2009E2796 /* InitialView.swift in Sources */,
 				D3A54A6F29AFAD2C00C50709 /* UserPreferences.swift in Sources */,
 				D386FA13298B617300878B56 /* ContentView.swift in Sources */,
 				D31F9FC1299736740001CD0C /* OutlierGroupView.swift in Sources */,
