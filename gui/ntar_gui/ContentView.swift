@@ -186,138 +186,43 @@ struct ContentView: View {
         if !running {
             initialView()
         } else {
-            
-            GeometryReader { top_geometry in
-                ScrollViewReader { scroller in
+            sequenceView()
+        }
+    }
+
+    // main view of an image seuqence
+    func sequenceView() -> some View {
+        GeometryReader { top_geometry in
+            ScrollViewReader { scroller in
+                VStack {
+                    let should_show_progress =
+                      viewModel.initial_load_in_progress ||
+                      loading_outliers                   ||
+                      loading_all_outliers               || 
+                      rendering_current_frame            ||
+                      updating_frame_batch               ||
+                      rendering_all_frames
+
+                    // selected frame 
+                    ZStack {
+                        currentFrameView()
+                          .frame(maxWidth: .infinity, alignment: .center)
+                          .overlay(
+                            ProgressView()
+                              .scaleEffect(8, anchor: .center) // this is blocky scaled up 
+                              .progressViewStyle(CircularProgressViewStyle(tint: .yellow))
+                              .frame(maxWidth: 200, maxHeight: 200)
+                              .opacity(should_show_progress ? 0.8 : 0)
+                          )
+                    }
+                      // buttons to the right of the selected frame
+                      .overlay(rightSideButtons(), alignment: .bottom)
+
                     VStack {
-                        let should_show_progress =
-                          viewModel.initial_load_in_progress ||
-                          loading_outliers                   ||
-                          loading_all_outliers               || 
-                          rendering_current_frame            ||
-                          updating_frame_batch               ||
-                          rendering_all_frames
-                        
-                        ZStack {
-                            
-                            currentFrameView()
-                              .frame(maxWidth: .infinity, alignment: .center)
-                              .overlay(
-                                ProgressView()
-                                  .scaleEffect(8, anchor: .center) // this is blocky scaled up 
-                                  .progressViewStyle(CircularProgressViewStyle(tint: .yellow))
-                                  .frame(maxWidth: 200, maxHeight: 200)
-                                  .opacity(should_show_progress ? 0.8 : 0)
-                              )
-                        }.overlay(rightSideButtons(), alignment: .bottom)
-                        
-                    /*
-                    if showFullResolution {
-                        HStack {
-                            Text(viewModel.label_text).font(.largeTitle)
-                            let count = viewModel.currentFrameView.outlierViews.count
-                            if count > 0 {
-                                Text("has \(count) outliers").font(.largeTitle)
-                            }
-                        }
-                    }*/
-                        VStack {
-                            HStack {
-                                ZStack {
-                                    videoPlaybackButtons(scroller)
-                                      .frame(maxWidth: .infinity, alignment: .center)
-                                    
-                                    HStack {
-                                        let paint_action = {
-                                            Log.d("PAINT")
-                                            paint_sheet_showing = !paint_sheet_showing
-                                        }
-                                        Button(action: paint_action) {
-                                            buttonImage("square.stack.3d.forward.dottedline", size: 44)
-                                            
-                                        }
-                                          .buttonStyle(PlainButtonStyle())           
-                                          .frame(alignment: .trailing)
-                                          .help("effect multiple frames")
-                                        
-                                        let gear_action = {
-                                            Log.d("GEAR")
-                                            settings_sheet_showing = !settings_sheet_showing
-                                        }
-                                        Button(action: gear_action) {
-                                            buttonImage("gearshape.fill", size: 44)
-                                            
-                                        }
-                                          .buttonStyle(PlainButtonStyle())           
-                                          .frame(alignment: .trailing)
-                                          .help("settings")
-                                        
-                                        /*
-                                         if running {
-                                         Menu("FUCKING MENU"/*buttonImage("gearshape.fill", size: 30)*/) {
-                                         
-                                         }
-                                         }*/
-                                        toggleViews()
-                                    }
-                                      .frame(maxWidth: .infinity, alignment: .trailing)
-                                      .sheet(isPresented: $settings_sheet_showing) {
-                                          SettingsSheetView(isVisible: self.$settings_sheet_showing,
-                                                            fast_skip_amount: self.$fast_skip_amount,
-                                                            video_playback_framerate: self.$video_playback_framerate,
-                                                            skipEmpties: self.$skipEmpties)
-                                      }
-                                      .sheet(isPresented: $paint_sheet_showing) {
-                                          MassivePaintSheetView(isVisible: self.$paint_sheet_showing,
-                                                                viewModel: viewModel)
-                                          { should_paint, start_index, end_index in
-                                              
-                                              updating_frame_batch = true
-                                              
-                                              for idx in start_index ... end_index {
-                                                  // XXX use a task group?
-                                                  setAllFrameOutliers(in: viewModel.frames[idx], to: should_paint)
-                                              }
-                                              // XXX 
-                                              updating_frame_batch = false
-                                              
-                                              // XXX iterate through start->end
-                                              // setFrameOutliers()
-                                              Log.d("should_paint \(should_paint), start_index \(start_index), end_index \(end_index)")
-                                          }
-                                      }
-                                }//.background(.green)
-                                /*
-                                 VStack {
-                                 Picker("go to frame", selection: $viewModel.current_index) {
-                                 ForEach(0 ..< viewModel.frames.count, id: \.self) {
-                                 Text("frame \($0)")
-                                    }
-                                }
-                                  .frame(maxWidth: 200)
-                                  .onChange(of: viewModel.current_index) { pick in
-                                      Log.d("pick \(pick)")
-                                      self.transition(toFrame: viewModel.frames[pick],
-                                                      from: viewModel.currentFrame,
-                                                      withScroll: scroller)
-                                  }
-                            }
-                                */
-                            
-/*                            
-                            Text("background")
-                            Slider(value: $background_brightness, in: 0...100) { editing in
-                                Log.d("editing \(editing) background_brightness \(background_brightness)")
-                                background_color = Color(white: background_brightness/100)
-                                viewModel.objectWillChange.send()
-                            }
-                              .frame(maxWidth: 100, maxHeight: 30)
-  */                          
-                            //load all outlier button
-                            
-                            }
-                        
+                        // buttons below the selected frame 
+                        bottomControls(withScroll: scroller)
                         Spacer().frame(maxHeight: 30)
+
                         // the filmstrip at the bottom
                         filmstrip(withScroll: scroller)
                           .frame(maxWidth: .infinity, alignment: .bottom)
@@ -328,6 +233,65 @@ struct ContentView: View {
               .padding()
               .background(background_color)
         }
+    }
+    
+    func bottomControls(withScroll scroller: ScrollViewProxy) -> some View {
+        HStack {
+            ZStack {
+                videoPlaybackButtons(scroller)
+                  .frame(maxWidth: .infinity, alignment: .center)
+                
+                HStack {
+                    let paint_action = {
+                        Log.d("PAINT")
+                        paint_sheet_showing = !paint_sheet_showing
+                    }
+                    Button(action: paint_action) {
+                        buttonImage("square.stack.3d.forward.dottedline", size: 44)
+                        
+                    }
+                      .buttonStyle(PlainButtonStyle())           
+                      .frame(alignment: .trailing)
+                      .help("effect multiple frames")
+                    
+                    let gear_action = {
+                        Log.d("GEAR")
+                        settings_sheet_showing = !settings_sheet_showing
+                    }
+                    Button(action: gear_action) {
+                        buttonImage("gearshape.fill", size: 44)
+                        
+                    }
+                      .buttonStyle(PlainButtonStyle())           
+                      .frame(alignment: .trailing)
+                      .help("settings")
+                    
+                    toggleViews()
+                }
+                  .frame(maxWidth: .infinity, alignment: .trailing)
+                  .sheet(isPresented: $settings_sheet_showing) {
+                      SettingsSheetView(isVisible: self.$settings_sheet_showing,
+                                        fast_skip_amount: self.$fast_skip_amount,
+                                        video_playback_framerate: self.$video_playback_framerate,
+                                        skipEmpties: self.$skipEmpties)
+                  }
+                  .sheet(isPresented: $paint_sheet_showing) {
+                      MassivePaintSheetView(isVisible: self.$paint_sheet_showing,
+                                            viewModel: viewModel)
+                      { should_paint, start_index, end_index in
+                          
+                          updating_frame_batch = true
+                          
+                          for idx in start_index ... end_index {
+                              // XXX use a task group?
+                              setAllFrameOutliers(in: viewModel.frames[idx], to: should_paint)
+                          }
+                          updating_frame_batch = false
+                          
+                          Log.d("should_paint \(should_paint), start_index \(start_index), end_index \(end_index)")
+                      }
+                 }
+            }
         }
     }
     
@@ -1028,8 +992,6 @@ struct ContentView: View {
             }
             VStack(alignment: .leading) {
                 Picker("show", selection: $frameViewMode) {
-                    // XXX expand this to not use allCases, but only those that we have files for
-                    // i.e. don't show test-paint when the sequence wasn't test painted
                     ForEach(FrameViewMode.allCases, id: \.self) { value in
                         Text(value.localizedName).tag(value)
                     }
@@ -1044,40 +1006,7 @@ struct ContentView: View {
                 Toggle("full resolution", isOn: $showFullResolution)
                   .onChange(of: showFullResolution) { mode_on in
                       refreshCurrentFrame()
-                  }
-/*
-                Toggle("preview mode", isOn: $showPreviewMode)
-                  .keyboardShortcut("b", modifiers: [])
-                  .onChange(of: showPreviewMode) { mode_on in
-                      if mode_on {
-                          showOutliers = false
-                          showProcessedPreviewMode = false
-                          showTestPaintPreviewMode = false
-                          showFullResolution = false
-
-                          viewModel.current_frame_image = viewModel.frames[viewModel.current_index].preview_image.resizable()
-                      } 
-                  }
-                Toggle("processed mode", isOn: $showProcessedPreviewMode)
-                  .onChange(of: showProcessedPreviewMode) { mode_on in
-                      if mode_on {
-                          showOutliers = false
-                          showPreviewMode = false
-                          showTestPaintPreviewMode = false
-
-                          viewModel.current_frame_image = viewModel.frames[viewModel.current_index].processed_preview_image.resizable()
-                      }
-                  }                
-                Toggle("test paint mode", isOn: $showTestPaintPreviewMode)
-                  .onChange(of: showTestPaintPreviewMode) { mode_on in
-                      if mode_on {
-                          showOutliers = false
-                          showPreviewMode = false
-                          showProcessedPreviewMode = false
-                          viewModel.current_frame_image = viewModel.frames[viewModel.current_index].test_paint_preview_image.resizable()
-                      }
                  }
- */
             }
         }
     }
