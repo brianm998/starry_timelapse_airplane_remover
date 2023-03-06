@@ -26,6 +26,12 @@ class UserPreferences: Codable {
         }
     }
 
+    var sortedSequenceList: [String] {
+        return recentlyOpenedSequencelist.keys.sorted {
+            recentlyOpenedSequencelist[$0]! > recentlyOpenedSequencelist[$1]!
+        }
+    }
+    
     func justOpened(filename: String) {
         self.recentlyOpenedSequencelist[filename] = Date().timeIntervalSince1970
     }
@@ -40,7 +46,7 @@ class UserPreferences: Codable {
             dispatchGroup.enter()
             Task {
                 do {
-                    instance = try await UserPreferences.load() 
+                    instance = try await UserPreferences.load()
                 } catch {
                     Log.e("\(error)")
                 }

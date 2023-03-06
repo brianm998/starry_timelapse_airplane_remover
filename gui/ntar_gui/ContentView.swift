@@ -167,14 +167,18 @@ struct ContentView: View {
     @State private var paint_sheet_showing = false
 
     @State private var previously_opened_sheet_showing = false
-    @State private var previously_opened_sheet_showing_item: String = "" // WTF with this one?
+    @State private var previously_opened_sheet_showing_item: String
     
     
     init(viewModel: ViewModel) {
         self.viewModel = viewModel
 
-        let array = Array(UserPreferences.shared.recentlyOpenedSequencelist.keys)
-        previously_opened_sheet_showing_item = array[0]
+        let array = UserPreferences.shared.sortedSequenceList
+        if array.count > 0 {
+            previously_opened_sheet_showing_item = array[0]
+        } else {
+            previously_opened_sheet_showing_item = ""
+        }
     }
     
     var body: some View {
@@ -1191,7 +1195,7 @@ struct ContentView: View {
                       .help("open a recently processed sequence")
 
                     Picker("Choose Previous", selection: $previously_opened_sheet_showing_item) {
-                        let array = Array(UserPreferences.shared.recentlyOpenedSequencelist.keys)
+                        let array = UserPreferences.shared.sortedSequenceList
                         ForEach(array, id: \.self) { option in
                             Text(option)
                         }
