@@ -121,7 +121,7 @@ class ntar_gui_app: App {
             //let outlier_dirname = "/rp/tmp/LRT_02_18_2023-a7iv-2-aurora-topaz-ntar-v-0_2_0-outliers/config.json"
             
             
-            outlier_json_startup(with: outlier_dirname)
+            startup(withConfig: outlier_dirname)
             
         } else {
             // this path starts from a image sequence only
@@ -138,7 +138,7 @@ class ntar_gui_app: App {
          */
     }
 
-    func outlier_json_startup(with json_config_filename: String) {
+    func startup(withConfig json_config_filename: String) {
         Log.d("outlier_json_startup with \(json_config_filename)")
         // first read config from json
         let dispatchGroup = DispatchGroup()
@@ -176,7 +176,7 @@ class ntar_gui_app: App {
         dispatchGroup.wait()
     }
     
-    func startup(with image_sequence_dirname: String) {
+    func startup(withNewImageSequence image_sequence_dirname: String) {
 
         self.image_sequence_dirname = image_sequence_dirname
         

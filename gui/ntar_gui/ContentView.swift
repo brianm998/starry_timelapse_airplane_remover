@@ -234,7 +234,8 @@ struct ContentView: View {
               .background(background_color)
         }
     }
-    
+
+    // controls below the selected frame and above the filmstrip
     func bottomControls(withScroll scroller: ScrollViewProxy) -> some View {
         HStack {
             ZStack {
@@ -1039,7 +1040,7 @@ struct ContentView: View {
                             
                             Task.detached(priority: .userInitiated) {
                                 do {
-                                    await viewModel.app?.outlier_json_startup(with: path)
+                                    await viewModel.app?.startup(withConfig: path)
                             
                                     Log.d("viewModel.eraser \(await viewModel.eraser)")
                                     try await viewModel.eraser?.run()
@@ -1076,7 +1077,7 @@ struct ContentView: View {
                                     viewModel.initial_load_in_progress = true
                                     Task.detached(priority: .userInitiated) {
                                         do {
-                                            await viewModel.app?.startup(with: path)
+                                            await viewModel.app?.startup(withNewImageSequence: path)
                                             try await viewModel.eraser?.run()
                                         } catch {
                                             Log.e("\(error)")
@@ -1101,7 +1102,7 @@ struct ContentView: View {
                                 
                                 Task.detached(priority: .userInitiated) {
                                     do {
-                                        await viewModel.app?.outlier_json_startup(with: previously_opened_sheet_showing_item)
+                                        await viewModel.app?.startup(withConfig: previously_opened_sheet_showing_item)
                                         try await viewModel.eraser?.run()
                                     } catch {
                                         Log.e("\(error)")
