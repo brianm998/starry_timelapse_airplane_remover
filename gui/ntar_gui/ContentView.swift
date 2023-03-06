@@ -343,8 +343,7 @@ struct ContentView: View {
                             let frame_center_y = outlierViewModel.frame_height/2
                             let outlier_center = outlierViewModel.bounds.center
                             
-                            let will_paint = outlierViewModel.group.shouldPaint == nil ? false :
-                              outlierViewModel.group.shouldPaint!.willPaint
+                            let will_paint = outlierViewModel.group.shouldPaint?.willPaint ?? false
                             
                             let paint_color: Color = will_paint ? .red : .green
                             
@@ -612,13 +611,23 @@ struct ContentView: View {
     }
 
     func filmstrip(withScroll scroller: ScrollViewProxy) -> some View {
-        ScrollView(.horizontal) {
-            HStack(spacing: 0) {
-                ForEach(0..<viewModel.image_sequence_size, id: \.self) { frame_index in
-                    self.filmStripView(forFrame: frame_index, withScroll: scroller)
+        HStack {
+            if viewModel.image_sequence_size == 0 {
+                Text("Loading Film Strip")
+                  .font(.largeTitle)
+                  .frame(minHeight: 50)
+            } else {
+                ScrollView(.horizontal) {
+                    HStack(spacing: 0) {
+                        ForEach(0..<viewModel.image_sequence_size, id: \.self) { frame_index in
+                            self.filmStripView(forFrame: frame_index, withScroll: scroller)
+                              .help("load frame \(frame_index)")
+                        }
+                    }
                 }
             }
         }.frame(maxWidth: .infinity, maxHeight: 50)
+          .background(viewModel.image_sequence_size == 0 ? .yellow : .clear)
     }
 
     func renderAllFramesButton() -> some View {
