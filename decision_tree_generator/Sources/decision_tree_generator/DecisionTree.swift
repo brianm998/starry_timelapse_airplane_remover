@@ -7,13 +7,13 @@ import NtarCore
 // that knows how to render itself as a String of swift code
 @available(macOS 10.15, *) 
 protocol DecisionTree {
-    // output swift code eventually returns true or false
+    // swift code that eventually returns true or false
     var swiftCode: String { get }
 }
 
 // end leaf node which always returns true
 @available(macOS 10.15, *) 
-struct ShouldPaintDecision: DecisionTree {
+struct ReturnTrueTreeNode: DecisionTree {
     let indent: Int
     var swiftCode: String {
         var indentation = ""
@@ -24,7 +24,7 @@ struct ShouldPaintDecision: DecisionTree {
 
 // end leaf node which always returns false
 @available(macOS 10.15, *) 
-struct ShouldNotPaintDecision: DecisionTree {
+struct ReturnFalseTreeNode: DecisionTree {
     let indent: Int
     var swiftCode: String {
         var indentation = ""
@@ -33,7 +33,8 @@ struct ShouldNotPaintDecision: DecisionTree {
     }
 }
 
-// intermediate node which decides based upon the value of a particular type
+// decision node which decides upon a value of some type
+// delegating to one of two further code paths
 @available(macOS 10.15, *) 
 struct DecisionTreeNode: DecisionTree {
 
@@ -49,7 +50,7 @@ struct DecisionTreeNode: DecisionTree {
     // code to handle the case where the input data is greater than the given value
     let greaterThan: DecisionTree
 
-    // indentention is levels of recursion, not directly spaces
+    // indentention is levels of recursion, not spaces directly
     let indent: Int
 
     var swiftCode: String {

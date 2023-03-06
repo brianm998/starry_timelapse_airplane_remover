@@ -670,11 +670,11 @@ struct decision_tree_generator: ParsableCommand {
         }
         if should_paint_test_data.count == 0 {
             // func was called without any data to paint, return don't paint it all
-            return ShouldNotPaintDecision(indent: indent)
+            return ReturnFalseTreeNode(indent: indent)
         }
         if should_not_paint_test_data.count == 0 {
             // func was called without any data to not paint, return paint it all
-            return ShouldPaintDecision(indent: indent)
+            return ReturnTrueTreeNode(indent: indent)
         }
 
         // this is the 0-1 percentage of should_paint
@@ -819,8 +819,8 @@ struct decision_tree_generator: ParsableCommand {
                             ret.decisionTreeNode =
                               DecisionTreeNode(type: type,
                                                value: (paint_dist.max + not_paint_dist.min) / 2,
-                                               lessThan: ShouldPaintDecision(indent: indent + 1),
-                                               greaterThan: ShouldNotPaintDecision(indent: indent + 1),
+                                               lessThan: ReturnTrueTreeNode(indent: indent + 1),
+                                               greaterThan: ReturnFalseTreeNode(indent: indent + 1),
                                                indent: indent)
                             ret.should_paint_dist = paint_dist
                             ret.should_not_paint_dist = not_paint_dist
@@ -833,8 +833,8 @@ struct decision_tree_generator: ParsableCommand {
                             ret.decisionTreeNode =
                               DecisionTreeNode(type: type,
                                                value: (not_paint_dist.max + paint_dist.min) / 2,
-                                               lessThan: ShouldNotPaintDecision(indent: indent + 1),
-                                               greaterThan: ShouldPaintDecision(indent: indent + 1),
+                                               lessThan: ReturnFalseTreeNode(indent: indent + 1),
+                                               greaterThan: ReturnTrueTreeNode(indent: indent + 1),
                                                indent: indent)
                             ret.should_paint_dist = paint_dist
                             ret.should_not_paint_dist = not_paint_dist
