@@ -20,7 +20,6 @@ fileprivate var current_video_frame = 0
 enum FrameViewMode: String, Equatable, CaseIterable {
     case original
     case processed
-    case testPainted
 
     var localizedName: LocalizedStringKey {
         LocalizedStringKey(rawValue)
@@ -187,52 +186,31 @@ struct ContentView: View {
         if !running {
             initialView()
         } else {
-        
-        GeometryReader { top_geometry in
-            ScrollViewReader { scroller in
-                VStack {
-                    let should_show_progress =
-                      viewModel.initial_load_in_progress ||
-                      loading_outliers                   ||
-                      loading_all_outliers               || 
-                      rendering_current_frame            ||
-                      updating_frame_batch               ||
-                      rendering_all_frames
-                    
-                    ZStack {
+            
+            GeometryReader { top_geometry in
+                ScrollViewReader { scroller in
+                    VStack {
+                        let should_show_progress =
+                          viewModel.initial_load_in_progress ||
+                          loading_outliers                   ||
+                          loading_all_outliers               || 
+                          rendering_current_frame            ||
+                          updating_frame_batch               ||
+                          rendering_all_frames
                         
-                        currentFrameView()
-                         .frame(maxWidth: .infinity, alignment: .center)
-                      .overlay(
-                        ProgressView()
-                          .scaleEffect(8, anchor: .center) // this is blocky scaled up 
-                          .progressViewStyle(CircularProgressViewStyle(tint: .yellow))
-                          .frame(maxWidth: 200, maxHeight: 200)
-                          .opacity(should_show_progress ? 0.8 : 0)
-                      )
-                    }.overlay(
-                          VStack {
-                            paintAllButton()
-                              .frame(maxWidth: .infinity, alignment: .bottomTrailing)
-                            clearAllButton()
-                              .frame(maxWidth: .infinity, alignment: .bottomTrailing)
-                            applyAllDecisionTreeButton()
-                              .frame(maxWidth: .infinity, alignment: .bottomTrailing)
-                            applyDecisionTreeButton()
-                              .frame(maxWidth: .infinity, alignment: .bottomTrailing)
-                            loadAllOutliersButton()
-                              .frame(maxWidth: .infinity, alignment: .bottomTrailing)
-                            renderCurrentFrameButton()
-                              .frame(maxWidth: .infinity, alignment: .bottomTrailing)
-                            renderAllFramesButton()
-                              .frame(maxWidth: .infinity, alignment: .bottomTrailing)
-                          }//.background(.green)
-//                            .frame(maxWidth: .infinity, alignment: .center)
-//                            .frame(maxWidth: .infinity, alignment: .bottomTrailing)
-//                      }.background(.red)
-//                        .frame(maxWidth: .infinity, alignment: .bottomTrailing)
-                             , alignment: .bottom)
-
+                        ZStack {
+                            
+                            currentFrameView()
+                              .frame(maxWidth: .infinity, alignment: .center)
+                              .overlay(
+                                ProgressView()
+                                  .scaleEffect(8, anchor: .center) // this is blocky scaled up 
+                                  .progressViewStyle(CircularProgressViewStyle(tint: .yellow))
+                                  .frame(maxWidth: 200, maxHeight: 200)
+                                  .opacity(should_show_progress ? 0.8 : 0)
+                              )
+                        }.overlay(rightSideButtons(), alignment: .bottom)
+                        
                     /*
                     if showFullResolution {
                         HStack {
@@ -243,18 +221,13 @@ struct ContentView: View {
                             }
                         }
                     }*/
-                    VStack {
-                        HStack {
-
-                            ZStack {
-                                
-                                    videoPlaybackButtons(scroller) // XXX not really centered
+                        VStack {
+                            HStack {
+                                ZStack {
+                                    videoPlaybackButtons(scroller)
                                       .frame(maxWidth: .infinity, alignment: .center)
-                                
-                                // rectangle.split.3x1
-                                // 
+                                    
                                     HStack {
-                                        
                                         let paint_action = {
                                             Log.d("PAINT")
                                             paint_sheet_showing = !paint_sheet_showing
@@ -265,7 +238,7 @@ struct ContentView: View {
                                         }
                                           .buttonStyle(PlainButtonStyle())           
                                           .frame(alignment: .trailing)
-                                        
+                                          .help("effect multiple frames")
                                         
                                         let gear_action = {
                                             Log.d("GEAR")
@@ -277,6 +250,7 @@ struct ContentView: View {
                                         }
                                           .buttonStyle(PlainButtonStyle())           
                                           .frame(alignment: .trailing)
+                                          .help("settings")
                                         
                                         /*
                                          if running {
@@ -350,7 +324,7 @@ struct ContentView: View {
                         Spacer().frame(maxHeight: 10, alignment: .bottom)
                     }
                 }
-            }.frame(maxWidth: .infinity, maxHeight: .infinity)
+            }.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
               .padding()
               .background(background_color)
         }
@@ -361,8 +335,7 @@ struct ContentView: View {
     // or a place holder when we have no image for it yet
     func currentFrameView() -> some View {
         HStack {
-            //if let frame_image = viewModel.frames[viewModel.current_index].image {
-            if let frame_image = viewModel.current_frame_image {//viewModel.frames[viewModel.current_index].image {
+            if let frame_image = viewModel.current_frame_image {
                 GeometryReader { geometry in
                     let min = geometry.size.height/viewModel.frame_height
                     let max = min < 1 ? 1 : min
@@ -381,13 +354,13 @@ struct ContentView: View {
                 ZStack {
                     Rectangle()
                       .foregroundColor(.yellow)
-                      .frame(maxWidth: viewModel.frame_width, maxHeight: viewModel.frame_height)
+                      .aspectRatio(CGSize(width: 4, height: 3), contentMode: .fit)
                     Text(viewModel.no_image_explaination_text)
                 }
             }
         }
     }
-    
+
     // this is the main frame with outliers on top of it
     func frameView( _ image: Image) -> some View {
         ZStack {
@@ -425,7 +398,10 @@ struct ContentView: View {
                                       // update the view model to show the change quickly
                                       outlierViewModel.group.shouldPaint = reason
                                       self.viewModel.update()
-                                      
+
+
+
+                                     
                                       Task {
                                           if let frame = viewModel.currentFrame,
                                              let outlier_groups = await frame.outlier_groups,
@@ -448,6 +424,7 @@ struct ContentView: View {
                     }
                 }
             }
+
             // this is the selection overlay
             if isDragging,
                let drag_start = drag_start,
@@ -455,6 +432,8 @@ struct ContentView: View {
             {
                 let width = abs(drag_start.x-drag_end.x)
                 let height = abs(drag_start.y-drag_end.y)
+
+                let _ = Log.d("drag_start \(drag_start) drag_end \(drag_end) width \(width) height \(height)")
 
                 let drag_x_offset = drag_end.x > drag_start.x ? drag_end.x : drag_start.x
                 let drag_y_offset = drag_end.y > drag_start.y ? drag_end.y : drag_start.y
@@ -472,13 +451,13 @@ struct ContentView: View {
                   .frame(width: width, height: height)
                   .offset(x: CGFloat(-viewModel.frame_width/2) + drag_x_offset - width/2,
                           y: CGFloat(-viewModel.frame_height/2) + drag_y_offset - height/2)
-
             }
         }
-        // add a drag gesture to allow selecting outliers for painting or not
+        // add a drag gesture  to allow selecting outliers for painting or not
         // XXX selecting and zooming conflict with eachother
           .gesture(DragGesture()
                    .onChanged { gesture in
+                       let _ = Log.d("isDragging")
                        isDragging = true
                        let location = gesture.location
                        if let drag_start = drag_start {
@@ -626,6 +605,25 @@ struct ContentView: View {
         } else {
             Log.w("frame \(frame_view.frame_index) has no frame")
         }
+    }
+
+    func rightSideButtons() -> some View {
+        VStack {
+            paintAllButton()
+              .frame(maxWidth: .infinity, alignment: .bottomTrailing)
+            clearAllButton()
+              .frame(maxWidth: .infinity, alignment: .bottomTrailing)
+            applyAllDecisionTreeButton()
+              .frame(maxWidth: .infinity, alignment: .bottomTrailing)
+            applyDecisionTreeButton()
+              .frame(maxWidth: .infinity, alignment: .bottomTrailing)
+            loadAllOutliersButton()
+              .frame(maxWidth: .infinity, alignment: .bottomTrailing)
+            renderCurrentFrameButton()
+              .frame(maxWidth: .infinity, alignment: .bottomTrailing)
+            renderAllFramesButton()
+              .frame(maxWidth: .infinity, alignment: .bottomTrailing)
+        }.opacity(0.8)
     }
     
     func paintAllButton() -> some View {
@@ -992,8 +990,6 @@ struct ContentView: View {
                     viewModel.current_frame_image = current_frame_view.preview_image.resizable()
                 case .processed:
                     viewModel.current_frame_image = current_frame_view.processed_preview_image.resizable()
-                case .testPainted:
-                    viewModel.current_frame_image = current_frame_view.test_paint_preview_image.resizable()
                 }
             //self.viewModel.current_frame_image =
             //                  .preview_image.resizable()
@@ -1018,8 +1014,9 @@ struct ContentView: View {
     func toggleViews() -> some View {
         HStack() {
             VStack(alignment: .leading) {
-                Toggle("modify outliers", isOn: $showOutliers)
+                Toggle("modify changes", isOn: $showOutliers)
                   .keyboardShortcut("o", modifiers: [])
+                  .help("show and change edits")
                   .onChange(of: showOutliers) { shouldShow in
                       Log.d("show outliers shouldShow \(shouldShow)")
                       if shouldShow {
@@ -1038,6 +1035,7 @@ struct ContentView: View {
                     }
                 }
                   .frame(maxWidth: 180)
+                  .help("show original or processed frame")
                   .onChange(of: frameViewMode) { pick in
                       Log.d("pick \(pick)")
                       refreshCurrentFrame()
@@ -1331,8 +1329,6 @@ struct ContentView: View {
                     viewModel.current_frame_image = new_frame_view.preview_image.resizable()
                 case .processed:
                     viewModel.current_frame_image = new_frame_view.processed_preview_image.resizable()
-                case .testPainted:
-                    viewModel.current_frame_image = new_frame_view.test_paint_preview_image.resizable()
                 }
             }
             if showFullResolution {
@@ -1353,13 +1349,6 @@ struct ContentView: View {
                                 
                             case .processed:
                                 if let baseImage = try await next_frame.baseOutputImage() {
-                                    if next_frame.frame_index == viewModel.current_index {
-                                        viewModel.current_frame_image = Image(nsImage: baseImage)
-                                    }
-                                }
-                                
-                            case .testPainted:
-                                if let baseImage = try await next_frame.baseTestPaintImage() {
                                     if next_frame.frame_index == viewModel.current_index {
                                         viewModel.current_frame_image = Image(nsImage: baseImage)
                                     }
