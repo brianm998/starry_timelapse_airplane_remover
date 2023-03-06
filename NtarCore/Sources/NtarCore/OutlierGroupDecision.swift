@@ -154,6 +154,10 @@ public extension OutlierGroup {
     }
     
     // we derive a Double value from each of these
+    // all switches on this enum are in this file
+    // add a new case, handle all switches here, and the
+    // decision tree generator will use it after recompile
+    // all existing outlier value files will need to be regenerated to include itx
     enum TreeDecisionType: CaseIterable, Hashable, Codable, Comparable {
         case size
         case width
@@ -272,29 +276,31 @@ public extension OutlierGroup {
     }
 
     func nonAsyncDecisionTreeValue(for type: TreeDecisionType) -> Double {
+        let height = IMAGE_HEIGHT!
+        let width = IMAGE_WIDTH!
         switch type {
             // attempt to normalize all pixel size related values
             // divide by width and/or hight
         case .size:
-            return Double(self.size)/(IMAGE_HEIGHT!*IMAGE_WIDTH!)
+            return Double(self.size)/(height*width)
         case .width:
-            return Double(self.bounds.width)/IMAGE_WIDTH!
+            return Double(self.bounds.width)/width
         case .height:
-            return Double(self.bounds.height)/IMAGE_HEIGHT!
+            return Double(self.bounds.height)/height
         case .centerX:
-            return Double(self.bounds.center.x)/IMAGE_WIDTH!
+            return Double(self.bounds.center.x)/width
         case .minX:
-            return Double(self.bounds.min.x)/IMAGE_WIDTH!
+            return Double(self.bounds.min.x)/width
         case .maxX:
-            return Double(self.bounds.max.x)/IMAGE_WIDTH!
+            return Double(self.bounds.max.x)/width
         case .minY:
-            return Double(self.bounds.min.y)/IMAGE_HEIGHT!
+            return Double(self.bounds.min.y)/height
         case .maxY:
-            return Double(self.bounds.max.y)/IMAGE_HEIGHT!
+            return Double(self.bounds.max.y)/height
         case .centerY:
-            return Double(self.bounds.center.y)/IMAGE_HEIGHT!
+            return Double(self.bounds.center.y)/height
         case .hypotenuse:
-            return Double(self.bounds.hypotenuse)/(IMAGE_HEIGHT!*IMAGE_WIDTH!)
+            return Double(self.bounds.hypotenuse)/(height*width)
         case .aspectRatio:
             return Double(self.bounds.width) / Double(self.bounds.height)
         case .fillAmount:
