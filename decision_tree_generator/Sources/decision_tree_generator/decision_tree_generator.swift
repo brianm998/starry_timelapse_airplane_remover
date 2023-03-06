@@ -7,24 +7,6 @@ import CryptoKit
 var start_time: Date = Date()
 
 @available(macOS 10.15, *) 
-struct TreeDecisionTypeResult {
-    init(type: OutlierGroup.TreeDecisionType) {
-        self.type = type
-    }
-    let type: OutlierGroup.TreeDecisionType
-    var decisionResult: DecisionResult?
-    var decisionTreeNode: DecisionTree?
-    var should_paint_dist: ValueDistribution?
-    var should_not_paint_dist: ValueDistribution?
-}
-
-@available(macOS 10.15, *) 
-struct DecisionTypeValuesResult {
-    let type: OutlierGroup.TreeDecisionType
-    let values: [Double]
-}
-
-@available(macOS 10.15, *) 
 struct OutlierGroupValueMapResult {
     let should_paint_test_data: [OutlierGroupValueMap]
     let should_not_paint_test_data: [OutlierGroupValueMap]
@@ -35,53 +17,9 @@ struct TreeTestResults {
     let numberBad: Int
 }
 
-@available(macOS 10.15, *) 
-struct RankedResult<T> {
-    let rank: Double
-    let type: OutlierGroup.TreeDecisionType
-    let result: T
-}
-
 // how much do we truncate the sha256 hash when embedding it into code
 let sha_suffix_size = 8
 
-// use this for with the taskgroup below
-@available(macOS 10.15, *) 
-struct DecisionResult {
-    let type: OutlierGroup.TreeDecisionType
-    let value: Double
-    let lessThanShouldPaint: [OutlierGroupValueMap]
-    let lessThanShouldNotPaint: [OutlierGroupValueMap]
-    let greaterThanShouldPaint: [OutlierGroupValueMap]
-    let greaterThanShouldNotPaint: [OutlierGroupValueMap]
-    let lessThanSplit: Double
-    let greaterThanSplit: Double
-    
-    public init(type: OutlierGroup.TreeDecisionType,
-                value: Double = 0,
-                lessThanShouldPaint: [OutlierGroupValueMap],
-                lessThanShouldNotPaint: [OutlierGroupValueMap],
-                greaterThanShouldPaint: [OutlierGroupValueMap],
-                greaterThanShouldNotPaint: [OutlierGroupValueMap])
-    {
-
-        self.type = type
-        self.value = value
-        self.lessThanShouldPaint = lessThanShouldPaint
-        self.lessThanShouldNotPaint = lessThanShouldNotPaint
-        self.greaterThanShouldPaint = greaterThanShouldPaint
-        self.greaterThanShouldNotPaint = greaterThanShouldNotPaint
-        // this is the 0-1 percentage of should_paint on the less than split
-        self.lessThanSplit =
-          Double(lessThanShouldPaint.count) /
-          Double(lessThanShouldNotPaint.count + lessThanShouldPaint.count)
-
-        // this is the 0-1 percentage of should_paint on the greater than split
-        self.greaterThanSplit =
-          Double(greaterThanShouldPaint.count) /
-          Double(greaterThanShouldNotPaint.count + greaterThanShouldPaint.count)
-    }
-}
 
 @main
 @available(macOS 10.15, *) 
@@ -98,9 +36,10 @@ struct decision_tree_generator: ParsableCommand {
     var verification_mode = false
 
     @Argument(help: """
-        fill this shit in better sometime later
+                A list of files, which can be either a reference to a config.json file,
+                or a reference to a directory containing files ending with '_outlier_values.bin'
         """)
-    var json_config_file_names: [String]
+    var input_filenames: [String]
     
     mutating func run() throws {
         Log.name = "decision_tree_generator-log"
@@ -113,7 +52,7 @@ struct decision_tree_generator: ParsableCommand {
         if verification_mode {
             run_verification()
         } else {
-            generate_tree_from_json_config()
+            generate_tree_from_input_files()
         }
         Log.dispatchGroup.wait()
     }
@@ -225,7 +164,7 @@ struct decision_tree_generator: ParsableCommand {
         let dispatch_group = DispatchGroup()
         dispatch_group.enter()
         Task {
-            for json_config_file_name in json_config_file_names {
+            for json_config_file_name in input_filenames {
                 if json_config_file_name.hasSuffix("config.json") {
                     do {
                         try await runVerification(basedUpon: json_config_file_name)
@@ -386,7 +325,7 @@ struct decision_tree_generator: ParsableCommand {
     }
 
     // actually generate a decision tree
-    func generate_tree_from_json_config() {
+    func generate_tree_from_input_files() {
         let dispatch_group = DispatchGroup()
         dispatch_group.enter()
         Task {
@@ -394,7 +333,7 @@ struct decision_tree_generator: ParsableCommand {
             var should_paint_test_data: [OutlierGroupValueMap] = []
             var should_not_paint_test_data: [OutlierGroupValueMap] = []
             
-            for json_config_file_name in json_config_file_names {
+            for json_config_file_name in input_filenames {
                 if json_config_file_name.hasSuffix("config.json") {
                     // here we are loading the full outlier groups and analyzing based upon that
                     // comprehensive, but slow
@@ -474,11 +413,12 @@ struct decision_tree_generator: ParsableCommand {
             //Log.d("should NOT paint")
             //log(valueMaps: should_not_paint_test_data)
 
-            let generator = DecisionTreeGenerator(inputFilenames: json_config_file_names)
+            let generator = DecisionTreeGenerator()
             
             let (tree_swift_code, sha_hash) =
-              await generator.generateTree(with: should_paint_test_data,
-                                           and: should_not_paint_test_data)
+              await generator.generateTree(withTrueData: should_paint_test_data,
+                                           andFalseData: should_not_paint_test_data,
+                                           inputFilenames: input_filenames)
 
             // save this generated swift code to a file
 
@@ -515,26 +455,6 @@ struct decision_tree_generator: ParsableCommand {
         }
     }
     
-}
-
-@available(macOS 10.15, *) 
-struct TreeResponse {
-    enum Place {
-        case less
-        case greater
-    }
-    
-    let treeNode: DecisionTree
-    let position: Place
-}
-    
-@available(macOS 10.15, *) 
-struct ValueDistribution {
-    let type: OutlierGroup.TreeDecisionType
-    let min: Double
-    let max: Double
-    let mean: Double
-    let median: Double
 }
 
 fileprivate let file_manager = FileManager.default
