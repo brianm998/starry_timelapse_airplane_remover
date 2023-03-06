@@ -626,6 +626,7 @@ struct decision_tree_generator: ParsableCommand {
                }
 
               // a way to call into the decision tree without an OutlierGroup object
+              // it's going to blow up unless supplied with the expected set of types
               static func decisionTree_\(hash_prefix) (
                  types: [OutlierGroup.TreeDecisionType], // parallel
                  values: [Double]                        // arrays
@@ -1124,6 +1125,7 @@ struct ValueDistribution {
 // that knows how to render itself as a String of swift code
 @available(macOS 10.15, *) 
 protocol DecisionTree {
+    // output swift code eventually returns true or false
     var swiftCode: String { get }
 }
 
@@ -1152,10 +1154,20 @@ struct ShouldNotPaintDecision: DecisionTree {
 // intermediate node which decides based upon the value of a particular type
 @available(macOS 10.15, *) 
 struct DecisionTreeNode: DecisionTree {
+
+    // the kind of value we are deciding upon
     let type: OutlierGroup.TreeDecisionType
+
+    // the value that we are splitting upon
     let value: Double
+
+    // code to handle the case where the input data is less than the given value
     let lessThan: DecisionTree
+
+    // code to handle the case where the input data is greater than the given value
     let greaterThan: DecisionTree
+
+    // indentention is levels of recursion, not directly spaces
     let indent: Int
 
     var swiftCode: String {
