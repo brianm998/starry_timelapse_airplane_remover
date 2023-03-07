@@ -26,6 +26,16 @@ enum FrameViewMode: String, Equatable, CaseIterable {
     }
 }
 
+enum SelectionMode: String, Equatable, CaseIterable {
+    case paint
+    case clear
+    case details
+    
+    var localizedName: LocalizedStringKey {
+        LocalizedStringKey(rawValue)
+    }
+}
+
 // the overall level of the app
 struct ContentView: View {
     @ObservedObject var viewModel: ViewModel
@@ -33,12 +43,13 @@ struct ContentView: View {
     
     // enum for how we show each frame
     @State private var frameViewMode = FrameViewMode.processed
+
+    @State private var selectionMode = SelectionMode.paint
     
     // should we show full resolution images on the main frame?
     // faster low res previews otherwise
     @State private var showFullResolution = false
     
-    @State private var selection_causes_painting = true
     @State private var running = false
     @State private var drag_start: CGPoint?
     @State private var drag_end: CGPoint?
@@ -61,6 +72,9 @@ struct ContentView: View {
 
     @State private var settings_sheet_showing = false
     @State private var paint_sheet_showing = false
+    @State private var info_sheet_showing = false
+
+    @State private var outlierGroupTableRows: [OutlierGroupTableRow] = []
 
     //@State private var previously_opened_sheet_showing = false
     @State private var previously_opened_sheet_showing_item: String
@@ -302,24 +316,31 @@ struct ContentView: View {
                 let drag_y_offset = drag_end.y > drag_start.y ? drag_end.y : drag_start.y
 
                 Rectangle()
-                  .fill((selection_causes_painting ?
-                          Color.red :
-                          Color.green).opacity(0.2))
+                  .fill(selectionColor().opacity(0.2))
                   .overlay(
                     Rectangle()
                       .stroke(style: StrokeStyle(lineWidth: 2))
-                      .foregroundColor((selection_causes_painting ?
-                                          Color.red : Color.green).opacity(0.8))
+                      .foregroundColor(selectionColor().opacity(0.8))
                   )                
                   .frame(width: width, height: height)
                   .offset(x: CGFloat(-viewModel.frame_width/2) + drag_x_offset - width/2,
                           y: CGFloat(-viewModel.frame_height/2) + drag_y_offset - height/2)
             }
         }
+          .sheet(isPresented: $info_sheet_showing) {
+              InfoSheetView(isVisible: self.$info_sheet_showing,
+                            outlierGroupTableRows: self.$outlierGroupTableRows,
+                            viewModel: viewModel)
+              { 
+                  // XXX don't really care it's dismissed
+              }.frame(minWidth: 800, // grab these from the overall view size
+                      minHeight: 800) // 
+          }
+        
         // add a drag gesture  to allow selecting outliers for painting or not
         // XXX selecting and zooming conflict with eachother
-          .gesture(self.selectionDragGesture
-          )
+          .gesture(self.selectionDragGesture)
+        
     }
 
     var selectionDragGesture: some Gesture {
@@ -341,21 +362,61 @@ struct ContentView: View {
                        let end_location = gesture.location
                        if let drag_start = drag_start {
                            Log.d("end location \(end_location) drag start \(drag_start)")
-                           
-                           let frameView = viewModel.currentFrameView
-                           frameView.userSelectAllOutliers(toShouldPaint: selection_causes_painting,
-                                                           between: drag_start,
-                                                           and: end_location)
 
-                           if let frame = frameView.frame {
-                               Task {
-                                   // is view layer updated? (NO)
-                                   await frame.userSelectAllOutliers(toShouldPaint: selection_causes_painting,
-                                                                     between: drag_start,
-                                                                     and: end_location)
-                                   refreshCurrentFrame()
-                                   viewModel.update()
+                           let frameView = viewModel.currentFrameView
+
+                           var should_paint = false
+                           var paint_choice = true
+                           
+                           switch selectionMode {
+                           case .paint:
+                               should_paint = true
+                           case .clear:
+                               should_paint = false
+                           case .details:
+                               paint_choice = false
+                           }
+
+                           if paint_choice {
+                               frameView.userSelectAllOutliers(toShouldPaint: should_paint,
+                                                               between: drag_start,
+                                                               and: end_location)
+                               if let frame = frameView.frame {
+                                   Task {
+                                       // is view layer updated? (NO)
+                                       await frame.userSelectAllOutliers(toShouldPaint: should_paint,
+                                                                         between: drag_start,
+                                                                         and: end_location)
+                                       refreshCurrentFrame()
+                                       viewModel.update()
+                                   }
                                }
+                           } else {
+                               let _ = Log.d("DETAILS")
+
+                               if let frame = frameView.frame {
+                                   Task {
+                                       var new_outlier_info: [OutlierGroup] = []
+                                       var _outlierGroupTableRows: [OutlierGroupTableRow] = []
+                                       
+                                       await frame.foreachOutlierGroup(between: drag_start,
+                                                                       and: end_location) { group in
+                                           Log.d("group \(group)")
+                                           new_outlier_info.append(group)
+
+                                           let new_row = await OutlierGroupTableRow(group)
+                                           _outlierGroupTableRows.append(new_row)
+                                           return .continue
+                                       }
+                                       await MainActor.run {
+                                           outlierGroupTableRows = _outlierGroupTableRows
+                                           Log.d("outlierGroupTableRows \(outlierGroupTableRows.count)")
+                                           info_sheet_showing = true
+                                       }
+                                   }
+                               } 
+                               
+                               // XXX show the details here somehow
                            }
                        }
                        drag_start = nil
@@ -474,6 +535,17 @@ struct ContentView: View {
         }
     }
 
+    func selectionColor() -> Color {
+        switch selectionMode {
+        case .paint:
+            return .red
+        case .clear:
+            return .green
+        case .details:
+            return .blue
+        }
+    }
+    
     func rightSideButtons() -> some View {
         VStack {
             paintAllButton()
@@ -900,8 +972,11 @@ struct ContentView: View {
                           refreshCurrentFrame()
                       }
                   }
-                Toggle("selection causes paint", isOn: $selection_causes_painting)
-                  .keyboardShortcut("t", modifiers: []) // XXX find better modifier
+                Picker("selection mode", selection: $selectionMode) {
+                    ForEach(SelectionMode.allCases, id: \.self) { value in
+                        Text(value.localizedName).tag(value)
+                    }
+                }.pickerStyle(.radioGroup)
             }
             VStack(alignment: .leading) {
                 Picker("show", selection: $frameViewMode) {

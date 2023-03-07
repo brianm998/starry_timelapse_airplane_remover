@@ -19,7 +19,7 @@ You should have received a copy of the GNU General Public License along with nta
 
 // the first pass is done upon init, finding and pruning outlier groups
 
-enum LoopReturn {
+public enum LoopReturn {
     case `continue`
     case `break`
 }
@@ -268,31 +268,8 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
                                       between startLocation: CGPoint,
                                       and endLocation: CGPoint) async
     {
-        // first get bounding box from start and end location
-        var min_x: CGFloat = CGFLOAT_MAX
-        var max_x: CGFloat = 0
-        var min_y: CGFloat = CGFLOAT_MAX
-        var max_y: CGFloat = 0
-
-        if startLocation.x < min_x { min_x = startLocation.x }
-        if startLocation.x > max_x { max_x = startLocation.x }
-        if startLocation.y < min_y { min_y = startLocation.y }
-        if startLocation.y > max_y { max_y = startLocation.y }
-        
-        if endLocation.x < min_x { min_x = endLocation.x }
-        if endLocation.x > max_x { max_x = endLocation.x }
-        if endLocation.y < min_y { min_y = endLocation.y }
-        if endLocation.y > max_y { max_y = endLocation.y }
-
-        let gesture_bounds = BoundingBox(min: Coord(x: Int(min_x), y: Int(min_y)),
-                                         max: Coord(x: Int(max_x), y: Int(max_y)))
-        
-        await foreachOutlierGroup() { group in
-            if gesture_bounds.contains(other: group.bounds) {
-                // check to make sure this outlier's bounding box is fully contained
-                // otherwise don't change paint status
-                await group.shouldPaint(.userSelected(should_paint))
-            }
+        await foreachOutlierGroup(between: startLocation, and: endLocation) { group in
+            await group.shouldPaint(.userSelected(should_paint))
             return .continue
         }
     }
@@ -554,7 +531,41 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
         return outlier_groups?.groups?[outlier_name]
     }
     
-    func foreachOutlierGroup(_ closure: (OutlierGroup)async->LoopReturn) async {
+    public func foreachOutlierGroup(between startLocation: CGPoint,
+                                    and endLocation: CGPoint,
+                                    _ closure: (OutlierGroup)async->LoopReturn) async
+    {
+        // first get bounding box from start and end location
+        var min_x: CGFloat = CGFLOAT_MAX
+        var max_x: CGFloat = 0
+        var min_y: CGFloat = CGFLOAT_MAX
+        var max_y: CGFloat = 0
+
+        if startLocation.x < min_x { min_x = startLocation.x }
+        if startLocation.x > max_x { max_x = startLocation.x }
+        if startLocation.y < min_y { min_y = startLocation.y }
+        if startLocation.y > max_y { max_y = startLocation.y }
+        
+        if endLocation.x < min_x { min_x = endLocation.x }
+        if endLocation.x > max_x { max_x = endLocation.x }
+        if endLocation.y < min_y { min_y = endLocation.y }
+        if endLocation.y > max_y { max_y = endLocation.y }
+
+        let gesture_bounds = BoundingBox(min: Coord(x: Int(min_x), y: Int(min_y)),
+                                         max: Coord(x: Int(max_x), y: Int(max_y)))
+
+        await foreachOutlierGroup() { group in
+            if gesture_bounds.contains(other: group.bounds) {
+                // check to make sure this outlier's bounding box is fully contained
+                // otherwise don't change paint status
+                return await closure(group)
+            } else {
+                return .continue
+            }
+        }
+    }
+
+    public func foreachOutlierGroup(_ closure: (OutlierGroup)async->LoopReturn) async {
         if let outlier_groups = self.outlier_groups,
            let groups = outlier_groups.groups 
         {
