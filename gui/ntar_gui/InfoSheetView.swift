@@ -68,6 +68,11 @@ struct OutlierGroupTableRow: Identifiable {
     }
 }
 
+typealias DTColumn = TableColumn<OutlierGroupTableRow,
+                                             KeyPathComparator<OutlierGroupTableRow>,
+                                             Text,
+                                             Text>
+
 struct InfoSheetView: View {
     @Binding var isVisible: Bool
     @ObservedObject var viewModel: ViewModel
@@ -107,257 +112,151 @@ struct InfoSheetView: View {
             Text(String(row.size))
         }
     }
+    
+    var dtSizeColumn: DTColumn {
+        self.tableColumn(for: "dt_size", value: \.dt_size) { $0.dt_size }
+    }
+    
+    var dtWidthColumn: DTColumn {
+        self.tableColumn(for: "dt_width", value: \.dt_width) { $0.dt_width }
+    }
+    
+    var dtHeightColumn: DTColumn {
+        self.tableColumn(for: "dt_height", value: \.dt_height) { $0.dt_height }
+    }
 
-    var dtSizeColumn: TableColumn<OutlierGroupTableRow,
-                                  KeyPathComparator<OutlierGroupTableRow>,
-                                  Text,
-                                  Text>
-    {
-        TableColumn("dt_size", value: \OutlierGroupTableRow.dt_size) { (row: OutlierGroupTableRow) in
-            Text(String(format: "%3g", row.dt_size))
+    var dtCenterXColumn: DTColumn {
+        self.tableColumn(for: "dt_centerX", value: \.dt_centerX) { $0.dt_centerX }
+    }
+
+    var dtCenterYColumn: DTColumn {
+        self.tableColumn(for: "dt_centerY", value: \.dt_centerY) { $0.dt_centerY }
+    }
+
+    var dtMinXColumn: DTColumn {
+        self.tableColumn(for: "dt_minX", value: \.dt_minX) { $0.dt_minX }
+    }
+
+    var dtMinYColumn: DTColumn {
+        self.tableColumn(for: "dt_minY", value: \.dt_minY) { $0.dt_minY }
+    }
+
+    var dtMaxXColumn: DTColumn {
+        self.tableColumn(for: "dt_maxX", value: \.dt_maxX) { $0.dt_maxX }
+    }
+
+    var dtMaxYColumn: DTColumn {
+        self.tableColumn(for: "dt_maxY", value: \.dt_maxY) { $0.dt_maxY }
+    }
+
+    var dtHypotenuseColumn: DTColumn {
+        self.tableColumn(for: "dt_hypotenuse", value: \.dt_hypotenuse) { $0.dt_hypotenuse }
+    }
+
+    var dtAspectRatioColumn: DTColumn {
+        self.tableColumn(for: "dt_aspectRatio", value: \.dt_aspectRatio) { $0.dt_aspectRatio }
+    }
+
+    var dtFillAmountColumn: DTColumn {
+        self.tableColumn(for: "dt_fillAmount", value: \.dt_fillAmount) { $0.dt_fillAmount }
+    }
+
+    var dtSurfaceAreaRatioColumn: DTColumn {
+        self.tableColumn(for: "dt_surfaceAreaRatio", value: \.dt_surfaceAreaRatio) { row in
+            row.dt_surfaceAreaRatio
         }
     }
 
-    var dtWidthColumn: TableColumn<OutlierGroupTableRow,
-                                  KeyPathComparator<OutlierGroupTableRow>,
-                                  Text,
-                                  Text>
-    {
-        TableColumn("dt_width", value: \OutlierGroupTableRow.dt_width) { (row: OutlierGroupTableRow) in
-            Text(String(format: "%3g", row.dt_width))
+    var dtAveragebrightnessColumn: DTColumn {
+        self.tableColumn(for: "dt_averagebrightness", value: \.dt_averagebrightness) { row in
+            row.dt_averagebrightness
         }
     }
 
-    var dtHeightColumn: TableColumn<OutlierGroupTableRow,
-                                  KeyPathComparator<OutlierGroupTableRow>,
-                                  Text,
-                                  Text>
-    {
-        TableColumn("dt_height", value: \OutlierGroupTableRow.dt_height) { (row: OutlierGroupTableRow) in
-            Text(String(format: "%3g", row.dt_height))
+    var dtMedianBrightnessColumn: DTColumn {
+        self.tableColumn(for: "dt_medianBrightness", value: \.dt_medianBrightness) { row in
+            row.dt_medianBrightness
         }
     }
 
-    var dtCenterXColumn: TableColumn<OutlierGroupTableRow,
-                                  KeyPathComparator<OutlierGroupTableRow>,
-                                  Text,
-                                  Text>
-    {
-        TableColumn("dt_centerX", value: \OutlierGroupTableRow.dt_centerX) { (row: OutlierGroupTableRow) in
-            Text(String(format: "%3g", row.dt_centerX))
+    var dtMaxBrightnessColumn: DTColumn {
+        self.tableColumn(for: "dt_maxBrightness", value: \.dt_maxBrightness) { row in
+            row.dt_maxBrightness
         }
     }
 
-    var dtCenterYColumn: TableColumn<OutlierGroupTableRow,
-                                  KeyPathComparator<OutlierGroupTableRow>,
-                                  Text,
-                                  Text>
-    {
-        TableColumn("dt_centerY", value: \OutlierGroupTableRow.dt_centerY) { (row: OutlierGroupTableRow) in
-            Text(String(format: "%3g", row.dt_centerY))
+    var dtAvgCountOfFirst10HoughLinesColumn: DTColumn {
+        self.tableColumn(for: "dt_avgCountOfFirst10HoughLines",
+                         value: \.dt_avgCountOfFirst10HoughLines) { row in
+            row.dt_avgCountOfFirst10HoughLines
         }
     }
 
-    var dtMinXColumn: TableColumn<OutlierGroupTableRow,
-                                  KeyPathComparator<OutlierGroupTableRow>,
-                                  Text,
-                                  Text>
-    {
-        TableColumn("dt_minX", value: \OutlierGroupTableRow.dt_minX) { (row: OutlierGroupTableRow) in
-            Text(String(format: "%3g", row.dt_minX))
+    var dtMaxThetaDiffOfFirst10HoughLinesColumn: DTColumn {
+        self.tableColumn(for: "dt_maxThetaDiffOfFirst10HoughLines",
+                         value: \.dt_maxThetaDiffOfFirst10HoughLines) { row in
+            row.dt_maxThetaDiffOfFirst10HoughLines
         }
     }
 
-    var dtMinYColumn: TableColumn<OutlierGroupTableRow,
-                                  KeyPathComparator<OutlierGroupTableRow>,
-                                  Text,
-                                  Text>
-    {
-        TableColumn("dt_minY", value: \OutlierGroupTableRow.dt_minY) { (row: OutlierGroupTableRow) in
-            Text(String(format: "%3g", row.dt_minY))
+    var dtMaxRhoDiffOfFirst10HoughLinesColumn: DTColumn {
+        self.tableColumn(for: "dt_maxRhoDiffOfFirst10HoughLines",
+                         value: \.dt_maxRhoDiffOfFirst10HoughLines) { row in
+            row.dt_maxRhoDiffOfFirst10HoughLines
+        }
+    }
+    
+    var dtNumberOfNearbyOutliersInSameFrameColumn: DTColumn {
+        self.tableColumn(for: "dt_numberOfNearbyOutliersInSameFrame",
+                         value: \.dt_numberOfNearbyOutliersInSameFrame) { row in
+            row.dt_numberOfNearbyOutliersInSameFrame
         }
     }
 
-    var dtMaxXColumn: TableColumn<OutlierGroupTableRow,
-                                  KeyPathComparator<OutlierGroupTableRow>,
-                                  Text,
-                                  Text>
-    {
-        TableColumn("dt_maxX", value: \OutlierGroupTableRow.dt_maxX) { (row: OutlierGroupTableRow) in
-            Text(String(format: "%3g", row.dt_maxX))
+    var dtAdjecentFrameNeighboringOutliersBestThetaColumn: DTColumn {
+        self.tableColumn(for: "dt_adjecentFrameNeighboringOutliersBestTheta",
+                         value: \.dt_adjecentFrameNeighboringOutliersBestTheta) { row in
+            row.dt_adjecentFrameNeighboringOutliersBestTheta
         }
     }
 
-    var dtMaxYColumn: TableColumn<OutlierGroupTableRow,
-                                  KeyPathComparator<OutlierGroupTableRow>,
-                                  Text,
-                                  Text>
-    {
-        TableColumn("dt_maxY", value: \OutlierGroupTableRow.dt_maxY) { (row: OutlierGroupTableRow) in
-            Text(String(format: "%3g", row.dt_maxY))
+    var dtHistogramStreakDetectionColumn: DTColumn {
+        self.tableColumn(for: "dt_histogramStreakDetection",
+                         value: \.dt_histogramStreakDetection) { row in
+            row.dt_histogramStreakDetection
         }
     }
 
-    var dtHypotenuseColumn: TableColumn<OutlierGroupTableRow,
-                                  KeyPathComparator<OutlierGroupTableRow>,
-                                  Text,
-                                  Text>
-    {
-        TableColumn("dt_hypotenuse", value: \OutlierGroupTableRow.dt_hypotenuse) { (row: OutlierGroupTableRow) in
-            Text(String(format: "%3g", row.dt_hypotenuse))
+    var dtMaxHoughTransformCountColumn: DTColumn {
+        self.tableColumn(for: "dt_maxHoughTransformCount",
+                         value: \.dt_maxHoughTransformCount) { row in
+            row.dt_maxHoughTransformCount
         }
     }
 
-    var dtAspectRatioColumn: TableColumn<OutlierGroupTableRow,
-                                  KeyPathComparator<OutlierGroupTableRow>,
-                                  Text,
-                                  Text>
-    {
-        TableColumn("dt_aspectRatio", value: \OutlierGroupTableRow.dt_aspectRatio) { (row: OutlierGroupTableRow) in
-            Text(String(format: "%3g", row.dt_aspectRatio))
+    var dtMaxHoughThetaColumn: DTColumn {
+        self.tableColumn(for: "dt_maxHoughTheta",
+                         value: \.dt_maxHoughTheta) { row in
+            row.dt_maxHoughTheta
         }
     }
 
-    var dtFillAmountColumn: TableColumn<OutlierGroupTableRow,
-                                  KeyPathComparator<OutlierGroupTableRow>,
-                                  Text,
-                                  Text>
-    {
-        TableColumn("dt_fillAmount", value: \OutlierGroupTableRow.dt_fillAmount) { (row: OutlierGroupTableRow) in
-            Text(String(format: "%3g", row.dt_fillAmount))
+    var dtNeighboringInterFrameOutlierThetaScoreColumn: DTColumn {
+        self.tableColumn(for: "dt_neighboringInterFrameOutlierThetaScore",
+                         value: \.dt_neighboringInterFrameOutlierThetaScore) { row in
+            row.dt_neighboringInterFrameOutlierThetaScore
         }
     }
 
-    var dtSurfaceAreaRatioColumn: TableColumn<OutlierGroupTableRow,
-                                  KeyPathComparator<OutlierGroupTableRow>,
-                                  Text,
-                                  Text>
+    func tableColumn(for name: String,
+                     value: KeyPath<OutlierGroupTableRow,Double>,
+                     closure: @escaping (OutlierGroupTableRow) -> Double) -> DTColumn
     {
-        TableColumn("dt_surfaceAreaRatio", value: \OutlierGroupTableRow.dt_surfaceAreaRatio) { (row: OutlierGroupTableRow) in
-            Text(String(format: "%3g", row.dt_surfaceAreaRatio))
+        TableColumn(name, value: value) { (row: OutlierGroupTableRow) in
+            Text(String(format: "%3g", closure(row)))
         }
     }
-
-    var dtAveragebrightnessColumn: TableColumn<OutlierGroupTableRow,
-                                  KeyPathComparator<OutlierGroupTableRow>,
-                                  Text,
-                                  Text>
-    {
-        TableColumn("dt_averagebrightness", value: \OutlierGroupTableRow.dt_averagebrightness) { (row: OutlierGroupTableRow) in
-            Text(String(format: "%3g", row.dt_averagebrightness))
-        }
-    }
-
-    var dtMedianBrightnessColumn: TableColumn<OutlierGroupTableRow,
-                                  KeyPathComparator<OutlierGroupTableRow>,
-                                  Text,
-                                  Text>
-    {
-        TableColumn("dt_medianBrightness", value: \OutlierGroupTableRow.dt_medianBrightness) { (row: OutlierGroupTableRow) in
-            Text(String(format: "%3g", row.dt_medianBrightness))
-        }
-    }
-
-    var dtMaxBrightnessColumn: TableColumn<OutlierGroupTableRow,
-                                  KeyPathComparator<OutlierGroupTableRow>,
-                                  Text,
-                                  Text>
-    {
-        TableColumn("dt_maxBrightness", value: \OutlierGroupTableRow.dt_maxBrightness) { (row: OutlierGroupTableRow) in
-            Text(String(format: "%3g", row.dt_maxBrightness))
-        }
-    }
-
-    var dtAvgCountOfFirst10HoughLinesColumn: TableColumn<OutlierGroupTableRow,
-                                  KeyPathComparator<OutlierGroupTableRow>,
-                                  Text,
-                                  Text>
-    {
-        TableColumn("dt_avgCountOfFirst10HoughLines", value: \OutlierGroupTableRow.dt_avgCountOfFirst10HoughLines) { (row: OutlierGroupTableRow) in
-            Text(String(format: "%3g", row.dt_avgCountOfFirst10HoughLines))
-        }
-    }
-
-    var dtMaxThetaDiffOfFirst10HoughLinesColumn: TableColumn<OutlierGroupTableRow,
-                                  KeyPathComparator<OutlierGroupTableRow>,
-                                  Text,
-                                  Text>
-    {
-        TableColumn("dt_maxThetaDiffOfFirst10HoughLines", value: \OutlierGroupTableRow.dt_maxThetaDiffOfFirst10HoughLines) { (row: OutlierGroupTableRow) in
-            Text(String(format: "%3g", row.dt_maxThetaDiffOfFirst10HoughLines))
-        }
-    }
-
-    var dtMaxRhoDiffOfFirst10HoughLinesColumn: TableColumn<OutlierGroupTableRow,
-                                  KeyPathComparator<OutlierGroupTableRow>,
-                                  Text,
-                                  Text>
-    {
-        TableColumn("dt_maxRhoDiffOfFirst10HoughLines", value: \OutlierGroupTableRow.dt_maxRhoDiffOfFirst10HoughLines) { (row: OutlierGroupTableRow) in
-            Text(String(format: "%3g", row.dt_maxRhoDiffOfFirst10HoughLines))
-        }
-    }
-
-    var dtNumberOfNearbyOutliersInSameFrameColumn: TableColumn<OutlierGroupTableRow,
-                                  KeyPathComparator<OutlierGroupTableRow>,
-                                  Text,
-                                  Text>
-    {
-        TableColumn("dt_numberOfNearbyOutliersInSameFrame", value: \OutlierGroupTableRow.dt_numberOfNearbyOutliersInSameFrame) { (row: OutlierGroupTableRow) in
-            Text(String(format: "%3g", row.dt_numberOfNearbyOutliersInSameFrame))
-        }
-    }
-
-    var dtAdjecentFrameNeighboringOutliersBestThetaColumn: TableColumn<OutlierGroupTableRow,
-                                  KeyPathComparator<OutlierGroupTableRow>,
-                                  Text,
-                                  Text>
-    {
-        TableColumn("dt_adjecentFrameNeighboringOutliersBestTheta", value: \OutlierGroupTableRow.dt_adjecentFrameNeighboringOutliersBestTheta) { (row: OutlierGroupTableRow) in
-            Text(String(format: "%3g", row.dt_adjecentFrameNeighboringOutliersBestTheta))
-        }
-    }
-
-    var dtHistogramStreakDetectionColumn: TableColumn<OutlierGroupTableRow,
-                                  KeyPathComparator<OutlierGroupTableRow>,
-                                  Text,
-                                  Text>
-    {
-        TableColumn("dt_histogramStreakDetection", value: \OutlierGroupTableRow.dt_histogramStreakDetection) { (row: OutlierGroupTableRow) in
-            Text(String(format: "%3g", row.dt_histogramStreakDetection))
-        }
-    }
-
-    var dtMaxHoughTransformCountColumn: TableColumn<OutlierGroupTableRow,
-                                  KeyPathComparator<OutlierGroupTableRow>,
-                                  Text,
-                                  Text>
-    {
-        TableColumn("dt_maxHoughTransformCount", value: \OutlierGroupTableRow.dt_maxHoughTransformCount) { (row: OutlierGroupTableRow) in
-            Text(String(format: "%3g", row.dt_maxHoughTransformCount))
-        }
-    }
-
-    var dtMaxHoughThetaColumn: TableColumn<OutlierGroupTableRow,
-                                  KeyPathComparator<OutlierGroupTableRow>,
-                                  Text,
-                                  Text>
-    {
-        TableColumn("dt_maxHoughTheta", value: \OutlierGroupTableRow.dt_maxHoughTheta) { (row: OutlierGroupTableRow) in
-            Text(String(format: "%3g", row.dt_maxHoughTheta))
-        }
-    }
-
-    var dtNeighboringInterFrameOutlierThetaScoreColumn: TableColumn<OutlierGroupTableRow,
-                                  KeyPathComparator<OutlierGroupTableRow>,
-                                  Text,
-                                  Text>
-    {
-        TableColumn("dt_neighboringInterFrameOutlierThetaScore", value: \OutlierGroupTableRow.dt_neighboringInterFrameOutlierThetaScore) { (row: OutlierGroupTableRow) in
-            Text(String(format: "%3g", row.dt_neighboringInterFrameOutlierThetaScore))
-        }
-    }
-
+    
     @State var sortOrder: [KeyPathComparator<OutlierGroupTableRow>] = [
       .init(\.size, order: SortOrder.forward)
     ]
