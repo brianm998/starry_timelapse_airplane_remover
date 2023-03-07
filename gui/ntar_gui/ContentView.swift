@@ -318,7 +318,12 @@ struct ContentView: View {
         }
         // add a drag gesture  to allow selecting outliers for painting or not
         // XXX selecting and zooming conflict with eachother
-          .gesture(DragGesture()
+          .gesture(self.selectionDragGesture
+          )
+    }
+
+    var selectionDragGesture: some Gesture {
+        DragGesture()
                    .onChanged { gesture in
                        let _ = Log.d("isDragging")
                        isDragging = true
@@ -356,7 +361,6 @@ struct ContentView: View {
                        drag_start = nil
                        drag_end = nil
                    }
-          )
     }
 
     // the view for each frame in the filmstrip at the bottom
@@ -520,7 +524,7 @@ struct ContentView: View {
                     HStack(spacing: 0) {
                         ForEach(0..<viewModel.image_sequence_size, id: \.self) { frame_index in
                             self.filmStripView(forFrame: frame_index, withScroll: scroller)
-                              .help("load frame \(frame_index)")
+                              .help("show frame \(frame_index)")
                         }
                     }
                 }
