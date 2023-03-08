@@ -447,7 +447,7 @@ public extension OutlierGroup {
                     ret += score
                     count += 1
                 }
-                ret /= Double(count)
+                if count > 0 { ret /= Double(count) }
                 return ret
             }
             return 0
