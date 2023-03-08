@@ -1,6 +1,11 @@
 import SwiftUI
 import NtarCore
 
+typealias DTColumn = TableColumn<OutlierGroupTableRow,
+                                 KeyPathComparator<OutlierGroupTableRow>,
+                                 Text,
+                                 Text>
+
 enum WillPaintType: Comparable {
     case willPaint
     case willNotPaint
@@ -93,11 +98,6 @@ struct OutlierGroupTableRow: Identifiable {
         dt_neighboringInterFrameOutlierThetaScore = await group.decisionTreeValue(for: .neighboringInterFrameOutlierThetaScore)
     }
 }
-
-typealias DTColumn = TableColumn<OutlierGroupTableRow,
-                                 KeyPathComparator<OutlierGroupTableRow>,
-                                 Text,
-                                 Text>
 
 struct OutlierGroupTable: View {
     @ObservedObject var viewModel: ViewModel
@@ -289,7 +289,7 @@ struct OutlierGroupTable: View {
     {
         TableColumn(name, value: value) { (row: OutlierGroupTableRow) in
             Text(String(format: "%.2g", closure(row)))
-        }.width(min: 10, ideal: 60, max: 100)
+        }.width(min: 40, ideal: 60, max: 100)
     }
     
     @State var sortOrder: [KeyPathComparator<OutlierGroupTableRow>] = [
@@ -303,7 +303,11 @@ struct OutlierGroupTable: View {
             VStack {
                 Spacer()
                 Text("Information about \(viewModel.outlierGroupTableRows.count) outlier groups")
-                Table(viewModel.outlierGroupTableRows, selection: $selectedOutliers, sortOrder: $sortOrder) {
+                Table(viewModel.outlierGroupTableRows,
+                      selection: $selectedOutliers,
+                      sortOrder: $sortOrder)
+                {
+                    // current compiler can't take more than 10 columns at once here
                     Group {
                         nameColumn
                         willPaintColumn
