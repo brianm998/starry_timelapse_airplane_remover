@@ -94,7 +94,7 @@ class ntar_gui_app: App {
 
         Task {
             for window in NSApp.windows {
-                if window.title == OTHER_WINDOW_TITLE {
+                if window.title.hasPrefix("Outlier") {
                     window.close()
                 }
             }
@@ -387,12 +387,13 @@ class ntar_gui_app: App {
             OutlierGroupTable(viewModel: viewModel)
               { 
                   // XXX don't really care it's dismissed
-              }.navigationTitle(OTHER_WINDOW_TITLE)
+              }
         }
     }
 }
 
-let OTHER_WINDOW_TITLE = "Outlier Group Information"   // XXX make this better
+let OUTLIER_WINDOW_PREFIX = "Outliers"
+let OTHER_WINDOW_TITLE = "\(OUTLIER_WINDOW_PREFIX) Group Information"   // XXX make this better
 
 // allow intiazliation of an array with objects of some type that know their index
 // XXX put this somewhere else

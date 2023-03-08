@@ -13,7 +13,7 @@ enum WillPaintType: Comparable {
 }
 
 struct OutlierGroupTableRow: Identifiable {
-    var id = UUID()
+    let id = UUID()
     
     let name: String
     let size: UInt
@@ -291,7 +291,7 @@ struct OutlierGroupTable: View {
             Text(String(format: "%.2g", closure(row)))
         }.width(min: 40, ideal: 60, max: 100)
     }
-    
+
     @State var sortOrder: [KeyPathComparator<OutlierGroupTableRow>] = [
       .init(\.size, order: SortOrder.forward)
     ]
@@ -344,13 +344,56 @@ struct OutlierGroupTable: View {
                         dtMaxHoughThetaColumn
                         dtNeighboringInterFrameOutlierThetaScoreColumn
                     }
+                } .onChange(of: selectedOutliers) {newValue in 
+                    Log.d("selected outliers \(newValue)")
+                    if let frame = viewModel.outlierGroupWindowFrame {
+                        let frameView = viewModel.frames[frame.frame_index]
+                        if let outlierViews = frameView.outlierViews {
+
+                            for outlierView in outlierViews {
+                                outlierView.isSelected = false
+                            }
+                            
+                            var outlier_is_selected = false
+                            for value in newValue {
+                                if let row = viewModel.outlierGroupTableRows.first(where: { $0.id == value }) {
+                                    Log.d("selected row \(row.name)")
+                                    for outlierView in outlierViews {
+                                        if outlierView.name == row.name {
+                                            // set this outlier view to selected
+                                            Log.d("outlier \(outlierView.name) is selected)")
+                                            outlierView.isSelected = true
+                                            break
+                                        }
+                                    }
+                                }
+                            }
+                            self.viewModel.update()
+                            
+                        } else {
+                            Log.w("no frame")
+                        }
+                    }
                 } .onChange(of: sortOrder) {
                     viewModel.outlierGroupTableRows.sort(using: $0)
+                } .onDisappear() {
+                    // without this selection will persist 
+                    if let frame = viewModel.outlierGroupWindowFrame {
+                        let frameView = viewModel.frames[frame.frame_index]
+                        if let outlierViews = frameView.outlierViews {
+                            for outlierView in outlierViews {
+                                outlierView.isSelected = false
+                            }
+                        }
+                    }
                 }
+                
                 Spacer()
             }
             Spacer()
-        }
+        }.navigationTitle(viewModel.outlierGroupWindowFrame == nil ?
+                                  OTHER_WINDOW_TITLE :
+                                  "\(OUTLIER_WINDOW_PREFIX) for frame \(viewModel.outlierGroupWindowFrame!.frame_index)")
     }
 }
 

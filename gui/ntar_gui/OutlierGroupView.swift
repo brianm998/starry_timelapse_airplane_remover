@@ -23,7 +23,8 @@ class OutlierGroupView: ObservableObject {
         self.frame_width = frame_width
         self.frame_height = frame_height
     }
-    
+
+    var isSelected = false
     let group: OutlierGroupEncodable
     let name: String
     let bounds: BoundingBox

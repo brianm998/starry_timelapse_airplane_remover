@@ -251,8 +251,11 @@ struct ContentView: View {
                             let outlier_center = outlierViewModel.bounds.center
                             
                             let will_paint = outlierViewModel.group.shouldPaint?.willPaint ?? false
-                            
-                            let paint_color: Color = will_paint ? .red : .green
+
+                            // this nested trinary sucks
+                            let paint_color: Color = outlierViewModel.isSelected ? .blue : (will_paint ? .red : .green)
+
+                            let _ = Log.i("outlierViewModel.isSelected \(outlierViewModel.isSelected) paint_color \(paint_color)")
                             
                             Image(nsImage: outlierViewModel.image)
                               .renderingMode(.template) // makes this VV color work
@@ -269,9 +272,6 @@ struct ContentView: View {
                                       // update the view model to show the change quickly
                                       outlierViewModel.group.shouldPaint = reason
                                       self.viewModel.update()
-
-
-
                                      
                                       Task {
                                           if let frame = viewModel.currentFrame,
@@ -392,6 +392,7 @@ struct ContentView: View {
                                            return .continue
                                        }
                                        await MainActor.run {
+                                           self.viewModel.outlierGroupWindowFrame = frame
                                            self.viewModel.outlierGroupTableRows = _outlierGroupTableRows
                                            Log.d("outlierGroupTableRows \(viewModel.outlierGroupTableRows.count)")
                                            showOutlierGroupTableWindow()
@@ -686,7 +687,7 @@ struct ContentView: View {
         var show = true
         for window in windows {
             Log.d("window.title \(window.title) window.subtitle \(window.subtitle) ")
-            if window.title == OTHER_WINDOW_TITLE {
+            if window.title.hasPrefix(OUTLIER_WINDOW_PREFIX) {
                 window.makeKey()
                 window.orderFrontRegardless()
                 show = false
@@ -708,6 +709,7 @@ struct ContentView: View {
                         return .continue
                     }
                     await MainActor.run {
+                        self.viewModel.outlierGroupWindowFrame = frame
                         self.viewModel.outlierGroupTableRows = _outlierGroupTableRows
                         showOutlierGroupTableWindow()
                     }
