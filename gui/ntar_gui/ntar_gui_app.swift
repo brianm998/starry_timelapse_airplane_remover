@@ -371,6 +371,9 @@ class ntar_gui_app: App {
         WindowGroup {
             ContentView(viewModel: viewModel)
         }
+        WindowGroup(id: "foobar") {
+            Text("some shit")
+        }
     }
 }
 

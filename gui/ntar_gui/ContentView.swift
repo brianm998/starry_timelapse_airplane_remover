@@ -37,6 +37,7 @@ enum SelectionMode: String, Equatable, CaseIterable {
 }
 
 // the overall level of the app
+@available(macOS 13.0, *) 
 struct ContentView: View {
     @ObservedObject var viewModel: ViewModel
     @State private var showOutliers = false
@@ -77,23 +78,18 @@ struct ContentView: View {
     @State private var outlierGroupTableRows: [OutlierGroupTableRow] = []
 
     //@State private var previously_opened_sheet_showing = false
-    @State private var previously_opened_sheet_showing_item: String
-    
+    @State private var previously_opened_sheet_showing_item: String =
+      UserPreferences.shared.sortedSequenceList.count > 0 ?
+      UserPreferences.shared.sortedSequenceList[0] : ""      
+
+    @Environment(\.openWindow) private var openWindow
     
     init(viewModel: ViewModel) {
         self.viewModel = viewModel
-
-        let array = UserPreferences.shared.sortedSequenceList
-        if array.count > 0 {
-            previously_opened_sheet_showing_item = array[0]
-        } else {
-            previously_opened_sheet_showing_item = ""
-        }
     }
     
     var body: some View {
         //let scaling_anchor = UnitPoint(x: 0.75, y: 0.75)
-
         if !running {
             InitialView(viewModel: viewModel,
                         running: $running,
@@ -101,6 +97,7 @@ struct ContentView: View {
         } else {
             sequenceView()
         }
+
     }
 
     // main view of an image seuqence
@@ -396,13 +393,13 @@ struct ContentView: View {
 
                                if let frame = frameView.frame {
                                    Task {
-                                       var new_outlier_info: [OutlierGroup] = []
+                                       //var new_outlier_info: [OutlierGroup] = []
                                        var _outlierGroupTableRows: [OutlierGroupTableRow] = []
                                        
                                        await frame.foreachOutlierGroup(between: drag_start,
                                                                        and: end_location) { group in
                                            Log.d("group \(group)")
-                                           new_outlier_info.append(group)
+                                           //new_outlier_info.append(group)
 
                                            let new_row = await OutlierGroupTableRow(group)
                                            _outlierGroupTableRows.append(new_row)
@@ -411,7 +408,8 @@ struct ContentView: View {
                                        await MainActor.run {
                                            outlierGroupTableRows = _outlierGroupTableRows
                                            Log.d("outlierGroupTableRows \(outlierGroupTableRows.count)")
-                                           info_sheet_showing = true
+                                           //info_sheet_showing = true
+                                           openWindow(id: "foobar")
                                        }
                                    }
                                } 
@@ -551,6 +549,8 @@ struct ContentView: View {
             paintAllButton()
               .frame(maxWidth: .infinity, alignment: .bottomTrailing)
             clearAllButton()
+              .frame(maxWidth: .infinity, alignment: .bottomTrailing)
+            outlierInfoButton()
               .frame(maxWidth: .infinity, alignment: .bottomTrailing)
             applyAllDecisionTreeButton()
               .frame(maxWidth: .infinity, alignment: .bottomTrailing)
@@ -695,6 +695,31 @@ struct ContentView: View {
             Text("DT Auto Only").font(.largeTitle)
         }.buttonStyle(ShrinkingButton())
     }
+
+    func outlierInfoButton() -> some View {
+        let action: () -> Void = {
+            Task {
+                var _outlierGroupTableRows: [OutlierGroupTableRow] = []
+                if let frame = viewModel.currentFrame {
+                    await frame.foreachOutlierGroup() { group in
+                        let new_row = await OutlierGroupTableRow(group)
+                        _outlierGroupTableRows.append(new_row)
+                        return .continue
+                    }
+                    await MainActor.run {
+                        outlierGroupTableRows = _outlierGroupTableRows
+                        Log.d("outlierGroupTableRows \(outlierGroupTableRows.count)")
+                        info_sheet_showing = true
+                    }
+                }
+            }
+            return
+        }
+        return Button(action: action) {
+            Text("Outlier Info").font(.largeTitle)
+        }.buttonStyle(ShrinkingButton())
+    }
+
     func applyAllDecisionTreeButton() -> some View {
         Log.d("applyAllDecisionTreeButton")
         let action: () -> Void = {
@@ -1220,6 +1245,7 @@ struct ContentView: View {
     }
 }
 
+@available(macOS 13.0, *) 
 struct ContentView_Previews: PreviewProvider {
     static var previews: some View {
         ContentView(viewModel: ViewModel())

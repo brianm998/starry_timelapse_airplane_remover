@@ -1,12 +1,32 @@
 import SwiftUI
 import NtarCore
 
+enum WillPaintType: Comparable {
+    case willPaint
+    case willNotPaint
+    case unknown
+}
+
 struct OutlierGroupTableRow: Identifiable {
     var id = UUID()
     
     let name: String
     let size: UInt
+//    let shouldPaint: PaintReason?
+    let willPaint: Bool?
 
+    var willPaintType: WillPaintType {
+        if let willPaint = willPaint {
+            if willPaint {
+                return .willPaint
+            } else {
+                return .willNotPaint
+            }
+        } else {
+            return .unknown
+        }
+    }
+    
     // decision tree values
     let dt_size: Double
     let dt_width: Double
@@ -38,6 +58,12 @@ struct OutlierGroupTableRow: Identifiable {
     init(_ group: OutlierGroup) async {
         name = await group.name
         size = await group.size
+        let shouldPaint = await group.shouldPaint
+        if let shouldPaint = shouldPaint {
+            willPaint = shouldPaint.willPaint
+        } else {
+            willPaint = nil
+        }
 
         dt_size = await group.decisionTreeValue(for: .size)
         dt_width = await group.decisionTreeValue(for: .width)
@@ -69,9 +95,9 @@ struct OutlierGroupTableRow: Identifiable {
 }
 
 typealias DTColumn = TableColumn<OutlierGroupTableRow,
-                                             KeyPathComparator<OutlierGroupTableRow>,
-                                             Text,
-                                             Text>
+                                 KeyPathComparator<OutlierGroupTableRow>,
+                                 Text,
+                                 Text>
 
 struct InfoSheetView: View {
     @Binding var isVisible: Bool
@@ -95,154 +121,170 @@ struct InfoSheetView: View {
         //outlierGroupTableRows.sort(using: OutlierGroupTableRow.size)
     }
 
-    var nameColumn: TableColumn<OutlierGroupTableRow,
-                                KeyPathComparator<OutlierGroupTableRow>,
-                                Text,
-                                Text>
-    {
-        TableColumn("name", value: \OutlierGroupTableRow.name)
+    var nameColumn: DTColumn {
+        TableColumn("name", value: \.name)
+          .width(min: 30, ideal: 80, max: 120)
     }
     
-    var sizeColumn: TableColumn<OutlierGroupTableRow,
-                                KeyPathComparator<OutlierGroupTableRow>,
-                                Text,
-                                Text>
-    {
-        TableColumn("size", value: \OutlierGroupTableRow.size) { (row: OutlierGroupTableRow) in
+    var sizeColumn: DTColumn {
+        TableColumn("size", value: \.size) { (row: OutlierGroupTableRow) in
             Text(String(row.size))
+        }.width(min: 10, ideal: 30, max: 80)
+    }
+
+    func image(for type: WillPaintType) -> Image {
+        switch type {
+        case .willPaint:
+            return Image(systemName: "paintbrush")
+        case .willNotPaint:
+            return Image(systemName: "xmark.seal")
+        case .unknown:
+            return Image(systemName: "camera.metering.unknown")
         }
     }
     
+    var willPaintColumn: TableColumn<OutlierGroupTableRow,
+                                     KeyPathComparator<OutlierGroupTableRow>,
+                                     Image,
+                                     Text> {
+        TableColumn("paint",
+                    value: \OutlierGroupTableRow.willPaintType) { (row: OutlierGroupTableRow) in
+            image(for: row.willPaintType)
+        }.width(min: 10, ideal: 20, max: 40)
+    }
+    
+    // add paint reason
+    
     var dtSizeColumn: DTColumn {
-        self.tableColumn(for: "dt_size", value: \.dt_size) { $0.dt_size }
+        self.tableColumn(for: "size", value: \.dt_size) { $0.dt_size }
     }
     
     var dtWidthColumn: DTColumn {
-        self.tableColumn(for: "dt_width", value: \.dt_width) { $0.dt_width }
+        self.tableColumn(for: "width", value: \.dt_width) { $0.dt_width }
     }
     
     var dtHeightColumn: DTColumn {
-        self.tableColumn(for: "dt_height", value: \.dt_height) { $0.dt_height }
+        self.tableColumn(for: "height", value: \.dt_height) { $0.dt_height }
     }
 
     var dtCenterXColumn: DTColumn {
-        self.tableColumn(for: "dt_centerX", value: \.dt_centerX) { $0.dt_centerX }
+        self.tableColumn(for: "centerX", value: \.dt_centerX) { $0.dt_centerX }
     }
 
     var dtCenterYColumn: DTColumn {
-        self.tableColumn(for: "dt_centerY", value: \.dt_centerY) { $0.dt_centerY }
+        self.tableColumn(for: "centerY", value: \.dt_centerY) { $0.dt_centerY }
     }
 
     var dtMinXColumn: DTColumn {
-        self.tableColumn(for: "dt_minX", value: \.dt_minX) { $0.dt_minX }
+        self.tableColumn(for: "minX", value: \.dt_minX) { $0.dt_minX }
     }
 
     var dtMinYColumn: DTColumn {
-        self.tableColumn(for: "dt_minY", value: \.dt_minY) { $0.dt_minY }
+        self.tableColumn(for: "minY", value: \.dt_minY) { $0.dt_minY }
     }
 
     var dtMaxXColumn: DTColumn {
-        self.tableColumn(for: "dt_maxX", value: \.dt_maxX) { $0.dt_maxX }
+        self.tableColumn(for: "maxX", value: \.dt_maxX) { $0.dt_maxX }
     }
 
     var dtMaxYColumn: DTColumn {
-        self.tableColumn(for: "dt_maxY", value: \.dt_maxY) { $0.dt_maxY }
+        self.tableColumn(for: "maxY", value: \.dt_maxY) { $0.dt_maxY }
     }
 
     var dtHypotenuseColumn: DTColumn {
-        self.tableColumn(for: "dt_hypotenuse", value: \.dt_hypotenuse) { $0.dt_hypotenuse }
+        self.tableColumn(for: "hypotenuse", value: \.dt_hypotenuse) { $0.dt_hypotenuse }
     }
 
     var dtAspectRatioColumn: DTColumn {
-        self.tableColumn(for: "dt_aspectRatio", value: \.dt_aspectRatio) { $0.dt_aspectRatio }
+        self.tableColumn(for: "aspectRatio", value: \.dt_aspectRatio) { $0.dt_aspectRatio }
     }
 
     var dtFillAmountColumn: DTColumn {
-        self.tableColumn(for: "dt_fillAmount", value: \.dt_fillAmount) { $0.dt_fillAmount }
+        self.tableColumn(for: "fillAmount", value: \.dt_fillAmount) { $0.dt_fillAmount }
     }
 
     var dtSurfaceAreaRatioColumn: DTColumn {
-        self.tableColumn(for: "dt_surfaceAreaRatio", value: \.dt_surfaceAreaRatio) { row in
+        self.tableColumn(for: "surfaceAreaRatio", value: \.dt_surfaceAreaRatio) { row in
             row.dt_surfaceAreaRatio
         }
     }
 
     var dtAveragebrightnessColumn: DTColumn {
-        self.tableColumn(for: "dt_averagebrightness", value: \.dt_averagebrightness) { row in
+        self.tableColumn(for: "averagebrightness", value: \.dt_averagebrightness) { row in
             row.dt_averagebrightness
         }
     }
 
     var dtMedianBrightnessColumn: DTColumn {
-        self.tableColumn(for: "dt_medianBrightness", value: \.dt_medianBrightness) { row in
+        self.tableColumn(for: "medianBrightness", value: \.dt_medianBrightness) { row in
             row.dt_medianBrightness
         }
     }
 
     var dtMaxBrightnessColumn: DTColumn {
-        self.tableColumn(for: "dt_maxBrightness", value: \.dt_maxBrightness) { row in
+        self.tableColumn(for: "maxBrightness", value: \.dt_maxBrightness) { row in
             row.dt_maxBrightness
         }
     }
 
     var dtAvgCountOfFirst10HoughLinesColumn: DTColumn {
-        self.tableColumn(for: "dt_avgCountOfFirst10HoughLines",
+        self.tableColumn(for: "avgCountOfFirst10HoughLines",
                          value: \.dt_avgCountOfFirst10HoughLines) { row in
             row.dt_avgCountOfFirst10HoughLines
         }
     }
 
     var dtMaxThetaDiffOfFirst10HoughLinesColumn: DTColumn {
-        self.tableColumn(for: "dt_maxThetaDiffOfFirst10HoughLines",
+        self.tableColumn(for: "maxThetaDiffOfFirst10HoughLines",
                          value: \.dt_maxThetaDiffOfFirst10HoughLines) { row in
             row.dt_maxThetaDiffOfFirst10HoughLines
         }
     }
 
     var dtMaxRhoDiffOfFirst10HoughLinesColumn: DTColumn {
-        self.tableColumn(for: "dt_maxRhoDiffOfFirst10HoughLines",
+        self.tableColumn(for: "maxRhoDiffOfFirst10HoughLines",
                          value: \.dt_maxRhoDiffOfFirst10HoughLines) { row in
             row.dt_maxRhoDiffOfFirst10HoughLines
         }
     }
     
     var dtNumberOfNearbyOutliersInSameFrameColumn: DTColumn {
-        self.tableColumn(for: "dt_numberOfNearbyOutliersInSameFrame",
+        self.tableColumn(for: "numberOfNearbyOutliersInSameFrame",
                          value: \.dt_numberOfNearbyOutliersInSameFrame) { row in
             row.dt_numberOfNearbyOutliersInSameFrame
         }
     }
 
     var dtAdjecentFrameNeighboringOutliersBestThetaColumn: DTColumn {
-        self.tableColumn(for: "dt_adjecentFrameNeighboringOutliersBestTheta",
+        self.tableColumn(for: "adjecentFrameNeighboringOutliersBestTheta",
                          value: \.dt_adjecentFrameNeighboringOutliersBestTheta) { row in
             row.dt_adjecentFrameNeighboringOutliersBestTheta
         }
     }
 
     var dtHistogramStreakDetectionColumn: DTColumn {
-        self.tableColumn(for: "dt_histogramStreakDetection",
+        self.tableColumn(for: "histogramStreakDetection",
                          value: \.dt_histogramStreakDetection) { row in
             row.dt_histogramStreakDetection
         }
     }
 
     var dtMaxHoughTransformCountColumn: DTColumn {
-        self.tableColumn(for: "dt_maxHoughTransformCount",
+        self.tableColumn(for: "maxHoughTransformCount",
                          value: \.dt_maxHoughTransformCount) { row in
             row.dt_maxHoughTransformCount
         }
     }
 
     var dtMaxHoughThetaColumn: DTColumn {
-        self.tableColumn(for: "dt_maxHoughTheta",
+        self.tableColumn(for: "maxHoughTheta",
                          value: \.dt_maxHoughTheta) { row in
             row.dt_maxHoughTheta
         }
     }
 
     var dtNeighboringInterFrameOutlierThetaScoreColumn: DTColumn {
-        self.tableColumn(for: "dt_neighboringInterFrameOutlierThetaScore",
+        self.tableColumn(for: "neighboringInterFrameOutlierThetaScore",
                          value: \.dt_neighboringInterFrameOutlierThetaScore) { row in
             row.dt_neighboringInterFrameOutlierThetaScore
         }
@@ -253,8 +295,8 @@ struct InfoSheetView: View {
                      closure: @escaping (OutlierGroupTableRow) -> Double) -> DTColumn
     {
         TableColumn(name, value: value) { (row: OutlierGroupTableRow) in
-            Text(String(format: "%3g", closure(row)))
-        }
+            Text(String(format: "%.2g", closure(row)))
+        }.width(min: 10, ideal: 60, max: 100)
     }
     
     @State var sortOrder: [KeyPathComparator<OutlierGroupTableRow>] = [
@@ -271,6 +313,9 @@ struct InfoSheetView: View {
                 Table(outlierGroupTableRows, selection: $selectedOutliers, sortOrder: $sortOrder) {
                     Group {
                         nameColumn
+                        willPaintColumn
+                    }
+                    Group {
                         sizeColumn
                         dtSizeColumn
                         dtWidthColumn
