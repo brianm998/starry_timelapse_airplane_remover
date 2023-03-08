@@ -385,6 +385,7 @@ struct OutlierGroupTable: View {
                                 outlierView.isSelected = false
                             }
                         }
+                        self.viewModel.update()
                     }
                 }
                 
