@@ -16,7 +16,6 @@
 		D332F70129B63F9D009E2796 /* SettingsSheetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D332F70029B63F9D009E2796 /* SettingsSheetView.swift */; };
 		D332F70329B63FD0009E2796 /* MassivePaintSheetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D332F70229B63FD0009E2796 /* MassivePaintSheetView.swift */; };
 		D332F70529B64004009E2796 /* ShrinkingButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = D332F70429B64004009E2796 /* ShrinkingButton.swift */; };
-		D332F70729B6C95A009E2796 /* InfoSheetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D332F70629B6C95A009E2796 /* InfoSheetView.swift */; };
 		D386FA11298B617300878B56 /* ntar_gui_app.swift in Sources */ = {isa = PBXBuildFile; fileRef = D386FA10298B617300878B56 /* ntar_gui_app.swift */; };
 		D386FA13298B617300878B56 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D386FA12298B617300878B56 /* ContentView.swift */; };
 		D386FA15298B617400878B56 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = D386FA14298B617400878B56 /* Assets.xcassets */; };
@@ -25,6 +24,7 @@
 		D386FA2D298B617400878B56 /* ntar_guiUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D386FA2C298B617400878B56 /* ntar_guiUITests.swift */; };
 		D386FA2F298B617400878B56 /* ntar_guiUITestsLaunchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D386FA2E298B617400878B56 /* ntar_guiUITestsLaunchTests.swift */; };
 		D3A54A6F29AFAD2C00C50709 /* UserPreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3A54A6E29AFAD2C00C50709 /* UserPreferences.swift */; };
+		D3B886AD29B830BE003590A1 /* OutlierGroupTable.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3B886AC29B830BE003590A1 /* OutlierGroupTable.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -56,7 +56,6 @@
 		D332F70029B63F9D009E2796 /* SettingsSheetView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SettingsSheetView.swift; sourceTree = "<group>"; };
 		D332F70229B63FD0009E2796 /* MassivePaintSheetView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = MassivePaintSheetView.swift; sourceTree = "<group>"; };
 		D332F70429B64004009E2796 /* ShrinkingButton.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ShrinkingButton.swift; sourceTree = "<group>"; };
-		D332F70629B6C95A009E2796 /* InfoSheetView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = InfoSheetView.swift; sourceTree = "<group>"; };
 		D386FA0D298B617300878B56 /* ntar_gui.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ntar_gui.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		D386FA10298B617300878B56 /* ntar_gui_app.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ntar_gui_app.swift; sourceTree = "<group>"; };
 		D386FA12298B617300878B56 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
@@ -69,6 +68,7 @@
 		D386FA2C298B617400878B56 /* ntar_guiUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ntar_guiUITests.swift; sourceTree = "<group>"; };
 		D386FA2E298B617400878B56 /* ntar_guiUITestsLaunchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ntar_guiUITestsLaunchTests.swift; sourceTree = "<group>"; };
 		D3A54A6E29AFAD2C00C50709 /* UserPreferences.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = UserPreferences.swift; sourceTree = "<group>"; };
+		D3B886AC29B830BE003590A1 /* OutlierGroupTable.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = OutlierGroupTable.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -139,7 +139,7 @@
 		D386FA0F298B617300878B56 /* ntar_gui */ = {
 			isa = PBXGroup;
 			children = (
-				D332F70629B6C95A009E2796 /* InfoSheetView.swift */,
+				D3B886AC29B830BE003590A1 /* OutlierGroupTable.swift */,
 				D332F70429B64004009E2796 /* ShrinkingButton.swift */,
 				D332F70229B63FD0009E2796 /* MassivePaintSheetView.swift */,
 				D332F70029B63F9D009E2796 /* SettingsSheetView.swift */,
@@ -367,8 +367,8 @@
 				D332F70329B63FD0009E2796 /* MassivePaintSheetView.swift in Sources */,
 				D31F9FBF299736740001CD0C /* ViewModel.swift in Sources */,
 				D31F9FC0299736740001CD0C /* FrameSaveQueue.swift in Sources */,
-				D332F70729B6C95A009E2796 /* InfoSheetView.swift in Sources */,
 				D386FA11298B617300878B56 /* ntar_gui_app.swift in Sources */,
+				D3B886AD29B830BE003590A1 /* OutlierGroupTable.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

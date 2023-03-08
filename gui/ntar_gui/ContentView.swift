@@ -73,7 +73,6 @@ struct ContentView: View {
 
     @State private var settings_sheet_showing = false
     @State private var paint_sheet_showing = false
-    @State private var info_sheet_showing = false
 
     //@State private var previously_opened_sheet_showing = false
     @State private var previously_opened_sheet_showing_item: String =
@@ -322,16 +321,6 @@ struct ContentView: View {
                           y: CGFloat(-viewModel.frame_height/2) + drag_y_offset - height/2)
             }
         }
-          .sheet(isPresented: $info_sheet_showing) {
-              InfoSheetView(isVisible: self.$info_sheet_showing,
-                            viewModel: viewModel)
-              { 
-                  // XXX don't really care it's dismissed
-              }.frame(minWidth: 800, // grab these from the overall view size
-                      minHeight: 800) // 
-          }
-        
-        // add a drag gesture  to allow selecting outliers for painting or not
         // XXX selecting and zooming conflict with eachother
           .gesture(self.selectionDragGesture)
         
@@ -405,7 +394,6 @@ struct ContentView: View {
                                        await MainActor.run {
                                            self.viewModel.outlierGroupTableRows = _outlierGroupTableRows
                                            Log.d("outlierGroupTableRows \(viewModel.outlierGroupTableRows.count)")
-                                           //info_sheet_showing = true
                                            openWindow(id: "foobar")
                                        }
                                    }
@@ -705,7 +693,7 @@ struct ContentView: View {
                     }
                     await MainActor.run {
                         self.viewModel.outlierGroupTableRows = _outlierGroupTableRows
-                        info_sheet_showing = true
+                        openWindow(id: "foobar")
                     }
                 }
             }

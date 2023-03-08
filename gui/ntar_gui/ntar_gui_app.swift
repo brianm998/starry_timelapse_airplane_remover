@@ -366,13 +366,19 @@ class ntar_gui_app: App {
             // update view for thumbnails
         }
     }
+
+    @State private var info_sheet_showing = false
     
     var body: some Scene {
         WindowGroup {
             ContentView(viewModel: viewModel)
         }
         WindowGroup(id: "foobar") {
-            Text("some shit")
+            OutlierGroupTable(isVisible: self.$info_sheet_showing,
+                          viewModel: viewModel)
+              { 
+                  // XXX don't really care it's dismissed
+              }
         }
     }
 }

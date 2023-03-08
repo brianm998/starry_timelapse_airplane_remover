@@ -99,7 +99,7 @@ typealias DTColumn = TableColumn<OutlierGroupTableRow,
                                  Text,
                                  Text>
 
-struct InfoSheetView: View {
+struct OutlierGroupTable: View {
     @Binding var isVisible: Bool
     @ObservedObject var viewModel: ViewModel
 
