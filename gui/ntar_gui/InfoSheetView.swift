@@ -103,17 +103,13 @@ struct InfoSheetView: View {
     @Binding var isVisible: Bool
     @ObservedObject var viewModel: ViewModel
 
-    @Binding var outlierGroupTableRows: [OutlierGroupTableRow]
-    
     var closure: () -> Void
 
     init(isVisible: Binding<Bool>,
-         outlierGroupTableRows: Binding<[OutlierGroupTableRow]>,
          viewModel: ViewModel,
          closure: @escaping () -> Void)
     {
         self._isVisible = isVisible
-        self._outlierGroupTableRows = outlierGroupTableRows
         self.closure = closure
         self.viewModel = viewModel
 
@@ -309,8 +305,8 @@ struct InfoSheetView: View {
             Spacer()
             VStack {
                 Spacer()
-                Text("Information about \(outlierGroupTableRows.count) outlier groups")
-                Table(outlierGroupTableRows, selection: $selectedOutliers, sortOrder: $sortOrder) {
+                Text("Information about \(viewModel.outlierGroupTableRows.count) outlier groups")
+                Table(viewModel.outlierGroupTableRows, selection: $selectedOutliers, sortOrder: $sortOrder) {
                     Group {
                         nameColumn
                         willPaintColumn
@@ -348,7 +344,7 @@ struct InfoSheetView: View {
                         dtNeighboringInterFrameOutlierThetaScoreColumn
                     }
                 } .onChange(of: sortOrder) {
-                    outlierGroupTableRows.sort(using: $0)
+                    viewModel.outlierGroupTableRows.sort(using: $0)
                 }
                 Button("Close") {
                     self.isVisible = false

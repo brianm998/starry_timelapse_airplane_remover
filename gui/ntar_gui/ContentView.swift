@@ -75,8 +75,6 @@ struct ContentView: View {
     @State private var paint_sheet_showing = false
     @State private var info_sheet_showing = false
 
-    @State private var outlierGroupTableRows: [OutlierGroupTableRow] = []
-
     //@State private var previously_opened_sheet_showing = false
     @State private var previously_opened_sheet_showing_item: String =
       UserPreferences.shared.sortedSequenceList.count > 0 ?
@@ -326,7 +324,6 @@ struct ContentView: View {
         }
           .sheet(isPresented: $info_sheet_showing) {
               InfoSheetView(isVisible: self.$info_sheet_showing,
-                            outlierGroupTableRows: self.$outlierGroupTableRows,
                             viewModel: viewModel)
               { 
                   // XXX don't really care it's dismissed
@@ -406,8 +403,8 @@ struct ContentView: View {
                                            return .continue
                                        }
                                        await MainActor.run {
-                                           outlierGroupTableRows = _outlierGroupTableRows
-                                           Log.d("outlierGroupTableRows \(outlierGroupTableRows.count)")
+                                           self.viewModel.outlierGroupTableRows = _outlierGroupTableRows
+                                           Log.d("outlierGroupTableRows \(viewModel.outlierGroupTableRows.count)")
                                            //info_sheet_showing = true
                                            openWindow(id: "foobar")
                                        }
@@ -707,8 +704,7 @@ struct ContentView: View {
                         return .continue
                     }
                     await MainActor.run {
-                        outlierGroupTableRows = _outlierGroupTableRows
-                        Log.d("outlierGroupTableRows \(outlierGroupTableRows.count)")
+                        self.viewModel.outlierGroupTableRows = _outlierGroupTableRows
                         info_sheet_showing = true
                     }
                 }

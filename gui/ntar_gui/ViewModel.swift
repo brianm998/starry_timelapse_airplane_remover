@@ -34,6 +34,8 @@ class ViewModel: ObservableObject {
 
     @Published var initial_load_in_progress = false
 
+    @Published var outlierGroupTableRows: [OutlierGroupTableRow] = []
+
     // the frame number of the frame we're currently showing
     var current_index = 0
 
