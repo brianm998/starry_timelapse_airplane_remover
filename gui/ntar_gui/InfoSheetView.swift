@@ -125,7 +125,7 @@ struct InfoSheetView: View {
     var sizeColumn: DTColumn {
         TableColumn("size", value: \.size) { (row: OutlierGroupTableRow) in
             Text(String(row.size))
-        }.width(min: 10, ideal: 30, max: 80)
+        }.width(min: 30, ideal: 40, max: 80)
     }
 
     func image(for type: WillPaintType) -> Image {
