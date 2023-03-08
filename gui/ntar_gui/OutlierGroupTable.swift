@@ -100,16 +100,13 @@ typealias DTColumn = TableColumn<OutlierGroupTableRow,
                                  Text>
 
 struct OutlierGroupTable: View {
-    @Binding var isVisible: Bool
     @ObservedObject var viewModel: ViewModel
 
     var closure: () -> Void
 
-    init(isVisible: Binding<Bool>,
-         viewModel: ViewModel,
+    init(viewModel: ViewModel,
          closure: @escaping () -> Void)
     {
-        self._isVisible = isVisible
         self.closure = closure
         self.viewModel = viewModel
 
@@ -345,13 +342,6 @@ struct OutlierGroupTable: View {
                     }
                 } .onChange(of: sortOrder) {
                     viewModel.outlierGroupTableRows.sort(using: $0)
-                }
-                Button("Close") {
-                    self.isVisible = false
-                }
-                Button("Copy to Clipboard") {
-                    // XXX do a copy to clipboard here XXXx
-                    self.isVisible = false
                 }
                 Spacer()
             }

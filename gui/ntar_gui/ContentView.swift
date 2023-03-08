@@ -693,7 +693,19 @@ struct ContentView: View {
                     }
                     await MainActor.run {
                         self.viewModel.outlierGroupTableRows = _outlierGroupTableRows
-                        openWindow(id: "foobar")
+                        let windows = NSApp.windows
+                        var show = true
+                        for window in windows {
+                            Log.d("window.title \(window.title) window.subtitle \(window.subtitle) ")
+                            if window.title == OTHER_WINDOW_TITLE {
+                                window.makeKey()
+                                window.orderFrontRegardless()
+                                show = false
+                            }
+                        }
+                        if show {
+                            openWindow(id: "foobar")
+                        }
                     }
                 }
             }

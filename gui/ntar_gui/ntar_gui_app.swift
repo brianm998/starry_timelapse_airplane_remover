@@ -85,11 +85,22 @@ class ntar_gui_app: App {
     let input_queue: FinalQueue
     
     required init() {
+        
         viewModel = ViewModel()
         let dispatch_handler = DispatchHandler()
         input_queue = FinalQueue(max_concurrent: 200, // XXX get this number right
                                  dispatchGroup: dispatch_handler)
 
+
+        Task {
+            for window in NSApp.windows {
+                if window.title == OTHER_WINDOW_TITLE {
+                    window.close()
+                }
+            }
+        }
+
+        
         viewModel.app = self
         Task(priority: .high) {
             try await input_queue.start()
@@ -367,21 +378,21 @@ class ntar_gui_app: App {
         }
     }
 
-    @State private var info_sheet_showing = false
     
     var body: some Scene {
         WindowGroup {
             ContentView(viewModel: viewModel)
         }
         WindowGroup(id: "foobar") {
-            OutlierGroupTable(isVisible: self.$info_sheet_showing,
-                          viewModel: viewModel)
+            OutlierGroupTable(viewModel: viewModel)
               { 
                   // XXX don't really care it's dismissed
-              }
+              }.navigationTitle(OTHER_WINDOW_TITLE)
         }
     }
 }
+
+let OTHER_WINDOW_TITLE = "FU"   // XXX make this better
 
 // allow intiazliation of an array with objects of some type that know their index
 // XXX put this somewhere else
