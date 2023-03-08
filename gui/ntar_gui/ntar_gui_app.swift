@@ -392,7 +392,7 @@ class ntar_gui_app: App {
     }
 }
 
-let OTHER_WINDOW_TITLE = "FU"   // XXX make this better
+let OTHER_WINDOW_TITLE = "Outlier Group Information"   // XXX make this better
 
 // allow intiazliation of an array with objects of some type that know their index
 // XXX put this somewhere else
