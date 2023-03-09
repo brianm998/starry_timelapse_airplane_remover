@@ -267,26 +267,67 @@ struct ContentView: View {
                                   if let origShouldPaint = outlierViewModel.group.shouldPaint {
                                       // change the paintability of this outlier group
                                       // set it to user selected opposite previous value
-                                      let reason = PaintReason.userSelected(!origShouldPaint.willPaint)
-                                      
-                                      // update the view model to show the change quickly
-                                      outlierViewModel.group.shouldPaint = reason
-                                      self.viewModel.update()
-                                     
                                       Task {
-                                          if let frame = viewModel.currentFrame,
-                                             let outlier_groups = await frame.outlier_groups,
-                                             let groups = outlier_groups.groups,
-                                             let outlier_group = groups[outlierViewModel.group.name]
-                                          {
-                                              // update the actor in the background
-                                              await outlier_group.shouldPaint(reason)
-                                              self.viewModel.update()
+                                          if selectionMode == .details {
+                                              // here we want to select just this outlier
+
+                                              if self.viewModel.outlierGroupTableRows.count == 1,
+                                                 self.viewModel.outlierGroupTableRows[0].name == outlierViewModel.group.name
+                                              {
+                                                  // just toggle the selectablility of this one
+                                                  // XXX need separate enums for selection does paint and selection does do info
+                                              } else {
+                                                  // make this row the only selected one
+                                                  let frame_view = viewModel.frames[outlierViewModel.group.frame_index]
+                                                  if let frame = frame_view.frame,
+                                                     let group = await frame.outlierGroup(named: outlierViewModel.group.name)
+                                                  {
+                                                      if let outlier_views = frame_view.outlierViews {
+                                                          for outlier_view in outlier_views {
+                                                              if outlier_view.name != outlierViewModel.group.name {
+                                                                  outlier_view.isSelected = false
+                                                              }
+                                                          }
+                                                      }
+                                                      let new_row = await OutlierGroupTableRow(group)
+                                                      outlierViewModel.isSelected = true
+                                                      await MainActor.run {
+                                                          self.viewModel.outlierGroupWindowFrame = frame
+                                                          self.viewModel.outlierGroupTableRows = [new_row]
+                                                          self.viewModel.selectedOutliers = [new_row.id]
+                                                          showOutlierGroupTableWindow()
+                                                          self.viewModel.update()
+
+                                                      }
+                                                  } else {
+                                                      Log.w("couldn't find frame")
+                                                  }
+                                              }
+                                          
                                           } else {
-                                              Log.e("HOLY FUCK")
+                                          
+                                              let reason = PaintReason.userSelected(!origShouldPaint.willPaint)
+                                          
+                                              // update the view model to show the change quickly
+                                              outlierViewModel.group.shouldPaint = reason
+                                              self.viewModel.update()
+                                              
+                                              Task {
+                                                  if let frame = viewModel.currentFrame,
+                                                     let outlier_groups = await frame.outlier_groups,
+                                                     let groups = outlier_groups.groups,
+                                                     let outlier_group = groups[outlierViewModel.group.name]
+                                                  {
+                                                      // update the actor in the background
+                                                      await outlier_group.shouldPaint(reason)
+                                                      self.viewModel.update()
+                                                  } else {
+                                                      Log.e("HOLY FUCK")
+                                                  }
+                                              }
                                           }
+                                          // update the view model so it shows up on screen
                                       }
-                                      // update the view model so it shows up on screen
                                   } else {
                                       Log.e("WTF, not already set to paint??")
                                   }
@@ -690,6 +731,7 @@ struct ContentView: View {
             if window.title.hasPrefix(OUTLIER_WINDOW_PREFIX) {
                 window.makeKey()
                 window.orderFrontRegardless()
+                //window.objectWillChange.send()
                 show = false
             }
         }

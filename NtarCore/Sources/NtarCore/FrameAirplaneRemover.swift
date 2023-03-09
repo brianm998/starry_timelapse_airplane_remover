@@ -527,7 +527,7 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
         return Data()
     }
 
-    func outlierGroup(named outlier_name: String) -> OutlierGroup? {
+    public func outlierGroup(named outlier_name: String) -> OutlierGroup? {
         return outlier_groups?.groups?[outlier_name]
     }
     

@@ -37,6 +37,8 @@ class ViewModel: ObservableObject {
     @Published var outlierGroupTableRows: [OutlierGroupTableRow] = []
     @Published var outlierGroupWindowFrame: FrameAirplaneRemover?
 
+    @Published var selectedOutliers = Set<OutlierGroupTableRow.ID>()
+    
     // the frame number of the frame we're currently showing
     var current_index = 0
 

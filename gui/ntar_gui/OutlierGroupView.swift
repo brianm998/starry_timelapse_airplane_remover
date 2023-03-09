@@ -2,8 +2,6 @@ import Foundation
 import SwiftUI
 import Cocoa
 import NtarCore
-import Zoomable
-
 
 
 

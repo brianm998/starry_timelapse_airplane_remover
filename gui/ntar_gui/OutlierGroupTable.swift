@@ -59,7 +59,6 @@ struct OutlierGroupTableRow: Identifiable {
     let dt_maxHoughTheta: Double
     let dt_neighboringInterFrameOutlierThetaScore: Double
 
-
     init(_ group: OutlierGroup) async {
         name = await group.name
         size = await group.size
@@ -295,7 +294,6 @@ struct OutlierGroupTable: View {
     @State var sortOrder: [KeyPathComparator<OutlierGroupTableRow>] = [
       .init(\.size, order: SortOrder.forward)
     ]
-    @State private var selectedOutliers = Set<OutlierGroupTableRow.ID>()
     
     var body: some View {
         HStack {
@@ -304,7 +302,7 @@ struct OutlierGroupTable: View {
                 Spacer()
                 Text("Information about \(viewModel.outlierGroupTableRows.count) outlier groups")
                 Table(viewModel.outlierGroupTableRows,
-                      selection: $selectedOutliers,
+                      selection: $viewModel.selectedOutliers,
                       sortOrder: $sortOrder)
                 {
                     // current compiler can't take more than 10 columns at once here
@@ -344,7 +342,7 @@ struct OutlierGroupTable: View {
                         dtMaxHoughThetaColumn
                         dtNeighboringInterFrameOutlierThetaScoreColumn
                     }
-                } .onChange(of: selectedOutliers) {newValue in 
+                } .onChange(of: viewModel.selectedOutliers) {newValue in 
                     Log.d("selected outliers \(newValue)")
                     if let frame = viewModel.outlierGroupWindowFrame {
                         let frameView = viewModel.frames[frame.frame_index]
