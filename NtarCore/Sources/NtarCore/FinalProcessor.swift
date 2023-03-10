@@ -857,7 +857,7 @@ func streak_from(group: OutlierGroup,
             // too far apart
             if distance > last_group_hypo + other_group_hypo { return .continue }
             
-            let center_line_theta = center_theta(from: last_group.bounds, to: other_group.bounds)
+            let center_line_theta = last_group.bounds.centerTheta(with: other_group.bounds)
 
             guard let other_group_line = await other_group.firstLine else { return .continue }
             guard let last_group_line = await last_group.firstLine else { return .continue }
@@ -925,10 +925,8 @@ func streak_from(group: OutlierGroup,
                         // i.e. the center line theta should not be too far off between this new group
                         // and the ones before it
 
-                        let center_theta_one_back = center_theta(from: best_group.bounds,
-                                                                 to: member_one_back.group.bounds)
-                        let center_theta_two_back = center_theta(from: best_group.bounds,
-                                                                 to: member_two_back.group.bounds)
+                        let center_theta_one_back = best_group.bounds.centerTheta(with: member_one_back.group.bounds)
+                        let center_theta_two_back = best_group.bounds.centerTheta(with: member_two_back.group.bounds)
 
                         if(abs(center_theta_one_back - center_theta_two_back) > 20) {// XXX constant (could be larger?)
                             Log.v("not adding \(best_group) to streak because \(center_theta_one_back) - \(center_theta_two_back) > 20")
@@ -958,59 +956,6 @@ func streak_from(group: OutlierGroup,
 }
 
 
-
-// theta in degrees of the line between the centers of the two bounding boxes
-func center_theta(from box_1: BoundingBox, to box_2: BoundingBox) -> Double {
-    //Log.v("center_theta(box_1.min.x: \(box_1.min.x), box_1.min.y: \(box_1.min.y), box_1.max.x: \(box_1.max.x), box_1.max.y: \(box_1.max.y), min_2_x: \(min_2_x), min_2_y: \(min_2_y), max_2_x: \(max_2_x), box_2.max.y: \(box_2.max.y)")
-
-    //Log.v("2 half size [\(half_width_2), \(half_height_2)]")
-
-    let center_1_x = Double(box_1.min.x) + Double(box_1.width)/2
-    let center_1_y = Double(box_1.min.y) + Double(box_1.height)/2
-
-    //Log.v("1 center [\(center_1_x), \(center_1_y)]")
-    
-    let center_2_x = Double(box_2.min.x) + Double(box_2.width)/2
-    let center_2_y = Double(box_2.min.y) + Double(box_2.height)/2
-    
-    //Log.v("2 center [\(center_2_x), \(center_2_y)]")
-
-    // special case horizontal alignment, theta 0 degrees
-    if center_1_y == center_2_y { return 0 }
-
-    // special case vertical alignment, theta 90 degrees
-    if center_1_x == center_2_x { return 90 }
-
-    var theta: Double = 0
-
-    let width = Double(abs(center_1_x - center_2_x))
-    let height = Double(abs(center_1_y - center_2_y))
-
-    let ninety_degrees_in_radians = 90 * Double.pi/180
-    
-    if center_1_x < center_2_x {
-        if center_1_y < center_2_y {
-            // 90 + case
-            theta = ninety_degrees_in_radians + atan(height/width)
-        } else { // center_1_y > center_2_y
-            // 0 - 90 case
-            theta = atan(width/height)
-        }
-    } else { // center_1_x > center_2_x
-        if center_1_y < center_2_y {
-            // 0 - 90 case
-            theta = atan(width/height)
-        } else { // center_1_y > center_2_y
-            // 90 + case
-            theta = ninety_degrees_in_radians + atan(height/width)
-        }
-    }
-
-    // XXX what about rho?
-    let theta_degrees = theta*180/Double.pi // convert from radians to degrees
-    //Log.v("theta_degrees \(theta_degrees)")
-    return  theta_degrees
-}
 
 // how many pixels actually overlap between the groups ?  returns 0-1 value of overlap amount
 @available(macOS 10.15, *)

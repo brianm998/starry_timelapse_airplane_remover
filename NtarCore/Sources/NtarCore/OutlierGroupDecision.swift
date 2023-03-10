@@ -46,6 +46,21 @@ public struct HoughLineHistogram {
         }
         return ret
     }
+
+    var maxTheta: Double {
+        var max_value: Double = 0
+        var max_index: Int = 0
+
+        for (index, value) in values.enumerated() {
+            if value > max_value {
+                max_value = value
+                max_index = index
+            }
+        }
+        var ret = Double(max_index*increment)
+        if ret > 360 { ret -= 360 }
+        return ret
+    }
 }
 
 // used for storing only decision tree data for all of the outlier groups in a frame
@@ -363,9 +378,10 @@ public extension OutlierGroup {
 
     private var numberOfNearbyOutliersInSameFrame: Double {
         get async {
-            if let frame = frame {
-                let nearby_groups = await frame.outlierGroups(within: 200, // XXX hardcoded constant
-                                                              of: self.bounds)
+            if let frame = frame,
+               let nearby_groups = await frame.outlierGroups(within: self.maxNearbyGroupDistance,
+                                                             of: self.bounds)
+            {
                 return Double(nearby_groups.count)
             } else {
                 fatalError("SHIT")
@@ -393,6 +409,25 @@ public extension OutlierGroup {
         }
         return 0
     }
+
+    private var maxNearbyGroupDistance: Double {
+        800*7000/IMAGE_WIDTH! // XXX hardcoded constant
+    }
+
+    // returns 1 if they are the same
+    // returns 0 if they are 180 degrees apart
+    private func thetaScore(between theta_1: Double, and theta_2: Double) -> Double {
+
+        var theta_1_opposite = theta_1 + 180
+        if theta_1_opposite > 360 { theta_1_opposite -= 360 }
+
+        var opposite_difference = theta_1_opposite - theta_2
+
+        if opposite_difference <   0 { opposite_difference += 360 }
+        if opposite_difference > 360 { opposite_difference -= 360 }
+
+        return opposite_difference / 180.0
+    }
     
     // tries to find a streak with hough line histograms
     private var histogramStreakDetection: Double {
@@ -401,24 +436,28 @@ public extension OutlierGroup {
                 var best_score = 0.0
                 let selfHisto = self.houghLineHistogram
 
-                if let previous_frame = await frame.previousFrame {
-                    let nearby_groups = await previous_frame.outlierGroups(within: 300, // XXX hardcoded constant
-                                                                           of: self.bounds)
+                if let previous_frame = await frame.previousFrame,
+                   let nearby_groups = await previous_frame.outlierGroups(within: self.maxNearbyGroupDistance,
+                                                                          of: self.bounds)
+                {
                     for group in nearby_groups {
+                        let center_line_theta = self.bounds.centerTheta(with: group.bounds)
                         let histo = await group.houghLineHistogram
-                        let score = histo.matchScore(with: selfHisto)
-                        best_score = max(score, best_score)
+                        let histo_score = histo.matchScore(with: selfHisto)
+                        let theta_score = thetaScore(between: center_line_theta, and: histo.maxTheta)
+                        best_score = max(histo_score*theta_score, best_score)
                     }
                 }
-                if let next_frame = await frame.nextFrame {
-                    let nearby_groups = await next_frame.outlierGroups(within: 300, // XXX hardcoded constant
-                                                                           of: self.bounds)
+                if let next_frame = await frame.nextFrame,
+                   let nearby_groups = await next_frame.outlierGroups(within: self.maxNearbyGroupDistance,
+                                                                      of: self.bounds)
+                {
                     for group in nearby_groups {
-                        // XXX apply some score to how close this theta
-                        // is to the direction it moves in
+                        let center_line_theta = self.bounds.centerTheta(with: group.bounds)
                         let histo = await group.houghLineHistogram
-                        let score = histo.matchScore(with: selfHisto)
-                        best_score = max(score, best_score)
+                        let histo_score = histo.matchScore(with: selfHisto)
+                        let theta_score = thetaScore(between: center_line_theta, and: histo.maxTheta)
+                        best_score = max(histo_score*theta_score, best_score)
                     }
                 }
                 return best_score
@@ -429,22 +468,25 @@ public extension OutlierGroup {
     }
 
     private var neighboringInterFrameOutlierThetaScore: Double {
-
+        // XXX doesn't use related frames 
         get async {
-            if let frame = frame {
-                let nearby_groups = await frame.outlierGroups(within: 300, // XXX hardcoded constant
-                                                              of: self.bounds)
+            if let frame = frame,
+               let nearby_groups = await frame.outlierGroups(within: self.maxNearbyGroupDistance,
+                                                             of: self.bounds)
+            {
                 let selfHisto = self.houghLineHistogram
                 var ret = 0.0
                 var count = 0
                 for group in nearby_groups {
                     if group.name == self.name { continue }
+                    let center_line_theta = self.bounds.centerTheta(with: group.bounds)
                     let otherHisto = self.houghLineHistogram
-                    let score = otherHisto.matchScore(with: selfHisto)
-                    // XXX modify this score by how close the theta of
+                    let theta_score = thetaScore(between: center_line_theta, and: otherHisto.maxTheta)
+                    let histo_score = otherHisto.matchScore(with: selfHisto)
+                    // modify this score by how close the theta of
                     // the line between the outlier groups center points
                     // is to the the theta of both of them
-                    ret += score
+                    ret += theta_score * histo_score
                     count += 1
                 }
                 if count > 0 { ret /= Double(count) }
@@ -467,9 +509,12 @@ public extension OutlierGroup {
             if let frame = frame {
                 let this_theta = self.firstLine?.theta ?? 180
                 var smallest_difference: Double = 360
-                if let previous_frame = await frame.previousFrame {
-                    let nearby_groups = await previous_frame.outlierGroups(within: 200, // XXX hardcoded constant
-                                                                           of: self.bounds)
+                if let previous_frame = await frame.previousFrame,
+                   let nearby_groups =
+                     await previous_frame.outlierGroups(within: self.maxNearbyGroupDistance,
+                                                            of: self.bounds)
+                {
+
                     for group in nearby_groups {
                         if let firstLine = await group.firstLine {
                             let difference = Double(abs(this_theta - firstLine.theta))
@@ -480,9 +525,10 @@ public extension OutlierGroup {
                     }
                 }
 
-                if let next_frame = await frame.nextFrame {
-                    let nearby_groups = await next_frame.outlierGroups(within: 200, // XXX hardcoded constant
-                                                                       of: self.bounds)
+                if let next_frame = await frame.nextFrame,
+                   let nearby_groups = await next_frame.outlierGroups(within: self.maxNearbyGroupDistance,
+                                                                      of: self.bounds)
+                {
                     for group in nearby_groups {
                         if let firstLine = await group.firstLine {
                             let difference = Double(abs(this_theta - firstLine.theta))

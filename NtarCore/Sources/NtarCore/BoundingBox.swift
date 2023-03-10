@@ -78,6 +78,62 @@ public struct BoundingBox: Codable {
         return 0
     }
 
+    // theta in degrees of the line between the centers of the two bounding boxes
+    func centerTheta(with box_2: BoundingBox) -> Double {
+        let box_1 = self
+        //Log.v("center_theta(box_1.min.x: \(box_1.min.x), box_1.min.y: \(box_1.min.y), box_1.max.x: \(box_1.max.x), box_1.max.y: \(box_1.max.y), min_2_x: \(min_2_x), min_2_y: \(min_2_y), max_2_x: \(max_2_x), box_2.max.y: \(box_2.max.y)")
+
+        //Log.v("2 half size [\(half_width_2), \(half_height_2)]")
+
+        let center_1_x = Double(box_1.min.x) + Double(box_1.width)/2
+        let center_1_y = Double(box_1.min.y) + Double(box_1.height)/2
+
+        //Log.v("1 center [\(center_1_x), \(center_1_y)]")
+        
+        let center_2_x = Double(box_2.min.x) + Double(box_2.width)/2
+        let center_2_y = Double(box_2.min.y) + Double(box_2.height)/2
+        
+        //Log.v("2 center [\(center_2_x), \(center_2_y)]")
+
+        // special case horizontal alignment, theta 0 degrees
+        if center_1_y == center_2_y { return 0 }
+
+        // special case vertical alignment, theta 90 degrees
+        if center_1_x == center_2_x { return 90 }
+
+        var theta: Double = 0
+
+        let width = Double(abs(center_1_x - center_2_x))
+        let height = Double(abs(center_1_y - center_2_y))
+
+        let ninety_degrees_in_radians = 90 * Double.pi/180
+        
+        if center_1_x < center_2_x {
+            if center_1_y < center_2_y {
+                // 90 + case
+                theta = ninety_degrees_in_radians + atan(height/width)
+            } else { // center_1_y > center_2_y
+                // 0 - 90 case
+                theta = atan(width/height)
+            }
+        } else { // center_1_x > center_2_x
+            if center_1_y < center_2_y {
+                // 0 - 90 case
+                theta = atan(width/height)
+            } else { // center_1_y > center_2_y
+                // 90 + case
+                theta = ninety_degrees_in_radians + atan(height/width)
+            }
+        }
+
+        // XXX what about rho?
+        let theta_degrees = theta*180/Double.pi // convert from radians to degrees
+        //Log.v("theta_degrees \(theta_degrees)")
+        return  theta_degrees
+    }
+
+
+    
     // positive if they don't overlap, negative if they do
     public func edgeDistance(to other_box: BoundingBox) -> Double {
 
