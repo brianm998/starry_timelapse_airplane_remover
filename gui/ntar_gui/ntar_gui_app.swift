@@ -75,23 +75,28 @@ class ntar_gui_app: App {
     var show_test_paint_colors = false
     var should_write_outlier_group_files = true // XXX see what happens
     var process_outlier_group_images = false
-    var image_sequence_dirname: String?
 
-    var viewModel: ViewModel
+    /*@StateObject*/ private var viewModel: ViewModel
 
     // the state of each frame indexed by frame #
-    var frame_states: [Int: FrameProcessingState] = [:]
+    //var frame_states: [Int: FrameProcessingState] = [:]
     
     let input_queue: FinalQueue
-    
+
     required init() {
         
-        viewModel = ViewModel()
         let dispatch_handler = DispatchHandler()
         input_queue = FinalQueue(max_concurrent: 200, // XXX get this number right
                                  dispatchGroup: dispatch_handler)
-
-
+/*
+        _viewModel = StateObject(wrappedValue: {
+                                     let ret = ViewModel()
+                                     // ret.app = self
+                                     return ret
+                                     }())
+ */
+        self.viewModel = ViewModel()
+        viewModel.app = self
         Task {
             for window in NSApp.windows {
                 if window.title.hasPrefix("Outlier") {
@@ -101,7 +106,6 @@ class ntar_gui_app: App {
         }
 
         
-        viewModel.app = self
         Task(priority: .high) {
             try await input_queue.start()
         }
@@ -161,9 +165,7 @@ class ntar_gui_app: App {
             do {
                 let config = try await Config.read(fromJsonFilename: json_config_filename)
 
-                viewModel.config = config
-
-                let callbacks = make_callbacks()
+                let callbacks = await make_callbacks()
                 
                 let eraser = try NighttimeAirplaneRemover(with: config,
                                                           callbacks: callbacks,
@@ -171,13 +173,17 @@ class ntar_gui_app: App {
                                                                                        maxResidentImages: 32*/
                                                           fullyProcess: false,
                                                           isGUI: true)
-                self.viewModel.eraser = eraser // XXX rename this crap
 
-                if let fp = eraser.final_processor {
-                    self.viewModel.frameSaveQueue = FrameSaveQueue(fp)
-                } else {
-                    fatalError("fucking fix this")
+                await MainActor.run {
+                    self.viewModel.eraser = eraser // XXX rename this crap
+                    self.viewModel.config = config
+                    if let fp = eraser.final_processor {
+                        self.viewModel.frameSaveQueue = FrameSaveQueue(fp)
+                    } else {
+                        fatalError("fucking fix this")
+                    }
                 }
+
                 Log.d("outlier json startup done")
             } catch {
                 Log.e("\(error)")
@@ -187,80 +193,78 @@ class ntar_gui_app: App {
         dispatchGroup.wait()
     }
     
-    func startup(withNewImageSequence image_sequence_dirname: String) {
+    @MainActor func startup(withNewImageSequence image_sequence_dirname: String) {
 
-        self.image_sequence_dirname = image_sequence_dirname
-        
         // XXX copied from Ntar.swift
-        if var input_image_sequence_dirname = self.image_sequence_dirname {
+        var input_image_sequence_dirname = image_sequence_dirname 
 
-            while input_image_sequence_dirname.hasSuffix("/") {
-                // remove any trailing '/' chars,
-                // otherwise our created output dir(s) will end up inside this dir,
-                // not alongside it
-                _ = input_image_sequence_dirname.removeLast()
-            }
+        while input_image_sequence_dirname.hasSuffix("/") {
+            // remove any trailing '/' chars,
+            // otherwise our created output dir(s) will end up inside this dir,
+            // not alongside it
+            _ = input_image_sequence_dirname.removeLast()
+        }
 
-            if !input_image_sequence_dirname.hasPrefix("/") {
-                let full_path =
-                  file_manager.currentDirectoryPath + "/" + 
-                  input_image_sequence_dirname
-                input_image_sequence_dirname = full_path
-            }
-            
-            var filename_paths = input_image_sequence_dirname.components(separatedBy: "/")
-            var input_image_sequence_path: String = ""
-            var input_image_sequence_name: String = ""
-            if let last_element = filename_paths.last {
-                filename_paths.removeLast()
-                input_image_sequence_path = filename_paths.joined(separator: "/")
-                if input_image_sequence_path.count == 0 { input_image_sequence_path = "/" }
-                input_image_sequence_name = last_element
-            } else {
-                input_image_sequence_path = "/"
-                input_image_sequence_name = input_image_sequence_dirname
-            }
+        if !input_image_sequence_dirname.hasPrefix("/") {
+            let full_path =
+              file_manager.currentDirectoryPath + "/" + 
+              input_image_sequence_dirname
+            input_image_sequence_dirname = full_path
+        }
+        
+        var filename_paths = input_image_sequence_dirname.components(separatedBy: "/")
+        var input_image_sequence_path: String = ""
+        var input_image_sequence_name: String = ""
+        if let last_element = filename_paths.last {
+            filename_paths.removeLast()
+            input_image_sequence_path = filename_paths.joined(separator: "/")
+            if input_image_sequence_path.count == 0 { input_image_sequence_path = "/" }
+            input_image_sequence_name = last_element
+        } else {
+            input_image_sequence_path = "/"
+            input_image_sequence_name = input_image_sequence_dirname
+        }
 
-            var output_path = ""
-            if let outputPath = self.outputPath {
-                output_path = outputPath
-            } else {
-                output_path = input_image_sequence_path
-            }
+        var output_path = ""
+        if let outputPath = self.outputPath {
+            output_path = outputPath
+        } else {
+            output_path = input_image_sequence_path
+        }
 
-            var test_paint_output_path = output_path
-            if let testPaintOutputPath = self.testPaintOutputPath {
-                test_paint_output_path = testPaintOutputPath
-            }
+        var test_paint_output_path = output_path
+        if let testPaintOutputPath = self.testPaintOutputPath {
+            test_paint_output_path = testPaintOutputPath
+        }
 
-            var config = Config(outputPath: output_path,
-                                outlierMaxThreshold: self.outlierMaxThreshold,
-                                outlierMinThreshold: self.outlierMinThreshold,
-                                minGroupSize: self.minGroupSize,
-                                numConcurrentRenders: self.numConcurrentRenders,
-                                test_paint: self.test_paint,
-                                test_paint_output_path: test_paint_output_path,
-                                imageSequenceName: input_image_sequence_name,
-                                imageSequencePath: input_image_sequence_path,
-                                writeOutlierGroupFiles: self.should_write_outlier_group_files,
-                                writeFramePreviewFiles: self.should_write_outlier_group_files,
-                                writeFrameProcessedPreviewFiles: self.should_write_outlier_group_files,
-                                writeFrameTestPaintPreviewFiles: self.should_write_outlier_group_files,
-                                writeFrameThumbnailFiles: self.should_write_outlier_group_files)
+        var config = Config(outputPath: output_path,
+                            outlierMaxThreshold: self.outlierMaxThreshold,
+                            outlierMinThreshold: self.outlierMinThreshold,
+                            minGroupSize: self.minGroupSize,
+                            numConcurrentRenders: self.numConcurrentRenders,
+                            test_paint: self.test_paint,
+                            test_paint_output_path: test_paint_output_path,
+                            imageSequenceName: input_image_sequence_name,
+                            imageSequencePath: input_image_sequence_path,
+                            writeOutlierGroupFiles: self.should_write_outlier_group_files,
+                            writeFramePreviewFiles: self.should_write_outlier_group_files,
+                            writeFrameProcessedPreviewFiles: self.should_write_outlier_group_files,
+                            writeFrameTestPaintPreviewFiles: self.should_write_outlier_group_files,
+                            writeFrameThumbnailFiles: self.should_write_outlier_group_files)
 
-            
-            viewModel.config = config
-            
-            let callbacks = make_callbacks()
-            Log.i("have config")
+        
+        
+        let callbacks = make_callbacks()
+        Log.i("have config")
 
-            do {
-                let eraser = try NighttimeAirplaneRemover(with: config,
-                                                          callbacks: callbacks,
-                                                          processExistingFiles: true,
-                                                          isGUI: true)
+        do {
+            let eraser = try NighttimeAirplaneRemover(with: config,
+                                                      callbacks: callbacks,
+                                                      processExistingFiles: true,
+                                                      isGUI: true)
 
                 self.viewModel.eraser = eraser // XXX rename this crap
+                self.viewModel.config = config
 
                 if let fp = eraser.final_processor {
                     self.viewModel.frameSaveQueue = FrameSaveQueue(fp)
@@ -268,16 +272,14 @@ class ntar_gui_app: App {
                     fatalError("fucking fix this")
                 }
 
-                
-                Log.i("done running")
-                
-            } catch {
-                Log.e("\(error)")
-            }
+            
+        } catch {
+            Log.e("\(error)")
         }
+
     }
 
-    func make_callbacks() -> Callbacks {
+    @MainActor func make_callbacks() -> Callbacks {
         var callbacks = Callbacks()
 
 
@@ -302,7 +304,7 @@ class ntar_gui_app: App {
             Log.d("frame \(frame.frame_index) changed to state \(state)")
             Task {
                 await MainActor.run {
-                    self.frame_states[frame.frame_index] = state
+                    //self.frame_states[frame.frame_index] = state
                     self.viewModel.objectWillChange.send()
                 }
             }
@@ -324,7 +326,7 @@ class ntar_gui_app: App {
         return callbacks
     }
 
-    func addToViewModel(frame new_frame: FrameAirplaneRemover) async {
+    @MainActor func addToViewModel(frame new_frame: FrameAirplaneRemover) async {
         Log.d("addToViewModel(frame: \(new_frame.frame_index))")
 
         if self.viewModel.config == nil {
@@ -383,6 +385,7 @@ class ntar_gui_app: App {
         WindowGroup {
             ContentView(viewModel: viewModel)
         }
+        
         WindowGroup(id: "foobar") {
             OutlierGroupTable(viewModel: viewModel)
               { 

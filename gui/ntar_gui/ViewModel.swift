@@ -5,7 +5,8 @@ import NtarCore
 import Zoomable
 
 // the overall view model
-class ViewModel: ObservableObject {
+@MainActor
+public class ViewModel: ObservableObject {
     var app: ntar_gui_app?
     var config: Config?
     var eraser: NighttimeAirplaneRemover?
