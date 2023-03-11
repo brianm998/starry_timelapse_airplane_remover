@@ -596,8 +596,9 @@ struct ContentView: View {
         }) {
             Text("Paint All").font(.largeTitle)
         }
-        .buttonStyle(ShrinkingButton())
-        .keyboardShortcut("p", modifiers: [])
+          .help("paint all of the outlier groups in the frame")
+          .buttonStyle(ShrinkingButton())
+          .keyboardShortcut("p", modifiers: [])
     }
     
     func clearAllButton() -> some View {
@@ -606,6 +607,7 @@ struct ContentView: View {
         }) {
             Text("Clear All").font(.largeTitle)
         }
+          .help("don't paint any of the outlier groups in the frame")
           .buttonStyle(ShrinkingButton())
           .keyboardShortcut("c", modifiers: [])
     }
@@ -626,7 +628,8 @@ struct ContentView: View {
                     }
                 }
             }
-        }.frame(maxWidth: .infinity, maxHeight: 50)
+        }
+          .frame(maxWidth: .infinity, maxHeight: 50)
           .background(viewModel.image_sequence_size == 0 ? .yellow : .clear)
     }
 
@@ -664,7 +667,9 @@ struct ContentView: View {
         
         return Button(action: action) {
             Text("Render All Frames").font(.largeTitle)
-        }.buttonStyle(ShrinkingButton())
+        }
+          .help("Render all frames of this sequence with current settings")
+          .buttonStyle(ShrinkingButton())
     }
 
     func renderCurrentFrame(_ closure: (() -> Void)? = nil) async {
@@ -693,7 +698,9 @@ struct ContentView: View {
         
         return Button(action: action) {
             Text("Render This Frame").font(.largeTitle)
-        }.buttonStyle(ShrinkingButton())
+        }
+          .help("Render the active frame with current settings")
+          .buttonStyle(ShrinkingButton())
     }
     
     func applyDecisionTreeButton() -> some View {
@@ -718,7 +725,9 @@ struct ContentView: View {
         }
         return Button(action: action) {
             Text("DT Auto Only").font(.largeTitle)
-        }.buttonStyle(ShrinkingButton())
+        }
+          .help("apply the outlier group decision tree to all selected outlier groups in this frame")
+          .buttonStyle(ShrinkingButton())
     }
 
     func showOutlierGroupTableWindow() {
@@ -759,7 +768,9 @@ struct ContentView: View {
         }
         return Button(action: action) {
             Text("Outlier Info").font(.largeTitle)
-        }.buttonStyle(ShrinkingButton())
+        }
+          .help("Open the outlier info table window for all outlier groups in this frame")
+          .buttonStyle(ShrinkingButton())
     }
 
     func applyAllDecisionTreeButton() -> some View {
@@ -793,8 +804,11 @@ struct ContentView: View {
         }
         return Button(action: action) {
             Text("Decision Tree All").font(.largeTitle)
-        }.buttonStyle(ShrinkingButton())
+        }
+          .help("apply the outlier group decision tree to all outlier groups in this frame")
+          .buttonStyle(ShrinkingButton())
     }
+
     func loadAllOutliersButton() -> some View {
         let action: () -> Void = {
             Task {
@@ -859,7 +873,9 @@ struct ContentView: View {
         
         return Button(action: action) {
             Text("Load All Outliers").font(.largeTitle)
-        }.buttonStyle(ShrinkingButton())
+        }
+          .help("Load all outlier groups for all frames.\nThis can take awhile.")
+          .buttonStyle(ShrinkingButton())
     }
     
     // an HStack of buttons to advance backwards and fowards through the sequence
@@ -1030,7 +1046,7 @@ struct ContentView: View {
     func toggleViews() -> some View {
         HStack() {
             VStack(alignment: .leading) {
-                Toggle("modify changes", isOn: $showOutliers)
+                Toggle("show edits", isOn: $showOutliers)
                   .keyboardShortcut("o", modifiers: [])
                   .help("show and change edits")
                   .onChange(of: showOutliers) { shouldShow in
@@ -1043,7 +1059,15 @@ struct ContentView: View {
                     ForEach(SelectionMode.allCases, id: \.self) { value in
                         Text(value.localizedName).tag(value)
                     }
-                }.pickerStyle(.radioGroup)
+                }
+                  .help("""
+                          What happens when outlier groups are selected?
+                            paint   - they will be marked for painting
+                            clear   - they will be marked for not painting
+                            details - they will be shown in the info window
+                        """)
+                 .frame(maxWidth: 280)
+                .pickerStyle(.segmented)
             }
             VStack(alignment: .leading) {
                 Picker("show", selection: $frameViewMode) {
