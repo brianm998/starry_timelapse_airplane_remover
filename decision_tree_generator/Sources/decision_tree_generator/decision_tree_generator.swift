@@ -197,7 +197,7 @@ struct decision_tree_generator: ParsableCommand {
                                         // could search for classes that conform to a new protocol
                                         // that defines this specific method, but it's static :(
                                         let decisionTreeShouldPaint =  
-                                          OutlierGroup.decisionTree_2db488e9(types: matrix.types,
+                                          OutlierGroup.decisionTree_5ef0d754(types: matrix.types,
                                                                              values: values.values)
                                         if decisionTreeShouldPaint == values.shouldPaint {
                                             number_good += 1
@@ -423,7 +423,7 @@ struct decision_tree_generator: ParsableCommand {
             // save this generated swift code to a file
 
             // XXX make this better
-            let filename = "../NtarCore/Sources/NtarCore/OutlierGroupDecisionTree_\(sha_hash.suffix(sha_suffix_size)).swift"
+            let filename = "../NtarCore/Sources/NtarCore/OutlierGroupDecisionTree_\(sha_hash.prefix(sha_suffix_size)).swift"
             do {
                 if file_manager.fileExists(atPath: filename) {
                     Log.i("overwriting already existing filename \(filename)")
