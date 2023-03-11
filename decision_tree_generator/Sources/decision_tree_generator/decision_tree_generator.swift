@@ -197,7 +197,7 @@ struct decision_tree_generator: ParsableCommand {
                                         // could search for classes that conform to a new protocol
                                         // that defines this specific method, but it's static :(
                                         let decisionTreeShouldPaint =  
-                                          OutlierGroup.decisionTree_5ef0d754(types: matrix.types,
+                                          OutlierGroup.decisionTree_2e88b8a1(types: matrix.types,
                                                                              values: values.values)
                                         if decisionTreeShouldPaint == values.shouldPaint {
                                             number_good += 1
