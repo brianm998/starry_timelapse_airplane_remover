@@ -382,16 +382,49 @@ class ntar_gui_app: App {
 
     
     var body: some Scene {
+        let contentView = ContentView(viewModel: viewModel)
         WindowGroup {
-            ContentView(viewModel: viewModel)
+            contentView
         }
-        
+          .commands {
+              CommandMenu("Actions") {
+                  contentView.paintAllButton()
+                    .keyboardShortcut("p", modifiers: [])
+                  //.disabled(!viewModel.sequenceLoaded)
+
+                  contentView.clearAllButton()
+                    .keyboardShortcut("c", modifiers: [])
+
+                  contentView.outlierInfoButton()
+                  contentView.applyAllDecisionTreeButton()
+                  contentView.applyDecisionTreeButton()
+                  contentView.loadAllOutliersButton()
+                  contentView.renderCurrentFrameButton()
+                  contentView.renderAllFramesButton()
+              }
+          }
         WindowGroup(id: "foobar") {
             OutlierGroupTable(viewModel: viewModel)
               { 
                   // XXX don't really care it's dismissed
               }
         }
+        // this shows up as stars and wand in the upper right of the menu bar
+        // always there when app is running, even when another app is used
+        MenuBarExtra {
+            ScrollView {
+                VStack(spacing: 0) {
+                    // maybe add buttons show show the different windows?
+                    // maybe show overall progress monitor of some type?
+                    Text("Should really be doing something here")
+                    Text("what exactly?")
+                    Text("not sure")
+                }
+            }
+        } label: {
+            Label("ntar", systemImage: "wand.and.stars.inverse")
+        }
+
     }
 }
 

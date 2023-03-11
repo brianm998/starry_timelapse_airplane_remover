@@ -51,7 +51,6 @@ struct ContentView: View {
     // faster low res previews otherwise
     @State private var showFullResolution = false
     
-    @State private var running = false
     @State private var drag_start: CGPoint?
     @State private var drag_end: CGPoint?
     @State private var isDragging = false
@@ -87,9 +86,8 @@ struct ContentView: View {
     
     var body: some View {
         //let scaling_anchor = UnitPoint(x: 0.75, y: 0.75)
-        if !running {
+        if !viewModel.sequenceLoaded {
             InitialView(viewModel: viewModel,
-                        running: $running,
                         previously_opened_sheet_showing_item: $previously_opened_sheet_showing_item)
         } else {
             sequenceView()
@@ -122,8 +120,6 @@ struct ContentView: View {
                               .opacity(should_show_progress ? 0.8 : 0)
                           )
                     }
-                      // buttons to the right of the selected frame
-                      .overlay(rightSideButtons(), alignment: .bottom)
 
                     VStack {
                         // buttons below the selected frame 
@@ -571,10 +567,11 @@ struct ContentView: View {
     
     func rightSideButtons() -> some View {
         VStack {
+
             paintAllButton()
               .frame(maxWidth: .infinity, alignment: .bottomTrailing)
             clearAllButton()
-              .frame(maxWidth: .infinity, alignment: .bottomTrailing)
+            .frame(maxWidth: .infinity, alignment: .bottomTrailing)
             outlierInfoButton()
               .frame(maxWidth: .infinity, alignment: .bottomTrailing)
             applyAllDecisionTreeButton()
@@ -594,22 +591,18 @@ struct ContentView: View {
         Button(action: {
                    setAllCurrentFrameOutliers(to: true, renderImmediately: false)
         }) {
-            Text("Paint All").font(.largeTitle)
+            Text("Paint All")
         }
           .help("paint all of the outlier groups in the frame")
-          .buttonStyle(ShrinkingButton())
-          .keyboardShortcut("p", modifiers: [])
     }
     
     func clearAllButton() -> some View {
         Button(action: {
             setAllCurrentFrameOutliers(to: false, renderImmediately: false)
         }) {
-            Text("Clear All").font(.largeTitle)
+            Text("Clear All")
         }
           .help("don't paint any of the outlier groups in the frame")
-          .buttonStyle(ShrinkingButton())
-          .keyboardShortcut("c", modifiers: [])
     }
 
     func filmstrip(withScroll scroller: ScrollViewProxy) -> some View {
@@ -666,10 +659,9 @@ struct ContentView: View {
         }
         
         return Button(action: action) {
-            Text("Render All Frames").font(.largeTitle)
+            Text("Render All Frames")
         }
           .help("Render all frames of this sequence with current settings")
-          .buttonStyle(ShrinkingButton())
     }
 
     func renderCurrentFrame(_ closure: (() -> Void)? = nil) async {
@@ -697,10 +689,9 @@ struct ContentView: View {
         }
         
         return Button(action: action) {
-            Text("Render This Frame").font(.largeTitle)
+            Text("Render This Frame")
         }
           .help("Render the active frame with current settings")
-          .buttonStyle(ShrinkingButton())
     }
     
     func applyDecisionTreeButton() -> some View {
@@ -724,10 +715,9 @@ struct ContentView: View {
             }
         }
         return Button(action: action) {
-            Text("DT Auto Only").font(.largeTitle)
+            Text("DT Auto Only")
         }
           .help("apply the outlier group decision tree to all selected outlier groups in this frame")
-          .buttonStyle(ShrinkingButton())
     }
 
     func showOutlierGroupTableWindow() {
@@ -767,10 +757,9 @@ struct ContentView: View {
             return
         }
         return Button(action: action) {
-            Text("Outlier Info").font(.largeTitle)
+            Text("Outlier Info")
         }
           .help("Open the outlier info table window for all outlier groups in this frame")
-          .buttonStyle(ShrinkingButton())
     }
 
     func applyAllDecisionTreeButton() -> some View {
@@ -803,10 +792,9 @@ struct ContentView: View {
             }
         }
         return Button(action: action) {
-            Text("Decision Tree All").font(.largeTitle)
+            Text("Decision Tree All")
         }
           .help("apply the outlier group decision tree to all outlier groups in this frame")
-          .buttonStyle(ShrinkingButton())
     }
 
     func loadAllOutliersButton() -> some View {
@@ -872,10 +860,9 @@ struct ContentView: View {
         }
         
         return Button(action: action) {
-            Text("Load All Outliers").font(.largeTitle)
+            Text("Load All Outliers")
         }
           .help("Load all outlier groups for all frames.\nThis can take awhile.")
-          .buttonStyle(ShrinkingButton())
     }
     
     // an HStack of buttons to advance backwards and fowards through the sequence

@@ -13,6 +13,8 @@ public class ViewModel: ObservableObject {
     var frameSaveQueue: FrameSaveQueue?
     var no_image_explaination_text: String = "Loading..."
 
+    @Published var sequenceLoaded = false
+    
     @Published var frame_width: CGFloat = 600
     @Published var frame_height: CGFloat = 450
     

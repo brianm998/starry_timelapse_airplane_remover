@@ -3,7 +3,6 @@ import NtarCore
 
 struct InitialView: View {
     @ObservedObject var viewModel: ViewModel
-    @Binding var running: Bool
     @Binding var previously_opened_sheet_showing_item: String
 
     var body: some View {
@@ -33,7 +32,7 @@ struct InitialView: View {
                         {
                             let path = returnedUrl.path
                             Log.d("url path \(path) viewModel.app \(viewModel.app)")
-                            running = true
+                            viewModel.sequenceLoaded = true
                             viewModel.initial_load_in_progress = true
                             
                             Task.detached(priority: .userInitiated) {
@@ -71,7 +70,7 @@ struct InitialView: View {
                                     let path = returnedUrl.path
                                     Log.d("url path \(path)")
                                     
-                                    running = true
+                                    viewModel.sequenceLoaded = true
                                     viewModel.initial_load_in_progress = true
                                     Task.detached(priority: .userInitiated) {
                                         do {
@@ -95,7 +94,7 @@ struct InitialView: View {
                             let loadRecent = {
                                 Log.d("load image sequence")
                                 
-                                running = true
+                                viewModel.sequenceLoaded = true
                                 viewModel.initial_load_in_progress = true
                                 
                                 Task.detached(priority: .userInitiated) {
