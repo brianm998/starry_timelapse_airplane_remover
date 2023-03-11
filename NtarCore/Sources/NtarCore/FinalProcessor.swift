@@ -78,7 +78,11 @@ public actor FinalProcessor {
         self.frame_count = frame_count
         self.dispatch_group = dispatch_group
         self.image_sequence = imageSequence
-        self.final_queue = FinalQueue(max_concurrent: config.numConcurrentRenders,
+
+        // too much concurrency here can cause the os to thrash on writing files
+        var final_queue_max_concurrent = config.numConcurrentRenders/2
+        if final_queue_max_concurrent <= 0 { final_queue_max_concurrent = 1 }
+        self.final_queue = FinalQueue(max_concurrent: final_queue_max_concurrent,
                                       dispatchGroup: dispatch_group)
     }
 
