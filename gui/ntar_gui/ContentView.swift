@@ -255,8 +255,6 @@ struct ContentView: View {
                             // this nested trinary sucks
                             let paint_color: Color = outlierViewModel.isSelected ? .blue : (will_paint ? .red : .green)
 
-                            let _ = Log.i("outlierViewModel.isSelected \(outlierViewModel.isSelected) paint_color \(paint_color)")
-                            
                             Image(nsImage: outlierViewModel.image)
                               .renderingMode(.template) // makes this VV color work
                               .foregroundColor(paint_color)
