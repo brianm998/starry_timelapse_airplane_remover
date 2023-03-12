@@ -16,7 +16,6 @@ fileprivate var video_play_timer: Timer?
 
 fileprivate var current_video_frame = 0
 
-
 enum FrameViewMode: String, Equatable, CaseIterable {
     case original
     case processed
@@ -64,7 +63,7 @@ struct ContentView: View {
     @State private var updating_frame_batch = false
 
     @State private var video_playback_framerate = 10
-    @State private var video_playing = false
+    @State var video_playing = false
 
     @State private var skipEmpties = false
     // if not skip empties, fast forward and reverse do a set number of frames
@@ -79,7 +78,7 @@ struct ContentView: View {
       UserPreferences.shared.sortedSequenceList[0] : ""      
 
     @Environment(\.openWindow) private var openWindow
-    
+
     init(viewModel: ViewModel) {
         self.viewModel = viewModel
     }
@@ -94,7 +93,7 @@ struct ContentView: View {
         }
 
     }
-
+    
     // main view of an image seuqence
     func sequenceView() -> some View {
         GeometryReader { top_geometry in
@@ -132,7 +131,8 @@ struct ContentView: View {
                         Spacer().frame(maxHeight: 10, alignment: .bottom)
                     }
                 }
-            }.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+            }
+              .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
               .padding()
               .background(background_color)
         }
@@ -864,7 +864,47 @@ struct ContentView: View {
         }
           .help("Load all outlier groups for all frames.\nThis can take awhile.")
     }
-    
+
+    func goToFirstFrameButtonAction(withScroll scroller: ScrollViewProxy? = nil) {
+        self.transition(toFrame: viewModel.frames[0],
+                        from: viewModel.currentFrame,
+                        withScroll: scroller)
+
+    }
+
+    func goToLastFrameButtonAction(withScroll scroller: ScrollViewProxy? = nil) {
+        self.transition(toFrame: viewModel.frames[viewModel.frames.count-1],
+                        from: viewModel.currentFrame,
+                        withScroll: scroller)
+
+    }
+
+    func fastPreviousButtonAction(withScroll scroller: ScrollViewProxy? = nil) {
+        if skipEmpties {
+            if let current_frame = viewModel.currentFrame {
+                self.transitionUntilNotEmpty(from: current_frame,
+                                             forwards: false,
+                                             withScroll: scroller)
+            }
+        } else {
+            self.transition(numberOfFrames: -fast_skip_amount,
+                            withScroll: scroller)
+        }
+    }
+
+    func fastForwardButtonAction(withScroll scroller: ScrollViewProxy? = nil) {
+        if skipEmpties {
+            if let current_frame = viewModel.currentFrame {
+                self.transitionUntilNotEmpty(from: current_frame,
+                                             forwards: true,
+                                             withScroll: scroller)
+            }
+        } else {
+            self.transition(numberOfFrames: fast_skip_amount,
+                            withScroll: scroller)
+        }
+    }
+
     // an HStack of buttons to advance backwards and fowards through the sequence
     func videoPlaybackButtons(_ scroller: ScrollViewProxy) -> some View {
 
@@ -878,7 +918,7 @@ struct ContentView: View {
         let button_color = Color(white: 202/256)
         
         return HStack {
-            // start button
+            // go to start button
             button(named: "backward.end.fill",
                    shortcutKey: start_shortcut_key,
                    color: button_color,
@@ -887,11 +927,8 @@ struct ContentView: View {
                      (keyboard shortcut '\(start_shortcut_key.character)')
                      """)
             {
-                self.transition(toFrame: viewModel.frames[0],
-                                from: viewModel.currentFrame,
-                                withScroll: scroller)
+                self.goToFirstFrameButtonAction(withScroll: scroller)
             }
-            
             
             // fast previous button
             button(named: "backward.fill",
@@ -902,16 +939,7 @@ struct ContentView: View {
                      (keyboard shortcut '\(fast_previous_shortut_key.character)')
                      """)
             {
-                if skipEmpties {
-                    if let current_frame = viewModel.currentFrame {
-                        self.transitionUntilNotEmpty(from: current_frame,
-                                                     forwards: false,
-                                                     withScroll: scroller)
-                    }
-                } else {
-                    self.transition(numberOfFrames: -fast_skip_amount,
-                                                      withScroll: scroller)
-                }
+                self.fastPreviousButtonAction(withScroll: scroller)
             }
             
             // previous button
@@ -962,16 +990,7 @@ struct ContentView: View {
                      (keyboard shortcut '\(fast_next_shortcut_key.character)')
                      """)
             {
-                if skipEmpties {
-                    if let current_frame = viewModel.currentFrame {
-                        self.transitionUntilNotEmpty(from: current_frame,
-                                                     forwards: true,
-                                                     withScroll: scroller)
-                    }
-                } else {
-                    self.transition(numberOfFrames: fast_skip_amount,
-                                    withScroll: scroller)
-                }
+                self.fastForwardButtonAction(withScroll: scroller)
             }
             
             
@@ -984,15 +1003,13 @@ struct ContentView: View {
                      (keyboard shortcut '\(end_button_shortcut_key.character)')
                      """)
             {
-                self.transition(toFrame: viewModel.frames[viewModel.frames.count-1],
-                                from: viewModel.currentFrame,
-                                withScroll: scroller)
+                self.goToLastFrameButtonAction(withScroll: scroller)
             }
         }
         
     }
 
-    func togglePlay(_ scroller: ScrollViewProxy) {
+    func togglePlay(_ scroller: ScrollViewProxy? = nil) {
         self.video_playing = !self.video_playing
         if video_playing {
             self.showOutliers = false
@@ -1016,7 +1033,9 @@ struct ContentView: View {
                 if current_video_frame >= self.viewModel.frames.count {
                     video_play_timer?.invalidate()
                     viewModel.current_index = current_video_frame
-                    scroller.scrollTo(viewModel.current_index, anchor: .center)
+                    if let scroller = scroller {
+                        scroller.scrollTo(viewModel.current_index, anchor: .center)
+                    }
                     video_playing = false
                 }
             }
@@ -1026,7 +1045,9 @@ struct ContentView: View {
             Log.d("not playing")
             // scroller usage here
             viewModel.current_index = current_video_frame
-            scroller.scrollTo(viewModel.current_index, anchor: .center)
+            if let scroller = scroller {
+                scroller.scrollTo(viewModel.current_index, anchor: .center)
+            }
         }
     }
     
@@ -1265,7 +1286,11 @@ struct ContentView: View {
         Log.d("transition from \(viewModel.currentFrame)")
         let start_time = Date().timeIntervalSinceReferenceDate
 
-        viewModel.frames[viewModel.current_index].isCurrentFrame = false
+        if viewModel.current_index >= 0,
+           viewModel.current_index < viewModel.frames.count
+        {
+            viewModel.frames[viewModel.current_index].isCurrentFrame = false
+        }
         viewModel.frames[new_frame_view.frame_index].isCurrentFrame = true
         viewModel.current_index = new_frame_view.frame_index
         

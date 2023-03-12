@@ -110,7 +110,7 @@ class ntar_gui_app: App {
             try await input_queue.start()
         }
         
-        Log.handlers[.console] = ConsoleLogHandler(at: .debug)
+        Log.handlers[.console] = ConsoleLogHandler(at: .info)
         Log.i("Starting Up")
 
         /*
@@ -380,7 +380,6 @@ class ntar_gui_app: App {
         }
     }
 
-    
     var body: some Scene {
         let contentView = ContentView(viewModel: viewModel)
         WindowGroup {
@@ -401,6 +400,29 @@ class ntar_gui_app: App {
                   contentView.loadAllOutliersButton()
                   contentView.renderCurrentFrameButton()
                   contentView.renderAllFramesButton()
+              }
+              CommandMenu("Playback") {
+                  Button("Show first frame") {
+                      contentView.goToFirstFrameButtonAction()
+                  }
+                  Button("Go back many frames") {
+                      contentView.fastPreviousButtonAction()
+                  }
+                  Button("Go back one frame") {
+                      contentView.transition(numberOfFrames: -1)
+                  }
+                  Button(contentView.video_playing ? "Pause Video" : "Play Video") {
+                      contentView.togglePlay()
+                  }
+                  Button("Advance one frame") {
+                      contentView.transition(numberOfFrames: 1)
+                  }
+                  Button("Advance many frames") {
+                      contentView.fastPreviousButtonAction()
+                  }
+                  Button("Show last frame") {
+                      contentView.goToFirstFrameButtonAction()
+                  }
               }
           }
         WindowGroup(id: "foobar") {
