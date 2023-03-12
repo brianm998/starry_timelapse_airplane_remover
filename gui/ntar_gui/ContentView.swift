@@ -99,11 +99,18 @@ struct ContentView: View {
             ScrollViewReader { scroller in
                 VStack {
                     let should_show_progress =
-                      viewModel.initial_load_in_progress ||
                       loading_outliers                   ||
                       rendering_current_frame            ||
                       updating_frame_batch               ||
                       rendering_all_frames
+
+                    if viewModel.initial_load_in_progress {
+                        HStack {
+                            Text("Loading Image Sequence")
+                            Spacer()
+                            ProgressView(value: viewModel.frameLoadingProgress)
+                        }
+                    }
 
                     if viewModel.loading_all_outliers {
                         HStack {

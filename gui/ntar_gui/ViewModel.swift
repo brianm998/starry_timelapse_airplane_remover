@@ -40,6 +40,8 @@ public class ViewModel: ObservableObject {
 
     @Published var number_of_frames_with_outliers_loaded = 0
 
+    @Published var number_of_frames_loaded = 0
+
     @Published var outlierGroupTableRows: [OutlierGroupTableRow] = []
     @Published var outlierGroupWindowFrame: FrameAirplaneRemover?
 
@@ -54,6 +56,11 @@ public class ViewModel: ObservableObject {
     var outlierLoadingProgress: Double {
         if image_sequence_size == 0 { 0 }
         return Double(number_of_frames_with_outliers_loaded)/Double(image_sequence_size)
+    }
+    
+    var frameLoadingProgress: Double {
+        if image_sequence_size == 0 { 0 }
+        return Double(number_of_frames_loaded)/Double(image_sequence_size)
     }
     
     // currently selected index in the sequence
@@ -175,6 +182,7 @@ public class ViewModel: ObservableObject {
         Log.d("appending frame \(frame.frame_index)")
         self.frames[frame.frame_index].frame = frame
 
+        number_of_frames_loaded += 1
         if self.initial_load_in_progress {
             var have_all = true
             for frame in self.frames {
