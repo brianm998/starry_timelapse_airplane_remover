@@ -101,11 +101,18 @@ struct ContentView: View {
                     let should_show_progress =
                       viewModel.initial_load_in_progress ||
                       loading_outliers                   ||
-                      viewModel.loading_all_outliers     || 
                       rendering_current_frame            ||
                       updating_frame_batch               ||
                       rendering_all_frames
 
+                    if viewModel.loading_all_outliers {
+                        HStack {
+                            Text("Loading Outlier Groups for all frames")
+                            Spacer()
+                            ProgressView(value: viewModel.outlierLoadingProgress)
+                        }
+                    }
+                    
                     // selected frame 
                     ZStack {
                         currentFrameView()
@@ -807,6 +814,7 @@ struct ContentView: View {
                         // this gets "Too many open files" with more than 2000 images :(
                         viewModel.loading_all_outliers = true
                         Log.d("foobar starting")
+                        viewModel.number_of_frames_with_outliers_loaded = 0
                         for frameView in viewModel.frames {
                             Log.d("frame \(frameView.frame_index) attempting to load outliers")
                             var did_load = false
@@ -826,6 +834,7 @@ struct ContentView: View {
                                             Task {
                                                 await MainActor.run {
                                                     Task {
+                                                        viewModel.number_of_frames_with_outliers_loaded += 1
                                                         await viewModel.setOutlierGroups(forFrame: frame)
                                                     }
                                                 }
