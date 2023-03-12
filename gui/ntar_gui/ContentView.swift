@@ -57,7 +57,6 @@ struct ContentView: View {
     @State private var background_color: Color = .gray
 
     @State private var loading_outliers = false
-    @State private var loading_all_outliers = false
     @State private var rendering_current_frame = false
     @State private var rendering_all_frames = false
     @State private var updating_frame_batch = false
@@ -102,7 +101,7 @@ struct ContentView: View {
                     let should_show_progress =
                       viewModel.initial_load_in_progress ||
                       loading_outliers                   ||
-                      loading_all_outliers               || 
+                      viewModel.loading_all_outliers     || 
                       rendering_current_frame            ||
                       updating_frame_batch               ||
                       rendering_all_frames
@@ -806,7 +805,7 @@ struct ContentView: View {
                     try await withThrowingTaskGroup(of: Void.self) { taskGroup in
                         let max_concurrent = viewModel.config?.numConcurrentRenders ?? 10
                         // this gets "Too many open files" with more than 2000 images :(
-                        loading_all_outliers = true
+                        viewModel.loading_all_outliers = true
                         Log.d("foobar starting")
                         for frameView in viewModel.frames {
                             Log.d("frame \(frameView.frame_index) attempting to load outliers")
@@ -850,7 +849,7 @@ struct ContentView: View {
                         }
                         
                         let end_time = Date().timeIntervalSinceReferenceDate
-                        loading_all_outliers = false
+                        viewModel.loading_all_outliers = false
                         Log.d("foobar loaded outliers for \(viewModel.frames.count) frames in \(end_time - start_time) seconds")
                     }                                 
                 } catch {

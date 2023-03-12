@@ -36,6 +36,7 @@ public class ViewModel: ObservableObject {
     var current_frame_image_view_mode: FrameViewMode = .original // XXX really orig?
 
     @Published var initial_load_in_progress = false
+    @Published var loading_all_outliers = false
 
     @Published var outlierGroupTableRows: [OutlierGroupTableRow] = []
     @Published var outlierGroupWindowFrame: FrameAirplaneRemover?
