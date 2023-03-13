@@ -54,12 +54,12 @@ public class ViewModel: ObservableObject {
     var image_sequence_size: Int = 0
 
     var outlierLoadingProgress: Double {
-        if image_sequence_size == 0 { 0 }
+        if image_sequence_size == 0 { return 0 }
         return Double(number_of_frames_with_outliers_loaded)/Double(image_sequence_size)
     }
     
     var frameLoadingProgress: Double {
-        if image_sequence_size == 0 { 0 }
+        if image_sequence_size == 0 { return 0 }
         return Double(number_of_frames_loaded)/Double(image_sequence_size)
     }
     
