@@ -18,7 +18,7 @@ struct TreeTestResults {
 }
 
 // how much do we truncate the sha256 hash when embedding it into code
-let sha_suffix_size = 8
+let sha_prefix_size = 8
 
 
 @main
@@ -197,7 +197,7 @@ struct decision_tree_generator: ParsableCommand {
                                         // could search for classes that conform to a new protocol
                                         // that defines this specific method, but it's static :(
                                         let decisionTreeShouldPaint =  
-                                          OutlierGroup.decisionTree_9ec4fbc9(types: matrix.types,
+                                          OutlierGroup.decisionTree_125389d5(types: matrix.types,
                                                                              values: values.values)
                                         if decisionTreeShouldPaint == values.shouldPaint {
                                             number_good += 1
@@ -379,6 +379,7 @@ struct decision_tree_generator: ParsableCommand {
                                         //if let json = matrix.prettyJson { print(json) }
                                         //Log.d("frame \(frame_index) matrix \(matrix)")
                                         for values in matrix.values {
+                                            
                                             var valueMap = OutlierGroupValueMap()
                                             for (index, type) in matrix.types.enumerated() {
                                                 valueMap.values[type] = values.values[index]
@@ -389,6 +390,8 @@ struct decision_tree_generator: ParsableCommand {
                                                 local_should_not_paint_test_data.append(valueMap)
                                             }
                                         }
+
+                                        //Log.i("got \(local_should_paint_test_data.count)/\(local_should_not_paint_test_data.count) test data from \(file)")
                                         
                                         return OutlierGroupValueMapResult(
                                           should_paint_test_data: local_should_paint_test_data,
@@ -407,12 +410,6 @@ struct decision_tree_generator: ParsableCommand {
             
             Log.i("Calculating decision tree with \(should_paint_test_data.count) should paint \(should_not_paint_test_data.count) should not paint test data outlier groups")
 
-            // XXX these are the same, but in different orders, not sure if that matters
-            //Log.d("should paint")
-            //log(valueMaps: should_paint_test_data)
-            //Log.d("should NOT paint")
-            //log(valueMaps: should_not_paint_test_data)
-
             let generator = DecisionTreeGenerator()
             
             let (tree_swift_code, sha_hash) =
@@ -423,7 +420,7 @@ struct decision_tree_generator: ParsableCommand {
             // save this generated swift code to a file
 
             // XXX make this better
-            let filename = "../NtarCore/Sources/NtarCore/OutlierGroupDecisionTree_\(sha_hash.prefix(sha_suffix_size)).swift"
+            let filename = "../NtarCore/Sources/NtarCore/OutlierGroupDecisionTree_\(sha_hash.prefix(sha_prefix_size)).swift"
             do {
                 if file_manager.fileExists(atPath: filename) {
                     Log.i("overwriting already existing filename \(filename)")

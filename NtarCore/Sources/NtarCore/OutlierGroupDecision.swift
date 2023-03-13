@@ -8,7 +8,8 @@ import Foundation
  
  */
 
-@available(macOS 10.15, *) 
+@available(macOS 10.15, *)
+// a typed vector of values for a single outlier group
 public struct OutlierGroupValueMap {
     public var values: [OutlierGroup.TreeDecisionType: Double] = [:]
     public init() { }
@@ -152,7 +153,7 @@ public extension OutlierGroup {
     var shouldPaintFromDecisionTree: Bool {
         get async {
             // XXX have the generator modify this?
-            return await self.shouldPaintFromDecisionTree_9ec4fbc9
+            return await self.shouldPaintFromDecisionTree_125389d5
 
             // XXX XXX XXX
             // XXX XXX XXX
