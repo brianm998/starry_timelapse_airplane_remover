@@ -8,6 +8,9 @@ import CryptoKit
 @available(macOS 10.15, *) 
 class DecisionTreeGenerator {
 
+    // number of levels (groups of '    ') of indentation to start with 
+    let initial_indent = 2
+    
     // top level func that writes a compilable wrapper around the root tree node
     func generateTree(withTrueData return_true_test_data: [OutlierGroupValueMap],
                       andFalseData return_false_test_data: [OutlierGroupValueMap],
@@ -17,7 +20,7 @@ class DecisionTreeGenerator {
         // the root tree node with all of the test data 
         let tree = await decisionTreeNode(with: return_true_test_data,
                                           and: return_false_test_data,
-                                          indent: 2)
+                                          indent: initial_indent)
 
         let generated_swift_code = tree.swiftCode
 
@@ -80,7 +83,7 @@ class DecisionTreeGenerator {
         function2_parameters.removeLast()
         function2_parameters.removeLast()
 
-        let hash_prefix = tree_hash_string.prefix(sha_suffix_size)
+        let hash_prefix = tree_hash_string.prefix(sha_prefix_size)
         
         let swift_string = """
           /*
@@ -155,10 +158,12 @@ class DecisionTreeGenerator {
 
     // recursively return a decision tree that differentiates the test data
     fileprivate func decisionTreeNode(with return_true_test_data: [OutlierGroupValueMap],
-                          and return_false_test_data: [OutlierGroupValueMap],
-                          indent: Int) async -> DecisionTree
+                                      and return_false_test_data: [OutlierGroupValueMap],
+                                      indent: Int) async -> DecisionTree
     {
-        //Log.i("decisionTreeNode with indent \(indent) return_true_test_data.count \(return_true_test_data.count) return_false_test_data.count \(return_false_test_data.count)")
+        if indent == self.initial_indent {
+            Log.i("decisionTreeNode with indent \(indent) return_true_test_data.count \(return_true_test_data.count) return_false_test_data.count \(return_false_test_data.count)")
+        }
 
         if return_true_test_data.count == 0,
            return_false_test_data.count == 0
@@ -190,9 +195,9 @@ class DecisionTreeGenerator {
         var should_paint_values: [OutlierGroup.TreeDecisionType: [Double]] = [:]
         var should_not_paint_values: [OutlierGroup.TreeDecisionType: [Double]] = [:]
         
-        await withTaskGroup(of: DecisionTypeValuesResult.self) { taskGroup in
+        await withLimitedTaskGroup(of: DecisionTypeValuesResult.self) { taskGroup in
             for type in OutlierGroup.TreeDecisionType.allCases {
-                taskGroup.addTask() {
+                await taskGroup.addTask() {
                     var list: [Double] = []
                     for test_data in return_true_test_data {
                         if let value = test_data.values[type] {
@@ -209,9 +214,9 @@ class DecisionTreeGenerator {
 
         //Log.i("decisionTreeNode checkpoint 0.5 with indent \(indent) return_true_test_data.count \(return_true_test_data.count) return_false_test_data.count \(return_false_test_data.count)")
 
-        await withTaskGroup(of: DecisionTypeValuesResult.self) { taskGroup in
+        await withLimitedTaskGroup(of: DecisionTypeValuesResult.self) { taskGroup in
             for type in OutlierGroup.TreeDecisionType.allCases {
-                taskGroup.addTask() {
+                await taskGroup.addTask() {
                     var list: [Double] = []
                     for test_data in return_false_test_data {
                         if let value = test_data.values[type] {
@@ -234,10 +239,10 @@ class DecisionTreeGenerator {
 
         let _should_paint_values: [OutlierGroup.TreeDecisionType: [Double]] = should_paint_values
         
-        await withTaskGroup(of: ValueDistribution.self) { taskGroup in
+        await withLimitedTaskGroup(of: ValueDistribution.self) { taskGroup in
             // for each type, calculate a min/max/mean/median for both paint and not
             for type in OutlierGroup.TreeDecisionType.allCases {
-                taskGroup.addTask() {
+                await taskGroup.addTask() {
                     var min = Double.greatestFiniteMagnitude
                     var max = -Double.greatestFiniteMagnitude
                     var sum = 0.0
@@ -267,9 +272,9 @@ class DecisionTreeGenerator {
         let _should_not_paint_values: [OutlierGroup.TreeDecisionType: [Double]] = should_not_paint_values
 
         // XXX dupe above for not paint
-        await withTaskGroup(of: ValueDistribution.self) { taskGroup in
+        await withLimitedTaskGroup(of: ValueDistribution.self) { taskGroup in
             for type in OutlierGroup.TreeDecisionType.allCases {
-                taskGroup.addTask() {
+                await taskGroup.addTask() {
                     var min = Double.greatestFiniteMagnitude
                     var max = -Double.greatestFiniteMagnitude
                     var sum = 0.0
@@ -301,13 +306,13 @@ class DecisionTreeGenerator {
         var rankedDecisionResults: [RankedResult<DecisionResult>] = []
         var bestTreeNodes: [RankedResult<DecisionTree>] = []
 
-        await withTaskGroup(of: TreeDecisionTypeResult.self) { taskGroup in
+        await withLimitedTaskGroup(of: Array<TreeDecisionTypeResult>.self) { taskGroup in
         
             for type in OutlierGroup.TreeDecisionType.allCases {
                 if let paint_dist = should_paint_dist[type],
                    let not_paint_dist = should_not_paint_dist[type]
                 {
-                    taskGroup.addTask() {
+                    await taskGroup.addTask() {
                         //Log.d("type \(type)")
                         if paint_dist.max < not_paint_dist.min {
                             // we have a clear distinction between all provided test data
@@ -323,7 +328,7 @@ class DecisionTreeGenerator {
                                                indent: indent)
                             ret.should_paint_dist = paint_dist
                             ret.should_not_paint_dist = not_paint_dist
-                            return ret
+                            return [ret]
                         } else if not_paint_dist.max < paint_dist.min {
                             //Log.d("clear distinction \(not_paint_dist.max) < \(paint_dist.min)")
                             // we have a clear distinction between all provided test data
@@ -337,62 +342,50 @@ class DecisionTreeGenerator {
                                                indent: indent)
                             ret.should_paint_dist = paint_dist
                             ret.should_not_paint_dist = not_paint_dist
-                            return ret
+                            return [ret]
                         } else {
-                            //Log.d("no clear distinction, need new node at indent \(indent)")
                             // we do not have a clear distinction between all provided test data
                             // we need to figure out what type is best to segarate
                             // the test data further
                             
                             // test this type to see how much we can split the data based upon it
-                            
-                            // for now, center between their medians
-                            // possible improvement is to decide based upon something else
-                            // use this value to split the return_true_test_data and not paint
-                            let decisionValue = (paint_dist.median + not_paint_dist.median) / 2
-                            
-                            var lessThanShouldPaint: [OutlierGroupValueMap] = []
-                            var lessThanShouldNotPaint: [OutlierGroupValueMap] = []
-                            
-                            var greaterThanShouldPaint: [OutlierGroupValueMap] = []
-                            var greaterThanShouldNotPaint: [OutlierGroupValueMap] = []
-                            
-                            // calculate how the data would split if we used the above decision value
-                            for group_values in return_true_test_data {
-                                if let group_value = group_values.values[type] {
-                                    if group_value < decisionValue {
-                                        lessThanShouldPaint.append(group_values)
-                                    } else {
-                                        greaterThanShouldPaint.append(group_values)
-                                    }
-                                } else {
-                                    Log.e("no value for type \(type)")
-                                    fatalError("SHIT")
-                                }
-                            }
-                            
-                            for group_values in return_false_test_data {
-                                if let group_value = group_values.values[type] {
-                                    if group_value < decisionValue {
-                                        lessThanShouldNotPaint.append(group_values)
-                                    } else {
-                                        greaterThanShouldNotPaint.append(group_values)
-                                    }
-                                } else {
-                                    Log.e("FUCK")
-                                    fatalError("SHIT")
-                                }
+
+                            if indent == self.initial_indent {
+                                Log.d("for \(type) paint_dist min \(paint_dist.min) median \(paint_dist.median) mean \(paint_dist.mean) max \(paint_dist.max) not_paint_dist min \(not_paint_dist.min) mean \(not_paint_dist.mean) median \(not_paint_dist.max) median \(not_paint_dist.max)")
                             }
 
-                            var ret = TreeDecisionTypeResult(type: type)
-                            ret.decisionResult =
-                              DecisionResult(type: type,
-                                             value: decisionValue,
-                                             lessThanShouldPaint: lessThanShouldPaint,
-                                             lessThanShouldNotPaint: lessThanShouldNotPaint,
-                                             greaterThanShouldPaint: greaterThanShouldPaint,
-                                             greaterThanShouldNotPaint: greaterThanShouldNotPaint)
-                            return ret
+                            // XXX find more ways to split the data
+                            return [
+                              self.result(for: type,
+                                             decisionValue: (paint_dist.median + not_paint_dist.median) / 2,
+                                             withTrueData: return_true_test_data,
+                                             andFalseData: return_false_test_data),
+                              // XXX expermintal
+                              /*
+                              self.result(for: type,
+                                             decisionValue: (paint_dist.mean + not_paint_dist.mean) / 2,
+                                             withTrueData: return_true_test_data,
+                                             andFalseData: return_false_test_data),
+
+
+                              self.result(for: type,
+                                             decisionValue: (paint_dist.min + not_paint_dist.max) / 2,
+                                             withTrueData: return_true_test_data,
+                                             andFalseData: return_false_test_data),
+                              self.result(for: type,
+                                             decisionValue: (paint_dist.max + not_paint_dist.min) / 2,
+                                             withTrueData: return_true_test_data,
+                                             andFalseData: return_false_test_data),
+                              self.result(for: type,
+                                             decisionValue: (paint_dist.max + not_paint_dist.max) / 2,
+                                             withTrueData: return_true_test_data,
+                                             andFalseData: return_false_test_data),
+                              self.result(for: type,
+                                             decisionValue: (paint_dist.min + not_paint_dist.min) / 2,
+                                             withTrueData: return_true_test_data,
+                                             andFalseData: return_false_test_data),
+                               */
+                            ]
                         }
                     }
                 }
@@ -401,15 +394,17 @@ class DecisionTreeGenerator {
             var decisionResults: [DecisionResult] = []
             var decisionTreeNodes: [TreeDecisionTypeResult] = []
 
-            while let response = await taskGroup.next() {
-                if let result = response.decisionResult {
-                    decisionResults.append(result)
-                }
-                if let _ = response.decisionTreeNode,
-                   let _ = response.should_paint_dist,
-                   let _ = response.should_not_paint_dist
-                {
-                    decisionTreeNodes.append(response)
+            while let responses = await taskGroup.next() {
+                for response in responses {
+                    if let result = response.decisionResult {
+                        decisionResults.append(result)
+                    }
+                    if let _ = response.decisionTreeNode,
+                       let _ = response.should_paint_dist,
+                       let _ = response.should_not_paint_dist
+                    {
+                        decisionTreeNodes.append(response)
+                    }
                 }
             }
 
@@ -521,6 +516,10 @@ class DecisionTreeGenerator {
                 }
 
                 if maxList.count == 1 {
+                    
+                    if indent == self.initial_indent {
+                        Log.i("maxlist count is one, using type \(maxList[0].result.type)")
+                    }
                     // sorting by rank gave us just one
                     return await recurseOn(result: maxList[0].result, indent: indent) // XXX
                 } else {
@@ -529,6 +528,10 @@ class DecisionTreeGenerator {
                     // XXX maybe sort by something else?
 
                     let maxSort = maxList.sorted { $0.type < $1.type }
+
+                    if indent == self.initial_indent {
+                        Log.i("sorted by type is one, using type \(maxSort[0].result.type)")
+                    }
                     
                     return await recurseOn(result: maxSort[0].result, indent: indent) // XXX
                 }
@@ -549,8 +552,8 @@ class DecisionTreeGenerator {
         var greater_response: TreeResponse?
 
         // first recurse on both sides of the decision tree with differentated test data
-        await withTaskGroup(of: TreeResponse.self) { taskGroup in
-            taskGroup.addTask() {
+        await withLimitedTaskGroup(of: TreeResponse.self) { taskGroup in
+            await taskGroup.addTask() {
                 let less_tree = await self.decisionTreeNode(with: result.lessThanShouldPaint,
                                                             and: result.lessThanShouldNotPaint,
                                                             indent: indent + 1)
@@ -568,7 +571,7 @@ class DecisionTreeGenerator {
                 }
              }
              */
-            taskGroup.addTask() {
+            await taskGroup.addTask() {
                 let greater_tree = await self.decisionTreeNode(with: result.greaterThanShouldPaint,
                                                                and: result.greaterThanShouldNotPaint,
                                                                indent: indent + 1)
@@ -597,6 +600,55 @@ class DecisionTreeGenerator {
             Log.e("holy fuck")
             fatalError("doh")
         }
+    }
+
+    fileprivate func result(for type: OutlierGroup.TreeDecisionType,
+                               decisionValue: Double,
+                               withTrueData return_true_test_data: [OutlierGroupValueMap],
+                               andFalseData return_false_test_data: [OutlierGroupValueMap]) -> TreeDecisionTypeResult {
+        var lessThanShouldPaint: [OutlierGroupValueMap] = []
+        var lessThanShouldNotPaint: [OutlierGroupValueMap] = []
+        
+        var greaterThanShouldPaint: [OutlierGroupValueMap] = []
+        var greaterThanShouldNotPaint: [OutlierGroupValueMap] = []
+        
+        // calculate how the data would split if we used the above decision value
+        for group_values in return_true_test_data {
+            if let group_value = group_values.values[type] {
+                if group_value < decisionValue {
+                    lessThanShouldPaint.append(group_values)
+                } else {
+                    greaterThanShouldPaint.append(group_values)
+                }
+            } else {
+                Log.e("no value for type \(type)")
+                fatalError("SHIT")
+            }
+        }
+        
+        for group_values in return_false_test_data {
+            if let group_value = group_values.values[type] {
+                if group_value < decisionValue {
+                    lessThanShouldNotPaint.append(group_values)
+                } else {
+                    greaterThanShouldNotPaint.append(group_values)
+                }
+            } else {
+                Log.e("FUCK")
+                fatalError("SHIT")
+            }
+        }
+
+        var ret = TreeDecisionTypeResult(type: type)
+        ret.decisionResult =
+          DecisionResult(type: type,
+                         value: decisionValue,
+                         lessThanShouldPaint: lessThanShouldPaint,
+                         lessThanShouldNotPaint: lessThanShouldNotPaint,
+                         greaterThanShouldPaint: greaterThanShouldPaint,
+                         greaterThanShouldNotPaint: greaterThanShouldNotPaint)
+
+        return ret
     }
 }
 
@@ -671,6 +723,10 @@ fileprivate struct DecisionResult {
         self.lessThanShouldNotPaint = lessThanShouldNotPaint
         self.greaterThanShouldPaint = greaterThanShouldPaint
         self.greaterThanShouldNotPaint = greaterThanShouldNotPaint
+
+
+        // XXX somehow factor in how far away the training data is from the split as well?
+        
         // this is the 0-1 percentage of should_paint on the less than split
         self.lessThanSplit =
           Double(lessThanShouldPaint.count) /
