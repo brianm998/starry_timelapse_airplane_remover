@@ -29,7 +29,7 @@ struct SettingsSheetView: View {
                             }
                         }.frame(maxWidth: 200)
                     }
-                    let frame_rates = [5, 10, 15, 20, 25, 30]
+                    let frame_rates = [1, 2, 3, 5, 10, 15, 20, 25, 30]
                     Picker("Frame Rate", selection: $video_playback_framerate) {
                         ForEach(frame_rates, id: \.self) {
                             Text("\($0) fps")

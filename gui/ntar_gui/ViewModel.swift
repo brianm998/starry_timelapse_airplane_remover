@@ -124,7 +124,7 @@ public class ViewModel: ObservableObject {
                let processed_preview_image = NSImage(contentsOf: URL(fileURLWithPath: processed_preview_filename))
             {
                 Log.d("loaded processed preview for self.frames[\(frame.frame_index)] from jpeg")
-                let view_image = Image(nsImage: processed_preview_image)
+                let view_image = Image(nsImage: processed_preview_image).resizable()
                 self.frames[frame.frame_index].processed_preview_image = view_image
             }
             
@@ -132,7 +132,7 @@ public class ViewModel: ObservableObject {
                let test_paint_preview_image = NSImage(contentsOf: URL(fileURLWithPath: test_paint_preview_filename))
             {
                 Log.d("loaded test paint preview for self.frames[\(frame.frame_index)] from jpeg")
-                let view_image = Image(nsImage: test_paint_preview_image)
+                let view_image = Image(nsImage: test_paint_preview_image).resizable()
                 self.frames[frame.frame_index].test_paint_preview_image = view_image
             }
             
@@ -140,7 +140,7 @@ public class ViewModel: ObservableObject {
                let preview_image = NSImage(contentsOf: URL(fileURLWithPath: preview_filename))
             {
                 Log.d("loaded preview for self.frames[\(frame.frame_index)] from jpeg")
-                let view_image = Image(nsImage: preview_image)
+                let view_image = Image(nsImage: preview_image).resizable()
                 self.frames[frame.frame_index].preview_image = view_image
             } 
             

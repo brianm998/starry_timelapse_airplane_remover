@@ -61,7 +61,7 @@ struct ContentView: View {
     @State private var rendering_all_frames = false
     @State private var updating_frame_batch = false
 
-    @State private var video_playback_framerate = 10
+    @State private var video_playback_framerate = 30
     @State var video_playing = false
 
     @State private var skipEmpties = false
@@ -132,16 +132,17 @@ struct ContentView: View {
                               .opacity(should_show_progress ? 0.8 : 0)
                           )
                     }
-
                     VStack {
                         // buttons below the selected frame 
                         bottomControls(withScroll: scroller)
-                        Spacer().frame(maxHeight: 30)
 
-                        // the filmstrip at the bottom
-                        filmstrip(withScroll: scroller)
-                          .frame(maxWidth: .infinity, alignment: .bottom)
-                        Spacer().frame(maxHeight: 10, alignment: .bottom)
+                        if !video_playing {
+                            Spacer().frame(maxHeight: 30)
+                            // the filmstrip at the bottom
+                            filmstrip(withScroll: scroller)
+                              .frame(maxWidth: .infinity, alignment: .bottom)
+                            Spacer().frame(maxHeight: 10, alignment: .bottom)
+                        }
                     }
                 }
             }
@@ -158,56 +159,58 @@ struct ContentView: View {
                 videoPlaybackButtons(scroller)
                   .frame(maxWidth: .infinity, alignment: .center)
                 
-                HStack {
-                    let paint_action = {
-                        Log.d("PAINT")
-                        paint_sheet_showing = !paint_sheet_showing
-                    }
-                    Button(action: paint_action) {
-                        buttonImage("square.stack.3d.forward.dottedline", size: 44)
+                if !video_playing {
+                    HStack {
+                        let paint_action = {
+                            Log.d("PAINT")
+                            paint_sheet_showing = !paint_sheet_showing
+                        }
+                        Button(action: paint_action) {
+                            buttonImage("square.stack.3d.forward.dottedline", size: 44)
+                            
+                        }
+                          .buttonStyle(PlainButtonStyle())           
+                          .frame(alignment: .trailing)
+                          .help("effect multiple frames")
                         
-                    }
-                      .buttonStyle(PlainButtonStyle())           
-                      .frame(alignment: .trailing)
-                      .help("effect multiple frames")
-                    
-                    let gear_action = {
-                        Log.d("GEAR")
-                        settings_sheet_showing = !settings_sheet_showing
-                    }
-                    Button(action: gear_action) {
-                        buttonImage("gearshape.fill", size: 44)
+                        let gear_action = {
+                            Log.d("GEAR")
+                            settings_sheet_showing = !settings_sheet_showing
+                        }
+                        Button(action: gear_action) {
+                            buttonImage("gearshape.fill", size: 44)
+                            
+                        }
+                          .buttonStyle(PlainButtonStyle())           
+                          .frame(alignment: .trailing)
+                          .help("settings")
                         
+                        toggleViews()
                     }
-                      .buttonStyle(PlainButtonStyle())           
-                      .frame(alignment: .trailing)
-                      .help("settings")
-                    
-                    toggleViews()
-                }
-                  .frame(maxWidth: .infinity, alignment: .trailing)
-                  .sheet(isPresented: $settings_sheet_showing) {
-                      SettingsSheetView(isVisible: self.$settings_sheet_showing,
-                                        fast_skip_amount: self.$fast_skip_amount,
-                                        video_playback_framerate: self.$video_playback_framerate,
-                                        skipEmpties: self.$skipEmpties)
-                  }
-                  .sheet(isPresented: $paint_sheet_showing) {
-                      MassivePaintSheetView(isVisible: self.$paint_sheet_showing,
-                                            viewModel: viewModel)
-                      { should_paint, start_index, end_index in
-                          
-                          updating_frame_batch = true
-                          
-                          for idx in start_index ... end_index {
-                              // XXX use a task group?
-                              setAllFrameOutliers(in: viewModel.frames[idx], to: should_paint)
-                          }
-                          updating_frame_batch = false
-                          
-                          Log.d("should_paint \(should_paint), start_index \(start_index), end_index \(end_index)")
+                      .frame(maxWidth: .infinity, alignment: .trailing)
+                      .sheet(isPresented: $settings_sheet_showing) {
+                          SettingsSheetView(isVisible: self.$settings_sheet_showing,
+                                            fast_skip_amount: self.$fast_skip_amount,
+                                            video_playback_framerate: self.$video_playback_framerate,
+                                            skipEmpties: self.$skipEmpties)
                       }
-                 }
+                      .sheet(isPresented: $paint_sheet_showing) {
+                          MassivePaintSheetView(isVisible: self.$paint_sheet_showing,
+                                                viewModel: viewModel)
+                          { should_paint, start_index, end_index in
+                              
+                              updating_frame_batch = true
+                              
+                              for idx in start_index ... end_index {
+                                  // XXX use a task group?
+                                  setAllFrameOutliers(in: viewModel.frames[idx], to: should_paint)
+                              }
+                              updating_frame_batch = false
+                              
+                              Log.d("should_paint \(should_paint), start_index \(start_index), end_index \(end_index)")
+                          }
+                      }
+                }
             }
         }
     }
@@ -217,17 +220,24 @@ struct ContentView: View {
     func currentFrameView() -> some View {
         HStack {
             if let frame_image = viewModel.current_frame_image {
-                GeometryReader { geometry in
-                    let min = geometry.size.height/viewModel.frame_height
-                    let max = min < 1 ? 1 : min
-                    ZoomableView(size: CGSize(width: viewModel.frame_width,
-                                              height: viewModel.frame_height),
-                                 min: min,
-                                 max: max,
-                                 showsIndicators: true)
-                    {
-                        // the currently visible frame
-                        self.frameView(frame_image)
+                if video_playing {
+                    frame_image
+//                      .resizable()
+                      .aspectRatio(contentMode: .fit)
+                } else {
+                    GeometryReader { geometry in
+                        let min = geometry.size.height/viewModel.frame_height
+                        let max = min < 1 ? 1 : min
+
+                        ZoomableView(size: CGSize(width: viewModel.frame_width,
+                                                  height: viewModel.frame_height),
+                                     min: min,
+                                     max: max,
+                                     showsIndicators: true)
+                        {
+                            // the currently visible frame
+                            self.frameView(frame_image)//.aspectRatio(contentMode: .fill)
+                        }
                     }
                 }
             } else {
@@ -816,6 +826,8 @@ struct ContentView: View {
                 do {
                     var current_running = 0
                     let start_time = Date().timeIntervalSinceReferenceDate
+                    // XXX move to this:
+                    //try await withThrowingLimitedTaskGroup(of: Void.self) { taskGroup in
                     try await withThrowingTaskGroup(of: Void.self) { taskGroup in
                         let max_concurrent = viewModel.config?.numConcurrentRenders ?? 10
                         // this gets "Too many open files" with more than 2000 images :(
@@ -934,42 +946,44 @@ struct ContentView: View {
         
         return HStack {
             // go to start button
-            button(named: "backward.end.fill",
-                   shortcutKey: start_shortcut_key,
-                   color: button_color,
-                   toolTip: """
-                     go to start of sequence
-                     (keyboard shortcut '\(start_shortcut_key.character)')
-                     """)
-            {
-                self.goToFirstFrameButtonAction(withScroll: scroller)
-            }
-            
-            // fast previous button
-            button(named: "backward.fill",
-                   shortcutKey: fast_previous_shortut_key,
-                   color: button_color,
-                   toolTip: """
-                     back \(fast_skip_amount) frames
-                     (keyboard shortcut '\(fast_previous_shortut_key.character)')
-                     """)
-            {
-                self.fastPreviousButtonAction(withScroll: scroller)
-            }
-            
-            // previous button
-            button(named: "backward.frame.fill",
-                   shortcutKey: previous_shortut_key,
-                   color: button_color,
-                   toolTip: """
-                     back one frame
-                     (keyboard shortcut left arrow)
-                     """)
-            {
-                self.transition(numberOfFrames: -1,
-                                withScroll: scroller)
-            }
 
+            if !video_playing {
+                button(named: "backward.end.fill",
+                       shortcutKey: start_shortcut_key,
+                       color: button_color,
+                       toolTip: """
+                         go to start of sequence
+                         (keyboard shortcut '\(start_shortcut_key.character)')
+                         """)
+                {
+                    self.goToFirstFrameButtonAction(withScroll: scroller)
+                }
+                
+                // fast previous button
+                button(named: "backward.fill",
+                       shortcutKey: fast_previous_shortut_key,
+                       color: button_color,
+                       toolTip: """
+                         back \(fast_skip_amount) frames
+                         (keyboard shortcut '\(fast_previous_shortut_key.character)')
+                         """)
+                {
+                    self.fastPreviousButtonAction(withScroll: scroller)
+                }
+                
+                // previous button
+                button(named: "backward.frame.fill",
+                       shortcutKey: previous_shortut_key,
+                       color: button_color,
+                       toolTip: """
+                         back one frame
+                         (keyboard shortcut left arrow)
+                         """)
+                {
+                    self.transition(numberOfFrames: -1,
+                                    withScroll: scroller)
+                }
+            }
             // play/pause button
             button(named: video_playing ? "pause.fill" : "play.fill", // pause.fill
                    shortcutKey: " ",
@@ -980,89 +994,111 @@ struct ContentView: View {
                      """)
             {
                 self.togglePlay(scroller)
-                Log.w("play button not yet implemented")
+                //Log.w("play button not yet implemented")
             }
-            
-            // next button
-            button(named: "forward.frame.fill",
-                   shortcutKey: .rightArrow,
-                   color: button_color,
-                   toolTip: """
-                     forward one frame
-                     (keyboard shortcut right arrow)
-                     """)
-            {
-                self.transition(numberOfFrames: 1,
-                                withScroll: scroller)
+            if !video_playing {
+                
+                // next button
+                button(named: "forward.frame.fill",
+                       shortcutKey: .rightArrow,
+                       color: button_color,
+                       toolTip: """
+                         forward one frame
+                         (keyboard shortcut right arrow)
+                         """)
+                {
+                    self.transition(numberOfFrames: 1,
+                                    withScroll: scroller)
+                }
+                
+                // fast next button
+                button(named: "forward.fill",
+                       shortcutKey: fast_next_shortcut_key,
+                       color: button_color,
+                       toolTip: """
+                         forward \(fast_skip_amount) frames
+                         (keyboard shortcut '\(fast_next_shortcut_key.character)')
+                         """)
+                {
+                    self.fastForwardButtonAction(withScroll: scroller)
+                }
+                
+                
+                // end button
+                button(named: "forward.end.fill",
+                       shortcutKey: end_button_shortcut_key,
+                       color: button_color,
+                       toolTip: """
+                         advance to end of sequence
+                         (keyboard shortcut '\(end_button_shortcut_key.character)')
+                         """)
+                {
+                    self.goToLastFrameButtonAction(withScroll: scroller)
+                }
             }
-            
-            // fast next button
-            button(named: "forward.fill",
-                   shortcutKey: fast_next_shortcut_key,
-                   color: button_color,
-                   toolTip: """
-                     forward \(fast_skip_amount) frames
-                     (keyboard shortcut '\(fast_next_shortcut_key.character)')
-                     """)
-            {
-                self.fastForwardButtonAction(withScroll: scroller)
-            }
-            
-            
-            // end button
-            button(named: "forward.end.fill",
-                   shortcutKey: end_button_shortcut_key,
-                   color: button_color,
-                   toolTip: """
-                     advance to end of sequence
-                     (keyboard shortcut '\(end_button_shortcut_key.character)')
-                     """)
-            {
-                self.goToLastFrameButtonAction(withScroll: scroller)
-            }
-        }
-        
+        }        
     }
 
+    func stopVideo(_ scroller: ScrollViewProxy? = nil) {
+        video_play_timer?.invalidate()
+        viewModel.current_index = current_video_frame
+        video_playing = false
+        
+        if let scroller = scroller {
+            // delay the scroller a little bit to allow the view to adjust
+            // otherwise the call to scrollTo() happens when it's not visible
+            // and is ignored, leaving the scroll view unmoved.
+            Task {
+                await MainActor.run {
+                    scroller.scrollTo(viewModel.current_index, anchor: .center)
+                }
+            }
+        }
+    }
+    
     func togglePlay(_ scroller: ScrollViewProxy? = nil) {
         self.video_playing = !self.video_playing
         if video_playing {
             self.showOutliers = false
             Log.d("playing @ \(video_playback_framerate) fps")
             current_video_frame = viewModel.current_index
-            video_play_timer = Timer.scheduledTimer(withTimeInterval: 1/Double(video_playback_framerate),
-                                                    repeats: true) { timer in
 
-                // play each frame of the video in sequence
-                let current_frame_view = self.viewModel.frames[current_video_frame]
+            switch self.frameViewMode {
+            case .original:
+                video_play_timer = Timer.scheduledTimer(withTimeInterval: 1/Double(video_playback_framerate),
+                                                        repeats: true) { timer in
+                    let current_idx = current_video_frame
 
-                switch self.frameViewMode {
-                case .original:
-                    viewModel.current_frame_image = current_frame_view.preview_image.resizable()
-                case .processed:
-                    viewModel.current_frame_image = current_frame_view.processed_preview_image.resizable()
-                }
-            //self.viewModel.current_frame_image =
-            //                  .preview_image.resizable()
-                current_video_frame += 1
-                if current_video_frame >= self.viewModel.frames.count {
-                    video_play_timer?.invalidate()
-                    viewModel.current_index = current_video_frame
-                    if let scroller = scroller {
-                        scroller.scrollTo(viewModel.current_index, anchor: .center)
+                    // play each frame of the video in sequence
+                    viewModel.current_frame_image =
+                      self.viewModel.frames[current_idx].preview_image
+
+                    current_video_frame = current_idx + 1
+                    if current_video_frame >= self.viewModel.frames.count {
+                        stopVideo(scroller)
                     }
-                    video_playing = false
+                }
+            case .processed:
+                video_play_timer = Timer.scheduledTimer(withTimeInterval: 1/Double(video_playback_framerate),
+                                                        repeats: true) { timer in
+
+                    let current_idx = current_video_frame
+                    // play each frame of the video in sequence
+                    if current_idx >= self.viewModel.frames.count {
+                        stopVideo(scroller)
+                    } else {
+                        viewModel.current_frame_image =
+                          self.viewModel.frames[current_idx].processed_preview_image
+
+                        current_video_frame = current_idx + 1
+                        if current_video_frame >= self.viewModel.frames.count {
+                            stopVideo(scroller)
+                        }
+                    }
                 }
             }
         } else {
-            self.showOutliers = true // XXX maybe track previous state before setting it off at start of video play?
-            video_play_timer?.invalidate()
-            Log.d("not playing")
-            // scroller usage here
-            viewModel.current_index = current_video_frame
-            if let scroller = scroller {
-                scroller.scrollTo(viewModel.current_index, anchor: .center)
-            }
+            stopVideo(scroller)
         }
     }
     
@@ -1240,9 +1276,9 @@ struct ContentView: View {
 
                 switch self.frameViewMode {
                 case .original:
-                    viewModel.current_frame_image = new_frame_view.preview_image.resizable()
+                    viewModel.current_frame_image = new_frame_view.preview_image//.resizable()
                 case .processed:
-                    viewModel.current_frame_image = new_frame_view.processed_preview_image.resizable()
+                    viewModel.current_frame_image = new_frame_view.processed_preview_image//.resizable()
                 }
             }
             if showFullResolution {
