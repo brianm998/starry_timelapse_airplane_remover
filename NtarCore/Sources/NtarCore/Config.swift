@@ -186,7 +186,7 @@ public struct Config: Codable {
     public var preview_height: Int = default_preview_height
 
     // XXX try making these larger now that video plays better
-    public static var default_preview_width: Int = 1920
+    public static var default_preview_width: Int = 1617 // 1080p in 4/3 aspect ratio
     public static var default_preview_height: Int = 1080
     
     public var thumbnail_width: Int = default_thumbnail_width

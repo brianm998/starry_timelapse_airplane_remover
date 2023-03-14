@@ -136,13 +136,13 @@ struct ContentView: View {
                         // buttons below the selected frame 
                         bottomControls(withScroll: scroller)
 
-                        if !video_playing {
+//                        if !video_playing {
                             Spacer().frame(maxHeight: 30)
                             // the filmstrip at the bottom
                             filmstrip(withScroll: scroller)
                               .frame(maxWidth: .infinity, alignment: .bottom)
                             Spacer().frame(maxHeight: 10, alignment: .bottom)
-                        }
+//                        }
                     }
                 }
             }
@@ -222,8 +222,8 @@ struct ContentView: View {
             if let frame_image = viewModel.current_frame_image {
                 if video_playing {
                     frame_image
-//                      .resizable()
-                      .aspectRatio(contentMode: .fit)
+                      .resizable()
+                      .aspectRatio(contentMode: . fit)
                 } else {
                     GeometryReader { geometry in
                         let min = geometry.size.height/viewModel.frame_height
@@ -502,7 +502,7 @@ struct ContentView: View {
           .background(viewModel.current_index == frame_index ? Color(white: 0.45) : Color(white: 0.22))
           .onTapGesture {
               // XXX move this out 
-              viewModel.label_text = "loading..."
+              //viewModel.label_text = "loading..."
               // XXX set loading image here
               // grab frame and try to show it
               let frame_view = viewModel.frames[frame_index]
@@ -636,13 +636,14 @@ struct ContentView: View {
                   .frame(minHeight: 50)
             } else {
                 ScrollView(.horizontal) {
-                    HStack(spacing: 0) {
+                    LazyHStack(spacing: 0) {
                         ForEach(0..<viewModel.image_sequence_size, id: \.self) { frame_index in
                             self.filmStripView(forFrame: frame_index, withScroll: scroller)
                               .help("show frame \(frame_index)")
                         }
                     }
                 }
+                  .frame(minHeight: CGFloat((viewModel.config?.thumbnail_height ?? 50) + 30))
             }
         }
           .frame(maxWidth: .infinity, maxHeight: 50)
@@ -1041,7 +1042,15 @@ struct ContentView: View {
 
     func stopVideo(_ scroller: ScrollViewProxy? = nil) {
         video_play_timer?.invalidate()
-        viewModel.current_index = current_video_frame
+
+        if current_video_frame >= 0,
+           current_video_frame < viewModel.frames.count
+        {
+            viewModel.current_index = current_video_frame
+        } else {
+            viewModel.current_index = 0
+        }
+        
         video_playing = false
         self.background_color = .gray
         
@@ -1062,7 +1071,7 @@ struct ContentView: View {
         if video_playing {
             self.showOutliers = false
 
-            self.background_color = .black
+            //self.background_color = .black
             
             Log.d("playing @ \(video_playback_framerate) fps")
             current_video_frame = viewModel.current_index
