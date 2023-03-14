@@ -987,7 +987,7 @@ struct ContentView: View {
             // play/pause button
             button(named: video_playing ? "pause.fill" : "play.fill", // pause.fill
                    shortcutKey: " ",
-                   color: button_color,
+                   color: video_playing ? .gray : button_color,
                    size: 40,
                    toolTip: """
                      Play / Pause
@@ -1043,6 +1043,7 @@ struct ContentView: View {
         video_play_timer?.invalidate()
         viewModel.current_index = current_video_frame
         video_playing = false
+        self.background_color = .gray
         
         if let scroller = scroller {
             // delay the scroller a little bit to allow the view to adjust
@@ -1060,6 +1061,9 @@ struct ContentView: View {
         self.video_playing = !self.video_playing
         if video_playing {
             self.showOutliers = false
+
+            self.background_color = .black
+            
             Log.d("playing @ \(video_playback_framerate) fps")
             current_video_frame = viewModel.current_index
 
