@@ -240,6 +240,10 @@ struct ContentView: View {
                                 Text(value.localizedName).tag(value)
                             }
                         }
+                          .help("""
+                                  Choose between quickly scrubbing around the video
+                                  and editing an individual frame.
+                                """)
                           .disabled(video_playing)
                           .onChange(of: interactionMode) { mode in
                               Log.d("interactionMode change \(mode)")
@@ -260,6 +264,10 @@ struct ContentView: View {
                             }
                         }
                           .disabled(video_playing)
+                          .help("""
+                                  Show each frame as either the original   
+                                  or with ntar processing applied.
+                                """)
                           .frame(maxWidth: 220)
                           .help("show original or processed frame")
                           .onChange(of: frameViewMode) { pick in
@@ -332,6 +340,7 @@ struct ContentView: View {
     }
     
     // shows either a zoomable view of the current frame
+    // just the frame itself for scrubbing and video playback
     // or a place holder when we have no image for it yet
     func currentFrameView() -> some View {
         HStack {
@@ -345,7 +354,8 @@ struct ContentView: View {
                 case .edit: 
                     GeometryReader { geometry in
                         let min = geometry.size.height/viewModel.frame_height
-                        let max = min < 1 ? 1 : min
+                        let full_max = self.showFullResolution ? 1 : 0.3
+                        let max = min < full_max ? full_max : min
 
                         ZoomableView(size: CGSize(width: viewModel.frame_width,
                                                   height: viewModel.frame_height),
@@ -356,6 +366,7 @@ struct ContentView: View {
                             // the currently visible frame
                             self.frameView(frame_image)//.aspectRatio(contentMode: .fill)
                         }
+                          .transition(.moveAndFade)
                     }
                 }
             } else {
@@ -366,6 +377,7 @@ struct ContentView: View {
                       .aspectRatio(CGSize(width: 4, height: 3), contentMode: .fit)
                     Text(viewModel.no_image_explaination_text)
                 }
+                  .transition(.moveAndFade)
             }
         }
     }
@@ -752,6 +764,7 @@ struct ContentView: View {
                 Text("Loading Film Strip")
                   .font(.largeTitle)
                   .frame(minHeight: 50)
+                  .transition(.moveAndFade)
             } else {
                 ScrollView(.horizontal) {
                     LazyHStack(spacing: 0) {
@@ -762,6 +775,7 @@ struct ContentView: View {
                     }
                 }
                   .frame(minHeight: CGFloat((viewModel.config?.thumbnail_height ?? 50) + 30))
+                  .transition(.moveAndFade)
             }
         }
           .frame(maxWidth: .infinity, maxHeight: 50)
@@ -1313,14 +1327,11 @@ struct ContentView: View {
                  .pickerStyle(.segmented)
 
                 HStack {
-                Toggle("full resolution", isOn: $showFullResolution)
-                  .onChange(of: showFullResolution) { mode_on in
-                      refreshCurrentFrame()
-                  }
-                Toggle("show filmstip", isOn: $showFilmstrip)
-                  .onChange(of: showFullResolution) { mode_on in
-                      //refreshCurrentFrame()
-                  }
+                    Toggle("full resolution", isOn: $showFullResolution)
+                      .onChange(of: showFullResolution) { mode_on in
+                          refreshCurrentFrame()
+                      }
+                    Toggle("show filmstip", isOn: $showFilmstrip)
                 }
             }
         }
@@ -1563,6 +1574,12 @@ struct ContentView_Previews: PreviewProvider {
 
 extension AnyTransition {
     static var moveAndFade: AnyTransition {
-        AnyTransition.slide
+        //AnyTransition.move(edge: .trailing)
+        //AnyTransition.slide
+        .asymmetric(
+          insertion: .move(edge: .trailing).combined(with: .opacity),
+          removal: .scale.combined(with: .opacity)
+        )         
+
     }
 }
