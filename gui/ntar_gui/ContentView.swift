@@ -35,12 +35,23 @@ enum SelectionMode: String, Equatable, CaseIterable {
     }
 }
 
+enum InteractionMode: String, Equatable, CaseIterable {
+    case edit
+    case scrub
+
+    var localizedName: LocalizedStringKey {
+        LocalizedStringKey(rawValue)
+    }
+}
+
 // the overall level of the app
 @available(macOS 13.0, *) 
 struct ContentView: View {
     @ObservedObject var viewModel: ViewModel
-    @State private var showOutliers = false
-    
+    @State private var interactionMode: InteractionMode = .scrub
+
+    @State private var previousInteractionMode: InteractionMode = .scrub
+
     // enum for how we show each frame
     @State private var frameViewMode = FrameViewMode.processed
 
@@ -136,13 +147,14 @@ struct ContentView: View {
                         // buttons below the selected frame 
                         bottomControls(withScroll: scroller)
 
+                        if interactionMode == .edit {
 //                        if !video_playing {
                             Spacer().frame(maxHeight: 30)
                             // the filmstrip at the bottom
                             filmstrip(withScroll: scroller)
                               .frame(maxWidth: .infinity, alignment: .bottom)
                             Spacer().frame(maxHeight: 10, alignment: .bottom)
-//                        }
+                        }
                     }
                 }
             }
@@ -158,8 +170,49 @@ struct ContentView: View {
             ZStack {
                 videoPlaybackButtons(scroller)
                   .frame(maxWidth: .infinity, alignment: .center)
+
+                HStack {
+                    VStack {
+                        Picker("I will", selection: $interactionMode) {
+                            ForEach(InteractionMode.allCases, id: \.self) { value in
+                                Text(value.localizedName).tag(value)
+                            }
+                        }
+                        
+                          .onChange(of: interactionMode) { mode in
+                              Log.d("interactionMode change \(mode)")
+                              switch mode {
+                              case .edit:
+                                  refreshCurrentFrame()
+                                  
+                              case .scrub:
+                                  break
+                              }
+                          }
+                          .frame(maxWidth: 220)
+                          .pickerStyle(.segmented)
+                        
+                        Picker("I will see", selection: $frameViewMode) {
+                            ForEach(FrameViewMode.allCases, id: \.self) { value in
+                                Text(value.localizedName).tag(value)
+                            }
+                        }
+                          .frame(maxWidth: 220)
+                          .help("show original or processed frame")
+                          .onChange(of: frameViewMode) { pick in
+                              Log.d("pick \(pick)")
+                              refreshCurrentFrame()
+                          }
+                          .pickerStyle(.segmented)
+                    }
+                }
+                  .frame(maxWidth: .infinity, alignment: .leading)
+
+
                 
-                if !video_playing {
+                
+                if interactionMode == .edit {
+//                if !video_playing {
                     HStack {
                         let paint_action = {
                             Log.d("PAINT")
@@ -219,12 +272,14 @@ struct ContentView: View {
     // or a place holder when we have no image for it yet
     func currentFrameView() -> some View {
         HStack {
-            if let frame_image = viewModel.current_frame_image {
-                if video_playing {
+            if let frame_image = self.viewModel.current_frame_image {
+                switch self.interactionMode {
+                case .scrub:
                     frame_image
                       .resizable()
                       .aspectRatio(contentMode: . fit)
-                } else {
+
+                case .edit: 
                     GeometryReader { geometry in
                         let min = geometry.size.height/viewModel.frame_height
                         let max = min < 1 ? 1 : min
@@ -258,7 +313,7 @@ struct ContentView: View {
             // the main image shown
             image
 
-            if showOutliers {
+            if interactionMode == .edit {
                 let current_frame_view = viewModel.currentFrameView
                 if let outlierViews = current_frame_view.outlierViews {
                     ForEach(0 ..< outlierViews.count, id: \.self) { idx in
@@ -1043,6 +1098,8 @@ struct ContentView: View {
     func stopVideo(_ scroller: ScrollViewProxy? = nil) {
         video_play_timer?.invalidate()
 
+        self.interactionMode = self.previousInteractionMode
+        
         if current_video_frame >= 0,
            current_video_frame < viewModel.frames.count
         {
@@ -1069,7 +1126,9 @@ struct ContentView: View {
     func togglePlay(_ scroller: ScrollViewProxy? = nil) {
         self.video_playing = !self.video_playing
         if video_playing {
-            self.showOutliers = false
+
+            self.previousInteractionMode = self.interactionMode
+            self.interactionMode = .scrub
 
             //self.background_color = .black
             
@@ -1118,15 +1177,6 @@ struct ContentView: View {
     func toggleViews() -> some View {
         HStack() {
             VStack(alignment: .leading) {
-                Toggle("show edits", isOn: $showOutliers)
-                  .keyboardShortcut("o", modifiers: [])
-                  .help("show and change edits")
-                  .onChange(of: showOutliers) { shouldShow in
-                      Log.d("show outliers shouldShow \(shouldShow)")
-                      if shouldShow {
-                          refreshCurrentFrame()
-                      }
-                  }
                 Picker("selection mode", selection: $selectionMode) {
                     ForEach(SelectionMode.allCases, id: \.self) { value in
                         Text(value.localizedName).tag(value)
@@ -1139,20 +1189,7 @@ struct ContentView: View {
                             details - they will be shown in the info window
                         """)
                  .frame(maxWidth: 280)
-                .pickerStyle(.segmented)
-            }
-            VStack(alignment: .leading) {
-                Picker("show", selection: $frameViewMode) {
-                    ForEach(FrameViewMode.allCases, id: \.self) { value in
-                        Text(value.localizedName).tag(value)
-                    }
-                }
-                  .frame(maxWidth: 180)
-                  .help("show original or processed frame")
-                  .onChange(of: frameViewMode) { pick in
-                      Log.d("pick \(pick)")
-                      refreshCurrentFrame()
-                  }
+                 .pickerStyle(.segmented)
                 
                 Toggle("full resolution", isOn: $showFullResolution)
                   .onChange(of: showFullResolution) { mode_on in
@@ -1324,7 +1361,7 @@ struct ContentView: View {
                 }
             }
 
-            if showOutliers {
+            if interactionMode == .edit {
                 // try loading outliers if there aren't any present
                 if viewModel.frames[next_frame.frame_index].outlierViews == nil {
                     Task {
@@ -1357,11 +1394,13 @@ struct ContentView: View {
         }
         viewModel.frames[new_frame_view.frame_index].isCurrentFrame = true
         viewModel.current_index = new_frame_view.frame_index
-        
-        if let scroller = scroller {
+
+        if interactionMode == .edit,
+           let scroller = scroller
+        {
             scroller.scrollTo(viewModel.current_index, anchor: .center)
 
-            viewModel.label_text = "frame \(new_frame_view.frame_index)"
+            //viewModel.label_text = "frame \(new_frame_view.frame_index)"
 
             // only save frame when we are also scrolling (i.e. not scrubbing)
             if let frame_to_save = old_frame {
