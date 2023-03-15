@@ -16,6 +16,11 @@ fileprivate var video_play_timer: Timer?
 
 fileprivate var current_video_frame = 0
 
+enum VideoPlayMode: String, Equatable, CaseIterable {
+    case forward
+    case reverse
+}
+
 enum FrameViewMode: String, Equatable, CaseIterable {
     case original
     case processed
@@ -51,6 +56,8 @@ struct ContentView: View {
     @State private var interactionMode: InteractionMode = .scrub
 
     @State private var sliderValue = 0.0
+
+    @State private var videoPlayMode: VideoPlayMode = .forward
     
     @State private var previousInteractionMode: InteractionMode = .scrub
 
@@ -1046,8 +1053,10 @@ struct ContentView: View {
         // XXX these should really use modifiers but those don't work :(
         let start_shortcut_key: KeyEquivalent = "b" // make this bottom arror
         let fast_previous_shortut_key: KeyEquivalent = "z"
-        let previous_shortut_key: KeyEquivalent = .leftArrow
         let fast_next_shortcut_key: KeyEquivalent = "x"
+        let previous_shortut_key: KeyEquivalent = .leftArrow
+        let previous_shortcut_key: KeyEquivalent = .leftArrow
+        let backwards_shortcut_key: KeyEquivalent = "r"
         let end_button_shortcut_key: KeyEquivalent = "f" // make this top arror
 
         let button_color = Color(white: 202/256)
@@ -1091,18 +1100,45 @@ struct ContentView: View {
                     self.transition(numberOfFrames: -1,
                                     withScroll: scroller)
                 }
+
+                // play backwards button
+                button(named: "arrowtriangle.backward",
+                       shortcutKey: backwards_shortcut_key,
+                       color: button_color,
+                       size: 40,
+                       toolTip: """
+                         play in reverse
+                         (keyboard shortcut '\(backwards_shortcut_key)')
+                         """)
+                {
+                    self.videoPlayMode = .reverse
+                    self.togglePlay(scroller)
+                }
             }
-            // play/pause button
-            button(named: video_playing ? "pause.fill" : "play.fill", // pause.fill
-                   shortcutKey: " ",
-                   color: video_playing ? .blue : button_color,
-                   size: 40,
-                   toolTip: """
-                     Play / Pause
-                     """)
-            {
-                self.togglePlay(scroller)
-                //Log.w("play button not yet implemented")
+
+            ZStack {
+                // backwards button is not shown, so we use this to have shortcut still work
+                if video_playing {
+                    Button("") {
+                        self.togglePlay(scroller)
+                    }
+                      .opacity(0)
+                      .keyboardShortcut(backwards_shortcut_key, modifiers: [])
+                } 
+            
+                // play/pause button
+                button(named: video_playing ? "pause.fill" : "play.fill", // pause.fill
+                       shortcutKey: " ",
+                       color: video_playing ? .blue : button_color,
+                       size: 40,
+                       toolTip: """
+                         Play / Pause
+                         """)
+                {
+                    self.videoPlayMode = .forward
+                    self.togglePlay(scroller)
+                    //Log.w("play button not yet implemented")
+                }
             }
             if !video_playing {
                 
@@ -1194,15 +1230,30 @@ struct ContentView: View {
                 video_play_timer = Timer.scheduledTimer(withTimeInterval: 1/Double(video_playback_framerate),
                                                         repeats: true) { timer in
                     let current_idx = current_video_frame
-
                     // play each frame of the video in sequence
-                    viewModel.current_frame_image =
-                      self.viewModel.frames[current_idx].preview_image
-                    current_video_frame = current_idx + 1
-                    if current_video_frame >= self.viewModel.frames.count {
+                    if current_idx >= self.viewModel.frames.count ||
+                         current_idx < 0
+                    {
                         stopVideo(scroller)
                     } else {
-                        self.sliderValue = Double(current_idx)
+
+                        // play each frame of the video in sequence
+                        viewModel.current_frame_image =
+                          self.viewModel.frames[current_idx].preview_image
+
+                        switch self.videoPlayMode {
+                        case .forward:
+                            current_video_frame = current_idx + 1
+
+                        case .reverse:
+                            current_video_frame = current_idx - 1
+                        }
+                        
+                        if current_video_frame >= self.viewModel.frames.count {
+                            stopVideo(scroller)
+                        } else {
+                            self.sliderValue = Double(current_idx)
+                        }
                     }
                 }
             case .processed:
@@ -1211,13 +1262,22 @@ struct ContentView: View {
 
                     let current_idx = current_video_frame
                     // play each frame of the video in sequence
-                    if current_idx >= self.viewModel.frames.count {
+                    if current_idx >= self.viewModel.frames.count ||
+                       current_idx < 0
+                    {
                         stopVideo(scroller)
                     } else {
                         viewModel.current_frame_image =
                           self.viewModel.frames[current_idx].processed_preview_image
 
-                        current_video_frame = current_idx + 1
+                        switch self.videoPlayMode {
+                        case .forward:
+                            current_video_frame = current_idx + 1
+
+                        case .reverse:
+                            current_video_frame = current_idx - 1
+                        }
+                        
                         if current_video_frame >= self.viewModel.frames.count {
                             stopVideo(scroller)
                         } else {
