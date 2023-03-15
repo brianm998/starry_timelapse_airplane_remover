@@ -112,7 +112,6 @@ struct ContentView: View {
             ScrollViewReader { scroller in
                 VStack {
                     let should_show_progress =
-                      loading_outliers                   ||
                       rendering_current_frame            ||
                       updating_frame_batch               ||
                       rendering_all_frames
@@ -128,6 +127,16 @@ struct ContentView: View {
                               .frame(maxWidth: 200, maxHeight: 200)
                               .opacity(should_show_progress ? 0.8 : 0)
                           )
+                    }
+
+                    if loading_outliers {
+                        HStack {
+                            Text("Loading Outliers for this frame")
+                            Spacer()
+                            ProgressView()
+                              .progressViewStyle(.linear)
+                              .frame(maxWidth: .infinity)
+                        }
                     }
 
                     if viewModel.initial_load_in_progress {
@@ -151,7 +160,6 @@ struct ContentView: View {
                         bottomControls(withScroll: scroller)
                         
                         if interactionMode == .edit {
-//                        if !video_playing {
                             Spacer().frame(maxHeight: 30)
                             // the filmstrip at the bottom
                             filmstrip(withScroll: scroller)
@@ -203,6 +211,19 @@ struct ContentView: View {
 
                 HStack {
                     VStack {
+                        ZStack {
+                            Button("") {
+                                self.interactionMode = .edit
+                            }
+                              .opacity(0)
+                              .keyboardShortcut("e", modifiers: [])
+
+                            Button("") {
+                                self.interactionMode = .scrub
+                            }
+                              .opacity(0)
+                              .keyboardShortcut("s", modifiers: [])
+                            
                         Picker("I will", selection: $interactionMode) {
                             ForEach(InteractionMode.allCases, id: \.self) { value in
                                 Text(value.localizedName).tag(value)
@@ -221,7 +242,7 @@ struct ContentView: View {
                           }
                           .frame(maxWidth: 220)
                           .pickerStyle(.segmented)
-                        
+                        }
                         Picker("I will see", selection: $frameViewMode) {
                             ForEach(FrameViewMode.allCases, id: \.self) { value in
                                 Text(value.localizedName).tag(value)
@@ -1027,7 +1048,7 @@ struct ContentView: View {
         let fast_previous_shortut_key: KeyEquivalent = "z"
         let previous_shortut_key: KeyEquivalent = .leftArrow
         let fast_next_shortcut_key: KeyEquivalent = "x"
-        let end_button_shortcut_key: KeyEquivalent = "e" // make this top arror
+        let end_button_shortcut_key: KeyEquivalent = "f" // make this top arror
 
         let button_color = Color(white: 202/256)
         
