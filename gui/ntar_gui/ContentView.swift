@@ -172,8 +172,12 @@ struct ContentView: View {
                                   let frame_index = Int(sliderValue)
                                   Log.i("transition to \(frame_index)")
                                   // XXX do more than just this
-                                  let new_frame_index = Int(value)
+                                  var new_frame_index = Int(value)
                                   //viewModel.current_index = Int(value)
+                                  if new_frame_index < 0 { new_frame_index = 0 }
+                                  if new_frame_index >= viewModel.frames.count {
+                                      new_frame_index = viewModel.frames.count - 1
+                                  }
                                   let new_frame_view = viewModel.frames[new_frame_index]
                                   let current_frame = viewModel.currentFrame
                                   self.transition(toFrame: new_frame_view,
