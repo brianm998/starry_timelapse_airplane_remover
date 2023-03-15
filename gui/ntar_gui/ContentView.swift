@@ -69,6 +69,8 @@ struct ContentView: View {
     // should we show full resolution images on the main frame?
     // faster low res previews otherwise
     @State private var showFullResolution = false
+
+    @State private var showFilmstrip = true
     
     @State private var drag_start: CGPoint?
     @State private var drag_end: CGPoint?
@@ -166,7 +168,9 @@ struct ContentView: View {
                         // buttons below the selected frame 
                         bottomControls(withScroll: scroller)
                         
-                        if interactionMode == .edit {
+                        if interactionMode == .edit,
+                           showFilmstrip
+                        {
                             Spacer().frame(maxHeight: 30)
                             // the filmstrip at the bottom
                             filmstrip(withScroll: scroller)
@@ -1307,11 +1311,17 @@ struct ContentView: View {
                         """)
                  .frame(maxWidth: 280)
                  .pickerStyle(.segmented)
-                
+
+                HStack {
                 Toggle("full resolution", isOn: $showFullResolution)
                   .onChange(of: showFullResolution) { mode_on in
                       refreshCurrentFrame()
-                 }
+                  }
+                Toggle("show filmstip", isOn: $showFilmstrip)
+                  .onChange(of: showFullResolution) { mode_on in
+                      //refreshCurrentFrame()
+                  }
+                }
             }
         }
     }
