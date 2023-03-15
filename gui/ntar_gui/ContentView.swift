@@ -50,6 +50,8 @@ struct ContentView: View {
     @ObservedObject var viewModel: ViewModel
     @State private var interactionMode: InteractionMode = .scrub
 
+    @State private var sliderValue = 0.0
+    
     @State private var previousInteractionMode: InteractionMode = .scrub
 
     // enum for how we show each frame
@@ -115,6 +117,19 @@ struct ContentView: View {
                       updating_frame_batch               ||
                       rendering_all_frames
 
+                    // selected frame 
+                    ZStack {
+                        currentFrameView()
+                          .frame(maxWidth: .infinity, alignment: .center)
+                          .overlay(
+                            ProgressView()
+                              .scaleEffect(8, anchor: .center) // this is blocky scaled up 
+                              .progressViewStyle(CircularProgressViewStyle(tint: .yellow))
+                              .frame(maxWidth: 200, maxHeight: 200)
+                              .opacity(should_show_progress ? 0.8 : 0)
+                          )
+                    }
+
                     if viewModel.initial_load_in_progress {
                         HStack {
                             Text("Loading Image Sequence")
@@ -131,29 +146,40 @@ struct ContentView: View {
                         }
                     }
                     
-                    // selected frame 
-                    ZStack {
-                        currentFrameView()
-                          .frame(maxWidth: .infinity, alignment: .center)
-                          .overlay(
-                            ProgressView()
-                              .scaleEffect(8, anchor: .center) // this is blocky scaled up 
-                              .progressViewStyle(CircularProgressViewStyle(tint: .yellow))
-                              .frame(maxWidth: 200, maxHeight: 200)
-                              .opacity(should_show_progress ? 0.8 : 0)
-                          )
-                    }
                     VStack {
                         // buttons below the selected frame 
                         bottomControls(withScroll: scroller)
-
+                        
                         if interactionMode == .edit {
 //                        if !video_playing {
                             Spacer().frame(maxHeight: 30)
                             // the filmstrip at the bottom
                             filmstrip(withScroll: scroller)
+                              .frame(maxWidth: .infinity/*, alignment: .bottom*/)
+                            Spacer().frame(maxHeight: 10/*, alignment: .bottom*/)
+                        }
+
+                        if viewModel.image_sequence_size > 0 {
+                            if interactionMode == .edit {
+                                Spacer().frame(maxHeight: 20)
+                            }
+                            let start = 0.0
+                            let end = Double(viewModel.image_sequence_size)
+                            Slider(value: $sliderValue, in : start...end)
                               .frame(maxWidth: .infinity, alignment: .bottom)
-                            Spacer().frame(maxHeight: 10, alignment: .bottom)
+                              .disabled(video_playing)
+                              .onChange(of: sliderValue) { value in
+                                  let frame_index = Int(sliderValue)
+                                  Log.i("transition to \(frame_index)")
+                                  // XXX do more than just this
+                                  let new_frame_index = Int(value)
+                                  //viewModel.current_index = Int(value)
+                                  let new_frame_view = viewModel.frames[new_frame_index]
+                                  let current_frame = viewModel.currentFrame
+                                  self.transition(toFrame: new_frame_view,
+                                                  from: current_frame,
+                                                  withScroll: scroller)
+                              }
                         }
                     }
                 }
@@ -178,7 +204,7 @@ struct ContentView: View {
                                 Text(value.localizedName).tag(value)
                             }
                         }
-                        
+                          .disabled(video_playing)
                           .onChange(of: interactionMode) { mode in
                               Log.d("interactionMode change \(mode)")
                               switch mode {
@@ -197,6 +223,7 @@ struct ContentView: View {
                                 Text(value.localizedName).tag(value)
                             }
                         }
+                          .disabled(video_playing)
                           .frame(maxWidth: 220)
                           .help("show original or processed frame")
                           .onChange(of: frameViewMode) { pick in
@@ -1043,7 +1070,7 @@ struct ContentView: View {
             // play/pause button
             button(named: video_playing ? "pause.fill" : "play.fill", // pause.fill
                    shortcutKey: " ",
-                   color: video_playing ? .gray : button_color,
+                   color: video_playing ? .blue : button_color,
                    size: 40,
                    toolTip: """
                      Play / Pause
@@ -1104,8 +1131,10 @@ struct ContentView: View {
            current_video_frame < viewModel.frames.count
         {
             viewModel.current_index = current_video_frame
+            self.sliderValue = Double(viewModel.current_index)
         } else {
             viewModel.current_index = 0
+            self.sliderValue = Double(viewModel.current_index)
         }
         
         video_playing = false
@@ -1144,10 +1173,11 @@ struct ContentView: View {
                     // play each frame of the video in sequence
                     viewModel.current_frame_image =
                       self.viewModel.frames[current_idx].preview_image
-
                     current_video_frame = current_idx + 1
                     if current_video_frame >= self.viewModel.frames.count {
                         stopVideo(scroller)
+                    } else {
+                        self.sliderValue = Double(current_idx)
                     }
                 }
             case .processed:
@@ -1165,6 +1195,8 @@ struct ContentView: View {
                         current_video_frame = current_idx + 1
                         if current_video_frame >= self.viewModel.frames.count {
                             stopVideo(scroller)
+                        } else {
+                            self.sliderValue = Double(current_idx)
                         }
                     }
                 }
@@ -1394,7 +1426,8 @@ struct ContentView: View {
         }
         viewModel.frames[new_frame_view.frame_index].isCurrentFrame = true
         viewModel.current_index = new_frame_view.frame_index
-
+        self.sliderValue = Double(viewModel.current_index)
+        
         if interactionMode == .edit,
            let scroller = scroller
         {
@@ -1433,3 +1466,8 @@ struct ContentView_Previews: PreviewProvider {
     }
 }
 
+extension AnyTransition {
+    static var moveAndFade: AnyTransition {
+        AnyTransition.slide
+    }
+}
