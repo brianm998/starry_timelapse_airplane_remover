@@ -57,7 +57,7 @@ struct decision_tree_generator: ParsableCommand {
         Log.dispatchGroup.wait()
     }
 
-    func runVerification(basedUpon json_config_file_name: String) async throws {
+    func runVerification(basedUpon json_config_file_name: String) async throws -> TreeTestResults {
 
         var num_similar_outlier_groups = 0
         var num_different_outlier_groups = 0
@@ -157,6 +157,8 @@ struct decision_tree_generator: ParsableCommand {
         let total = num_similar_outlier_groups + num_different_outlier_groups
         let percentage_good = Double(num_similar_outlier_groups)/Double(total)*100
         Log.i("for \(json_config_file_name), out of \(total) \(percentage_good)% success")
+        return TreeTestResults(numberGood: num_similar_outlier_groups,
+                               numberBad: num_different_outlier_groups)
     }
     
     // use an exising decision tree to see how well it does against a given sample
@@ -164,10 +166,13 @@ struct decision_tree_generator: ParsableCommand {
         let dispatch_group = DispatchGroup()
         dispatch_group.enter()
         Task {
+            // XXX could do these all in parallel with a task group
+            var allResults: [TreeTestResults] = []
             for json_config_file_name in input_filenames {
                 if json_config_file_name.hasSuffix("config.json") {
                     do {
-                        try await runVerification(basedUpon: json_config_file_name)
+                        let results = try await runVerification(basedUpon: json_config_file_name)
+                        allResults.append(results)
                     } catch {
                         Log.e("\(error)")
                     }
@@ -197,7 +202,7 @@ struct decision_tree_generator: ParsableCommand {
                                         // could search for classes that conform to a new protocol
                                         // that defines this specific method, but it's static :(
                                         let decisionTreeShouldPaint =  
-                                          OutlierGroup.decisionTree_125389d5(types: matrix.types,
+                                          OutlierGroup.decisionTree_55f23bc4(types: matrix.types,
                                                                              values: values.values)
                                         if decisionTreeShouldPaint == values.shouldPaint {
                                             number_good += 1
@@ -211,12 +216,26 @@ struct decision_tree_generator: ParsableCommand {
                             }
                         }
 
+                        // XXX combine these all
+                        
                         let total = number_good + number_bad
                         let percentage_good = Double(number_good)/Double(total)*100
-                        Log.i("for \(json_config_file_name), out of \(total) \(percentage_good)% success")
+                        Log.i("for \(json_config_file_name), out of \(total) \(percentage_good)% success good \(number_good) vs bad \(number_bad)")
+
+                        allResults.append(TreeTestResults(numberGood: number_good,
+                                                          numberBad: number_bad))
                     }
                 }
             }
+            var number_good = 0
+            var number_bad = 0
+            for result in allResults {
+                number_good += result.numberGood
+                number_bad += result.numberBad
+            }
+            let total = number_good + number_bad
+            let percentage_good = Double(number_good)/Double(total)*100
+            Log.i("out of a total of \(total) outlier groups, \(percentage_good)% success good \(number_good) vs bad \(number_bad)")
             dispatch_group.leave()
         }
         dispatch_group.wait()
