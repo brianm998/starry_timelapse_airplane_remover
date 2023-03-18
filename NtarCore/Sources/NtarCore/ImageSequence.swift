@@ -43,6 +43,9 @@ public actor ImageSequence {
     {
         self.max_images = max_images
         var image_files: [String] = []
+        if !file_manager.fileExists(atPath: dirname) {
+            throw "\(dirname) does not exist"
+        }
         let contents = try file_manager.contentsOfDirectory(atPath: dirname)
         contents.forEach { file in
             supported_image_file_types.forEach { type in

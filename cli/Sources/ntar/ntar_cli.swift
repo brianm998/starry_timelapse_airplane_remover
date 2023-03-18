@@ -377,27 +377,30 @@ struct Ntar: ParsableCommand {
                 }
             }
 
-            do {
-                if let fileLogLevel = fileLogLevel {
-                    Log.i("enabling file logging")
+            if let fileLogLevel = fileLogLevel {
+                Log.i("enabling file logging")
+                do {
                     Log.handlers[.file] = try FileLogHandler(at: fileLogLevel)
+                } catch {
+                    Log.e("\(error)")
                 }
-                
-                signal(SIGKILL) { foo in
-                    print("caught SIGKILL \(foo)")
-                }
-                    
-                // XXX maybe check to make sure this is a directory
-                Log.i("processing files in \(input_image_sequence_dirname)")
-                let local_dispatch = DispatchGroup()
-                local_dispatch.enter()
-                Task {
+            }
+            
+            signal(SIGKILL) { foo in
+                print("caught SIGKILL \(foo)")
+            }
+            
+            Log.i("looking for files to processes in \(input_image_sequence_dirname)")
+            let local_dispatch = DispatchGroup()
+            local_dispatch.enter()
+            Task {
+                do {
                     let eraser = try NighttimeAirplaneRemover(with: config,
                                                               callbacks: callbacks,
                                                               processExistingFiles: false)
-
+                    
                     var upm: UpdatableProgressMonitor?
-
+                    
                     if let _ = eraser.callbacks.updatable {
                         // setup sequence monitor
                         let updatableProgressMonitor =
@@ -414,17 +417,17 @@ struct Ntar: ParsableCommand {
                     
                     Log.dispatchGroup = await eraser.dispatchGroup.dispatch_group
                     try eraser.run()
-
+                    
                     if let updatableProgressMonitor = upm {
                         await updatableProgressMonitor.dispatchGroup.wait()
                         print("processing complete, output is in \(eraser.output_dirname)")
                     }
-                    local_dispatch.leave()
+                } catch {
+                    Log.e("\(error)")
                 }
-                local_dispatch.wait()
-            } catch {
-                Log.e("\(error)")
+                local_dispatch.leave()
             }
+            local_dispatch.wait()
         } else {
             throw ValidationError("need to provide input")
         }
