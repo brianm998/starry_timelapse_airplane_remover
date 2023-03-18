@@ -166,65 +166,74 @@ struct decision_tree_generator: ParsableCommand {
         let dispatch_group = DispatchGroup()
         dispatch_group.enter()
         Task {
+        try await withThrowingLimitedTaskGroup(of: Optional<TreeTestResults>.self) { taskGroup in
+            
             // XXX could do these all in parallel with a task group
             var allResults: [TreeTestResults] = []
             for json_config_file_name in input_filenames {
-                if json_config_file_name.hasSuffix("config.json") {
-                    do {
-                        let results = try await runVerification(basedUpon: json_config_file_name)
-                        allResults.append(results)
-                    } catch {
-                        Log.e("\(error)")
-                    }
-                } else {
-                    if file_manager.fileExists(atPath: json_config_file_name) {
-                        var number_good = 0
-                        var number_bad = 0
-                        
-                        // load a list of OutlierGroupValueMatrix
-                        // and get outlierGroupValues from them
-                        let contents = try file_manager.contentsOfDirectory(atPath: json_config_file_name)
-                        for file in contents {
-                            if file.hasSuffix("_outlier_values.bin") {
-                                let filename = "\(json_config_file_name)/\(file)"
-                                do {
-                                    // load data
-                                    // process a frames worth of outlier data
-                                    let imageURL = NSURL(fileURLWithPath: filename, isDirectory: false)
-                                    
-                                    let (data, _) = try await URLSession.shared.data(for: URLRequest(url: imageURL as URL))
-
-                                    let decoder = BinaryDecoder()
-                                    let matrix = try decoder.decode(OutlierGroupValueMatrix.self, from: data)
-
-                                    for values in matrix.values {
-                                        // XXX how to reference hash properly here ???
-                                        // could search for classes that conform to a new protocol
-                                        // that defines this specific method, but it's static :(
-                                        let decisionTreeShouldPaint =  
-                                          OutlierGroup.decisionTree_55f23bc4(types: matrix.types,
-                                                                             values: values.values)
-                                        if decisionTreeShouldPaint == values.shouldPaint {
-                                            number_good += 1
-                                        } else {
-                                            number_bad += 1
+                try await taskGroup.addTask() {
+                    if json_config_file_name.hasSuffix("config.json") {
+                        do {
+                            return try await runVerification(basedUpon: json_config_file_name)
+                        } catch {
+                            Log.e("\(error)")
+                        }
+                    } else {
+                        if file_manager.fileExists(atPath: json_config_file_name) {
+                            var number_good = 0
+                            var number_bad = 0
+                            
+                            // load a list of OutlierGroupValueMatrix
+                            // and get outlierGroupValues from them
+                            let contents = try file_manager.contentsOfDirectory(atPath: json_config_file_name)
+                            for file in contents {
+                                if file.hasSuffix("_outlier_values.bin") {
+                                    let filename = "\(json_config_file_name)/\(file)"
+                                    do {
+                                        // load data
+                                        // process a frames worth of outlier data
+                                        let imageURL = NSURL(fileURLWithPath: filename, isDirectory: false)
+                                        
+                                        let (data, _) = try await URLSession.shared.data(for: URLRequest(url: imageURL as URL))
+                                        
+                                        let decoder = BinaryDecoder()
+                                        let matrix = try decoder.decode(OutlierGroupValueMatrix.self, from: data)
+                                        
+                                        for values in matrix.values {
+                                            // XXX how to reference hash properly here ???
+                                            // could search for classes that conform to a new protocol
+                                            // that defines this specific method, but it's static :(
+                                            let decisionTreeShouldPaint =  
+                                              OutlierGroup.decisionTree_55f23bc4(types: matrix.types,
+                                                                                 values: values.values)
+                                            if decisionTreeShouldPaint == values.shouldPaint {
+                                                number_good += 1
+                                            } else {
+                                                number_bad += 1
+                                            }
                                         }
+                                    } catch {
+                                        Log.e("\(error)")
                                     }
-                                } catch {
-                                    Log.e("\(error)")
                                 }
                             }
+
+                            // XXX combine these all
+                            
+                            let total = number_good + number_bad
+                            let percentage_good = Double(number_good)/Double(total)*100
+                            Log.i("for \(json_config_file_name), out of \(total) \(percentage_good)% success good \(number_good) vs bad \(number_bad)")
+                            
+                            return TreeTestResults(numberGood: number_good,
+                                                   numberBad: number_bad)
                         }
-
-                        // XXX combine these all
-                        
-                        let total = number_good + number_bad
-                        let percentage_good = Double(number_good)/Double(total)*100
-                        Log.i("for \(json_config_file_name), out of \(total) \(percentage_good)% success good \(number_good) vs bad \(number_bad)")
-
-                        allResults.append(TreeTestResults(numberGood: number_good,
-                                                          numberBad: number_bad))
                     }
+                    return nil
+                }
+            }
+            while let response = try await taskGroup.next() {
+                if let response = response {
+                    allResults.append(response)
                 }
             }
             var number_good = 0
@@ -236,6 +245,7 @@ struct decision_tree_generator: ParsableCommand {
             let total = number_good + number_bad
             let percentage_good = Double(number_good)/Double(total)*100
             Log.i("out of a total of \(total) outlier groups, \(percentage_good)% success good \(number_good) vs bad \(number_bad)")
+        }
             dispatch_group.leave()
         }
         dispatch_group.wait()
