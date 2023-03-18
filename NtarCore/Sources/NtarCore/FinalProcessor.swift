@@ -624,9 +624,7 @@ fileprivate func run_final_overlap_pass(frames: [FrameAirplaneRemover],
                     }
                     
                     if !close_enough {
-                        let pixel_overlap_amount =
-                          await pixel_overlap(group_1: group, group_2: og)
-                        
+                        let pixel_overlap_amount = await group.pixelOverlap(with: og)
                         
                         var do_it = true
                         
@@ -960,54 +958,6 @@ func streak_from(group: OutlierGroup,
 }
 
 
-
-// how many pixels actually overlap between the groups ?  returns 0-1 value of overlap amount
-@available(macOS 10.15, *)
-func pixel_overlap(group_1: OutlierGroup,
-                   group_2: OutlierGroup) async -> Double // 1 means total overlap, 0 means none
-{
-    // throw out non-overlapping frames, do any slip through?
-    if group_1.bounds.min.x > group_2.bounds.max.x || group_1.bounds.min.y > group_2.bounds.max.y { return 0 }
-    if group_2.bounds.min.x > group_1.bounds.max.x || group_2.bounds.min.y > group_1.bounds.max.y { return 0 }
-
-    var min_x = group_1.bounds.min.x
-    var min_y = group_1.bounds.min.y
-    var max_x = group_1.bounds.max.x
-    var max_y = group_1.bounds.max.y
-    
-    if group_2.bounds.min.x > min_x { min_x = group_2.bounds.min.x }
-    if group_2.bounds.min.y > min_y { min_y = group_2.bounds.min.y }
-    
-    if group_2.bounds.max.x < max_x { max_x = group_2.bounds.max.x }
-    if group_2.bounds.max.y < max_y { max_y = group_2.bounds.max.y }
-    
-    // XXX could search a smaller space probably
-
-    var overlap_pixel_amount = 0;
-    
-    for x in min_x ... max_x {
-        for y in min_y ... max_y {
-            let outlier_1_index = (y - group_1.bounds.min.y) * group_1.bounds.width + (x - group_1.bounds.min.x)
-            let outlier_2_index = (y - group_2.bounds.min.y) * group_2.bounds.width + (x - group_2.bounds.min.x)
-            if outlier_1_index > 0,
-               outlier_1_index < group_1.pixels.count,
-               group_1.pixels[outlier_1_index] != 0,
-               outlier_2_index > 0,
-               outlier_2_index < group_2.pixels.count,
-               group_2.pixels[outlier_2_index] != 0
-            {
-                overlap_pixel_amount += 1
-            }
-        }
-    }
-
-    if overlap_pixel_amount > 0 {
-        let avg_group_size = (Double(group_1.size) + Double(group_2.size)) / 2
-        return Double(overlap_pixel_amount)/avg_group_size
-    }
-    
-    return 0
-}
 
 // XXX this is likely causing false positives by being innacurate
 @available(macOS 10.15, *) 

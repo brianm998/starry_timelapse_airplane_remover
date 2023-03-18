@@ -153,7 +153,7 @@ public extension OutlierGroup {
     var shouldPaintFromDecisionTree: Bool {
         get async {
             // XXX have the generator modify this?
-            return await self.shouldPaintFromDecisionTree_125389d5
+            return await self.shouldPaintFromDecisionTree_55f23bc4
 
             // XXX XXX XXX
             // XXX XXX XXX
@@ -200,6 +200,9 @@ public extension OutlierGroup {
         case maxHoughTransformCount
         case maxHoughTheta
         case neighboringInterFrameOutlierThetaScore
+        case maxOverlap
+        case maxOverlapTimesThetaHisto
+        
         /*
          add score based upon number of close with hough line histogram values
          add score based upon how many overlapping outliers there are in
@@ -221,6 +224,10 @@ public extension OutlierGroup {
             case .histogramStreakDetection:
                 return true
             case .neighboringInterFrameOutlierThetaScore:
+                return true
+            case .maxOverlap:
+                return true
+            case .maxOverlapTimesThetaHisto:
                 return true
             default:
                 return false
@@ -279,6 +286,10 @@ public extension OutlierGroup {
                 return 23
             case .neighboringInterFrameOutlierThetaScore:
                 return 24
+            case .maxOverlap:
+                return 25
+            case .maxOverlapTimesThetaHisto:
+                return 26
             }
         }
 
@@ -354,6 +365,10 @@ public extension OutlierGroup {
             return await self.histogramStreakDetection
         case .neighboringInterFrameOutlierThetaScore:
             return await self.neighboringInterFrameOutlierThetaScore
+        case .maxOverlap:
+            return await self.maxOverlap
+        case .maxOverlapTimesThetaHisto:
+            return await self.maxOverlapTimesThetaHisto
         default:
             return self.nonAsyncDecisionTreeValue(for: type)
         }
@@ -442,11 +457,9 @@ public extension OutlierGroup {
                                                                           of: self.bounds)
                 {
                     for group in nearby_groups {
-                        let center_line_theta = self.bounds.centerTheta(with: group.bounds)
-                        let histo = await group.houghLineHistogram
-                        let histo_score = histo.matchScore(with: selfHisto)
-                        let theta_score = thetaScore(between: center_line_theta, and: histo.maxTheta)
-                        best_score = max(histo_score*theta_score, best_score)
+                        let score = await self.thetaHistoCenterLineScore(with: group,
+                                                                         selfHisto: selfHisto)
+                        best_score = max(score, best_score)
                     }
                 }
                 if let next_frame = await frame.nextFrame,
@@ -454,11 +467,9 @@ public extension OutlierGroup {
                                                                       of: self.bounds)
                 {
                     for group in nearby_groups {
-                        let center_line_theta = self.bounds.centerTheta(with: group.bounds)
-                        let histo = await group.houghLineHistogram
-                        let histo_score = histo.matchScore(with: selfHisto)
-                        let theta_score = thetaScore(between: center_line_theta, and: histo.maxTheta)
-                        best_score = max(histo_score*theta_score, best_score)
+                        let score = await self.thetaHistoCenterLineScore(with: group,
+                                                                         selfHisto: selfHisto)
+                        best_score = max(score, best_score)
                     }
                 }
                 return best_score
@@ -468,6 +479,115 @@ public extension OutlierGroup {
         }
     }
 
+    // a score based upon a comparsion of the theta histograms of the this and another group,
+    // as well as how well the theta of the other group corresponds to the center line theta between them
+    private func thetaHistoCenterLineScore(with group: OutlierGroup,
+                                           selfHisto: HoughLineHistogram? = nil) async -> Double
+    {
+        var histo = selfHisto
+        if histo == nil { histo = self.houghLineHistogram }
+        let center_line_theta = self.bounds.centerTheta(with: group.bounds)
+        let other_histo = await group.houghLineHistogram
+        let histo_score = other_histo.matchScore(with: histo!)
+        let theta_score = thetaScore(between: center_line_theta, and: other_histo.maxTheta)
+        return histo_score*theta_score
+    }
+    
+    // tries to find a streak with hough line histograms
+    private var histogramStreakDetectionV2: Double { // XXX rename this
+        get async {
+            if let frame = frame {
+                var best_score = 0.0
+                let selfHisto = self.houghLineHistogram
+
+                if let previous_frame = await frame.previousFrame,
+                   let nearby_groups = await previous_frame.outlierGroups(within: self.maxNearbyGroupDistance,
+                                                                          of: self.bounds)
+                {
+                    for group in nearby_groups {
+                        let score = await self.thetaHistoCenterLineScore(with: group,
+                                                                         selfHisto: selfHisto)
+                        best_score = max(score, best_score)
+                    }
+                }
+                if let next_frame = await frame.nextFrame,
+                   let nearby_groups = await next_frame.outlierGroups(within: self.maxNearbyGroupDistance,
+                                                                      of: self.bounds)
+                {
+                    for group in nearby_groups {
+                        let score = await self.thetaHistoCenterLineScore(with: group,
+                                                                         selfHisto: selfHisto)
+                        best_score = max(score, best_score)
+                    }
+                }
+                return best_score
+            } else {
+                fatalError("SHIT")
+            }
+        }
+    }
+
+    private var maxOverlap: Double {
+        get async {
+            var maxOverlap = 0.0
+            if let frame = frame {
+                if let previous_frame = await frame.previousFrame,
+                   let nearby_groups = await previous_frame.outlierGroups(within: self.maxNearbyGroupDistance,
+                                                                          of: self.bounds)
+                {
+                    for group in nearby_groups {
+                        maxOverlap = max(await self.pixelOverlap(with: group), maxOverlap)
+                    }
+                }
+                
+                if let next_frame = await frame.nextFrame,
+                   let nearby_groups = await next_frame.outlierGroups(within: self.maxNearbyGroupDistance,
+                                                                      of: self.bounds)
+                {
+                    for group in nearby_groups {
+                        maxOverlap = max(await self.pixelOverlap(with: group), maxOverlap)
+                    }
+                }
+                
+            }
+            return maxOverlap
+        }
+    }
+
+    private var maxOverlapTimesThetaHisto: Double {
+        get async {
+            var maxOverlap = 0.0
+            if let frame = frame {
+                let selfHisto = self.houghLineHistogram
+
+                if let previous_frame = await frame.previousFrame,
+                   let nearby_groups = await previous_frame.outlierGroups(within: self.maxNearbyGroupDistance,
+                                                                          of: self.bounds)
+                {
+                    for group in nearby_groups {
+                        let otherHisto = await group.houghLineHistogram
+                        let histo_score = otherHisto.matchScore(with: selfHisto)
+                        let overlap = await self.pixelOverlap(with: group)
+                        maxOverlap = max(overlap * histo_score, maxOverlap)
+                    }
+                }
+                
+                if let next_frame = await frame.nextFrame,
+                   let nearby_groups = await next_frame.outlierGroups(within: self.maxNearbyGroupDistance,
+                                                                      of: self.bounds)
+                {
+                    for group in nearby_groups {
+                        let otherHisto = await group.houghLineHistogram
+                        let histo_score = otherHisto.matchScore(with: selfHisto)
+                        let overlap = await self.pixelOverlap(with: group)
+                        maxOverlap = max(overlap * histo_score, maxOverlap)
+                    }
+                }
+            }            
+            return maxOverlap
+        }
+    }
+    
     private var neighboringInterFrameOutlierThetaScore: Double {
         // XXX doesn't use related frames 
         get async {
@@ -481,7 +601,7 @@ public extension OutlierGroup {
                 for group in nearby_groups {
                     if group.name == self.name { continue }
                     let center_line_theta = self.bounds.centerTheta(with: group.bounds)
-                    let otherHisto = self.houghLineHistogram
+                    let otherHisto = await group.houghLineHistogram
                     let theta_score = thetaScore(between: center_line_theta, and: otherHisto.maxTheta)
                     let histo_score = otherHisto.matchScore(with: selfHisto)
                     // modify this score by how close the theta of
