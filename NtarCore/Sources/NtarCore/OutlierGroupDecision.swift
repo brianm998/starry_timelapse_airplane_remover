@@ -15,13 +15,30 @@ public struct OutlierGroupValueMap {
     public init() { }
 }
 
-// XXX populate this by scanning the runtime
 @available(macOS 10.15, *)
-public var decisionTrees: [String: DecisionTree] = [:]
+public var decisionTrees: [String: DecisionTree] = {
+    let decisionTrees = listClasses { $0.compactMap { $0 as? DecisionTree.Type } }
+    var ret: [String: DecisionTree] = [:]
+    for tree in decisionTrees {
+        let instance = tree.init()
+        ret[instance.name] = instance
+    }
+    return ret
+}()
+
+// black magic from the objc runtime
+fileprivate func listClasses<T>(_ body: (UnsafeBufferPointer<AnyClass>) throws -> T) rethrows -> T {
+  var cnt: UInt32 = 0
+  let ptr = objc_copyClassList(&cnt)
+  defer { free(UnsafeMutableRawPointer(ptr)) }
+  let buf = UnsafeBufferPointer( start: ptr, count: Int(cnt) )
+  return try body(buf)
+}
+
 
 @available(macOS 10.15, *)
 public protocol DecisionTree {
-
+    init()
     var name: String { get }
     var sha256: String { get }
     var generationSecondsSince1970: TimeInterval { get }

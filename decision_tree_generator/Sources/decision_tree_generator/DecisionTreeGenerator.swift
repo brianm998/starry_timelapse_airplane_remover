@@ -134,7 +134,8 @@ class DecisionTreeGenerator {
           }
           
           @available(macOS 10.15, *)
-          public class OutlierGroupDecisionTree_\(hash_prefix): DecisionTree {
+          public final class OutlierGroupDecisionTree_\(hash_prefix): DecisionTree {
+              public init() { }
               public let sha256 = "\(tree_hash_string)"
               public let name = "\(hash_prefix)"
               public let sha256Prefix = "\(hash_prefix)"
