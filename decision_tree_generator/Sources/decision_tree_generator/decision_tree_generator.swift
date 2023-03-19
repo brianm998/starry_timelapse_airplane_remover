@@ -35,6 +35,13 @@ struct decision_tree_generator: ParsableCommand {
             """)
     var verification_mode = false
 
+    @Flag(name: [.customShort("a"), .customLong("all")],
+          help:"""
+            Iterate over all possible combinations of the decision types to generate
+            lots of different trees
+            """)
+    var produce_all_type_combinations = false
+
     @Option(name: [.customShort("t"), .customLong("types")],
           help:"""
             Specify a comma delimited list of types from this list:
@@ -212,7 +219,7 @@ struct decision_tree_generator: ParsableCommand {
                                             // could search for classes that conform to a new protocol
                                             // that defines this specific method, but it's static :(
                                             let decisionTreeShouldPaint =  
-                                              OutlierGroup.decisionTree_20d73d2a(types: matrix.types,
+                                              OutlierGroup.decisionTree_125389d5(types: matrix.types,
                                                                                  values: values.values)
                                             if decisionTreeShouldPaint == values.shouldPaint {
                                                 number_good += 1
@@ -372,11 +379,11 @@ struct decision_tree_generator: ParsableCommand {
             Log.d("decisionTypesString \(decisionTypesString)")
             
             if decisionTypesString == "" {
-                Log.d("FUCK")
+                // if not specfied, use all types
                 decisionTypes = OutlierGroup.TreeDecisionType.allCases
             } else {
-                Log.d("SHIT")
-                var rawValues = decisionTypesString.components(separatedBy: ",")
+                // split out given types
+                let rawValues = decisionTypesString.components(separatedBy: ",")
                 for rawValue in rawValues {
                     if let enumValue = OutlierGroup.TreeDecisionType(rawValue: rawValue) {
                         decisionTypes.append(enumValue)
@@ -408,9 +415,7 @@ struct decision_tree_generator: ParsableCommand {
                         fatalError("couldn't get config from \(json_config_file_name)")
                     }
                 } else {
-                    // check to see if it's a dir
-                    if file_manager.fileExists(atPath: json_config_file_name/*, isDirecotry: &isDir*/) {
-
+                    if file_manager.fileExists(atPath: json_config_file_name) {
                         try await withThrowingLimitedTaskGroup(of: OutlierGroupValueMapResult.self) { taskGroup in
                             
                             // load a list of OutlierGroupValueMatrix
@@ -424,6 +429,7 @@ struct decision_tree_generator: ParsableCommand {
                                         var local_should_paint_test_data: [OutlierGroupValueMap] = []
                                         var local_should_not_paint_test_data: [OutlierGroupValueMap] = []
                                         
+                                        Log.d("\(file) loading data")
 
                                         // load data
                                         // process a frames worth of outlier data
@@ -431,24 +437,30 @@ struct decision_tree_generator: ParsableCommand {
                                         
                                         let (data, _) = try await URLSession.shared.data(for: URLRequest(url: imageURL as URL))
                                         
+                                        Log.d("\(file) data loaded")
                                         let decoder = BinaryDecoder()
-                                        let matrix = try decoder.decode(OutlierGroupValueMatrix.self, from: data)
-                                        //if let json = matrix.prettyJson { print(json) }
-                                        //Log.d("frame \(frame_index) matrix \(matrix)")
-                                        for values in matrix.values {
+                                        do {
+                                            let matrix = try decoder.decode(OutlierGroupValueMatrix.self, from: data)
+                                            Log.d("\(file) data decoded")
+                                            //if let json = matrix.prettyJson { print(json) }
+                                            //Log.d("frame \(frame_index) matrix \(matrix)")
+                                            for values in matrix.values {
+                                                
+                                                var valueMap = OutlierGroupValueMap()
+                                                for (index, type) in matrix.types.enumerated() {
+                                                    valueMap.values[type] = values.values[index]
+                                                }
+                                                if values.shouldPaint {
+                                                    local_should_paint_test_data.append(valueMap)
+                                                } else {
+                                                    local_should_not_paint_test_data.append(valueMap)
+                                                }
+                                            }
                                             
-                                            var valueMap = OutlierGroupValueMap()
-                                            for (index, type) in matrix.types.enumerated() {
-                                                valueMap.values[type] = values.values[index]
-                                            }
-                                            if values.shouldPaint {
-                                                local_should_paint_test_data.append(valueMap)
-                                            } else {
-                                                local_should_not_paint_test_data.append(valueMap)
-                                            }
+                                        } catch {
+                                            Log.e("\(file): \(error)")
                                         }
-
-                                        //Log.i("got \(local_should_paint_test_data.count)/\(local_should_not_paint_test_data.count) test data from \(file)")
+                                        Log.i("got \(local_should_paint_test_data.count)/\(local_should_not_paint_test_data.count) test data from \(file)")
                                         
                                         return OutlierGroupValueMapResult(
                                           should_paint_test_data: local_should_paint_test_data,
@@ -464,40 +476,64 @@ struct decision_tree_generator: ParsableCommand {
                     }
                 }
             }
-            
-            Log.i("Calculating decision tree with \(should_paint_test_data.count) should paint \(should_not_paint_test_data.count) should not paint test data outlier groups")
 
-            let generator = DecisionTreeGenerator(withTypes: decisionTypes)
-
-            let (tree_swift_code, sha_hash) =
-              await generator.generateTree(withTrueData: should_paint_test_data,
-                                           andFalseData: should_not_paint_test_data,
-                                           inputFilenames: input_filenames)
-
-            // save this generated swift code to a file
-
-            // XXX make this better
-            let filename = "../NtarCore/Sources/NtarCore/OutlierGroupDecisionTree_\(sha_hash.prefix(sha_prefix_size)).swift"
-            do {
-                if file_manager.fileExists(atPath: filename) {
-                    Log.i("overwriting already existing filename \(filename)")
-                    try file_manager.removeItem(atPath: filename)
+            if produce_all_type_combinations {
+                let min = 8     // XXX make a parameter?
+                let max = OutlierGroup.TreeDecisionType.allCases.count
+                for types in decisionTypes.combinations(ofCount: min..<max) {
+                    Log.i("calculating tree with \(types)")
+                    await self.writeTree(withTypes: types,
+                                         withTrueData: should_paint_test_data,
+                                         andFalseData: should_not_paint_test_data,
+                                         inputFilenames: input_filenames)
                 }
-
-                // write to file
-                file_manager.createFile(atPath: filename,
-                                        contents: tree_swift_code.data(using: .utf8),
-                                        attributes: nil)
-                Log.i("wrote \(filename)")
-            } catch {
-                Log.e("\(error)")
+            } else {
+                await self.writeTree(withTypes: decisionTypes,
+                                     withTrueData: should_paint_test_data,
+                                     andFalseData: should_not_paint_test_data,
+                                     inputFilenames: input_filenames)
             }
-
+            
             dispatch_group.leave()
         }
         dispatch_group.wait()
     }
 
+    func writeTree(withTypes decisionTypes: [OutlierGroup.TreeDecisionType],
+                   withTrueData should_paint_test_data: [OutlierGroupValueMap],
+                   andFalseData should_not_paint_test_data: [OutlierGroupValueMap],
+                   inputFilenames: [String]) async {
+        
+        Log.i("Calculating decision tree with \(should_paint_test_data.count) should paint \(should_not_paint_test_data.count) should not paint test data outlier groups")
+
+        let generator = DecisionTreeGenerator(withTypes: decisionTypes)
+
+        let (tree_swift_code, sha_hash) =
+          await generator.generateTree(withTrueData: should_paint_test_data,
+                                       andFalseData: should_not_paint_test_data,
+                                       inputFilenames: input_filenames)
+
+        // save this generated swift code to a file
+
+        // XXX make this better
+        let filename = "../NtarCore/Sources/NtarCore/OutlierGroupDecisionTree_\(sha_hash.prefix(sha_prefix_size)).swift"
+        do {
+            if file_manager.fileExists(atPath: filename) {
+                Log.i("overwriting already existing filename \(filename)")
+                try file_manager.removeItem(atPath: filename)
+            }
+
+            // write to file
+            file_manager.createFile(atPath: filename,
+                                    contents: tree_swift_code.data(using: .utf8),
+                                    attributes: nil)
+            Log.i("wrote \(filename)")
+        } catch {
+            Log.e("\(error)")
+        }
+
+    }
+    
     func log(valueMaps: [OutlierGroupValueMap]) {
         for (index, valueMap) in valueMaps.enumerated() {
             var log = "\(index) - "
