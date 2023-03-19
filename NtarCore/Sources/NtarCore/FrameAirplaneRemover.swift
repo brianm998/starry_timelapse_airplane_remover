@@ -1155,6 +1155,14 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
             }
         }
 
+        do {
+            // write frame out as a tiff file after processing it
+            try image.writeTIFFEncoding(ofData: output_data,  toFilename: self.output_filename)
+            self.state = .complete
+        } catch {
+            Log.e("\(error)")
+        }
+
         Log.i("frame \(self.frame_index) complete")
     }
     
