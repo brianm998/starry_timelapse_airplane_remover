@@ -153,7 +153,7 @@ public extension OutlierGroup {
     var shouldPaintFromDecisionTree: Bool {
         get async {
             // XXX have the generator modify this?
-            return await self.shouldPaintFromDecisionTree_55f23bc4
+            return await self.shouldPaintFromDecisionTree_20d73d2a
 
             // XXX XXX XXX
             // XXX XXX XXX
@@ -174,7 +174,12 @@ public extension OutlierGroup {
     // add a new case, handle all switches here, and the
     // decision tree generator will use it after recompile
     // all existing outlier value files will need to be regenerated to include itx
-    enum TreeDecisionType: CaseIterable, Hashable, Codable, Comparable {
+    enum TreeDecisionType: String,
+                           CaseIterable,
+                           Hashable,
+                           Codable,
+                           Comparable
+    {
         case size
         case width
         case height
@@ -215,6 +220,15 @@ public extension OutlierGroup {
          
          */
 
+        public static var allCasesString: String {
+            var ret = ""
+            for type in OutlierGroup.TreeDecisionType.allCases {
+                ret += "\(type.rawValue)\n"
+            }
+
+            return ret
+        }
+        
         public var needsAsync: Bool {
             switch self {
             case .numberOfNearbyOutliersInSameFrame:

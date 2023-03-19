@@ -8,6 +8,16 @@ import CryptoKit
 @available(macOS 10.15, *) 
 class DecisionTreeGenerator {
 
+    let decisionTypes: [OutlierGroup.TreeDecisionType]
+    
+    public init() {
+        decisionTypes = OutlierGroup.TreeDecisionType.allCases
+    }
+
+    public init(withTypes types: [OutlierGroup.TreeDecisionType]) {
+        decisionTypes = types
+    }
+    
     // number of levels (groups of '    ') of indentation to start with 
     let initial_indent = 2
     
@@ -67,7 +77,7 @@ class DecisionTreeGenerator {
         var function_parameters = ""
         var function2_parameters = ""
         
-        for type in OutlierGroup.TreeDecisionType.allCases {
+        for type in decisionTypes {
             if type.needsAsync { 
                 function_parameters += "                   \(type): await self.decisionTreeValue(for: .\(type)),\n"
             } else {
@@ -84,6 +94,16 @@ class DecisionTreeGenerator {
         function2_parameters.removeLast()
 
         let hash_prefix = tree_hash_string.prefix(sha_prefix_size)
+
+        var decisionTypeString = "    public let decisionTypes: [OutlierGroup.TreeDecisionType] = [\n"
+        
+        for type in decisionTypes {
+            decisionTypeString += "        .\(type.rawValue),\n"
+        }
+        decisionTypeString.removeLast()
+        decisionTypeString.removeLast()
+
+        decisionTypeString += "\n    ]\n"
         
         let swift_string = """
           /*
@@ -110,6 +130,9 @@ class DecisionTreeGenerator {
 
               public let inputSequences =
           \(input_files_array)
+
+              // the list of decision types this tree was made with
+          \(decisionTypeString)
           }
           
           @available(macOS 10.15, *)
@@ -196,7 +219,7 @@ class DecisionTreeGenerator {
         var should_not_paint_values: [OutlierGroup.TreeDecisionType: [Double]] = [:]
         
         await withLimitedTaskGroup(of: DecisionTypeValuesResult.self) { taskGroup in
-            for type in OutlierGroup.TreeDecisionType.allCases {
+            for type in decisionTypes {
                 await taskGroup.addTask() {
                     var list: [Double] = []
                     for test_data in return_true_test_data {
@@ -215,7 +238,7 @@ class DecisionTreeGenerator {
         //Log.i("decisionTreeNode checkpoint 0.5 with indent \(indent) return_true_test_data.count \(return_true_test_data.count) return_false_test_data.count \(return_false_test_data.count)")
 
         await withLimitedTaskGroup(of: DecisionTypeValuesResult.self) { taskGroup in
-            for type in OutlierGroup.TreeDecisionType.allCases {
+            for type in decisionTypes {
                 await taskGroup.addTask() {
                     var list: [Double] = []
                     for test_data in return_false_test_data {
@@ -241,7 +264,7 @@ class DecisionTreeGenerator {
         
         await withLimitedTaskGroup(of: ValueDistribution.self) { taskGroup in
             // for each type, calculate a min/max/mean/median for both paint and not
-            for type in OutlierGroup.TreeDecisionType.allCases {
+            for type in decisionTypes {
                 await taskGroup.addTask() {
                     var min = Double.greatestFiniteMagnitude
                     var max = -Double.greatestFiniteMagnitude
@@ -273,7 +296,7 @@ class DecisionTreeGenerator {
 
         // XXX dupe above for not paint
         await withLimitedTaskGroup(of: ValueDistribution.self) { taskGroup in
-            for type in OutlierGroup.TreeDecisionType.allCases {
+            for type in decisionTypes {
                 await taskGroup.addTask() {
                     var min = Double.greatestFiniteMagnitude
                     var max = -Double.greatestFiniteMagnitude
@@ -308,7 +331,7 @@ class DecisionTreeGenerator {
 
         await withLimitedTaskGroup(of: Array<TreeDecisionTypeResult>.self) { taskGroup in
         
-            for type in OutlierGroup.TreeDecisionType.allCases {
+            for type in decisionTypes {
                 if let paint_dist = should_paint_dist[type],
                    let not_paint_dist = should_not_paint_dist[type]
                 {

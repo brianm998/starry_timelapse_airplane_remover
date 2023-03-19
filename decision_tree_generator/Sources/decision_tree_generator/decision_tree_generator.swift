@@ -35,6 +35,14 @@ struct decision_tree_generator: ParsableCommand {
             """)
     var verification_mode = false
 
+    @Option(name: [.customShort("t"), .customLong("types")],
+          help:"""
+            Specify a comma delimited list of types from this list:
+            
+            \(OutlierGroup.TreeDecisionType.allCasesString)
+            """)
+    var decisionTypesString: String = ""
+    
     @Argument(help: """
                 A list of files, which can be either a reference to a config.json file,
                 or a reference to a directory containing files ending with '_outlier_values.bin'
@@ -204,7 +212,7 @@ struct decision_tree_generator: ParsableCommand {
                                             // could search for classes that conform to a new protocol
                                             // that defines this specific method, but it's static :(
                                             let decisionTreeShouldPaint =  
-                                              OutlierGroup.decisionTree_55f23bc4(types: matrix.types,
+                                              OutlierGroup.decisionTree_20d73d2a(types: matrix.types,
                                                                                  values: values.values)
                                             if decisionTreeShouldPaint == values.shouldPaint {
                                                 number_good += 1
@@ -355,9 +363,29 @@ struct decision_tree_generator: ParsableCommand {
 
     // actually generate a decision tree
     func generate_tree_from_input_files() {
+        
         let dispatch_group = DispatchGroup()
         dispatch_group.enter()
         Task {
+            var decisionTypes: [OutlierGroup.TreeDecisionType] = []
+
+            Log.d("decisionTypesString \(decisionTypesString)")
+            
+            if decisionTypesString == "" {
+                Log.d("FUCK")
+                decisionTypes = OutlierGroup.TreeDecisionType.allCases
+            } else {
+                Log.d("SHIT")
+                var rawValues = decisionTypesString.components(separatedBy: ",")
+                for rawValue in rawValues {
+                    if let enumValue = OutlierGroup.TreeDecisionType(rawValue: rawValue) {
+                        decisionTypes.append(enumValue)
+                    } else {
+                        Log.w("type \(rawValue) is not a member of OutlierGroup.TreeDecisionType")
+                    }
+                }
+            }
+            
             // test data gathered from all inputs
             var should_paint_test_data: [OutlierGroupValueMap] = []
             var should_not_paint_test_data: [OutlierGroupValueMap] = []
@@ -439,8 +467,8 @@ struct decision_tree_generator: ParsableCommand {
             
             Log.i("Calculating decision tree with \(should_paint_test_data.count) should paint \(should_not_paint_test_data.count) should not paint test data outlier groups")
 
-            let generator = DecisionTreeGenerator()
-            
+            let generator = DecisionTreeGenerator(withTypes: decisionTypes)
+
             let (tree_swift_code, sha_hash) =
               await generator.generateTree(withTrueData: should_paint_test_data,
                                            andFalseData: should_not_paint_test_data,
@@ -481,6 +509,18 @@ struct decision_tree_generator: ParsableCommand {
         }
     }
     
+}
+
+@available(macOS 10.15, *) 
+extension OutlierGroup.TreeDecisionType: ExpressibleByArgument {
+
+    public init?(argument: String) {
+        if let me = OutlierGroup.TreeDecisionType(rawValue: argument) {
+            self = me
+        } else {
+            return nil
+        }
+    }
 }
 
 fileprivate let file_manager = FileManager.default
