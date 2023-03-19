@@ -15,6 +15,27 @@ public struct OutlierGroupValueMap {
     public init() { }
 }
 
+// XXX populate this by scanning the runtime
+@available(macOS 10.15, *)
+public var decisionTrees: [String: DecisionTree] = [:]
+
+@available(macOS 10.15, *)
+public protocol DecisionTree {
+
+    var name: String { get }
+    var sha256: String { get }
+    var generationSecondsSince1970: TimeInterval { get }
+    var inputSequences: [String] { get }
+    var decisionTypes: [OutlierGroup.TreeDecisionType] { get }
+    
+    func shouldPaintFromDecisionTree (
+      types: [OutlierGroup.TreeDecisionType], // parallel
+      values: [Double]                        // arrays
+    ) -> Bool
+    
+    func shouldPaintFromDecisionTree(group: OutlierGroup) async -> Bool
+}
+
 public struct HoughLineHistogram {
 
     let values: [Double]
@@ -153,13 +174,13 @@ public extension OutlierGroup {
     var shouldPaintFromDecisionTree: Bool {
         get async {
             // XXX have the generator modify this?
-            return await self.shouldPaintFromDecisionTree_20d73d2a
+            //return await self.shouldPaintFromDecisionTree_20d73d2a
 
             // XXX XXX XXX
             // XXX XXX XXX
             // XXX XXX XXX
             // XXX XXX XXX
-            //return false        // XXX XXX XX
+            return false        // XXX XXX XX
             // XXX XXX XXX
             // XXX XXX XXX
             // XXX XXX XXX
