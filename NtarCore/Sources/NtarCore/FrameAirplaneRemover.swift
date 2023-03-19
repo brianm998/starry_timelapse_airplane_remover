@@ -370,6 +370,9 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
     let fully_process: Bool
 
     let overwriteFileLoadedOutlierGroups: Bool
+
+    // if this is false, just write out outlier data
+    let writeOutputFiles: Bool
     
     init(with config: Config,
          width: Int,
@@ -387,10 +390,12 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
          thumbnailOutputDirname thumbnail_output_dirname: String?,
          outlierGroupLoader: @escaping () async -> OutlierGroups?,
          fullyProcess: Bool = true,
-         overwriteFileLoadedOutlierGroups: Bool = false) async throws
+         overwriteFileLoadedOutlierGroups: Bool = false,
+         writeOutputFiles: Bool = true) async throws
     {
         self.fully_process = fullyProcess
         self.overwriteFileLoadedOutlierGroups = overwriteFileLoadedOutlierGroups
+        self.writeOutputFiles = writeOutputFiles
         self.config = config
         self.base_name = baseName
         self.callbacks = callbacks
@@ -1086,6 +1091,11 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
 
         // these are derived from the outliers binary, and writing them out is ok
         await writeOutlierValuesBinary()
+
+        if !self.writeOutputFiles {
+            self.state = .complete
+            return
+        }
         
         self.state = .reloadingImages
         

@@ -44,6 +44,8 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
     // are we running on the gui?
     public let is_gui: Bool
 
+    public let writeOutputFiles: Bool
+    
     public let basename: String
     
     public init(with config: Config,
@@ -51,11 +53,13 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
                 processExistingFiles: Bool,
                 maxResidentImages: Int? = nil,
                 fullyProcess: Bool = true,
-                isGUI: Bool = false) throws
+                isGUI: Bool = false,
+                writeOutputFiles: Bool = true) throws
     {
         self.config = config
         self.callbacks = callbacks
         self.is_gui = isGUI     // XXX make this better
+        self.writeOutputFiles = writeOutputFiles
         
         var _basename = "\(config.image_sequence_dirname)-ntar-v-\(config.ntar_version)"
         self.basename = _basename.replacingOccurrences(of: ".", with: "_")
@@ -374,7 +378,8 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
                                               thumbnailOutputDirname: thumbnail_output_dirname,
                                               outlierGroupLoader: loadOutliersFromFile,
                                               fullyProcess: fully_process,
-                                              overwriteFileLoadedOutlierGroups: is_gui)
+                                              overwriteFileLoadedOutlierGroups: is_gui,
+                                              writeOutputFiles: writeOutputFiles)
    }        
 }
               

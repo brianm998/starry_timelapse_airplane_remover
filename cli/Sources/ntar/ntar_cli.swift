@@ -191,6 +191,9 @@ struct Ntar: ParsableCommand {
     @Flag(name: .shortAndLong, help:"Show version number")
     var version = false
 
+    @Flag(name: .shortAndLong, help:"only write out outlier data, not images")
+    var skipOutputFiles = false
+    
     @Flag(name: .customShort("q"),
           help:"process individual outlier group image files")
     var process_outlier_group_images = false
@@ -341,11 +344,13 @@ struct Ntar: ParsableCommand {
             Log.i("looking for files to processes in \(input_image_sequence_dirname)")
             let local_dispatch = DispatchGroup()
             local_dispatch.enter()
+            let writeOutputFiles = !skipOutputFiles
             Task {
                 do {
                     let eraser = try NighttimeAirplaneRemover(with: config,
                                                               callbacks: callbacks,
-                                                              processExistingFiles: false)
+                                                              processExistingFiles: false,
+                                                              writeOutputFiles: writeOutputFiles)
                     
                     var upm: UpdatableProgressMonitor?
                     
