@@ -13,8 +13,8 @@ struct OutlierGroupValueMapResult {
 }
 
 struct TreeTestResults {
-    let numberGood: Int
-    let numberBad: Int
+    let numberGood: [String:Int]
+    let numberBad: [String:Int]
 }
 
 // how much do we truncate the sha256 hash when embedding it into code
@@ -74,8 +74,13 @@ struct decision_tree_generator: ParsableCommand {
 
     func runVerification(basedUpon json_config_file_name: String) async throws -> TreeTestResults {
 
-        var num_similar_outlier_groups = 0
-        var num_different_outlier_groups = 0
+        var num_similar_outlier_groups:[String:Int] = [:]
+        var num_different_outlier_groups:[String:Int] = [:]
+        for (treeKey, _) in decisionTrees {
+            num_similar_outlier_groups[treeKey] = 0
+            num_different_outlier_groups[treeKey] = 0
+        }
+        
         let config = try await Config.read(fromJsonFilename: json_config_file_name)
         Log.d("got config from \(json_config_file_name)")
         
@@ -131,21 +136,30 @@ struct decision_tree_generator: ParsableCommand {
                 // check all outlier groups
                 
                 await taskGroup.addTask() {
-                    var number_good = 0
-                    var number_bad = 0
+                    var number_good: [String: Int] = [:]
+                    var number_bad: [String: Int] = [:]
+                    for (treeKey, _) in decisionTrees {
+                        number_good[treeKey] = 0
+                        number_bad[treeKey] = 0
+                    }
+
                     //Log.d("should check frame \(frame.frame_index)")
                     if let outlier_group_list = await frame.outlierGroups() {
                         for outlier_group in outlier_group_list {
                             if let numberGood = await outlier_group.shouldPaint {
-                                let decisionTreeShouldPaint = await outlier_group.shouldPaintFromDecisionTree
-                                if decisionTreeShouldPaint == numberGood.willPaint {
-                                    // good
-                                    //Log.d("good")
-                                    number_good += 1
-                                } else {
-                                    // bad
-                                    //Log.w("outlier group \(outlier_group) decisionTreeShouldPaint \(decisionTreeShouldPaint) != numberGood.willPaint \(numberGood.willPaint)")
-                                    number_bad += 1
+
+
+                                for (treeKey, tree) in decisionTrees {
+                                    let decisionTreeShouldPaint =  
+                                      await tree.shouldPaintFromDecisionTree(group: outlier_group)
+
+
+                                    if decisionTreeShouldPaint == numberGood.willPaint {
+                                        number_good[treeKey]! += 1
+                                    } else {
+                                        number_bad[treeKey]! += 1
+                                    }
+                                    
                                 }
                             } else {
                                 //Log.e("WTF")
@@ -164,14 +178,16 @@ struct decision_tree_generator: ParsableCommand {
             Log.d("waiting for all")
             while let response = await taskGroup.next() {
                 Log.d("got response response.numberGood \(response.numberGood) response.numberBad \(response.numberBad) ")
-                num_similar_outlier_groups += response.numberGood
-                num_different_outlier_groups += response.numberBad
+                for (treeKey, _) in decisionTrees {
+                    num_similar_outlier_groups[treeKey]! += response.numberGood[treeKey]!
+                    num_different_outlier_groups[treeKey]! += response.numberBad[treeKey]!
+                }
             }
         }
         Log.d("checkpoint at end")
-        let total = num_similar_outlier_groups + num_different_outlier_groups
-        let percentage_good = Double(num_similar_outlier_groups)/Double(total)*100
-        Log.i("for \(json_config_file_name), out of \(total) \(percentage_good)% success")
+        //let total = num_similar_outlier_groups + num_different_outlier_groups
+        //let percentage_good = Double(num_similar_outlier_groups)/Double(total)*100
+        //Log.i("for \(json_config_file_name), out of \(total) \(percentage_good)% success")
         return TreeTestResults(numberGood: num_similar_outlier_groups,
                                numberBad: num_different_outlier_groups)
     }
@@ -194,8 +210,12 @@ struct decision_tree_generator: ParsableCommand {
                         }
                     } else {
                         if file_manager.fileExists(atPath: json_config_file_name) {
-                            var number_good = 0
-                            var number_bad = 0
+                            var number_good: [String: Int] = [:]
+                            var number_bad: [String: Int] = [:]
+                            for (treeKey, _) in decisionTrees {
+                                number_good[treeKey] = 0
+                                number_bad[treeKey] = 0
+                            }
                             
                             // load a list of OutlierGroupValueMatrix
                             // and get outlierGroupValues from them
@@ -217,13 +237,16 @@ struct decision_tree_generator: ParsableCommand {
                                             // XXX how to reference hash properly here ???
                                             // could search for classes that conform to a new protocol
                                             // that defines this specific method, but it's static :(
-                                            let decisionTreeShouldPaint =  
-                                              OutlierGroup.decisionTree_125389d5(types: matrix.types,
-                                                                                 values: values.values)
-                                            if decisionTreeShouldPaint == values.shouldPaint {
-                                                number_good += 1
-                                            } else {
-                                                number_bad += 1
+
+                                            for (treeKey, tree) in decisionTrees {
+                                                let decisionTreeShouldPaint =  
+                                                  tree.shouldPaintFromDecisionTree(types: matrix.types,
+                                                                                   values: values.values)
+                                                if decisionTreeShouldPaint == values.shouldPaint {
+                                                    number_good[treeKey]! += 1
+                                                } else {
+                                                    number_bad[treeKey]! += 1
+                                                }
                                             }
                                         }
                                     } catch {
@@ -234,9 +257,9 @@ struct decision_tree_generator: ParsableCommand {
 
                             // XXX combine these all
                             
-                            let total = number_good + number_bad
-                            let percentage_good = Double(number_good)/Double(total)*100
-                            Log.i("for \(json_config_file_name), out of \(total) \(percentage_good)% success good \(number_good) vs bad \(number_bad)")
+                            //let total = number_good + number_bad
+                            //let percentage_good = Double(number_good)/Double(total)*100
+                            //Log.i("for \(json_config_file_name), out of \(total) \(percentage_good)% success good \(number_good) vs bad \(number_bad)")
                             
                             return TreeTestResults(numberGood: number_good,
                                                    numberBad: number_bad)
@@ -250,15 +273,24 @@ struct decision_tree_generator: ParsableCommand {
                     allResults.append(response)
                 }
             }
-            var number_good = 0
-            var number_bad = 0
-            for result in allResults {
-                number_good += result.numberGood
-                number_bad += result.numberBad
+            var number_good:[String:Int] = [:]
+            var number_bad:[String:Int] = [:]
+            for (treeKey, _) in decisionTrees {
+                number_good[treeKey] = 0
+                number_bad[treeKey] = 0
             }
-            let total = number_good + number_bad
-            let percentage_good = Double(number_good)/Double(total)*100
-            Log.i("out of a total of \(total) outlier groups, \(percentage_good)% success good \(number_good) vs bad \(number_bad)")
+            
+            for result in allResults {
+                for (treeKey, _) in decisionTrees {
+                    number_good[treeKey]! += result.numberGood[treeKey]!
+                    number_bad[treeKey]! += result.numberBad[treeKey]!
+                }
+            }
+            for (treeKey, _) in decisionTrees {
+                let total = number_good[treeKey]! + number_bad[treeKey]!
+                let percentage_good = Double(number_good[treeKey]!)/Double(total)*100
+                Log.i("For decision Tree \(treeKey) out of a total of \(total) outlier groups, \(percentage_good)% success good \(number_good[treeKey]!) vs bad \(number_bad[treeKey]!)")
+            }
         }
             dispatch_group.leave()
         }
@@ -459,7 +491,7 @@ struct decision_tree_generator: ParsableCommand {
                                         } catch {
                                             Log.e("\(file): \(error)")
                                         }
-                                        Log.i("got \(local_should_paint_test_data.count)/\(local_should_not_paint_test_data.count) test data from \(file)")
+                                        //Log.i("got \(local_should_paint_test_data.count)/\(local_should_not_paint_test_data.count) test data from \(file)")
                                         
                                         return OutlierGroupValueMapResult(
                                           should_paint_test_data: local_should_paint_test_data,
@@ -477,7 +509,7 @@ struct decision_tree_generator: ParsableCommand {
             }
 
             if produce_all_type_combinations {
-                let min = OutlierGroup.TreeDecisionType.allCases.count-3 // XXX make a parameter
+                let min = OutlierGroup.TreeDecisionType.allCases.count-1 // XXX make a parameter
                 let max = OutlierGroup.TreeDecisionType.allCases.count
                 let combinations = decisionTypes.combinations(ofCount: min..<max)
                 Log.i("calculating \(combinations.count) different decision trees")
