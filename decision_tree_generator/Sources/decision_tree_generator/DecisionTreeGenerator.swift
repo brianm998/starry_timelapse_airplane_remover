@@ -564,8 +564,8 @@ class DecisionTreeGenerator {
                 }
             }
         } else {
-            Log.e("no best type")
-            fatalError("no best result")
+            Log.e("no best type, defaulting to false :(")
+            return ReturnFalseTreeNode(indent: indent + 1)
         }
     }
 
