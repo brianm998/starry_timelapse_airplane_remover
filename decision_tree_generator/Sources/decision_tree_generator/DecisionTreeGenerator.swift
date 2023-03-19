@@ -106,6 +106,32 @@ class DecisionTreeGenerator {
         decisionTypeString.removeLast()
         
         decisionTypeString += "\n    ]\n"
+        
+
+        var skippedDecisionTypeString = "    public let notUsedDecisionTypes: [OutlierGroup.TreeDecisionType] = [\n"
+
+        var was_added = false
+        for type in OutlierGroup.TreeDecisionType.allCases {
+            var should_add = true
+            for requestedType in decisionTypes {
+                if type == requestedType {
+                    should_add = false
+                    break
+                }
+            }
+            if should_add {
+                was_added = true 
+                skippedDecisionTypeString += "        .\(type.rawValue),\n"
+            }
+        }
+        if was_added {
+            skippedDecisionTypeString.removeLast()
+            skippedDecisionTypeString.removeLast()
+        }
+        
+        skippedDecisionTypeString += "\n    ]\n"
+
+
 
         var decisionSplitTypeString = "    public let decisionSplitTypes: [DecisionSplitType] = [\n"
         
@@ -165,6 +191,9 @@ class DecisionTreeGenerator {
               // the list of decision types this tree was made with
           \(decisionTypeString)
 
+              // the list of decision types this tree did not use
+          \(skippedDecisionTypeString)
+          
               // the types of decision splits made
           \(decisionSplitTypeString)
 
