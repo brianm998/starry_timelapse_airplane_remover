@@ -2,18 +2,17 @@
 import Foundation
 import NtarCore
 
-
 // represents an abstract node in the decision tree
 // that knows how to render itself as a String of swift code
 @available(macOS 10.15, *) 
-protocol DecisionTree {
+protocol SwiftDecisionTree {
     // swift code that eventually returns true or false
     var swiftCode: String { get }
 }
 
 // end leaf node which always returns true
 @available(macOS 10.15, *) 
-struct ReturnTrueTreeNode: DecisionTree {
+struct ReturnTrueTreeNode: SwiftDecisionTree {
     let indent: Int
     var swiftCode: String {
         var indentation = ""
@@ -24,7 +23,7 @@ struct ReturnTrueTreeNode: DecisionTree {
 
 // end leaf node which always returns false
 @available(macOS 10.15, *) 
-struct ReturnFalseTreeNode: DecisionTree {
+struct ReturnFalseTreeNode: SwiftDecisionTree {
     let indent: Int
     var swiftCode: String {
         var indentation = ""
@@ -36,7 +35,7 @@ struct ReturnFalseTreeNode: DecisionTree {
 // decision node which decides upon a value of some type
 // delegating to one of two further code paths
 @available(macOS 10.15, *) 
-struct DecisionTreeNode: DecisionTree {
+struct DecisionTreeNode: SwiftDecisionTree {
 
     // the kind of value we are deciding upon
     let type: OutlierGroup.TreeDecisionType
@@ -45,10 +44,10 @@ struct DecisionTreeNode: DecisionTree {
     let value: Double
 
     // code to handle the case where the input data is less than the given value
-    let lessThan: DecisionTree
+    let lessThan: SwiftDecisionTree
 
     // code to handle the case where the input data is greater than the given value
-    let greaterThan: DecisionTree
+    let greaterThan: SwiftDecisionTree
 
     // indentention is levels of recursion, not spaces directly
     let indent: Int
