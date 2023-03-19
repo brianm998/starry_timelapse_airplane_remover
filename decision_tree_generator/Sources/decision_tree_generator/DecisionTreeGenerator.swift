@@ -11,13 +11,13 @@ public var allDecisionTrees: [String: Int] = [:]
 class DecisionTreeGenerator {
 
     let decisionTypes: [OutlierGroup.TreeDecisionType]
+    let decisionSplitTypes: [DecisionSplitType]
     
-    public init() {
-        decisionTypes = OutlierGroup.TreeDecisionType.allCases
-    }
-
-    public init(withTypes types: [OutlierGroup.TreeDecisionType]) {
+    public init(withTypes types: [OutlierGroup.TreeDecisionType] = OutlierGroup.TreeDecisionType.allCases,
+                andSplitTypes splitTypes: [DecisionSplitType] = [.median])
+    {
         decisionTypes = types
+        decisionSplitTypes = splitTypes
     }
     
     // number of levels (groups of '    ') of indentation to start with 
@@ -56,6 +56,10 @@ class DecisionTreeGenerator {
         let generation_date = Date()
 
         for type in decisionTypes {
+            digest.update(data: Data(type.rawValue.utf8))
+        }
+
+        for type in decisionSplitTypes {
             digest.update(data: Data(type.rawValue.utf8))
         }
 
@@ -100,9 +104,19 @@ class DecisionTreeGenerator {
         }
         decisionTypeString.removeLast()
         decisionTypeString.removeLast()
-
+        
         decisionTypeString += "\n    ]\n"
 
+        var decisionSplitTypeString = "    public let decisionSplitTypes: [DecisionSplitType] = [\n"
+        
+        for type in decisionSplitTypes {
+            decisionSplitTypeString += "        .\(type.rawValue),\n"
+        }
+        decisionSplitTypeString.removeLast()
+        decisionSplitTypeString.removeLast()
+
+        decisionSplitTypeString += "\n    ]\n"
+        
         // the root tree node with all of the test data 
         let tree = await decisionTreeNode(with: return_true_test_data,
                                           and: return_false_test_data,
@@ -150,7 +164,10 @@ class DecisionTreeGenerator {
 
               // the list of decision types this tree was made with
           \(decisionTypeString)
-          
+
+              // the types of decision splits made
+          \(decisionSplitTypeString)
+
               // decide the paintability of this OutlierGroup with a decision tree
               public func shouldPaintFromDecisionTree(group: OutlierGroup) async -> Bool {
                   return await group.shouldPaint_\(hash_prefix)(from: self)
@@ -385,11 +402,31 @@ class DecisionTreeGenerator {
                             }
 
                             // XXX find more ways to split the data
-                            return [
-                              self.result(for: type,
-                                             decisionValue: (paint_dist.median + not_paint_dist.median) / 2,
-                                             withTrueData: return_true_test_data,
-                                             andFalseData: return_false_test_data),
+
+                            // XXX allow for an enum of decision value split types
+                            // XXX espose these to the hash and in the generated code
+                            var ret: [TreeDecisionTypeResult] = []
+
+                            for splitType in self.decisionSplitTypes {
+                                switch splitType {
+                                case .mean:
+                                    ret.append(
+                                      self.result(for: type,
+                                                  decisionValue: (paint_dist.mean + not_paint_dist.mean) / 2,
+                                                  withTrueData: return_true_test_data,
+                                                  andFalseData: return_false_test_data)
+                                    )
+
+                                case .median:
+                                    ret.append(
+                                      self.result(for: type,
+                                                  decisionValue: (paint_dist.median + not_paint_dist.median) / 2,
+                                                  withTrueData: return_true_test_data,
+                                                  andFalseData: return_false_test_data)
+                                    )
+                                }
+                            }
+                            return ret
                               // XXX expermintal
                               /*
                               self.result(for: type,
@@ -415,7 +452,6 @@ class DecisionTreeGenerator {
                                              withTrueData: return_true_test_data,
                                              andFalseData: return_false_test_data),
                                */
-                            ]
                         }
                     }
                 }

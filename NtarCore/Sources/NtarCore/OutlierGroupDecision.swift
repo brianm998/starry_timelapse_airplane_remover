@@ -8,6 +8,13 @@ import Foundation
  
  */
 
+// different ways we split up data sets that are still overlapping
+public enum DecisionSplitType: String {
+    case median
+    case mean
+    // XXX others ???
+}
+
 @available(macOS 10.15, *)
 // a typed vector of values for a single outlier group
 public struct OutlierGroupValueMap {
@@ -15,6 +22,7 @@ public struct OutlierGroupValueMap {
     public init() { }
 }
 
+// a list of all extant decision trees at runtime, indexed by hash prefix
 @available(macOS 10.15, *)
 public var decisionTrees: [String: DecisionTree] = {
     let decisionTrees = listClasses { $0.compactMap { $0 as? DecisionTree.Type } }
@@ -186,25 +194,6 @@ public extension OutlierGroup {
             }
             return values
         } 
-    }
-    
-    var shouldPaintFromDecisionTree: Bool {
-        get async {
-            // XXX have the generator modify this?
-            //return await self.shouldPaintFromDecisionTree_20d73d2a
-
-            // XXX XXX XXX
-            // XXX XXX XXX
-            // XXX XXX XXX
-            // XXX XXX XXX
-            return false        // XXX XXX XX
-            // XXX XXX XXX
-            // XXX XXX XXX
-            // XXX XXX XXX
-            // XXX XXX XXX
-
-            //return await self.shouldPaintFromDecisionTree_074081b0
-        }
     }
     
     // we derive a Double value from each of these

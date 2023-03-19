@@ -17,6 +17,15 @@ struct TreeTestResults {
     let numberBad: [String:Int]
 }
 
+struct DecisionTreeResult: Comparable {
+    let score: Double
+    let message: String
+
+    public static func < (lhs: Self, rhs: Self) -> Bool {
+        return lhs.score < rhs.score
+    }
+}
+
 // how much do we truncate the sha256 hash when embedding it into code
 let sha_prefix_size = 8
 
@@ -286,10 +295,17 @@ struct decision_tree_generator: ParsableCommand {
                     number_bad[treeKey]! += result.numberBad[treeKey]!
                 }
             }
+            var outputResults: [DecisionTreeResult] = []
             for (treeKey, _) in decisionTrees {
                 let total = number_good[treeKey]! + number_bad[treeKey]!
                 let percentage_good = Double(number_good[treeKey]!)/Double(total)*100
-                Log.i("For decision Tree \(treeKey) out of a total of \(total) outlier groups, \(percentage_good)% success good \(number_good[treeKey]!) vs bad \(number_bad[treeKey]!)")
+                let message = "For decision Tree \(treeKey) out of a total of \(total) outlier groups, \(percentage_good)% success good \(number_good[treeKey]!) vs bad \(number_bad[treeKey]!)"
+                outputResults.append(DecisionTreeResult(score: percentage_good,
+                                                        message: message))
+            }
+            // sort these on output by percentage_good
+            for result in outputResults.sorted() {
+                Log.i(result.message)
             }
         }
             dispatch_group.leave()
@@ -537,9 +553,35 @@ struct decision_tree_generator: ParsableCommand {
                    andFalseData should_not_paint_test_data: [OutlierGroupValueMap],
                    inputFilenames: [String]) async {
         
+        // for now, write three different trees
+        await self.writeTree(withTypes: decisionTypes,
+                             andSplitTypes: [.mean],
+                             withTrueData: should_paint_test_data,
+                             andFalseData: should_not_paint_test_data,
+                             inputFilenames: inputFilenames)
+
+        await self.writeTree(withTypes: decisionTypes,
+                             andSplitTypes: [.median],
+                             withTrueData: should_paint_test_data,
+                             andFalseData: should_not_paint_test_data,
+                             inputFilenames: inputFilenames)
+
+        await self.writeTree(withTypes: decisionTypes,
+                             andSplitTypes: [.mean, .median],
+                             withTrueData: should_paint_test_data,
+                             andFalseData: should_not_paint_test_data,
+                             inputFilenames: inputFilenames)
+    }
+    
+    func writeTree(withTypes decisionTypes: [OutlierGroup.TreeDecisionType],
+                   andSplitTypes splitTypes: [DecisionSplitType],
+                   withTrueData should_paint_test_data: [OutlierGroupValueMap],
+                   andFalseData should_not_paint_test_data: [OutlierGroupValueMap],
+                   inputFilenames: [String]) async {
+        
         Log.i("Calculating decision tree with \(should_paint_test_data.count) should paint \(should_not_paint_test_data.count) should not paint test data outlier groups")
 
-        let generator = DecisionTreeGenerator(withTypes: decisionTypes)
+        let generator = DecisionTreeGenerator(withTypes: decisionTypes, andSplitTypes: splitTypes)
 
         let base_filename = "../NtarCore/Sources/NtarCore/OutlierGroupDecisionTree_"
         
