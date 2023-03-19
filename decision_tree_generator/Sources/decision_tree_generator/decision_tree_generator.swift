@@ -182,7 +182,6 @@ struct decision_tree_generator: ParsableCommand {
         dispatch_group.enter()
         Task {
         try await withThrowingLimitedTaskGroup(of: Optional<TreeTestResults>.self) { taskGroup in
-            
             // XXX could do these all in parallel with a task group
             var allResults: [TreeTestResults] = []
             for json_config_file_name in input_filenames {
@@ -201,6 +200,7 @@ struct decision_tree_generator: ParsableCommand {
                             // load a list of OutlierGroupValueMatrix
                             // and get outlierGroupValues from them
                             let contents = try file_manager.contentsOfDirectory(atPath: json_config_file_name)
+                            let decoder = BinaryDecoder()
                             for file in contents {
                                 if file.hasSuffix("_outlier_values.bin") {
                                     let filename = "\(json_config_file_name)/\(file)"
@@ -211,7 +211,6 @@ struct decision_tree_generator: ParsableCommand {
                                         
                                         let (data, _) = try await URLSession.shared.data(for: URLRequest(url: imageURL as URL))
                                         
-                                        let decoder = BinaryDecoder()
                                         let matrix = try decoder.decode(OutlierGroupValueMatrix.self, from: data)
                                         
                                         for values in matrix.values {
@@ -437,11 +436,11 @@ struct decision_tree_generator: ParsableCommand {
                                         
                                         let (data, _) = try await URLSession.shared.data(for: URLRequest(url: imageURL as URL))
                                         
-                                        Log.d("\(file) data loaded")
+                                        //Log.d("\(file) data loaded")
                                         let decoder = BinaryDecoder()
                                         do {
                                             let matrix = try decoder.decode(OutlierGroupValueMatrix.self, from: data)
-                                            Log.d("\(file) data decoded")
+                                            //Log.d("\(file) data decoded")
                                             //if let json = matrix.prettyJson { print(json) }
                                             //Log.d("frame \(frame_index) matrix \(matrix)")
                                             for values in matrix.values {
@@ -478,10 +477,12 @@ struct decision_tree_generator: ParsableCommand {
             }
 
             if produce_all_type_combinations {
-                let min = 8     // XXX make a parameter?
+                let min = OutlierGroup.TreeDecisionType.allCases.count-3 // XXX make a parameter
                 let max = OutlierGroup.TreeDecisionType.allCases.count
-                for types in decisionTypes.combinations(ofCount: min..<max) {
-                    Log.i("calculating tree with \(types)")
+                let combinations = decisionTypes.combinations(ofCount: min..<max)
+                Log.i("calculating \(combinations.count) different decision trees")
+                for (index, types) in combinations.enumerated() {
+                    Log.i("calculating tree \(index) with \(types)")
                     await self.writeTree(withTypes: types,
                                          withTrueData: should_paint_test_data,
                                          andFalseData: should_not_paint_test_data,
