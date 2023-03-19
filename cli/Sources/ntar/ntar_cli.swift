@@ -184,23 +184,6 @@ struct Ntar: ParsableCommand {
         """)
     var numConcurrentRenders: Int = ProcessInfo.processInfo.activeProcessorCount
 
-    @Flag(name: [.short, .customLong("test-paint")], help:"""
-        Write out a separate image sequence with colors indicating
-        what was detected, and what was changed.
-        Shows what changes have been made to each frame.
-        """)
-    var test_paint = false
-
-    @Option(name: [.customLong("test-paint-output-path")], help:"""
-        The filesystem location under which ntar will create the test paint output dir.
-        Defaults to the main output path.
-        """)
-    var testPaintOutputPath: String?
-
-    @Flag(name: [.short, .customLong("show-test-paint-colors")],
-          help:"Print out what the test paint colors mean")
-    var show_test_paint_colors = false
-
     @Flag(name: [.customShort("w"), .customLong("write-outlier-group-files")],
           help:"Write individual outlier group image files")
     var should_write_outlier_group_files = false
@@ -228,33 +211,6 @@ struct Ntar: ParsableCommand {
             return
         }
         
-        if show_test_paint_colors {
-            print("""
-                  When called with -t or --test-paint, ntar will output two sequences of images.
-                  The first will be the normal output with airplanes removed.
-                  The second will the the 'test paint' version,
-                  where each outlier group larger than \(self.minGroupSize) pixels that will be painted over is painted:
-
-                  """)
-            for willPaintReason in PaintReason.shouldPaintCases {
-                print("   "+willPaintReason.BasicColor+"- "+willPaintReason.BasicColor.name() +
-                      ": "+willPaintReason.name+BasicColor.reset +
-                      "\n     \(willPaintReason.description)")
-            }
-            print("""
-
-                  And each larger outlier group that is not painted over in the normal output is painted:
-
-                  """)
-            for willPaintReason in PaintReason.shouldNotPaintCases {
-                print("   "+willPaintReason.BasicColor+"- "+willPaintReason.BasicColor.name() +
-                      ": "+willPaintReason.name+BasicColor.reset +
-                      "\n     \(willPaintReason.description)")
-            }
-            print("\n")
-            return
-        } 
-
         if process_outlier_group_images {
             let airplanes_group = "outlier_data/airplanes"
             let non_airplanes_group = "outlier_data/non_airplanes"
@@ -330,25 +286,17 @@ struct Ntar: ParsableCommand {
                     output_path = input_image_sequence_path
                 }
 
-                var test_paint_output_path = output_path
-                if let testPaintOutputPath = testPaintOutputPath {
-                    test_paint_output_path = testPaintOutputPath
-                }
-
                 config = Config(outputPath: output_path,
                                 outlierMaxThreshold: outlierMaxThreshold,
                                 outlierMinThreshold: outlierMinThreshold,
                                 minGroupSize: minGroupSize,
                                 numConcurrentRenders: numConcurrentRenders,
-                                test_paint: test_paint,
-                                test_paint_output_path: test_paint_output_path,
                                 imageSequenceName: input_image_sequence_name,
                                 imageSequencePath: input_image_sequence_path,
                                 writeOutlierGroupFiles: should_write_outlier_group_files,
                                 // maybe make a separate command line parameter for these VVV? 
                                 writeFramePreviewFiles: should_write_outlier_group_files,
                                 writeFrameProcessedPreviewFiles: should_write_outlier_group_files,
-                                writeFrameTestPaintPreviewFiles: should_write_outlier_group_files,
                                 writeFrameThumbnailFiles: should_write_outlier_group_files)
 
                 Log.nameSuffix = input_image_sequence_name

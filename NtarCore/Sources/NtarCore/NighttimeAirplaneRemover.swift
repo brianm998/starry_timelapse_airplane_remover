@@ -27,9 +27,6 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
     public var config: Config
     public var callbacks: Callbacks
 
-    // the name of the directory to create when writing test paint images
-    let test_paint_output_dirname: String
-
     // the name of the directory to create when writing outlier group files
     let outlier_output_dirname: String
 
@@ -38,9 +35,6 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
 
     // the name of the directory to create when writing processed frame previews
     let processed_preview_output_dirname: String
-
-    // the name of the directory to create when writing test paint frame previews
-    let test_paint_preview_output_dirname: String
 
     // the name of the directory to create when writing frame thumbnails (small previews)
     let thumbnail_output_dirname: String
@@ -65,11 +59,9 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
         
         var _basename = "\(config.image_sequence_dirname)-ntar-v-\(config.ntar_version)"
         self.basename = _basename.replacingOccurrences(of: ".", with: "_")
-        test_paint_output_dirname = "\(config.test_paint_output_path)/\(basename)-test-paint"
         outlier_output_dirname = "\(config.outputPath)/\(basename)-outliers"
         preview_output_dirname = "\(config.outputPath)/\(basename)-previews"
         processed_preview_output_dirname = "\(config.outputPath)/\(basename)-processed-previews"
-        test_paint_preview_output_dirname = "\(config.outputPath)/\(basename)-test-paint-previews"
         thumbnail_output_dirname = "\(config.outputPath)/\(basename)-thumbnails"
 
         try super.init(imageSequenceDirname: "\(config.image_sequence_path)/\(config.image_sequence_dirname)",
@@ -169,9 +161,6 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
                 Log.e("first frame to get size: \(error)")
             }
         }
-        if config.test_paint {
-            try mkdir(test_paint_output_dirname)
-        }
         if config.writeOutlierGroupFiles {
             // doesn't do mkdir -p, if a base dir is missing it just hangs :(
             try mkdir(outlier_output_dirname) // XXX this can fail silently and pause the whole process :(
@@ -184,19 +173,13 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
             try mkdir(processed_preview_output_dirname)
         }
 
-        if config.writeFrameTestPaintPreviewFiles {
-            try mkdir(test_paint_preview_output_dirname)
-        }
-        
         if config.writeFrameThumbnailFiles {
             try mkdir(thumbnail_output_dirname)
         }
 
-        if config.test_paint                      ||
-           config.writeOutlierGroupFiles          ||
+        if config.writeOutlierGroupFiles          ||
            config.writeFramePreviewFiles          ||
            config.writeFrameProcessedPreviewFiles ||
-           config.writeFrameTestPaintPreviewFiles ||
            config.writeFrameThumbnailFiles
         {
             config.writeJson(named: "\(self.basename)-config.json")
@@ -221,17 +204,12 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
             otherFrameIndexes.append(index+1)
         }
         
-        let test_paint_filename = self.config.test_paint ?
-          "\(self.test_paint_output_dirname)/\(base_name)" : nil
-
-        
         // the other frames that we use to detect outliers and repaint from
         let frame_plane_remover =
           try await self.createFrame(atIndex: index,
                                      otherFrameIndexes: otherFrameIndexes,
                                      output_filename: "\(self.output_dirname)/\(base_name)",
                                      base_name: base_name,
-                                     test_paint_filename: test_paint_filename,
                                      image_width: image_width!,
                                      image_height: image_height!,
                                      image_bytesPerPixel: image_bytesPerPixel!)
@@ -307,7 +285,6 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
                      otherFrameIndexes: [Int],
                      output_filename: String, // full path
                      base_name: String,       // just filename
-                     test_paint_filename tpfo: String?,
                      image_width: Int,
                      image_height: Int,
                      image_bytesPerPixel: Int) async throws -> FrameAirplaneRemover
@@ -390,12 +367,10 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
                                               atIndex: frame_index,
                                               otherFrameIndexes: otherFrameIndexes,
                                               outputFilename: output_filename,
-                                              testPaintFilename: tpfo,
                                               baseName: base_name,
                                               outlierOutputDirname: outlier_output_dirname,
                                               previewOutputDirname: preview_output_dirname,
                                               processedPreviewOutputDirname: processed_preview_output_dirname,
-                                              testPaintPreviewOutputDirname: test_paint_preview_output_dirname,
                                               thumbnailOutputDirname: thumbnail_output_dirname,
                                               outlierGroupLoader: loadOutliersFromFile,
                                               fullyProcess: fully_process,

@@ -70,9 +70,6 @@ class ntar_gui_app: App {
     var outlierMinThreshold: Double = 9
     var minGroupSize: Int = 80      // groups smaller than this are completely ignored
     var numConcurrentRenders: Int = ProcessInfo.processInfo.activeProcessorCount
-    var test_paint = false
-    var testPaintOutputPath: String?
-    var show_test_paint_colors = false
     var should_write_outlier_group_files = true // XXX see what happens
     var process_outlier_group_images = false
 
@@ -232,24 +229,16 @@ class ntar_gui_app: App {
             output_path = input_image_sequence_path
         }
 
-        var test_paint_output_path = output_path
-        if let testPaintOutputPath = self.testPaintOutputPath {
-            test_paint_output_path = testPaintOutputPath
-        }
-
         var config = Config(outputPath: output_path,
                             outlierMaxThreshold: self.outlierMaxThreshold,
                             outlierMinThreshold: self.outlierMinThreshold,
                             minGroupSize: self.minGroupSize,
                             numConcurrentRenders: self.numConcurrentRenders,
-                            test_paint: self.test_paint,
-                            test_paint_output_path: test_paint_output_path,
                             imageSequenceName: input_image_sequence_name,
                             imageSequencePath: input_image_sequence_path,
                             writeOutlierGroupFiles: self.should_write_outlier_group_files,
                             writeFramePreviewFiles: self.should_write_outlier_group_files,
                             writeFrameProcessedPreviewFiles: self.should_write_outlier_group_files,
-                            writeFrameTestPaintPreviewFiles: self.should_write_outlier_group_files,
                             writeFrameThumbnailFiles: self.should_write_outlier_group_files)
 
         

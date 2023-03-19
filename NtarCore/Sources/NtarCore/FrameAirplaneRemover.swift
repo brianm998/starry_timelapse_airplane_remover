@@ -64,13 +64,9 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
     public let otherFrameIndexes: [Int] // used in found outliers and paint only
     nonisolated public let frame_index: Int
 
-    public var test_paint_filename: String = "" // the filename to write out test paint data to
-    var test_paint = false               // should we test paint?  helpful for debugging
-
     public let outlier_output_dirname: String?
     public let preview_output_dirname: String?
     public let processed_preview_output_dirname: String?
-    public let test_paint_preview_output_dirname: String?
     public let thumbnail_output_dirname: String?
 
     // populated by pruning
@@ -312,9 +308,6 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
         }
     }
     
-    // only used for test painting
-    private var ignored_outlier_groups: [String: OutlierGroup] = [:] // keyed by group name
-
     var outlierGroupCount: Int { return outlier_groups?.groups?.count ?? 0 }
     
     public let output_filename: String
@@ -333,7 +326,7 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
     
     nonisolated public var previewFilename: String? {
         if let preview_output_dirname = preview_output_dirname {
-            return "\(preview_output_dirname)/\(base_name).jpg"
+            return "\(preview_output_dirname)/\(base_name).jpg" // XXX this makes it .tif.jpg
         }
         return nil
     }
@@ -341,13 +334,6 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
     nonisolated public var processedPreviewFilename: String? {
         if let processed_preview_output_dirname = processed_preview_output_dirname {
             return "\(processed_preview_output_dirname)/\(base_name).jpg"
-        }
-        return nil
-    }
-    
-    nonisolated public var testPaintPreviewFilename: String? {
-        if let test_paint_preview_output_dirname = test_paint_preview_output_dirname {
-            return "\(test_paint_preview_output_dirname)/\(base_name).jpg"
         }
         return nil
     }
@@ -386,12 +372,10 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
          atIndex frame_index: Int,
          otherFrameIndexes: [Int],
          outputFilename output_filename: String,
-         testPaintFilename tpfo: String?,
          baseName: String,       // source filename without path
          outlierOutputDirname outlier_output_dirname: String?,
          previewOutputDirname preview_output_dirname: String?,
          processedPreviewOutputDirname processed_preview_output_dirname: String?,
-         testPaintPreviewOutputDirname test_paint_preview_output_dirname: String?,
          thumbnailOutputDirname thumbnail_output_dirname: String?,
          outlierGroupLoader: @escaping () async -> OutlierGroups?,
          fullyProcess: Bool = true,
@@ -411,15 +395,10 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
         self.frame_index = frame_index // frame index in the image sequence
         self.otherFrameIndexes = otherFrameIndexes
         self.output_filename = output_filename
-        if let tp_filename = tpfo {
-            self.test_paint = true
-            self.test_paint_filename = tp_filename
-        }
 
         self.outlier_output_dirname = outlier_output_dirname
         self.preview_output_dirname = preview_output_dirname
         self.processed_preview_output_dirname = processed_preview_output_dirname
-        self.test_paint_preview_output_dirname = test_paint_preview_output_dirname
         self.thumbnail_output_dirname = thumbnail_output_dirname
         self.width = width
         self.height = height
@@ -938,11 +917,6 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
                 {
                     // ignore small groups that have a bad hough score
                     //Log.e("frame \(frame_index) ignoring outlier \(new_outlier) with hough score \(hough_score) satsr \(satsr) surface_area_score \(surface_area_score)")
-                    if test_paint {
-                        // allow test painting of these ignored groups
-                        await new_outlier.shouldPaint(.smallNonLinear)
-                        ignored_outlier_groups[group_name] = new_outlier
-                    }
                 } else {
                     //Log.w("frame \(frame_index) adding outlier \(new_outlier) with hough score \(hough_score) satsr \(satsr) surface_area_score \(surface_area_score)")
                     // add this new outlier to the set to analyize
@@ -953,43 +927,6 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
         }
         self.state = .readyForInterFrameProcessing
         Log.i("frame \(frame_index) has found \(outlier_groups?.groups?.count) outlier groups to consider")
-    }
-
-    private func testPaintOutliers(from outliers: [String:OutlierGroup], toData test_paint_data: inout Data) async {
-        for (name, group) in outliers {
-            for x in group.bounds.min.x ... group.bounds.max.x {
-                for y in group.bounds.min.y ... group.bounds.max.y {
-                    let pixel_index = (y-group.bounds.min.y)*group.bounds.width + (x - group.bounds.min.x)
-                    if group.pixels[pixel_index] != 0 {                    
-                        var nextPixel = Pixel()
-                        if let reason = await group.shouldPaint,
-                           !reason.willPaint
-                        {
-                            nextPixel.value = reason.testPaintPixel.value
-                            
-                            var nextValue = nextPixel.value
-                            let offset = (Int(y) * bytesPerRow) + (Int(x) * bytesPerPixel)
-                            
-                            test_paint_data.replaceSubrange(offset ..< offset+self.bytesPerPixel,
-                                                            with: &nextValue,
-                                                            count: self.bytesPerPixel)
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    // paint the outliers that we decided not to paint, to enable debuging
-    private func testPaintOutliers(toData test_paint_data: inout Data) async {
-        Log.d("frame \(frame_index) painting outliers green")
-
-        if let outlier_groups = outlier_groups,
-           let groups = outlier_groups.groups
-        {
-            await self.testPaintOutliers(from: groups, toData: &test_paint_data)
-        }
-        await self.testPaintOutliers(from: ignored_outlier_groups, toData: &test_paint_data)
     }
 
     public func pixelatedImage() async throws -> PixelatedImage? {
@@ -1007,12 +944,6 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
         return try await image_sequence.getImage(withName: name).image().baseImage
     }
     
-    public func baseTestPaintImage() async throws -> NSImage? {
-        let name = self.test_paint_filename
-        if name == "" { return nil } // we don't have one
-        return try await image_sequence.getImage(withName: name).image().baseImage
-    }
-    
     public func baseImage(ofSize size: NSSize) async throws -> NSImage? {
         let name = image_sequence.filenames[frame_index]
         return try await image_sequence.getImage(withName: name).image().baseImage(ofSize: size)
@@ -1024,10 +955,6 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
 //        dispatchGroup.enter()
         Task {
             await image_sequence.removeValue(forKey: self.output_filename)
-            let test_paint_name = self.test_paint_filename
-            if test_paint_name != "" {
-                await image_sequence.removeValue(forKey: test_paint_name)
-            }
 //            dispatchGroup.leave()
         }
 //        dispatchGroup.wait()
@@ -1036,7 +963,6 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
     
     // actually paint over outlier groups that have been selected as airplane tracks
     private func paintOverAirplanes(toData data: inout Data,
-                                    testData test_paint_data: inout Data,
                                     otherFrames: [PixelatedImage]) async throws
     {
         Log.i("frame \(frame_index) painting airplane outlier groups")
@@ -1081,7 +1007,6 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
                                 if alpha > 0 {
                                     paint(x: x, y: y, why: reason, alpha: alpha,
                                           toData: &data,
-                                          testData: &test_paint_data,
                                           image: image,
                                           otherFrames: otherFrames)
                                 }
@@ -1095,17 +1020,11 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
         }
     }
 
-    private func writeTestFile(withData data: Data) async throws {
-        let image = try await image_sequence.getImage(withName: image_sequence.filenames[frame_index]).image()
-        try image.writeTIFFEncoding(ofData: data, toFilename: test_paint_filename)
-    }
-
     // paint over a selected outlier pixel with data from pixels from adjecent frames
     private func paint(x: Int, y: Int,
                        why: PaintReason,
                        alpha: Double,
                        toData data: inout Data,
-                       testData test_paint_data: inout Data,
                        image: PixelatedImage,
                        otherFrames: [PixelatedImage])
     {
@@ -1141,21 +1060,6 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
         data.replaceSubrange(offset ..< offset+self.bytesPerPixel,
                              with: &paint_value, count: self.bytesPerPixel)
         
-        // for testing, colors changed pixels
-        if test_paint {
-            var test_paint_pixel = why.testPaintPixel
-
-            if alpha < 1 {
-                let op = image.readPixel(atX: x, andY: y)
-                test_paint_pixel = Pixel(merging: op, with: test_paint_pixel, atAlpha: alpha)
-                //Log.i("alpha \(alpha) @ [\(x), \(y)]")
-            }
-            var test_paint_value = test_paint_pixel.value
-            
-            test_paint_data.replaceSubrange(offset ..< offset+self.bytesPerPixel,
-                                            with: &test_paint_value,
-                                            count: self.bytesPerPixel)
-        }
     }
     
     // run after should_paint has been set for each group, 
@@ -1215,26 +1119,11 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
         }
         var output_data = _mut_data
 
-        var test_paint_data: Data = Data()
-        if test_paint {
-            guard let foobar = CFDataCreateMutableCopy(kCFAllocatorDefault,
-                                                       CFDataGetLength(_data as CFData),
-                                                       _data as CFData) as? Data
-            else {
-                Log.e("couldn't copy image data")
-                fatalError("couldn't copy image data")
-            }
-            test_paint_data = foobar
-            self.state = .painting
-            await self.testPaintOutliers(toData: &test_paint_data)
-        } else {
-            self.state = .painting
-        }
+        self.state = .painting
                   
         Log.d("frame \(self.frame_index) painting over airplanes")
                   
         try await self.paintOverAirplanes(toData: &output_data,
-                                          testData: &test_paint_data,
                                           otherFrames: otherFrames)
         
         Log.d("frame \(self.frame_index) writing output files")
@@ -1266,45 +1155,6 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
             }
         }
 
-        // XXX write out a full frame image of all outliers w/ current paint values
-        // not including the image behind it
-        
-        // write out a preview of the processed file
-        if config.test_paint && config.writeFrameTestPaintPreviewFiles {
-            if let processed_preview_image = image.baseImage(ofSize: self.previewSize,
-                                                            fromData: test_paint_data),
-               let imageData = processed_preview_image.jpegData,
-               let filename = self.testPaintPreviewFilename
-            {
-                do {
-                    if file_manager.fileExists(atPath: filename) {
-                        Log.i("overwriting already existing filename \(filename)")
-                        try file_manager.removeItem(atPath: filename)
-                    }
-
-                    // write to file
-                    file_manager.createFile(atPath: filename,
-                                            contents: imageData,
-                                            attributes: nil)
-                    Log.i("frame \(self.frame_index) wrote preview to \(filename)")
-                } catch {
-                    Log.e("\(error)")
-                }
-            } else {
-                Log.w("frame \(self.frame_index) WTF")
-            }
-        }
-        
-
-        do {
-            try await self.writeTestFile(withData: test_paint_data)
-            // write frame out as a tiff file after processing it
-            try image.writeTIFFEncoding(ofData: output_data,  toFilename: self.output_filename)
-            self.state = .complete
-        } catch {
-            Log.e("\(error)")
-        }
-        
         Log.i("frame \(self.frame_index) complete")
     }
     

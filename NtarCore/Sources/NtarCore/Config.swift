@@ -25,14 +25,11 @@ public struct Config: Codable {
         self.outlierMinThreshold = 0
         self.minGroupSize = 0
         self.numConcurrentRenders = 0
-        self.test_paint = false
-        self.test_paint_output_path = ""
         self.image_sequence_dirname = ""
         self.image_sequence_path = ""
         self.writeOutlierGroupFiles = false
         self.writeFramePreviewFiles = false
         self.writeFrameProcessedPreviewFiles = false
-        self.writeFrameTestPaintPreviewFiles = false
         self.writeFrameThumbnailFiles = false
 
         // XXX 16 bit hardcode
@@ -57,14 +54,11 @@ public struct Config: Codable {
                 outlierMinThreshold: Double,
                 minGroupSize: Int,
                 numConcurrentRenders: Int,
-                test_paint: Bool,
-                test_paint_output_path: String,
                 imageSequenceName: String,
                 imageSequencePath: String,
                 writeOutlierGroupFiles: Bool,
                 writeFramePreviewFiles: Bool,
                 writeFrameProcessedPreviewFiles: Bool,
-                writeFrameTestPaintPreviewFiles: Bool,
                 writeFrameThumbnailFiles: Bool)
     {
         if let outputPath = outputPath {
@@ -76,14 +70,11 @@ public struct Config: Codable {
         self.outlierMinThreshold = outlierMinThreshold
         self.minGroupSize = minGroupSize
         self.numConcurrentRenders = numConcurrentRenders
-        self.test_paint = test_paint
-        self.test_paint_output_path = test_paint_output_path
         self.image_sequence_dirname = imageSequenceName
         self.image_sequence_path = imageSequencePath
         self.writeOutlierGroupFiles = writeOutlierGroupFiles
         self.writeFramePreviewFiles = writeFramePreviewFiles
         self.writeFrameProcessedPreviewFiles = writeFrameProcessedPreviewFiles
-        self.writeFrameTestPaintPreviewFiles = writeFrameTestPaintPreviewFiles
         self.writeFrameThumbnailFiles = writeFrameThumbnailFiles
 
         // XXX 16 bit hardcode
@@ -114,12 +105,6 @@ public struct Config: Codable {
     // how many cpu cores should we max out at?
     public var numConcurrentRenders: Int
 
-    // write out test paint images
-    public var test_paint: Bool
-
-    // where to create the test paint output dir
-    public var test_paint_output_path: String
-    
     // the name of the directory containing the input sequence
     public var image_sequence_dirname: String
 
@@ -134,9 +119,6 @@ public struct Config: Codable {
 
     // write out a processed preview file for each frame
     public var writeFrameProcessedPreviewFiles: Bool
-
-    // write out a processed test paint preview file for each frame
-    public var writeFrameTestPaintPreviewFiles: Bool    
 
     // write out a small thumbnail preview file for each frame
     public var writeFrameThumbnailFiles: Bool
