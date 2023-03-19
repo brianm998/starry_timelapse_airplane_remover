@@ -541,16 +541,16 @@ struct decision_tree_generator: ParsableCommand {
 
         let generator = DecisionTreeGenerator(withTypes: decisionTypes)
 
-        let (tree_swift_code, sha_hash) =
-          await generator.generateTree(withTrueData: should_paint_test_data,
-                                       andFalseData: should_not_paint_test_data,
-                                       inputFilenames: input_filenames)
-
-        // save this generated swift code to a file
-
-        // XXX make this better
-        let filename = "../NtarCore/Sources/NtarCore/OutlierGroupDecisionTree_\(sha_hash.prefix(sha_prefix_size)).swift"
+        let base_filename = "../NtarCore/Sources/NtarCore/OutlierGroupDecisionTree_"
+        
         do {
+            let (tree_swift_code, filename) =
+              try await generator.generateTree(withTrueData: should_paint_test_data,
+                                               andFalseData: should_not_paint_test_data,
+                                               inputFilenames: input_filenames,
+                                               baseFilename: base_filename)
+
+            // save this generated swift code to a file
             if file_manager.fileExists(atPath: filename) {
                 Log.i("overwriting already existing filename \(filename)")
                 try file_manager.removeItem(atPath: filename)

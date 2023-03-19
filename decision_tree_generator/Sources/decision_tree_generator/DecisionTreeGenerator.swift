@@ -26,16 +26,9 @@ class DecisionTreeGenerator {
     // top level func that writes a compilable wrapper around the root tree node
     func generateTree(withTrueData return_true_test_data: [OutlierGroupValueMap],
                       andFalseData return_false_test_data: [OutlierGroupValueMap],
-                      inputFilenames: [String]) async -> (String, String)
+                      inputFilenames: [String],
+                      baseFilename: String) async throws -> (String, String)
     {
-        
-        // the root tree node with all of the test data 
-        let tree = await decisionTreeNode(with: return_true_test_data,
-                                          and: return_false_test_data,
-                                          indent: initial_indent)
-
-        let generated_swift_code = tree.swiftCode
-
         let end_time = Date()
 
         let formatter = DateComponentsFormatter()
@@ -46,29 +39,24 @@ class DecisionTreeGenerator {
 
         let indentation = "        "
         var digest = SHA256()
+
+        digest.update(data: Data("\(return_true_test_data.count)".utf8))
+        digest.update(data: Data("\(return_false_test_data.count)".utf8))
         
         var input_files_string = ""
         var input_files_array = "\(indentation)["
         for inputFilename in inputFilenames {
             input_files_string += "     - \(inputFilename)\n"
             input_files_array += "\n\(indentation)    \"\(inputFilename)\","
-            if let data = inputFilename.data(using: .utf8) {
-                digest.update(data: data)
-            } else {
-                Log.e("FUCK")
-                fatalError("SHIT")
-            }
+            digest.update(data: Data(inputFilename.utf8))
         }
         input_files_array.removeLast()
         input_files_array += "\n\(indentation)]"
 
         let generation_date = Date()
 
-        if let data = "\(generation_date)".data(using: .utf8) {
-            digest.update(data: data)
-        } else {
-            Log.e("FUCK")
-            fatalError("SHIT")
+        for type in decisionTypes {
+            digest.update(data: Data(type.rawValue.utf8))
         }
 
         let tree_hash = digest.finalize()
@@ -97,6 +85,14 @@ class DecisionTreeGenerator {
 
         let hash_prefix = tree_hash_string.prefix(sha_prefix_size)
 
+        let filename = "\(baseFilename)\(hash_prefix).swift"
+
+        // check to see if this file exists or not
+        if file_manager.fileExists(atPath: filename) {
+            // Don't do anything
+            throw "decision tree already exists at \(filename)"
+        }
+        
         var decisionTypeString = "    public let decisionTypes: [OutlierGroup.TreeDecisionType] = [\n"
         
         for type in decisionTypes {
@@ -106,6 +102,13 @@ class DecisionTreeGenerator {
         decisionTypeString.removeLast()
 
         decisionTypeString += "\n    ]\n"
+
+        // the root tree node with all of the test data 
+        let tree = await decisionTreeNode(with: return_true_test_data,
+                                          and: return_false_test_data,
+                                          indent: initial_indent)
+
+        let generated_swift_code = tree.swiftCode
         
         let swift_string = """
           /*
@@ -180,7 +183,7 @@ class DecisionTreeGenerator {
           }
           """
 
-        return (swift_string, tree_hash_string)
+        return (swift_string, filename)
     }
 
     // recursively return a decision tree that differentiates the test data
@@ -765,3 +768,5 @@ fileprivate struct DecisionResult {
           Double(greaterThanShouldNotPaint.count + greaterThanShouldPaint.count)
     }
 }
+
+fileprivate let file_manager = FileManager.default
