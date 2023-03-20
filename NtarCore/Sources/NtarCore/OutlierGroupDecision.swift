@@ -226,6 +226,9 @@ public extension OutlierGroup {
         case avgCountOfFirst10HoughLines
         case maxThetaDiffOfFirst10HoughLines
         case maxRhoDiffOfFirst10HoughLines
+        case avgCountOfAllHoughLines
+        case maxThetaDiffOfAllHoughLines
+        case maxRhoDiffOfAllHoughLines
         case numberOfNearbyOutliersInSameFrame
         case adjecentFrameNeighboringOutliersBestTheta
         case histogramStreakDetection
@@ -313,24 +316,30 @@ public extension OutlierGroup {
                 return 16
             case .maxThetaDiffOfFirst10HoughLines:
                 return 17
-            case .maxRhoDiffOfFirst10HoughLines:
+            case .maxRhoDiffOfFirst10HoughLines: // scored better without this
                 return 18
-            case .numberOfNearbyOutliersInSameFrame:
+            case .avgCountOfAllHoughLines:
                 return 19
-            case .adjecentFrameNeighboringOutliersBestTheta:
+            case .maxThetaDiffOfAllHoughLines:
                 return 20
-            case .histogramStreakDetection:
+            case .maxRhoDiffOfAllHoughLines:
                 return 21
-            case .maxHoughTransformCount:
+            case .numberOfNearbyOutliersInSameFrame:
                 return 22
-            case .maxHoughTheta:
+            case .adjecentFrameNeighboringOutliersBestTheta:
                 return 23
-            case .neighboringInterFrameOutlierThetaScore:
+            case .histogramStreakDetection:
                 return 24
-            case .maxOverlap:
+            case .maxHoughTransformCount:
                 return 25
-            case .maxOverlapTimesThetaHisto:
+            case .maxHoughTheta:
                 return 26
+            case .neighboringInterFrameOutlierThetaScore:
+                return 27
+            case .maxOverlap:
+                return 28
+            case .maxOverlapTimesThetaHisto:
+                return 29
             }
         }
 
@@ -387,6 +396,12 @@ public extension OutlierGroup {
             return self.maxThetaDiffOfFirst10HoughLines
         case .maxRhoDiffOfFirst10HoughLines:
             return self.maxRhoDiffOfFirst10HoughLines
+        case .avgCountOfAllHoughLines:
+            return self.avgCountOfAllHoughLines
+        case .maxThetaDiffOfAllHoughLines:
+            return self.maxThetaDiffOfAllHoughLines
+        case .maxRhoDiffOfAllHoughLines:
+            return self.maxRhoDiffOfAllHoughLines
         case .maxHoughTransformCount:
             return self.maxHoughTransformCount
         case .maxHoughTheta:
@@ -643,12 +658,14 @@ public extension OutlierGroup {
                     if group.name == self.name { continue }
                     let center_line_theta = self.bounds.centerTheta(with: group.bounds)
                     let otherHisto = await group.houghLineHistogram
-                    let theta_score = thetaScore(between: center_line_theta, and: otherHisto.maxTheta)
+                    let other_theta_score = thetaScore(between: center_line_theta, and: otherHisto.maxTheta)
+                    let self_theta_score = thetaScore(between: center_line_theta, and: selfHisto.maxTheta)
                     let histo_score = otherHisto.matchScore(with: selfHisto)
+
                     // modify this score by how close the theta of
                     // the line between the outlier groups center points
                     // is to the the theta of both of them
-                    ret += theta_score * histo_score
+                    ret += self_theta_score * other_theta_score * histo_score
                     count += 1
                 }
                 if count > 0 { ret /= Double(count) }
@@ -711,7 +728,9 @@ public extension OutlierGroup {
     private var maxThetaDiffOfFirst10HoughLines: Double {
         var max_diff = 0.0
         let first_theta = self.lines[0].theta
-        for i in 1..<10 {
+        var max = 10;
+        if self.lines.count < max { max = self.lines.count }
+        for i in 0..<max {
             let this_theta = self.lines[i].theta
             let this_diff = abs(this_theta - first_theta)
             if this_diff > max_diff { max_diff = this_diff }
@@ -722,7 +741,9 @@ public extension OutlierGroup {
     private var maxRhoDiffOfFirst10HoughLines: Double {
         var max_diff = 0.0
         let first_rho = self.lines[0].rho
-        for i in 1..<10 {
+        var max = 10;
+        if self.lines.count < max { max = self.lines.count }
+        for i in 0..<max {
             let this_rho = self.lines[i].rho
             let this_diff = abs(this_rho - first_rho)
             if this_diff > max_diff { max_diff = this_diff }
@@ -733,11 +754,43 @@ public extension OutlierGroup {
     private var avgCountOfFirst10HoughLines: Double {
         var sum = 0.0
         var divisor = 0.0
-        for i in 0..<10 {
-            if i < self.lines.count {
-                sum += Double(self.lines[i].count)/Double(self.size)
-                divisor += 1
-            }
+        var max = 10;
+        if self.lines.count < max { max = self.lines.count }
+        for i in 0..<max {
+            sum += Double(self.lines[i].count)/Double(self.size)
+            divisor += 1
+        }
+        return sum/divisor
+    }
+
+    private var maxThetaDiffOfAllHoughLines: Double {
+        var max_diff = 0.0
+        let first_theta = self.lines[0].theta
+        for i in 1..<self.lines.count {
+            let this_theta = self.lines[i].theta
+            let this_diff = abs(this_theta - first_theta)
+            if this_diff > max_diff { max_diff = this_diff }
+        }
+        return max_diff
+    }
+    
+    private var maxRhoDiffOfAllHoughLines: Double {
+        var max_diff = 0.0
+        let first_rho = self.lines[0].rho
+        for i in 1..<self.lines.count {
+            let this_rho = self.lines[i].rho
+            let this_diff = abs(this_rho - first_rho)
+            if this_diff > max_diff { max_diff = this_diff }
+        }
+        return max_diff
+    }
+    
+    private var avgCountOfAllHoughLines: Double {
+        var sum = 0.0
+        var divisor = 0.0
+        for i in 0..<self.lines.count {
+            sum += Double(self.lines[i].count)/Double(self.size)
+            divisor += 1
         }
         return sum/divisor
     }
