@@ -14,6 +14,7 @@ target 'ntar_gui' do
 
   pod 'ArgumentParser'
   pod 'NtarCore', :path => "../NtarCore"
+  pod 'NtarDecisionTrees', :path => "../NtarDecisionTrees"
 #  pod 'Zoomable', { :git => "git@github.com:brianm998/Zoomable", :branch => "main" }
   pod 'Zoomable',  :path => "../../Zoomable"
   pod 'BinaryCodable',  :path => "../../BinaryCodable"

@@ -8,7 +8,7 @@ let package = Package(
     dependencies: [
         // Dependencies declare other packages that this package depends on.
         .package(url: "https://github.com/apple/swift-argument-parser", from: "1.0.0"),
-        .package(name: "NtarCore", path: "../NtarCore"),
+        .package(name: "NtarDecisionTrees", path: "../NtarDecisionTrees"),
     ],
     targets: [
         // Targets are the basic building blocks of a package. A target can define a module or a test suite.
@@ -17,7 +17,7 @@ let package = Package(
             name: "ntar",
             dependencies: [
               .product(name: "ArgumentParser", package: "swift-argument-parser"),
-              .product(name: "NtarCore", package: "NtarCore"),
+              .product(name: "NtarDecisionTrees", package: "NtarDecisionTrees"),
             ],
             path: "Sources"),
         .testTarget(
