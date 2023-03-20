@@ -552,25 +552,26 @@ struct decision_tree_generator: ParsableCommand {
                    withTrueData should_paint_test_data: [OutlierGroupValueMap],
                    andFalseData should_not_paint_test_data: [OutlierGroupValueMap],
                    inputFilenames: [String]) async {
-        
-        // for now, write three different trees
+        /*
         await self.writeTree(withTypes: decisionTypes,
                              andSplitTypes: [.mean],
                              withTrueData: should_paint_test_data,
                              andFalseData: should_not_paint_test_data,
                              inputFilenames: inputFilenames)
-
+*/
+        // .median seems best, but more exploration possibleq
         await self.writeTree(withTypes: decisionTypes,
                              andSplitTypes: [.median],
                              withTrueData: should_paint_test_data,
                              andFalseData: should_not_paint_test_data,
                              inputFilenames: inputFilenames)
-
+/*
         await self.writeTree(withTypes: decisionTypes,
                              andSplitTypes: [.mean, .median],
                              withTrueData: should_paint_test_data,
                              andFalseData: should_not_paint_test_data,
                              inputFilenames: inputFilenames)
+ */
     }
     
     func writeTree(withTypes decisionTypes: [OutlierGroup.TreeDecisionType],
