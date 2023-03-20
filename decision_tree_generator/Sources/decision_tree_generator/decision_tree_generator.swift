@@ -584,7 +584,7 @@ struct decision_tree_generator: ParsableCommand {
 
         let generator = DecisionTreeGenerator(withTypes: decisionTypes, andSplitTypes: splitTypes)
 
-        let base_filename = "../NtarCore/Sources/NtarCore/OutlierGroupDecisionTree_"
+        let base_filename = "../NtarDecisionTrees/Sources/NtarDecisionTrees/OutlierGroupDecisionTree_"
         
         do {
             let (tree_swift_code, filename) =
