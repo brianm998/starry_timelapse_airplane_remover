@@ -9,7 +9,6 @@ let package = Package(
         // Dependencies declare other packages that this package depends on.
         // .package(url: /* package url */, from: "1.0.0"),
         .package(url: "https://github.com/apple/swift-argument-parser", from: "1.0.0"),
-        .package(url: "https://github.com/christophhagen/BinaryCodable", from: "1.0.0"),
         .package(name: "NtarCore", path: "../NtarCore"),
     ],
     targets: [
@@ -20,7 +19,6 @@ let package = Package(
             dependencies: [
               .product(name: "ArgumentParser", package: "swift-argument-parser"),
               .product(name: "NtarCore", package: "NtarCore"),
-              .product(name: "BinaryCodable", package: "BinaryCodable")
             ]),
         .testTarget(
             name: "decision_tree_generatorTests",
