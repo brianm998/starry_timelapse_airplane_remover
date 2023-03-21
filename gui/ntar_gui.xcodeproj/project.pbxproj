@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		5950D2092E1D060BC9275E66 /* Pods_ntar_gui.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0B0453DB24E8A23144C66A23 /* Pods_ntar_gui.framework */; };
+		D310C6F429C8D8F40014FBA9 /* libNtarDecisionTrees.a in Frameworks */ = {isa = PBXBuildFile; fileRef = D310C6F329C8D8F40014FBA9 /* libNtarDecisionTrees.a */; };
 		D31F9FBF299736740001CD0C /* ViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D31F9FBC299736730001CD0C /* ViewModel.swift */; };
 		D31F9FC0299736740001CD0C /* FrameSaveQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = D31F9FBD299736730001CD0C /* FrameSaveQueue.swift */; };
 		D31F9FC1299736740001CD0C /* OutlierGroupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D31F9FBE299736730001CD0C /* OutlierGroupView.swift */; };
@@ -48,6 +49,7 @@
 		0B0453DB24E8A23144C66A23 /* Pods_ntar_gui.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_ntar_gui.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		540415BAD54DC7E2F8297DCF /* Pods-ntar_gui.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-ntar_gui.release.xcconfig"; path = "Target Support Files/Pods-ntar_gui/Pods-ntar_gui.release.xcconfig"; sourceTree = "<group>"; };
 		5F0FA5BFD47E6F6D97B17603 /* Pods-ntar_gui.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-ntar_gui.debug.xcconfig"; path = "Target Support Files/Pods-ntar_gui/Pods-ntar_gui.debug.xcconfig"; sourceTree = "<group>"; };
+		D310C6F329C8D8F40014FBA9 /* libNtarDecisionTrees.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libNtarDecisionTrees.a; path = ../../NtarDecisionTrees/libNtarDecisionTrees.a; sourceTree = "<group>"; };
 		D31F9FBC299736730001CD0C /* ViewModel.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ViewModel.swift; sourceTree = "<group>"; };
 		D31F9FBD299736730001CD0C /* FrameSaveQueue.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = FrameSaveQueue.swift; sourceTree = "<group>"; };
 		D31F9FBE299736730001CD0C /* OutlierGroupView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = OutlierGroupView.swift; sourceTree = "<group>"; };
@@ -76,6 +78,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D310C6F429C8D8F40014FBA9 /* libNtarDecisionTrees.a in Frameworks */,
 				5950D2092E1D060BC9275E66 /* Pods_ntar_gui.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -139,6 +142,7 @@
 		D386FA0F298B617300878B56 /* ntar_gui */ = {
 			isa = PBXGroup;
 			children = (
+				D310C6F329C8D8F40014FBA9 /* libNtarDecisionTrees.a */,
 				D3B886AC29B830BE003590A1 /* OutlierGroupTable.swift */,
 				D332F70429B64004009E2796 /* ShrinkingButton.swift */,
 				D332F70229B63FD0009E2796 /* MassivePaintSheetView.swift */,
@@ -540,6 +544,34 @@
 				);
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
 				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-framework",
+					"\"ArgumentParser\"",
+					"-framework",
+					"\"ArgumentParserToolInfo\"",
+					"-framework",
+					"\"BinaryCodable\"",
+					"-framework",
+					"\"ImageIO\"",
+					"-framework",
+					"\"NtarCore\"",
+					"-framework",
+					"\"NtarDecisionTrees\"",
+					"-framework",
+					"\"SDWebImage\"",
+					"-framework",
+					"\"SDWebImageSwiftUI\"",
+					"-framework",
+					"\"Zoomable\"",
+					"-weak_framework",
+					"\"Combine\"",
+					"-weak_framework",
+					"\"SwiftUI\"",
+					"-L../NtarDecisionTrees",
+					"-Xlinker",
+					"-all_load",
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = "com.ntar-gui";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx13.0;
@@ -570,6 +602,34 @@
 				);
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
 				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-framework",
+					"\"ArgumentParser\"",
+					"-framework",
+					"\"ArgumentParserToolInfo\"",
+					"-framework",
+					"\"BinaryCodable\"",
+					"-framework",
+					"\"ImageIO\"",
+					"-framework",
+					"\"NtarCore\"",
+					"-framework",
+					"\"NtarDecisionTrees\"",
+					"-framework",
+					"\"SDWebImage\"",
+					"-framework",
+					"\"SDWebImageSwiftUI\"",
+					"-framework",
+					"\"Zoomable\"",
+					"-weak_framework",
+					"\"Combine\"",
+					"-weak_framework",
+					"\"SwiftUI\"",
+					"-L../NtarDecisionTrees",
+					"-Xlinker",
+					"-all_load",
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = "com.ntar-gui";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx13.0;

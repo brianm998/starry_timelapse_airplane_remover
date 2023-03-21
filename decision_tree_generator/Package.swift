@@ -21,7 +21,12 @@ let package = Package(
               .product(name: "NtarCore", package: "NtarCore"),
             ],
             linkerSettings: [
-              .unsafeFlags(["-L../NtarDecisionTrees"]),
+              .unsafeFlags([
+                             "-L../NtarDecisionTrees",
+                             "-Xlinker", "-all_load",
+                             //"-Xlinker", "-force_load",
+                             //"../NtarDecisionTrees/libNtarDecisionTrees.a"
+                           ]),
               .linkedLibrary("NtarDecisionTrees")
             ]),
         .testTarget(
