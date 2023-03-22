@@ -130,7 +130,8 @@ struct decision_tree_generator: ParsableCommand {
         // in the frame check callback
 
         // load the outliers in parallel
-        try await withLimitedThrowingTaskGroup(of: Void.self) { taskGroup in
+        try await withLimitedThrowingTaskGroup(of: Void.self,
+                                               limitedTo: 36) { taskGroup in
             for frame in frames {
                 await taskGroup.addTask(/*priority: .medium*/) {
                     try await frame.loadOutliers()
@@ -140,7 +141,8 @@ struct decision_tree_generator: ParsableCommand {
         }
 
         Log.i("checkpoint before loading tree test results")
-        await withLimitedTaskGroup(of: TreeTestResults.self) { taskGroup in
+        await withLimitedTaskGroup(of: TreeTestResults.self,
+                                   limitedTo: 36) { taskGroup in
             for frame in frames {
                 // check all outlier groups
                 
@@ -525,7 +527,7 @@ struct decision_tree_generator: ParsableCommand {
             }
 
             if produce_all_type_combinations {
-                let min = OutlierGroup.TreeDecisionType.allCases.count-1 // XXX make a parameter
+                let min = OutlierGroup.TreeDecisionType.allCases.count-2 // XXX make a parameter
                 let max = OutlierGroup.TreeDecisionType.allCases.count
                 let combinations = decisionTypes.combinations(ofCount: min..<max)
                 Log.i("calculating \(combinations.count) different decision trees")

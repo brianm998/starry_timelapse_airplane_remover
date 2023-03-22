@@ -1,0 +1,44 @@
+16:53:17.5820 | 👩‍💻 DEBUG | Thread 73 | decision_tree_generator.swift@204: got response response.numberGood 0 response.numberBad 3 
+16:53:17.5820 | 👩‍💻 DEBUG | Thread 73 | decision_tree_generator.swift@204: got response response.numberGood 3 response.numberBad 0 
+16:53:17.5820 | 👩‍💻 DEBUG | Thread 73 | decision_tree_generator.swift@204: got response response.numberGood 28 response.numberBad 0 
+16:53:17.5830 | 👩‍💻 DEBUG | Thread 73 | decision_tree_generator.swift@204: got response response.numberGood 7 response.numberBad 1 
+16:53:17.5830 | 👩‍💻 DEBUG | Thread 73 | decision_tree_generator.swift@204: got response response.numberGood 5 response.numberBad 0 
+16:53:17.5830 | 👩‍💻 DEBUG | Thread 73 | decision_tree_generator.swift@204: got response response.numberGood 0 response.numberBad 2 
+16:53:17.5830 | 👩‍💻 DEBUG | Thread 73 | decision_tree_generator.swift@204: got response response.numberGood 39 response.numberBad 7 
+16:53:17.5830 | 👩‍💻 DEBUG | Thread 73 | decision_tree_generator.swift@204: got response response.numberGood 3 response.numberBad 0 
+decision_tree_generator(86225,0x700005dda000) malloc: Heap corruption detected, free list is damaged at 0x600001307550
+*** Incorrect guard value: 105553116856336
+decision_tree_generator(86225,0x700005dda000) malloc: *** set a breakpoint in malloc_error_break to debug
+Process 86225 stopped
+* thread #43, queue = 'com.apple.root.user-initiated-qos.cooperative', stop reason = breakpoint 1.1
+    frame #0: 0x00007ff8040945bc libsystem_malloc.dylib`malloc_error_break
+libsystem_malloc.dylib`malloc_error_break:
+->  0x7ff8040945bc <+0>: pushq  %rbp
+    0x7ff8040945bd <+1>: movq   %rsp, %rbp
+    0x7ff8040945c0 <+4>: nop    
+    0x7ff8040945c1 <+5>: nopl   (%rax)
+Target 0: (decision_tree_generator) stopped.
+(lldb) bt
+* thread #43, queue = 'com.apple.root.user-initiated-qos.cooperative', stop reason = breakpoint 1.1
+  * frame #0: 0x00007ff8040945bc libsystem_malloc.dylib`malloc_error_break
+    frame #1: 0x00007ff8040862eb libsystem_malloc.dylib`malloc_vreport + 443
+    frame #2: 0x00007ff80409a308 libsystem_malloc.dylib`malloc_zone_error + 178
+    frame #3: 0x00007ff8040790e8 libsystem_malloc.dylib`nanov2_allocate_from_block + 582
+    frame #4: 0x00007ff804078677 libsystem_malloc.dylib`nanov2_allocate + 130
+    frame #5: 0x00007ff8040785a4 libsystem_malloc.dylib`nanov2_malloc + 56
+    frame #6: 0x00007ff804094abb libsystem_malloc.dylib`_malloc_zone_malloc + 125
+    frame #7: 0x00007ff81195db2e libswiftCore.dylib`protocol witness for Swift.Collection.subscript.read : (τ_0_0.Index) -> τ_0_0.Element in conformance Swift.UnsafeMutableBufferPointer<τ_0_0> : Swift.Collection in Swift + 30
+    frame #8: 0x00007ff811896d08 libswiftCore.dylib`Swift.MutableCollection< where τ_0_0: Swift.BidirectionalCollection>._insertionSort(within: Swift.Range<τ_0_0.Swift.Collection.Index>, sortedEnd: τ_0_0.Swift.Collection.Index, by: (τ_0_0.Swift.Sequence.Element, τ_0_0.Swift.Sequence.Element) throws -> Swift.Bool) throws -> () + 712
+    frame #9: 0x00007ff8118963a4 libswiftCore.dylib`Swift.UnsafeMutableBufferPointer._stableSortImpl(by: (τ_0_0, τ_0_0) throws -> Swift.Bool) throws -> () + 820
+    frame #10: 0x00007ff8119c053f libswiftCore.dylib`partial apply forwarder for closure #1 (inout Swift.UnsafeMutableBufferPointer<τ_0_0.Swift.Sequence.Element>) throws -> () in Swift.MutableCollection< where τ_0_0: Swift.RandomAccessCollection>.sort(by: (τ_0_0.Swift.Sequence.Element, τ_0_0.Swift.Sequence.Element) throws -> Swift.Bool) throws -> () + 95
+    frame #11: 0x00007ff81177b2dc libswiftCore.dylib`Swift.ContiguousArray.withContiguousMutableStorageIfAvailable<τ_0_0>((inout Swift.UnsafeMutableBufferPointer<τ_0_0>) throws -> τ_1_0) throws -> Swift.Optional<τ_1_0> + 140
+    frame #12: 0x00007ff81177b242 libswiftCore.dylib`protocol witness for Swift.MutableCollection.withContiguousMutableStorageIfAvailable<τ_0_0>((inout Swift.UnsafeMutableBufferPointer<τ_0_0.Element>) throws -> τ_1_0) throws -> Swift.Optional<τ_1_0> in conformance Swift.ContiguousArray<τ_0_0> : Swift.MutableCollection in Swift + 18
+    frame #13: 0x00007ff811895a29 libswiftCore.dylib`Swift.MutableCollection< where τ_0_0: Swift.RandomAccessCollection>.sort(by: (τ_0_0.Swift.Sequence.Element, τ_0_0.Swift.Sequence.Element) throws -> Swift.Bool) throws -> () + 889
+    frame #14: 0x00007ff81189558f libswiftCore.dylib`Swift.Sequence< where τ_0_0.Element: Swift.Comparable>.sorted() -> Swift.Array<τ_0_0.Element> + 239
+    frame #15: 0x0000000100251512 decision_tree_generator`OutlierGroup.medianBrightness.getter(self=0x000060002bef9400) at OutlierGroupDecision.swift:128:30
+    frame #16: 0x0000000100251173 decision_tree_generator`OutlierGroup.nonAsyncDecisionTreeValue(type=medianBrightness, self=0x000060002bef9400) at OutlierGroupDecision.swift:87:25
+    frame #17: 0x00000001002a3d69 decision_tree_generator`OutlierGroup.shouldPaintFromDecisionTree.getter(self=0x000060002bef9400) at OutlierGroupDecisionTree.swift:15832:37
+    frame #18: 0x00000001002fc620 decision_tree_generator`closure #1 in closure #6 in closure #1 in decision_tree_generator.run_verification(frame=0x0000000100b2e640) at decision_tree_generator.swift:178
+    frame #19: 0x000000010031fc30 decision_tree_generator`partial apply for closure #1 in closure #6 in closure #1 in decision_tree_generator.run_verification() at <compiler-generated>:0
+    frame #20: 0x000000010019bfe0 decision_tree_generator`thunk for @escaping @callee_guaranteed @Sendable @async () -> (@out A) at <compiler-generated>:0
+    frame #21: 0x000000010019c110 decision_tree_generator`partial apply for thunk for @escaping @callee_guaranteed @Sendable @async () -> (@out A) at <compiler-generated>:0
