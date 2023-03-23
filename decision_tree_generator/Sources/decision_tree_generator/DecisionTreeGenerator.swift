@@ -296,17 +296,17 @@ class DecisionTreeGenerator {
 
         // indexed by outlierGroup.sortOrder
         let should_paint_values = await transform(testData: return_true_test_data)
-        let should_not_paint_values = await transform(testData: return_false_test_data)
-        
-        // value distributions for each type
-        // indexed by outlierGroup.sortOrder
-        
         let should_paint_dist = await getValueDistributions(of: should_paint_values)
+        
+        // indexed by outlierGroup.sortOrder
+        let should_not_paint_values = await transform(testData: return_false_test_data)
         let should_not_paint_dist = await getValueDistributions(of: should_not_paint_values)
 
         // iterate ofer all decision tree types to pick the best one
         // that differentiates the test data
 
+        // XXX make these return values of the task group below, and
+        // XXX put the task group into a separate method
         var decisionResults = ThreadSafeArray<DecisionResult>()
         var decisionTreeNodes = ThreadSafeArray<TreeDecisionTypeResult>()
 
@@ -755,20 +755,22 @@ class DecisionTreeGenerator {
             return ThreadSafeArray(array)
         }
     }
-    
+
+    // XXX document what this does
     fileprivate func recurseOn(result: DecisionResult, indent: Int) async -> DecisionTreeNode {
         //Log.d("best at indent \(indent) was \(result.type) \(String(format: "%g", result.lessThanSplit)) \(String(format: "%g", result.greaterThanSplit)) \(String(format: "%g", result.value)) < Should \(await result.lessThanShouldPaint.count) < ShouldNot \(await result.lessThanShouldNotPaint.count) > Should  \(await result.lessThanShouldPaint.count) > ShouldNot \(await result.greaterThanShouldNotPaint.count)")
 
         // we've identified the best type to differentiate the test data
         // output a tree node with this type and value
 
+        // XXX move these into return values from the task group
         var less_response: TreeResponse?
         var greater_response: TreeResponse?
 
         // first recurse on both sides of the decision tree with differentated test data
         // XXX check
         await withLimitedTaskGroup(of: TreeResponse.self,
-                                   limitedTo: 2) { taskGroup in
+                                   limitedTo: 36) { taskGroup in
             await taskGroup.addTask() {
                 let less_tree = await self.decisionTreeNode(with: result.lessThanShouldPaint,
                                                             and: result.lessThanShouldNotPaint,
@@ -778,7 +780,6 @@ class DecisionTreeGenerator {
             // uncomment this to make it serial (for easier debugging)
             // comment it to make it parallel
             /*
-             */
             while let response = await taskGroup.next() {
                 switch response.position {
                 case .less:
@@ -787,6 +788,7 @@ class DecisionTreeGenerator {
                     greater_response = response
                 }
              }
+             */
             await taskGroup.addTask() {
                 let greater_tree = await self.decisionTreeNode(with: result.greaterThanShouldPaint,
                                                                and: result.greaterThanShouldNotPaint,
@@ -821,9 +823,10 @@ class DecisionTreeGenerator {
 
     fileprivate func result(for type: OutlierGroup.TreeDecisionType,
                             decisionValue: Double,
-                            withTrueData return_true_test_data: ThreadSafeArray<OutlierGroupValueMap>,
-                            andFalseData return_false_test_data: ThreadSafeArray<OutlierGroupValueMap>) async -> TreeDecisionTypeResult {
-        
+                            withTrueData true_test_data: ThreadSafeArray<OutlierGroupValueMap>,
+                            andFalseData false_test_data: ThreadSafeArray<OutlierGroupValueMap>)
+      async -> TreeDecisionTypeResult
+    {
         var lessThanShouldPaint = ThreadSafeArray<OutlierGroupValueMap>()
         var lessThanShouldNotPaint = ThreadSafeArray<OutlierGroupValueMap>()
         
@@ -836,9 +839,9 @@ class DecisionTreeGenerator {
         // CRASH START
         // XXX XXX XXX
 
-        let return_true_test_data_count = await return_true_test_data.count
-        for index in 0..<return_true_test_data_count {
-            if let group_values = await return_true_test_data.get(at: index),
+        let true_test_data_count = await true_test_data.count
+        for index in 0..<true_test_data_count {
+            if let group_values = await true_test_data.get(at: index),
                let group_value = await group_values.get(at: type.sortOrder) // crash here
             {
         /**/
@@ -856,9 +859,9 @@ class DecisionTreeGenerator {
         // XXX XXX XXX
 /**/
 
-        let return_false_test_data_count = await return_false_test_data.count 
-        for index in 0..<return_false_test_data_count {
-            if let group_values = await return_false_test_data.get(at: index),
+        let false_test_data_count = await false_test_data.count 
+        for index in 0..<false_test_data_count {
+            if let group_values = await false_test_data.get(at: index),
                let group_value = await group_values.get(at: type.sortOrder)
             {
                 if group_value < decisionValue {
