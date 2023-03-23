@@ -283,12 +283,9 @@ class DecisionTreeGenerator {
         // look for boundries where we can further isolate 
 
         // raw values for each type
-        // XXX index these by outlierGroup.sortOrder XXX
+        // index these by outlierGroup.sortOrder
 
         let type_count = OutlierGroup.TreeDecisionType.allCases.count
-        
-        var should_paint_values = ThreadSafeArray<ThreadSafeArray<Double>>(repeating: ThreadSafeArray<Double>(repeating: 0, count: 0), count: type_count)
-        var should_not_paint_values = ThreadSafeArray<ThreadSafeArray<Double>>(repeating: ThreadSafeArray<Double>(repeating: 0, count: 0), count: type_count)
         
         
         // XXX XXX XXX
@@ -297,56 +294,9 @@ class DecisionTreeGenerator {
         // XXX XXX XXX
         // XXX XXX XXX
 
-
-        for type in decisionTypes {
-            var list: [Double] = []
-            let max = await return_true_test_data.count
-            for idx in 0..<max {
-                if let test_data = await return_true_test_data.get(at: idx),
-                   let value = await test_data.get(at: type.sortOrder)
-                {
-                    list.append(value)
-                }
-            }
-            
-            await should_paint_values.set(atIndex: type.sortOrder,
-                                          to: ThreadSafeArray(list))
-            
-        }
-
-        
-        // XXX XXX XXX
-        // XXX XXX XXX
-        // DIED HERE, now works
-        // XXX XXX XXX
-        // XXX XXX XXX
-
-
-        for type in decisionTypes {
-            var list: [Double] = []
-
-            let max = await return_false_test_data.count
-            for idx in 0..<max {
-                if let test_data = await return_false_test_data.get(at: idx),
-                   let value = await test_data.get(at: type.sortOrder)
-                {
-                    list.append(value)
-                }
-            }
-            await should_not_paint_values.set(atIndex: type.sortOrder,
-                                              to: ThreadSafeArray(list))
-            
-        }
-        
-        //Log.i("decisionTreeNode checkpoint 0.5 with indent \(indent) return_true_test_data.count \(return_true_test_data.count) return_false_test_data.count \(return_false_test_data.count)")
-
-
-        // XXX XXX XXX
-        // XXX XXX XXX
-        // DIED HERE, now works
-        // XXX XXX XXX
-        // XXX XXX XXX
-
+        // indexed by outlierGroup.sortOrder
+        let should_paint_values = await transform(testData: return_true_test_data)
+        let should_not_paint_values = await transform(testData: return_false_test_data)
         
         //Log.i("decisionTreeNode checkpoint 1 with indent \(indent) return_true_test_data.count \(return_true_test_data.count) return_false_test_data.count \(return_false_test_data.count)")
 
@@ -825,6 +775,37 @@ class DecisionTreeGenerator {
         }
     }
 
+    // XXX document what this does
+    fileprivate func transform(testData: ThreadSafeArray<OutlierGroupValueMap>) 
+      async -> ThreadSafeArray<ThreadSafeArray<Double>>
+    {
+        return await withLimitedTaskGroup(of: DecisionTypeValuesResult.self,
+                                          limitedTo: 36) { taskGroup in
+            let type_count = OutlierGroup.TreeDecisionType.allCases.count
+            var array = [ThreadSafeArray<Double>](repeating: ThreadSafeArray<Double>([]),
+                                                  count: type_count)
+            for type in decisionTypes {
+                await taskGroup.addTask() {
+                    var list: [Double] = []
+                    let max = await testData.count
+                    for idx in 0..<max {
+                        if let testData = await testData.get(at: idx),
+                           let value = await testData.get(at: type.sortOrder)
+                        {
+                            list.append(value)
+                        }
+                    }
+                    return DecisionTypeValuesResult(type: type, values: ThreadSafeArray(list))
+                }
+            }
+            
+            while let response = await taskGroup.next() {
+                array[response.type.sortOrder] = response.values
+            }
+            return ThreadSafeArray(array)
+        }
+    }
+    
     fileprivate func recurseOn(result: DecisionResult, indent: Int) async -> DecisionTreeNode {
         //Log.d("best at indent \(indent) was \(result.type) \(String(format: "%g", result.lessThanSplit)) \(String(format: "%g", result.greaterThanSplit)) \(String(format: "%g", result.value)) < Should \(await result.lessThanShouldPaint.count) < ShouldNot \(await result.lessThanShouldNotPaint.count) > Should  \(await result.lessThanShouldPaint.count) > ShouldNot \(await result.greaterThanShouldNotPaint.count)")
 
@@ -971,7 +952,7 @@ fileprivate struct RankedResult<T>: Comparable {
 @available(macOS 10.15, *) 
 fileprivate struct DecisionTypeValuesResult {
     let type: OutlierGroup.TreeDecisionType
-    let values: [Double]
+    let values: ThreadSafeArray<Double>
 }
 
 @available(macOS 10.15, *) 
