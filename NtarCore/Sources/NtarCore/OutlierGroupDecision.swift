@@ -17,22 +17,43 @@ public enum DecisionSplitType: String {
 
 @available(macOS 10.15, *)
 // a typed vector of values for a single outlier group
-public struct OutlierGroupValueMap {
-    public var values: [OutlierGroup.TreeDecisionType: Double] = [:]
-    public init() { }
+public actor OutlierGroupValueMap {
+    // indexed by outlierGroup.sortOrder
+    private var values: [Double]
+    public init() {
+        values = [Double](repeating: 0.0, count: OutlierGroup.TreeDecisionType.allCases.count)
+    }
+
+    public func set(atIndex index: Int, to newValue: Double) {
+        values[index] = newValue
+    }
+
+    public func get(at index: Int) -> Double? {
+        Log.d("get(atIndex: \(index))")
+        if index < 0 || index >= values.count { return nil }
+        let ret = values[index]
+        //let ret = 0.0
+        Log.d("get(atIndex: \(index)) = \(ret)")
+        return ret
+    }
 }
 
 // a list of all extant decision trees at runtime, indexed by hash prefix
 @available(macOS 10.15, *)
-public var decisionTrees: [String: DecisionTree] = {
+// XXX we need an actor here for thread safety
+public var decisionTrees: [String: DecisionTree] = loadDecisionTrees()
+
+@available(macOS 10.15, *)
+public func loadDecisionTrees() -> [String : DecisionTree] {
     let decisionTrees = listClasses { $0.compactMap { $0 as? DecisionTree.Type } }
     var ret: [String: DecisionTree] = [:]
     for tree in decisionTrees {
         let instance = tree.init()
         ret[instance.name] = instance
     }
+    print("XXX loaded \(ret.count) decision trees")
     return ret
-}()
+}
 
 // black magic from the objc runtime
 fileprivate func listClasses<T>(_ body: (UnsafeBufferPointer<AnyClass>) throws -> T) rethrows -> T {
@@ -129,20 +150,22 @@ public class OutlierGroupValueMatrix: Codable {
     }
     
     public var outlierGroupValues: ([OutlierGroupValueMap], [OutlierGroupValueMap]) {
-        var shouldPaintRet: [OutlierGroupValueMap] = []
-        var shoultNotPaintRet: [OutlierGroupValueMap] = []
-        for value in values {
-            var groupValues = OutlierGroupValueMap()
-            for (index, type) in types.enumerated() {
-                groupValues.values[type] = value.values[index]
+        get async {
+            var shouldPaintRet: [OutlierGroupValueMap] = []
+            var shoultNotPaintRet: [OutlierGroupValueMap] = []
+            for value in values {
+                var groupValues = OutlierGroupValueMap()
+                for (index, type) in types.enumerated() {
+                    await groupValues.set(atIndex: type.sortOrder, to: value.values[index])
+                }
+                if(value.shouldPaint) {
+                    shouldPaintRet.append(groupValues)
+                } else {
+                    shoultNotPaintRet.append(groupValues)
+                }
             }
-            if(value.shouldPaint) {
-                shouldPaintRet.append(groupValues)
-            } else {
-                shoultNotPaintRet.append(groupValues)
-            }
+            return (shouldPaintRet, shoultNotPaintRet)
         }
-        return (shouldPaintRet, shoultNotPaintRet)
     }
 
     public var prettyJson: String? {
@@ -189,7 +212,7 @@ public extension OutlierGroup {
             var values = OutlierGroupValueMap()
             for type in OutlierGroup.TreeDecisionType.allCases {
                 let value = await self.decisionTreeValue(for: type)
-                values.values[type] = value
+                await values.set(atIndex: type.sortOrder, to: value)
                 //Log.d("frame \(frame_index) type \(type) value \(value)")
             }
             return values
@@ -278,7 +301,7 @@ public extension OutlierGroup {
             }
         }
 
-        private var sortOrder: Int {
+        public var sortOrder: Int {
             switch self {
             case .size:
                 return 0

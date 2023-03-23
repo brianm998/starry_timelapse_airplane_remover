@@ -465,7 +465,8 @@ struct decision_tree_generator: ParsableCommand {
                     }
                 } else {
                     if file_manager.fileExists(atPath: json_config_file_name) {
-                        try await withThrowingLimitedTaskGroup(of: OutlierGroupValueMapResult.self) { taskGroup in
+                        try await withThrowingLimitedTaskGroup(of: OutlierGroupValueMapResult.self,
+                                                               limitedTo: 36) { taskGroup in
                             
                             // load a list of OutlierGroupValueMatrix
                             // and get outlierGroupValues from them
@@ -497,7 +498,8 @@ struct decision_tree_generator: ParsableCommand {
                                                 
                                                 var valueMap = OutlierGroupValueMap()
                                                 for (index, type) in matrix.types.enumerated() {
-                                                    valueMap.values[type] = values.values[index]
+                                                    await valueMap.set(atIndex: type.sortOrder,
+                                                                       to: values.values[index])
                                                 }
                                                 if values.shouldPaint {
                                                     local_should_paint_test_data.append(valueMap)
@@ -612,12 +614,13 @@ struct decision_tree_generator: ParsableCommand {
 
     }
     
-    func log(valueMaps: [OutlierGroupValueMap]) {
+    func log(valueMaps: [OutlierGroupValueMap]) async {
         for (index, valueMap) in valueMaps.enumerated() {
             var log = "\(index) - "
             for type in OutlierGroup.TreeDecisionType.allCases {
-                let value = valueMap.values[type]!
-                log += "\(String(format: "%.3g", value)) "
+                if let value = await valueMap.get(at: type.sortOrder) {
+                    log += "\(String(format: "%.3g", value)) "
+                }
             }
             Log.d(log)
         }
