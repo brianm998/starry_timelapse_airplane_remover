@@ -298,104 +298,15 @@ class DecisionTreeGenerator {
         let should_paint_values = await transform(testData: return_true_test_data)
         let should_not_paint_values = await transform(testData: return_false_test_data)
         
-        //Log.i("decisionTreeNode checkpoint 1 with indent \(indent) return_true_test_data.count \(return_true_test_data.count) return_false_test_data.count \(return_false_test_data.count)")
-
         // value distributions for each type
         // indexed by outlierGroup.sortOrder
         
-        var should_paint_dist = ThreadSafeArray<ValueDistribution?>(repeating: nil, count: type_count)
-        var should_not_paint_dist = ThreadSafeArray<ValueDistribution?>(repeating: nil, count: type_count)
-
-        // checked
-        await withLimitedTaskGroup(of: ValueDistribution.self,
-                                   limitedTo: 36) { taskGroup in
-            // for each type, calculate a min/max/mean/median for both paint and not
-            for type in decisionTypes {
-                if let all_values = await should_paint_values.get(at: type.sortOrder) {
-                    await taskGroup.addTask() {
-                        var min = Double.greatestFiniteMagnitude
-                        var max = -Double.greatestFiniteMagnitude
-                        var sum = 0.0
-                        //Log.d("all values for paint \(type): \(all_values)")
-
-                        let count = await all_values.count
-                        for idx in 0..<count {
-                            if let value = await all_values.get(at: idx) {
-                                if value < min { min = value }
-                                if value > max { max = value }
-                                sum += value
-                            }
-                        }
-                        sum /= Double(await all_values.count)
-                        let median = await all_values.sorted().get(at: all_values.count/2) ?? 0
-                        return ValueDistribution(type: type, min: min, max: max,
-                                                 mean: sum, median: median)
-                    }
-                }
-            }
-            while let response = await taskGroup.next() {
-                await should_paint_dist.set(atIndex: response.type.sortOrder, to: response)
-            }
-        }
-
-        // XXX XXX XXX
-        // XXX XXX XXX
-        // seems to work
-        // XXX XXX XXX
-        // XXX XXX XXX
-
-        
-        //Log.i("decisionTreeNode checkpoint 1.5 with indent \(indent) return_true_test_data.count \(return_true_test_data.count) return_false_test_data.count \(return_false_test_data.count)")
-
-        // XXX not atomic
-        let _should_not_paint_values = should_not_paint_values
-
-        // XXX dupe above for not paint
-        // checked
-        await withLimitedTaskGroup(of: ValueDistribution.self, // XXX here???
-                                   limitedTo: 36) { taskGroup in
-            for type in decisionTypes {
-                if let all_values = await _should_not_paint_values.get(at: type.sortOrder) {
-                    await taskGroup.addTask() {
-                        var min = Double.greatestFiniteMagnitude
-                        var max = -Double.greatestFiniteMagnitude
-                        var sum = 0.0
-                        //Log.d("all values for not paint \(type): \(all_values)")
-                        let count = await all_values.count
-                        for idx in 0..<count {
-                            if let value = await all_values.get(at: idx) {
-                                if value < min { min = value }
-                                if value > max { max = value }
-                                sum += value
-                            }
-                        }
-                        sum /= Double(await all_values.count)
-                        let median = await all_values.sorted().get(at: all_values.count/2) ?? 0
-                        return ValueDistribution(type: type, min: min, max: max,
-                                                 mean: sum, median: median)
-                    }
-                }
-            }
-
-            while let response: ValueDistribution = await taskGroup.next() {
-                await should_not_paint_dist.set(atIndex: response.type.sortOrder, to: response)
-            }
-        }
-
-        // XXX XXX XXX
-        // XXX XXX XXX
-        // seems to work
-        // XXX XXX XXX
-        // XXX XXX XXX
-
-
-       //Log.i("decisionTreeNode checkpoint 2 with indent \(indent) return_true_test_data.count \(return_true_test_data.count) return_false_test_data.count \(return_false_test_data.count)")
+        let should_paint_dist = await getValueDistributions(of: should_paint_values)
+        let should_not_paint_dist = await getValueDistributions(of: should_not_paint_values)
 
         // iterate ofer all decision tree types to pick the best one
         // that differentiates the test data
 
-        // XXX not safe arrays yet
-        
         var decisionResults = ThreadSafeArray<DecisionResult>()
         var decisionTreeNodes = ThreadSafeArray<TreeDecisionTypeResult>()
 
@@ -775,6 +686,45 @@ class DecisionTreeGenerator {
         }
     }
 
+    // XXX document what this does
+    fileprivate func getValueDistributions(of values: ThreadSafeArray<ThreadSafeArray<Double>>)
+      async -> ThreadSafeArray<ValueDistribution?>
+    {
+        return await withLimitedTaskGroup(of: ValueDistribution.self,
+                                          limitedTo: 36) { taskGroup in
+            let type_count = OutlierGroup.TreeDecisionType.allCases.count
+            var array = [ValueDistribution?](repeating: nil, count: type_count)
+            // for each type, calculate a min/max/mean/median for both paint and not
+            for type in decisionTypes {
+                if let all_values = await values.get(at: type.sortOrder) {
+                    await taskGroup.addTask() {
+                        var min = Double.greatestFiniteMagnitude
+                        var max = -Double.greatestFiniteMagnitude
+                        var sum = 0.0
+                        //Log.d("all values for paint \(type): \(all_values)")
+
+                        let count = await all_values.count
+                        for idx in 0..<count {
+                            if let value = await all_values.get(at: idx) {
+                                if value < min { min = value }
+                                if value > max { max = value }
+                                sum += value
+                            }
+                        }
+                        sum /= Double(await all_values.count)                           // VV ??
+                        let median = await all_values.sorted().get(at: all_values.count/2) ?? 0
+                        return ValueDistribution(type: type, min: min, max: max,
+                                                 mean: sum, median: median)
+                    }
+                }
+            }
+            while let response = await taskGroup.next() {
+                array[response.type.sortOrder] = response
+            }
+            return ThreadSafeArray(array)
+        }
+    }
+    
     // XXX document what this does
     fileprivate func transform(testData: ThreadSafeArray<OutlierGroupValueMap>) 
       async -> ThreadSafeArray<ThreadSafeArray<Double>>
