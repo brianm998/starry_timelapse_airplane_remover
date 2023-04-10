@@ -11,7 +11,13 @@ protocol SwiftDecisionTree {
 
     // execute the same output swift code at runtime for pruning and boosting
     // returns -1 for negative, +1 for positive
-    func value(for outlierGroup: OutlierGroup) async -> Double 
+    func result(for outlierGroup: OutlierGroup) async -> Double 
+
+    // returns -1 for negative, +1 for positive
+    func result(
+      for types: [OutlierGroup.TreeDecisionType], // parallel
+      and values: [Double]                        // arrays
+    ) -> Double
 }
 
 // end leaf node which always returns true
@@ -24,7 +30,16 @@ struct ReturnTrueTreeNode: SwiftDecisionTree {
         return "\(indentation)return 1"
     }
 
-    func value(for outlierGroup: OutlierGroup) async -> Double {
+    func result(for outlierGroup: OutlierGroup) async -> Double {
+        return 1
+    }
+
+    public func result
+      (
+        for types: [OutlierGroup.TreeDecisionType], // parallel
+        and values: [Double]                        // arrays
+      ) -> Double
+    {
         return 1
     }
 }
@@ -39,7 +54,16 @@ struct ReturnFalseTreeNode: SwiftDecisionTree {
         return "\(indentation)return -1"
     }
 
-    func value(for outlierGroup: OutlierGroup) async -> Double {
+    func result(for outlierGroup: OutlierGroup) async -> Double {
+        return -1
+    }
+
+    public func result
+      (
+        for types: [OutlierGroup.TreeDecisionType], // parallel
+        and values: [Double]                        // arrays
+      ) -> Double
+    {
         return -1
     }
 }
@@ -86,7 +110,7 @@ class DecisionTreeNode: SwiftDecisionTree {
     let indent: Int
 
     // runtime execution
-    func value(for outlierGroup: OutlierGroup) async -> Double {
+    func result(for outlierGroup: OutlierGroup) async -> Double {
         let outlierValue = await outlierGroup.decisionTreeValue(for: type)
         if stump {
             if outlierValue < value {
@@ -96,13 +120,42 @@ class DecisionTreeNode: SwiftDecisionTree {
             }
         } else {
             if outlierValue < value {
-                return await lessThan.value(for: outlierGroup)
+                return await lessThan.result(for: outlierGroup)
             } else {
-                return await greaterThan.value(for: outlierGroup)
+                return await greaterThan.result(for: outlierGroup)
             }
         }
     }
 
+    func result
+      (
+        for types: [OutlierGroup.TreeDecisionType], // parallel
+        and values: [Double]                        // arrays
+      ) -> Double
+    {
+        for i in 0 ..< types.count {
+            if types[i] == type {
+                let outlierValue = values[i]
+
+                if stump {
+                    if outlierValue < value {
+                        return lessThanStumpValue
+                    } else {
+                        return greaterThanStumpValue
+                    }
+                } else {
+                    if outlierValue < value {
+                        return lessThan.result(for: types, and: values)
+                    } else {
+                        return greaterThan.result(for: types, and: values)
+                    }
+                }
+                
+            }
+        }
+        fatalError("cannot find \(type)")
+    }
+    
     // write swift code to do the same thing
     var swiftCode: String {
         var indentation = ""
