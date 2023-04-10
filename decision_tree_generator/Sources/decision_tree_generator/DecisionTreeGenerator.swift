@@ -691,7 +691,7 @@ class DecisionTreeGenerator {
                                                               indent: indent + 1)
                   let paintCount = await result.lessThanShouldPaint.count
                   let notPaintCount = await result.lessThanShouldNotPaint.count
-                  let stumpValue = Double(paintCount)/Double(notPaintCount)*2-1
+                  let stumpValue = Double(paintCount)/Double(paintCount + notPaintCount)*2-1
                   return TreeResponse(treeNode: less_tree, position: .less, stumpValue: stumpValue)
               }
               await taskGroup.addTask() {
@@ -700,7 +700,7 @@ class DecisionTreeGenerator {
                                                                  indent: indent + 1)
                   let paintCount = await result.greaterThanShouldPaint.count
                   let notPaintCount = await result.greaterThanShouldNotPaint.count
-                  let stumpValue = Double(paintCount)/Double(notPaintCount)*2-1
+                  let stumpValue = Double(paintCount)/Double(paintCount + notPaintCount)*2-1
                   return TreeResponse(treeNode: greater_tree, position: .greater, stumpValue: stumpValue)
               }
               
@@ -742,11 +742,11 @@ class DecisionTreeGenerator {
                             andFalseData false_test_data: ThreadSafeArray<OutlierGroupValueMap>)
       async -> TreeDecisionTypeResult
     {
-        var lessThanShouldPaint = ThreadSafeArray<OutlierGroupValueMap>()
-        var lessThanShouldNotPaint = ThreadSafeArray<OutlierGroupValueMap>()
+        let lessThanShouldPaint = ThreadSafeArray<OutlierGroupValueMap>()
+        let lessThanShouldNotPaint = ThreadSafeArray<OutlierGroupValueMap>()
         
-        var greaterThanShouldPaint = ThreadSafeArray<OutlierGroupValueMap>()
-        var greaterThanShouldNotPaint = ThreadSafeArray<OutlierGroupValueMap>()
+        let greaterThanShouldPaint = ThreadSafeArray<OutlierGroupValueMap>()
+        let greaterThanShouldNotPaint = ThreadSafeArray<OutlierGroupValueMap>()
         
         // calculate how the data would split if we used the above decision value
 
