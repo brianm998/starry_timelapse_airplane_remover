@@ -9,8 +9,9 @@ protocol SwiftDecisionTree {
     // swift code that eventually returns true or false
     var swiftCode: String { get }
 
-    // XXX get this working
-    //func value(for outlierGroup: OutlierGroup) -> Double 
+    // execute the same output swift code at runtime for pruning and boosting
+    // returns -1 for negative, +1 for positive
+    func value(for outlierGroup: OutlierGroup) async -> Double 
 }
 
 // end leaf node which always returns true
@@ -22,6 +23,10 @@ struct ReturnTrueTreeNode: SwiftDecisionTree {
         for _ in 0..<indent { indentation += "    " }
         return "\(indentation)return 1"
     }
+
+    func value(for outlierGroup: OutlierGroup) async -> Double {
+        return 1
+    }
 }
 
 // end leaf node which always returns false
@@ -32,6 +37,10 @@ struct ReturnFalseTreeNode: SwiftDecisionTree {
         var indentation = ""
         for _ in 0..<indent { indentation += "    " }
         return "\(indentation)return -1"
+    }
+
+    func value(for outlierGroup: OutlierGroup) async -> Double {
+        return -1
     }
 }
 
@@ -76,6 +85,25 @@ class DecisionTreeNode: SwiftDecisionTree {
     // indentention is levels of recursion, not spaces directly
     let indent: Int
 
+    // runtime execution
+    func value(for outlierGroup: OutlierGroup) async -> Double {
+        let outlierValue = await outlierGroup.decisionTreeValue(for: type)
+        if stump {
+            if outlierValue < value {
+                return lessThanStumpValue
+            } else {
+                return greaterThanStumpValue
+            }
+        } else {
+            if outlierValue < value {
+                return await lessThan.value(for: outlierGroup)
+            } else {
+                return await greaterThan.value(for: outlierGroup)
+            }
+        }
+    }
+
+    // write swift code to do the same thing
     var swiftCode: String {
         var indentation = ""
         for _ in 0..<indent { indentation += "    " }
