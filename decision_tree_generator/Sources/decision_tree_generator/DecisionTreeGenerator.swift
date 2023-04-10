@@ -10,12 +10,19 @@ class DecisionTreeGenerator {
 
     let decisionTypes: [OutlierGroup.TreeDecisionType]
     let decisionSplitTypes: [DecisionSplitType]
+    let maxDepth: Int
     
     public init(withTypes types: [OutlierGroup.TreeDecisionType] = OutlierGroup.TreeDecisionType.allCases,
-                andSplitTypes splitTypes: [DecisionSplitType] = [.median])
+                andSplitTypes splitTypes: [DecisionSplitType] = [.median],
+                maxDepth: Int? = nil)
     {
         decisionTypes = types
         decisionSplitTypes = splitTypes
+        if let maxDepth = maxDepth {
+            self.maxDepth = maxDepth
+        } else {
+            self.maxDepth = -1  // no limit
+        }
     }
     
     // number of levels (groups of '    ') of indentation to start with 
@@ -340,7 +347,7 @@ class DecisionTreeGenerator {
                       await taskGroup.addTask() {
                           //Log.d("type \(type)")
                           if paint_dist.max < not_paint_dist.min {
-                              // we have a clear distinction between all provided test data
+                              // we have a linear split between all provided test data
                               // this is an end leaf node, both paths after decision lead to a result
                               //Log.d("clear distinction \(paint_dist.max) < \(not_paint_dist.min)")
                               
@@ -358,7 +365,7 @@ class DecisionTreeGenerator {
                               return ThreadSafeArray([ret])
                           } else if not_paint_dist.max < paint_dist.min {
                               //Log.d("clear distinction \(not_paint_dist.max) < \(paint_dist.min)")
-                              // we have a clear distinction between all provided test data
+                              // we have a linear split between all provided test data
                               // this is an end leaf node, both paths after decision lead to a result
                               var ret = TreeDecisionTypeResult(type: type)
                               ret.decisionTreeNode =
@@ -373,12 +380,12 @@ class DecisionTreeGenerator {
                               ret.should_not_paint_dist = not_paint_dist
                               return ThreadSafeArray([ret])
                           } else {
-                              // we do not have a clear distinction between all provided test data
-                              // we need to figure out what type is best to segarate
+                              // we do not have a linear split between all provided test data
+                              // we need to figure out what type is best to segregate
                               // the test data further
-                              
+
                               // test this type to see how much we can split the data based upon it
-                              
+
                               if indent == self.initial_indent {
                                   Log.d("for \(type) paint_dist min \(paint_dist.min) median \(paint_dist.median) mean \(paint_dist.mean) max \(paint_dist.max) not_paint_dist min \(not_paint_dist.min) mean \(not_paint_dist.mean) median \(not_paint_dist.max) median \(not_paint_dist.max)")
                               }
@@ -725,19 +732,28 @@ class DecisionTreeGenerator {
         if let less_response = less_response,
            let greater_response = greater_response
         {
-            return DecisionTreeNode(type: result.type,
-                                    value: result.value,
-                                    lessThan: less_response.treeNode,
-                                    lessThanStumpValue: less_response.stumpValue,
-                                    greaterThan: greater_response.treeNode,
-                                    greaterThanStumpValue: greater_response.stumpValue,
-                                    indent: indent)
+            var ret = DecisionTreeNode(type: result.type,
+                                       value: result.value,
+                                       lessThan: less_response.treeNode,
+                                       lessThanStumpValue: less_response.stumpValue,
+                                       greaterThan: greater_response.treeNode,
+                                       greaterThanStumpValue: greater_response.stumpValue,
+                                       indent: indent)
+
+            // if we stump, the rest of the tree is still there, but we don't use it
+            if at(max: indent) { ret.stump = true }
+            return ret
         } else {
             Log.e("holy fuck")
             fatalError("doh")
         }
     }
 
+    fileprivate func at(max indent: Int) -> Bool {
+        if maxDepth == -1 { return false } // no limit
+        return indent - initial_indent <= maxDepth
+    }
+    
     fileprivate func result(for type: OutlierGroup.TreeDecisionType,
                             decisionValue: Double,
                             withPositiveData positive_test_data: ThreadSafeArray<OutlierGroupValueMap>,
