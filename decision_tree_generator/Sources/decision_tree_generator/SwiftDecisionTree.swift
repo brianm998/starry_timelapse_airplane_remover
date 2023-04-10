@@ -8,6 +8,9 @@ import NtarCore
 protocol SwiftDecisionTree {
     // swift code that eventually returns true or false
     var swiftCode: String { get }
+
+    // XXX get this working
+    //func value(for outlierGroup: OutlierGroup) -> Double 
 }
 
 // end leaf node which always returns true
@@ -17,7 +20,7 @@ struct ReturnTrueTreeNode: SwiftDecisionTree {
     var swiftCode: String {
         var indentation = ""
         for _ in 0..<indent { indentation += "    " }
-        return "\(indentation)return true"
+        return "\(indentation)return 1"
     }
 }
 
@@ -28,15 +31,36 @@ struct ReturnFalseTreeNode: SwiftDecisionTree {
     var swiftCode: String {
         var indentation = ""
         for _ in 0..<indent { indentation += "    " }
-        return "\(indentation)return false"
+        return "\(indentation)return -1"
     }
 }
 
 // decision node which decides upon a value of some type
 // delegating to one of two further code paths
 @available(macOS 10.15, *) 
-struct DecisionTreeNode: SwiftDecisionTree {
+class DecisionTreeNode: SwiftDecisionTree {
 
+    public init (type: OutlierGroup.TreeDecisionType,
+                 value: Double,
+                 lessThan: SwiftDecisionTree,
+                 lessThanStumpValue: Double,
+                 greaterThan: SwiftDecisionTree,
+                 greaterThanStumpValue: Double,
+                 indent: Int)
+    {
+        self.type = type
+        self.value = value
+        self.lessThan = lessThan
+        self.greaterThan = greaterThan
+        self.indent = indent
+        self.lessThanStumpValue = lessThanStumpValue
+        self.greaterThanStumpValue = greaterThanStumpValue
+    }
+
+    var stump = false
+    let lessThanStumpValue: Double
+    let greaterThanStumpValue: Double
+      
     // the kind of value we are deciding upon
     let type: OutlierGroup.TreeDecisionType
 
@@ -55,13 +79,24 @@ struct DecisionTreeNode: SwiftDecisionTree {
     var swiftCode: String {
         var indentation = ""
         for _ in 0..<indent { indentation += "    " }
-        return """
-          \(indentation)if \(type) < \(value) {
-          \(lessThan.swiftCode)
-          \(indentation)} else {
-          \(greaterThan.swiftCode)
-          \(indentation)}
-          """
+        if stump {
+            return """
+              \(indentation)if \(type) < \(value) {
+              \(indentation)    return \(lessThanStumpValue)
+              \(indentation)} else {
+              \(indentation)    return \(greaterThanStumpValue)
+              \(indentation)}
+              """
+        } else {
+            // recurse on an if statement
+            return """
+              \(indentation)if \(type) < \(value) {
+              \(lessThan.swiftCode)
+              \(indentation)} else {
+              \(greaterThan.swiftCode)
+              \(indentation)}
+              """
+        }
     }
 }
 

@@ -29,11 +29,11 @@ public actor OutlierGroupValueMap {
     }
 
     public func get(at index: Int) -> Double? {
-        Log.d("get(atIndex: \(index))")
+        //Log.d("get(atIndex: \(index))")
         if index < 0 || index >= values.count { return nil }
         let ret = values[index]
         //let ret = 0.0
-        Log.d("get(atIndex: \(index)) = \(ret)")
+        //Log.d("get(atIndex: \(index)) = \(ret)")
         return ret
     }
 }
@@ -77,9 +77,9 @@ public protocol DecisionTree {
     func shouldPaintFromDecisionTree (
       types: [OutlierGroup.TreeDecisionType], // parallel
       values: [Double]                        // arrays
-    ) -> Bool
+    ) -> Double
     
-    func shouldPaintFromDecisionTree(group: OutlierGroup) async -> Bool
+    func shouldPaintFromDecisionTree(group: OutlierGroup) async -> Double
 }
 
 public struct HoughLineHistogram {

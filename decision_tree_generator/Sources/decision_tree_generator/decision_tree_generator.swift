@@ -72,6 +72,7 @@ struct decision_tree_generator: ParsableCommand {
 
         start_time = Date()
         Log.i("Starting")
+        Log.d("in debug mode")
 
         if verification_mode {
             run_verification()
@@ -162,7 +163,7 @@ struct decision_tree_generator: ParsableCommand {
 
                                 for (treeKey, tree) in decisionTrees {
                                     let decisionTreeShouldPaint =  
-                                      await tree.shouldPaintFromDecisionTree(group: outlier_group)
+                                      await tree.shouldPaintFromDecisionTree(group: outlier_group) > 0
 
 
                                     if decisionTreeShouldPaint == numberGood.willPaint {
@@ -250,9 +251,10 @@ struct decision_tree_generator: ParsableCommand {
                                             // that defines this specific method, but it's static :(
 
                                             for (treeKey, tree) in decisionTrees {
+                                                // XXX another task group here
                                                 let decisionTreeShouldPaint =  
                                                   tree.shouldPaintFromDecisionTree(types: matrix.types,
-                                                                                   values: values.values)
+                                                                                   values: values.values) > 0
                                                 if decisionTreeShouldPaint == values.shouldPaint {
                                                     number_good[treeKey]! += 1
                                                 } else {
