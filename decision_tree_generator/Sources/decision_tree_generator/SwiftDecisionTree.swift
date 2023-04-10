@@ -20,9 +20,9 @@ protocol SwiftDecisionTree {
     ) -> Double
 }
 
-// end leaf node which always returns true
+// end leaf node which always returns 100% positive
 @available(macOS 10.15, *) 
-struct ReturnTrueTreeNode: SwiftDecisionTree {
+struct FullyPositiveTreeNode: SwiftDecisionTree {
     let indent: Int
     var swiftCode: String {
         var indentation = ""
@@ -44,9 +44,9 @@ struct ReturnTrueTreeNode: SwiftDecisionTree {
     }
 }
 
-// end leaf node which always returns false
+// end leaf node which always returns 100% negative
 @available(macOS 10.15, *) 
-struct ReturnFalseTreeNode: SwiftDecisionTree {
+struct FullyNegativeTreeNode: SwiftDecisionTree {
     let indent: Int
     var swiftCode: String {
         var indentation = ""
@@ -90,6 +90,8 @@ class DecisionTreeNode: SwiftDecisionTree {
         self.greaterThanStumpValue = greaterThanStumpValue
     }
 
+    // stump means cutting off the tree at this node, and returning stumped values
+    // of the test data on either side of the split
     var stump = false
     let lessThanStumpValue: Double
     let greaterThanStumpValue: Double
