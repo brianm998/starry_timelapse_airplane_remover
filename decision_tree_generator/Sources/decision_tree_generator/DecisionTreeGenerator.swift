@@ -690,18 +690,18 @@ class DecisionTreeGenerator {
 
     // XXX document what this does
     fileprivate func recurseOn(result: DecisionResult, indent: Int) async -> DecisionTreeNode {
-        //Log.d("best at indent \(indent) was \(result.type) \(String(format: "%g", result.lessThanSplit)) \(String(format: "%g", result.greaterThanSplit)) \(String(format: "%g", result.value)) < Should \(await result.lessThanShouldPaint.count) < ShouldNot \(await result.lessThanShouldNotPaint.count) > Should  \(await result.lessThanShouldPaint.count) > ShouldNot \(await result.greaterThanShouldNotPaint.count)")
+        //Log.d("best at indent \(indent) was \(result.type) \(String(format: "%g", result.lessThanSplit)) \(String(format: "%g", result.greaterThanSplit)) \(String(format: "%g", result.value)) < Should \(await result.lessThanPositive.count) < ShouldNot \(await result.lessThanNegative.count) > Should  \(await result.lessThanPositive.count) > ShouldNot \(await result.greaterThanNegative.count)")
 
         // we've identified the best type to differentiate the test data
         // output a tree node with this type and value
         var less_response: TreeResponse?
         var greater_response: TreeResponse?
 
-        let lessThanPaintCount = await result.lessThanShouldPaint.count
-        let lessThanNotPaintCount = await result.lessThanShouldNotPaint.count
+        let lessThanPaintCount = await result.lessThanPositive.count
+        let lessThanNotPaintCount = await result.lessThanNegative.count
 
-        let greaterThanPaintCount = await result.greaterThanShouldPaint.count
-        let greaterThanNotPaintCount = await result.greaterThanShouldNotPaint.count
+        let greaterThanPaintCount = await result.greaterThanPositive.count
+        let greaterThanNotPaintCount = await result.greaterThanNegative.count
 
         let paintMax = Double(lessThanPaintCount+greaterThanPaintCount)
         let notPaintMax = Double(lessThanNotPaintCount+greaterThanNotPaintCount)
@@ -736,15 +736,15 @@ class DecisionTreeGenerator {
                                          limitedTo: thread_max) { taskGroup in
                   
                   await taskGroup.addTask() {
-                      let less_tree = await self.decisionTreeNode(with: result.lessThanShouldPaint,
-                                                                  and: result.lessThanShouldNotPaint,
+                      let less_tree = await self.decisionTreeNode(with: result.lessThanPositive,
+                                                                  and: result.lessThanNegative,
                                                                   indent: indent + 1)
                       return TreeResponse(treeNode: less_tree, position: .less,
                                           stumpValue: lessThanStumpValue)
                   }
                   await taskGroup.addTask() {
-                      let greater_tree = await self.decisionTreeNode(with: result.greaterThanShouldPaint,
-                                                                     and: result.greaterThanShouldNotPaint,
+                      let greater_tree = await self.decisionTreeNode(with: result.greaterThanPositive,
+                                                                     and: result.greaterThanNegative,
                                                                      indent: indent + 1)
                       return TreeResponse(treeNode: greater_tree, position: .greater,
                                           stumpValue: greaterThanStumpValue)
@@ -795,11 +795,11 @@ class DecisionTreeGenerator {
                             andNegativeData negative_test_data: ThreadSafeArray<OutlierGroupValueMap>)
       async -> TreeDecisionTypeResult
     {
-        let lessThanShouldPaint = ThreadSafeArray<OutlierGroupValueMap>()
-        let lessThanShouldNotPaint = ThreadSafeArray<OutlierGroupValueMap>()
+        let lessThanPositive = ThreadSafeArray<OutlierGroupValueMap>()
+        let lessThanNegative = ThreadSafeArray<OutlierGroupValueMap>()
         
-        let greaterThanShouldPaint = ThreadSafeArray<OutlierGroupValueMap>()
-        let greaterThanShouldNotPaint = ThreadSafeArray<OutlierGroupValueMap>()
+        let greaterThanPositive = ThreadSafeArray<OutlierGroupValueMap>()
+        let greaterThanNegative = ThreadSafeArray<OutlierGroupValueMap>()
         
         // calculate how the data would split if we used the above decision value
 
@@ -814,9 +814,9 @@ class DecisionTreeGenerator {
             {
         /**/
                 if group_value < decisionValue {
-                    await lessThanShouldPaint.append(group_values)
+                    await lessThanPositive.append(group_values)
                 } else {
-                    await greaterThanShouldPaint.append(group_values)
+                    await greaterThanPositive.append(group_values)
                 }
 /*         */
 
@@ -833,9 +833,9 @@ class DecisionTreeGenerator {
                let group_value = await group_values.get(at: type.sortOrder)
             {
                 if group_value < decisionValue {
-                    await lessThanShouldNotPaint.append(group_values)
+                    await lessThanNegative.append(group_values)
                 } else {
-                    await greaterThanShouldNotPaint.append(group_values)
+                    await greaterThanNegative.append(group_values)
                 }
 
             }
@@ -845,10 +845,10 @@ class DecisionTreeGenerator {
         ret.decisionResult =
           await DecisionResult(type: type,
                                value: decisionValue,
-                               lessThanShouldPaint: lessThanShouldPaint,
-                               lessThanShouldNotPaint: lessThanShouldNotPaint,
-                               greaterThanShouldPaint: greaterThanShouldPaint,
-                               greaterThanShouldNotPaint: greaterThanShouldNotPaint)
+                               lessThanPositive: lessThanPositive,
+                               lessThanNegative: lessThanNegative,
+                               greaterThanPositive: greaterThanPositive,
+                               greaterThanNegative: greaterThanNegative)
 
         return ret
     }
@@ -913,44 +913,44 @@ fileprivate struct TreeResponse {
 fileprivate struct DecisionResult {
     let type: OutlierGroup.TreeDecisionType
     let value: Double
-    let lessThanShouldPaint: ThreadSafeArray<OutlierGroupValueMap>
-    let lessThanShouldNotPaint: ThreadSafeArray<OutlierGroupValueMap>
-    let greaterThanShouldPaint: ThreadSafeArray<OutlierGroupValueMap>
-    let greaterThanShouldNotPaint: ThreadSafeArray<OutlierGroupValueMap>
+    let lessThanPositive: ThreadSafeArray<OutlierGroupValueMap>
+    let lessThanNegative: ThreadSafeArray<OutlierGroupValueMap>
+    let greaterThanPositive: ThreadSafeArray<OutlierGroupValueMap>
+    let greaterThanNegative: ThreadSafeArray<OutlierGroupValueMap>
     let lessThanSplit: Double
     let greaterThanSplit: Double
     
     public init(type: OutlierGroup.TreeDecisionType,
                 value: Double = 0,
-                lessThanShouldPaint: ThreadSafeArray<OutlierGroupValueMap>,
-                lessThanShouldNotPaint: ThreadSafeArray<OutlierGroupValueMap>,
-                greaterThanShouldPaint: ThreadSafeArray<OutlierGroupValueMap>,
-                greaterThanShouldNotPaint: ThreadSafeArray<OutlierGroupValueMap>) async
+                lessThanPositive: ThreadSafeArray<OutlierGroupValueMap>,
+                lessThanNegative: ThreadSafeArray<OutlierGroupValueMap>,
+                greaterThanPositive: ThreadSafeArray<OutlierGroupValueMap>,
+                greaterThanNegative: ThreadSafeArray<OutlierGroupValueMap>) async
     {
 
         self.type = type
         self.value = value
-        self.lessThanShouldPaint = lessThanShouldPaint
-        self.lessThanShouldNotPaint = lessThanShouldNotPaint
-        self.greaterThanShouldPaint = greaterThanShouldPaint
-        self.greaterThanShouldNotPaint = greaterThanShouldNotPaint
+        self.lessThanPositive = lessThanPositive
+        self.lessThanNegative = lessThanNegative
+        self.greaterThanPositive = greaterThanPositive
+        self.greaterThanNegative = greaterThanNegative
 
-        let lessThanShouldPaintCount = await lessThanShouldPaint.count
-        let lessThanShouldNotPaintCount = await lessThanShouldNotPaint.count
-        let greaterThanShouldPaintCount = await greaterThanShouldPaint.count
-        let greaterThanShouldNotPaintCount = await greaterThanShouldNotPaint.count
+        let lessThanPositiveCount = await lessThanPositive.count
+        let lessThanNegativeCount = await lessThanNegative.count
+        let greaterThanPositiveCount = await greaterThanPositive.count
+        let greaterThanNegativeCount = await greaterThanNegative.count
         
         // XXX somehow factor in how far away the training data is from the split as well?
         
         // this is the 0-1 percentage of should_paint on the less than split
         self.lessThanSplit =
-          Double(lessThanShouldPaintCount) /
-          Double(lessThanShouldNotPaintCount + lessThanShouldPaintCount)
+          Double(lessThanPositiveCount) /
+          Double(lessThanNegativeCount + lessThanPositiveCount)
 
         // this is the 0-1 percentage of should_paint on the greater than split
         self.greaterThanSplit =
-          Double(greaterThanShouldPaintCount) /
-          Double(greaterThanShouldNotPaintCount + greaterThanShouldPaintCount)
+          Double(greaterThanPositiveCount) /
+          Double(greaterThanNegativeCount + greaterThanPositiveCount)
     }
 }
 
