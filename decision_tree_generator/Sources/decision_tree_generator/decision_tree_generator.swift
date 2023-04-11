@@ -59,6 +59,13 @@ struct decision_tree_generator: ParsableCommand {
             """)
     var decisionTypesString: String = ""
     
+    @Option(name: [.customShort("m"), .customLong("max-depth")],
+          help:"""
+            Decision tree max depth parameter.
+            After this depth, decision tree will stump based upon remaining data.
+            """)
+    var maxDepth: Int? = nil
+    
     @Argument(help: """
                 A list of files, which can be either a reference to a config.json file,
                 or a reference to a directory containing files ending with '_outlier_values.bin'
@@ -67,7 +74,7 @@ struct decision_tree_generator: ParsableCommand {
     
     mutating func run() throws {
         Log.name = "decision_tree_generator-log"
-        Log.handlers[.console] = ConsoleLogHandler(at: .debug)
+        Log.handlers[.console] = ConsoleLogHandler(at: .info)
         Log.handlers[.file] = try FileLogHandler(at: .verbose) // XXX make this a command line parameter
 
         start_time = Date()
@@ -132,7 +139,7 @@ struct decision_tree_generator: ParsableCommand {
 
         // load the outliers in parallel
         try await withLimitedThrowingTaskGroup(of: Void.self,
-                                               limitedTo: 36) { taskGroup in
+                                               limitedTo: thread_max) { taskGroup in
             for frame in frames {
                 await taskGroup.addTask(/*priority: .medium*/) {
                     try await frame.loadOutliers()
@@ -143,7 +150,7 @@ struct decision_tree_generator: ParsableCommand {
 
         Log.i("checkpoint before loading tree test results")
         await withLimitedTaskGroup(of: TreeTestResults.self,
-                                   limitedTo: 36) { taskGroup in
+                                   limitedTo: thread_max) { taskGroup in
             for frame in frames {
                 // check all outlier groups
                 
@@ -468,7 +475,7 @@ struct decision_tree_generator: ParsableCommand {
                 } else {
                     if file_manager.fileExists(atPath: json_config_file_name) {
                         try await withThrowingLimitedTaskGroup(of: OutlierGroupValueMapResult.self,
-                                                               limitedTo: 36) { taskGroup in
+                                                               limitedTo: thread_max) { taskGroup in
                             
                             // load a list of OutlierGroupValueMatrix
                             // and get outlierGroupValues from them
@@ -540,13 +547,15 @@ struct decision_tree_generator: ParsableCommand {
                     await self.writeTree(withTypes: types,
                                          withPositiveData: positive_test_data,
                                          andNegativeData: negative_test_data,
-                                         inputFilenames: input_filenames)
+                                         inputFilenames: input_filenames,
+                                         maxDepth: maxDepth)
                 }
             } else {
                 await self.writeTree(withTypes: decisionTypes,
                                      withPositiveData: positive_test_data,
                                      andNegativeData: negative_test_data,
-                                     inputFilenames: input_filenames)
+                                     inputFilenames: input_filenames,
+                                     maxDepth: maxDepth)
             }
             
             dispatch_group.leave()
@@ -557,7 +566,8 @@ struct decision_tree_generator: ParsableCommand {
     func writeTree(withTypes decisionTypes: [OutlierGroup.TreeDecisionType],
                    withPositiveData positive_test_data: [OutlierGroupValueMap],
                    andNegativeData negative_test_data: [OutlierGroupValueMap],
-                   inputFilenames: [String]) async {
+                   inputFilenames: [String],
+                   maxDepth: Int? = nil) async {
         /*
         await self.writeTree(withTypes: decisionTypes,
                              andSplitTypes: [.mean],
@@ -565,12 +575,13 @@ struct decision_tree_generator: ParsableCommand {
                              andNegativeData: negative_test_data,
                              inputFilenames: inputFilenames)
 */
-        // .median seems best, but more exploration possibleq
+        // .median seems best, but more exploration possible
         await self.writeTree(withTypes: decisionTypes,
                              andSplitTypes: [.median],
                              withPositiveData: positive_test_data,
                              andNegativeData: negative_test_data,
-                             inputFilenames: inputFilenames)
+                             inputFilenames: inputFilenames,
+                             maxDepth: maxDepth)
 /*
         await self.writeTree(withTypes: decisionTypes,
                              andSplitTypes: [.mean, .median],
@@ -584,11 +595,14 @@ struct decision_tree_generator: ParsableCommand {
                    andSplitTypes splitTypes: [DecisionSplitType],
                    withPositiveData positive_test_data: [OutlierGroupValueMap],
                    andNegativeData negative_test_data: [OutlierGroupValueMap],
-                   inputFilenames: [String]) async {
+                   inputFilenames: [String],
+                   maxDepth: Int? = nil) async {
         
         Log.i("Calculating decision tree with \(positive_test_data.count) should paint \(negative_test_data.count) should not paint test data outlier groups")
 
-        let generator = DecisionTreeGenerator(withTypes: decisionTypes, andSplitTypes: splitTypes)
+        let generator = DecisionTreeGenerator(withTypes: decisionTypes,
+                                              andSplitTypes: splitTypes,
+                                              maxDepth: maxDepth)
 
         let base_filename = "../NtarDecisionTrees/Sources/NtarDecisionTrees/OutlierGroupDecisionTree_"
         
