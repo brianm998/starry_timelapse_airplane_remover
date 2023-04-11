@@ -5,6 +5,8 @@ import BinaryCodable
 import CryptoKit
 
 
+let thread_max = 36             // XXX move this
+
 @available(macOS 10.15, *) 
 class DecisionTreeGenerator {
 
@@ -68,6 +70,8 @@ class DecisionTreeGenerator {
             digest.update(data: Data(type.rawValue.utf8))
         }
 
+        digest.update(data: Data("\(maxDepth)".utf8))
+        
         let tree_hash = digest.finalize()
         let tree_hash_string = tree_hash.compactMap { String(format: "%02x", $0) }.joined()
         let generation_date_since_1970 = generation_date.timeIntervalSince1970
@@ -199,6 +203,7 @@ class DecisionTreeGenerator {
               public let sha256 = "\(tree_hash_string)"
               public let name = "\(hash_prefix)"
               public let sha256Prefix = "\(hash_prefix)"
+              public let maxDepth = \(maxDepth)
               
               public let generationSecondsSince1970 = \(generation_date_since_1970)
 
@@ -334,7 +339,7 @@ class DecisionTreeGenerator {
         // this one is likely a problem
         let (decisionResults, decisionTreeNodes) = 
           await withLimitedTaskGroup(of: ThreadSafeArray<TreeDecisionTypeResult>.self,
-                                   limitedTo: 36) { taskGroup in
+                                     limitedTo: thread_max) { taskGroup in
 
               var decisionResults = ThreadSafeArray<DecisionResult>()
               var decisionTreeNodes = ThreadSafeArray<TreeDecisionTypeResult>()
@@ -618,7 +623,7 @@ class DecisionTreeGenerator {
       async -> ThreadSafeArray<ValueDistribution?>
     {
         return await withLimitedTaskGroup(of: ValueDistribution.self,
-                                          limitedTo: 36) { taskGroup in
+                                          limitedTo: thread_max) { taskGroup in
             let type_count = OutlierGroup.TreeDecisionType.allCases.count
             var array = [ValueDistribution?](repeating: nil, count: type_count)
             // for each type, calculate a min/max/mean/median for both paint and not
@@ -657,7 +662,7 @@ class DecisionTreeGenerator {
       async -> ThreadSafeArray<ThreadSafeArray<Double>>
     {
         return await withLimitedTaskGroup(of: DecisionTypeValuesResult.self,
-                                          limitedTo: 36) { taskGroup in
+                                          limitedTo: thread_max) { taskGroup in
             let type_count = OutlierGroup.TreeDecisionType.allCases.count
             var array = [ThreadSafeArray<Double>](repeating: ThreadSafeArray<Double>([]),
                                                   count: type_count)
@@ -689,44 +694,76 @@ class DecisionTreeGenerator {
 
         // we've identified the best type to differentiate the test data
         // output a tree node with this type and value
-        let (less_response, greater_response) =
-          await withLimitedTaskGroup(of: TreeResponse.self,
-                                     limitedTo: 36) { taskGroup in
+        var less_response: TreeResponse?
+        var greater_response: TreeResponse?
 
+        let lessThanPaintCount = await result.lessThanShouldPaint.count
+        let lessThanNotPaintCount = await result.lessThanShouldNotPaint.count
 
-              await taskGroup.addTask() {
-                  let less_tree = await self.decisionTreeNode(with: result.lessThanShouldPaint,
-                                                              and: result.lessThanShouldNotPaint,
-                                                              indent: indent + 1)
-                  let paintCount = await result.lessThanShouldPaint.count
-                  let notPaintCount = await result.lessThanShouldNotPaint.count
-                  let stumpValue = Double(paintCount)/Double(paintCount + notPaintCount)*2-1
-                  return TreeResponse(treeNode: less_tree, position: .less, stumpValue: stumpValue)
-              }
-              await taskGroup.addTask() {
-                  let greater_tree = await self.decisionTreeNode(with: result.greaterThanShouldPaint,
-                                                                 and: result.greaterThanShouldNotPaint,
-                                                                 indent: indent + 1)
-                  let paintCount = await result.greaterThanShouldPaint.count
-                  let notPaintCount = await result.greaterThanShouldNotPaint.count
-                  let stumpValue = Double(paintCount)/Double(paintCount + notPaintCount)*2-1
-                  return TreeResponse(treeNode: greater_tree, position: .greater, stumpValue: stumpValue)
-              }
-              
-              var less_response: TreeResponse?
-              var greater_response: TreeResponse?
-              
-              while let response = await taskGroup.next() {
-                  switch response.position {
-                  case .less:
-                      less_response = response
-                  case .greater:
-                      greater_response = response
-                  }
-              }
-              return (less_response, greater_response)
-          }
+        let greaterThanPaintCount = await result.greaterThanShouldPaint.count
+        let greaterThanNotPaintCount = await result.greaterThanShouldNotPaint.count
+
+        let paintMax = Double(lessThanPaintCount+greaterThanPaintCount)
+        let notPaintMax = Double(lessThanNotPaintCount+greaterThanNotPaintCount)
+
+        // divide by max to even out 1/10 disparity in true/false data
+        let lessThanPaintDiv = Double(lessThanPaintCount)/paintMax
+        let greaterThanPaintDiv = Double(greaterThanPaintCount)/paintMax
         
+        let lessThanStumpValue = lessThanPaintDiv / (lessThanPaintDiv + Double(lessThanNotPaintCount)/notPaintMax) * 2 - 1
+
+        Log.i("lessThanPaintCount \(lessThanPaintCount) lessThanNotPaintCount \(lessThanNotPaintCount) lessThanStumpValue \(lessThanStumpValue)")
+
+
+        let greaterThanStumpValue = greaterThanPaintDiv / (greaterThanPaintDiv + Double(greaterThanNotPaintCount)/notPaintMax) * 2 - 1
+        
+        Log.i("greaterThanPaintCount \(greaterThanPaintCount) greaterThanNotPaintCount \(greaterThanNotPaintCount) greaterThanStumpValue \(greaterThanStumpValue)")
+
+        if at(max: indent + 2) {
+            // stump, don't extend the tree branches further
+            var ret = DecisionTreeNode(type: result.type,
+                                       value: result.value,
+                                       lessThan: FullyPositiveTreeNode(indent: 0), // not used
+                                       lessThanStumpValue: lessThanStumpValue,
+                                       greaterThan: FullyPositiveTreeNode(indent: 0), // not used
+                                       greaterThanStumpValue: greaterThanStumpValue,
+                                       indent: indent/* + 1*/)
+            ret.stump = true 
+            return ret
+        } else {
+            (less_response, greater_response) = 
+              await withLimitedTaskGroup(of: TreeResponse.self,
+                                         limitedTo: thread_max) { taskGroup in
+                  
+                  await taskGroup.addTask() {
+                      let less_tree = await self.decisionTreeNode(with: result.lessThanShouldPaint,
+                                                                  and: result.lessThanShouldNotPaint,
+                                                                  indent: indent + 1)
+                      return TreeResponse(treeNode: less_tree, position: .less,
+                                          stumpValue: lessThanStumpValue)
+                  }
+                  await taskGroup.addTask() {
+                      let greater_tree = await self.decisionTreeNode(with: result.greaterThanShouldPaint,
+                                                                     and: result.greaterThanShouldNotPaint,
+                                                                     indent: indent + 1)
+                      return TreeResponse(treeNode: greater_tree, position: .greater,
+                                          stumpValue: greaterThanStumpValue)
+                  }
+                  
+                  var less_response: TreeResponse?
+                  var greater_response: TreeResponse?
+                  
+                  while let response = await taskGroup.next() {
+                      switch response.position {
+                      case .less:
+                          less_response = response
+                      case .greater:
+                          greater_response = response
+                      }
+                  }
+                  return (less_response, greater_response)
+              }
+        }
         //Log.d("WTF")
         
         if let less_response = less_response,
@@ -740,8 +777,6 @@ class DecisionTreeGenerator {
                                        greaterThanStumpValue: greater_response.stumpValue,
                                        indent: indent)
 
-            // if we stump, the rest of the tree is still there, but we don't use it
-            if at(max: indent) { ret.stump = true }
             return ret
         } else {
             Log.e("holy fuck")
@@ -750,8 +785,8 @@ class DecisionTreeGenerator {
     }
 
     fileprivate func at(max indent: Int) -> Bool {
-        if maxDepth == -1 { return false } // no limit
-        return indent - initial_indent <= maxDepth
+        if maxDepth < 0 { return false } // no limit
+        return indent - initial_indent > maxDepth
     }
     
     fileprivate func result(for type: OutlierGroup.TreeDecisionType,
