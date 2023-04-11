@@ -304,20 +304,12 @@ class DecisionTreeGenerator {
 
         let type_count = OutlierGroup.TreeDecisionType.allCases.count
         
-        
+
         // XXX XXX XXX
         // XXX XXX XXX
         // WORKS HERE
         // XXX XXX XXX
         // XXX XXX XXX
-
-        // indexed by outlierGroup.sortOrder
-        let positiveValues = await transform(testData: positive_test_data)
-        let positiveDist = await getValueDistributions(of: positiveValues)
-        
-        // indexed by outlierGroup.sortOrder
-        let negativeValues = await transform(testData: negative_test_data)
-        let negativeDist = await getValueDistributions(of: negativeValues)
 
         // iterate ofer all decision tree types to pick the best one
         // that differentiates the test data
@@ -344,9 +336,17 @@ class DecisionTreeGenerator {
           await withLimitedTaskGroup(of: ThreadSafeArray<TreeDecisionTypeResult>.self,
                                      limitedTo: thread_max) { taskGroup in
 
+              // indexed by outlierGroup.sortOrder
+              let positiveValues = await transform(testData: positive_test_data)
+              let positiveDist = await getValueDistributions(of: positiveValues)
+              
+              // indexed by outlierGroup.sortOrder
+              let negativeValues = await transform(testData: negative_test_data)
+              let negativeDist = await getValueDistributions(of: negativeValues)
               
               var decisionResults = ThreadSafeArray<DecisionResult>()
               var decisionTreeNodes = ThreadSafeArray<TreeDecisionTypeResult>()
+
               for type in _decisionTypes {
                   if let paint_dist_FU: ValueDistribution? = await positiveDist.get(at: type.sortOrder),
                      let not_paint_dist_FU: ValueDistribution? = await negativeDist.get(at: type.sortOrder),
@@ -627,9 +627,9 @@ class DecisionTreeGenerator {
       async -> ThreadSafeArray<ValueDistribution?>
     {
         let _decisionTypes = self.decisionTypes
+        let type_count = OutlierGroup.TreeDecisionType.allCases.count
         return await withLimitedTaskGroup(of: ValueDistribution.self,
                                           limitedTo: thread_max) { taskGroup in
-            let type_count = OutlierGroup.TreeDecisionType.allCases.count
             var array = [ValueDistribution?](repeating: nil, count: type_count)
             // for each type, calculate a min/max/mean/median for both paint and not
             for type in _decisionTypes {
@@ -667,9 +667,9 @@ class DecisionTreeGenerator {
       async -> ThreadSafeArray<ThreadSafeArray<Double>>
     {
         let _decisionTypes = self.decisionTypes
+        let type_count = OutlierGroup.TreeDecisionType.allCases.count
         return await withLimitedTaskGroup(of: DecisionTypeValuesResult.self,
                                           limitedTo: thread_max) { taskGroup in
-            let type_count = OutlierGroup.TreeDecisionType.allCases.count
             var array = [ThreadSafeArray<Double>](repeating: ThreadSafeArray<Double>([]),
                                                   count: type_count)
             for type in _decisionTypes {
