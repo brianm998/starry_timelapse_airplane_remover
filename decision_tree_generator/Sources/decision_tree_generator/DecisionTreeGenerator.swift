@@ -740,17 +740,23 @@ class DecisionTreeGenerator {
             (less_response, greater_response) = 
               await withLimitedTaskGroup(of: TreeResponse.self,
                                          limitedTo: thread_max) { taskGroup in
+
+                  let lessThanPositive = result.lessThanPositive
+                  let lessThanNegative = result.lessThanNegative
+
+                  let greaterThanPositive = result.greaterThanPositive
+                  let greaterThanNegative = result.greaterThanNegative
                   
                   await taskGroup.addTask() {
-                      let less_tree = await self.decisionTreeNode(with: result.lessThanPositive,
-                                                                  and: result.lessThanNegative,
+                      let less_tree = await self.decisionTreeNode(with: lessThanPositive,
+                                                                  and: lessThanNegative,
                                                                   indent: indent + 1)
                       return TreeResponse(treeNode: less_tree, position: .less,
                                           stumpValue: lessThanStumpValue)
                   }
                   await taskGroup.addTask() {
-                      let greater_tree = await self.decisionTreeNode(with: result.greaterThanPositive,
-                                                                     and: result.greaterThanNegative,
+                      let greater_tree = await self.decisionTreeNode(with: greaterThanPositive,
+                                                                     and: greaterThanNegative,
                                                                      indent: indent + 1)
                       return TreeResponse(treeNode: greater_tree, position: .greater,
                                           stumpValue: greaterThanStumpValue)
