@@ -336,14 +336,18 @@ class DecisionTreeGenerator {
         // XXX XXX XXX
         // XXX XXX XXX
 
+        let _decisionTypes = self.decisionTypes
+        let _decisionSplitTypes = self.decisionSplitTypes
+        
         // this one is likely a problem
         let (decisionResults, decisionTreeNodes) = 
           await withLimitedTaskGroup(of: ThreadSafeArray<TreeDecisionTypeResult>.self,
                                      limitedTo: thread_max) { taskGroup in
 
+              
               var decisionResults = ThreadSafeArray<DecisionResult>()
               var decisionTreeNodes = ThreadSafeArray<TreeDecisionTypeResult>()
-              for type in self.decisionTypes {
+              for type in _decisionTypes {
                   if let paint_dist_FU: ValueDistribution? = await positiveDist.get(at: type.sortOrder),
                      let not_paint_dist_FU: ValueDistribution? = await negativeDist.get(at: type.sortOrder),
                      let paint_dist: ValueDistribution = paint_dist_FU,
@@ -397,7 +401,7 @@ class DecisionTreeGenerator {
                               
                               var ret = ThreadSafeArray<TreeDecisionTypeResult>()
                               
-                              for splitType in self.decisionSplitTypes {
+                              for splitType in _decisionSplitTypes {
                                   switch splitType {
                                   case .mean:
                                       let result = await
@@ -622,12 +626,13 @@ class DecisionTreeGenerator {
     fileprivate func getValueDistributions(of values: ThreadSafeArray<ThreadSafeArray<Double>>)
       async -> ThreadSafeArray<ValueDistribution?>
     {
+        let _decisionTypes = self.decisionTypes
         return await withLimitedTaskGroup(of: ValueDistribution.self,
                                           limitedTo: thread_max) { taskGroup in
             let type_count = OutlierGroup.TreeDecisionType.allCases.count
             var array = [ValueDistribution?](repeating: nil, count: type_count)
             // for each type, calculate a min/max/mean/median for both paint and not
-            for type in decisionTypes {
+            for type in _decisionTypes {
                 if let all_values = await values.get(at: type.sortOrder) {
                     await taskGroup.addTask() {
                         var min = Double.greatestFiniteMagnitude
@@ -661,12 +666,13 @@ class DecisionTreeGenerator {
     fileprivate func transform(testData: ThreadSafeArray<OutlierGroupValueMap>) 
       async -> ThreadSafeArray<ThreadSafeArray<Double>>
     {
+        let _decisionTypes = self.decisionTypes
         return await withLimitedTaskGroup(of: DecisionTypeValuesResult.self,
                                           limitedTo: thread_max) { taskGroup in
             let type_count = OutlierGroup.TreeDecisionType.allCases.count
             var array = [ThreadSafeArray<Double>](repeating: ThreadSafeArray<Double>([]),
                                                   count: type_count)
-            for type in decisionTypes {
+            for type in _decisionTypes {
                 await taskGroup.addTask() {
                     var list: [Double] = []
                     let max = await testData.count
