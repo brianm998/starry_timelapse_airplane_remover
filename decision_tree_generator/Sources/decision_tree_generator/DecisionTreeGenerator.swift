@@ -8,7 +8,7 @@ import CryptoKit
 let thread_max = 36             // XXX move this
 
 @available(macOS 10.15, *) 
-class DecisionTreeGenerator {
+actor DecisionTreeGenerator {
 
     let decisionTypes: [OutlierGroup.TreeDecisionType]
     let decisionSplitTypes: [DecisionSplitType]
@@ -733,8 +733,8 @@ class DecisionTreeGenerator {
                                        lessThanStumpValue: lessThanStumpValue,
                                        greaterThan: FullyPositiveTreeNode(indent: 0), // not used
                                        greaterThanStumpValue: greaterThanStumpValue,
-                                       indent: indent/* + 1*/)
-            ret.stump = true 
+                                       indent: indent/* + 1*/,
+                                       stump: true)
             return ret
         } else {
             (less_response, greater_response) = 

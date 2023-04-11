@@ -71,7 +71,7 @@ struct FullyNegativeTreeNode: SwiftDecisionTree {
 // decision node which decides upon a value of some type
 // delegating to one of two further code paths
 @available(macOS 10.15, *) 
-class DecisionTreeNode: SwiftDecisionTree {
+struct DecisionTreeNode: SwiftDecisionTree {
 
     public init (type: OutlierGroup.TreeDecisionType,
                  value: Double,
@@ -79,7 +79,8 @@ class DecisionTreeNode: SwiftDecisionTree {
                  lessThanStumpValue: Double,
                  greaterThan: SwiftDecisionTree,
                  greaterThanStumpValue: Double,
-                 indent: Int)
+                 indent: Int,
+                 stump: Bool = false)
     {
         self.type = type
         self.value = value
@@ -88,11 +89,12 @@ class DecisionTreeNode: SwiftDecisionTree {
         self.indent = indent
         self.lessThanStumpValue = lessThanStumpValue
         self.greaterThanStumpValue = greaterThanStumpValue
+        self.stump = stump
     }
 
     // stump means cutting off the tree at this node, and returning stumped values
     // of the test data on either side of the split
-    var stump = false
+    let stump: Bool
     let lessThanStumpValue: Double
     let greaterThanStumpValue: Double
       
