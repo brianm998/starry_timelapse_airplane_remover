@@ -18,6 +18,11 @@ public actor NumberRunning {
     public init() { }
     
     public func increment() { count += 1 }
-    public func decrement() { count -= 1 }
+    public func decrement() { if count > 0 {count -= 1} else { Log.e("cannot decrement past zero") } }
     public func currentValue() -> UInt { count }
+    public func startOnIncrement(to max: UInt) -> Bool {
+        if count >= max { return false }
+        count += 1
+        return true
+    }
 }

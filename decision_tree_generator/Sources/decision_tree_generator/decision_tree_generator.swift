@@ -4,6 +4,8 @@ import ArgumentParser
 import BinaryCodable
 import CryptoKit
 
+let thread_max = 36             // XXX move this
+
 var start_time: Date = Date()
 
 @available(macOS 10.15, *) 
@@ -137,71 +139,75 @@ struct decision_tree_generator: ParsableCommand {
         // after the eraser is done running we should have received all the frames
         // in the frame check callback
 
+        var outlierLoadingTasks: [Task<Void,Error>] = []
+        
         // load the outliers in parallel
-        try await withLimitedThrowingTaskGroup(of: Void.self,
-                                               limitedTo: thread_max) { taskGroup in
-            for frame in frames {
-                await taskGroup.addTask(/*priority: .medium*/) {
-                    try await frame.loadOutliers()
-                }
+        for frame in frames {
+            let task = try await runThrowingTask() {
+                try await frame.loadOutliers()
             }
-            try await taskGroup.waitForAll()
+            outlierLoadingTasks.append(task)
         }
+        for task in outlierLoadingTasks { try await task.value }
+
+
+        var tasks: [Task<TreeTestResults,Never>] = []
         
         Log.i("checkpoint before loading tree test results")
-        await withLimitedTaskGroup(of: TreeTestResults.self,
-                                   limitedTo: thread_max) { taskGroup in
-            for frame in frames {
-                // check all outlier groups
+        for frame in frames {
+            // check all outlier groups
                 
-                await taskGroup.addTask() {
-                    var number_good: [String: Int] = [:]
-                    var number_bad: [String: Int] = [:]
-                    for (treeKey, _) in decisionTrees {
-                        number_good[treeKey] = 0
-                        number_bad[treeKey] = 0
-                    }
-
-                    //Log.d("should check frame \(frame.frame_index)")
-                    if let outlier_group_list = await frame.outlierGroups() {
-                        for outlier_group in outlier_group_list {
-                            if let numberGood = await outlier_group.shouldPaint {
-
-                                for (treeKey, tree) in decisionTrees {
-                                    let decisionTreeShouldPaint =  
-                                      await tree.shouldPaintFromDecisionTree(group: outlier_group) > 0
-
-
-                                    if decisionTreeShouldPaint == numberGood.willPaint {
-                                        number_good[treeKey]! += 1
-                                    } else {
-                                        number_bad[treeKey]! += 1
-                                    }
-                                    
-                                }
-                            } else {
-                                //Log.e("WTF")
-                                //fatalError("DIED")
-                            }
-                        }
-                    } else {
-                        //Log.e("WTF")
-                        //fatalError("DIED HERE")
-                    }
-                    //Log.d("number_good \(number_good) number_bad \(number_bad)")
-                    return TreeTestResults(numberGood: number_good,
-                                           numberBad: number_bad)
-                }
-            }
-            Log.d("waiting for all")
-            while let response = await taskGroup.next() {
-                Log.d("got response response.numberGood \(response.numberGood) response.numberBad \(response.numberBad) ")
+            let task = await runTask() {
+                var number_good: [String: Int] = [:]
+                var number_bad: [String: Int] = [:]
                 for (treeKey, _) in decisionTrees {
-                    num_similar_outlier_groups[treeKey]! += response.numberGood[treeKey]!
-                    num_different_outlier_groups[treeKey]! += response.numberBad[treeKey]!
+                    number_good[treeKey] = 0
+                    number_bad[treeKey] = 0
                 }
+                
+                //Log.d("should check frame \(frame.frame_index)")
+                if let outlier_group_list = await frame.outlierGroups() {
+                    for outlier_group in outlier_group_list {
+                        if let numberGood = await outlier_group.shouldPaint {
+                            
+                            for (treeKey, tree) in decisionTrees {
+                                let decisionTreeShouldPaint =  
+                                  await tree.shouldPaintFromDecisionTree(group: outlier_group) > 0
+                                
+                                
+                                if decisionTreeShouldPaint == numberGood.willPaint {
+                                    number_good[treeKey]! += 1
+                                } else {
+                                    number_bad[treeKey]! += 1
+                                }
+                                
+                            }
+                        } else {
+                            //Log.e("WTF")
+                            //fatalError("DIED")
+                        }
+                    }
+                } else {
+                    //Log.e("WTF")
+                    //fatalError("DIED HERE")
+                }
+                //Log.d("number_good \(number_good) number_bad \(number_bad)")
+                return TreeTestResults(numberGood: number_good,
+                                       numberBad: number_bad)
+            }
+            tasks.append(task)
+        }
+
+        for task in tasks {
+            let response = await task.value
+
+            Log.d("got response response.numberGood \(response.numberGood) response.numberBad \(response.numberBad) ")
+            for (treeKey, _) in decisionTrees {
+                num_similar_outlier_groups[treeKey]! += response.numberGood[treeKey]!
+                num_different_outlier_groups[treeKey]! += response.numberBad[treeKey]!
             }
         }
+
         Log.d("checkpoint at end")
         //let total = num_similar_outlier_groups + num_different_outlier_groups
         //let percentage_good = Double(num_similar_outlier_groups)/Double(total)*100
@@ -212,14 +218,17 @@ struct decision_tree_generator: ParsableCommand {
     
     // use an exising decision tree to see how well it does against a given sample
     func run_verification() {
+
         let dispatch_group = DispatchGroup()
         dispatch_group.enter()
         Task {
-        try await withThrowingLimitedTaskGroup(of: Optional<TreeTestResults>.self) { taskGroup in
+            
+            var tasks: [Task<TreeTestResults?,Error>] = []
+            
             // XXX could do these all in parallel with a task group
             var allResults: [TreeTestResults] = []
             for json_config_file_name in input_filenames {
-                try await taskGroup.addTask() {
+                let task: Task<TreeTestResults?,Error> = try await runThrowingTask() {
                     if json_config_file_name.hasSuffix("config.json") {
                         do {
                             return try await runVerification(basedUpon: json_config_file_name)
@@ -255,7 +264,7 @@ struct decision_tree_generator: ParsableCommand {
                                             // XXX how to reference hash properly here ???
                                             // could search for classes that conform to a new protocol
                                             // that defines this specific method, but it's static :(
-
+                                            
                                             for (treeKey, tree) in decisionTrees {
                                                 // XXX another task group here
                                                 let decisionTreeShouldPaint =  
@@ -273,7 +282,7 @@ struct decision_tree_generator: ParsableCommand {
                                     }
                                 }
                             }
-
+                            
                             // XXX combine these all
                             
                             //let total = number_good + number_bad
@@ -286,38 +295,40 @@ struct decision_tree_generator: ParsableCommand {
                     }
                     return nil
                 }
-            }
-            while let response = try await taskGroup.next() {
-                if let response = response {
-                    allResults.append(response)
+                tasks.append(task)
+                
+                for task in tasks {
+                    let response = try await task.value
+                    if let response = response {
+                        allResults.append(response)
+                    }
                 }
-            }
-            var number_good:[String:Int] = [:]
-            var number_bad:[String:Int] = [:]
-            for (treeKey, _) in decisionTrees {
-                number_good[treeKey] = 0
-                number_bad[treeKey] = 0
-            }
-            
-            for result in allResults {
+                var number_good:[String:Int] = [:]
+                var number_bad:[String:Int] = [:]
                 for (treeKey, _) in decisionTrees {
-                    number_good[treeKey]! += result.numberGood[treeKey]!
-                    number_bad[treeKey]! += result.numberBad[treeKey]!
+                    number_good[treeKey] = 0
+                    number_bad[treeKey] = 0
+                }
+                
+                for result in allResults {
+                    for (treeKey, _) in decisionTrees {
+                        number_good[treeKey]! += result.numberGood[treeKey]!
+                        number_bad[treeKey]! += result.numberBad[treeKey]!
+                    }
+                }
+                var outputResults: [DecisionTreeResult] = []
+                for (treeKey, _) in decisionTrees {
+                    let total = number_good[treeKey]! + number_bad[treeKey]!
+                    let percentage_good = Double(number_good[treeKey]!)/Double(total)*100
+                    let message = "For decision Tree \(treeKey) out of a total of \(total) outlier groups, \(percentage_good)% success good \(number_good[treeKey]!) vs bad \(number_bad[treeKey]!)"
+                    outputResults.append(DecisionTreeResult(score: percentage_good,
+                                                            message: message))
+                }
+                // sort these on output by percentage_good
+                for result in outputResults.sorted() {
+                    Log.i(result.message)
                 }
             }
-            var outputResults: [DecisionTreeResult] = []
-            for (treeKey, _) in decisionTrees {
-                let total = number_good[treeKey]! + number_bad[treeKey]!
-                let percentage_good = Double(number_good[treeKey]!)/Double(total)*100
-                let message = "For decision Tree \(treeKey) out of a total of \(total) outlier groups, \(percentage_good)% success good \(number_good[treeKey]!) vs bad \(number_bad[treeKey]!)"
-                outputResults.append(DecisionTreeResult(score: percentage_good,
-                                                        message: message))
-            }
-            // sort these on output by percentage_good
-            for result in outputResults.sorted() {
-                Log.i(result.message)
-            }
-        }
             dispatch_group.leave()
         }
         dispatch_group.wait()
@@ -372,55 +383,58 @@ struct decision_tree_generator: ParsableCommand {
         // in the frame check callback
 
         // load the outliers in parallel
-        try await withLimitedThrowingTaskGroup(of: Void.self) { taskGroup in
-            for frame in frames {
-                await taskGroup.addTask() {
-                    try await frame.loadOutliers()
-                }
+        var outlierLoadingTasks: [Task<Void,Error>] = []
+        
+        // load the outliers in parallel
+        for frame in frames {
+            let task = try await runThrowingTask() {
+                try await frame.loadOutliers()
             }
-            try await taskGroup.waitForAll()
+            outlierLoadingTasks.append(task)
         }
-        Log.d("outliers loaded")
+        for task in outlierLoadingTasks { try await task.value }
 
-        await withLimitedTaskGroup(of: OutlierGroupValueMapResult.self) { taskGroup in
-            for frame in frames {
-                await taskGroup.addTask() {
-                    
-                    var local_positive_test_data: [OutlierGroupValueMap] = []
-                    var local_negative_test_data: [OutlierGroupValueMap] = []
-                    if let outlier_groups = await frame.outlierGroups() {
-                        for outlier_group in outlier_groups {
-                            let name = await outlier_group.name
-                            if let should_paint = await outlier_group.shouldPaint {
-                                let will_paint = should_paint.willPaint
-
-                                let values = await outlier_group.decisionTreeGroupValues
-
-                                if will_paint {
-                                    local_positive_test_data.append(values)
-                                } else {
-                                    local_negative_test_data.append(values)
-                                }
+        var tasks: [Task<OutlierGroupValueMapResult,Never>] = []
+        
+        for frame in frames {
+            let task = await runTask() {
+                
+                var local_positive_test_data: [OutlierGroupValueMap] = []
+                var local_negative_test_data: [OutlierGroupValueMap] = []
+                if let outlier_groups = await frame.outlierGroups() {
+                    for outlier_group in outlier_groups {
+                        let name = await outlier_group.name
+                        if let should_paint = await outlier_group.shouldPaint {
+                            let will_paint = should_paint.willPaint
+                            
+                            let values = await outlier_group.decisionTreeGroupValues
+                            
+                            if will_paint {
+                                local_positive_test_data.append(values)
                             } else {
-                                Log.e("outlier group \(name) has no shouldPaint value")
-                                fatalError("outlier group \(name) has no shouldPaint value")
+                                local_negative_test_data.append(values)
                             }
+                        } else {
+                            Log.e("outlier group \(name) has no shouldPaint value")
+                            fatalError("outlier group \(name) has no shouldPaint value")
                         }
-                    } else {
-                        Log.e("cannot get outlier groups for frame \(frame.frame_index)")
-                        fatalError("cannot get outlier groups for frame \(frame.frame_index)")
                     }
-                    return OutlierGroupValueMapResult(
-                      positive_test_data: local_positive_test_data,
-                      negative_test_data: local_negative_test_data)
+                } else {
+                    Log.e("cannot get outlier groups for frame \(frame.frame_index)")
+                    fatalError("cannot get outlier groups for frame \(frame.frame_index)")
                 }
+                return OutlierGroupValueMapResult(
+                  positive_test_data: local_positive_test_data,
+                  negative_test_data: local_negative_test_data)
             }
-
-            while let response = await taskGroup.next() {
-                positive_test_data += response.positive_test_data
-                negative_test_data += response.negative_test_data
-            }
-        }    
+            tasks.append(task)
+        }
+        
+        for task in tasks {
+            let response = await task.value
+            positive_test_data += response.positive_test_data
+            negative_test_data += response.negative_test_data
+        }
 
         return (positive_test_data, negative_test_data)
     }
@@ -473,62 +487,65 @@ struct decision_tree_generator: ParsableCommand {
                     }
                 } else {
                     if file_manager.fileExists(atPath: json_config_file_name) {
-                        try await withThrowingLimitedTaskGroup(of: OutlierGroupValueMapResult.self,
-                                                               limitedTo: thread_max) { taskGroup in
-                            
-                            // load a list of OutlierGroupValueMatrix
-                            // and get outlierGroupValues from them
-                            let contents = try file_manager.contentsOfDirectory(atPath: json_config_file_name)
-                            for file in contents {
-                                if file.hasSuffix("_outlier_values.bin") {
-                                    let filename = "\(json_config_file_name)/\(file)"
-                                    
-                                    try await taskGroup.addTask() {
-                                        var local_positive_test_data: [OutlierGroupValueMap] = []
-                                        var local_negative_test_data: [OutlierGroupValueMap] = []
-                                        
-                                        Log.d("\(file) loading data")
 
-                                        // load data
-                                        // process a frames worth of outlier data
-                                        let imageURL = NSURL(fileURLWithPath: filename, isDirectory: false)
-                                        
-                                        let (data, _) = try await URLSession.shared.data(for: URLRequest(url: imageURL as URL))
-                                        
-                                        //Log.d("\(file) data loaded")
-                                        let decoder = BinaryDecoder()
-                                        do {
-                                            let matrix = try decoder.decode(OutlierGroupValueMatrix.self, from: data)
-                                            //Log.d("\(file) data decoded")
-                                            //if let json = matrix.prettyJson { print(json) }
-                                            //Log.d("frame \(frame_index) matrix \(matrix)")
-                                            for values in matrix.values {
-                                                let valueMap = OutlierGroupValueMap() { index in
-                                                    return values.values[index]
-                                                }
-                                                if values.shouldPaint {
-                                                    local_positive_test_data.append(valueMap)
-                                                } else {
-                                                    local_negative_test_data.append(valueMap)
-                                                }
+
+                        var tasks: [Task<OutlierGroupValueMapResult,Error>] = []
+                            
+                        // load a list of OutlierGroupValueMatrix
+                        // and get outlierGroupValues from them
+                        let contents = try file_manager.contentsOfDirectory(atPath: json_config_file_name)
+                        for file in contents {
+                            if file.hasSuffix("_outlier_values.bin") {
+                                let filename = "\(json_config_file_name)/\(file)"
+                                
+                                let task = try await runThrowingTask() {
+                                    var local_positive_test_data: [OutlierGroupValueMap] = []
+                                    var local_negative_test_data: [OutlierGroupValueMap] = []
+                                    
+                                    Log.d("\(file) loading data")
+                                    
+                                    // load data
+                                    // process a frames worth of outlier data
+                                    let imageURL = NSURL(fileURLWithPath: filename, isDirectory: false)
+                                    
+                                    let (data, _) = try await URLSession.shared.data(for: URLRequest(url: imageURL as URL))
+                                    
+                                    //Log.d("\(file) data loaded")
+                                    let decoder = BinaryDecoder()
+                                    do {
+                                        let matrix = try decoder.decode(OutlierGroupValueMatrix.self, from: data)
+                                        //Log.d("\(file) data decoded")
+                                        //if let json = matrix.prettyJson { print(json) }
+                                        //Log.d("frame \(frame_index) matrix \(matrix)")
+                                        for values in matrix.values {
+                                            let valueMap = OutlierGroupValueMap() { index in
+                                                return values.values[index]
                                             }
-                                            
-                                        } catch {
-                                            Log.e("\(file): \(error)")
+                                            if values.shouldPaint {
+                                                local_positive_test_data.append(valueMap)
+                                            } else {
+                                                local_negative_test_data.append(valueMap)
+                                            }
                                         }
-                                        //Log.i("got \(local_positive_test_data.count)/\(local_negative_test_data.count) test data from \(file)")
                                         
-                                        return OutlierGroupValueMapResult(
-                                          positive_test_data: local_positive_test_data,
-                                          negative_test_data: local_negative_test_data)
+                                    } catch {
+                                        Log.e("\(file): \(error)")
                                     }
+                                    //Log.i("got \(local_positive_test_data.count)/\(local_negative_test_data.count) test data from \(file)")
+                                    
+                                    return OutlierGroupValueMapResult(
+                                      positive_test_data: local_positive_test_data,
+                                      negative_test_data: local_negative_test_data)
                                 }
-                            }
-                            while let response = try await taskGroup.next() {
-                                positive_test_data += response.positive_test_data
-                                negative_test_data += response.negative_test_data
+                                tasks.append(task)
                             }
                         }
+                        for task in tasks {
+                            let response = try await task.value
+                            positive_test_data += response.positive_test_data
+                            negative_test_data += response.negative_test_data
+                        }
+
                     }
                 }
             }
@@ -539,23 +556,24 @@ struct decision_tree_generator: ParsableCommand {
                     let max = OutlierGroup.TreeDecisionType.allCases.count
                     let combinations = decisionTypes.combinations(ofCount: min..<max)
                     Log.i("calculating \(combinations.count) different decision trees")
-                    try await withThrowingLimitedTaskGroup(of: Void.self,
-                                                           limitedTo: 1/*thread_max*/) { taskGroup in
-                        for (index, types) in combinations.enumerated() {
-                            Log.i("calculating tree \(index) with \(types)")
-                            let positiveData = positive_test_data.map { $0 } // copy data for each tree generation
-                            let negativeData = negative_test_data.map { $0 }
-                            let _input_filenames = input_filenames
-                            try await taskGroup.addTask() {
-                                try await self.writeTree(withTypes: types,
-                                                         withPositiveData: positiveData,
-                                                         andNegativeData: negativeData,
-                                                         inputFilenames: _input_filenames,
-                                                         maxDepth: maxDepth)
-                            }
+
+                    var tasks: [Task<Void,Error>] = []
+                    
+                    for (index, types) in combinations.enumerated() {
+                        Log.i("calculating tree \(index) with \(types)")
+                        let positiveData = positive_test_data.map { $0 } // copy data for each tree generation
+                        let negativeData = negative_test_data.map { $0 }
+                        let _input_filenames = input_filenames
+                        let task = try await runThrowingTask() {
+                            try await self.writeTree(withTypes: types,
+                                                     withPositiveData: positiveData,
+                                                     andNegativeData: negativeData,
+                                                     inputFilenames: _input_filenames,
+                                                     maxDepth: maxDepth)
                         }
-                        try await taskGroup.waitForAll()
+                        tasks.append(task)
                     }
+                    for task in tasks { try await task.value }
                 } else {
                     try await self.writeTree(withTypes: decisionTypes,
                                              withPositiveData: positive_test_data,
