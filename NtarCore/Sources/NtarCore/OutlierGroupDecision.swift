@@ -17,24 +17,11 @@ public enum DecisionSplitType: String {
 
 @available(macOS 10.15, *)
 // a typed vector of values for a single outlier group
-public actor OutlierGroupValueMap {
+public struct OutlierGroupValueMap {
     // indexed by outlierGroup.sortOrder
-    private var values: [Double]
+    public var values: [Double]
     public init() {
         values = [Double](repeating: 0.0, count: OutlierGroup.TreeDecisionType.allCases.count)
-    }
-
-    public func set(atIndex index: Int, to newValue: Double) {
-        values[index] = newValue
-    }
-
-    public func get(at index: Int) -> Double? {
-        //Log.d("get(atIndex: \(index))")
-        if index < 0 || index >= values.count { return nil }
-        let ret = values[index]
-        //let ret = 0.0
-        //Log.d("get(atIndex: \(index)) = \(ret)")
-        return ret
     }
 }
 
@@ -156,7 +143,7 @@ public class OutlierGroupValueMatrix: Codable {
             for value in values {
                 var groupValues = OutlierGroupValueMap()
                 for (index, type) in types.enumerated() {
-                    await groupValues.set(atIndex: type.sortOrder, to: value.values[index])
+                    groupValues.values[type.sortOrder] = value.values[index]
                 }
                 if(value.shouldPaint) {
                     shouldPaintRet.append(groupValues)
@@ -212,7 +199,7 @@ public extension OutlierGroup {
             var values = OutlierGroupValueMap()
             for type in OutlierGroup.TreeDecisionType.allCases {
                 let value = await self.decisionTreeValue(for: type)
-                await values.set(atIndex: type.sortOrder, to: value)
+                values.values[type.sortOrder] = value
                 //Log.d("frame \(frame_index) type \(type) value \(value)")
             }
             return values

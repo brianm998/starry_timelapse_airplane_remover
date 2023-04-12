@@ -507,8 +507,7 @@ struct decision_tree_generator: ParsableCommand {
                                                 
                                                 var valueMap = OutlierGroupValueMap()
                                                 for (index, type) in matrix.types.enumerated() {
-                                                    await valueMap.set(atIndex: type.sortOrder,
-                                                                       to: values.values[index])
+                                                    valueMap.values[type.sortOrder] = values.values[index]
                                                 }
                                                 if values.shouldPaint {
                                                     local_positive_test_data.append(valueMap)
@@ -627,21 +626,18 @@ struct decision_tree_generator: ParsableCommand {
         } catch {
             Log.e("\(error)")
         }
-
     }
     
     func log(valueMaps: [OutlierGroupValueMap]) async {
         for (index, valueMap) in valueMaps.enumerated() {
             var log = "\(index) - "
             for type in OutlierGroup.TreeDecisionType.allCases {
-                if let value = await valueMap.get(at: type.sortOrder) {
-                    log += "\(String(format: "%.3g", value)) "
-                }
+                 let value = valueMap.values[type.sortOrder] 
+                 log += "\(String(format: "%.3g", value)) "
             }
             Log.d(log)
         }
     }
-    
 }
 
 @available(macOS 10.15, *) 
