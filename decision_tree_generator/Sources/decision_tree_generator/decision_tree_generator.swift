@@ -147,7 +147,7 @@ struct decision_tree_generator: ParsableCommand {
             }
             try await taskGroup.waitForAll()
         }
-
+        
         Log.i("checkpoint before loading tree test results")
         await withLimitedTaskGroup(of: TreeTestResults.self,
                                    limitedTo: thread_max) { taskGroup in
@@ -166,7 +166,6 @@ struct decision_tree_generator: ParsableCommand {
                     if let outlier_group_list = await frame.outlierGroups() {
                         for outlier_group in outlier_group_list {
                             if let numberGood = await outlier_group.shouldPaint {
-
 
                                 for (treeKey, tree) in decisionTrees {
                                     let decisionTreeShouldPaint =  
@@ -504,10 +503,8 @@ struct decision_tree_generator: ParsableCommand {
                                             //if let json = matrix.prettyJson { print(json) }
                                             //Log.d("frame \(frame_index) matrix \(matrix)")
                                             for values in matrix.values {
-                                                
-                                                var valueMap = OutlierGroupValueMap()
-                                                for (index, type) in matrix.types.enumerated() {
-                                                    valueMap.values[type.sortOrder] = values.values[index]
+                                                let valueMap = OutlierGroupValueMap() { index in
+                                                    return values.values[index]
                                                 }
                                                 if values.shouldPaint {
                                                     local_positive_test_data.append(valueMap)
@@ -536,27 +533,39 @@ struct decision_tree_generator: ParsableCommand {
                 }
             }
 
-            if produce_all_type_combinations {
-                let min = OutlierGroup.TreeDecisionType.allCases.count-2 // XXX make a parameter
-                let max = OutlierGroup.TreeDecisionType.allCases.count
-                let combinations = decisionTypes.combinations(ofCount: min..<max)
-                Log.i("calculating \(combinations.count) different decision trees")
-                for (index, types) in combinations.enumerated() {
-                    Log.i("calculating tree \(index) with \(types)")
-                    await self.writeTree(withTypes: types,
-                                         withPositiveData: positive_test_data,
-                                         andNegativeData: negative_test_data,
-                                         inputFilenames: input_filenames,
-                                         maxDepth: maxDepth)
+            do {
+                if produce_all_type_combinations {
+                    let min = OutlierGroup.TreeDecisionType.allCases.count-1 // XXX make a parameter
+                    let max = OutlierGroup.TreeDecisionType.allCases.count
+                    let combinations = decisionTypes.combinations(ofCount: min..<max)
+                    Log.i("calculating \(combinations.count) different decision trees")
+                    try await withThrowingLimitedTaskGroup(of: Void.self,
+                                                           limitedTo: 1/*thread_max*/) { taskGroup in
+                        for (index, types) in combinations.enumerated() {
+                            Log.i("calculating tree \(index) with \(types)")
+                            let positiveData = positive_test_data.map { $0 } // copy data for each tree generation
+                            let negativeData = negative_test_data.map { $0 }
+                            let _input_filenames = input_filenames
+                            try await taskGroup.addTask() {
+                                try await self.writeTree(withTypes: types,
+                                                         withPositiveData: positiveData,
+                                                         andNegativeData: negativeData,
+                                                         inputFilenames: _input_filenames,
+                                                         maxDepth: maxDepth)
+                            }
+                        }
+                        try await taskGroup.waitForAll()
+                    }
+                } else {
+                    try await self.writeTree(withTypes: decisionTypes,
+                                             withPositiveData: positive_test_data,
+                                             andNegativeData: negative_test_data,
+                                             inputFilenames: input_filenames,
+                                             maxDepth: maxDepth)
                 }
-            } else {
-                await self.writeTree(withTypes: decisionTypes,
-                                     withPositiveData: positive_test_data,
-                                     andNegativeData: negative_test_data,
-                                     inputFilenames: input_filenames,
-                                     maxDepth: maxDepth)
+            } catch {
+                Log.e("\(error)")
             }
-            
             dispatch_group.leave()
         }
         dispatch_group.wait()
@@ -566,7 +575,7 @@ struct decision_tree_generator: ParsableCommand {
                    withPositiveData positive_test_data: [OutlierGroupValueMap],
                    andNegativeData negative_test_data: [OutlierGroupValueMap],
                    inputFilenames: [String],
-                   maxDepth: Int? = nil) async {
+                   maxDepth: Int? = nil) async throws {
         /*
         await self.writeTree(withTypes: decisionTypes,
                              andSplitTypes: [.mean],
@@ -575,7 +584,7 @@ struct decision_tree_generator: ParsableCommand {
                              inputFilenames: inputFilenames)
 */
         // .median seems best, but more exploration possible
-        await self.writeTree(withTypes: decisionTypes,
+        try await self.writeTree(withTypes: decisionTypes,
                              andSplitTypes: [.median],
                              withPositiveData: positive_test_data,
                              andNegativeData: negative_test_data,
@@ -595,7 +604,7 @@ struct decision_tree_generator: ParsableCommand {
                    withPositiveData positive_test_data: [OutlierGroupValueMap],
                    andNegativeData negative_test_data: [OutlierGroupValueMap],
                    inputFilenames: [String],
-                   maxDepth: Int? = nil) async {
+                   maxDepth: Int? = nil) async throws -> String {
         
         Log.i("Calculating decision tree with \(positive_test_data.count) should paint \(negative_test_data.count) should not paint test data outlier groups")
 
@@ -604,28 +613,26 @@ struct decision_tree_generator: ParsableCommand {
                                               maxDepth: maxDepth)
 
         let base_filename = "../NtarDecisionTrees/Sources/NtarDecisionTrees/OutlierGroupDecisionTree_"
-        
-        do {
-            let (tree_swift_code, filename) =
-              try await generator.generateTree(withPositiveData: positive_test_data,
-                                               andNegativeData: negative_test_data,
-                                               inputFilenames: input_filenames,
-                                               baseFilename: base_filename)
 
-            // save this generated swift code to a file
-            if file_manager.fileExists(atPath: filename) {
-                Log.i("overwriting already existing filename \(filename)")
-                try file_manager.removeItem(atPath: filename)
-            }
+        let (tree_swift_code, filename, hash_prefix) =
+          try await generator.generateTree(withPositiveData: positive_test_data,
+                                           andNegativeData: negative_test_data,
+                                           inputFilenames: input_filenames,
+                                           baseFilename: base_filename)
 
-            // write to file
-            file_manager.createFile(atPath: filename,
-                                    contents: tree_swift_code.data(using: .utf8),
-                                    attributes: nil)
-            Log.i("wrote \(filename)")
-        } catch {
-            Log.e("\(error)")
+        // save this generated swift code to a file
+        if file_manager.fileExists(atPath: filename) {
+            Log.i("overwriting already existing filename \(filename)")
+            try file_manager.removeItem(atPath: filename)
         }
+
+        // write to file
+        file_manager.createFile(atPath: filename,
+                                contents: tree_swift_code.data(using: .utf8),
+                                attributes: nil)
+        Log.i("wrote \(filename)")
+
+        return hash_prefix
     }
     
     func log(valueMaps: [OutlierGroupValueMap]) async {

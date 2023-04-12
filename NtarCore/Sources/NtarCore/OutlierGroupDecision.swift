@@ -19,9 +19,19 @@ public enum DecisionSplitType: String {
 // a typed vector of values for a single outlier group
 public struct OutlierGroupValueMap {
     // indexed by outlierGroup.sortOrder
-    public var values: [Double]
-    public init() {
-        values = [Double](repeating: 0.0, count: OutlierGroup.TreeDecisionType.allCases.count)
+    public let values: [Double]
+    public init(_ values: [Double]) {
+        self.values = values
+    }
+    public static func rawValues() -> [Double] {
+        return [Double](repeating: 0.0, count: OutlierGroup.TreeDecisionType.allCases.count)
+    }
+    public init(_ closure: (Int) -> Double) {
+        var values = OutlierGroupValueMap.rawValues()
+        for i in 0 ..< OutlierGroup.TreeDecisionType.allCases.count {
+            values[i] = closure(i)
+        }
+        self.values = values
     }
 }
 
@@ -141,9 +151,8 @@ public class OutlierGroupValueMatrix: Codable {
             var shouldPaintRet: [OutlierGroupValueMap] = []
             var shoultNotPaintRet: [OutlierGroupValueMap] = []
             for value in values {
-                var groupValues = OutlierGroupValueMap()
-                for (index, type) in types.enumerated() {
-                    groupValues.values[type.sortOrder] = value.values[index]
+                let groupValues = OutlierGroupValueMap() { index in 
+                    return value.values[index]
                 }
                 if(value.shouldPaint) {
                     shouldPaintRet.append(groupValues)
@@ -196,13 +205,13 @@ public extension OutlierGroup {
 
     var decisionTreeGroupValues: OutlierGroupValueMap {
         get async {
-            var values = OutlierGroupValueMap()
+            var rawValues = OutlierGroupValueMap.rawValues()
             for type in OutlierGroup.TreeDecisionType.allCases {
                 let value = await self.decisionTreeValue(for: type)
-                values.values[type.sortOrder] = value
+                rawValues[type.sortOrder] = value
                 //Log.d("frame \(frame_index) type \(type) value \(value)")
             }
-            return values
+            return OutlierGroupValueMap(rawValues)
         } 
     }
     
