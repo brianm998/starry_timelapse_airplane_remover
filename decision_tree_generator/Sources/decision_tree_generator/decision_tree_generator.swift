@@ -548,7 +548,8 @@ struct decision_tree_generator: ParsableCommand {
                 } else {
                     if file_manager.fileExists(atPath: json_config_file_name) {
 
-                        var tasks: [Task<OutlierGroupValueMapResult,Error>] = []
+                        try await withLimitedThrowingTaskGroup(of: OutlierGroupValueMapResult.self) { taskGroup in
+
                             
                         // load a list of OutlierGroupValueMatrix
                         // and get outlierGroupValues from them
@@ -556,55 +557,57 @@ struct decision_tree_generator: ParsableCommand {
                         for file in contents {
                             if file.hasSuffix("_outlier_values.bin") {
                                 let filename = "\(json_config_file_name)/\(file)"
-                                
-                                let task = try await runThrowingTask() {
-                                    var local_positive_test_data: [OutlierGroupValueMap] = []
-                                    var local_negative_test_data: [OutlierGroupValueMap] = []
-                                    
-                                    Log.d("\(file) loading data")
-                                    
-                                    // load data
-                                    // process a frames worth of outlier data
-                                    let imageURL = NSURL(fileURLWithPath: filename, isDirectory: false)
-                                    
-                                    let (data, _) = try await URLSession.shared.data(for: URLRequest(url: imageURL as URL))
-                                    
-                                    //Log.d("\(file) data loaded")
-                                    let decoder = BinaryDecoder()
-                                    do {
-                                        let matrix = try decoder.decode(OutlierGroupValueMatrix.self, from: data)
-                                        //Log.d("\(file) data decoded")
-                                        //if let json = matrix.prettyJson { print(json) }
-                                        //Log.d("frame \(frame_index) matrix \(matrix)")
-                                        for values in matrix.values {
-                                            let valueMap = OutlierGroupValueMap() { index in
-                                                return values.values[index]
-                                            }
-                                            if values.shouldPaint {
-                                                local_positive_test_data.append(valueMap)
-                                            } else {
-                                                local_negative_test_data.append(valueMap)
-                                            }
-                                        }
+
+                                taskGroup.addTask() { 
+                                    let task = try await runThrowingTask() {
+                                        var local_positive_test_data: [OutlierGroupValueMap] = []
+                                        var local_negative_test_data: [OutlierGroupValueMap] = []
                                         
-                                    } catch {
-                                        Log.e("\(file): \(error)")
+                                        Log.d("\(file) loading data")
+                                        
+                                        // load data
+                                        // process a frames worth of outlier data
+                                        let imageURL = NSURL(fileURLWithPath: filename, isDirectory: false)
+                                        
+                                        let (data, _) = try await URLSession.shared.data(for: URLRequest(url: imageURL as URL))
+                                        
+                                        //Log.d("\(file) data loaded")
+                                        let decoder = BinaryDecoder()
+                                        do {
+                                            let matrix = try decoder.decode(OutlierGroupValueMatrix.self, from: data)
+                                            //Log.d("\(file) data decoded")
+                                            //if let json = matrix.prettyJson { print(json) }
+                                            //Log.d("frame \(frame_index) matrix \(matrix)")
+                                            for values in matrix.values {
+                                                let valueMap = OutlierGroupValueMap() { index in
+                                                    return values.values[index]
+                                                }
+                                                if values.shouldPaint {
+                                                    local_positive_test_data.append(valueMap)
+                                                } else {
+                                                    local_negative_test_data.append(valueMap)
+                                                }
+                                            }
+                                            
+                                        } catch {
+                                            Log.e("\(file): \(error)")
+                                        }
+                                        //Log.i("got \(local_positive_test_data.count)/\(local_negative_test_data.count) test data from \(file)")
+                                        
+                                        return OutlierGroupValueMapResult(
+                                          positive_test_data: local_positive_test_data,
+                                          negative_test_data: local_negative_test_data)
                                     }
-                                    //Log.i("got \(local_positive_test_data.count)/\(local_negative_test_data.count) test data from \(file)")
-                                    
-                                    return OutlierGroupValueMapResult(
-                                      positive_test_data: local_positive_test_data,
-                                      negative_test_data: local_negative_test_data)
                                 }
-                                tasks.append(task)
                             }
                         }
-                        for task in tasks {
-                            let response = try await task.value
-                            positive_test_data += response.positive_test_data
-                            negative_test_data += response.negative_test_data
+                        taskGroup.forEach() { task in
+                            if let task = task {
+                                let response = try await task.value
+                                positive_test_data += response.positive_test_data
+                                negative_test_data += response.negative_test_data
+                            }
                         }
-
                     }
                 }
             }
