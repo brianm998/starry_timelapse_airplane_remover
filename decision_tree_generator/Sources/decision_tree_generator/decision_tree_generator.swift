@@ -542,26 +542,12 @@ struct decision_tree_generator: ParsableCommand {
                         fatalError("couldn't get config from \(json_config_file_name)")
                     }
                 } else {
+                    // here we are reading pre-computed values for each data point
                     if file_manager.fileExists(atPath: json_config_file_name) {
-
-                        try await withLimitedThrowingTaskGroup(of: OutlierGroupValueMapResult.self) { taskGroup in
-                            // load a list of OutlierGroupValueMatrix
-                            // and get outlierGroupValues from them
-                            let contents = try file_manager.contentsOfDirectory(atPath: json_config_file_name)
-                            for file in contents {
-                                if file.hasSuffix("_outlier_values.bin") {
-                                    let filename = "\(json_config_file_name)/\(file)"
-                                    
-                                    try await taskGroup.addTask() {
-                                        return try await loadDataFrom(filename: filename)
-                                    }
-                                }
-                            }
-                            try await taskGroup.forEach() { response in
-                                positive_test_data += response.positive_test_data
-                                negative_test_data += response.negative_test_data
-                            }
-                        }
+                        // load here
+                        let result = try await loadDataFrom(dirname: json_config_file_name)
+                        positive_test_data += result.positive_test_data
+                        negative_test_data += result.negative_test_data
                     }
                 }
             }
@@ -605,6 +591,33 @@ struct decision_tree_generator: ParsableCommand {
         dispatch_group.wait()
     }
 
+    func loadDataFrom(dirname: String) async throws -> OutlierGroupValueMapResult {
+        var positive_test_data: [OutlierGroupValueMap] = []
+        var negative_test_data: [OutlierGroupValueMap] = []
+
+        try await withLimitedThrowingTaskGroup(of: OutlierGroupValueMapResult.self) { taskGroup in
+            // load a list of OutlierGroupValueMatrix
+            // and get outlierGroupValues from them
+            let contents = try file_manager.contentsOfDirectory(atPath: dirname)
+            for file in contents {
+                if file.hasSuffix("_outlier_values.bin") {
+                    let filename = "\(dirname)/\(file)"
+                    
+                    try await taskGroup.addTask() {
+                        return try await loadDataFrom(filename: filename)
+                    }
+                }
+            }
+            try await taskGroup.forEach() { response in
+                positive_test_data += response.positive_test_data
+                negative_test_data += response.negative_test_data
+            }
+        }
+        return OutlierGroupValueMapResult(
+          positive_test_data: positive_test_data,
+          negative_test_data: negative_test_data)
+    }
+    
     func loadDataFrom(filename: String) async throws -> OutlierGroupValueMapResult {
         var local_positive_test_data: [OutlierGroupValueMap] = []
         var local_negative_test_data: [OutlierGroupValueMap] = []
@@ -621,9 +634,7 @@ struct decision_tree_generator: ParsableCommand {
         let decoder = BinaryDecoder()
 
         let matrix = try decoder.decode(OutlierGroupValueMatrix.self, from: data)
-        //Log.d("\(file) data decoded")
-        //if let json = matrix.prettyJson { print(json) }
-        //Log.d("frame \(frame_index) matrix \(matrix)")
+
         for values in matrix.values {
             let valueMap = OutlierGroupValueMap() { index in
                 return values.values[index]
