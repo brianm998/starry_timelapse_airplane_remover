@@ -27,10 +27,58 @@ struct DecisionTreeResult: Comparable {
         return lhs.score < rhs.score
     }
 }
+func hostCPULoadInfo() -> host_cpu_load_info? {
+    let HOST_CPU_LOAD_INFO_COUNT = MemoryLayout<host_cpu_load_info>.stride/MemoryLayout<integer_t>.stride
+    var size = mach_msg_type_number_t(HOST_CPU_LOAD_INFO_COUNT)
+    var cpuLoadInfo = host_cpu_load_info()
 
+    let result = withUnsafeMutablePointer(to: &cpuLoadInfo) {
+        $0.withMemoryRebound(to: integer_t.self, capacity: HOST_CPU_LOAD_INFO_COUNT) {
+            host_statistics(mach_host_self(), HOST_CPU_LOAD_INFO, $0, &size)
+        }
+    }
+    if result != KERN_SUCCESS{
+        print("Error  - \(#file): \(#function) - kern_result_t = \(result)")
+        return nil
+    }
+    return cpuLoadInfo
+}
 // how much do we truncate the sha256 hash when embedding it into code
 let sha_prefix_size = 8
-
+    func cpuUsage() -> Double {
+        var totalUsageOfCPU: Double = 0.0
+        var threadsList = UnsafeMutablePointer(mutating: [thread_act_t]())
+        var threadsCount = mach_msg_type_number_t(0)
+        let threadsResult = withUnsafeMutablePointer(to: &threadsList) {
+            return $0.withMemoryRebound(to: thread_act_array_t?.self, capacity: 1) {
+                task_threads(mach_task_self_, $0, &threadsCount)
+            }
+        }
+        
+        if threadsResult == KERN_SUCCESS {
+            for index in 0..<threadsCount {
+                var threadInfo = thread_basic_info()
+                var threadInfoCount = mach_msg_type_number_t(THREAD_INFO_MAX)
+                let infoResult = withUnsafeMutablePointer(to: &threadInfo) {
+                    $0.withMemoryRebound(to: integer_t.self, capacity: 1) {
+                        thread_info(threadsList[Int(index)], thread_flavor_t(THREAD_BASIC_INFO), $0, &threadInfoCount)
+                    }
+                }
+                
+                guard infoResult == KERN_SUCCESS else {
+                    break
+                }
+                
+                let threadBasicInfo = threadInfo as thread_basic_info
+                if threadBasicInfo.flags & TH_FLAGS_IDLE == 0 {
+                    totalUsageOfCPU = (totalUsageOfCPU + (Double(threadBasicInfo.cpu_usage) / Double(TH_USAGE_SCALE) * 100.0))
+                }
+            }
+        }
+        
+        vm_deallocate(mach_task_self_, vm_address_t(UInt(bitPattern: threadsList)), vm_size_t(Int(threadsCount) * MemoryLayout<thread_t>.stride))
+        return totalUsageOfCPU
+    }
 
 @main
 @available(macOS 10.15, *) 
@@ -80,9 +128,9 @@ struct decision_tree_generator: ParsableCommand {
         Log.handlers[.file] = try FileLogHandler(at: .verbose) // XXX make this a command line parameter
 
         start_time = Date()
-        Log.i("Starting")
+        
+        Log.i("Starting with cpuUsage \(cpuUsage())")
         Log.d("in debug mode")
-
         if verification_mode {
             run_verification()
         } else {
@@ -134,7 +182,7 @@ struct decision_tree_generator: ParsableCommand {
 
         try eraser.run()
 
-
+        
         Log.i("loading outliers")
         // after the eraser is done running we should have received all the frames
         // in the frame check callback
@@ -156,7 +204,7 @@ struct decision_tree_generator: ParsableCommand {
         Log.i("checkpoint before loading tree test results")
         for frame in frames {
             // check all outlier groups
-                
+            
             let task = await runTask() {
                 var number_good: [String: Int] = [:]
                 var number_bad: [String: Int] = [:]
@@ -169,22 +217,26 @@ struct decision_tree_generator: ParsableCommand {
                 if let outlier_group_list = await frame.outlierGroups() {
                     for outlier_group in outlier_group_list {
                         if let numberGood = await outlier_group.shouldPaint {
-                            
-                            for (treeKey, tree) in decisionTrees {
-                                let decisionTreeShouldPaint =  
-                                  await tree.shouldPaintFromDecisionTree(group: outlier_group) > 0
-                                
-                                
-                                if decisionTreeShouldPaint == numberGood.willPaint {
-                                    number_good[treeKey]! += 1
-                                } else {
-                                    number_bad[treeKey]! += 1
+                            await withLimitedTaskGroup(of: (treeKey:String, shouldPaint:Bool).self) { taskGroup in
+                                for (treeKey, tree) in decisionTrees {
+                                    await taskGroup.addTask() {
+                                        let decisionTreeShouldPaint =  
+                                          await tree.shouldPaintFromDecisionTree(group: outlier_group) > 0
+                                        
+                                        return (treeKey, decisionTreeShouldPaint == numberGood.willPaint)
+                                    }
+                                }
+                                await taskGroup.forEach() { result in
+                                    if let result = result {
+                                        if result.shouldPaint {
+                                            number_good[result.treeKey]! += 1
+                                        } else {
+                                            number_bad[result.treeKey]! += 1
+                                        }
+                                    }
                                 }
                                 
                             }
-                        } else {
-                            //Log.e("WTF")
-                            //fatalError("DIED")
                         }
                     }
                 } else {
@@ -197,17 +249,17 @@ struct decision_tree_generator: ParsableCommand {
             }
             tasks.append(task)
         }
-
+        
         for task in tasks {
             let response = await task.value
-
+            
             Log.d("got response response.numberGood \(response.numberGood) response.numberBad \(response.numberBad) ")
             for (treeKey, _) in decisionTrees {
                 num_similar_outlier_groups[treeKey]! += response.numberGood[treeKey]!
                 num_different_outlier_groups[treeKey]! += response.numberBad[treeKey]!
             }
         }
-
+        
         Log.d("checkpoint at end")
         //let total = num_similar_outlier_groups + num_different_outlier_groups
         //let percentage_good = Double(num_similar_outlier_groups)/Double(total)*100
@@ -218,14 +270,13 @@ struct decision_tree_generator: ParsableCommand {
     
     // use an exising decision tree to see how well it does against a given sample
     func run_verification() {
-
+        
         let dispatch_group = DispatchGroup()
         dispatch_group.enter()
         Task {
             
             var tasks: [Task<TreeTestResults?,Error>] = []
             
-            // XXX could do these all in parallel with a task group
             var allResults: [TreeTestResults] = []
             for json_config_file_name in input_filenames {
                 let task: Task<TreeTestResults?,Error> = try await runThrowingTask() {
@@ -264,16 +315,23 @@ struct decision_tree_generator: ParsableCommand {
                                             // XXX how to reference hash properly here ???
                                             // could search for classes that conform to a new protocol
                                             // that defines this specific method, but it's static :(
-                                            
-                                            for (treeKey, tree) in decisionTrees {
-                                                // XXX another task group here
-                                                let decisionTreeShouldPaint =  
-                                                  tree.shouldPaintFromDecisionTree(types: matrix.types,
-                                                                                   values: values.values) > 0
-                                                if decisionTreeShouldPaint == values.shouldPaint {
-                                                    number_good[treeKey]! += 1
-                                                } else {
-                                                    number_bad[treeKey]! += 1
+                                            await withLimitedTaskGroup(of: (treeKey:String, shouldPaint:Bool).self) { taskGroup in
+                                                for (treeKey, tree) in decisionTrees {
+                                                    await taskGroup.addTask() {
+                                                        let decisionTreeShouldPaint =  
+                                                          tree.shouldPaintFromDecisionTree(types: matrix.types,
+                                                                                           values: values.values) > 0
+                                                        return (treeKey, decisionTreeShouldPaint == values.shouldPaint)
+                                                    }
+                                                }
+                                                await taskGroup.forEach() { result in
+                                                    if let result = result {
+                                                        if result.shouldPaint {
+                                                            number_good[result.treeKey]! += 1
+                                                        } else {
+                                                            number_bad[result.treeKey]! += 1
+                                                        }
+                                                    }
                                                 }
                                             }
                                         }
@@ -282,7 +340,6 @@ struct decision_tree_generator: ParsableCommand {
                                     }
                                 }
                             }
-                            
                             // XXX combine these all
                             
                             //let total = number_good + number_bad
