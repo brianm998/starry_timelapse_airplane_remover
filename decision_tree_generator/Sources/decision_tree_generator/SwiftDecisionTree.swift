@@ -2,14 +2,6 @@
 import Foundation
 import NtarCore
 
-// represents an abstract node in the decision tree
-// that knows how to render itself as a String of swift code
-@available(macOS 10.15, *) 
-protocol SwiftDecisionTree: OutlierGroupClassifier {
-    // returns a string containing swift code that eventually returns a double between -1 and 1
-    var swiftCode: String { get }
-}
-
 // end leaf node which always returns 100% positive
 @available(macOS 10.15, *) 
 struct FullyPositiveTreeNode: SwiftDecisionTree {
