@@ -545,8 +545,6 @@ struct decision_tree_generator: ParsableCommand {
                     if file_manager.fileExists(atPath: json_config_file_name) {
 
                         try await withLimitedThrowingTaskGroup(of: OutlierGroupValueMapResult.self) { taskGroup in
-                            
-                            
                             // load a list of OutlierGroupValueMatrix
                             // and get outlierGroupValues from them
                             let contents = try file_manager.contentsOfDirectory(atPath: json_config_file_name)
@@ -554,44 +552,8 @@ struct decision_tree_generator: ParsableCommand {
                                 if file.hasSuffix("_outlier_values.bin") {
                                     let filename = "\(json_config_file_name)/\(file)"
                                     
-                                    try await taskGroup.addTask() { 
-                                        var local_positive_test_data: [OutlierGroupValueMap] = []
-                                        var local_negative_test_data: [OutlierGroupValueMap] = []
-                                        
-                                        Log.d("\(file) loading data")
-                                        
-                                        // load data
-                                        // process a frames worth of outlier data
-                                        let imageURL = NSURL(fileURLWithPath: filename, isDirectory: false)
-                                        
-                                        let (data, _) = try await URLSession.shared.data(for: URLRequest(url: imageURL as URL))
-                                        
-                                        //Log.d("\(file) data loaded")
-                                        let decoder = BinaryDecoder()
-                                        do {
-                                            let matrix = try decoder.decode(OutlierGroupValueMatrix.self, from: data)
-                                            //Log.d("\(file) data decoded")
-                                            //if let json = matrix.prettyJson { print(json) }
-                                            //Log.d("frame \(frame_index) matrix \(matrix)")
-                                            for values in matrix.values {
-                                                let valueMap = OutlierGroupValueMap() { index in
-                                                    return values.values[index]
-                                                }
-                                                if values.shouldPaint {
-                                                    local_positive_test_data.append(valueMap)
-                                                } else {
-                                                    local_negative_test_data.append(valueMap)
-                                                }
-                                            }
-                                            
-                                        } catch {
-                                            Log.e("\(file): \(error)")
-                                        }
-                                        //Log.i("got \(local_positive_test_data.count)/\(local_negative_test_data.count) test data from \(file)")
-                                        
-                                        return OutlierGroupValueMapResult(
-                                          positive_test_data: local_positive_test_data,
-                                          negative_test_data: local_negative_test_data)
+                                    try await taskGroup.addTask() {
+                                        return try await loadDataFrom(filename: filename)
                                     }
                                 }
                             }
@@ -643,6 +605,45 @@ struct decision_tree_generator: ParsableCommand {
         dispatch_group.wait()
     }
 
+    func loadDataFrom(filename: String) async throws -> OutlierGroupValueMapResult {
+        var local_positive_test_data: [OutlierGroupValueMap] = []
+        var local_negative_test_data: [OutlierGroupValueMap] = []
+        
+        Log.d("\(filename) loading data")
+        
+        // load data
+        // process a frames worth of outlier data
+        let imageURL = NSURL(fileURLWithPath: filename, isDirectory: false)
+        
+        let (data, _) = try await URLSession.shared.data(for: URLRequest(url: imageURL as URL))
+        
+        //Log.d("\(file) data loaded")
+        let decoder = BinaryDecoder()
+
+        let matrix = try decoder.decode(OutlierGroupValueMatrix.self, from: data)
+        //Log.d("\(file) data decoded")
+        //if let json = matrix.prettyJson { print(json) }
+        //Log.d("frame \(frame_index) matrix \(matrix)")
+        for values in matrix.values {
+            let valueMap = OutlierGroupValueMap() { index in
+                return values.values[index]
+            }
+            if values.shouldPaint {
+                local_positive_test_data.append(valueMap)
+            } else {
+                local_negative_test_data.append(valueMap)
+            }
+        }
+            
+        //Log.i("got \(local_positive_test_data.count)/\(local_negative_test_data.count) test data from \(file)")
+        
+        return OutlierGroupValueMapResult(
+          positive_test_data: local_positive_test_data,
+          negative_test_data: local_negative_test_data)
+
+    }
+
+    
     func writeTree(withTypes decisionTypes: [OutlierGroup.TreeDecisionType],
                    withPositiveData positive_test_data: [OutlierGroupValueMap],
                    andNegativeData negative_test_data: [OutlierGroupValueMap],
