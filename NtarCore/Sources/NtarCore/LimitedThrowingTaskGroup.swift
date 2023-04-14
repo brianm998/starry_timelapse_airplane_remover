@@ -29,6 +29,10 @@ public actor LimitedThrowingTaskGroup<T> {
         return try await tasks[iterator].value
     }
 
+    public func forEach(_ closure: (T) -> Void) async throws {
+        for task in tasks { closure(try await task.value) }
+    }
+    
     public func waitForAll() async throws {
         for task in tasks { _ = try await task.value }
     }

@@ -230,12 +230,10 @@ struct decision_tree_generator: ParsableCommand {
                                     }
                                 }
                                 await taskGroup.forEach() { result in
-                                    if let result = result {
-                                        if result.shouldPaint {
-                                            number_good[result.treeKey]! += 1
-                                        } else {
-                                            number_bad[result.treeKey]! += 1
-                                        }
+                                    if result.shouldPaint {
+                                        number_good[result.treeKey]! += 1
+                                    } else {
+                                        number_bad[result.treeKey]! += 1
                                     }
                                 }
                                 
@@ -328,12 +326,10 @@ struct decision_tree_generator: ParsableCommand {
                                                     }
                                                 }
                                                 await taskGroup.forEach() { result in
-                                                    if let result = result {
-                                                        if result.shouldPaint {
-                                                            number_good[result.treeKey]! += 1
-                                                        } else {
-                                                            number_bad[result.treeKey]! += 1
-                                                        }
+                                                    if result.shouldPaint {
+                                                        number_good[result.treeKey]! += 1
+                                                    } else {
+                                                        number_bad[result.treeKey]! += 1
                                                     }
                                                 }
                                             }
@@ -549,17 +545,16 @@ struct decision_tree_generator: ParsableCommand {
                     if file_manager.fileExists(atPath: json_config_file_name) {
 
                         try await withLimitedThrowingTaskGroup(of: OutlierGroupValueMapResult.self) { taskGroup in
-
                             
-                        // load a list of OutlierGroupValueMatrix
-                        // and get outlierGroupValues from them
-                        let contents = try file_manager.contentsOfDirectory(atPath: json_config_file_name)
-                        for file in contents {
-                            if file.hasSuffix("_outlier_values.bin") {
-                                let filename = "\(json_config_file_name)/\(file)"
-
-                                taskGroup.addTask() { 
-                                    let task = try await runThrowingTask() {
+                            
+                            // load a list of OutlierGroupValueMatrix
+                            // and get outlierGroupValues from them
+                            let contents = try file_manager.contentsOfDirectory(atPath: json_config_file_name)
+                            for file in contents {
+                                if file.hasSuffix("_outlier_values.bin") {
+                                    let filename = "\(json_config_file_name)/\(file)"
+                                    
+                                    try await taskGroup.addTask() { 
                                         var local_positive_test_data: [OutlierGroupValueMap] = []
                                         var local_negative_test_data: [OutlierGroupValueMap] = []
                                         
@@ -600,10 +595,7 @@ struct decision_tree_generator: ParsableCommand {
                                     }
                                 }
                             }
-                        }
-                        taskGroup.forEach() { task in
-                            if let task = task {
-                                let response = try await task.value
+                            try await taskGroup.forEach() { response in
                                 positive_test_data += response.positive_test_data
                                 negative_test_data += response.negative_test_data
                             }
@@ -611,7 +603,7 @@ struct decision_tree_generator: ParsableCommand {
                     }
                 }
             }
-
+                
             do {
                 if produce_all_type_combinations {
                     let min = OutlierGroup.TreeDecisionType.allCases.count-1 // XXX make a parameter

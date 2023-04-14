@@ -28,10 +28,8 @@ public actor LimitedTaskGroup<T> {
         return await tasks[iterator].value
     }
 
-    public func forEach(_ closure: (T?) -> Void) async {
-        for task in tasks {
-            closure(await task.value)
-        }
+    public func forEach(_ closure: (T) -> Void) async {
+        for task in tasks { closure(await task.value) }
     }
     
     public func waitForAll() async {
@@ -39,6 +37,8 @@ public actor LimitedTaskGroup<T> {
     }
     
     public func addTask(closure: @escaping () async -> T) async {
+        // this may or may not run in the background, depending upon how
+        // many other active Tasks are running
         tasks.append(await runTask(closure))
     }
 }
