@@ -190,7 +190,7 @@ actor DecisionTreeGenerator {
           @available(macOS 10.15, *)
           extension OutlierGroup {
               public func shouldPaint_\(hash_prefix)(from tree: OutlierGroupDecisionTree_\(hash_prefix)) async -> Double {
-                  return tree.shouldPaintFromDecisionTree(
+                  return tree.classification(
           \(function_parameters)
                   )
               }
@@ -219,14 +219,14 @@ actor DecisionTreeGenerator {
           \(decisionSplitTypeString)
 
               // decide the paintability of this OutlierGroup with a decision tree
-              public func shouldPaintFromDecisionTree(group: OutlierGroup) async -> Double {
+              public func classification(group: OutlierGroup) async -> Double {
                   return await group.shouldPaint_\(hash_prefix)(from: self)
               }
 
               // a way to call into the decision tree without an OutlierGroup object
               // it's going to blow up unless supplied with the expected set of types
               // return value is between -1 and 1, 1 is paint
-              public func shouldPaintFromDecisionTree(
+              public func classification(
                  types: [OutlierGroup.TreeDecisionType], // parallel
                  values: [Double]                        // arrays
                 ) -> Double
@@ -236,14 +236,14 @@ actor DecisionTreeGenerator {
                     let value = values[index]
                     map[type] = value
                 }
-                return shouldPaintFromDecisionTree(
+                return classification(
           \(function2_parameters)
                 )
               }
 
               // the actual tree resides here
               // return value is between -1 and 1, 1 is paint
-              public func shouldPaintFromDecisionTree(
+              public func classification(
           \(function_signature)
                     ) -> Double
               {

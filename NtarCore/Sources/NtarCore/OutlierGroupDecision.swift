@@ -18,7 +18,7 @@ public enum DecisionSplitType: String {
 @available(macOS 10.15, *)
 // a typed vector of values for a single outlier group
 public struct OutlierGroupValueMap {
-    // indexed by outlierGroup.sortOrder
+    // indexed by OutlierGroup.TreeDecisionType.sortOrder
     public let values: [Double]
     public init(_ values: [Double]) {
         self.values = values
@@ -48,7 +48,7 @@ public func loadDecisionTrees() -> [String : DecisionTree] {
         let instance = tree.init()
         ret[instance.name] = instance
     }
-    print("XXX loaded \(ret.count) decision trees")
+    Log.i("loaded \(ret.count) decision trees")
     return ret
 }
 
@@ -63,20 +63,27 @@ fileprivate func listClasses<T>(_ body: (UnsafeBufferPointer<AnyClass>) throws -
 
 
 @available(macOS 10.15, *)
-public protocol DecisionTree {
+public protocol DecisionTree: OutlierGroupClassifier {
     init()
     var name: String { get }
     var sha256: String { get }
     var generationSecondsSince1970: TimeInterval { get }
     var inputSequences: [String] { get }
     var decisionTypes: [OutlierGroup.TreeDecisionType] { get }
+}
+
+@available(macOS 10.15, *)
+public protocol OutlierGroupClassifier {
     
-    func shouldPaintFromDecisionTree (
-      types: [OutlierGroup.TreeDecisionType], // parallel
-      values: [Double]                        // arrays
+    // execute the same output swift code at runtime for pruning and boosting
+    // returns -1 for negative, +1 for positive
+    func classification(of group: OutlierGroup) async -> Double
+
+    // returns -1 for negative, +1 for positive
+    func classification (
+      of types: [OutlierGroup.TreeDecisionType], // parallel
+      and values: [Double]                        // arrays
     ) -> Double
-    
-    func shouldPaintFromDecisionTree(group: OutlierGroup) async -> Double
 }
 
 public struct HoughLineHistogram {

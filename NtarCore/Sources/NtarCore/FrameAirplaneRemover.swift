@@ -275,7 +275,7 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
         /*
          XXX commented out because of multiple trees now
         await foreachOutlierGroup() { group in
-            let should_paint = await group.shouldPaintFromDecisionTree
+            let should_paint = await group.classification
             var apply = true
             if let shouldPaint = await group.shouldPaint {
                 switch shouldPaint {
@@ -300,7 +300,7 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
         /*
          XXX commented out because of multiple trees now
         await foreachOutlierGroup() { group in
-            let should_paint = await group.shouldPaintFromDecisionTree
+            let should_paint = await group.classification
             Log.d("applying decision tree should_paint \(should_paint)")
             await group.shouldPaint(.decisionTree(should_paint))
             return .continue

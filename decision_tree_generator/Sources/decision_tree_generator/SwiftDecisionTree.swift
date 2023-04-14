@@ -5,19 +5,9 @@ import NtarCore
 // represents an abstract node in the decision tree
 // that knows how to render itself as a String of swift code
 @available(macOS 10.15, *) 
-protocol SwiftDecisionTree {
+protocol SwiftDecisionTree: OutlierGroupClassifier {
     // swift code that eventually returns true or false
     var swiftCode: String { get }
-
-    // execute the same output swift code at runtime for pruning and boosting
-    // returns -1 for negative, +1 for positive
-    func result(for outlierGroup: OutlierGroup) async -> Double 
-
-    // returns -1 for negative, +1 for positive
-    func result(
-      for types: [OutlierGroup.TreeDecisionType], // parallel
-      and values: [Double]                        // arrays
-    ) -> Double
 }
 
 // end leaf node which always returns 100% positive
@@ -30,13 +20,13 @@ struct FullyPositiveTreeNode: SwiftDecisionTree {
         return "\(indentation)return 1"
     }
 
-    func result(for outlierGroup: OutlierGroup) async -> Double {
+    func classification(of outlierGroup: OutlierGroup) async -> Double {
         return 1
     }
 
-    public func result
+    public func classification
       (
-        for types: [OutlierGroup.TreeDecisionType], // parallel
+        of types: [OutlierGroup.TreeDecisionType], // parallel
         and values: [Double]                        // arrays
       ) -> Double
     {
@@ -54,13 +44,13 @@ struct FullyNegativeTreeNode: SwiftDecisionTree {
         return "\(indentation)return -1"
     }
 
-    func result(for outlierGroup: OutlierGroup) async -> Double {
+    func classification(of outlierGroup: OutlierGroup) async -> Double {
         return -1
     }
 
-    public func result
+    public func classification
       (
-        for types: [OutlierGroup.TreeDecisionType], // parallel
+        of types: [OutlierGroup.TreeDecisionType], // parallel
         and values: [Double]                        // arrays
       ) -> Double
     {
@@ -114,7 +104,7 @@ struct DecisionTreeNode: SwiftDecisionTree {
     let indent: Int
 
     // runtime execution
-    func result(for outlierGroup: OutlierGroup) async -> Double {
+    func classification(of outlierGroup: OutlierGroup) async -> Double {
         let outlierValue = await outlierGroup.decisionTreeValue(for: type)
         if stump {
             if outlierValue < value {
@@ -124,16 +114,16 @@ struct DecisionTreeNode: SwiftDecisionTree {
             }
         } else {
             if outlierValue < value {
-                return await lessThan.result(for: outlierGroup)
+                return await lessThan.classification(of: outlierGroup)
             } else {
-                return await greaterThan.result(for: outlierGroup)
+                return await greaterThan.classification(of: outlierGroup)
             }
         }
     }
 
-    func result
+    func classification
       (
-        for types: [OutlierGroup.TreeDecisionType], // parallel
+        of types: [OutlierGroup.TreeDecisionType], // parallel
         and values: [Double]                        // arrays
       ) -> Double
     {
@@ -149,9 +139,9 @@ struct DecisionTreeNode: SwiftDecisionTree {
                     }
                 } else {
                     if outlierValue < value {
-                        return lessThan.result(for: types, and: values)
+                        return lessThan.classification(of: types, and: values)
                     } else {
-                        return greaterThan.result(for: types, and: values)
+                        return greaterThan.classification(of: types, and: values)
                     }
                 }
                 

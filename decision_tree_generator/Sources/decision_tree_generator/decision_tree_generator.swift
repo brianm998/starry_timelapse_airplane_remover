@@ -4,8 +4,6 @@ import ArgumentParser
 import BinaryCodable
 import CryptoKit
 
-let thread_max = 36             // XXX move this
-
 var start_time: Date = Date()
 
 @available(macOS 10.15, *) 
@@ -224,7 +222,7 @@ struct decision_tree_generator: ParsableCommand {
                                 for (treeKey, tree) in decisionTrees {
                                     await taskGroup.addTask() {
                                         let decisionTreeShouldPaint =  
-                                          await tree.shouldPaintFromDecisionTree(group: outlier_group) > 0
+                                          await tree.classification(of: outlier_group) > 0
                                         
                                         return (treeKey, decisionTreeShouldPaint == numberGood.willPaint)
                                     }
@@ -320,8 +318,8 @@ struct decision_tree_generator: ParsableCommand {
                                                 for (treeKey, tree) in decisionTrees {
                                                     await taskGroup.addTask() {
                                                         let decisionTreeShouldPaint =  
-                                                          tree.shouldPaintFromDecisionTree(types: matrix.types,
-                                                                                           values: values.values) > 0
+                                                          tree.classification(of: matrix.types,
+                                                                              and: values.values) > 0
                                                         return (treeKey, decisionTreeShouldPaint == values.shouldPaint)
                                                     }
                                                 }
@@ -551,7 +549,9 @@ struct decision_tree_generator: ParsableCommand {
                     }
                 }
             }
-                
+
+            Log.i("data loaded")
+            
             do {
                 if produce_all_type_combinations {
                     let min = OutlierGroup.TreeDecisionType.allCases.count-1 // XXX make a parameter
@@ -635,14 +635,26 @@ struct decision_tree_generator: ParsableCommand {
 
         let matrix = try decoder.decode(OutlierGroupValueMatrix.self, from: data)
 
-        for values in matrix.values {
-            let valueMap = OutlierGroupValueMap() { index in
-                return values.values[index]
+        var usable = true
+        
+        // XXX make sure the types in the matrix match up with what we expect
+        for type in OutlierGroup.TreeDecisionType.allCases {
+            if matrix.types[type.sortOrder] != type {
+                Log.e("@ sort order \(type.sortOrder) \(matrix.types[type.sortOrder]) != \(type), cannot use this data")
+                usable = false
             }
-            if values.shouldPaint {
-                local_positive_test_data.append(valueMap)
-            } else {
-                local_negative_test_data.append(valueMap)
+        }
+
+        if usable {
+            for values in matrix.values {
+                let valueMap = OutlierGroupValueMap() { index in
+                    return values.values[index]
+                }
+                if values.shouldPaint {
+                    local_positive_test_data.append(valueMap)
+                } else {
+                    local_negative_test_data.append(valueMap)
+                }
             }
         }
             
