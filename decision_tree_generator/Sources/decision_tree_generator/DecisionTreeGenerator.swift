@@ -219,7 +219,7 @@ actor DecisionTreeGenerator {
           \(decisionSplitTypeString)
 
               // decide the paintability of this OutlierGroup with a decision tree
-              public func classification(group: OutlierGroup) async -> Double {
+              public func classification(of group: OutlierGroup) async -> Double {
                   return await group.shouldPaint_\(hash_prefix)(from: self)
               }
 
@@ -227,8 +227,8 @@ actor DecisionTreeGenerator {
               // it's going to blow up unless supplied with the expected set of types
               // return value is between -1 and 1, 1 is paint
               public func classification(
-                 types: [OutlierGroup.TreeDecisionType], // parallel
-                 values: [Double]                        // arrays
+                 of types: [OutlierGroup.TreeDecisionType], // parallel
+                 and values: [Double]                        // arrays
                 ) -> Double
               {
                 var map: [OutlierGroup.TreeDecisionType:Double] = [:]

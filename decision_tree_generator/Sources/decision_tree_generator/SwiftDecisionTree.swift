@@ -6,7 +6,7 @@ import NtarCore
 // that knows how to render itself as a String of swift code
 @available(macOS 10.15, *) 
 protocol SwiftDecisionTree: OutlierGroupClassifier {
-    // swift code that eventually returns true or false
+    // returns a string containing swift code that eventually returns a double between -1 and 1
     var swiftCode: String { get }
 }
 
