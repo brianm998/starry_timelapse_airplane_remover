@@ -12,48 +12,28 @@ You should have received a copy of the GNU General Public License along with nta
 
 */
 
-// a wrapper around the ThrowingTaskGroup that has keeps too many groups from
+// a wrapper around the ThrowingTaskGroup that has keeps too many tasks from
 // running concurrently
 
 @available(macOS 10.15, *)
-public class LimitedTaskGroup<T> {
-    var taskGroup: TaskGroup<T>
-    let maxConcurrent: Int
-    let number_running: NumberRunning
+public actor LimitedTaskGroup<T> {
+    var tasks: [Task<T,Never>] = []
+    var iterator = 0
     
-    public init(taskGroup: TaskGroup<T>, maxConcurrent: Int) {
-        self.taskGroup = taskGroup
-        self.maxConcurrent = maxConcurrent
-        self.number_running = NumberRunning()
-    }
+    public init() { }
 
     public func next() async ->  T? {
-        return await taskGroup.next()
+        if iterator >= tasks.count { return nil }
+        iterator += 1
+        return await tasks[iterator].value
     }
 
     public func waitForAll() async {
-        await taskGroup.waitForAll()
+        for task in tasks { _ = await task.value }
     }
     
     public func addTask(closure: @escaping () async -> T) async {
-
-        var current_running = await number_running.currentValue()
-        while current_running > maxConcurrent {
-            do {
-                try await Task.sleep(nanoseconds: 500_000_000) // 500 ms
-            } catch {
-                Log.e("\(error)")
-            }
-            current_running = await number_running.currentValue()
-            //Log.d("awaking \(current_running) are still running")
-        }
-        await number_running.increment()
-        
-        taskGroup.addTask() {
-            let ret = await closure()
-            await self.number_running.decrement()
-            return ret
-        }
+        tasks.append(await runTask(closure))
     }
 }
 
@@ -66,8 +46,6 @@ public func withLimitedTaskGroup<ChildTaskResult, GroupResult>(
   body: (inout LimitedTaskGroup<ChildTaskResult>) async -> GroupResult
 ) async -> GroupResult where ChildTaskResult : Sendable
 {
-    return await withTaskGroup(of: ChildTaskResult.self, returning: returnType) { taskGroup in
-        var limitedTaskGroup = LimitedTaskGroup(taskGroup: taskGroup, maxConcurrent: maxConcurrent)
-        return await body(&limitedTaskGroup)
-    }
+    var limitedTaskGroup: LimitedTaskGroup<ChildTaskResult> = LimitedTaskGroup()
+    return await body(&limitedTaskGroup)
 }

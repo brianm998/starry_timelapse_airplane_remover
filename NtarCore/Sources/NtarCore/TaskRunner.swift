@@ -5,7 +5,10 @@ import Foundation
 @available(macOS 10.15, *)
 fileprivate var number_running = NumberRunning()
 
-fileprivate let max_running: UInt = UInt(ProcessInfo.processInfo.activeProcessorCount)-4
+// XXX getting this number right is hard
+// too big and the swift runtime barfs underneath
+// too small and the process runs without available cpu resources
+fileprivate let max_running: UInt = UInt(ProcessInfo.processInfo.activeProcessorCount)
 
 /**
  var tasks: [Task<ValueDistribution,Never>] = []
@@ -21,6 +24,7 @@ fileprivate let max_running: UInt = UInt(ProcessInfo.processInfo.activeProcessor
  */
 @available(macOS 10.15, *)
 public func runTask<Type>(_ closure: @escaping () async -> Type) async -> Task<Type,Never> {
+    //Log.i("runtask with cpuUsage \(cpuUsage())")
     if await number_running.startOnIncrement(to: max_running) {
         return Task<Type,Never> {
             let ret = await closure() // run closure in separate task
