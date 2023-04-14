@@ -28,6 +28,12 @@ public actor LimitedTaskGroup<T> {
         return await tasks[iterator].value
     }
 
+    public func forEach(_ closure: (T?) -> Void) async {
+        for task in tasks {
+            closure(await task.value)
+        }
+    }
+    
     public func waitForAll() async {
         for task in tasks { _ = await task.value }
     }

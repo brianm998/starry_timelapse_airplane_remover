@@ -152,8 +152,6 @@ actor DecisionTreeGenerator {
 
         //Log.d("getting root")
 
-        // XXX problem in here somewhere:
-
         // the root tree node with all of the test data 
         let tree = await decisionTreeNode(with: positive_test_data,
                                           and: negative_test_data,
