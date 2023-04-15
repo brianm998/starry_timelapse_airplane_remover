@@ -125,6 +125,15 @@ struct decision_tree_generator: ParsableCommand {
             """)
     var maxDepth: Int? = nil
     
+    @Option(name: [.customLong("forest")],
+          help:"""
+            When run in forest mode, the given number of trees are produced based upon
+            splitting up the input data with a different validation set that number of times.
+
+            Then a higher level classifier is written to combine them all.
+            """)
+    var forestSize: Int? = nil
+    
     @Argument(help: """
                 A list of files, which can be either a reference to a config.json file,
                 or a reference to a directory containing files ending with '_outlier_values.bin'
@@ -146,7 +155,13 @@ struct decision_tree_generator: ParsableCommand {
         if verification_mode {
             run_verification()
         } else {
-            generate_tree_from_training_data()
+            if let forestSize = forestSize {
+                // generate a forest of trees
+                generate_forest_from_training_data(with: forestSize)                
+            } else {
+                // generate a single tree
+                generate_tree_from_training_data()
+            }
         }
         Log.dispatchGroup.wait()
     }
@@ -543,6 +558,82 @@ struct decision_tree_generator: ParsableCommand {
     }
 
     // actually generate a decision tree
+    func generate_forest_from_training_data(with forestSize: Int) {
+        
+        let dispatch_group = DispatchGroup()
+        dispatch_group.enter()
+        Task {
+
+            let generator = DecisionTreeGenerator(withTypes: OutlierGroup.TreeDecisionType.allCases,
+                                                  andSplitTypes: [.median],
+                                                  maxDepth: maxDepth)
+
+            let base_filename = "../NtarDecisionTrees/Sources/NtarDecisionTrees/OutlierGroupDecisionTreeForest_"
+
+            
+            let forest = try await generator.generateForest(withInputData: loadTrainingData(),
+                                                            inputFilenames: input_filenames,
+                                                            treeCount: forestSize,
+                                                            baseFilename: base_filename) 
+
+            let forest_base_filename = "../NtarDecisionTrees/Sources/NtarDecisionTrees/OutlierGroupForestClassifier_"
+
+            try await generator.writeClassifier(with: forest, baseFilename: forest_base_filename)
+            
+            dispatch_group.leave()
+        }
+        dispatch_group.wait()
+    }
+
+    func loadTestData() async throws -> ClassifiedData {
+        var test_data = ClassifiedData()
+        
+        // load test_data 
+        for dirname in test_data_dirnames {
+            if file_manager.fileExists(atPath: dirname) {
+                // load here
+                let result = try await loadDataFrom(dirname: dirname)
+                test_data.positive_data += result.positive_data
+                test_data.negative_data += result.negative_data
+            }
+        }
+        return test_data
+    }
+
+    func loadTrainingData() async throws -> ClassifiedData {
+        var training_data = ClassifiedData()
+        
+        for json_config_file_name in input_filenames {
+            if json_config_file_name.hasSuffix("config.json") {
+                // here we are loading the full outlier groups and analyzing based upon that
+                // comprehensive, but slow
+                Log.d("should read \(json_config_file_name)")
+
+                do {
+                    let (more_should_paint, more_should_not_paint) =
+                      try await read(fromConfig: json_config_file_name)
+                    
+                    training_data.positive_data += more_should_paint
+                    training_data.negative_data += more_should_not_paint
+                } catch {
+                    Log.w("couldn't get config from \(json_config_file_name)")
+                    Log.e("\(error)")
+                    fatalError("couldn't get config from \(json_config_file_name)")
+                }
+            } else {
+                // here we are reading pre-computed values for each data point
+                if file_manager.fileExists(atPath: json_config_file_name) {
+                    // load here
+                    let result = try await loadDataFrom(dirname: json_config_file_name)
+                    training_data.positive_data += result.positive_data
+                    training_data.negative_data += result.negative_data
+                }
+            }
+        }
+        return training_data
+    }
+    
+    // actually generate a decision tree
     func generate_tree_from_training_data() {
         
         let dispatch_group = DispatchGroup()
@@ -568,50 +659,12 @@ struct decision_tree_generator: ParsableCommand {
             }
             
             // training data gathered from all inputs
-            var training_data = ClassifiedData()
-            
-            for json_config_file_name in input_filenames {
-                if json_config_file_name.hasSuffix("config.json") {
-                    // here we are loading the full outlier groups and analyzing based upon that
-                    // comprehensive, but slow
-                    Log.d("should read \(json_config_file_name)")
-
-                    do {
-                        let (more_should_paint, more_should_not_paint) =
-                          try await read(fromConfig: json_config_file_name)
-                        
-                        training_data.positive_data += more_should_paint
-                        training_data.negative_data += more_should_not_paint
-                    } catch {
-                        Log.w("couldn't get config from \(json_config_file_name)")
-                        Log.e("\(error)")
-                        fatalError("couldn't get config from \(json_config_file_name)")
-                    }
-                } else {
-                    // here we are reading pre-computed values for each data point
-                    if file_manager.fileExists(atPath: json_config_file_name) {
-                        // load here
-                        let result = try await loadDataFrom(dirname: json_config_file_name)
-                        training_data.positive_data += result.positive_data
-                        training_data.negative_data += result.negative_data
-                    }
-                }
-            }
+            var training_data = try await loadTrainingData()
 
             Log.i("data loaded")
 
             // test data gathered from -t on command line
-            var test_data = ClassifiedData()
-            
-            // load test_data 
-            for dirname in test_data_dirnames {
-                if file_manager.fileExists(atPath: dirname) {
-                    // load here
-                    let result = try await loadDataFrom(dirname: dirname)
-                    test_data.positive_data += result.positive_data
-                    test_data.negative_data += result.negative_data
-                }
-            }
+            var test_data = try await loadTestData()
             
             do {
                 if produce_all_type_combinations {
