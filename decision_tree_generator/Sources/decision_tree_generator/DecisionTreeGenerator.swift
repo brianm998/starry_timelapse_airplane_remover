@@ -991,14 +991,43 @@ public func runTest(of classifier: OutlierGroupClassifier,
 fileprivate func prune(tree: SwiftDecisionTree,
                        with test_data: ClassifiedData) async -> SwiftDecisionTree
 {
-    let (o_good, o_bad) = await runTest(of: tree, on: test_data)
 
-    Log.i("Prune start: o_good \(o_good), o_bad \(o_bad) on \(test_data.size) data points")
+    let original_tree = tree
     
+    var (best_good, best_bad) = await runTest(of: original_tree, on: test_data)
 
-    // iterate over every node that ends in two leafs and try stumping it and comparing to the
-    // given test data
+    Log.i("Prune start: best_good \(best_good), best_bad \(best_bad) on \(test_data.size) data points")
 
+    if let root_node = original_tree as? DecisionTreeNode {
+        // iterate over every node that ends in two leafs and try stumping it and comparing to the
+        // given test data
+        
+        var nodesToStump: [DecisionTreeNode] = [root_node]
+    
+        while nodesToStump.count > 0 {
+            Log.i("stumping w/ \(nodesToStump.count)")
+            let stump_node = nodesToStump.removeFirst()
+            if !stump_node.stump {
+                stump_node.stump = true
+                let (good, bad) = await runTest(of: original_tree, on: test_data)
+                Log.i("Prune check: better by \(good-best_good) on \(test_data.size) data points")
+                if good > best_good {
+                    best_good = good
+                    // this was better, keep the stump
+                    Log.i("keeping stump w/ best_good \(best_good)")
+                } else {
+                    // it was worse, remove stump
+                    stump_node.stump = false
+                    if let less_node = stump_node.lessThan as? DecisionTreeNode {
+                        nodesToStump.append(less_node)
+                    }
+                    if let greater_node = stump_node.greaterThan as? DecisionTreeNode {
+                        nodesToStump.append(greater_node)
+                    }
+                }
+            }
+        }
+    }
     
     return tree
 }
