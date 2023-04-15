@@ -46,10 +46,23 @@ public class ClassifiedData {
         
         // assemble them together
         var ret: [ClassifiedData] = []
-        for i in 0..<Swift.min(positive_chunks.count,negative_chunks.count) {
+        for i in 0..<number_of_groups-1 {
             ret.append(ClassifiedData(positive_data: positive_chunks[i],
                                       negative_data: negative_chunks[i]))
         }
+
+        // glomb any remaning groups togther in one
+        var last_positive_data: [OutlierFeatureData] = []
+        var last_negative_data: [OutlierFeatureData] = []
+        for i in number_of_groups-1..<positive_chunks.count {
+            last_positive_data += positive_chunks[i]
+        }
+        for i in number_of_groups-1..<negative_chunks.count {
+            last_negative_data += negative_chunks[i]
+        }
+        let last = ClassifiedData(positive_data: last_positive_data,
+                                  negative_data: last_negative_data)
+        ret.append(last)
         return ret
     }
 }
