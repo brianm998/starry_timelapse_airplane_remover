@@ -6,9 +6,17 @@ import CryptoKit
 
 var start_time: Date = Date()
 
-struct TreeTestResults {
-    let numberGood: [String:Int]
-    let numberBad: [String:Int]
+class TreeTestResults {
+    var numberGood: [String:Int] = [:]
+    var numberBad: [String:Int] = [:]
+
+    public init() { }
+    public init(numberGood: [String:Int],
+                numberBad: [String:Int])
+    {
+        self.numberGood = numberGood
+        self.numberBad = numberBad
+    }
 }
 
 struct DecisionTreeResult: Comparable {
@@ -269,9 +277,81 @@ struct decision_tree_generator: ParsableCommand {
         return TreeTestResults(numberGood: num_similar_outlier_groups,
                                numberBad: num_different_outlier_groups)
     }
+
+
+    func run_verification() {
+        let dispatch_group = DispatchGroup()
+        dispatch_group.enter()
+        Task {
+            var classifiedData = ClassifiedData()
+            for input_dirname in input_filenames {
+                if file_manager.fileExists(atPath: input_dirname) {
+                    classifiedData += try await loadDataFrom(dirname: input_dirname)
+                }
+            }
+            // we've loaded all the classified data
+
+            var results = TreeTestResults()
+            
+            for (treeKey, tree) in decisionTrees {
+                let (num_good, num_bad) = await run_verification(of: tree, with: classifiedData)
+                results.numberGood[tree.name] = num_good
+                results.numberBad[tree.name] = num_bad
+            }
+
+            var outputResults: [DecisionTreeResult] = []
+            for (treeKey, _) in decisionTrees {
+                let total = results.numberGood[treeKey]! + results.numberBad[treeKey]!
+                let percentage_good = Double(results.numberGood[treeKey]!)/Double(total)*100
+                let message = "For decision Tree \(treeKey) out of a total of \(total) outlier groups, \(percentage_good)% success good \(results.numberGood[treeKey]!) vs bad \(results.numberBad[treeKey]!)"
+                outputResults.append(DecisionTreeResult(score: percentage_good,
+                                                        message: message))
+            }
+            // sort these on output by percentage_good
+            for result in outputResults.sorted() {
+                Log.i(result.message)
+            }
+            
+            dispatch_group.leave()
+        }
+        dispatch_group.wait()
+    }
+
+    func run_verification(of tree: DecisionTree,
+                          with classifiedData: ClassifiedData) async -> (Int, Int)
+    {
+        let types = OutlierGroup.TreeDecisionType.allCases
+
+        var numberGood = 0
+        var numberBad = 0
+        for positiveData in classifiedData.positive_data {
+            let classification = tree.classification(of: types, and: positiveData.values)
+            if classification < 0 {
+                // wrong
+                numberBad += 1
+            } else {
+                //right
+                numberGood += 1
+            }
+        }
+
+        for negativeData in classifiedData.negative_data {
+            let classification = tree.classification(of: types, and: negativeData.values)
+            if classification < 0 {
+                //right
+                numberGood += 1
+            } else {
+                // wrong
+                numberBad += 1
+            }
+        }
+
+        return (numberGood, numberBad)
+    }
     
     // use an exising decision tree to see how well it does against a given sample
-    func run_verification() {
+    // this works against config.json files (the slow way) as well as raw data
+    func run_verification_old() {
         
         let dispatch_group = DispatchGroup()
         dispatch_group.enter()

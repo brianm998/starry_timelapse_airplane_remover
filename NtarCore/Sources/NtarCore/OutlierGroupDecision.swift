@@ -19,6 +19,7 @@ public enum DecisionSplitType: String {
 @available(macOS 10.15, *) 
 public class ClassifiedData {
     public init() { }
+
     public init(positive_data: [OutlierFeatureData],
                 negative_data: [OutlierFeatureData])
     {
@@ -28,6 +29,11 @@ public class ClassifiedData {
 
     public var positive_data: [OutlierFeatureData] = []
     public var negative_data: [OutlierFeatureData] = []
+
+    public static func +=(lhs: ClassifiedData, rhs: ClassifiedData) {
+        lhs.positive_data += rhs.positive_data
+        lhs.negative_data += rhs.negative_data
+    }
 }
 
 @available(macOS 10.15, *)
