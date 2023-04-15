@@ -30,7 +30,7 @@ actor DecisionTreeGenerator {
     func generateForest(withInputData input_data: ClassifiedData,
                         inputFilenames: [String],
                         treeCount: Int,
-                        baseFilename: String) async throws -> [TreeForestResult]
+                        baseFilename: String) async throws -> ([TreeForestResult], [ClassifiedData])
     {
         /*
          split the input data into treeCount + 1  evenly spaced groups
@@ -50,7 +50,7 @@ actor DecisionTreeGenerator {
         // use this test data only for testing, not training at all
         let test_data = input_data_split.removeFirst().split(into: ProcessInfo.processInfo.activeProcessorCount)
 
-        return try await withLimitedThrowingTaskGroup(of: TreeForestResult.self) { taskGroup in
+        let trees = try await withLimitedThrowingTaskGroup(of: TreeForestResult.self) { taskGroup in
             var results: [TreeForestResult] = []
             for validation_index in 0..<input_data_split.count {
                 try await taskGroup.addTask() { 
@@ -93,12 +93,13 @@ actor DecisionTreeGenerator {
             try await taskGroup.forEach() { results.append($0) }
             return results
         }
+
+        return (trees, test_data)
     }    
 
     func writeClassifier(with forest: [TreeForestResult],
-                         baseFilename: String) async throws
+                         baseFilename: String) async throws -> OutlierGroupClassifier
     {
-
         var trees_declaration_string = ""
         var trees_classification_string_1 = ""
         var trees_classification_string_2 = ""
@@ -166,7 +167,7 @@ actor DecisionTreeGenerator {
                                 contents: swift_string.data(using: .utf8),
                                 attributes: nil)
 
-        
+        return ForestClassifier(trees: forest)
     }
     
     // top level func that writes a compilable wrapper around the root tree node

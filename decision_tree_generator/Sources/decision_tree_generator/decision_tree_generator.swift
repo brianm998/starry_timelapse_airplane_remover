@@ -19,6 +19,38 @@ class TreeTestResults {
     }
 }
 
+@available(macOS 10.15, *)
+struct ForestClassifier: OutlierGroupClassifier {
+
+    let trees: [TreeForestResult]
+    
+    init(trees: [TreeForestResult]) {
+        self.trees = trees
+    }
+    // returns -1 for negative, +1 for positive
+    func classification(of group: OutlierGroup) async -> Double {
+        var ret: Double = 0
+        for result in trees {
+            ret += await result.tree.classification(of: group) * result.testScore
+        }
+        return ret / Double(trees.count)
+    }
+
+    // returns -1 for negative, +1 for positive
+    func classification (
+      of types: [OutlierGroup.TreeDecisionType],  // parallel
+      and values: [Double]                        // arrays
+    ) -> Double
+    {
+        var ret: Double = 0
+        for result in trees {
+            ret += result.tree.classification(of: types, and: values) * result.testScore
+        }
+        return ret / Double(trees.count)
+    }
+
+}
+
 struct DecisionTreeResult: Comparable {
     let score: Double
     let message: String
@@ -571,15 +603,22 @@ struct decision_tree_generator: ParsableCommand {
             let base_filename = "../NtarDecisionTrees/Sources/NtarDecisionTrees/OutlierGroupDecisionTreeForest_"
 
             
-            let forest = try await generator.generateForest(withInputData: loadTrainingData(),
-                                                            inputFilenames: input_filenames,
-                                                            treeCount: forestSize,
-                                                            baseFilename: base_filename) 
+            let (forest, test_data) =
+              try await generator.generateForest(withInputData: loadTrainingData(),
+                                                 inputFilenames: input_filenames,
+                                                 treeCount: forestSize,
+                                                 baseFilename: base_filename) 
 
             let forest_base_filename = "../NtarDecisionTrees/Sources/NtarDecisionTrees/OutlierGroupForestClassifier_"
 
-            try await generator.writeClassifier(with: forest, baseFilename: forest_base_filename)
-            
+            let classifier = try await generator.writeClassifier(with: forest, baseFilename: forest_base_filename)
+
+            // test classifier and see how well it does on the training data
+
+            var (good, bad) = await runTest(of: classifier, onChunks: test_data)
+            let score = Double(good)/Double(good + bad)
+            Log.i("final forest classifier got score \(score) on test data")
+
             dispatch_group.leave()
         }
         dispatch_group.wait()
