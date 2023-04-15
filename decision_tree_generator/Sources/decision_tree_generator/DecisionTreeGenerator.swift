@@ -136,11 +136,11 @@ actor DecisionTreeGenerator {
              import NtarCore
              
              @available(macOS 10.15, *)
-             public struct OutlierGroupClassifier_Forest_\(hash_prefix): NamedOutlierGroupClassifier {
+             public final class OutlierGroupClassifier_Forest_\(hash_prefix): NamedOutlierGroupClassifier {
 
                  public init() { }
 
-                 let name = "\(hash_prefix)"
+                 public let name = "\(hash_prefix)"
                  
              \(trees_declaration_string)
                  // returns -1 for negative, +1 for positive
