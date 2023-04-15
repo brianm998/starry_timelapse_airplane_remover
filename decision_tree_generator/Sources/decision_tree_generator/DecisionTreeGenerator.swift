@@ -160,6 +160,8 @@ actor DecisionTreeGenerator {
                                           decisionSplitTypes: decisionSplitTypes,
                                           maxDepth: maxDepth)
 
+        let pruned_tree = await prune(tree: tree, with: test_data)
+        
         // XXX prune this mother fucker with test data
         
         let generated_swift_code = tree.swiftCode
@@ -950,6 +952,55 @@ fileprivate struct DecisionResult {
           Double(greaterThanPositiveCount) /
           Double(greaterThanNegativeCount + greaterThanPositiveCount)
     }
+}
+
+@available(macOS 10.15, *) 
+public func runTest(of classifier: OutlierGroupClassifier,
+                    on classifiedData: ClassifiedData) async -> (Int, Int)
+{
+    let types = OutlierGroup.TreeDecisionType.allCases
+
+    var numberGood = 0
+    var numberBad = 0
+    for positiveData in classifiedData.positive_data {
+        let classification = classifier.classification(of: types, and: positiveData.values)
+        if classification < 0 {
+            // wrong
+            numberBad += 1
+        } else {
+            //right
+            numberGood += 1
+        }
+    }
+
+    for negativeData in classifiedData.negative_data {
+        let classification = classifier.classification(of: types, and: negativeData.values)
+        if classification < 0 {
+            //right
+            numberGood += 1
+        } else {
+            // wrong
+            numberBad += 1
+        }
+    }
+
+    return (numberGood, numberBad)
+}
+
+@available(macOS 10.15, *) 
+fileprivate func prune(tree: SwiftDecisionTree,
+                       with test_data: ClassifiedData) async -> SwiftDecisionTree
+{
+    let (o_good, o_bad) = await runTest(of: tree, on: test_data)
+
+    Log.i("Prune start: o_good \(o_good), o_bad \(o_bad) on \(test_data.size) data points")
+    
+
+    // iterate over every node that ends in two leafs and try stumping it and comparing to the
+    // given test data
+
+    
+    return tree
 }
 
 fileprivate let file_manager = FileManager.default

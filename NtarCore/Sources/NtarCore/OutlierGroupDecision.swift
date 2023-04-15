@@ -34,6 +34,8 @@ public class ClassifiedData {
         lhs.positive_data += rhs.positive_data
         lhs.negative_data += rhs.negative_data
     }
+
+    public var size: Int { positive_data.count + negative_data.count }
 }
 
 @available(macOS 10.15, *)

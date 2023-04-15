@@ -294,7 +294,7 @@ struct decision_tree_generator: ParsableCommand {
             var results = TreeTestResults()
             
             for (treeKey, tree) in decisionTrees {
-                let (num_good, num_bad) = await run_verification(of: tree, with: classifiedData)
+                let (num_good, num_bad) = await runTest(of: tree, on: classifiedData)
                 results.numberGood[tree.name] = num_good
                 results.numberBad[tree.name] = num_bad
             }
@@ -317,37 +317,6 @@ struct decision_tree_generator: ParsableCommand {
         dispatch_group.wait()
     }
 
-    func run_verification(of tree: DecisionTree,
-                          with classifiedData: ClassifiedData) async -> (Int, Int)
-    {
-        let types = OutlierGroup.TreeDecisionType.allCases
-
-        var numberGood = 0
-        var numberBad = 0
-        for positiveData in classifiedData.positive_data {
-            let classification = tree.classification(of: types, and: positiveData.values)
-            if classification < 0 {
-                // wrong
-                numberBad += 1
-            } else {
-                //right
-                numberGood += 1
-            }
-        }
-
-        for negativeData in classifiedData.negative_data {
-            let classification = tree.classification(of: types, and: negativeData.values)
-            if classification < 0 {
-                //right
-                numberGood += 1
-            } else {
-                // wrong
-                numberBad += 1
-            }
-        }
-
-        return (numberGood, numberBad)
-    }
     
     // use an exising decision tree to see how well it does against a given sample
     // this works against config.json files (the slow way) as well as raw data
