@@ -34,9 +34,9 @@ public class ConsoleLogHandler: LogHandler {
             let dateString = self.dateFormatter.string(from: Date())
             
             if let data = data {
-                print("\(dateString) | \(logLevel.emo) \(logLevel) | \(threadName) | \(fileLocation): \(message) | \(data.description)")
+                print("\(dateString) | \(logLevel.emo) \(logLevel) | \(fileLocation): \(message) | \(data.description)")
             } else {
-                print("\(dateString) | \(logLevel.emo) \(logLevel) | \(threadName) | \(fileLocation): \(message)")
+                print("\(dateString) | \(logLevel.emo) \(logLevel) | \(fileLocation): \(message)")
             }
 //        }
     }
