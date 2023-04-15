@@ -957,6 +957,8 @@ fileprivate struct DecisionResult {
 public func runTest(of classifier: OutlierGroupClassifier,
                     onChunks classifiedData: [ClassifiedData]) async -> (Int, Int)
 {
+    // handle more than one classified data batch and run in parallel
+    
     var number_good: Int = 0
     var number_bad: Int = 0
     
@@ -978,12 +980,11 @@ public func runTest(of classifier: OutlierGroupClassifier,
 public func runTest(of classifier: OutlierGroupClassifier,
                     on classifiedData: ClassifiedData) async -> (Int, Int)
 {
-    // handle more than one classified data batch and run in parallel
-    
     let types = OutlierGroup.TreeDecisionType.allCases
 
     var numberGood = 0
     var numberBad = 0
+    
     for positiveData in classifiedData.positive_data {
         let classification = classifier.classification(of: types, and: positiveData.values)
         if classification < 0 {
@@ -1025,6 +1026,12 @@ fileprivate func prune(tree: SwiftDecisionTree,
     
     var best_percentage_good = Double(best_good)/Double(total)*100
     
+    if best_bad == 0 {
+        // can't get better than this, on point trying
+        Log.i("not pruning tree with \(best_percentage_good) initial test results.  Use a different test data set for pruning.")
+        return tree
+    } 
+    
     Log.i("Prune start: best_good \(best_good), best_bad \(best_bad) \(best_percentage_good)% good on \(test_data.size) data points")
 
     if let root_node = tree as? DecisionTreeNode {
@@ -1034,14 +1041,14 @@ fileprivate func prune(tree: SwiftDecisionTree,
         var nodesToStump: [DecisionTreeNode] = [root_node]
     
         while nodesToStump.count > 0 {
-            Log.i("stumping w/ \(nodesToStump.count) nodes \(best_percentage_good)% good")
+            Log.i("pruning \(nodesToStump.count) nodes \(best_percentage_good)% good")
             let stump_node = nodesToStump.removeFirst()
             if !stump_node.stump {
                 stump_node.stump = true
 
                 let (good, bad) = await runTest(of: tree, onChunks: chunked_test_data)
                 Log.i("Prune check: better by \(good-best_good) on \(test_data.size) data points")
-                if good > best_good {
+                if good >= best_good {
                     best_good = good
                     best_percentage_good = Double(best_good)/Double(total)*100
                     // this was better, keep the stump
@@ -1050,10 +1057,21 @@ fileprivate func prune(tree: SwiftDecisionTree,
                     // it was worse, remove stump
                     stump_node.stump = false
                     if let less_node = stump_node.lessThan as? DecisionTreeNode {
-                        nodesToStump.append(less_node)
+                        // XXX narrow down data to that on this side
+
+                        if let _ = less_node.lessThan as? DecisionTreeNode,
+                           let _ = less_node.greaterThan as? DecisionTreeNode
+                        {
+                            nodesToStump.append(less_node)
+                        }
                     }
                     if let greater_node = stump_node.greaterThan as? DecisionTreeNode {
-                        nodesToStump.append(greater_node)
+                        // XXX narrow down data to that on this side
+                        if let _ = greater_node.lessThan as? DecisionTreeNode,
+                           let _ = greater_node.greaterThan as? DecisionTreeNode
+                        {
+                            nodesToStump.append(greater_node)
+                        }
                     }
                 }
             }
