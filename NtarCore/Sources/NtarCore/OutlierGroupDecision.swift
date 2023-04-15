@@ -15,9 +15,24 @@ public enum DecisionSplitType: String {
     // XXX others ???
 }
 
+
+@available(macOS 10.15, *) 
+public class ClassifiedData {
+    public init() { }
+    public init(positive_data: [OutlierFeatureData],
+                negative_data: [OutlierFeatureData])
+    {
+        self.positive_data = positive_data
+        self.negative_data = negative_data
+    }
+
+    public var positive_data: [OutlierFeatureData] = []
+    public var negative_data: [OutlierFeatureData] = []
+}
+
 @available(macOS 10.15, *)
 // a typed vector of values for a single outlier group
-public struct OutlierGroupValueMap {
+public struct OutlierFeatureData {
     // indexed by OutlierGroup.TreeDecisionType.sortOrder
     public let values: [Double]
     public init(_ values: [Double]) {
@@ -27,7 +42,7 @@ public struct OutlierGroupValueMap {
         return [Double](repeating: 0.0, count: OutlierGroup.TreeDecisionType.allCases.count)
     }
     public init(_ closure: (Int) -> Double) {
-        var values = OutlierGroupValueMap.rawValues()
+        var values = OutlierFeatureData.rawValues()
         for i in 0 ..< OutlierGroup.TreeDecisionType.allCases.count {
             values[i] = closure(i)
         }
@@ -213,12 +228,12 @@ public class OutlierGroupValueMatrix: Codable {
                                          values: await outlierGroup.decisionTreeValues))
     }
     
-    public var outlierGroupValues: ([OutlierGroupValueMap], [OutlierGroupValueMap]) {
+    public var outlierGroupValues: ([OutlierFeatureData], [OutlierFeatureData]) {
         get async {
-            var shouldPaintRet: [OutlierGroupValueMap] = []
-            var shoultNotPaintRet: [OutlierGroupValueMap] = []
+            var shouldPaintRet: [OutlierFeatureData] = []
+            var shoultNotPaintRet: [OutlierFeatureData] = []
             for value in values {
-                let groupValues = OutlierGroupValueMap() { index in 
+                let groupValues = OutlierFeatureData() { index in 
                     return value.values[index]
                 }
                 if(value.shouldPaint) {
@@ -270,15 +285,15 @@ public extension OutlierGroup {
         return ret
     }
 
-    var decisionTreeGroupValues: OutlierGroupValueMap {
+    var decisionTreeGroupValues: OutlierFeatureData {
         get async {
-            var rawValues = OutlierGroupValueMap.rawValues()
+            var rawValues = OutlierFeatureData.rawValues()
             for type in OutlierGroup.TreeDecisionType.allCases {
                 let value = await self.decisionTreeValue(for: type)
                 rawValues[type.sortOrder] = value
                 //Log.d("frame \(frame_index) type \(type) value \(value)")
             }
-            return OutlierGroupValueMap(rawValues)
+            return OutlierFeatureData(rawValues)
         } 
     }
     

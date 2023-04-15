@@ -6,12 +6,6 @@ import CryptoKit
 
 var start_time: Date = Date()
 
-@available(macOS 10.15, *) 
-struct OutlierGroupValueMapResult {
-    let positive_data: [OutlierGroupValueMap]
-    let negative_data: [OutlierGroupValueMap]
-}
-
 struct TreeTestResults {
     let numberGood: [String:Int]
     let numberBad: [String:Int]
@@ -114,7 +108,7 @@ struct decision_tree_generator: ParsableCommand {
           help:"""
             A list of directories containing test data that is not used for training
             """)
-    var test_data: [String] = []
+    var test_data_dirnames: [String] = []
     
     @Option(name: [.customShort("m"), .customLong("max-depth")],
           help:"""
@@ -138,7 +132,7 @@ struct decision_tree_generator: ParsableCommand {
         
         Log.i("Starting with cpuUsage \(cpuUsage())")
 
-        Log.i("test-data: \(test_data)")
+        Log.i("test-data: \(test_data_dirnames)")
         Log.i("input_filenames: \(input_filenames)")
         Log.d("in debug mode")
         if verification_mode {
@@ -400,11 +394,11 @@ struct decision_tree_generator: ParsableCommand {
     // read outlier group values from a stored set of files listed by a config.json
     // the reads the full outliers from file, and can be slow
     private func read(fromConfig json_config_file_name: String) async throws
-      -> ([OutlierGroupValueMap], // should paint
-          [OutlierGroupValueMap]) // should not paint
+      -> ([OutlierFeatureData], // should paint
+          [OutlierFeatureData]) // should not paint
     {
-        var positive_data: [OutlierGroupValueMap] = []
-        var negative_data: [OutlierGroupValueMap] = []
+        var positive_data: [OutlierFeatureData] = []
+        var negative_data: [OutlierFeatureData] = []
         let config = try await Config.read(fromJsonFilename: json_config_file_name)
         Log.d("got config from \(json_config_file_name)")
         
@@ -457,13 +451,13 @@ struct decision_tree_generator: ParsableCommand {
         }
         for task in outlierLoadingTasks { try await task.value }
 
-        var tasks: [Task<OutlierGroupValueMapResult,Never>] = []
+        var tasks: [Task<ClassifiedData,Never>] = []
         
         for frame in frames {
             let task = await runTask() {
                 
-                var local_positive_data: [OutlierGroupValueMap] = []
-                var local_negative_data: [OutlierGroupValueMap] = []
+                var local_positive_data: [OutlierFeatureData] = []
+                var local_negative_data: [OutlierFeatureData] = []
                 if let outlier_groups = await frame.outlierGroups() {
                     for outlier_group in outlier_groups {
                         let name = await outlier_group.name
@@ -486,7 +480,7 @@ struct decision_tree_generator: ParsableCommand {
                     Log.e("cannot get outlier groups for frame \(frame.frame_index)")
                     fatalError("cannot get outlier groups for frame \(frame.frame_index)")
                 }
-                return OutlierGroupValueMapResult(
+                return ClassifiedData(
                   positive_data: local_positive_data,
                   negative_data: local_negative_data)
             }
@@ -528,8 +522,10 @@ struct decision_tree_generator: ParsableCommand {
             }
             
             // training data gathered from all inputs
-            var positive_training_data: [OutlierGroupValueMap] = []
-            var negative_training_data: [OutlierGroupValueMap] = []
+            //var positive_training_data: [OutlierFeatureData] = []
+            //var negative_training_data: [OutlierFeatureData] = []
+
+            var training_data = ClassifiedData()
             
             for json_config_file_name in input_filenames {
                 if json_config_file_name.hasSuffix("config.json") {
@@ -541,8 +537,8 @@ struct decision_tree_generator: ParsableCommand {
                         let (more_should_paint, more_should_not_paint) =
                           try await read(fromConfig: json_config_file_name)
                         
-                        positive_training_data += more_should_paint
-                        negative_training_data += more_should_not_paint
+                        training_data.positive_data += more_should_paint
+                        training_data.negative_data += more_should_not_paint
                     } catch {
                         Log.w("couldn't get config from \(json_config_file_name)")
                         Log.e("\(error)")
@@ -553,8 +549,8 @@ struct decision_tree_generator: ParsableCommand {
                     if file_manager.fileExists(atPath: json_config_file_name) {
                         // load here
                         let result = try await loadDataFrom(dirname: json_config_file_name)
-                        positive_training_data += result.positive_data
-                        negative_training_data += result.negative_data
+                        training_data.positive_data += result.positive_data
+                        training_data.negative_data += result.negative_data
                     }
                 }
             }
@@ -562,16 +558,19 @@ struct decision_tree_generator: ParsableCommand {
             Log.i("data loaded")
 
             // test data gathered from -t on command line
-            var positive_test_data: [OutlierGroupValueMap] = []
-            var negative_test_data: [OutlierGroupValueMap] = []
+            //var positive_test_data: [OutlierFeatureData] = []
+            //var negative_test_data: [OutlierFeatureData] = []
 
+            var test_data = ClassifiedData()
+
+            
             // load test_data 
-            for dirname in test_data {
+            for dirname in test_data_dirnames {
                 if file_manager.fileExists(atPath: dirname) {
                     // load here
                     let result = try await loadDataFrom(dirname: dirname)
-                    positive_test_data += result.positive_data
-                    negative_test_data += result.negative_data
+                    test_data.positive_data += result.positive_data
+                    test_data.negative_data += result.negative_data
                 }
             }
             
@@ -586,13 +585,13 @@ struct decision_tree_generator: ParsableCommand {
                     
                     for (index, types) in combinations.enumerated() {
                         Log.i("calculating tree \(index) with \(types)")
-                        let positiveData = positive_training_data.map { $0 } // copy data for each tree generation
-                        let negativeData = negative_training_data.map { $0 }
+                        //let positiveData = training_data.positive_data.map { $0 } // copy data for each tree generation
+                        //let negativeData = training_data.negative_data.map { $0 }
                         let _input_filenames = input_filenames
                         let task = try await runThrowingTask() {
                             try await self.writeTree(withTypes: types,
-                                                     withPositiveData: positiveData,
-                                                     andNegativeData: negativeData,
+                                                     withTrainingData: training_data,
+                                                     andTestData: test_data,
                                                      inputFilenames: _input_filenames,
                                                      maxDepth: maxDepth)
                         }
@@ -601,8 +600,8 @@ struct decision_tree_generator: ParsableCommand {
                     for task in tasks { try await task.value }
                 } else {
                     try await self.writeTree(withTypes: decisionTypes,
-                                             withPositiveData: positive_training_data,
-                                             andNegativeData: negative_training_data,
+                                             withTrainingData: training_data,
+                                             andTestData: test_data,
                                              inputFilenames: input_filenames,
                                              maxDepth: maxDepth)
                 }
@@ -614,11 +613,11 @@ struct decision_tree_generator: ParsableCommand {
         dispatch_group.wait()
     }
 
-    func loadDataFrom(dirname: String) async throws -> OutlierGroupValueMapResult {
-        var positive_data: [OutlierGroupValueMap] = []
-        var negative_data: [OutlierGroupValueMap] = []
+    func loadDataFrom(dirname: String) async throws -> ClassifiedData {
+        var positive_data: [OutlierFeatureData] = []
+        var negative_data: [OutlierFeatureData] = []
 
-        try await withLimitedThrowingTaskGroup(of: OutlierGroupValueMapResult.self) { taskGroup in
+        try await withLimitedThrowingTaskGroup(of: ClassifiedData.self) { taskGroup in
             // load a list of OutlierGroupValueMatrix
             // and get outlierGroupValues from them
             let contents = try file_manager.contentsOfDirectory(atPath: dirname)
@@ -636,14 +635,14 @@ struct decision_tree_generator: ParsableCommand {
                 negative_data += response.negative_data
             }
         }
-        return OutlierGroupValueMapResult(
+        return ClassifiedData(
           positive_data: positive_data,
           negative_data: negative_data)
     }
     
-    func loadDataFrom(filename: String) async throws -> OutlierGroupValueMapResult {
-        var local_positive_data: [OutlierGroupValueMap] = []
-        var local_negative_data: [OutlierGroupValueMap] = []
+    func loadDataFrom(filename: String) async throws -> ClassifiedData {
+        var local_positive_data: [OutlierFeatureData] = []
+        var local_negative_data: [OutlierFeatureData] = []
         
         Log.d("\(filename) loading data")
         
@@ -670,7 +669,7 @@ struct decision_tree_generator: ParsableCommand {
 
         if usable {
             for values in matrix.values {
-                let valueMap = OutlierGroupValueMap() { index in
+                let valueMap = OutlierFeatureData() { index in
                     return values.values[index]
                 }
                 if values.shouldPaint {
@@ -683,7 +682,7 @@ struct decision_tree_generator: ParsableCommand {
             
         //Log.i("got \(local_positive_data.count)/\(local_negative_data.count) test data from \(file)")
         
-        return OutlierGroupValueMapResult(
+        return ClassifiedData(
           positive_data: local_positive_data,
           negative_data: local_negative_data)
 
@@ -691,8 +690,8 @@ struct decision_tree_generator: ParsableCommand {
 
     
     func writeTree(withTypes decisionTypes: [OutlierGroup.TreeDecisionType],
-                   withPositiveData positive_training_data: [OutlierGroupValueMap],
-                   andNegativeData negative_training_data: [OutlierGroupValueMap],
+                   withTrainingData training_data: ClassifiedData,
+                   andTestData test_data: ClassifiedData,
                    inputFilenames: [String],
                    maxDepth: Int? = nil) async throws {
         /*
@@ -704,11 +703,11 @@ struct decision_tree_generator: ParsableCommand {
 */
         // .median seems best, but more exploration possible
         try await self.writeTree(withTypes: decisionTypes,
-                             andSplitTypes: [.median],
-                             withPositiveData: positive_training_data,
-                             andNegativeData: negative_training_data,
-                             inputFilenames: inputFilenames,
-                             maxDepth: maxDepth)
+                                 andSplitTypes: [.median],
+                                 withTrainingData: training_data,
+                                 andTestData: test_data,
+                                 inputFilenames: inputFilenames,
+                                 maxDepth: maxDepth)
 /*
         await self.writeTree(withTypes: decisionTypes,
                              andSplitTypes: [.mean, .median],
@@ -720,12 +719,12 @@ struct decision_tree_generator: ParsableCommand {
     
     func writeTree(withTypes decisionTypes: [OutlierGroup.TreeDecisionType],
                    andSplitTypes splitTypes: [DecisionSplitType],
-                   withPositiveData positive_training_data: [OutlierGroupValueMap],
-                   andNegativeData negative_training_data: [OutlierGroupValueMap],
+                   withTrainingData training_data: ClassifiedData,
+                   andTestData test_data: ClassifiedData,
                    inputFilenames: [String],
                    maxDepth: Int? = nil) async throws -> String {
         
-        Log.i("Calculating decision tree with \(positive_training_data.count) should paint \(negative_training_data.count) should not paint test data outlier groups")
+        Log.i("Calculating decision tree with \(training_data.positive_data.count) should paint \(training_data.negative_data.count) should not paint test data outlier groups")
 
         let generator = DecisionTreeGenerator(withTypes: decisionTypes,
                                               andSplitTypes: splitTypes,
@@ -734,8 +733,8 @@ struct decision_tree_generator: ParsableCommand {
         let base_filename = "../NtarDecisionTrees/Sources/NtarDecisionTrees/OutlierGroupDecisionTree_"
 
         let treeResponse = 
-          try await generator.generateTree(withPositiveData: positive_training_data,
-                                           andNegativeData: negative_training_data,
+          try await generator.generateTree(withTrainingData: training_data,
+                                           andTestData: test_data,
                                            inputFilenames: input_filenames,
                                            baseFilename: base_filename)
         
@@ -758,7 +757,7 @@ struct decision_tree_generator: ParsableCommand {
         return hash_prefix
     }
     
-    func log(valueMaps: [OutlierGroupValueMap]) async {
+    func log(valueMaps: [OutlierFeatureData]) async {
         for (index, valueMap) in valueMaps.enumerated() {
             var log = "\(index) - "
             for type in OutlierGroup.TreeDecisionType.allCases {
