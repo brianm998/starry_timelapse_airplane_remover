@@ -991,12 +991,15 @@ public func runTest(of classifier: OutlierGroupClassifier,
 fileprivate func prune(tree: SwiftDecisionTree,
                        with test_data: ClassifiedData) async -> SwiftDecisionTree
 {
-
     let original_tree = tree
     
     var (best_good, best_bad) = await runTest(of: original_tree, on: test_data)
 
-    Log.i("Prune start: best_good \(best_good), best_bad \(best_bad) on \(test_data.size) data points")
+    let total = best_good + best_bad
+
+    var best_percentage_good = Double(best_good)/Double(total)*100
+    
+    Log.i("Prune start: best_good \(best_good), best_bad \(best_bad) \(best_percentage_good)% good on \(test_data.size) data points")
 
     if let root_node = original_tree as? DecisionTreeNode {
         // iterate over every node that ends in two leafs and try stumping it and comparing to the
@@ -1005,7 +1008,7 @@ fileprivate func prune(tree: SwiftDecisionTree,
         var nodesToStump: [DecisionTreeNode] = [root_node]
     
         while nodesToStump.count > 0 {
-            Log.i("stumping w/ \(nodesToStump.count)")
+            Log.i("stumping w/ \(nodesToStump.count) nodes \(best_percentage_good)% good")
             let stump_node = nodesToStump.removeFirst()
             if !stump_node.stump {
                 stump_node.stump = true
@@ -1013,8 +1016,9 @@ fileprivate func prune(tree: SwiftDecisionTree,
                 Log.i("Prune check: better by \(good-best_good) on \(test_data.size) data points")
                 if good > best_good {
                     best_good = good
+                    best_percentage_good = Double(best_good)/Double(total)*100
                     // this was better, keep the stump
-                    Log.i("keeping stump w/ best_good \(best_good)")
+                    Log.i("keeping stump w/ best_good \(best_good) \(best_percentage_good)% good")
                 } else {
                     // it was worse, remove stump
                     stump_node.stump = false
