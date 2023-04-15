@@ -36,6 +36,31 @@ public class ClassifiedData {
     }
 
     public var size: Int { positive_data.count + negative_data.count }
+
+    public func split(into number_of_groups: Int) -> [ClassifiedData] {
+        // chunk the positive and negative data
+        let positive_chunks = positive_data.chunks(of: positive_data.count/number_of_groups)
+        let negative_chunks = negative_data.chunks(of: negative_data.count/number_of_groups)
+
+        Log.i("got \(positive_chunks.count) positive_chunks and \(negative_chunks.count) negative_chunks")
+        
+        // assemble them together
+        var ret: [ClassifiedData] = []
+        for i in 0..<Swift.min(positive_chunks.count,negative_chunks.count) {
+            ret.append(ClassifiedData(positive_data: positive_chunks[i],
+                                      negative_data: negative_chunks[i]))
+        }
+        return ret
+    }
+}
+
+extension Array {
+    // splits array into some number of chunks of the given size
+    func chunks(of size: Int) -> [[Element]] {
+        return stride(from: 0, to: count, by: size).map {
+            Array(self[$0 ..< Swift.min($0 + size, count)])
+        }
+    }
 }
 
 @available(macOS 10.15, *)

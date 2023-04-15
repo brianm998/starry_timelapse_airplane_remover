@@ -140,13 +140,13 @@ struct decision_tree_generator: ParsableCommand {
         
         Log.i("Starting with cpuUsage \(cpuUsage())")
 
-        Log.i("test-data: \(test_data_dirnames)")
-        Log.i("input_filenames: \(input_filenames)")
+        Log.i("test-data:  \(test_data_dirnames)")
+        Log.i("train-data: \(input_filenames)")
         Log.d("in debug mode")
         if verification_mode {
             run_verification()
         } else {
-            generate_tree_from_input_files()
+            generate_tree_from_training_data()
         }
         Log.dispatchGroup.wait()
     }
@@ -193,7 +193,6 @@ struct decision_tree_generator: ParsableCommand {
         // XXX run it and get the outlier groups
 
         try eraser.run()
-
         
         Log.i("loading outliers")
         // after the eraser is done running we should have received all the frames
@@ -271,13 +270,9 @@ struct decision_tree_generator: ParsableCommand {
         }
         
         Log.d("checkpoint at end")
-        //let total = num_similar_outlier_groups + num_different_outlier_groups
-        //let percentage_good = Double(num_similar_outlier_groups)/Double(total)*100
-        //Log.i("for \(json_config_file_name), out of \(total) \(percentage_good)% success")
         return TreeTestResults(numberGood: num_similar_outlier_groups,
                                numberBad: num_different_outlier_groups)
     }
-
 
     func run_verification() {
         let dispatch_group = DispatchGroup()
@@ -292,9 +287,11 @@ struct decision_tree_generator: ParsableCommand {
             // we've loaded all the classified data
 
             var results = TreeTestResults()
+
+            let chunked_test_data = classifiedData.split(into: ProcessInfo.processInfo.activeProcessorCount)
             
             for (treeKey, tree) in decisionTrees {
-                let (num_good, num_bad) = await runTest(of: tree, on: classifiedData)
+                let (num_good, num_bad) = await runTest(of: tree, onChunks: chunked_test_data)
                 results.numberGood[tree.name] = num_good
                 results.numberBad[tree.name] = num_bad
             }
@@ -546,7 +543,7 @@ struct decision_tree_generator: ParsableCommand {
     }
 
     // actually generate a decision tree
-    func generate_tree_from_input_files() {
+    func generate_tree_from_training_data() {
         
         let dispatch_group = DispatchGroup()
         dispatch_group.enter()
@@ -571,9 +568,6 @@ struct decision_tree_generator: ParsableCommand {
             }
             
             // training data gathered from all inputs
-            //var positive_training_data: [OutlierFeatureData] = []
-            //var negative_training_data: [OutlierFeatureData] = []
-
             var training_data = ClassifiedData()
             
             for json_config_file_name in input_filenames {
@@ -607,11 +601,7 @@ struct decision_tree_generator: ParsableCommand {
             Log.i("data loaded")
 
             // test data gathered from -t on command line
-            //var positive_test_data: [OutlierFeatureData] = []
-            //var negative_test_data: [OutlierFeatureData] = []
-
             var test_data = ClassifiedData()
-
             
             // load test_data 
             for dirname in test_data_dirnames {

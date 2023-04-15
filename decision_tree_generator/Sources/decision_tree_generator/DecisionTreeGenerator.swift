@@ -4,7 +4,6 @@ import ArgumentParser
 import BinaryCodable
 import CryptoKit
 
-
 // number of levels (groups of '    ') of indentation to start with 
 let initial_indent = 2
 
@@ -41,7 +40,7 @@ actor DecisionTreeGenerator {
         formatter.allowedUnits = [.day, .hour, .minute, .second]
         formatter.unitsStyle = .full
         let duration_string = formatter.string(from: start_time, to: end_time) ?? "??"
-
+        
         let indentation = "        "
         var digest = SHA256()
 
@@ -956,8 +955,31 @@ fileprivate struct DecisionResult {
 
 @available(macOS 10.15, *) 
 public func runTest(of classifier: OutlierGroupClassifier,
+                    onChunks classifiedData: [ClassifiedData]) async -> (Int, Int)
+{
+    var number_good: Int = 0
+    var number_bad: Int = 0
+    
+    await withLimitedTaskGroup(of: (positive: Int,negative: Int).self) { taskGroup in
+        for i in 0 ..< classifiedData.count {
+            await taskGroup.addTask(){ 
+                return await runTest(of: classifier, on: classifiedData[i])
+            }
+        }
+        await taskGroup.forEach()  { result in
+            number_good += result.positive
+            number_bad += result.negative
+        }
+    }
+    return (number_good, number_bad)
+}
+
+@available(macOS 10.15, *) 
+public func runTest(of classifier: OutlierGroupClassifier,
                     on classifiedData: ClassifiedData) async -> (Int, Int)
 {
+    // handle more than one classified data batch and run in parallel
+    
     let types = OutlierGroup.TreeDecisionType.allCases
 
     var numberGood = 0
@@ -991,19 +1013,23 @@ public func runTest(of classifier: OutlierGroupClassifier,
 fileprivate func prune(tree: SwiftDecisionTree,
                        with test_data: ClassifiedData) async -> SwiftDecisionTree
 {
-    let original_tree = tree
-    
-    var (best_good, best_bad) = await runTest(of: original_tree, on: test_data)
+    // first split out the test data into chunks
+
+    // then run tests in parallel
+
+    let chunked_test_data = test_data.split(into: ProcessInfo.processInfo.activeProcessorCount)
+
+    var (best_good, best_bad) = await runTest(of: tree, onChunks: chunked_test_data)
 
     let total = best_good + best_bad
-
+    
     var best_percentage_good = Double(best_good)/Double(total)*100
     
     Log.i("Prune start: best_good \(best_good), best_bad \(best_bad) \(best_percentage_good)% good on \(test_data.size) data points")
 
-    if let root_node = original_tree as? DecisionTreeNode {
-        // iterate over every node that ends in two leafs and try stumping it and comparing to the
-        // given test data
+    if let root_node = tree as? DecisionTreeNode {
+        // iterate over every DecisionTreeNode and try stumping it and comparing to the
+        // best found score so far
         
         var nodesToStump: [DecisionTreeNode] = [root_node]
     
@@ -1012,7 +1038,8 @@ fileprivate func prune(tree: SwiftDecisionTree,
             let stump_node = nodesToStump.removeFirst()
             if !stump_node.stump {
                 stump_node.stump = true
-                let (good, bad) = await runTest(of: original_tree, on: test_data)
+
+                let (good, bad) = await runTest(of: tree, onChunks: chunked_test_data)
                 Log.i("Prune check: better by \(good-best_good) on \(test_data.size) data points")
                 if good > best_good {
                     best_good = good
