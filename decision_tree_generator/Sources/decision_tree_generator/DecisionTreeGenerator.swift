@@ -136,6 +136,8 @@ actor DecisionTreeGenerator {
         var trees_name_list_string = "["
         var digest = SHA256()
 
+        var trees_type_string = ""
+        
         for tree in forest {
             let score = tree.testScore
             let name = tree.tree.name
@@ -146,6 +148,8 @@ actor DecisionTreeGenerator {
             trees_classification_string_2 += "        let _\(name) = tree_\(name).classification(of: features, and: values) * \(score)\n"
             trees_classification_string_3 += "_\(name)+"
             trees_name_list_string += " \"\(name)\","
+
+            trees_type_string += "   \(tree.tree.type)\n\n"
             
             digest.update(data: Data(name.utf8))
         }
@@ -186,6 +190,8 @@ actor DecisionTreeGenerator {
                 \(depthString)
 
                 \(pruneString)
+
+             \(trees_type_string)
               */
 
              import Foundation
