@@ -12,7 +12,7 @@ public protocol OutlierGroupClassifier {
 
     // returns -1 for negative, +1 for positive
     func classification (
-      of types: [OutlierGroup.Feature],  // parallel
+      of features: [OutlierGroup.Feature],        // parallel
       and values: [Double]                        // arrays
     ) -> Double
 }

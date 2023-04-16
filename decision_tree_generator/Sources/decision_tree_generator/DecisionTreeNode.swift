@@ -67,12 +67,12 @@ class DecisionTreeNode: SwiftDecisionTree {
 
     func classification
       (
-        of types: [OutlierGroup.Feature], // parallel
+        of features: [OutlierGroup.Feature], // parallel
         and values: [Double]                        // arrays
       ) -> Double
     {
-        for i in 0 ..< types.count {
-            if types[i] == type {
+        for i in 0 ..< features.count {
+            if features[i] == type {
                 let outlierValue = values[i]
 
                 if stump {
@@ -83,9 +83,9 @@ class DecisionTreeNode: SwiftDecisionTree {
                     }
                 } else {
                     if outlierValue < value {
-                        return lessThan.classification(of: types, and: values)
+                        return lessThan.classification(of: features, and: values)
                     } else {
-                        return greaterThan.classification(of: types, and: values)
+                        return greaterThan.classification(of: features, and: values)
                     }
                 }
                 

@@ -23,13 +23,13 @@ struct ForestClassifier: OutlierGroupClassifier {
 
     // returns -1 for negative, +1 for positive
     func classification (
-      of types: [OutlierGroup.Feature],  // parallel
+      of features: [OutlierGroup.Feature],  // parallel
       and values: [Double]                        // arrays
     ) -> Double
     {
         var ret: Double = 0
         for result in trees {
-            ret += result.tree.classification(of: types, and: values) * result.testScore
+            ret += result.tree.classification(of: features, and: values) * result.testScore
         }
         return ret / Double(trees.count)
     }

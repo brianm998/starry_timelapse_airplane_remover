@@ -45,7 +45,7 @@ fileprivate func listClasses<T>(_ body: (UnsafeBufferPointer<AnyClass>) throws -
 @available(macOS 10.15, *) 
 public extension OutlierGroup {
     
-    // ordered by the list of types below
+    // ordered by the list of features below
     var decisionTreeValues: [Double] {
         get async {
             var ret: [Double] = []

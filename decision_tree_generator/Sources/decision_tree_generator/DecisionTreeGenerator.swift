@@ -113,7 +113,7 @@ actor DecisionTreeGenerator {
 
             trees_declaration_string += "    let tree_\(name) = OutlierGroupDecisionTree_\(name)()\n"
             trees_classification_string_1 += "        let _\(name) = await tree_\(name).classification(of: group) * \(score)\n"
-            trees_classification_string_2 += "        let _\(name) = tree_\(name).classification(of: types, and: values) * \(score)\n"
+            trees_classification_string_2 += "        let _\(name) = tree_\(name).classification(of: features, and: values) * \(score)\n"
             trees_classification_string_3 += "_\(name)+"
             digest.update(data: Data(name.utf8))
         }
@@ -151,8 +151,8 @@ actor DecisionTreeGenerator {
 
                  // returns -1 for negative, +1 for positive
                  public func classification (
-                    of types: [OutlierGroup.Feature],  // parallel
-                    and values: [Double]                        // arrays
+                    of features: [OutlierGroup.Feature],   // parallel
+                    and values: [Double]                   // arrays
                  ) -> Double
                  {
              \(trees_classification_string_2)
@@ -389,15 +389,15 @@ actor DecisionTreeGenerator {
               }
 
               // a way to call into the decision tree without an OutlierGroup object
-              // it's going to blow up unless supplied with the expected set of types
+              // it's going to blow up unless supplied with the expected set of features
               // return value is between -1 and 1, 1 is paint
               public func classification(
-                 of types: [OutlierGroup.Feature], // parallel
+                 of features: [OutlierGroup.Feature], // parallel
                  and values: [Double]                       // arrays
                 ) -> Double
               {
                 var map: [OutlierGroup.Feature:Double] = [:]
-                for (index, type) in types.enumerated() {
+                for (index, type) in features.enumerated() {
                     let value = values[index]
                     map[type] = value
                 }
@@ -1144,13 +1144,13 @@ public func runTest(of classifier: OutlierGroupClassifier,
 public func runTest(of classifier: OutlierGroupClassifier,
                     on classifiedData: ClassifiedData) async -> (Int, Int)
 {
-    let types = OutlierGroup.Feature.allCases
+    let features = OutlierGroup.Feature.allCases
 
     var numberGood = 0
     var numberBad = 0
     
     for positiveData in classifiedData.positiveData {
-        let classification = classifier.classification(of: types, and: positiveData.values)
+        let classification = classifier.classification(of: features, and: positiveData.values)
         if classification < 0 {
             // wrong
             numberBad += 1
@@ -1161,7 +1161,7 @@ public func runTest(of classifier: OutlierGroupClassifier,
     }
 
     for negativeData in classifiedData.negativeData {
-        let classification = classifier.classification(of: types, and: negativeData.values)
+        let classification = classifier.classification(of: features, and: negativeData.values)
         if classification < 0 {
             //right
             numberGood += 1

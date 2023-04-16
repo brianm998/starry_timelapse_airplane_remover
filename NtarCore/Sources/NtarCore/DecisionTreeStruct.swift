@@ -41,10 +41,10 @@ public struct DecisionTreeStruct: DecisionTree {
 
     // returns -1 for negative, +1 for positive
     public func classification (
-      of types: [OutlierGroup.Feature],  // parallel
+      of features: [OutlierGroup.Feature],  // parallel
       and values: [Double]                        // arrays
     ) -> Double
     {
-        return tree.classification(of: types, and: values)
+        return tree.classification(of: features, and: values)
     }
 }

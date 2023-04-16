@@ -84,7 +84,7 @@ struct decision_tree_generator: ParsableCommand {
 
     @Option(name: [.customShort("f"), .customLong("features")],
           help:"""
-            Specify a comma delimited list of types from this list:
+            Specify a comma delimited list of features from this list:
             
             \(OutlierGroup.Feature.allCasesString)
             """)
