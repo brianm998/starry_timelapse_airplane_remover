@@ -17,7 +17,7 @@ struct FullyNegativeTreeNode: SwiftDecisionTree {
 
     public func classification
       (
-        of types: [OutlierGroup.TreeDecisionType], // parallel
+        of types: [OutlierGroup.Feature], // parallel
         and values: [Double]                        // arrays
       ) -> Double
     {

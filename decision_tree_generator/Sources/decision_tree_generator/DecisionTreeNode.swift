@@ -7,7 +7,7 @@ import NtarCore
 @available(macOS 10.15, *) 
 class DecisionTreeNode: SwiftDecisionTree {
 
-    public init (type: OutlierGroup.TreeDecisionType,
+    public init (type: OutlierGroup.Feature,
                  value: Double,
                  lessThan: SwiftDecisionTree,
                  lessThanStumpValue: Double,
@@ -33,7 +33,7 @@ class DecisionTreeNode: SwiftDecisionTree {
     let greaterThanStumpValue: Double
       
     // the kind of value we are deciding upon
-    let type: OutlierGroup.TreeDecisionType
+    let type: OutlierGroup.Feature
 
     // the value that we are splitting upon
     let value: Double
@@ -67,7 +67,7 @@ class DecisionTreeNode: SwiftDecisionTree {
 
     func classification
       (
-        of types: [OutlierGroup.TreeDecisionType], // parallel
+        of types: [OutlierGroup.Feature], // parallel
         and values: [Double]                        // arrays
       ) -> Double
     {

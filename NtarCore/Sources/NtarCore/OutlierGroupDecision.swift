@@ -3,7 +3,7 @@ import Foundation
 /*
  This OutlierGroup extention contains all of the decision tree specific logic.
 
- Adding a new case to the TreeDecisionType and giving a value for it in decisionTreeValue
+ Adding a new case to the Feature and giving a value for it in decisionTreeValue
  is all needed to add a new value to the decision tree criteria
  
  */
@@ -49,7 +49,7 @@ public extension OutlierGroup {
     var decisionTreeValues: [Double] {
         get async {
             var ret: [Double] = []
-            for type in OutlierGroup.TreeDecisionType.allCases {
+            for type in OutlierGroup.Feature.allCases {
                 ret.append(await self.decisionTreeValue(for: type))
             }
             return ret
@@ -57,9 +57,9 @@ public extension OutlierGroup {
     }
 
     // the ordering of the list of values above
-    static var decisionTreeValueTypes: [OutlierGroup.TreeDecisionType] {
-        var ret: [OutlierGroup.TreeDecisionType] = []
-        for type in OutlierGroup.TreeDecisionType.allCases {
+    static var decisionTreeValueTypes: [OutlierGroup.Feature] {
+        var ret: [OutlierGroup.Feature] = []
+        for type in OutlierGroup.Feature.allCases {
             ret.append(type)
         }
         return ret
@@ -68,7 +68,7 @@ public extension OutlierGroup {
     var decisionTreeGroupValues: OutlierFeatureData {
         get async {
             var rawValues = OutlierFeatureData.rawValues()
-            for type in OutlierGroup.TreeDecisionType.allCases {
+            for type in OutlierGroup.Feature.allCases {
                 let value = await self.decisionTreeValue(for: type)
                 rawValues[type.sortOrder] = value
                 //Log.d("frame \(frame_index) type \(type) value \(value)")
@@ -82,7 +82,7 @@ public extension OutlierGroup {
     // add a new case, handle all switches here, and the
     // decision tree generator will use it after recompile
     // all existing outlier value files will need to be regenerated to include itx
-    enum TreeDecisionType: String,
+    enum Feature: String,
                            CaseIterable,
                            Hashable,
                            Codable,
@@ -133,7 +133,7 @@ public extension OutlierGroup {
 
         public static var allCasesString: String {
             var ret = ""
-            for type in OutlierGroup.TreeDecisionType.allCases {
+            for type in OutlierGroup.Feature.allCases {
                 ret += "\(type.rawValue)\n"
             }
 
@@ -224,16 +224,16 @@ public extension OutlierGroup {
             }
         }
 
-        public static func ==(lhs: TreeDecisionType, rhs: TreeDecisionType) -> Bool {
+        public static func ==(lhs: Feature, rhs: Feature) -> Bool {
             return lhs.sortOrder == rhs.sortOrder
         }
 
-        public static func <(lhs: TreeDecisionType, rhs: TreeDecisionType) -> Bool {
+        public static func <(lhs: Feature, rhs: Feature) -> Bool {
             return lhs.sortOrder < rhs.sortOrder
         }        
     }
 
-    func nonAsyncDecisionTreeValue(for type: TreeDecisionType) -> Double {
+    func nonAsyncDecisionTreeValue(for type: Feature) -> Double {
         let height = IMAGE_HEIGHT!
         let width = IMAGE_WIDTH!
         switch type {
@@ -292,7 +292,7 @@ public extension OutlierGroup {
         }
     }
     
-    func decisionTreeValue(for type: TreeDecisionType) async -> Double {
+    func decisionTreeValue(for type: Feature) async -> Double {
         switch type {
         case .numberOfNearbyOutliersInSameFrame:
             return await self.numberOfNearbyOutliersInSameFrame
@@ -679,7 +679,7 @@ public extension OutlierGroup {
     /*
     func logDecisionTreeValues() {
         var message = "decision tree values for \(self.name): "
-        for type in /*OutlierGroup.*/TreeDecisionType.allCases {
+        for type in /*OutlierGroup.*/Feature.allCases {
             message += "\(type) = \(self.decisionTreeValue(for: type)) " 
         }
         Log.d(message)

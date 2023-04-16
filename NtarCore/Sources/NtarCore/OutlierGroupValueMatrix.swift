@@ -3,7 +3,7 @@ import Foundation
 // used for storing only decision tree data for all of the outlier groups in a frame
 @available(macOS 10.15, *) 
 public class OutlierGroupValueMatrix: Codable {
-    public var types: [OutlierGroup.TreeDecisionType] = OutlierGroup.decisionTreeValueTypes
+    public var types: [OutlierGroup.Feature] = OutlierGroup.decisionTreeValueTypes
 
     public struct OutlierGroupValues: Codable {
         public let shouldPaint: Bool
