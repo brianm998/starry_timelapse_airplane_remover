@@ -320,7 +320,7 @@ actor DecisionTreeGenerator {
         //Log.d("getting root")
 
         // the root tree node with all of the test data 
-        let tree = await decisionTreeNode(withTrainingData: trainingData,
+        var tree = await decisionTreeNode(withTrainingData: trainingData,
                                           andTestData: testData,
                                           indented: initial_indent,
                                           decisionTypes: decisionTypes,
@@ -332,12 +332,9 @@ actor DecisionTreeGenerator {
         var generated_swift_code: String = ""
         if pruneTree {
             // this can take a long time
-            let pruned_tree = await prune(tree: tree, with: testData)
-            
-            generated_swift_code = pruned_tree.swiftCode
-        } else {
-            generated_swift_code = tree.swiftCode
+           tree = await prune(tree: tree, with: testData)
         }
+        generated_swift_code = tree.swiftCode
 
         Log.d("got root")
 
@@ -585,22 +582,21 @@ fileprivate func recurseOn(result: DecisionResult, indent: Int,
     
     if at(max: indent + 2, at: maxDepth) {
         // stump, don't extend the tree branches further
-        var ret = DecisionTreeNode(type: result.type,
-                                   value: result.value,
-                                   lessThan: FullyPositiveTreeNode(indent: 0), // not used
-                                   lessThanStumpValue: lessThanStumpValue,
-                                   greaterThan: FullyPositiveTreeNode(indent: 0), // not used
-                                   greaterThanStumpValue: greaterThanStumpValue,
-                                   indent: indent/* + 1*/,
-                                   stump: true)
-        return ret
+        return DecisionTreeNode(type: result.type,
+                                value: result.value,
+                                lessThan: FullyPositiveTreeNode(indent: 0), // not used
+                                lessThanStumpValue: lessThanStumpValue,
+                                greaterThan: FullyPositiveTreeNode(indent: 0), // not used
+                                greaterThanStumpValue: greaterThanStumpValue,
+                                indent: indent/* + 1*/,
+                                stump: true)
     } else {
         
-        let lessThanPositive = result.lessThanPositive.map { $0 }
-        let lessThanNegative = result.lessThanNegative.map { $0 }
+        let lessThanPositive = result.lessThanPositive//.map { $0 }
+        let lessThanNegative = result.lessThanNegative//.map { $0 }
         
-        let greaterThanPositive = result.greaterThanPositive.map { $0 }
-        let greaterThanNegative = result.greaterThanNegative.map { $0 }
+        let greaterThanPositive = result.greaterThanPositive//.map { $0 }
+        let greaterThanNegative = result.greaterThanNegative//.map { $0 }
         
         let less_response_task = await runTask() {
             let _decisionTypes = decisionTypes
@@ -945,7 +941,6 @@ fileprivate func decisionTreeNode(withTrainingData trainingData: ClassifiedData,
                                                       result: decisionResult)) 
         }
     }
-    //        }
     
     // return a direct tree node if we have it (no recursion)
     // make sure we choose the best one of theese
