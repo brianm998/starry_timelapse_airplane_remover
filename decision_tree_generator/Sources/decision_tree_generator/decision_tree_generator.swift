@@ -814,9 +814,11 @@ struct decision_tree_generator: ParsableCommand {
         
         Log.i("Calculating decision tree with \(trainingData.positiveData.count) should paint \(trainingData.negativeData.count) should not paint test data outlier groups")
 
+        let prune = !noPrune && testData.positiveData.count != 0 && testData.negativeData.count != 0
+        
         let generator = DecisionTreeGenerator(withTypes: decisionTypes,
                                               andSplitTypes: splitTypes,
-                                              pruneTree: !noPrune,
+                                              pruneTree: prune,
                                               maxDepth: maxDepth)
 
         let base_filename = "../NtarDecisionTrees/Sources/NtarDecisionTrees/OutlierGroupDecisionTree_"

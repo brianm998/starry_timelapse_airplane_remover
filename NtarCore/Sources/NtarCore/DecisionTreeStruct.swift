@@ -11,7 +11,16 @@ public struct DecisionTreeStruct: DecisionTree {
     public let inputSequences: [String]
     public let decisionTypes: [OutlierGroup.Feature]
     public let tree: SwiftDecisionTree
-
+    public let maxDepth: Int?
+    public let pruned: Bool
+    public var type: ClassifierType {
+        return .tree(DecisionTreeParams(name: name,
+                                        inputSequences: inputSequences,
+                                        decisionTypes: decisionTypes,
+                                        maxDepth: maxDepth,
+                                        pruned: pruned))
+    }
+    
     public init() {
         fatalError("don't call this")
     }
@@ -23,7 +32,9 @@ public struct DecisionTreeStruct: DecisionTree {
                 sha256: String,
                 generationSecondsSince1970: TimeInterval,
                 inputSequences: [String],
-                decisionTypes: [OutlierGroup.Feature])
+                decisionTypes: [OutlierGroup.Feature],
+                maxDepth: Int?,
+                pruned: Bool)
     {
         self.name = name
         self.tree = tree
@@ -33,6 +44,8 @@ public struct DecisionTreeStruct: DecisionTree {
         self.generationSecondsSince1970 = generationSecondsSince1970
         self.inputSequences = inputSequences
         self.decisionTypes = decisionTypes
+        self.maxDepth = maxDepth
+        self.pruned = pruned
     }
     
     public func classification(of group: OutlierGroup) async -> Double {
