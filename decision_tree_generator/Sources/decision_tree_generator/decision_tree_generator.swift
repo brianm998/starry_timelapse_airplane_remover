@@ -111,6 +111,12 @@ struct decision_tree_generator: ParsableCommand {
             Then a higher level classifier is written to combine them all.
             """)
     var forestSize: Int? = nil
+
+    @Flag(name: [.customLong("no-prune")],
+          help:"""
+            Turn off pruning of trees, which can be slow
+            """)
+    var noPrune = false
     
     @Argument(help: """
                 A list of files, which can be either a reference to a config.json file,
@@ -548,6 +554,7 @@ struct decision_tree_generator: ParsableCommand {
 
             let generator = DecisionTreeGenerator(withTypes: OutlierGroup.Feature.allCases,
                                                   andSplitTypes: [.median],
+                                                  pruneTree: !noPrune,
                                                   maxDepth: maxDepth)
 
             let base_filename = "../NtarDecisionTrees/Sources/NtarDecisionTrees/OutlierGroupDecisionTreeForest_"
@@ -809,6 +816,7 @@ struct decision_tree_generator: ParsableCommand {
 
         let generator = DecisionTreeGenerator(withTypes: decisionTypes,
                                               andSplitTypes: splitTypes,
+                                              pruneTree: !noPrune,
                                               maxDepth: maxDepth)
 
         let base_filename = "../NtarDecisionTrees/Sources/NtarDecisionTrees/OutlierGroupDecisionTree_"

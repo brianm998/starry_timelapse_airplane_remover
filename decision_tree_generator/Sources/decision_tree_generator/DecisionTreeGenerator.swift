@@ -8,18 +8,27 @@ import CryptoKit
 let initial_indent = 2
 
 @available(macOS 10.15, *) 
+struct TreeForestResult {
+    let tree: DecisionTreeStruct
+    let testScore: Double
+}
+
+@available(macOS 10.15, *) 
 actor DecisionTreeGenerator {
 
     let decisionTypes: [OutlierGroup.Feature]
     let decisionSplitTypes: [DecisionSplitType]
     let maxDepth: Int
+    let pruneTree: Bool
     
     public init(withTypes types: [OutlierGroup.Feature] = OutlierGroup.Feature.allCases,
                 andSplitTypes splitTypes: [DecisionSplitType] = [.median],
+                pruneTree: Bool = true,
                 maxDepth: Int? = nil)
     {
         decisionTypes = types
         decisionSplitTypes = splitTypes
+        self.pruneTree = pruneTree
         if let maxDepth = maxDepth {
             self.maxDepth = maxDepth
         } else {
@@ -198,6 +207,12 @@ actor DecisionTreeGenerator {
         
         digest.update(data: Data("\(trainingData.positiveData.count)".utf8))
         digest.update(data: Data("\(trainingData.negativeData.count)".utf8))
+
+        if pruneTree {
+            digest.update(data: Data("PRUNE".utf8))
+        } else {
+            digest.update(data: Data("NO PRUNE".utf8))
+        }
         
         var input_files_string = ""
         var input_files_array = "\(indentation)["
@@ -312,11 +327,17 @@ actor DecisionTreeGenerator {
                                           decisionSplitTypes: decisionSplitTypes,
                                           maxDepth: maxDepth)
 
-        let pruned_tree = await prune(tree: tree, with: testData)
-        
-        // XXX prune this mother fucker with test data
-        
-        let generated_swift_code = tree.swiftCode
+        // prune this mother fucker with test data
+
+        var generated_swift_code: String = ""
+        if pruneTree {
+            // this can take a long time
+            let pruned_tree = await prune(tree: tree, with: testData)
+            
+            generated_swift_code = pruned_tree.swiftCode
+        } else {
+            generated_swift_code = tree.swiftCode
+        }
 
         Log.d("got root")
 
@@ -326,6 +347,22 @@ actor DecisionTreeGenerator {
             treeString =
               """
                  This is tree number \(treeIndex) of a forest
+              
+              """
+        }
+
+        var pruneString = ""
+        
+        if pruneTree {
+            pruneString =
+              """
+                 This tree was pruned with test data
+              
+              """
+        } else {
+            pruneString =
+              """
+                 This tree was NOT pruned with test data
               
               """
         }
@@ -341,6 +378,7 @@ actor DecisionTreeGenerator {
              from input data described by:
           \(input_files_string)
           \(treeString)
+          \(pruneString)
           */
 
           import Foundation
@@ -1172,12 +1210,6 @@ public func runTest(of classifier: OutlierGroupClassifier,
     }
 
     return (numberGood, numberBad)
-}
-
-@available(macOS 10.15, *) 
-struct TreeForestResult {
-    let tree: DecisionTreeStruct
-    let testScore: Double
 }
 
 @available(macOS 10.15, *) 
