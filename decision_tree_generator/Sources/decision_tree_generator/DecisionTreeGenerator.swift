@@ -380,7 +380,6 @@ actor DecisionTreeGenerator {
 
         // the root tree node with all of the test data 
         var tree = await decisionTreeNode(withTrainingData: trainingData,
-                                          andTestData: testData,
                                           indented: initial_indent,
                                           decisionTypes: decisionTypes,
                                           decisionSplitTypes: decisionSplitTypes,
@@ -391,7 +390,7 @@ actor DecisionTreeGenerator {
         var generated_swift_code: String = ""
         if pruneTree {
             // this can take a long time
-           tree = await prune(tree: tree, with: testData)
+            tree = await prune(tree: tree, with: testData)
         }
         generated_swift_code = tree.swiftCode
 
@@ -614,7 +613,6 @@ fileprivate func getValueDistributions(of values: [[Double]],
 fileprivate func recurseOn(result: DecisionResult, indent: Int,
                            decisionTypes: [OutlierGroup.Feature],
                            decisionSplitTypes: [DecisionSplitType],
-                           andTestData testData: ClassifiedData,
                            maxDepth: Int) async -> DecisionTreeNode {
     //Log.d("best at indent \(indent) was \(result.type) \(String(format: "%g", result.lessThanSplit)) \(String(format: "%g", result.greaterThanSplit)) \(String(format: "%g", result.value)) < Should \(await result.lessThanPositive.count) < ShouldNot \(await result.lessThanNegative.count) > Should  \(await result.lessThanPositive.count) > ShouldNot \(await result.greaterThanNegative.count)")
     
@@ -670,7 +668,6 @@ fileprivate func recurseOn(result: DecisionResult, indent: Int,
             let less_tree = await decisionTreeNode(
               withTrainingData: ClassifiedData(positiveData: lessThanPositive,
                                                negativeData: lessThanNegative),
-              andTestData: testData,
               indented: indent + 1,
               decisionTypes: _decisionTypes,
               decisionSplitTypes: _decisionSplitTypes,
@@ -684,7 +681,6 @@ fileprivate func recurseOn(result: DecisionResult, indent: Int,
         let greater_tree = await decisionTreeNode(
               withTrainingData: ClassifiedData(positiveData: greaterThanPositive,
                                                negativeData: greaterThanNegative),
-              andTestData: testData,
               indented: indent + 1,
               decisionTypes: _decisionTypes,
               decisionSplitTypes: _decisionSplitTypes,
@@ -721,8 +717,7 @@ fileprivate func at(max indent: Int, at maxDepth: Int) -> Bool {
 @available(macOS 10.15, *) 
 fileprivate func result(for type: OutlierGroup.Feature,
                         decisionValue: Double,
-                        withTrainingData trainingData: ClassifiedData,
-                        andTestData testData: ClassifiedData)
+                        withTrainingData trainingData: ClassifiedData)
   async -> FeatureResult
 {
     var lessThanPositive: [OutlierFeatureData] = []
@@ -772,7 +767,6 @@ fileprivate func result(for type: OutlierGroup.Feature,
 // recursively return a decision tree that differentiates the test data
 @available(macOS 10.15, *) 
 fileprivate func decisionTreeNode(withTrainingData trainingData: ClassifiedData,
-                                  andTestData testData: ClassifiedData,
                                   indented indent: Int,
                                   decisionTypes: [OutlierGroup.Feature],
                                   decisionSplitTypes: [DecisionSplitType],
@@ -908,16 +902,14 @@ fileprivate func decisionTreeNode(withTrainingData trainingData: ClassifiedData,
                             let result = await
                               result(for: type,
                                      decisionValue: (paint_dist.mean + not_paint_dist.mean) / 2,
-                                     withTrainingData: trainingData,
-                                     andTestData: testData)
+                                     withTrainingData: trainingData)
                             ret.append(result)
                             
                         case .median:
                             let result = await 
                               result(for: type,
                                      decisionValue: (paint_dist.median + not_paint_dist.median) / 2,
-                                     withTrainingData: trainingData,
-                                     andTestData: testData)
+                                     withTrainingData: trainingData)
                             ret.append(result)
                         }
                     }
@@ -1056,7 +1048,6 @@ fileprivate func decisionTreeNode(withTrainingData trainingData: ClassifiedData,
                                    indent: indent,
                                    decisionTypes: decisionTypes,
                                    decisionSplitTypes: decisionSplitTypes,
-                                   andTestData: testData,
                                    maxDepth: maxDepth)
         } else {
             // choose the first one somehow
@@ -1088,7 +1079,6 @@ fileprivate func decisionTreeNode(withTrainingData trainingData: ClassifiedData,
                                        indent: indent,
                                        decisionTypes: decisionTypes,
                                        decisionSplitTypes: decisionSplitTypes,
-                                       andTestData: testData,
                                        maxDepth: maxDepth) // XXX
             } else {
                 // sort them by type next
@@ -1105,7 +1095,6 @@ fileprivate func decisionTreeNode(withTrainingData trainingData: ClassifiedData,
                                        indent: indent,
                                        decisionTypes: decisionTypes,
                                        decisionSplitTypes: decisionSplitTypes,
-                                       andTestData: testData,
                                        maxDepth: maxDepth) // XXX
             }
         }
