@@ -22,26 +22,29 @@ public struct DecisionTreeParams {
 
     public init(name: String,
                 inputSequences: [String],
-//    let positiveTrainingSize: Int
-//    let negativeTrainingSize: Int
+                positiveTrainingSize: Int,
+                negativeTrainingSize: Int,
                 decisionTypes: [OutlierGroup.Feature],
-//    let decisionSplitTypes: [DecisionSplitType]
+                decisionSplitTypes: [DecisionSplitType],
                 maxDepth: Int?,
                 pruned: Bool)
     {
         self.name = name
         self.inputSequences = inputSequences
+        self.positiveTrainingSize = positiveTrainingSize
+        self.negativeTrainingSize = negativeTrainingSize
         self.decisionTypes = decisionTypes
+        self.decisionSplitTypes = decisionSplitTypes
         self.maxDepth = maxDepth
         self.pruned = pruned
     }
     
     let name: String
     let inputSequences: [String]
-//    let positiveTrainingSize: Int
-//    let negativeTrainingSize: Int
+    let positiveTrainingSize: Int
+    let negativeTrainingSize: Int
     let decisionTypes: [OutlierGroup.Feature]
-//    let decisionSplitTypes: [DecisionSplitType]
+    let decisionSplitTypes: [DecisionSplitType]
     let maxDepth: Int?
     let pruned: Bool
 }
