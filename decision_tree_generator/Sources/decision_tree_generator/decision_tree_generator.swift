@@ -6,60 +6,6 @@ import CryptoKit
 
 var start_time: Date = Date()
 
-class TreeTestResults {
-    var numberGood: [String:Int] = [:]
-    var numberBad: [String:Int] = [:]
-
-    public init() { }
-    public init(numberGood: [String:Int],
-                numberBad: [String:Int])
-    {
-        self.numberGood = numberGood
-        self.numberBad = numberBad
-    }
-}
-
-@available(macOS 10.15, *)
-struct ForestClassifier: OutlierGroupClassifier {
-
-    let trees: [TreeForestResult]
-    
-    init(trees: [TreeForestResult]) {
-        self.trees = trees
-    }
-    // returns -1 for negative, +1 for positive
-    func classification(of group: OutlierGroup) async -> Double {
-        var ret: Double = 0
-        for result in trees {
-            ret += await result.tree.classification(of: group) * result.testScore
-        }
-        return ret / Double(trees.count)
-    }
-
-    // returns -1 for negative, +1 for positive
-    func classification (
-      of types: [OutlierGroup.TreeDecisionType],  // parallel
-      and values: [Double]                        // arrays
-    ) -> Double
-    {
-        var ret: Double = 0
-        for result in trees {
-            ret += result.tree.classification(of: types, and: values) * result.testScore
-        }
-        return ret / Double(trees.count)
-    }
-
-}
-
-struct DecisionTreeResult: Comparable {
-    let score: Double
-    let message: String
-
-    public static func < (lhs: Self, rhs: Self) -> Bool {
-        return lhs.score < rhs.score
-    }
-}
-
 // how much do we truncate the sha256 hash when embedding it into code
 let sha_prefix_size = 8
 
@@ -189,9 +135,13 @@ struct decision_tree_generator: ParsableCommand {
         } else {
             if let forestSize = forestSize {
                 // generate a forest of trees
+                // this ignores given test data,
+                // instead separating out the input data
+                // into train, validate and test segments
                 generate_forest_from_training_data(with: forestSize)                
             } else {
                 // generate a single tree
+                // this prunes from the give test data
                 generate_tree_from_training_data()
             }
         }
@@ -589,7 +539,7 @@ struct decision_tree_generator: ParsableCommand {
         return (positiveData, negativeData)
     }
 
-    // actually generate a decision tree
+    // actually generate a decision tree forest
     func generate_forest_from_training_data(with forestSize: Int) {
         
         let dispatch_group = DispatchGroup()
