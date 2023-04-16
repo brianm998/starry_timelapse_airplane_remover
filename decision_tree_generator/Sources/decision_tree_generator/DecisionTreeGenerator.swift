@@ -360,8 +360,6 @@ actor DecisionTreeGenerator {
         
         skippedDecisionTypeString += "\n    ]\n"
 
-
-
         var decisionSplitTypeString = "[\n"
         
         for type in decisionSplitTypes {
@@ -469,18 +467,9 @@ actor DecisionTreeGenerator {
               
               public let generationSecondsSince1970 = \(generation_date_since_1970)
 
-              public let inputSequences =
-          \(input_files_array)
-
-              // the list of decision types this tree was made with
-              public let decisionTypes: [OutlierGroup.Feature] = \(decisionTypeString)
-
               // the list of decision types this tree did not use
           \(skippedDecisionTypeString)
           
-              // the types of decision splits made
-              public let decisionSplitTypes: [DecisionSplitType] = \(decisionSplitTypeString)
-
               // decide the paintability of this OutlierGroup with a decision tree
               public func classification(of group: OutlierGroup) async -> Double {
                   return await group.shouldPaint_\(hash_prefix)(from: self)
