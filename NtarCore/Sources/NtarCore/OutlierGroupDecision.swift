@@ -19,17 +19,17 @@ public enum DecisionSplitType: String {
 // a list of all extant decision trees at runtime, indexed by hash prefix
 @available(macOS 10.15, *)
 // XXX we need an actor here for thread safety
-public var decisionTrees: [String: NamedOutlierGroupClassifier] = loadDecisionTrees()
+public var decisionTrees: [String: NamedOutlierGroupClassifier] = loadOutlierGroupClassifiers()
 
 @available(macOS 10.15, *)
-public func loadDecisionTrees() -> [String : NamedOutlierGroupClassifier] {
+public func loadOutlierGroupClassifiers() -> [String : NamedOutlierGroupClassifier] {
     let decisionTrees = listClasses { $0.compactMap { $0 as? NamedOutlierGroupClassifier.Type } }
     var ret: [String: NamedOutlierGroupClassifier] = [:]
     for tree in decisionTrees {
         let instance = tree.init()
         ret[instance.name] = instance
     }
-    Log.i("loaded \(ret.count) decision trees")
+    Log.i("loaded \(ret.count) outlier group classifiers")
     return ret
 }
 
