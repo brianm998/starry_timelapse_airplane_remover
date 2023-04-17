@@ -113,6 +113,7 @@ public extension OutlierGroup {
         case numberOfNearbyOutliersInSameFrame
         case adjecentFrameNeighboringOutliersBestTheta
         case histogramStreakDetection
+        case longerHistogramStreakDetection
         case maxHoughTransformCount
         case maxHoughTheta
         case neighboringInterFrameOutlierThetaScore
@@ -147,6 +148,8 @@ public extension OutlierGroup {
             case .adjecentFrameNeighboringOutliersBestTheta:
                 return true
             case .histogramStreakDetection:
+                return true
+            case .longerHistogramStreakDetection:
                 return true
             case .neighboringInterFrameOutlierThetaScore:
                 return true
@@ -211,16 +214,18 @@ public extension OutlierGroup {
                 return 23
             case .histogramStreakDetection:
                 return 24
-            case .maxHoughTransformCount:
+            case .longerHistogramStreakDetection:
                 return 25
-            case .maxHoughTheta:
+            case .maxHoughTransformCount:
                 return 26
-            case .neighboringInterFrameOutlierThetaScore:
+            case .maxHoughTheta:
                 return 27
-            case .maxOverlap:
+            case .neighboringInterFrameOutlierThetaScore:
                 return 28
-            case .maxOverlapTimesThetaHisto:
+            case .maxOverlap:
                 return 29
+            case .maxOverlapTimesThetaHisto:
+                return 30
             }
         }
 
@@ -300,6 +305,8 @@ public extension OutlierGroup {
             return await self.adjecentFrameNeighboringOutliersBestTheta
         case .histogramStreakDetection:
             return await self.histogramStreakDetection
+        case .longerHistogramStreakDetection:
+            return await self.longerHistogramStreakDetection
         case .neighboringInterFrameOutlierThetaScore:
             return await self.neighboringInterFrameOutlierThetaScore
         case .maxOverlap:
@@ -431,36 +438,13 @@ public extension OutlierGroup {
     }
     
     // tries to find a streak with hough line histograms
-    private var histogramStreakDetectionV2: Double { // XXX rename this
+    // make this recursive to go back 3 frames in each direction
+    private var longerHistogramStreakDetection: Double {
         get async {
-            if let frame = frame {
-                var best_score = 0.0
-                let selfHisto = self.houghLineHistogram
-
-                if let previous_frame = await frame.previousFrame,
-                   let nearby_groups = await previous_frame.outlierGroups(within: self.maxNearbyGroupDistance,
-                                                                          of: self.bounds)
-                {
-                    for group in nearby_groups {
-                        let score = await self.thetaHistoCenterLineScore(with: group,
-                                                                         selfHisto: selfHisto)
-                        best_score = max(score, best_score)
-                    }
-                }
-                if let next_frame = await frame.nextFrame,
-                   let nearby_groups = await next_frame.outlierGroups(within: self.maxNearbyGroupDistance,
-                                                                      of: self.bounds)
-                {
-                    for group in nearby_groups {
-                        let score = await self.thetaHistoCenterLineScore(with: group,
-                                                                         selfHisto: selfHisto)
-                        best_score = max(score, best_score)
-                    }
-                }
-                return best_score
-            } else {
-                fatalError("SHIT")
-            }
+            let number_of_frames = 10 // how far in each direction to go
+            let forwardScore = await self.streakScore(in: .forwards, numberOfFramesLeft: number_of_frames)
+            let backwardScore = await self.streakScore(in: .backwards, numberOfFramesLeft: number_of_frames)
+            return forwardScore + backwardScore
         }
     }
 
@@ -683,5 +667,50 @@ public extension OutlierGroup {
             message += "\(type) = \(self.decisionTreeValue(for: type)) " 
         }
         Log.d(message)
-    }*/
+        }*/
+
+
+    @available(macOS 10.15, *)
+    func streakScore(in direction: StreakDirection,
+                     numberOfFramesLeft: Int,
+                     existingValue: Double = 0) async -> Double
+    {
+        let selfHisto = self.houghLineHistogram
+        var best_score = 0.0
+        var bestGroup: OutlierGroup?
+        
+        if let frame = self.frame,
+           let other_frame = direction == .forwards ? await frame.nextFrame : await frame.previousFrame,
+           let nearby_groups = await other_frame.outlierGroups(within: self.maxNearbyGroupDistance,
+                                                               of: self.bounds)
+        {
+            for nearby_group in nearby_groups {
+                let score = await self.thetaHistoCenterLineScore(with: nearby_group,
+                                                                 selfHisto: selfHisto)
+                best_score = max(score, best_score)
+                if score == best_score {
+                    bestGroup = nearby_group
+                }
+            }
+        }
+
+        let score = existingValue + best_score
+        
+        if numberOfFramesLeft != 0,
+           let bestGroup = bestGroup
+        {
+            return await bestGroup.streakScore(in: direction,
+                                               numberOfFramesLeft: numberOfFramesLeft - 1,
+                                               existingValue: score)
+        } else {
+            return score
+        }
+    }
+    
 }
+
+public enum StreakDirection {
+    case forwards
+    case backwards
+}
+
