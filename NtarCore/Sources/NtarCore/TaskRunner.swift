@@ -8,7 +8,17 @@ fileprivate var number_running = NumberRunning()
 // XXX getting this number right is hard
 // too big and the swift runtime barfs underneath
 // too small and the process runs without available cpu resources
-fileprivate let max_running: UInt = UInt(ProcessInfo.processInfo.activeProcessorCount)
+@available(macOS 10.15, *)
+fileprivate let max_running: UInt = determine_max()
+
+@available(macOS 10.15, *)
+fileprivate func determine_max() -> UInt {
+    var num_processors = ProcessInfo.processInfo.activeProcessorCount
+    num_processors -= num_processors/4
+    if num_processors < 2 { num_processors = 2 }
+    Log.i("using maximum of \(num_processors) concurrent tasks")
+    return UInt(num_processors)
+}
 
 /**
  var tasks: [Task<ValueDistribution,Never>] = []
