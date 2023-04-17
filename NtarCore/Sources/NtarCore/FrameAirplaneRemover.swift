@@ -297,16 +297,16 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
     }
 
     public func applyDecisionTreeToAllOutliers() async {
-        /*
-         XXX commented out because of multiple trees now
-        await foreachOutlierGroup() { group in
-            let should_paint = await group.classification
-            Log.d("applying decision tree should_paint \(should_paint)")
-            await group.shouldPaint(.decisionTree(should_paint))
-            return .continue
+        if let classifier = currentClassifier {
+            await foreachOutlierGroup() { group in
+                let score = await classifier.classification(of: group)
+                Log.d("applying classifier should_paint \(score)")
+                await group.shouldPaint(.fromClassifier(score))
+                return .continue
             }
-            
-         */
+        } else {
+            Log.w("no classifier")
+        }
     }
     
     public func userSelectAllOutliers(toShouldPaint should_paint: Bool) async {

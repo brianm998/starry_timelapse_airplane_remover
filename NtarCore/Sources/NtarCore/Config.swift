@@ -125,7 +125,7 @@ public struct Config: Codable {
 
     public var medium_hough_line_score: Double = 0.4 // close to being a line, not really far
     // how far in each direction do we go when doing final processing?
-    public var number_final_processing_neighbors_needed = 1 // in each direction
+    public var number_final_processing_neighbors_needed = 5 // in each direction
 
     public var final_theta_diff: Double = 10       // how close in theta/rho outliers need to be between frames
     public var final_rho_diff: Double = 20        // 20 works

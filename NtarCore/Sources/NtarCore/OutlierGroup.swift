@@ -146,18 +146,20 @@ public actor OutlierGroup: CustomStringConvertible,
         // we want all the lines, all of them.
         self.lines = transform.lines(min_count: 1)
 
-        if self.shouldPaint == nil,
-           self.paintScoreFromHoughTransformLines > 0.5
-        {
-            if size < 300 { // XXX constant XXX
-                // don't assume small ones are lines
-            } else {
-                //Log.d("frame \(frame_index) will paint group \(name) because it looks like a line from the group hough transform")
-                self.shouldPaint = .looksLikeALine(self.paintScoreFromHoughTransformLines)
+        if frameProcesingType == .legacy {
+            if self.shouldPaint == nil,
+               self.paintScoreFromHoughTransformLines > 0.5
+            {
+                if size < 300 { // XXX constant XXX
+                    // don't assume small ones are lines
+                } else {
+                    //Log.d("frame \(frame_index) will paint group \(name) because it looks like a line from the group hough transform")
+                    self.shouldPaint = .looksLikeALine(self.paintScoreFromHoughTransformLines)
+                }
             }
-        }
             
-        if self.shouldPaint == nil { setShouldPaintFromCombinedScore() }
+            if self.shouldPaint == nil { setShouldPaintFromCombinedScore() }
+        }
 
         //Log.d("frame \(frame_index) group \(self) bounds \(bounds) should_paint \(self.shouldPaint?.willPaint) reason \(String(describing: self.shouldPaint)) hough transform score \(paintScore(from: .houghTransform)) aspect ratio \(paintScore(from: .aspectRatio)) brightness score \(paintScore(from: .brightness)) size score \(paintScore(from: .groupSize)) combined \(paintScore(from: .combined)) ")
     }
@@ -277,17 +279,21 @@ public actor OutlierGroup: CustomStringConvertible,
         }
     }
 
+        // legacy classification code
     func setShouldPaintFromCombinedScore() {
-        let score = self.paintScore(from: .combined)
-        if score > 0.5 {
-            //Log.d("frame \(frame_index) should_paint[\(name)] = (true, .goodScore(\(score))")
-            self.shouldPaint = .goodScore(score)
-        } else {
-            //Log.d("frame \(frame_index) should_paint[\(name)] = (false, .badScore(\(score))")
-            self.shouldPaint = .badScore(score)
+        if frameProcesingType == .legacy {
+
+            let score = self.paintScore(from: .combined)
+            if score > 0.5 {
+                //Log.d("frame \(frame_index) should_paint[\(name)] = (true, .goodScore(\(score))")
+                self.shouldPaint = .goodScore(score)
+            } else {
+                //Log.d("frame \(frame_index) should_paint[\(name)] = (false, .badScore(\(score))")
+                self.shouldPaint = .badScore(score)
+            }
         }
     }
-    
+
     // used so we don't recompute on every access
     private var _paint_score_from_lines: Double?
     

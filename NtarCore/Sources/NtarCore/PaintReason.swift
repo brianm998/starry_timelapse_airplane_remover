@@ -13,9 +13,7 @@ public enum PaintReason: Equatable, CaseIterable, Codable {
 
    case userSelected(Bool)      // true if should paint
 
-   case decisionTree(Bool)      // true if should paint
-
-   
+   case fromClassifier(Double)      // 1 if should paint, -1 if not
 
    public var BasicColor: BasicColor {
         get {
@@ -38,11 +36,11 @@ public enum PaintReason: Equatable, CaseIterable, Codable {
                 } else {
                     return .green
                 }
-            case .decisionTree(let willPaint):
-                if willPaint {
-                    return .red
-                } else {
+            case .fromClassifier(let willPaint):
+                if willPaint > 0 {
                     return .green
+                } else {
+                    return .red
                 }
             }
         }
@@ -58,7 +56,7 @@ public enum PaintReason: Equatable, CaseIterable, Codable {
             case .adjecentOverlap:   return "adjecent overlap"
             case .smallNonLinear:    return "small not linear"
             case .userSelected(let willPaint): return "user selected \(willPaint)"
-            case .decisionTree(let willPaint): return "decision tree \(willPaint)"
+            case .fromClassifier(let willPaint): return "decision tree \(willPaint)"
             }
         }
    }
@@ -94,7 +92,7 @@ These outlier groups were ignored for being too small and not linear enough.
                 return """
 These outlier groups were selected specifically by user in gui.
 """
-            case .decisionTree:
+            case .fromClassifier:
                 return """
 These outlier groups were selected specifically by user in gui.
 """
@@ -113,8 +111,8 @@ These outlier groups were selected specifically by user in gui.
             case .smallNonLinear:    return false
             case .userSelected(let willPaint):
                 return willPaint
-            case .decisionTree(let willPaint):
-                return willPaint
+            case .fromClassifier(let willPaint):
+                return willPaint > 0
             }
         }
    }
@@ -187,10 +185,16 @@ These outlier groups were selected specifically by user in gui.
           default:
               return false
           }
-      case .decisionTree(let lhsWillPaint):
+      case .fromClassifier(let lhsPaintScore):
           switch rhs {
-          case .decisionTree(let rhsWillPaint):
-              return lhsWillPaint == rhsWillPaint
+          case .fromClassifier(let rhsPaintScore):
+              if lhsPaintScore > 0,
+                 rhsPaintScore > 0
+              {
+                  return true
+              } else {
+                  return false
+              }
           default:
               return false
           }

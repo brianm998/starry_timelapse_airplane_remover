@@ -150,6 +150,15 @@ struct Ntar: ParsableCommand {
         Defaults to creating output dir(s) alongside input sequence dir
         """)
     var outputPath: String?
+
+    @Option(name: [.customShort("p"), .customLong("process")], help: """
+        The percentage in brightness increase necessary for a single pixel to be considered an outlier.
+        Higher values decrease the number and size of found outlier groups.
+        Lower values increase the size and number of outlier groups,
+        which may find more airplanes, but also may yield more false positives.
+        Outlier Pixels with brightness increases greater than this are fully painted over.
+        """)
+    var processingType: FrameProcessingType = .legacy
     
     @Option(name: [.customShort("B"), .long], help: """
         The percentage in brightness increase necessary for a single pixel to be considered an outlier.
@@ -206,7 +215,10 @@ struct Ntar: ParsableCommand {
 
 
     mutating func run() throws {
-        
+
+        // set how to process frames
+        frameProcesingType = self.processingType
+
         if version {
             print("""
                   Nighttime Timelapse Airplane Remover (ntar) version \(config.ntar_version)
@@ -350,6 +362,7 @@ struct Ntar: ParsableCommand {
                     let eraser = try NighttimeAirplaneRemover(with: config,
                                                               callbacks: callbacks,
                                                               processExistingFiles: false,
+                                                              maxResidentImages: 40, // XXX
                                                               writeOutputFiles: writeOutputFiles)
                     
                     var upm: UpdatableProgressMonitor?
@@ -459,5 +472,8 @@ func process_outlier_groups(dirname: String,
 // allows the log level to be expressed on the command line as an argument
 @available(macOS 10.15, *) 
 extension Log.Level: ExpressibleByArgument { }
+
+@available(macOS 10.15, *) 
+extension FrameProcessingType: ExpressibleByArgument { }
 
 fileprivate let file_manager = FileManager.default

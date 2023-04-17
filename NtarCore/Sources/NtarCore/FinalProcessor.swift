@@ -176,13 +176,14 @@ public actor FinalProcessor {
                 count += 1
                 Log.d("adding frame \(frame.frame_index) to final queue")
                 await self.final_queue.method_list.add(atIndex: frame.frame_index) {
-                    if index + 2 <= self.frames.count,
-                       let next_frame = self.frame(at: index + 1)
-                    {
-                        await really_final_streak_processing(onFrame: frame,
-                                                             nextFrame: next_frame)
+                    if frameProcesingType == .legacy {
+                        if index + 2 <= self.frames.count,
+                           let next_frame = self.frame(at: index + 1)
+                        {
+                            await really_final_streak_processing(onFrame: frame,
+                                                                 nextFrame: next_frame)
+                        }
                     }
-
                     await self.finish(frame: frame)
                 }
             }
@@ -283,7 +284,13 @@ public actor FinalProcessor {
             }
             if have_enough_frames_to_inter_frame_process {
                 Log.i("FINAL THREAD frame \(index_to_process) doing inter-frame analysis with \(images_to_process.count) frames")
-                await run_final_pass(frames: images_to_process, config: config)
+
+                // doubly link the outliers so their feature values across frames work
+                await doublyLink(frames: images_to_process)    
+
+                if frameProcesingType == .legacy {
+                    await run_final_pass(frames: images_to_process, config: config)
+                }
                 Log.i("FINAL THREAD frame \(index_to_process) done with inter-frame analysis")
                 await self.incrementCurrentFrameIndex()
                 
@@ -301,20 +308,32 @@ public actor FinalProcessor {
 
                         // if the outloaders were loaded from a file, then further processing
                         // is not a good thing
-                        let outliers_loaded_from_file = await frame_to_finish.didLoadOutliersFromFile()
-                        
-                        if frame_to_finish.fully_process && !outliers_loaded_from_file {
-                            // identify all existing streaks with length of only 2
-                            // try to find other nearby streaks, if not found,
-                            //then skip for new not paint reason
-                            await frame_to_finish.set(state: .interFrameProcessing)
-                            
-                            Log.d("running final streak processing on frame \(frame_to_finish.frame_index)")
+                        switch frameProcesingType {
 
-                            await really_final_streak_processing(onFrame: frame_to_finish,
-                                                                 nextFrame: next_frame)
-
+                        case .ai:
+                            await frame_to_finish.applyDecisionTreeToAllOutliers()
                             await frame_to_finish.set(state: .outlierProcessingComplete)
+                            
+                        case .legacy:
+                            let outliers_loaded_from_file = await frame_to_finish.didLoadOutliersFromFile()
+                            
+                            if frame_to_finish.fully_process && !outliers_loaded_from_file {
+                                // identify all existing streaks with length of only 2
+                                // try to find other nearby streaks, if not found,
+                                //then skip for new not paint reason
+                                await frame_to_finish.set(state: .interFrameProcessing)
+                                
+                                Log.d("running final streak processing on frame \(frame_to_finish.frame_index)")
+
+                                await really_final_streak_processing(onFrame: frame_to_finish,
+                                                                     nextFrame: next_frame)
+
+                                await frame_to_finish.set(state: .outlierProcessingComplete)
+                            }
+
+                        case .none:
+                            break
+                            
                         }
 
                         await self.finish(frame: frame_to_finish)
@@ -335,6 +354,7 @@ public actor FinalProcessor {
 
         Log.i("FINAL THREAD finishing all remaining frames")
         try await self.finishAll() 
+        Log.i("FINAL THREAD done finishing all remaining frames")
 
         if let frameCheckClosure = callbacks.frameCheckClosure {
             // XXX there is a race condition here if we are in gui
@@ -371,6 +391,7 @@ public actor FinalProcessor {
 // add a outlier streak validation step right before a frame is handed to the final queue for finalizing.
 // identify all existing streaks with length of only 2
 // try to find other nearby streaks, if not found, then skip for new not paint reason
+        // legacy classification code
 @available(macOS 10.15, *)
 func really_final_streak_processing(onFrame frame: FrameAirplaneRemover,
                                     nextFrame next_frame: FrameAirplaneRemover) async {
@@ -524,30 +545,34 @@ fileprivate func doublyLink(frames: [FrameAirplaneRemover]) async {
 // likely adject airplane tracks.
 // otherwise, if they do overlap, then it's more likely a cloud or 
 // a bright star or planet, leave them as is.
+        // legacy classification code
 @available(macOS 10.15, *)
 fileprivate func run_final_pass(frames: [FrameAirplaneRemover],
                                 config: Config) async
 {
-    await doublyLink(frames: frames)    
-    if frames[0].fully_process {
-        Log.d("final pass on \(frames.count) frames doing streak analysis")
+    if frameProcesingType == .legacy {
+        if frames[0].fully_process {
+            Log.d("final pass on \(frames.count) frames doing streak analysis")
 
-        await run_final_streak_pass(frames: frames, config: config) // XXX not actually the final streak pass anymore..
+            await run_final_streak_pass(frames: frames, config: config) // XXX not actually the final streak pass anymore..
 
-        Log.d("running overlap pass on \(frames.count) frames")
+            Log.d("running overlap pass on \(frames.count) frames")
 
-        await run_final_overlap_pass(frames: frames, config: config)
+            await run_final_overlap_pass(frames: frames, config: config)
 
-        Log.d("done with final pass on \(frames.count) frames")
+            Log.d("done with final pass on \(frames.count) frames")
+        }
     }
 }
 
 var GLOBAL_last_overlap_frame_number = 0 // XXX
 
+        //  legacy classification code 
 @available(macOS 10.15, *)
 fileprivate func run_final_overlap_pass(frames: [FrameAirplaneRemover],
                                         config: Config) async
 {
+    if frameProcesingType != .legacy { return }
     var should_process = true
     for frame in frames {
         // these have already been processed, don't process them further
@@ -668,11 +693,13 @@ fileprivate func run_final_overlap_pass(frames: [FrameAirplaneRemover],
 
 var GLOBAL_last_streak_frame_number = 0 // XXX
 
+        // legacy classification code 
 // looks for airplane streaks across frames
 @available(macOS 10.15, *)
 fileprivate func run_final_streak_pass(frames: [FrameAirplaneRemover],
                                        config: Config) async
 {
+    if frameProcesingType != .legacy { return }
 
     let initial_frame_index = frames[0].frame_index
     
@@ -805,6 +832,7 @@ fileprivate func run_final_streak_pass(frames: [FrameAirplaneRemover],
 // a 'streak' is a set of outliers with simlar theta and rho, that are
 // close enough to eachother, and that are moving in close enough to the same
 // direction as the lines that describe them.
+        // legacy classification code 
 @available(macOS 10.15, *)
 func streak_from(group: OutlierGroup,
                  frames: [FrameAirplaneRemover],
@@ -813,6 +841,7 @@ func streak_from(group: OutlierGroup,
                  config: Config)
   async -> [AirplaneStreakMember]?
 {
+    if frameProcesingType != .legacy { return nil }
 
     Log.v("trying to find streak starting at \(group)")
     

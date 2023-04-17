@@ -16,10 +16,31 @@ public enum DecisionSplitType: String {
 }
 
 
+public enum FrameProcessingType: String {
+    case none
+    case legacy
+    case ai
+}
+
+public var frameProcesingType: FrameProcessingType = .legacy
+
 // a list of all extant decision trees at runtime, indexed by hash prefix
 @available(macOS 10.15, *)
-// XXX we need an actor here for thread safety
 public var decisionTrees: [String: NamedOutlierGroupClassifier] = loadOutlierGroupClassifiers()
+
+// try to load this classifier at runtime
+public let currentClassifierName = "c4f08149"
+
+@available(macOS 10.15, *)
+public var currentClassifier: NamedOutlierGroupClassifier? = loadCurrentClassifiers()
+
+
+@available(macOS 10.15, *)
+public func loadCurrentClassifiers() -> NamedOutlierGroupClassifier? {
+    let ret = decisionTrees[currentClassifierName]
+    Log.i("loaded current classifier \(ret)")
+    return ret
+}
 
 @available(macOS 10.15, *)
 public func loadOutlierGroupClassifiers() -> [String : NamedOutlierGroupClassifier] {
