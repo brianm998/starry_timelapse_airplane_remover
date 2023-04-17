@@ -21,7 +21,7 @@ public class ClassifiedData {
         lhs.negativeData += rhs.negativeData
     }
 
-    public var size: Int { positiveData.count + negativeData.count }
+    public var count: Int { positiveData.count + negativeData.count }
 
     // splits data into groups splitting part of each set of input group into each output group
     public func shuffleSplit(into number_of_groups: Int) -> [ClassifiedData] {

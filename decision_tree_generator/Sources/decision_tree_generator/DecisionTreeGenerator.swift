@@ -55,36 +55,18 @@ actor DecisionTreeGenerator {
          then write out a classifier which classifies based upon the weighted sum of all of them
          */
 
-
-        var split_size = treeCount
-
-        if pruneTree { split_size += 1 }
-        
-        var input_data_split = input_data.shuffleSplit(into: split_size)
+        var input_data_split = input_data.shuffleSplit(into: treeCount + 1)
 
         var validationData = ClassifiedData()
-        var testData = [ClassifiedData()]
-
-        if pruneTree {
-            // use this test data only for testing, not training at all
-            testData = input_data_split.removeFirst().split(into: ProcessInfo.processInfo.activeProcessorCount)
-        }
+        var testData = input_data_split.removeFirst().split(into: ProcessInfo.processInfo.activeProcessorCount)
         
         let trees = try await withLimitedThrowingTaskGroup(of: TreeForestResult.self) { taskGroup in
             var results: [TreeForestResult] = []
             for validation_index in 0..<input_data_split.count {
                 try await taskGroup.addTask() { 
                     // generate a tree from this validation data
-                    if self.pruneTree {
-                        // when we prune, the test data is separate, and this
-                        // is used for internal validation
-                        validationData = input_data_split[validation_index]
-                    } else {
-                        // when we don't prune, validation data is always empty
-                        // and we test against different test data
-                        testData = input_data_split[validation_index].split(into: ProcessInfo.processInfo.activeProcessorCount)
-                    }
-
+                    validationData = input_data_split[validation_index]
+                    
                     // use the remaining data for training
                     let trainingData = ClassifiedData()
                     for i in 0..<input_data_split.count {
@@ -93,7 +75,7 @@ actor DecisionTreeGenerator {
                         }
                     }
 
-                    // XXX this fails with a file already in place :(
+                    Log.i("have \(validationData.count) validationData, \(testData.map { $0.count }.reduce(0, +)) testData and \(trainingData.count) trainingData @ validation index \(validation_index)")
                     
                     let tree = try await self.generateTree(withTrainingData: trainingData,
                                                            andTestData: validationData,
@@ -1285,7 +1267,7 @@ fileprivate func prune(tree: SwiftDecisionTree,
         return tree
     } 
     
-    Log.i("Prune start: best_good \(best_good), best_bad \(best_bad) \(best_percentage_good)% good on \(testData.size) data points")
+    Log.i("Prune start: best_good \(best_good), best_bad \(best_bad) \(best_percentage_good)% good on \(testData.count) data points")
 
     // prune from the root node, checking how well the tree performs on the test data
     // with and without stumping the node in question.
@@ -1311,7 +1293,7 @@ fileprivate func prune(tree: SwiftDecisionTree,
                     best_good = good
                     best_percentage_good = Double(best_good)/Double(total)*100
                     // this was better, keep the stump
-                    Log.i("pruning \(nodesToStump.count) nodes \(best_percentage_good)% good better by \(good-best_good) on \(testData.size) data points keeping stump w/ best_good \(best_good) \(best_percentage_good)% good")
+                    Log.i("pruning \(nodesToStump.count) nodes \(best_percentage_good)% good better by \(good-best_good) on \(testData.count) data points keeping stump w/ best_good \(best_good) \(best_percentage_good)% good")
                 } else {
                     // it was worse, remove stump
                     stump_node.stump = false
@@ -1332,7 +1314,7 @@ fileprivate func prune(tree: SwiftDecisionTree,
                             nodesToStump.append(greater_node)
                         }
                     }
-                    Log.i("Prune check: worse by \(good-best_good) on \(testData.size) data points")
+                    Log.i("Prune check: worse by \(good-best_good) on \(testData.count) data points")
                 }
             }
         }
