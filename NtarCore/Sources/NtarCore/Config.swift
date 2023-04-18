@@ -193,8 +193,9 @@ public struct Config: Codable {
     // 0.1.2 lots of speed/memory usage improvements, better updatable log
     // 0.1.3 started to add the gui
     // 0.2.0 added first gui, outlier groups can be saved, and reloaded with config
+    // 0.3.0 added machine learning group classification, better threading, and more
 
-    public var ntar_version = "0.2.0"
+    public var ntar_version = "0.3.0"
 
 
     public func writeJson(named filename: String) {
