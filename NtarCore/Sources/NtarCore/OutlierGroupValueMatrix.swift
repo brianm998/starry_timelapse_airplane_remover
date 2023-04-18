@@ -13,9 +13,10 @@ public class OutlierGroupValueMatrix: Codable {
     public var values: [OutlierGroupValues] = []      // indexed by outlier group first then types later
     
     public func append(outlierGroup: OutlierGroup) async {
-        let shouldPaint = await outlierGroup.shouldPaint!
-        values.append(OutlierGroupValues(shouldPaint: shouldPaint.willPaint,
-                                         values: await outlierGroup.decisionTreeValues))
+        if let shouldPaint = await outlierGroup.shouldPaint {
+            values.append(OutlierGroupValues(shouldPaint: shouldPaint.willPaint,
+                                             values: await outlierGroup.decisionTreeValues))
+        }
     }
     
     public var outlierGroupValues: ([OutlierFeatureData], [OutlierFeatureData]) {
