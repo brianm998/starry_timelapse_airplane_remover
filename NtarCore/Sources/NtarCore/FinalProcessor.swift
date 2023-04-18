@@ -176,13 +176,19 @@ public actor FinalProcessor {
                 count += 1
                 Log.d("adding frame \(frame.frame_index) to final queue")
                 await self.final_queue.method_list.add(atIndex: frame.frame_index) {
-                    if frameProcesingType == .legacy {
+                    switch frameProcesingType {
+                    case .ai:
+                        await frame.applyDecisionTreeToAllOutliers()
+                        await frame.set(state: .outlierProcessingComplete)
+                    case .legacy:
                         if index + 2 <= self.frames.count,
                            let next_frame = self.frame(at: index + 1)
                         {
                             await really_final_streak_processing(onFrame: frame,
                                                                  nextFrame: next_frame)
                         }
+                    case .none:
+                        break
                     }
                     await self.finish(frame: frame)
                 }
