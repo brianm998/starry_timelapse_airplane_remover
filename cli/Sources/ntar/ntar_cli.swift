@@ -152,11 +152,11 @@ struct Ntar: ParsableCommand {
     var outputPath: String?
 
     @Option(name: [.customShort("p"), .customLong("process")], help: """
-        The percentage in brightness increase necessary for a single pixel to be considered an outlier.
-        Higher values decrease the number and size of found outlier groups.
-        Lower values increase the size and number of outlier groups,
-        which may find more airplanes, but also may yield more false positives.
-        Outlier Pixels with brightness increases greater than this are fully painted over.
+        Specify the frame processing type:
+
+        ai     - default, uses machine learning to categorize outlier groups
+        legacy - original method, hand coded algorithm
+        none   - don't modify the outlier group classification at all, used for re-processing
         """)
     var processingType: FrameProcessingType = .ai
     
