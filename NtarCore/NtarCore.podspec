@@ -15,7 +15,7 @@ Pod::Spec.new do |s|
   s.license      = "GPL"
 
   s.author       = { "" => "" }
-  s.platforms    = { :osx =>  "10.15" }
+  s.platforms    = { :osx =>  "12.0" }
 
   s.source       = { :git => "git@github.com:brianm998/nighttime_timelapse_airplane_remover", :branch => "develop" }
   s.source_files  = "Sources/**/*.{swift}"

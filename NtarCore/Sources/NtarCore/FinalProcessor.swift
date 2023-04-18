@@ -142,7 +142,7 @@ public actor FinalProcessor {
                 message += " \(count) \(name)"
                 await updatable.log(name: name, message: message, value: 2)
             }
-         }
+        }
     }
     
     func frame(at index: Int) -> FrameAirplaneRemover? {

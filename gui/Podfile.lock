@@ -1,15 +1,10 @@
 PODS:
-  - ArgumentParser (1.2.0):
-    - ArgumentParserToolInfo (~> 1.2.0)
-  - ArgumentParserToolInfo (1.2.0)
   - BinaryCodable (0.0.1)
   - NtarCore (0.1.2):
     - BinaryCodable
-  - NtarDecisionTrees (0.1.2):
-    - NtarCore
-  - SDWebImage (5.15.0):
-    - SDWebImage/Core (= 5.15.0)
-  - SDWebImage/Core (5.15.0)
+  - SDWebImage (5.15.5):
+    - SDWebImage/Core (= 5.15.5)
+  - SDWebImage/Core (5.15.5)
   - SDWebImageSwiftUI (2.2.2):
     - SDWebImage (~> 5.10)
   - Zoomable (0.0.1):
@@ -17,16 +12,12 @@ PODS:
     - SDWebImageSwiftUI
 
 DEPENDENCIES:
-  - ArgumentParser
   - BinaryCodable (from `../../BinaryCodable`)
   - NtarCore (from `../NtarCore`)
-  - NtarDecisionTrees (from `../NtarDecisionTrees`)
   - Zoomable (from `../../Zoomable`)
 
 SPEC REPOS:
   trunk:
-    - ArgumentParser
-    - ArgumentParserToolInfo
     - SDWebImage
     - SDWebImageSwiftUI
 
@@ -35,21 +26,16 @@ EXTERNAL SOURCES:
     :path: "../../BinaryCodable"
   NtarCore:
     :path: "../NtarCore"
-  NtarDecisionTrees:
-    :path: "../NtarDecisionTrees"
   Zoomable:
     :path: "../../Zoomable"
 
 SPEC CHECKSUMS:
-  ArgumentParser: 33874ea30134f4131398810725e3dbfed96ddb1a
-  ArgumentParserToolInfo: 8531cd8ada6bc81f2acc6cc243065ea9fc540647
-  BinaryCodable: 665cdfd32f528ea762f81177a7c81c91322ad8bf
-  NtarCore: ce84288db06a8a4ae7fb5757c3e0b7188274da6b
-  NtarDecisionTrees: bd9a202d2f8d171503f3d415bff69e3fe3429395
-  SDWebImage: 9bec4c5cdd9579e1f57104735ee0c37df274d593
+  BinaryCodable: 7693e29edaab2a1ae165acf76f9803f7497d1ef7
+  NtarCore: 9efcaeeff25f4fdf610929443dd6db8a23874ebd
+  SDWebImage: fd7e1a22f00303e058058278639bf6196ee431fe
   SDWebImageSwiftUI: 54ded4115b4ac6cd60b78f61415f86d070892d98
-  Zoomable: 0c5c0b98c09d9b76f4dccf8f72be4fae32efafeb
+  Zoomable: 59bba07c49251a6171fa5ee9674750fb75cc75a3
 
-PODFILE CHECKSUM: 691a185a254b72f4fbde6dda9811767b8e1a5dd2
+PODFILE CHECKSUM: 6c37f1993a4fd6eff3be4da0b58728ea1af278d8
 
-COCOAPODS: 1.11.0
+COCOAPODS: 1.12.0
