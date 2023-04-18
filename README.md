@@ -3,7 +3,7 @@
 
 The Nighttime Timelapse Airplane Remover (ntar) is a software package that performs the removal of airplane streaks from night time timelapse videos.
 
-## Comparison videos from northern esmerelda counth, Nevada, USA
+## Comparison videos from northern esmerelda county, Nevada, USA
 
 It was this nearly cloudless night last year that kicked off this project for me.
 
