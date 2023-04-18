@@ -22,7 +22,7 @@ public enum FrameProcessingType: String {
     case ai
 }
 
-public var frameProcesingType: FrameProcessingType = .legacy
+public var frameProcesingType: FrameProcessingType = .ai
 
 // a list of all extant decision trees at runtime, indexed by hash prefix
 @available(macOS 10.15, *)

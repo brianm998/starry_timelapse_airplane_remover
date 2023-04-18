@@ -158,7 +158,7 @@ struct Ntar: ParsableCommand {
         which may find more airplanes, but also may yield more false positives.
         Outlier Pixels with brightness increases greater than this are fully painted over.
         """)
-    var processingType: FrameProcessingType = .legacy
+    var processingType: FrameProcessingType = .ai
     
     @Option(name: [.customShort("B"), .long], help: """
         The percentage in brightness increase necessary for a single pixel to be considered an outlier.
