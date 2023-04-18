@@ -60,42 +60,24 @@ public actor FinalQueue {
     
     public nonisolated func start() async throws {
         let name = "final queue running"
-        await self.dispatch_group.enter(name)
         Log.d("starting")
         // move to withLimitedThrowingTaskGroup
-        try await withThrowingTaskGroup(of: Void.self) { group in
+        try await withLimitedThrowingTaskGroup(of: Void.self) { taskGroup in
             while(await self.should_run()) {
-                let current_running = await self.number_running.currentValue()
-
-                Log.v("current_running \(current_running)")
-                if current_running < max_concurrent,
-                   let next_key = await self.method_list.nextKey,
+                if let next_key = await self.method_list.nextKey,
                    let method = await self.value(forKey: next_key)
                 {
                     let dispatch_name = "final queue frame \(next_key)"
-                    if await self.dispatch_group.enter(dispatch_name) {
-                        await self.removeValue(forKey: next_key)
-                        await self.number_running.increment()
-                        group.addTask(priority: .medium) {
-                            try await method()
-                            await self.number_running.decrement()
-                            await self.dispatch_group.leave(dispatch_name)
-                        }
-                    } else {
-                        Log.w("could not queue frame \(next_key), it's being saved right now")
-
-                        // XXX maybe instead of remove, add to end?
-                        await self.removeValue(forKey: next_key)
-                    }
+                    await self.removeValue(forKey: next_key)
+                    try await taskGroup.addTask() { try await method() }
                 } else {
                     try await Task.sleep(nanoseconds: 1_000_000_000)
-                    //sleep(1)
+                     //sleep(1)
                 }
             }
-            try await group.waitForAll()
+            try await taskGroup.waitForAll()
 
             Log.d("done")
-            await self.dispatch_group.leave(name)
         }
     }
 }
