@@ -169,56 +169,34 @@ public class ImageSequenceProcessor<T> {
         // this dispatch group is only used for this task
         let local_dispatch_group = DispatchGroup()
         local_dispatch_group.enter()
-
-        // XXX use a task group here instead, re-using the method list
-        // XXX make MethodList class generic for the task group type?
         
         Task {
             // each of these methods removes the airplanes from a particular frame
             //try await assembleMethodList()
             Log.i("processing a total of \(await method_list.list.count) frames")
             
-            try await withThrowingTaskGroup(of: T.self) { group in
+            try await withLimitedThrowingTaskGroup(of: T.self) { group in
                 while(await method_list.list.count > 0) {
-                    let current_running = await self.number_running.currentValue()
-                    let current_max_concurrent = await self.maxConcurrentRenders()
-                    //let fuck = await method_list.list.count
-
-
-                    //Log.d("current_running \(current_running) max concurrent \(current_max_concurrent) method_list.count \(fuck)")
-                    if current_running < current_max_concurrent {
-                        Log.d("\(current_running) frames currently processing")
-                        Log.d("we have \(await method_list.list.count) more frames to process")
-                        Log.d("processing new frame")
-                        
-                        // sort the keys and take the smallest one first
-                        if let next_method_key = await method_list.nextKey,
-                           let next_method = await method_list.list[next_method_key]
-                        {
-                            await method_list.removeValue(forKey: next_method_key)
-                            await self.number_running.increment()
-                            //let name = "image sequence processor foobaz \(next_method_key)"
-                            group.addTask(priority: .medium) {
-                                return try await next_method()
-                            }
-                        } else {
-                            Log.e("FUCK") 
-                            fatalError("FUCK")
+                    Log.d("we have \(await method_list.list.count) more frames to process")
+                    Log.d("processing new frame")
+                    
+                    // sort the keys and take the smallest one first
+                    if let next_method_key = await method_list.nextKey,
+                       let next_method = await method_list.list[next_method_key]
+                    {
+                        await method_list.removeValue(forKey: next_method_key)
+                        await self.number_running.increment()
+                        try await group.addTask() {
+                            let ret = try await next_method()
+                            await self.result_hook(with: ret)
+                            return ret
                         }
                     } else {
-                        //Log.d("waiting for a processed frame")
-                        if let processed_frame = try await group.next() {
-                            Log.d("got processed_frame \(processed_frame)")
-                            await self.result_hook(with: processed_frame)
-                        } else {
-                            //Log.d("did not get a processed frame")
-                        }
+                        Log.e("FUCK") 
+                        fatalError("FUCK")
                     }
                 }
-                while let processed_frame = try await group.next() {
-                    Log.d("got processed_frame \(processed_frame)")
-                    await self.result_hook(with: processed_frame)
-                }
+                try await group.waitForAll()
                 
                 Log.d("finished hook")
                 self.finished_hook()

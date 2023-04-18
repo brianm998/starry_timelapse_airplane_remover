@@ -61,7 +61,6 @@ public actor FinalQueue {
     public nonisolated func start() async throws {
         let name = "final queue running"
         Log.d("starting")
-        // move to withLimitedThrowingTaskGroup
         try await withLimitedThrowingTaskGroup(of: Void.self) { taskGroup in
             while(await self.should_run()) {
                 if let next_key = await self.method_list.nextKey,
