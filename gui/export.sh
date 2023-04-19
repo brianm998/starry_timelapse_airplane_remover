@@ -61,11 +61,10 @@ ditto \
 # XXX add a version number in here (get it from the config in code)
 
 # notarize it (should check for these env vars before starting)
-xcrun altool --notarize-app \
-    --primary-bundle-id "com.ntar_gui" \
-    --username "${APPSTORE_LOGIN}" \
-    --password "${APPSTORE_PASSWORD}" \
-    --file "${BUILD_DIR}/AdHoc/${APP_NAME}-for-notarization.zip"
+
+xcrun notarytool submit "${BUILD_DIR}/AdHoc/${APP_NAME}-for-notarization.zip" \
+                   --keychain-profile "${APPSTORE_PASSWORD}" \
+                   --wait 
 
 WAIT_TIME=60
 
