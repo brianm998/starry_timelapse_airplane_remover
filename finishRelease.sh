@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# die on any error
+set -e
+
 # take release compiled gui and cli app and package them for distribution
 # as well as tag this release in git with the version from Config.swift
 
@@ -25,16 +28,33 @@ cat > "${TEMP_ZIP_BASE}/install.sh"  <<EOF
 # add something here to tell the user what's going on,
 # maybe a screen with text prompting the user to continue
 
-unzip ntar-gui-${NTAR_VERSION}.zip
-sudo rm -rf /Applications/ntar.app
-sudo mv ntar.app /Applications
-sudo mv ntar /usr/local/bin
-rm ntar-gui-${NTAR_VERSION}.zip
-
-echo 'I hope you enjoy ntar'
+echo 'Welcome to the ntar ${NTAR_VERSION} installer.'
 echo
-echo '/usr/local/bin/ntar is at your service on the command line'
-echo 'open /Applications/ntar.app for the gui'
+echo 'Do you wish to install ntar now?'
+echo 'You will be prompted for an admistrator password during installation'
+echo
+echo -n 'enter 'y' to continue: '
+
+read continue
+
+if [ \$continue == "y" ]
+then     
+    unzip ntar-gui-${NTAR_VERSION}.zip    
+    sudo rm -rf /Applications/ntar.app
+    sudo mv ntar.app /Applications
+    sudo mv ntar /usr/local/bin
+    rm ntar-gui-${NTAR_VERSION}.zip
+    
+    echo
+    echo 'ntar ${NTAR_VERSION} has been installed.'
+    echo
+    echo 'I hope you enjoy ntar'
+    echo
+    echo '/usr/local/bin/ntar is at your service on the command line'
+    echo 'open /Applications/ntar.app for the gui'
+else
+    echo "not installing ntar ${NTAR_VERSION} right now"
+fi
 EOF
 
 chmod 755 "${TEMP_ZIP_BASE}/install.sh"
