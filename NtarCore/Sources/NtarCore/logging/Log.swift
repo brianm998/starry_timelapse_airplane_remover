@@ -150,9 +150,9 @@ public class Log {
     public static var dispatchGroup = DispatchGroup()
     
     public enum Level: String,
-                     CustomStringConvertible,
-                     CaseIterable,
-                     Decodable
+                       CustomStringConvertible,
+                       CaseIterable,
+                       Decodable
     {
         case verbose
         case debug
@@ -876,7 +876,7 @@ fileprivate extension Log {
                                _ function: String,
                                _ line: Int)
     {
-        Log.dispatchGroup.enter()
+//        Log.dispatchGroup.enter()
         let threadName = Thread.current.threadName
         
         // start background task
@@ -889,7 +889,7 @@ fileprivate extension Log {
         backgroundTask = newBackgroundTask
 */
 #endif
-        Task {
+//        Task {
             var string = ""
 
             if let message = message {
@@ -929,8 +929,8 @@ fileprivate extension Log {
                                 at: logLevel)
                 }
             }
-            Log.dispatchGroup.leave()
-        }
+  //          Log.dispatchGroup.leave()
+//        }
     }
     
     static func parseFileName(_ file: String) -> String {
