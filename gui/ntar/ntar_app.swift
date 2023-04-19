@@ -1,6 +1,6 @@
 //
-//  ntar_guiApp.swift
-//  ntar_gui
+//  ntarApp.swift
+//  ntar
 //
 //  Created by Brian Martin on 2/1/23.
 //
@@ -63,7 +63,7 @@ import NtarCore
  */
 
 @main
-class ntar_gui_app: App {
+class ntar_app: App {
 
     var outputPath: String?
     var outlierMaxThreshold: Double = 13

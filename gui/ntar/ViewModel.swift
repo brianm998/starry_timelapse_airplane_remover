@@ -7,7 +7,7 @@ import Zoomable
 // the overall view model
 @MainActor
 public class ViewModel: ObservableObject {
-    var app: ntar_gui_app?
+    var app: ntar_app?
     var config: Config?
     var eraser: NighttimeAirplaneRemover?
     var frameSaveQueue: FrameSaveQueue?

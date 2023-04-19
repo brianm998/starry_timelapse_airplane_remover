@@ -2,6 +2,7 @@
 
 ####
 # first build the decision tree code into a static, universal library (.a file)
+# this can be large, and is linked into both the gui and cli apps
 ####
 cd NtarDecisionTrees
 rm -rf .build
@@ -29,23 +30,27 @@ rm -rf .build
 swift build --configuration release --arch arm64 --arch x86_64
 
 # result ends up here:
-# .build/apple/Products/Release/ntar
+# cli/.build/apple/Products/Release/ntar
 
 
 ####
 # next build a .app dir from the gui
 ####
 
+cd ../gui
+./release.sh
 
+# results end up here:
+# gui/.build/AdHoc/${APP_NAME}.app"
+# gui/.build/${APP_NAME}.zip"
 
 ####
 # then package that and the cli app into a file with a readme and installer script
 ####
 
-
+# XXX still haven't done this part yet
 
 ####
 # then zip that up with a release number somehow
 ####
 
-# push it automatically to github as a release from the cli?

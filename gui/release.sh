@@ -60,10 +60,14 @@ ditto \
 
 # XXX add a version number in here (get it from the config in code)
 
-# notarize it (should check for these env vars before starting)
+# notarize it
+
+# run this again to get another keychain profile item with an app specific password
+#   --keychain-profile "ntar" \
+#xcrun notarytool store-credentials --apple-id brian.beholden@gmail.com --team-id G3L75S65V9
 
 xcrun notarytool submit "${BUILD_DIR}/AdHoc/${APP_NAME}-for-notarization.zip" \
-                   --keychain-profile "${APPSTORE_PASSWORD}" \
+                   --keychain-profile "ntar" \
                    --wait 
 
 WAIT_TIME=60
@@ -83,4 +87,4 @@ ditto \
     "${BUILD_DIR}/${APP_NAME}.zip"
 
 
-echo "results in ${BUILD_DIR}/AdHoc/${APP_NAME}.app"
+echo "results in ${BUILD_DIR}/${APP_NAME}.zip"

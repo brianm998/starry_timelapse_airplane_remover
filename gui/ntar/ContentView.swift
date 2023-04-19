@@ -1,6 +1,6 @@
 //
 //  ContentView.swift
-//  ntar_gui
+//  ntar
 //
 //  Created by Brian Martin on 2/1/23.
 //
