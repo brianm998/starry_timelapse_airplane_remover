@@ -28,7 +28,7 @@ xcodebuild \
     -archivePath "${BUILD_DIR}/ntar.xcarchive" \
     archive
 
-cat > "${BUILD_DIR}/ExportOptiopns.plist" <<EOF
+cat > "${BUILD_DIR}/ExportOptions.plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -49,7 +49,7 @@ echo "exporting archive"
 xcodebuild \
     -exportArchive \
     -archivePath "${BUILD_DIR}/ntar.xcarchive" \
-    -exportOptionsPlist "${BUILD_DIR}/ExportOptiopns.plist" \
+    -exportOptionsPlist "${BUILD_DIR}/ExportOptions.plist" \
     -exportPath "${BUILD_DIR}/AdHoc"
 
 # create zip file for notorization
@@ -70,7 +70,7 @@ xcrun notarytool submit "${BUILD_DIR}/AdHoc/${APP_NAME}-for-notarization.zip" \
                    --keychain-profile "ntar" \
                    --wait 
 
-WAIT_TIME=60
+WAIT_TIME=20
 
 # wait for notorization and staple the build
 until xcrun stapler staple "${BUILD_DIR}/AdHoc/${APP_NAME}.app"; do
@@ -81,10 +81,6 @@ done
 # set to build for active arch only for development (as it is in git)
 perl -pi -e 's/ONLY_ACTIVE_ARCH = NO/ONLY_ACTIVE_ARCH = YES/'  ntar.xcodeproj/project.pbxproj
 
-ditto \
-    -c -k --sequesterRsrc --keepParent \
-    "${BUILD_DIR}/AdHoc/${APP_NAME}.app" \
-    "${BUILD_DIR}/${APP_NAME}.zip"
 
 
 echo "results in ${BUILD_DIR}/${APP_NAME}.zip"

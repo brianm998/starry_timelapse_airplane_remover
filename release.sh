@@ -45,12 +45,8 @@ cd ../gui
 # gui/.build/${APP_NAME}.zip"
 
 ####
-# then package that and the cli app into a file with a readme and installer script
+# package the gui and cli apps into a single zip file with version from ntar config in its name
 ####
 
-# XXX still haven't done this part yet
-
-####
-# then zip that up with a release number somehow
-####
+./finishRelease.sh
 
