@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -e
+
 # build and notarize with apple the ntar gui code for ad hoc distribution
 
 BUILD_DIR=.build

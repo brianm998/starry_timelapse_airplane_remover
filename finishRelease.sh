@@ -25,6 +25,8 @@ cp README.md $TEMP_ZIP_BASE
 cat > "${TEMP_ZIP_BASE}/install.sh"  <<EOF
 #!/bin/bash
 
+set -e
+
 # add something here to tell the user what's going on,
 # maybe a screen with text prompting the user to continue
 
@@ -39,7 +41,7 @@ read continue
 
 if [ \$continue == "y" ]
 then     
-    unzip ntar-gui-${NTAR_VERSION}.zip    
+    unzip ntar-gui-${NTAR_VERSION}.zip >/dev/null
     sudo rm -rf /Applications/ntar.app
     sudo mv ntar.app /Applications
     sudo mv ntar /usr/local/bin

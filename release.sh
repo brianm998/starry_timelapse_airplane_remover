@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -e
+
 ####
 # first build the decision tree code into a static, universal library (.a file)
 # this can be large, and is linked into both the gui and cli apps
