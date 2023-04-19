@@ -6,6 +6,7 @@ set -e
 
 BUILD_DIR=.build
 APP_NAME=ntar
+NTAR_VERSION=`cd ../NtarCore ; perl version.pl`
 
 rm -rf ${BUILD_DIR}
 
@@ -18,6 +19,9 @@ perl -pi -e 's/MACOSX_DEPLOYMENT_TARGET = \d+[.]?\d*/MACOSX_DEPLOYMENT_TARGET = 
 
 # FIX annother annoying cocoapods problem
 perl -pi -e 's/readlink/readlink -f/' Pods/Target\ Support\ Files/Pods-ntar/Pods-ntar-frameworks.sh
+
+# set the app version 
+perl -pi -e "s/MARKETING_VERSION = [^;]*/MARKETING_VERSION = ${NTAR_VERSION}/" ntar.xcodeproj/project.pbxproj
 
 # set flag to build for all archs
 perl -pi -e 's/ONLY_ACTIVE_ARCH = YES/ONLY_ACTIVE_ARCH = NO/'  ntar.xcodeproj/project.pbxproj

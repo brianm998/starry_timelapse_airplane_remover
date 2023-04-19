@@ -41,6 +41,7 @@ swift build --configuration release --arch arm64 --arch x86_64
 
 cd ../gui
 ./release.sh
+cd ..
 
 # results end up here:
 # gui/.build/AdHoc/${APP_NAME}.app"
