@@ -7,7 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		5950D2092E1D060BC9275E66 /* Pods_ntar_gui.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0B0453DB24E8A23144C66A23 /* Pods_ntar_gui.framework */; };
+		5950D2092E1D060BC9275E66 /* Pods_ntar.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0B0453DB24E8A23144C66A23 /* Pods_ntar.framework */; };
 		D310C6F429C8D8F40014FBA9 /* libNtarDecisionTrees.a in Frameworks */ = {isa = PBXBuildFile; fileRef = D310C6F329C8D8F40014FBA9 /* libNtarDecisionTrees.a */; };
 		D31F9FBF299736740001CD0C /* ViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D31F9FBC299736730001CD0C /* ViewModel.swift */; };
 		D31F9FC0299736740001CD0C /* FrameSaveQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = D31F9FBD299736730001CD0C /* FrameSaveQueue.swift */; };
@@ -17,13 +17,13 @@
 		D332F70129B63F9D009E2796 /* SettingsSheetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D332F70029B63F9D009E2796 /* SettingsSheetView.swift */; };
 		D332F70329B63FD0009E2796 /* MassivePaintSheetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D332F70229B63FD0009E2796 /* MassivePaintSheetView.swift */; };
 		D332F70529B64004009E2796 /* ShrinkingButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = D332F70429B64004009E2796 /* ShrinkingButton.swift */; };
-		D386FA11298B617300878B56 /* ntar_gui_app.swift in Sources */ = {isa = PBXBuildFile; fileRef = D386FA10298B617300878B56 /* ntar_gui_app.swift */; };
+		D386FA11298B617300878B56 /* ntar_app.swift in Sources */ = {isa = PBXBuildFile; fileRef = D386FA10298B617300878B56 /* ntar_app.swift */; };
 		D386FA13298B617300878B56 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D386FA12298B617300878B56 /* ContentView.swift */; };
 		D386FA15298B617400878B56 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = D386FA14298B617400878B56 /* Assets.xcassets */; };
 		D386FA18298B617400878B56 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = D386FA17298B617400878B56 /* Preview Assets.xcassets */; };
-		D386FA23298B617400878B56 /* ntar_guiTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D386FA22298B617400878B56 /* ntar_guiTests.swift */; };
-		D386FA2D298B617400878B56 /* ntar_guiUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D386FA2C298B617400878B56 /* ntar_guiUITests.swift */; };
-		D386FA2F298B617400878B56 /* ntar_guiUITestsLaunchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D386FA2E298B617400878B56 /* ntar_guiUITestsLaunchTests.swift */; };
+		D386FA23298B617400878B56 /* ntarTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D386FA22298B617400878B56 /* ntarTests.swift */; };
+		D386FA2D298B617400878B56 /* ntarUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D386FA2C298B617400878B56 /* ntarUITests.swift */; };
+		D386FA2F298B617400878B56 /* ntarUITestsLaunchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D386FA2E298B617400878B56 /* ntarUITestsLaunchTests.swift */; };
 		D3A54A6F29AFAD2C00C50709 /* UserPreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3A54A6E29AFAD2C00C50709 /* UserPreferences.swift */; };
 		D3B886AD29B830BE003590A1 /* OutlierGroupTable.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3B886AC29B830BE003590A1 /* OutlierGroupTable.swift */; };
 /* End PBXBuildFile section */
@@ -34,21 +34,21 @@
 			containerPortal = D386FA05298B617300878B56 /* Project object */;
 			proxyType = 1;
 			remoteGlobalIDString = D386FA0C298B617300878B56;
-			remoteInfo = ntar_gui;
+			remoteInfo = ntar;
 		};
 		D386FA29298B617400878B56 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = D386FA05298B617300878B56 /* Project object */;
 			proxyType = 1;
 			remoteGlobalIDString = D386FA0C298B617300878B56;
-			remoteInfo = ntar_gui;
+			remoteInfo = ntar;
 		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		0B0453DB24E8A23144C66A23 /* Pods_ntar_gui.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_ntar_gui.framework; sourceTree = BUILT_PRODUCTS_DIR; };
-		540415BAD54DC7E2F8297DCF /* Pods-ntar_gui.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-ntar_gui.release.xcconfig"; path = "Target Support Files/Pods-ntar_gui/Pods-ntar_gui.release.xcconfig"; sourceTree = "<group>"; };
-		5F0FA5BFD47E6F6D97B17603 /* Pods-ntar_gui.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-ntar_gui.debug.xcconfig"; path = "Target Support Files/Pods-ntar_gui/Pods-ntar_gui.debug.xcconfig"; sourceTree = "<group>"; };
+		0B0453DB24E8A23144C66A23 /* Pods_ntar.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_ntar.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		540415BAD54DC7E2F8297DCF /* Pods-ntar.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-ntar.release.xcconfig"; path = "Target Support Files/Pods-ntar/Pods-ntar.release.xcconfig"; sourceTree = "<group>"; };
+		5F0FA5BFD47E6F6D97B17603 /* Pods-ntar.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-ntar.debug.xcconfig"; path = "Target Support Files/Pods-ntar/Pods-ntar.debug.xcconfig"; sourceTree = "<group>"; };
 		D310C6F329C8D8F40014FBA9 /* libNtarDecisionTrees.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libNtarDecisionTrees.a; path = ../../NtarDecisionTrees/libNtarDecisionTrees.a; sourceTree = "<group>"; };
 		D31F9FBC299736730001CD0C /* ViewModel.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ViewModel.swift; sourceTree = "<group>"; };
 		D31F9FBD299736730001CD0C /* FrameSaveQueue.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = FrameSaveQueue.swift; sourceTree = "<group>"; };
@@ -58,17 +58,17 @@
 		D332F70029B63F9D009E2796 /* SettingsSheetView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SettingsSheetView.swift; sourceTree = "<group>"; };
 		D332F70229B63FD0009E2796 /* MassivePaintSheetView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = MassivePaintSheetView.swift; sourceTree = "<group>"; };
 		D332F70429B64004009E2796 /* ShrinkingButton.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ShrinkingButton.swift; sourceTree = "<group>"; };
-		D386FA0D298B617300878B56 /* ntar_gui.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ntar_gui.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		D386FA10298B617300878B56 /* ntar_gui_app.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ntar_gui_app.swift; sourceTree = "<group>"; };
+		D386FA0D298B617300878B56 /* ntar.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ntar.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		D386FA10298B617300878B56 /* ntar_app.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ntar_app.swift; sourceTree = "<group>"; };
 		D386FA12298B617300878B56 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		D386FA14298B617400878B56 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		D386FA17298B617400878B56 /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
-		D386FA19298B617400878B56 /* ntar_gui.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ntar_gui.entitlements; sourceTree = "<group>"; };
-		D386FA1E298B617400878B56 /* ntar_guiTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ntar_guiTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		D386FA22298B617400878B56 /* ntar_guiTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ntar_guiTests.swift; sourceTree = "<group>"; };
-		D386FA28298B617400878B56 /* ntar_guiUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ntar_guiUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		D386FA2C298B617400878B56 /* ntar_guiUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ntar_guiUITests.swift; sourceTree = "<group>"; };
-		D386FA2E298B617400878B56 /* ntar_guiUITestsLaunchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ntar_guiUITestsLaunchTests.swift; sourceTree = "<group>"; };
+		D386FA19298B617400878B56 /* ntar.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ntar.entitlements; sourceTree = "<group>"; };
+		D386FA1E298B617400878B56 /* ntarTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ntarTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		D386FA22298B617400878B56 /* ntarTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ntarTests.swift; sourceTree = "<group>"; };
+		D386FA28298B617400878B56 /* ntarUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ntarUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		D386FA2C298B617400878B56 /* ntarUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ntarUITests.swift; sourceTree = "<group>"; };
+		D386FA2E298B617400878B56 /* ntarUITestsLaunchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ntarUITestsLaunchTests.swift; sourceTree = "<group>"; };
 		D3A54A6E29AFAD2C00C50709 /* UserPreferences.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = UserPreferences.swift; sourceTree = "<group>"; };
 		D3B886AC29B830BE003590A1 /* OutlierGroupTable.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = OutlierGroupTable.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -79,7 +79,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				D310C6F429C8D8F40014FBA9 /* libNtarDecisionTrees.a in Frameworks */,
-				5950D2092E1D060BC9275E66 /* Pods_ntar_gui.framework in Frameworks */,
+				5950D2092E1D060BC9275E66 /* Pods_ntar.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -103,7 +103,7 @@
 		26FD1C08E241439DFF9D9A38 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
-				0B0453DB24E8A23144C66A23 /* Pods_ntar_gui.framework */,
+				0B0453DB24E8A23144C66A23 /* Pods_ntar.framework */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -111,8 +111,8 @@
 		539A197B9AA999D1261E7269 /* Pods */ = {
 			isa = PBXGroup;
 			children = (
-				5F0FA5BFD47E6F6D97B17603 /* Pods-ntar_gui.debug.xcconfig */,
-				540415BAD54DC7E2F8297DCF /* Pods-ntar_gui.release.xcconfig */,
+				5F0FA5BFD47E6F6D97B17603 /* Pods-ntar.debug.xcconfig */,
+				540415BAD54DC7E2F8297DCF /* Pods-ntar.release.xcconfig */,
 			);
 			path = Pods;
 			sourceTree = "<group>";
@@ -120,9 +120,9 @@
 		D386FA04298B617300878B56 = {
 			isa = PBXGroup;
 			children = (
-				D386FA0F298B617300878B56 /* ntar_gui */,
-				D386FA21298B617400878B56 /* ntar_guiTests */,
-				D386FA2B298B617400878B56 /* ntar_guiUITests */,
+				D386FA0F298B617300878B56 /* ntar */,
+				D386FA21298B617400878B56 /* ntarTests */,
+				D386FA2B298B617400878B56 /* ntarUITests */,
 				D386FA0E298B617300878B56 /* Products */,
 				539A197B9AA999D1261E7269 /* Pods */,
 				26FD1C08E241439DFF9D9A38 /* Frameworks */,
@@ -132,14 +132,14 @@
 		D386FA0E298B617300878B56 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				D386FA0D298B617300878B56 /* ntar_gui.app */,
-				D386FA1E298B617400878B56 /* ntar_guiTests.xctest */,
-				D386FA28298B617400878B56 /* ntar_guiUITests.xctest */,
+				D386FA0D298B617300878B56 /* ntar.app */,
+				D386FA1E298B617400878B56 /* ntarTests.xctest */,
+				D386FA28298B617400878B56 /* ntarUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
 		};
-		D386FA0F298B617300878B56 /* ntar_gui */ = {
+		D386FA0F298B617300878B56 /* ntar */ = {
 			isa = PBXGroup;
 			children = (
 				D310C6F329C8D8F40014FBA9 /* libNtarDecisionTrees.a */,
@@ -150,16 +150,16 @@
 				D332F6FE29B63DA2009E2796 /* InitialView.swift */,
 				D3A54A6E29AFAD2C00C50709 /* UserPreferences.swift */,
 				D31F9FC22997370C0001CD0C /* FrameView.swift */,
-				D386FA10298B617300878B56 /* ntar_gui_app.swift */,
+				D386FA10298B617300878B56 /* ntar_app.swift */,
 				D386FA12298B617300878B56 /* ContentView.swift */,
 				D31F9FBD299736730001CD0C /* FrameSaveQueue.swift */,
 				D31F9FBE299736730001CD0C /* OutlierGroupView.swift */,
 				D31F9FBC299736730001CD0C /* ViewModel.swift */,
 				D386FA14298B617400878B56 /* Assets.xcassets */,
-				D386FA19298B617400878B56 /* ntar_gui.entitlements */,
+				D386FA19298B617400878B56 /* ntar.entitlements */,
 				D386FA16298B617400878B56 /* Preview Content */,
 			);
-			path = ntar_gui;
+			path = ntar;
 			sourceTree = "<group>";
 		};
 		D386FA16298B617400878B56 /* Preview Content */ = {
@@ -170,29 +170,29 @@
 			path = "Preview Content";
 			sourceTree = "<group>";
 		};
-		D386FA21298B617400878B56 /* ntar_guiTests */ = {
+		D386FA21298B617400878B56 /* ntarTests */ = {
 			isa = PBXGroup;
 			children = (
-				D386FA22298B617400878B56 /* ntar_guiTests.swift */,
+				D386FA22298B617400878B56 /* ntarTests.swift */,
 			);
-			path = ntar_guiTests;
+			path = ntarTests;
 			sourceTree = "<group>";
 		};
-		D386FA2B298B617400878B56 /* ntar_guiUITests */ = {
+		D386FA2B298B617400878B56 /* ntarUITests */ = {
 			isa = PBXGroup;
 			children = (
-				D386FA2C298B617400878B56 /* ntar_guiUITests.swift */,
-				D386FA2E298B617400878B56 /* ntar_guiUITestsLaunchTests.swift */,
+				D386FA2C298B617400878B56 /* ntarUITests.swift */,
+				D386FA2E298B617400878B56 /* ntarUITestsLaunchTests.swift */,
 			);
-			path = ntar_guiUITests;
+			path = ntarUITests;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		D386FA0C298B617300878B56 /* ntar_gui */ = {
+		D386FA0C298B617300878B56 /* ntar */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = D386FA32298B617400878B56 /* Build configuration list for PBXNativeTarget "ntar_gui" */;
+			buildConfigurationList = D386FA32298B617400878B56 /* Build configuration list for PBXNativeTarget "ntar" */;
 			buildPhases = (
 				4D98E86BEFEEE42E5AA18E69 /* [CP] Check Pods Manifest.lock */,
 				D386FA09298B617300878B56 /* Sources */,
@@ -204,14 +204,14 @@
 			);
 			dependencies = (
 			);
-			name = ntar_gui;
-			productName = ntar_gui;
-			productReference = D386FA0D298B617300878B56 /* ntar_gui.app */;
+			name = ntar;
+			productName = ntar;
+			productReference = D386FA0D298B617300878B56 /* ntar.app */;
 			productType = "com.apple.product-type.application";
 		};
-		D386FA1D298B617400878B56 /* ntar_guiTests */ = {
+		D386FA1D298B617400878B56 /* ntarTests */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = D386FA35298B617400878B56 /* Build configuration list for PBXNativeTarget "ntar_guiTests" */;
+			buildConfigurationList = D386FA35298B617400878B56 /* Build configuration list for PBXNativeTarget "ntarTests" */;
 			buildPhases = (
 				D386FA1A298B617400878B56 /* Sources */,
 				D386FA1B298B617400878B56 /* Frameworks */,
@@ -222,14 +222,14 @@
 			dependencies = (
 				D386FA20298B617400878B56 /* PBXTargetDependency */,
 			);
-			name = ntar_guiTests;
-			productName = ntar_guiTests;
-			productReference = D386FA1E298B617400878B56 /* ntar_guiTests.xctest */;
+			name = ntarTests;
+			productName = ntarTests;
+			productReference = D386FA1E298B617400878B56 /* ntarTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
-		D386FA27298B617400878B56 /* ntar_guiUITests */ = {
+		D386FA27298B617400878B56 /* ntarUITests */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = D386FA38298B617400878B56 /* Build configuration list for PBXNativeTarget "ntar_guiUITests" */;
+			buildConfigurationList = D386FA38298B617400878B56 /* Build configuration list for PBXNativeTarget "ntarUITests" */;
 			buildPhases = (
 				D386FA24298B617400878B56 /* Sources */,
 				D386FA25298B617400878B56 /* Frameworks */,
@@ -240,9 +240,9 @@
 			dependencies = (
 				D386FA2A298B617400878B56 /* PBXTargetDependency */,
 			);
-			name = ntar_guiUITests;
-			productName = ntar_guiUITests;
-			productReference = D386FA28298B617400878B56 /* ntar_guiUITests.xctest */;
+			name = ntarUITests;
+			productName = ntarUITests;
+			productReference = D386FA28298B617400878B56 /* ntarUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
 /* End PBXNativeTarget section */
@@ -268,7 +268,7 @@
 					};
 				};
 			};
-			buildConfigurationList = D386FA08298B617300878B56 /* Build configuration list for PBXProject "ntar_gui" */;
+			buildConfigurationList = D386FA08298B617300878B56 /* Build configuration list for PBXProject "ntar" */;
 			compatibilityVersion = "Xcode 14.0";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
@@ -281,9 +281,9 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				D386FA0C298B617300878B56 /* ntar_gui */,
-				D386FA1D298B617400878B56 /* ntar_guiTests */,
-				D386FA27298B617400878B56 /* ntar_guiUITests */,
+				D386FA0C298B617300878B56 /* ntar */,
+				D386FA1D298B617400878B56 /* ntarTests */,
+				D386FA27298B617400878B56 /* ntarUITests */,
 			);
 		};
 /* End PBXProject section */
@@ -321,15 +321,15 @@
 			files = (
 			);
 			inputFileListPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-ntar_gui/Pods-ntar_gui-frameworks-${CONFIGURATION}-input-files.xcfilelist",
+				"${PODS_ROOT}/Target Support Files/Pods-ntar/Pods-ntar-frameworks-${CONFIGURATION}-input-files.xcfilelist",
 			);
 			name = "[CP] Embed Pods Frameworks";
 			outputFileListPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-ntar_gui/Pods-ntar_gui-frameworks-${CONFIGURATION}-output-files.xcfilelist",
+				"${PODS_ROOT}/Target Support Files/Pods-ntar/Pods-ntar-frameworks-${CONFIGURATION}-output-files.xcfilelist",
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-ntar_gui/Pods-ntar_gui-frameworks.sh\"\n";
+			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-ntar/Pods-ntar-frameworks.sh\"\n";
 			showEnvVarsInLog = 0;
 		};
 		4D98E86BEFEEE42E5AA18E69 /* [CP] Check Pods Manifest.lock */ = {
@@ -347,7 +347,7 @@
 			outputFileListPaths = (
 			);
 			outputPaths = (
-				"$(DERIVED_FILE_DIR)/Pods-ntar_gui-checkManifestLockResult.txt",
+				"$(DERIVED_FILE_DIR)/Pods-ntar-checkManifestLockResult.txt",
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
@@ -371,7 +371,7 @@
 				D332F70329B63FD0009E2796 /* MassivePaintSheetView.swift in Sources */,
 				D31F9FBF299736740001CD0C /* ViewModel.swift in Sources */,
 				D31F9FC0299736740001CD0C /* FrameSaveQueue.swift in Sources */,
-				D386FA11298B617300878B56 /* ntar_gui_app.swift in Sources */,
+				D386FA11298B617300878B56 /* ntar_app.swift in Sources */,
 				D3B886AD29B830BE003590A1 /* OutlierGroupTable.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -380,7 +380,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				D386FA23298B617400878B56 /* ntar_guiTests.swift in Sources */,
+				D386FA23298B617400878B56 /* ntarTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -388,8 +388,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				D386FA2F298B617400878B56 /* ntar_guiUITestsLaunchTests.swift in Sources */,
-				D386FA2D298B617400878B56 /* ntar_guiUITests.swift in Sources */,
+				D386FA2F298B617400878B56 /* ntarUITestsLaunchTests.swift in Sources */,
+				D386FA2D298B617400878B56 /* ntarUITests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -398,12 +398,12 @@
 /* Begin PBXTargetDependency section */
 		D386FA20298B617400878B56 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = D386FA0C298B617300878B56 /* ntar_gui */;
+			target = D386FA0C298B617300878B56 /* ntar */;
 			targetProxy = D386FA1F298B617400878B56 /* PBXContainerItemProxy */;
 		};
 		D386FA2A298B617400878B56 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = D386FA0C298B617300878B56 /* ntar_gui */;
+			target = D386FA0C298B617300878B56 /* ntar */;
 			targetProxy = D386FA29298B617400878B56 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
@@ -462,7 +462,7 @@
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
-				ONLY_ACTIVE_ARCH = NO;
+				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = macosx;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
@@ -516,7 +516,7 @@
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
-				ONLY_ACTIVE_ARCH = NO;
+				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = macosx;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
@@ -525,15 +525,15 @@
 		};
 		D386FA33298B617400878B56 /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 5F0FA5BFD47E6F6D97B17603 /* Pods-ntar_gui.debug.xcconfig */;
+			baseConfigurationReference = 5F0FA5BFD47E6F6D97B17603 /* Pods-ntar.debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = ntar_gui/ntar_gui.entitlements;
+				CODE_SIGN_ENTITLEMENTS = ntar/ntar.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_ASSET_PATHS = "\"ntar_gui/Preview Content\"";
+				DEVELOPMENT_ASSET_PATHS = "\"ntar/Preview Content\"";
 				DEVELOPMENT_TEAM = G3L75S65V9;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
@@ -566,15 +566,15 @@
 		};
 		D386FA34298B617400878B56 /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 540415BAD54DC7E2F8297DCF /* Pods-ntar_gui.release.xcconfig */;
+			baseConfigurationReference = 540415BAD54DC7E2F8297DCF /* Pods-ntar.release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = ntar_gui/ntar_gui.entitlements;
+				CODE_SIGN_ENTITLEMENTS = ntar/ntar.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_ASSET_PATHS = "\"ntar_gui/Preview Content\"";
+				DEVELOPMENT_ASSET_PATHS = "\"ntar/Preview Content\"";
 				DEVELOPMENT_TEAM = G3L75S65V9;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
@@ -620,7 +620,7 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_VERSION = 5.0;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/ntar_gui.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/ntar_gui";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/ntar.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/ntar";
 			};
 			name = Debug;
 		};
@@ -639,7 +639,7 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_VERSION = 5.0;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/ntar_gui.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/ntar_gui";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/ntar.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/ntar";
 			};
 			name = Release;
 		};
@@ -656,7 +656,7 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_VERSION = 5.0;
-				TEST_TARGET_NAME = ntar_gui;
+				TEST_TARGET_NAME = ntar;
 			};
 			name = Debug;
 		};
@@ -673,14 +673,14 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_VERSION = 5.0;
-				TEST_TARGET_NAME = ntar_gui;
+				TEST_TARGET_NAME = ntar;
 			};
 			name = Release;
 		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		D386FA08298B617300878B56 /* Build configuration list for PBXProject "ntar_gui" */ = {
+		D386FA08298B617300878B56 /* Build configuration list for PBXProject "ntar" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				D386FA30298B617400878B56 /* Debug */,
@@ -689,7 +689,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		D386FA32298B617400878B56 /* Build configuration list for PBXNativeTarget "ntar_gui" */ = {
+		D386FA32298B617400878B56 /* Build configuration list for PBXNativeTarget "ntar" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				D386FA33298B617400878B56 /* Debug */,
@@ -698,7 +698,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		D386FA35298B617400878B56 /* Build configuration list for PBXNativeTarget "ntar_guiTests" */ = {
+		D386FA35298B617400878B56 /* Build configuration list for PBXNativeTarget "ntarTests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				D386FA36298B617400878B56 /* Debug */,
@@ -707,7 +707,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		D386FA38298B617400878B56 /* Build configuration list for PBXNativeTarget "ntar_guiUITests" */ = {
+		D386FA38298B617400878B56 /* Build configuration list for PBXNativeTarget "ntarUITests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				D386FA39298B617400878B56 /* Debug */,

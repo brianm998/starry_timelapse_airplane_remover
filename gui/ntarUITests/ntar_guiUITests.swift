@@ -1,13 +1,13 @@
 //
-//  ntar_guiUITests.swift
-//  ntar_guiUITests
+//  ntarUITests.swift
+//  ntarUITests
 //
 //  Created by Brian Martin on 2/1/23.
 //
 
 import XCTest
 
-final class ntar_guiUITests: XCTestCase {
+final class ntarUITests: XCTestCase {
 
     override func setUpWithError() throws {
         // Put setup code here. This method is called before the invocation of each test method in the class.

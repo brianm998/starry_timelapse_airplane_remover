@@ -1,14 +1,14 @@
 //
-//  ntar_guiTests.swift
-//  ntar_guiTests
+//  ntarTests.swift
+//  ntarTests
 //
 //  Created by Brian Martin on 2/1/23.
 //
 
 import XCTest
-@testable import ntar_gui
+@testable import ntar
 
-final class ntar_guiTests: XCTestCase {
+final class ntarTests: XCTestCase {
 
     override func setUpWithError() throws {
         // Put setup code here. This method is called before the invocation of each test method in the class.

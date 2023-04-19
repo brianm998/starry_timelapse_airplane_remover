@@ -3,7 +3,7 @@
 # build and notarize with apple the ntar gui code for ad hoc distribution
 
 BUILD_DIR=.build
-APP_NAME=ntar_gui
+APP_NAME=ntar
 
 rm -rf ${BUILD_DIR}
 
@@ -15,17 +15,17 @@ pod install
 perl -pi -e 's/MACOSX_DEPLOYMENT_TARGET = \d+[.]?\d*/MACOSX_DEPLOYMENT_TARGET = 12.0/'  Pods/Pods.xcodeproj/project.pbxproj
 
 # FIX annother annoying cocoapods problem
-perl -pi -e 's/readlink/readlink -f/' Pods/Target\ Support\ Files/Pods-ntar_gui/Pods-ntar_gui-frameworks.sh
+perl -pi -e 's/readlink/readlink -f/' Pods/Target\ Support\ Files/Pods-ntar/Pods-ntar-frameworks.sh
 
 # set flag to build for all archs
-perl -pi -e 's/ONLY_ACTIVE_ARCH = YES/ONLY_ACTIVE_ARCH = NO/'  ntar_gui.xcodeproj/project.pbxproj
+perl -pi -e 's/ONLY_ACTIVE_ARCH = YES/ONLY_ACTIVE_ARCH = NO/'  ntar.xcodeproj/project.pbxproj
 
 # build the archive
 xcodebuild \
-    -workspace "ntar_gui.xcworkspace" \
-    -scheme "ntar_gui" \
+    -workspace "ntar.xcworkspace" \
+    -scheme "ntar" \
     -configuration "Release" \
-    -archivePath "${BUILD_DIR}/ntar_gui.xcarchive" \
+    -archivePath "${BUILD_DIR}/ntar.xcarchive" \
     archive
 
 cat > "${BUILD_DIR}/ExportOptiopns.plist" <<EOF
@@ -48,11 +48,11 @@ echo "exporting archive"
 # export the archive
 xcodebuild \
     -exportArchive \
-    -archivePath "${BUILD_DIR}/ntar_gui.xcarchive" \
+    -archivePath "${BUILD_DIR}/ntar.xcarchive" \
     -exportOptionsPlist "${BUILD_DIR}/ExportOptiopns.plist" \
     -exportPath "${BUILD_DIR}/AdHoc"
 
-# create zip file
+# create zip file for notorization
 ditto \
     -c -k --sequesterRsrc --keepParent \
     "${BUILD_DIR}/AdHoc/${APP_NAME}.app" \
@@ -75,6 +75,12 @@ until xcrun stapler staple "${BUILD_DIR}/AdHoc/${APP_NAME}.app"; do
 done
 
 # set to build for active arch only for development (as it is in git)
-perl -pi -e 's/ONLY_ACTIVE_ARCH = NO/ONLY_ACTIVE_ARCH = YES/'  ntar_gui.xcodeproj/project.pbxproj
+perl -pi -e 's/ONLY_ACTIVE_ARCH = NO/ONLY_ACTIVE_ARCH = YES/'  ntar.xcodeproj/project.pbxproj
+
+ditto \
+    -c -k --sequesterRsrc --keepParent \
+    "${BUILD_DIR}/AdHoc/${APP_NAME}.app" \
+    "${BUILD_DIR}/${APP_NAME}.zip"
+
 
 echo "results in ${BUILD_DIR}/AdHoc/${APP_NAME}.app"

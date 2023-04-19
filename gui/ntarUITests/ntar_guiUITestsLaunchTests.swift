@@ -1,13 +1,13 @@
 //
-//  ntar_guiUITestsLaunchTests.swift
-//  ntar_guiUITests
+//  ntarUITestsLaunchTests.swift
+//  ntarUITests
 //
 //  Created by Brian Martin on 2/1/23.
 //
 
 import XCTest
 
-final class ntar_guiUITestsLaunchTests: XCTestCase {
+final class ntarUITestsLaunchTests: XCTestCase {
 
     override class var runsForEachTargetApplicationUIConfiguration: Bool {
         true
