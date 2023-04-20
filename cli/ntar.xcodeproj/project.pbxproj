@@ -7,10 +7,10 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		D331859A29F1D685004DBB62 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = D331859929F1D685004DBB62 /* main.swift */; };
 		D33185A429F1DDD9004DBB62 /* BinaryCodable in Frameworks */ = {isa = PBXBuildFile; productRef = D33185A329F1DDD9004DBB62 /* BinaryCodable */; };
 		D33185A729F1DE10004DBB62 /* ArgumentParser in Frameworks */ = {isa = PBXBuildFile; productRef = D33185A629F1DE10004DBB62 /* ArgumentParser */; };
 		D33185AE29F1E007004DBB62 /* NtarCore in Frameworks */ = {isa = PBXBuildFile; productRef = D33185AD29F1E007004DBB62 /* NtarCore */; };
+		D33185B029F1E079004DBB62 /* ntar_cli.swift in Sources */ = {isa = PBXBuildFile; fileRef = D33185AF29F1E079004DBB62 /* ntar_cli.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -27,8 +27,8 @@
 
 /* Begin PBXFileReference section */
 		D331859629F1D685004DBB62 /* ntar */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = ntar; sourceTree = BUILT_PRODUCTS_DIR; };
-		D331859929F1D685004DBB62 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
 		D33185AB29F1DF5E004DBB62 /* NtarCore */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = NtarCore; path = ../NtarCore; sourceTree = "<group>"; };
+		D33185AF29F1E079004DBB62 /* ntar_cli.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; name = ntar_cli.swift; path = Sources/ntar/ntar_cli.swift; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -66,7 +66,7 @@
 		D331859829F1D685004DBB62 /* ntar */ = {
 			isa = PBXGroup;
 			children = (
-				D331859929F1D685004DBB62 /* main.swift */,
+				D33185AF29F1E079004DBB62 /* ntar_cli.swift */,
 			);
 			path = ntar;
 			sourceTree = "<group>";
@@ -153,7 +153,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				D331859A29F1D685004DBB62 /* main.swift in Sources */,
+				D33185B029F1E079004DBB62 /* ntar_cli.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
