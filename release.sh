@@ -31,9 +31,7 @@ lipo .build/arm64-apple-macosx/libNtarDecisionTrees.a \
 # next build a universal (all arch) binary for the cli     
 ####
 cd ../cli
-
 ./release.sh
-
 cd ..
 
 # result ends up here:
