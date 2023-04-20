@@ -41,8 +41,7 @@ read continue
 
 if [ \$continue == "y" ]
 then     
-    unzip ntar-gui-${NTAR_VERSION}.zip >/dev/null
-    sudo rm -rf /Applications/ntar.app
+    unzip ntar-gui-${NTAR_VERSION}.zip >/dev/null rm -rf /Applications/ntar.app
     sudo mv ntar.app /Applications
     sudo mv ntar /usr/local/bin
     rm ntar-gui-${NTAR_VERSION}.zip
@@ -69,7 +68,6 @@ ditto \
 
 # zip up the temp dir into to a named zip file in the releases dir
 cd $TEMP_DIR
-pwd 
 zip -r "../releases/ntar-${NTAR_VERSION}.zip" "ntar-${NTAR_VERSION}"
 cd ..
 

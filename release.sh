@@ -1,5 +1,9 @@
 #!/bin/bash
 
+# this script produces a new release of ntar
+#
+# created are a zip file in releases/ and local and remote release tags
+
 set -e
 
 ####
@@ -27,9 +31,10 @@ lipo .build/arm64-apple-macosx/libNtarDecisionTrees.a \
 # next build a universal (all arch) binary for the cli     
 ####
 cd ../cli
-rm -rf .build
-# build x86 and arm into a single universal binary
-swift build --configuration release --arch arm64 --arch x86_64
+
+./release.sh
+
+cd ..
 
 # result ends up here:
 # cli/.build/apple/Products/Release/ntar
@@ -45,7 +50,7 @@ cd ..
 
 # results end up here:
 # gui/.build/AdHoc/${APP_NAME}.app"
-# gui/.build/${APP_NAME}.zip"
+
 
 ####
 # package the gui and cli apps into a single zip file with version from ntar config in its name
@@ -53,3 +58,5 @@ cd ..
 
 ./finishRelease.sh
 
+# output should be in releases/ntar-${NTAR_VERSION}.zip
+# tag release/${NTAR_VERSION} should be on both local and remote

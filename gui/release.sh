@@ -64,17 +64,16 @@ ditto \
     "${BUILD_DIR}/AdHoc/${APP_NAME}.app" \
     "${BUILD_DIR}/AdHoc/${APP_NAME}-for-notarization.zip"
 
-# XXX add a version number in here (get it from the config in code)
-
 # notarize it
 
 # run this again to get another keychain profile item with an app specific password
 #   --keychain-profile "ntar" \
-#xcrun notarytool store-credentials --apple-id brian.beholden@gmail.com --team-id G3L75S65V9
+# xcrun notarytool store-credentials --apple-id brian.beholden@gmail.com --team-id G3L75S65V9
 
-xcrun notarytool submit "${BUILD_DIR}/AdHoc/${APP_NAME}-for-notarization.zip" \
-                   --keychain-profile "ntar" \
-                   --wait 
+xcrun notarytool submit \
+      "${BUILD_DIR}/AdHoc/${APP_NAME}-for-notarization.zip" \
+      --keychain-profile "ntar" \
+      --wait 
 
 WAIT_TIME=20
 
@@ -89,4 +88,4 @@ perl -pi -e 's/ONLY_ACTIVE_ARCH = NO/ONLY_ACTIVE_ARCH = YES/'  ntar.xcodeproj/pr
 
 
 
-echo "results in ${BUILD_DIR}/${APP_NAME}.zip"
+echo "results in ${BUILD_DIR}/AdHoc/${APP_NAME}.app"
