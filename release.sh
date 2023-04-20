@@ -1,4 +1,4 @@
-#!/bin/bash
+s#!/bin/bash
 
 # this script produces a new release of ntar
 #
@@ -26,28 +26,28 @@ lipo .build/arm64-apple-macosx/libNtarDecisionTrees.a \
      .build/x86_64-apple-macosx/libNtarDecisionTrees.a \
      -create -output libNtarDecisionTrees.a
 
+cd ..
 
 ####
 # next build a universal (all arch) binary for the cli     
 ####
-cd ../cli
+cd cli
 ./release.sh
 cd ..
 
 # result ends up here:
-# cli/.build/apple/Products/Release/ntar
+# cli/.build/ntar_cli_${NTAR_VERSION}.pkg"
 
 
 ####
 # next build a .app dir from the gui
 ####
-
-cd ../gui
+cd gui
 ./release.sh
 cd ..
 
 # results end up here:
-# gui/.build/AdHoc/${APP_NAME}.app"
+# gui/.build/ntar_app_${NTAR_VERSION}.pkg"
 
 
 ####
