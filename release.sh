@@ -1,4 +1,4 @@
-s#!/bin/bash
+#!/bin/bash
 
 # this script produces a new release of ntar
 #
