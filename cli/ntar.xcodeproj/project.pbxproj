@@ -8,6 +8,8 @@
 
 /* Begin PBXBuildFile section */
 		D331859A29F1D685004DBB62 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = D331859929F1D685004DBB62 /* main.swift */; };
+		D33185A429F1DDD9004DBB62 /* BinaryCodable in Frameworks */ = {isa = PBXBuildFile; productRef = D33185A329F1DDD9004DBB62 /* BinaryCodable */; };
+		D33185A729F1DE10004DBB62 /* ArgumentParser in Frameworks */ = {isa = PBXBuildFile; productRef = D33185A629F1DE10004DBB62 /* ArgumentParser */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -32,6 +34,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D33185A729F1DE10004DBB62 /* ArgumentParser in Frameworks */,
+				D33185A429F1DDD9004DBB62 /* BinaryCodable in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -78,6 +82,10 @@
 			dependencies = (
 			);
 			name = ntar;
+			packageProductDependencies = (
+				D33185A329F1DDD9004DBB62 /* BinaryCodable */,
+				D33185A629F1DE10004DBB62 /* ArgumentParser */,
+			);
 			productName = ntar;
 			productReference = D331859629F1D685004DBB62 /* ntar */;
 			productType = "com.apple.product-type.tool";
@@ -106,6 +114,10 @@
 				Base,
 			);
 			mainGroup = D331858D29F1D685004DBB62;
+			packageReferences = (
+				D33185A229F1DDD9004DBB62 /* XCRemoteSwiftPackageReference "BinaryCodable" */,
+				D33185A529F1DE10004DBB62 /* XCRemoteSwiftPackageReference "swift-argument-parser" */,
+			);
 			productRefGroup = D331859729F1D685004DBB62 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -284,6 +296,38 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		D33185A229F1DDD9004DBB62 /* XCRemoteSwiftPackageReference "BinaryCodable" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "git@github.com:christophhagen/BinaryCodable.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.0.0;
+			};
+		};
+		D33185A529F1DE10004DBB62 /* XCRemoteSwiftPackageReference "swift-argument-parser" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/apple/swift-argument-parser.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.0.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		D33185A329F1DDD9004DBB62 /* BinaryCodable */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = D33185A229F1DDD9004DBB62 /* XCRemoteSwiftPackageReference "BinaryCodable" */;
+			productName = BinaryCodable;
+		};
+		D33185A629F1DE10004DBB62 /* ArgumentParser */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = D33185A529F1DE10004DBB62 /* XCRemoteSwiftPackageReference "swift-argument-parser" */;
+			productName = ArgumentParser;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = D331858E29F1D685004DBB62 /* Project object */;
 }
