@@ -19,11 +19,14 @@ time xcodebuild \
      -archivePath .build/ntar \
      archive
 
+# could probably build this without xcode (swift directly) if we code sign it afterwards
+# with the 'Developer ID Application' identity after compilation and before pkgbuild below
+
 # package it up for distribution
-pkgbuild --root .build/ntar.xcarchive/Products \
+pkgbuild --root .build/ntar.xcarchive/Products/usr/local/bin \
 	 --identifier com.ntar \
 	 --version "${NTAR_VERSION}" \
-	 --install-location / \
+	 --install-location /usr/local/bin \
 	 --sign "Developer ID Installer: Brian Martin (G3L75S65V9)" \
 	 $PKG_NAME
 

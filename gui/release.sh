@@ -63,7 +63,9 @@ xcodebuild \
 ditto \
     -c -k --sequesterRsrc --keepParent \
     "${BUILD_DIR}/AdHoc/${APP_NAME}.app" \
-    "${BUILD_DIR}/AdHoc/${APP_NAME}-for-notarization.zip"
+    "${BUILD_DIR}/${APP_NAME}-for-notarization.zip"
+
+
 
 # notarize it
 
@@ -74,7 +76,7 @@ ditto \
 # xcrun notarytool store-credentials --apple-id brian.beholden@gmail.com --team-id G3L75S65V9
 
 xcrun notarytool submit \
-      "${BUILD_DIR}/AdHoc/${APP_NAME}-for-notarization.zip" \
+      "${BUILD_DIR}/${APP_NAME}-for-notarization.zip" \
       --keychain-profile "ntar" \
       --wait 
 
@@ -86,11 +88,20 @@ until xcrun stapler staple "${BUILD_DIR}/AdHoc/${APP_NAME}.app"; do
     sleep ${WAIT_TIME}
 done
 
+rm     "${BUILD_DIR}/AdHoc/Packaging.log"
+rm     "${BUILD_DIR}/AdHoc/ExportOptions.plist"
+rm     "${BUILD_DIR}/AdHoc/DistributionSummary.plist"
+
+COMPONENT_PLIST="${BUILD_DIR}/component_list.plist"
+
+pkgbuild --analyze --root "${BUILD_DIR}/AdHoc/${APP_NAME}.app" $COMPONENT_PLIST
+
 # package it up for distribution
-pkgbuild --root "${BUILD_DIR}/AdHoc" \
+pkgbuild --root "${BUILD_DIR}/AdHoc/${APP_NAME}.app" \
+         --component-plist $COMPONENT_PLIST \
 	 --identifier com.ntar \
 	 --version "${NTAR_VERSION}" \
-	 --install-location / \
+	 --install-location /Applications/${APP_NAME}.app \
  	 --sign "Developer ID Installer: Brian Martin (G3L75S65V9)" \
 	 $PKG_NAME
 
