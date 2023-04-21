@@ -51,7 +51,7 @@ cd ..
 
 
 ####
-# package the gui and cli apps into a single zip file with version from ntar config in its name
+# move the gui and cli apps into releases dir and tag git local and remote
 ####
 
 ./finishRelease.sh

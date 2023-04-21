@@ -1,20 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Scheme
    LastUpgradeVersion = "1430"
-   version = "2.2">
+   version = "1.7">
    <BuildAction
       parallelizeBuildables = "YES"
       buildImplicitDependencies = "YES">
       <BuildActionEntries>
-         <BuildActionEntry
-            buildForTesting = "YES"
-            buildForRunning = "YES"
-            buildForProfiling = "NO"
-            buildForArchiving = "NO"
-            buildForAnalyzing = "NO">
-            <AutocreatedTestPlanReference>
-            </AutocreatedTestPlanReference>
-         </BuildActionEntry>
          <BuildActionEntry
             buildForTesting = "YES"
             buildForRunning = "YES"
@@ -23,7 +14,7 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "D3EE3E0129F0E4F600A79169"
+               BlueprintIdentifier = "D331859529F1D685004DBB62"
                BuildableName = "ntar"
                BlueprintName = "ntar"
                ReferencedContainer = "container:ntar.xcodeproj">
@@ -53,21 +44,12 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "ntar"
-            BuildableName = "ntar"
-            BlueprintName = "ntar"
-            ReferencedContainer = "container:">
-         </BuildableReference>
-      </BuildableProductRunnable>
-      <MacroExpansion>
-         <BuildableReference
-            BuildableIdentifier = "primary"
-            BlueprintIdentifier = "D3EE3E0129F0E4F600A79169"
+            BlueprintIdentifier = "D331859529F1D685004DBB62"
             BuildableName = "ntar"
             BlueprintName = "ntar"
             ReferencedContainer = "container:ntar.xcodeproj">
          </BuildableReference>
-      </MacroExpansion>
+      </BuildableProductRunnable>
    </LaunchAction>
    <ProfileAction
       buildConfiguration = "Release"
@@ -79,7 +61,7 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "D3EE3E0129F0E4F600A79169"
+            BlueprintIdentifier = "D331859529F1D685004DBB62"
             BuildableName = "ntar"
             BlueprintName = "ntar"
             ReferencedContainer = "container:ntar.xcodeproj">
@@ -91,7 +73,6 @@
    </AnalyzeAction>
    <ArchiveAction
       buildConfiguration = "Release"
-      customArchiveName = "ntar_cli"
       revealArchiveInOrganizer = "YES">
    </ArchiveAction>
 </Scheme>

@@ -13,7 +13,7 @@ perl -pi -e 's/ONLY_ACTIVE_ARCH = YES/ONLY_ACTIVE_ARCH = NO/'  ntar.xcodeproj/pr
 
 # build an archive of the cli app
 time xcodebuild \
-     -workspace ntar.xcworkspace \
+     -project ntar.xcodeproj \
      -scheme ntar \
      -configuration Release \
      -archivePath .build/ntar \
