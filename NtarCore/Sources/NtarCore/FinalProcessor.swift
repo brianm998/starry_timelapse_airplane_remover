@@ -176,13 +176,8 @@ public actor FinalProcessor {
                 count += 1
                 Log.d("adding frame \(frame.frame_index) to final queue")
                 await self.final_queue.method_list.add(atIndex: frame.frame_index) {
-                    switch frameProcesingType {
-                    case .ai:
-                        await frame.applyDecisionTreeToAllOutliers()
-                        await frame.set(state: .outlierProcessingComplete)
-                    case .none:
-                        break
-                    }
+                    await frame.maybeApplyOutlierGroupClassifier()
+                    await frame.set(state: .outlierProcessingComplete)
                     await self.finish(frame: frame)
                 }
             }
@@ -221,115 +216,110 @@ public actor FinalProcessor {
         let frame_count = await frames.count
         
         var done = false
-        while(!done) {
-            Log.v("FINAL THREAD running")
-            let (cfi, frames_count) = await (current_frame_index, frames.count)
-            done = cfi >= frames_count
-            Log.v("FINAL THREAD done \(done) current_frame_index \(cfi) frames.count \(frames_count)")
-            if done {
-                Log.d("we are done")
-                continue
-            }
-            
-            let index_to_process = await current_frame_index
+        try await withLimitedThrowingTaskGroup(of: Void.self) { taskGroup in
+            while(!done) {
+                Log.v("FINAL THREAD running")
+                let (cfi, frames_count) = await (current_frame_index, frames.count)
+                done = cfi >= frames_count
+                Log.v("FINAL THREAD done \(done) current_frame_index \(cfi) frames.count \(frames_count)")
+                if done {
+                    Log.d("we are done")
+                    continue
+                }
+                
+                let index_to_process = await current_frame_index
 
-            Log.d("index_to_process \(index_to_process) shouldProcess[index_to_process] \(shouldProcess[index_to_process])")
+                Log.d("index_to_process \(index_to_process) shouldProcess[index_to_process] \(shouldProcess[index_to_process])")
 
-             
-            if !is_gui,         // always process on gui so we can see them all
-               !shouldProcess[index_to_process]
-            {
-                if let frameCheckClosure = callbacks.frameCheckClosure {
-                    if let frame = await self.frame(at: index_to_process) {
-                        Log.d("calling frameCheckClosure for frame \(frame.frame_index)")
-                        await frameCheckClosure(frame)
+                
+                if !is_gui,         // always process on gui so we can see them all
+                   !shouldProcess[index_to_process]
+                {
+                    if let frameCheckClosure = callbacks.frameCheckClosure {
+                        if let frame = await self.frame(at: index_to_process) {
+                            Log.d("calling frameCheckClosure for frame \(frame.frame_index)")
+                            await frameCheckClosure(frame)
+                        } else {
+                            Log.d("NOT calling frameCheckClosure for frame \(index_to_process)")
+                        }
                     } else {
                         Log.d("NOT calling frameCheckClosure for frame \(index_to_process)")
                     }
-                } else {
-                    Log.d("NOT calling frameCheckClosure for frame \(index_to_process)")
+                    
+                    // don't process existing files on cli
+                    Log.d("not processing \(index_to_process)")
+                    await self.incrementCurrentFrameIndex()
+                    continue
                 }
+
+                var images_to_process: [FrameAirplaneRemover] = []
                 
-                // don't process existing files on cli
-                Log.d("not processing \(index_to_process)")
-                await self.incrementCurrentFrameIndex()
-                continue
-            }
-
-            var images_to_process: [FrameAirplaneRemover] = []
-            
-            var start_index = index_to_process - config.number_final_processing_neighbors_needed
-            var end_index = index_to_process + config.number_final_processing_neighbors_needed
-            if start_index < 0 {
-                start_index = 0
-            }
-            if end_index >= frame_count {
-                end_index = frame_count - 1
-            }
-
-            Log.i("start_index \(start_index) end_index \(end_index)")
-            
-            var have_enough_frames_to_inter_frame_process = true
-            //var index_in_images_to_process_of_main_frame = 0
-            //var index_in_images_to_process = 0
-            for i in start_index ... end_index {
-                Log.v("looking for frame at \(i)")
-                if let next_frame = await self.frame(at: i) {
-                    images_to_process.append(next_frame)
-                } else {
-                    // this means we don't have enough neighboring frames to inter frame process yet
-                    have_enough_frames_to_inter_frame_process = false
+                var start_index = index_to_process - config.number_final_processing_neighbors_needed
+                var end_index = index_to_process + config.number_final_processing_neighbors_needed
+                if start_index < 0 {
+                    start_index = 0
                 }
-            }
-            if have_enough_frames_to_inter_frame_process {
-                Log.i("FINAL THREAD frame \(index_to_process) doing inter-frame analysis with \(images_to_process.count) frames")
+                if end_index >= frame_count {
+                    end_index = frame_count - 1
+                }
 
-                // doubly link the outliers so their feature values across frames work
-                await doublyLink(frames: images_to_process)    
-
-                Log.i("FINAL THREAD frame \(index_to_process) done with inter-frame analysis")
-                await self.incrementCurrentFrameIndex()
+                Log.i("start_index \(start_index) end_index \(end_index)")
                 
-                if start_index > 0,
-                   index_to_process < frame_count - config.number_final_processing_neighbors_needed - 1
-                {
-                    // maybe finish a previous frame
-                    // leave the ones at the end to finishAll()
-                    let immutable_start = start_index
-                    Log.v("FINAL THREAD frame \(index_to_process) queueing into final queue")
-                    if let frame_to_finish = await self.frame(at: immutable_start - 1),
-                       let next_frame = await self.frame(at: immutable_start)
-                    {
-                        await self.clearFrame(at: immutable_start - 1)
-
-                        // if the outloaders were loaded from a file, then further processing
-                        // is not a good thing
-                        switch frameProcesingType {
-
-                        case .ai:
-                            await frame_to_finish.set(state: .interFrameProcessing)
-                            await frame_to_finish.applyDecisionTreeToAllOutliers()
-                            await frame_to_finish.set(state: .outlierProcessingComplete)
-                            
-                        case .none:
-                            break
-                            
-                        }
-
-                        await self.finish(frame: frame_to_finish)
+                var have_enough_frames_to_inter_frame_process = true
+                //var index_in_images_to_process_of_main_frame = 0
+                //var index_in_images_to_process = 0
+                for i in start_index ... end_index {
+                    Log.v("looking for frame at \(i)")
+                    if let next_frame = await self.frame(at: i) {
+                        images_to_process.append(next_frame)
+                    } else {
+                        // this means we don't have enough neighboring frames to inter frame process yet
+                        have_enough_frames_to_inter_frame_process = false
                     }
-                    Log.v("FINAL THREAD frame \(index_to_process) done queueing into final queue")
                 }
-            } else {
-                Log.v("FINAL THREAD sleeping")
-                await self.setAsleep(to: true)
+                if have_enough_frames_to_inter_frame_process {
+                    Log.i("FINAL THREAD frame \(index_to_process) doing inter-frame analysis with \(images_to_process.count) frames")
 
-                try await Task.sleep(nanoseconds: 1_000_000_000)
-                //sleep(1)        // XXX hardcoded sleep amount
-                
-                Log.v("FINAL THREAD waking up")
-                await self.setAsleep(to: false)
+                    // doubly link the outliers so their feature values across frames work
+                    await doublyLink(frames: images_to_process)    
+
+                    Log.i("FINAL THREAD frame \(index_to_process) done with inter-frame analysis")
+                    await self.incrementCurrentFrameIndex()
+                    
+                    if start_index > 0,
+                       index_to_process < frame_count - config.number_final_processing_neighbors_needed - 1
+                    {
+                        // maybe finish a previous frame
+                        // leave the ones at the end to finishAll()
+                        let immutable_start = start_index
+                        Log.v("FINAL THREAD frame \(index_to_process) queueing into final queue")
+                        if let frame_to_finish = await self.frame(at: immutable_start - 1),
+                           let next_frame = await self.frame(at: immutable_start)
+                        {
+                            await self.clearFrame(at: immutable_start - 1)
+
+                            try await taskGroup.addTask() { 
+                                await frame_to_finish.maybeApplyOutlierGroupClassifier()
+                                await frame_to_finish.set(state: .outlierProcessingComplete)
+                                await self.finish(frame: frame_to_finish)
+                            }
+                        }
+                        Log.v("FINAL THREAD frame \(index_to_process) done queueing into final queue")
+                    }
+                } else {
+                    Log.v("FINAL THREAD sleeping")
+                    await self.setAsleep(to: true)
+
+                    try await Task.sleep(nanoseconds: 1_000_000_000)
+                    //sleep(1)        // XXX hardcoded sleep amount
+                    
+                    Log.v("FINAL THREAD waking up")
+                    await self.setAsleep(to: false)
+                }
             }
+
+            // wait for all existing tasks to complete 
+            try await taskGroup.waitForAll()
         }
 
         Log.i("FINAL THREAD finishing all remaining frames")

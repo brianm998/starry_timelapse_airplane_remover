@@ -328,8 +328,18 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
     public let base_name: String
 
     // did we load our outliers from a file?
-    private var outliersLoadedFromFile = false
+    public var outliersLoadedFromFile = false
 
+    public func maybeApplyOutlierGroupClassifier() async {
+        if !self.outliersLoadedFromFile ||
+           (self.outliersLoadedFromFile &&
+            self.overwriteFileLoadedOutlierGroups)
+        {
+            self.set(state: .interFrameProcessing)
+            await self.applyDecisionTreeToAllOutliers()
+        }
+    }
+    
     public func didLoadOutliersFromFile() -> Bool { outliersLoadedFromFile }
     
     nonisolated public var previewFilename: String? {
@@ -1065,7 +1075,7 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
     // does the final painting and then writes out the output files
     public func finish() async throws {
 
-        if self.outliersLoadedFromFile {
+        if self.outliersLoadedFromFile  {
             // if we've loaded outliers from a file, only save again if we're in gui mode
             // in GUI mode the user may have made an explicit decision
             if self.overwriteFileLoadedOutlierGroups {

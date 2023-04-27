@@ -15,14 +15,6 @@ public enum DecisionSplitType: String {
     // XXX others ???
 }
 
-
-public enum FrameProcessingType: String {
-    case none
-    case ai
-}
-
-public var frameProcesingType: FrameProcessingType = .ai
-
 // a list of all extant decision trees at runtime, indexed by hash prefix
 @available(macOS 10.15, *)
 public var decisionTrees: [String: NamedOutlierGroupClassifier] = loadOutlierGroupClassifiers()

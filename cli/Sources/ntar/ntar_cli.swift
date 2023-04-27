@@ -150,15 +150,6 @@ struct Ntar: ParsableCommand {
         Defaults to creating output dir(s) alongside input sequence dir
         """)
     var outputPath: String?
-
-    @Option(name: [.customShort("p"), .customLong("process")], help: """
-        Specify the frame processing type:
-
-        ai     - default, uses machine learning to categorize outlier groups
-        legacy - original method, hand coded algorithm
-        none   - don't modify the outlier group classification at all, used for re-processing
-        """)
-    var processingType: FrameProcessingType = .ai
     
     @Option(name: [.customShort("B"), .long], help: """
         The percentage in brightness increase necessary for a single pixel to be considered an outlier.
@@ -215,9 +206,6 @@ struct Ntar: ParsableCommand {
 
 
     mutating func run() throws {
-
-        // set how to process frames
-        frameProcesingType = self.processingType
 
         if version {
             print("""
@@ -386,6 +374,8 @@ struct Ntar: ParsableCommand {
                     
                     if let updatableProgressMonitor = upm {
                         await updatableProgressMonitor.dispatchGroup.wait()
+                        // simply sleep a small amount? 
+                        //try await Task.sleep(nanoseconds: 1_000_000_000)
                         print("processing complete, output is in \(eraser.output_dirname)")
                     }
                 } catch {
@@ -472,8 +462,5 @@ func process_outlier_groups(dirname: String,
 // allows the log level to be expressed on the command line as an argument
 @available(macOS 10.15, *) 
 extension Log.Level: ExpressibleByArgument { }
-
-@available(macOS 10.15, *) 
-extension FrameProcessingType: ExpressibleByArgument { }
 
 fileprivate let file_manager = FileManager.default
