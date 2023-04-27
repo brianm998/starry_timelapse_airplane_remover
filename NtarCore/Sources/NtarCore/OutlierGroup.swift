@@ -13,16 +13,6 @@ You should have received a copy of the GNU General Public License along with nta
 import Foundation
 import Cocoa
 
-enum PaintScoreType {
-    case houghTransform // based upon the lines returned from a hough transform
-    case fillAmount     // based upon the amount of the bounding box that has pixels from this group
-    case groupSize      // based upon the number of pixels in this group
-    case aspectRatio    // based upon the aspect ratio of this groups bounding box
-    case surfaceAreaRatio       //  based upon the surface area to size ratio
-    case brightness     // based upon the relative brightness of this group
-    case combined       // a combination, not using fillAmount
-}
-
 // these need to be setup at startup so the decision tree values are right
 internal var IMAGE_WIDTH: Double?
 internal var IMAGE_HEIGHT: Double?
