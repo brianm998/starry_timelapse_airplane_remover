@@ -921,21 +921,7 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
                                                      frame: self,
                                                      pixels: outlier_amounts,
                                                      max_pixel_distance: config.max_pixel_distance)
-                let hough_score = await new_outlier.paintScore(from: .houghTransform)
-                //let surface_area_score = await new_outlier.paintScore(from: .surfaceAreaRatio)
-
-                if group_size < config.max_must_look_like_line_size,
-                   hough_score < config.max_must_look_like_line_score,
-                   new_outlier.surfaceAreaToSizeRatio > config.surface_area_to_size_max
-                {
-                    // ignore small groups that have a bad hough score
-                    //Log.e("frame \(frame_index) ignoring outlier \(new_outlier) with hough score \(hough_score) satsr \(satsr) surface_area_score \(surface_area_score)")
-                } else {
-                    //Log.w("frame \(frame_index) adding outlier \(new_outlier) with hough score \(hough_score) satsr \(satsr) surface_area_score \(surface_area_score)")
-                    // add this new outlier to the set to analyize
-                    outlier_groups?.groups?[group_name] = new_outlier
-                }
-                  
+                outlier_groups?.groups?[group_name] = new_outlier
             }
         }
         self.state = .readyForInterFrameProcessing

@@ -18,7 +18,6 @@ public enum DecisionSplitType: String {
 
 public enum FrameProcessingType: String {
     case none
-    case legacy
     case ai
 }
 
