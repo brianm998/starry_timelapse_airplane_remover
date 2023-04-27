@@ -82,6 +82,7 @@ public struct Config: Codable {
 
         // XXX 16 bit hardcode
         self.max_pixel_distance = sixteenBitVersion(ofPercentage: outlierMinThreshold)
+        task_runner_max_concurrent_tasks = UInt(numConcurrentRenders)
     }
 
     // the base dir under which to create dir(s) for output sequence(s)

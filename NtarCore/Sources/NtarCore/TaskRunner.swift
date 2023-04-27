@@ -9,7 +9,7 @@ fileprivate var number_running = NumberRunning()
 // too big and the swift runtime barfs underneath
 // too small and the process runs without available cpu resources
 @available(macOS 10.15, *)
-fileprivate let max_running: UInt = determine_max()
+public var task_runner_max_concurrent_tasks: UInt = determine_max()
 
 @available(macOS 10.15, *)
 fileprivate func determine_max() -> UInt {
@@ -35,7 +35,7 @@ fileprivate func determine_max() -> UInt {
 @available(macOS 10.15, *)
 public func runTask<Type>(_ closure: @escaping () async -> Type) async -> Task<Type,Never> {
     //Log.i("runtask with cpuUsage \(cpuUsage())")
-    if await number_running.startOnIncrement(to: max_running) {
+    if await number_running.startOnIncrement(to: task_runner_max_concurrent_tasks) {
         return Task<Type,Never> {
             let ret = await closure() // run closure in separate task
             await number_running.decrement()
@@ -61,7 +61,7 @@ public func runTask<Type>(_ closure: @escaping () async -> Type) async -> Task<T
  */
 @available(macOS 10.15, *)
 public func runThrowingTask<Type>(_ closure: @escaping () async throws -> Type) async throws -> Task<Type,Error> {
-    if await number_running.startOnIncrement(to: max_running) {
+    if await number_running.startOnIncrement(to: task_runner_max_concurrent_tasks) {
         return Task<Type,Error> {
             let ret = try await closure() // run closure in separate task
             await number_running.decrement()
