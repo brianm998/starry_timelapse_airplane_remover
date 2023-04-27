@@ -168,22 +168,19 @@ public actor FinalProcessor {
     
     func finishAll() async throws {
         Log.d("finishing all")
-        var count = 0
-        // XXX necessary here???
-        //doublyLink(frames: frames)    
-        for (index, frame) in frames.enumerated() {
-            if let frame = frame {
-                count += 1
-                Log.d("adding frame \(frame.frame_index) to final queue")
-                await self.final_queue.method_list.add(atIndex: frame.frame_index) {
-                    await frame.maybeApplyOutlierGroupClassifier()
-                    await frame.set(state: .outlierProcessingComplete)
-                    await self.finish(frame: frame)
+        try await withLimitedThrowingTaskGroup(of: Void.self) { taskGroup in
+            for (index, frame) in frames.enumerated() {
+                if let frame = frame {
+                    Log.d("adding frame \(frame.frame_index) to final queue")
+                    try await taskGroup.addTask() { 
+                        await frame.maybeApplyOutlierGroupClassifier()
+                        await frame.set(state: .outlierProcessingComplete)
+                        await self.finish(frame: frame)
+                    }
                 }
             }
+            try await taskGroup.waitForAll()
         }
-        let method_list_count = await self.final_queue.method_list.count
-        Log.d("add all \(count) remaining frames to method list of count \(method_list_count)")
     }
 
     func finish(frame: FrameAirplaneRemover) async {
