@@ -21,9 +21,6 @@ public actor FinalQueue {
     // actors
     let method_list = MethodList<Void>()       // a list of methods to process each frame
 
-    // how many methods are running right now
-    let number_running: NumberRunning
-
     let max_concurrent: Int
     var should_run = true
 
@@ -32,10 +29,10 @@ public actor FinalQueue {
     public init(max_concurrent: Int = 8, dispatchGroup dispatch_group: DispatchHandler) {
         self.max_concurrent = max_concurrent
         self.dispatch_group = dispatch_group
-        self.number_running = NumberRunning()
     }
 
     func finish() {
+        Log.d("finish")
         should_run = false
     }
 
@@ -53,9 +50,9 @@ public actor FinalQueue {
     }
 
     func should_run() async -> Bool {
-        let number_running = await self.number_running.currentValue()
         let count = await method_list.count
-        return should_run || number_running > 0 || count > 0
+        Log.d("should_run \(should_run) || count \(count) > 0)")
+        return should_run || count > 0
     }
     
     public nonisolated func start() async throws {
@@ -78,6 +75,7 @@ public actor FinalQueue {
 
             Log.d("done")
         }
+        Log.d("really done")
     }
 }
 
