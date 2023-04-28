@@ -111,35 +111,38 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
         final_processor = processor
     }
 
-    public override func run() throws {
+    public override func run() async throws {
 
-        if let final_processor = final_processor {
-            // setup the final processor and queue
-            let final_queue_dispatch_name = "FinalQueue"
-            Task(priority: .high) {
-                // XXX really should have the enter before the task
-                await self.dispatchGroup.enter(final_queue_dispatch_name)
-                // the final queue runs a separate task group for processing 
-                try await final_processor.final_queue.start()
-                await self.dispatchGroup.leave(final_queue_dispatch_name)
-            }
-            let final_processor_dispatch_name = "FinalProcessor"
-            Task(priority: .high) {
-                // XXX really should have the enter before the task
-                await self.dispatchGroup.enter(final_processor_dispatch_name) 
-                // run the final processor as a single separate thread
-                var should_process = [Bool](repeating: false, count: self.existing_output_files.count)
-                for (index, output_file_exists) in self.existing_output_files.enumerated() {
-                    should_process[index] = !output_file_exists
-                }
-                try await final_processor.run(shouldProcess: should_process)
-                await self.dispatchGroup.leave(final_processor_dispatch_name)
-            }
-        } else {
+        guard let final_processor = final_processor
+        else {
             Log.e("should have a processor")
             fatalError("no processor")
         }
-        try super.run()
+        // setup the final processor and queue
+        let final_queue_dispatch_name = "FinalQueue"
+        let finalQueueTask = Task(priority: .high) {
+            // XXX really should have the enter before the task
+            await self.dispatchGroup.enter(final_queue_dispatch_name)
+            // the final queue runs a separate task group for processing 
+            try await final_processor.final_queue.start()
+            await self.dispatchGroup.leave(final_queue_dispatch_name)
+        }
+        let final_processor_dispatch_name = "FinalProcessor"
+        let finalProcessorTask = Task(priority: .high) {
+            // XXX really should have the enter before the task
+            await self.dispatchGroup.enter(final_processor_dispatch_name) 
+            // run the final processor as a single separate thread
+            var should_process = [Bool](repeating: false, count: self.existing_output_files.count)
+            for (index, output_file_exists) in self.existing_output_files.enumerated() {
+                should_process[index] = !output_file_exists
+            }
+            try await final_processor.run(shouldProcess: should_process)
+            await self.dispatchGroup.leave(final_processor_dispatch_name)
+        }
+
+        try await super.run()
+        _ = try await finalProcessorTask.value
+        _ = try await finalQueueTask.value
     }
 
     // called by the superclass at startup
@@ -243,43 +246,6 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
         }
     }
 
-    var last_final_log: TimeInterval = 0
-    
-    // balance the total number of active processes, and favor the end of the process
-    // so that we don't experience backup and overload memory
-    override func maxConcurrentRenders() async -> Int {
-        var ret = max_concurrent_renders
-        if let final_processor = final_processor {
-            let final_is_working = await final_processor.isWorking
-            let final_frames_unprocessed = await final_processor.framesBetween
-            let final_queue_size = await final_processor.final_queue.number_running.currentValue()
-            let current_running = await self.number_running.currentValue()
-            if final_frames_unprocessed - number_final_processing_neighbors_needed > 0 {
-                let signed_ret: Int = (Int(max_concurrent_renders) - Int(final_queue_size))-final_frames_unprocessed
-                if signed_ret < 0 {
-                    ret = 0
-                } else if signed_ret > 0 {
-                    ret = signed_ret
-                } else {
-                    ret = 1
-                }
-            } else {
-                ret = max_concurrent_renders - Int(final_queue_size)
-            }
-            let num_images = await image_sequence.numberOfResidentImages
-
-            let now = Date().timeIntervalSince1970
-
-            if now - last_final_log > 10 {
-                Log.v("final_is_working \(final_is_working) current_running \(current_running) final_queue_size \(final_queue_size) final_frames_unprocessed \(final_frames_unprocessed) max_renders \(ret) images loaded: \(num_images)")
-                last_final_log = now
-            }
-            
-        }
-        //Log.v("max_concurrent_renders \(ret)")
-        return ret
-    }
-    
     // called async, check for access to shared data
     // this method does the first step of processing on each frame.
     // outlier pixel detection, outlier group detection and analysis

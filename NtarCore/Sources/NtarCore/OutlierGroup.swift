@@ -208,6 +208,53 @@ public actor OutlierGroup: CustomStringConvertible,
         }
     }
 
+
+    // used so we don't recompute on every access
+    private var _paint_score_from_lines: Double?
+    
+    public var paintScoreFromHoughTransformLines: Double {
+        if let _paint_score_from_lines = _paint_score_from_lines {
+            return _paint_score_from_lines
+        }
+        
+        let first_count = lines[0].count
+        let last_count = lines[lines.count-1].count
+        let mid_count = (first_count - last_count) / 2
+        var line_counts: Set<Int> = []
+        var center_line_count_position: Double?
+        for (index, line) in lines.enumerated() {
+            line_counts.insert(line.count)
+            if center_line_count_position == nil && lines[index].count <= mid_count {
+                center_line_count_position = Double(index) / Double(lines.count)
+           }
+        }
+        let counts_over_lines = Double(line_counts.count) / Double(lines.count)
+        if let center_line_count_position = center_line_count_position {
+            var keys_over_lines_score: Double = 0
+            var center_line_count_position_score: Double = 0
+            if counts_over_lines < OAS_AIRPLANES_MIN_KEYS_OVER_LINES {
+                keys_over_lines_score = 1
+            } else if counts_over_lines > OAS_NON_AIRPLANES_MAX_KEYS_OVER_LINES {
+                keys_over_lines_score = 0
+            } else {
+                keys_over_lines_score = 0.5
+            }
+            
+            if center_line_count_position < OAS_AIRPLANES_MIN_CENTER_LINE_COUNT_POSITION {
+                center_line_count_position_score = 1
+            } else if center_line_count_position > OAS_NON_AIRPLANES_MAX_CENTER_LINE_COUNT_POSITION {
+                center_line_count_position_score = 0
+            } else {
+                center_line_count_position_score = 0.5
+            }
+            let ret = (keys_over_lines_score + center_line_count_position_score)/2
+            _paint_score_from_lines = ret
+            return ret
+        }
+        return 0
+    }
+
+    
     // how many pixels actually overlap between the groups ?  returns 0-1 value of overlap amount
     @available(macOS 10.15, *)
     func pixelOverlap(with group_2: OutlierGroup) async -> Double // 1 means total overlap, 0 means none

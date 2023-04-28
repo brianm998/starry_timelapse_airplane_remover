@@ -9,7 +9,7 @@ public struct HoughLineHistogram {
          lines: [Line],
          andGroupSize groupSize: UInt) {
         self.increment = increment
-
+        let lines = lines
         var values = Array<Double>(repeating: 0, count: 360/increment)
 
         for line in lines {

@@ -370,8 +370,10 @@ struct Ntar: ParsableCommand {
                     }
                     
                     Log.dispatchGroup = await eraser.dispatchGroup.dispatch_group
-                    try eraser.run()
-                    
+                    try await eraser.run()
+
+                    Log.i("done")
+
                     if let updatableProgressMonitor = upm {
                         await updatableProgressMonitor.dispatchGroup.wait()
                         // simply sleep a small amount? 

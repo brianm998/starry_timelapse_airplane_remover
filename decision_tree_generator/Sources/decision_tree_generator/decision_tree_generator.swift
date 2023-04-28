@@ -195,7 +195,7 @@ struct decision_tree_generator: ParsableCommand {
         Log.i("got \(sequence_size) frames")
         // XXX run it and get the outlier groups
 
-        try eraser.run()
+        try await eraser.run()
         
         Log.i("loading outliers")
         // after the eraser is done running we should have received all the frames
@@ -481,7 +481,7 @@ struct decision_tree_generator: ParsableCommand {
         Log.d("got \(sequence_size) frames")
         // XXX run it and get the outlier groups
 
-        try eraser.run()
+        try await eraser.run()
 
         Log.d("eraser done running")
         

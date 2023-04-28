@@ -64,8 +64,6 @@ public class ImageSequenceProcessor<T> {
         self.method_list = try assembleMethodList()
     }
 
-    func maxConcurrentRenders() async -> Int { max_concurrent_renders }
-    
     func mkdir(_ path: String) throws {
         if !file_manager.fileExists(atPath: path) {
             try file_manager.createDirectory(atPath: path,
@@ -152,7 +150,7 @@ public class ImageSequenceProcessor<T> {
         // can be overridden
     }
     
-    public func run() throws {
+    public func run() async throws {
         Log.d("run")
         let local_dispatch = DispatchGroup()
         local_dispatch.enter()

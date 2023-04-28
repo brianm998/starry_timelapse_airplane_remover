@@ -272,38 +272,51 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
     }
 
     public func applyDecisionTreeToAutoSelectedOutliers() async {
-        /*
-         XXX commented out because of multiple trees now
-        await foreachOutlierGroup() { group in
-            let should_paint = await group.classification
-            var apply = true
-            if let shouldPaint = await group.shouldPaint {
-                switch shouldPaint {
-                case .userSelected(_):
-                    // leave user selected ones in place
-                    apply = false
-                default:
-                    break
+        if let classifier = currentClassifier {
+            await withLimitedTaskGroup(of: Void.self) { taskGroup in
+                await foreachOutlierGroup() { group in
+                    await taskGroup.addTask() {
+                        var apply = true
+                        if let shouldPaint = await group.shouldPaint {
+                            switch shouldPaint {
+                            case .userSelected(_):
+                                // leave user selected ones in place
+                                apply = false
+                            default:
+                                break
+                            }
+                        }
+                        if apply {
+                            Log.d("applying decision tree")
+                            let score = await classifier.classification(of: group)
+                            await group.shouldPaint(.fromClassifier(score))
+                        }
+                    }
+                    return .continue
                 }
+                await taskGroup.waitForAll()
             }
-            if apply {
-                Log.d("applying decision tree")
-                await group.shouldPaint(.decisionTree(should_paint))
-            }
-            return .continue
-         }
-            
-         */
+        } else {
+            Log.w("no classifier")
+        }
     }
 
     public func applyDecisionTreeToAllOutliers() async {
         if let classifier = currentClassifier {
-            await foreachOutlierGroup() { group in
-                let score = await classifier.classification(of: group)
-                Log.d("applying classifier should_paint \(score)")
-                await group.shouldPaint(.fromClassifier(score))
-                return .continue
+            let start_time = NSDate().timeIntervalSince1970
+            await withLimitedTaskGroup(of: Void.self) { taskGroup in
+                await foreachOutlierGroup() { group in
+                    await taskGroup.addTask() {
+                        let score = await classifier.classification(of: group)
+                        Log.d("frame \(self.frame_index) applying classifier should_paint \(score)")
+                        await group.shouldPaint(.fromClassifier(score))
+                    }
+                    return .continue
+                }
+                await taskGroup.waitForAll()
             }
+            let end_time = NSDate().timeIntervalSince1970
+            Log.i("frame \(self.frame_index) spent \(end_time - start_time) seconds classifing outlier groups");
         } else {
             Log.w("no classifier")
         }
@@ -328,7 +341,7 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
     public let base_name: String
 
     // did we load our outliers from a file?
-    public var outliersLoadedFromFile = false
+    private var outliersLoadedFromFile = false
 
     public func maybeApplyOutlierGroupClassifier() async {
         if !self.outliersLoadedFromFile ||
@@ -931,7 +944,17 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
                                                      frame: self,
                                                      pixels: outlier_amounts,
                                                      max_pixel_distance: config.max_pixel_distance)
-                outlier_groups?.groups?[group_name] = new_outlier
+                let hough_score = await new_outlier.paintScoreFromHoughTransformLines
+
+                if group_size < config.max_must_look_like_line_size,
+                   hough_score < config.max_must_look_like_line_score,
+                   new_outlier.surfaceAreaToSizeRatio > config.surface_area_to_size_max
+                {
+                    // ignore small groups that have a bad hough score
+                    //Log.e("frame \(frame_index) ignoring outlier \(new_outlier) with hough score \(hough_score) satsr \(satsr) surface_area_score \(surface_area_score)")
+                } else {                
+                    outlier_groups?.groups?[group_name] = new_outlier
+                }
             }
         }
         self.state = .readyForInterFrameProcessing
