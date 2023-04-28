@@ -78,13 +78,13 @@ class ntar_app: App {
     // the state of each frame indexed by frame #
     //var frame_states: [Int: FrameProcessingState] = [:]
     
-    let input_queue: FinalQueue
+//    let input_queue: FinalQueue
 
     required init() {
         
         let dispatch_handler = DispatchHandler()
-        input_queue = FinalQueue(max_concurrent: 200, // XXX get this number right
-                                 dispatchGroup: dispatch_handler)
+//        input_queue = FinalQueue(max_concurrent: 200, // XXX get this number right
+//                                 dispatchGroup: dispatch_handler)
 /*
         _viewModel = StateObject(wrappedValue: {
                                      let ret = ViewModel()
@@ -103,9 +103,9 @@ class ntar_app: App {
         }
 
         
-        Task(priority: .high) {
-            try await input_queue.start()
-        }
+//        Task(priority: .high) {
+//            try await input_queue.start()
+//        }
         
         Log.handlers[.console] = ConsoleLogHandler(at: .info)
         Log.i("Starting Up")
@@ -252,15 +252,14 @@ class ntar_app: App {
                                                       processExistingFiles: true,
                                                       isGUI: true)
 
-                self.viewModel.eraser = eraser // XXX rename this crap
-                self.viewModel.config = config
+            self.viewModel.eraser = eraser // XXX rename this crap
+            self.viewModel.config = config
 
-                if let fp = eraser.final_processor {
-                    self.viewModel.frameSaveQueue = FrameSaveQueue(fp)
-                } else {
-                    fatalError("fucking fix this")
-                }
-
+            if let fp = eraser.final_processor {
+                self.viewModel.frameSaveQueue = FrameSaveQueue(fp)
+            } else {
+                fatalError("fucking fix this")
+            }
             
         } catch {
             Log.e("\(error)")
@@ -306,9 +305,9 @@ class ntar_app: App {
             // XXX we may need to introduce some kind of queue here to avoid hitting
             // too many open files on larger sequences :(
             Task {
-                await self.input_queue.add(atIndex: new_frame.frame_index) {
+//                await self.input_queue.add(atIndex: new_frame.frame_index) {
                     await self.addToViewModel(frame: new_frame)
-                }
+//                }
             }
         }
         

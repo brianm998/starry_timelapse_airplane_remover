@@ -49,7 +49,7 @@ class FrameSaveQueue {
             Log.d("actually saving frame \(frame.frame_index)")
             self.saving[frame.frame_index] = frame
             Task {
-                await self.finalProcessor.final_queue.add(atIndex: frame.frame_index) {
+//                await self.finalProcessor.final_queue.add(atIndex: frame.frame_index) {
                     Log.i("frame \(frame.frame_index) finishing")
                     try await frame.loadOutliers()
                     try await frame.finish()
@@ -68,7 +68,7 @@ class FrameSaveQueue {
                         }
                     }
                     dispatchGroup.wait()
-                }
+//                }
             }
         }
     }
