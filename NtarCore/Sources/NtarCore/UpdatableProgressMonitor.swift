@@ -126,7 +126,7 @@ public actor UpdatableProgressMonitor {
                 await updatable.log(name: "interFrameProcessing",
                                     message: padding + progress_bar(length: self.config.numConcurrentRenders,
                                                                     progress: progress) +
-                                      " \(interFrameProcessing.count) frames inter frame processing",
+                                      " \(interFrameProcessing.count) frames classifing outlier groups",
                                     value: 3)
             }
             
