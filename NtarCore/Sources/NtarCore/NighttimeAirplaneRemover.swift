@@ -118,15 +118,7 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
             Log.e("should have a processor")
             fatalError("no processor")
         }
-        // setup the final processor and queue
-        let final_queue_dispatch_name = "FinalQueue"
-        let finalQueueTask = Task(priority: .high) {
-            // XXX really should have the enter before the task
-            await self.dispatchGroup.enter(final_queue_dispatch_name)
-            // the final queue runs a separate task group for processing 
-            try await final_processor.final_queue.start()
-            await self.dispatchGroup.leave(final_queue_dispatch_name)
-        }
+        // setup the final processor 
         let final_processor_dispatch_name = "FinalProcessor"
         let finalProcessorTask = Task(priority: .high) {
             // XXX really should have the enter before the task
@@ -142,7 +134,6 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
 
         try await super.run()
         _ = try await finalProcessorTask.value
-        _ = try await finalQueueTask.value
     }
 
     // called by the superclass at startup

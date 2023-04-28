@@ -53,7 +53,6 @@ public actor FinalProcessor {
     var max_added_index = 0
     let frame_count: Int
     let dispatch_group: DispatchHandler
-    public let final_queue: FinalQueue
     let image_sequence: ImageSequence
 
     let config: Config
@@ -78,12 +77,6 @@ public actor FinalProcessor {
         self.frame_count = frame_count
         self.dispatch_group = dispatch_group
         self.image_sequence = imageSequence
-
-        // too much concurrency here can cause the os to thrash on writing files
-        var final_queue_max_concurrent = config.numConcurrentRenders/2
-        if final_queue_max_concurrent <= 0 { final_queue_max_concurrent = 1 }
-        self.final_queue = FinalQueue(max_concurrent: final_queue_max_concurrent,
-                                      dispatchGroup: dispatch_group)
     }
 
     func add(frame: FrameAirplaneRemover) {
@@ -175,7 +168,7 @@ public actor FinalProcessor {
                     try await taskGroup.addTask() { 
                         await frame.maybeApplyOutlierGroupClassifier()
                         await frame.set(state: .outlierProcessingComplete)
-                        await self.finish(frame: frame)
+                        try await self.finish(frame: frame)
                     }
                 }
             }
@@ -183,7 +176,7 @@ public actor FinalProcessor {
         }
     }
 
-    func finish(frame: FrameAirplaneRemover) async {
+    func finish(frame: FrameAirplaneRemover) async throws {
         // here is where the gui and cli paths diverge
         // if we have a frame check closure, we allow the user to check the frame here
         // but only if there are some outliers to check, otherwise just finish it.
@@ -200,12 +193,10 @@ public actor FinalProcessor {
 
         // cli and not checked frames go to the finish queue
         Log.d("adding frame \(frame.frame_index) to the final queue")
-        await self.final_queue.add(atIndex: frame.frame_index) {
-            Log.d("frame \(frame.frame_index) finishing")
-            try await frame.finish()
-            Log.d("frame \(frame.frame_index) finished")
-        }
 
+        Log.d("frame \(frame.frame_index) finishing")
+        try await frame.finish()
+        Log.d("frame \(frame.frame_index) finished")
     }
 
     nonisolated func run(shouldProcess: [Bool]) async throws {
@@ -298,7 +289,7 @@ public actor FinalProcessor {
                             try await taskGroup.addTask() { 
                                 await frame_to_finish.maybeApplyOutlierGroupClassifier()
                                 await frame_to_finish.set(state: .outlierProcessingComplete)
-                                await self.finish(frame: frame_to_finish)
+                                try await self.finish(frame: frame_to_finish)
                             }
                         }
                         Log.v("FINAL THREAD frame \(index_to_process) done queueing into final queue")
@@ -348,9 +339,6 @@ public actor FinalProcessor {
                 fatalError("must set both frameCheckClosure and countOfFramesToCheck")
             }
         }
-        
-        Log.d("FINAL THREAD check")
-        await final_queue.finish()
         Log.d("FINAL THREAD done")
     }
 }    
