@@ -118,6 +118,15 @@ actor DecisionTreeGenerator {
         var trees_name_list_string = "["
         var digest = SHA256()
 
+        var data_definition = ""
+        var classification_method_call = ""
+        for type in decisionTypes {
+            data_definition += "        let \(type) = await group.decisionTreeValue(for: .\(type))\n"
+            classification_method_call += "\(type): \(type), "
+        }        
+        classification_method_call.removeLast()
+        classification_method_call.removeLast()
+
         var trees_type_string = ""
         
         for tree in forest {
@@ -126,8 +135,8 @@ actor DecisionTreeGenerator {
             Log.i("have tree \(name) w/ score \(score)")
 
             trees_declaration_string += "    let tree_\(name) = OutlierGroupDecisionTree_\(name)()\n"
-            trees_classification_string_1 += "        let _\(name) = await tree_\(name).classification(of: group) * \(score)\n"
-            trees_classification_string_2 += "        let _\(name) = tree_\(name).classification(of: features, and: values) * \(score)\n"
+            trees_classification_string_1 += "        let _\(name): Double = tree_\(name).classification(\(classification_method_call)) * \(score)\n"
+            trees_classification_string_2 += "        let _\(name): Double = tree_\(name).classification(of: features, and: values) * \(score)\n"
             trees_classification_string_3 += "_\(name)+"
             trees_name_list_string += " \"\(name)\","
 
@@ -144,7 +153,8 @@ actor DecisionTreeGenerator {
 
         trees_name_list_string.removeLast()
         trees_name_list_string += "]"
-          
+
+        
         let filename = "\(baseFilename)\(hash_prefix).swift"
 
         var pruneString = ""
@@ -197,6 +207,7 @@ actor DecisionTreeGenerator {
              \(trees_declaration_string)
                  // returns -1 for negative, +1 for positive
                  public func classification(of group: OutlierGroup) async -> Double {
+             \(data_definition)
              \(trees_classification_string_1)
                      \(trees_classification_string_3)
                  }
