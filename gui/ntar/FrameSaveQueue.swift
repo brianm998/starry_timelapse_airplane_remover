@@ -76,6 +76,9 @@ class FrameSaveQueue {
     func readyToSave(frame: FrameAirplaneRemover,
                      waitTime: TimeInterval = 5,
                      completionClosure: @escaping () async -> Void) {
+
+        _ = Task { await frame.changesHandled() }
+        
         Log.w("frame \(frame.frame_index) entering pergatory")
         if let candidate = pergatory[frame.frame_index] {
             candidate.retainLonger()
@@ -87,6 +90,7 @@ class FrameSaveQueue {
                     // go back to pergatory
                     // going back to purgatory seems like hell, it never stops :(
                     //self.readyToSave(frame: frame, completionClosure: completionClosure)
+                    Log.e("pergatory problem for frame \(frame.frame_index)")
                 } else {
                     self.saveNow(frame: frame, completionClosure: completionClosure)
                 }
@@ -94,4 +98,5 @@ class FrameSaveQueue {
         }
     }
 }
+
 

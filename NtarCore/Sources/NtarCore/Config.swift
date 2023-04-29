@@ -82,7 +82,7 @@ public struct Config: Codable {
 
         // XXX 16 bit hardcode
         self.max_pixel_distance = sixteenBitVersion(ofPercentage: outlierMinThreshold)
-        task_runner_max_concurrent_tasks = UInt(numConcurrentRenders)
+        TaskRunner.maxConcurrentTasks = UInt(numConcurrentRenders)
     }
 
     // the base dir under which to create dir(s) for output sequence(s)
@@ -196,9 +196,9 @@ public struct Config: Codable {
     // 0.2.0 added first gui, outlier groups can be saved, and reloaded with config
     // 0.3.0 added machine learning group classification, better threading, and more
     // 0.3.1 added release scripts for distribution, plus bug fixes
+    // 0.3.2 fixed bugs, speed up tree forest, removes small outlier group dismissal
 
-    public var ntar_version = "0.3.1"
-
+    public var ntar_version = "0.3.2"
 
     public func writeJson(named filename: String) {
         

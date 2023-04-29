@@ -72,6 +72,14 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
     // populated by pruning
     public var outlier_groups: OutlierGroups?
 
+    private var didChange = false
+
+    public func changesHandled() { didChange = false }
+    
+    public func markAsChanged() { didChange = true }
+
+    public func hasChanges() -> Bool { return didChange }
+    
     public func outlierGroups() -> [OutlierGroup]? {
         if let outlier_groups = outlier_groups,
            let groups = outlier_groups.groups
@@ -224,7 +232,8 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
                             // make this overwrite for new user changes to existing data
                             Log.i("overwriting \(full_path)")
                         } 
-                        Log.i("creating \(full_path)")                      
+                        Log.i("creating \(full_path)")
+                        
                         file_manager.createFile(atPath: full_path, contents: data, attributes: nil)
                     } catch {
                         Log.e("\(error)")
@@ -944,17 +953,7 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
                                                      frame: self,
                                                      pixels: outlier_amounts,
                                                      max_pixel_distance: config.max_pixel_distance)
-                let hough_score = await new_outlier.paintScoreFromHoughTransformLines
-
-                if group_size < config.max_must_look_like_line_size,
-                   hough_score < config.max_must_look_like_line_score,
-                   new_outlier.surfaceAreaToSizeRatio > config.surface_area_to_size_max
-                {
-                    // ignore small groups that have a bad hough score
-                    //Log.e("frame \(frame_index) ignoring outlier \(new_outlier) with hough score \(hough_score) satsr \(satsr) surface_area_score \(surface_area_score)")
-                } else {                
-                    outlier_groups?.groups?[group_name] = new_outlier
-                }
+                outlier_groups?.groups?[group_name] = new_outlier
             }
         }
         self.state = .readyForInterFrameProcessing
