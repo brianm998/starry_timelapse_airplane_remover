@@ -1543,12 +1543,16 @@ struct ContentView: View {
 
             // only save frame when we are also scrolling (i.e. not scrubbing)
             if let frame_to_save = old_frame {
-                self.saveToFile(frame: frame_to_save) {
-                    Log.d("completion closure called for frame \(frame_to_save.frame_index)")
-                    Task {
-                        Log.d("refreshing saved frame \(frame_to_save.frame_index)")
-                        await viewModel.refresh(frame: frame_to_save)
-                        Log.d("refreshing for frame \(frame_to_save.frame_index) complete")
+
+                Task {
+                    let frame_changed = await frame_to_save.hasChanges()
+
+                    // only save changes to frames that have been changed
+                    if frame_changed {
+                        self.saveToFile(frame: frame_to_save) {
+                            Log.d("completion closure called for frame \(frame_to_save.frame_index)")
+                            Task { await viewModel.refresh(frame: frame_to_save) }
+                        }
                     }
                 }
             } else {
