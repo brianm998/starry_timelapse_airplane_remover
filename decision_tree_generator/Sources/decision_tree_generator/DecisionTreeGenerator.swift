@@ -118,15 +118,25 @@ actor DecisionTreeGenerator {
         var trees_name_list_string = "["
         var digest = SHA256()
 
-        var data_definition = ""
+        var data_definition_1 = "        let ("
+        var data_definition_2 = "await ("
         var classification_method_call = ""
         for type in decisionTypes {
-            data_definition += "        let \(type) = await group.decisionTreeValue(for: .\(type))\n"
+            data_definition_1 += "\(type), "
+            data_definition_2 += "group.decisionTreeValue(for: .\(type)), "
             classification_method_call += "\(type): \(type), "
         }        
         classification_method_call.removeLast()
         classification_method_call.removeLast()
 
+        data_definition_1.removeLast()
+        data_definition_1.removeLast()
+        data_definition_2.removeLast()
+        data_definition_2.removeLast()
+
+        data_definition_1 += ")"
+        data_definition_2 += ")"
+        
         var trees_type_string = ""
         
         for tree in forest {
@@ -207,7 +217,7 @@ actor DecisionTreeGenerator {
              \(trees_declaration_string)
                  // returns -1 for negative, +1 for positive
                  public func classification(of group: OutlierGroup) async -> Double {
-             \(data_definition)
+             \(data_definition_1) = \(data_definition_2)
              \(trees_classification_string_1)
                      \(trees_classification_string_3)
                  }
