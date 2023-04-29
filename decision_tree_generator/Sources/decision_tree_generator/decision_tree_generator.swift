@@ -75,6 +75,13 @@ struct decision_tree_generator: ParsableCommand {
             """)
     var verification_mode = false
 
+    @Option(name: .shortAndLong, help: """
+        Max Number of frames to process at once.
+        The default of all cpus works good in most cases.
+        May need to be reduced to a lower value if to consume less ram on some machines.
+        """)
+    var numConcurrentRenders: Int = ProcessInfo.processInfo.activeProcessorCount
+
     @Flag(name: [.customShort("a"), .customLong("all")],
           help:"""
             Iterate over all possible combinations of the decision types to generate
@@ -129,6 +136,8 @@ struct decision_tree_generator: ParsableCommand {
         Log.handlers[.console] = ConsoleLogHandler(at: .info)
         Log.handlers[.file] = try FileLogHandler(at: .verbose) // XXX make this a command line parameter
 
+        TaskRunner.maxConcurrentTasks = UInt(numConcurrentRenders)
+        
         start_time = Date()
         
         Log.i("Starting with cpuUsage \(cpuUsage())")
@@ -572,7 +581,7 @@ struct decision_tree_generator: ParsableCommand {
 
             // test classifier and see how well it does on the training data
 
-            var (good, bad) = await runTest(of: classifier, onChunks: testData)
+            let (good, bad) = await runTest(of: classifier, onChunks: testData)
             let score = Double(good)/Double(good + bad)
             Log.i("final forest classifier got score \(score) on test data")
 
@@ -597,7 +606,7 @@ struct decision_tree_generator: ParsableCommand {
     }
 
     func loadTrainingData() async throws -> ClassifiedData {
-        var trainingData = ClassifiedData()
+        let trainingData = ClassifiedData()
         
         for json_config_file_name in input_filenames {
             if json_config_file_name.hasSuffix("config.json") {
@@ -655,7 +664,7 @@ struct decision_tree_generator: ParsableCommand {
             }
             
             // training data gathered from all inputs
-            var trainingData = try await loadTrainingData()
+            let trainingData = try await loadTrainingData()
 
             Log.i("data loaded")
 
