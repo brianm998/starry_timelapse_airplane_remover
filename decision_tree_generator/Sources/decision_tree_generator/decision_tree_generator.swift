@@ -749,8 +749,13 @@ struct decision_tree_generator: ParsableCommand {
         
         // XXX make sure the types in the matrix match up with what we expect
         for type in OutlierGroup.Feature.allCases {
-            if matrix.types[type.sortOrder] != type {
-                Log.e("@ sort order \(type.sortOrder) \(matrix.types[type.sortOrder]) != \(type), cannot use this data")
+            if type.sortOrder < matrix.types.count {
+                if matrix.types[type.sortOrder] != type {
+                    Log.e("@ sort order \(type.sortOrder) \(matrix.types[type.sortOrder]) != \(type), cannot use this data")
+                    usable = false
+                }
+            } else {
+                Log.e("@ sort order \(type.sortOrder) is out of range, cannot use this data")
                 usable = false
             }
         }
