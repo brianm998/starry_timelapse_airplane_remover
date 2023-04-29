@@ -164,46 +164,37 @@ public class ImageSequenceProcessor<T> {
         
         try mkdir(output_dirname)
 
-        // this dispatch group is only used for this task
-        let local_dispatch_group = DispatchGroup()
-        local_dispatch_group.enter()
+        // each of these methods removes the airplanes from a particular frame
+        Log.i("processing a total of \(await method_list.list.count) frames")
         
-        Task {
-            // each of these methods removes the airplanes from a particular frame
-            //try await assembleMethodList()
-            Log.i("processing a total of \(await method_list.list.count) frames")
-            
-            try await withLimitedThrowingTaskGroup(of: T.self) { group in
-                while(await method_list.list.count > 0) {
-                    Log.d("we have \(await method_list.list.count) more frames to process")
-                    Log.d("processing new frame")
-                    
-                    // sort the keys and take the smallest one first
-                    if let next_method_key = await method_list.nextKey,
-                       let next_method = await method_list.list[next_method_key]
-                    {
-                        await method_list.removeValue(forKey: next_method_key)
-                        await self.number_running.increment()
-                        try await group.addTask() {
-                            let ret = try await next_method()
-                            await self.result_hook(with: ret)
-                            return ret
-                        }
-                    } else {
-                        Log.e("FUCK") 
-                        fatalError("FUCK")
-                    }
-                }
-                try await group.waitForAll()
+        try await withLimitedThrowingTaskGroup(of: T.self) { group in
+            while(await method_list.list.count > 0) {
+                Log.d("we have \(await method_list.list.count) more frames to process")
+                Log.d("processing new frame")
                 
-                Log.d("finished hook")
-                self.finished_hook()
-                local_dispatch_group.leave()
+                // sort the keys and take the smallest one first
+                if let next_method_key = await method_list.nextKey,
+                   let next_method = await method_list.list[next_method_key]
+                {
+                    await method_list.removeValue(forKey: next_method_key)
+                    await self.number_running.increment()
+                    try await group.addTask() {
+                        let ret = try await next_method()
+                        await self.result_hook(with: ret)
+                        return ret
+                    }
+                } else {
+                    Log.e("FUCK") 
+                    fatalError("FUCK")
+                }
             }
+            try await group.waitForAll()
+            
+            Log.d("finished hook")
+            self.finished_hook()
         }
         Log.d("DONE")
         
-        local_dispatch_group.wait()
         Log.d("DONE WAITING")
         let rename_me = self.dispatchGroup.dispatch_group
         while (shouldRun && rename_me.wait(timeout: DispatchTime.now().advanced(by: .seconds(3))) == .timedOut) {
