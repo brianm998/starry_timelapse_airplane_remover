@@ -88,10 +88,6 @@ until xcrun stapler staple "${BUILD_DIR}/AdHoc/${APP_NAME}.app"; do
     sleep ${WAIT_TIME}
 done
 
-rm     "${BUILD_DIR}/AdHoc/Packaging.log"
-rm     "${BUILD_DIR}/AdHoc/ExportOptions.plist"
-rm     "${BUILD_DIR}/AdHoc/DistributionSummary.plist"
-
 COMPONENT_PLIST="${BUILD_DIR}/component_list.plist"
 
 pkgbuild --analyze --root "${BUILD_DIR}/AdHoc/${APP_NAME}.app" $COMPONENT_PLIST
