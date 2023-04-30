@@ -75,9 +75,36 @@ The idea is to generate a large data set, create more outlier group decision par
 
 ## Getting Started
 
-The fastest way to get started if you've got macos swift command line support already is to clone this repo and run install.sh, which will build a release build of command line ntar and put that into /usr/local/bin, along with the ntar.pl wrapper.
+Download the latest release from here:
 
-If you're not a developer, then right now if you're on macos simply asking me for a binary will work.  If you're on windows we still need a windows swift developer to look at this.  I do have a small old linux box but I've not taken the time to get ntar to compile there, let me know if that is of interest to you.
+https://github.com/brianm998/nighttime_timelapse_airplane_remover/releases
+
+Two packages are available for installation, both called 'ntar'.
+
+One is for the command line, the other is a graphical application which is a super set of the command line app.
+
+One or both can be installed.
 
 Still under active development, feel free to reach out to me if you have any questions.
 
+## Known issues
+
+### Crashes
+
+When running under heavy load (and with larger -n command line values) ntar is currently prone to memory corruption issues, leading to a crash.
+
+I've tracked this down to a bug in swift itself, and filed https://github.com/apple/swift/issues/65537 to track getting it fixed.
+
+### Slow
+
+Processing of large sequences of high resolution images can be slow.  Working on speeding it up as much as possible.
+
+### Gui not complete
+
+The ntar gui application does work, but the workflow of working by itself isn't fully fleshed out yet.
+
+Currently I run `ntar -w` on the command line, and then load up the resulting config file in the gui to correct for any errors after the sequence has been processed on the command line first.
+
+### Classifier not always right
+
+The machine learning classifier is a work in progress.  While it has gotten as far as 98.5% accuracy on test data, your data may vary.  A longer term feature is to allow users to send in data from corrected sequences to further train the classifier.
