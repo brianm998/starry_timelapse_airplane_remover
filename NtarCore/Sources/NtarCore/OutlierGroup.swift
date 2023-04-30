@@ -599,7 +599,7 @@ public actor OutlierGroup: CustomStringConvertible,
         }
     }
 
-    private var maxBrightness: Double {
+    fileprivate var maxBrightness: Double {
         var max: UInt32 = 0
         for pixel in pixels {
             if pixel > max { max = pixel }
@@ -607,7 +607,7 @@ public actor OutlierGroup: CustomStringConvertible,
         return Double(max)
     }
     
-    private var medianBrightness: Double {
+    fileprivate var medianBrightness: Double {
         var values: [UInt32] = []
         for pixel in pixels {
             if pixel > 0 {
@@ -617,7 +617,7 @@ public actor OutlierGroup: CustomStringConvertible,
         return Double(values.sorted()[values.count/2]) // SIGABRT HERE :(
     }
 
-    private var numberOfNearbyOutliersInSameFrame: Double {
+    fileprivate var numberOfNearbyOutliersInSameFrame: Double {
         get async {
             if let frame = frame,
                let nearby_groups = await frame.outlierGroups(within: self.maxNearbyGroupDistance,
@@ -637,27 +637,27 @@ public actor OutlierGroup: CustomStringConvertible,
                                   andGroupSize: self.size)
     }
 
-    private var maxHoughTheta: Double {
+    fileprivate var maxHoughTheta: Double {
         if let firstLine = self.firstLine {
             return Double(firstLine.theta)
         }
         return 0
     }
         
-    private var maxHoughTransformCount: Double {
+    fileprivate var maxHoughTransformCount: Double {
         if let firstLine = self.firstLine {
             return Double(firstLine.count)/Double(self.size)
         }
         return 0
     }
 
-    private var maxNearbyGroupDistance: Double {
+    fileprivate var maxNearbyGroupDistance: Double {
         800*7000/IMAGE_WIDTH! // XXX hardcoded constant
     }
 
     // returns 1 if they are the same
     // returns 0 if they are 180 degrees apart
-    private func thetaScore(between theta_1: Double, and theta_2: Double) -> Double {
+    fileprivate func thetaScore(between theta_1: Double, and theta_2: Double) -> Double {
 
         var theta_1_opposite = theta_1 + 180
         if theta_1_opposite > 360 { theta_1_opposite -= 360 }
@@ -671,7 +671,7 @@ public actor OutlierGroup: CustomStringConvertible,
     }
     
     // tries to find a streak with hough line histograms
-    private var histogramStreakDetection: Double {
+    fileprivate var histogramStreakDetection: Double {
         get async {
             if let frame = frame {
                 var best_score = 0.0
@@ -706,7 +706,7 @@ public actor OutlierGroup: CustomStringConvertible,
 
     // a score based upon a comparsion of the theta histograms of the this and another group,
     // as well as how well the theta of the other group corresponds to the center line theta between them
-    private func thetaHistoCenterLineScore(with group: OutlierGroup,
+    fileprivate func thetaHistoCenterLineScore(with group: OutlierGroup,
                                            selfHisto: HoughLineHistogram? = nil) async -> Double
     {
         var histo = selfHisto
@@ -720,7 +720,7 @@ public actor OutlierGroup: CustomStringConvertible,
     
     // tries to find a streak with hough line histograms
     // make this recursive to go back 3 frames in each direction
-    private var longerHistogramStreakDetection: Double {
+    fileprivate var longerHistogramStreakDetection: Double {
         get async {
             let number_of_frames = 10 // how far in each direction to go
             let forwardScore = await self.streakScore(in: .forwards, numberOfFramesLeft: number_of_frames)
@@ -729,7 +729,7 @@ public actor OutlierGroup: CustomStringConvertible,
         }
     }
 
-    private var maxOverlap: Double {
+    fileprivate var maxOverlap: Double {
         get async {
             var maxOverlap = 0.0
             if let frame = frame {
@@ -756,7 +756,7 @@ public actor OutlierGroup: CustomStringConvertible,
         }
     }
 
-    private var maxOverlapTimesThetaHisto: Double {
+    fileprivate var maxOverlapTimesThetaHisto: Double {
         get async {
             var maxOverlap = 0.0
             if let frame = frame {
@@ -790,7 +790,7 @@ public actor OutlierGroup: CustomStringConvertible,
         }
     }
     
-    private var neighboringInterFrameOutlierThetaScore: Double {
+    fileprivate var neighboringInterFrameOutlierThetaScore: Double {
         // XXX doesn't use related frames 
         get async {
             if let frame = frame,
@@ -822,7 +822,7 @@ public actor OutlierGroup: CustomStringConvertible,
     }
     
     // tries to find the closest theta on any nearby outliers on adjecent frames
-    private var adjecentFrameNeighboringOutliersBestTheta: Double {
+    fileprivate var adjecentFrameNeighboringOutliersBestTheta: Double {
         /*
          instead of finding the closest theta, maybe use a probability distribution of thetas
          weighted by line count
@@ -871,7 +871,7 @@ public actor OutlierGroup: CustomStringConvertible,
         }
     }
 
-    private var maxThetaDiffOfFirst10HoughLines: Double {
+    fileprivate var maxThetaDiffOfFirst10HoughLines: Double {
         var max_diff = 0.0
         let first_theta = self.lines[0].theta
         var max = 10;
@@ -884,7 +884,7 @@ public actor OutlierGroup: CustomStringConvertible,
         return max_diff
     }
     
-    private var maxRhoDiffOfFirst10HoughLines: Double {
+    fileprivate var maxRhoDiffOfFirst10HoughLines: Double {
         var max_diff = 0.0
         let first_rho = self.lines[0].rho
         var max = 10;
@@ -897,7 +897,7 @@ public actor OutlierGroup: CustomStringConvertible,
         return max_diff
     }
     
-    private var avgCountOfFirst10HoughLines: Double {
+    fileprivate var avgCountOfFirst10HoughLines: Double {
         var sum = 0.0
         var divisor = 0.0
         var max = 10;
@@ -909,7 +909,7 @@ public actor OutlierGroup: CustomStringConvertible,
         return sum/divisor
     }
 
-    private var maxThetaDiffOfAllHoughLines: Double {
+    fileprivate var maxThetaDiffOfAllHoughLines: Double {
         var max_diff = 0.0
         let first_theta = self.lines[0].theta
         for i in 1..<self.lines.count {
@@ -920,7 +920,7 @@ public actor OutlierGroup: CustomStringConvertible,
         return max_diff
     }
     
-    private var maxRhoDiffOfAllHoughLines: Double {
+    fileprivate var maxRhoDiffOfAllHoughLines: Double {
         var max_diff = 0.0
         let first_rho = self.lines[0].rho
         for i in 1..<self.lines.count {
@@ -931,7 +931,7 @@ public actor OutlierGroup: CustomStringConvertible,
         return max_diff
     }
     
-    private var avgCountOfAllHoughLines: Double {
+    fileprivate var avgCountOfAllHoughLines: Double {
         var sum = 0.0
         var divisor = 0.0
         for i in 0..<self.lines.count {
@@ -953,7 +953,7 @@ public actor OutlierGroup: CustomStringConvertible,
     
 
     @available(macOS 10.15, *)
-    func streakScore(in direction: StreakDirection,
+    fileprivate func streakScore(in direction: StreakDirection,
                      numberOfFramesLeft: Int,
                      existingValue: Double = 0) async -> Double
     {
