@@ -576,9 +576,16 @@ public actor OutlierGroup: CustomStringConvertible,
             fatalError("called with bad value \(type)")
         }
     }
+
+    fileprivate var featureValueCache: [Feature: Double] = [:]
+
+    public func clearFeatureValueCache() { featureValueCache = [:] }
     
     public func decisionTreeValue(for type: Feature) async -> Double {
         Log.d("group \(name) @ frame \(frame_index) decisionTreeValue(for: \(type))")
+
+        if let value = featureValueCache[type] { return value }
+        
         switch type {
         case .numberOfNearbyOutliersInSameFrame:
             return await self.numberOfNearbyOutliersInSameFrame

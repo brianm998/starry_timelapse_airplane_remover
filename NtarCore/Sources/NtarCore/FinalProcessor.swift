@@ -162,7 +162,7 @@ public actor FinalProcessor {
     func finishAll() async throws {
         Log.d("finishing all")
         try await withLimitedThrowingTaskGroup(of: Void.self) { taskGroup in
-            for (index, frame) in frames.enumerated() {
+            for (_, frame) in frames.enumerated() {
                 if let frame = frame {
                     Log.d("adding frame \(frame.frame_index) to final queue")
                     try await taskGroup.addTask() { 
@@ -281,9 +281,8 @@ public actor FinalProcessor {
                         // leave the ones at the end to finishAll()
                         let immutable_start = start_index
                         Log.v("FINAL THREAD frame \(index_to_process) queueing into final queue")
-                        if let frame_to_finish = await self.frame(at: immutable_start - 1),
-                           let next_frame = await self.frame(at: immutable_start)
-                        {
+                        if let frame_to_finish = await self.frame(at: immutable_start - 1) {
+                            await frame_to_finish.clearOutlierGroupValueCaches()
                             await self.clearFrame(at: immutable_start - 1)
 
                             try await taskGroup.addTask() { 

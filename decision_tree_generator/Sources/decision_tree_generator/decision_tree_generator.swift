@@ -290,7 +290,7 @@ struct decision_tree_generator: ParsableCommand {
         let dispatch_group = DispatchGroup()
         dispatch_group.enter()
         Task {
-            var classifiedData = ClassifiedData()
+            let classifiedData = ClassifiedData()
             for input_dirname in input_filenames {
                 if file_manager.fileExists(atPath: input_dirname) {
                     classifiedData += try await loadDataFrom(dirname: input_dirname)
@@ -302,7 +302,7 @@ struct decision_tree_generator: ParsableCommand {
 
             let chunked_test_data = classifiedData.split(into: ProcessInfo.processInfo.activeProcessorCount)
             
-            for (treeKey, tree) in decisionTrees {
+            for (_, tree) in decisionTrees {
                 let (num_good, num_bad) = await runTest(of: tree, onChunks: chunked_test_data)
                 results.numberGood[tree.name] = num_good
                 results.numberBad[tree.name] = num_bad
@@ -591,7 +591,7 @@ struct decision_tree_generator: ParsableCommand {
     }
 
     func loadTestData() async throws -> ClassifiedData {
-        var testData = ClassifiedData()
+        let testData = ClassifiedData()
         
         // load testData 
         for dirname in test_data_dirnames {
@@ -669,7 +669,7 @@ struct decision_tree_generator: ParsableCommand {
             Log.i("data loaded")
 
             // test data gathered from -t on command line
-            var testData = try await loadTestData()
+            let testData = try await loadTestData()
             
             do {
                 if produce_all_type_combinations {
@@ -686,21 +686,21 @@ struct decision_tree_generator: ParsableCommand {
                         //let negativeData = trainingData.negativeData.map { $0 }
                         let _input_filenames = input_filenames
                         let task = try await runThrowingTask() {
-                            try await self.writeTree(withTypes: types,
-                                                     withTrainingData: trainingData,
-                                                     andTestData: testData,
-                                                     inputFilenames: _input_filenames,
-                                                     maxDepth: maxDepth)
+                            _ = try await self.writeTree(withTypes: types,
+                                                         withTrainingData: trainingData,
+                                                         andTestData: testData,
+                                                         inputFilenames: _input_filenames,
+                                                         maxDepth: maxDepth)
                         }
                         tasks.append(task)
                     }
                     for task in tasks { try await task.value }
                 } else {
-                    try await self.writeTree(withTypes: decisionTypes,
-                                             withTrainingData: trainingData,
-                                             andTestData: testData,
-                                             inputFilenames: input_filenames,
-                                             maxDepth: maxDepth)
+                    _ = try await self.writeTree(withTypes: decisionTypes,
+                                                 withTrainingData: trainingData,
+                                                 andTestData: testData,
+                                                 inputFilenames: input_filenames,
+                                                 maxDepth: maxDepth)
                 }
             } catch {
                 Log.e("\(error)")
@@ -804,12 +804,12 @@ struct decision_tree_generator: ParsableCommand {
                              inputFilenames: inputFilenames)
 */
         // .median seems best, but more exploration possible
-        try await self.writeTree(withTypes: decisionTypes,
-                                 andSplitTypes: [.median],
-                                 withTrainingData: trainingData,
-                                 andTestData: testData,
-                                 inputFilenames: inputFilenames,
-                                 maxDepth: maxDepth)
+        _ = try await self.writeTree(withTypes: decisionTypes,
+                                     andSplitTypes: [.median],
+                                     withTrainingData: trainingData,
+                                     andTestData: testData,
+                                     inputFilenames: inputFilenames,
+                                     maxDepth: maxDepth)
 /*
         await self.writeTree(withTypes: decisionTypes,
                              andSplitTypes: [.mean, .median],

@@ -154,7 +154,7 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
                 IMAGE_HEIGHT = Double(test_image.height)
 
                 image_bytesPerPixel = test_image.bytesPerPixel
-                Log.d("first frame to get sizes: image_width \(image_width) image_height \(image_height) image_bytesPerPixel \(image_bytesPerPixel)")
+                Log.d("first frame to get sizes: image_width \(String(describing: image_width)) image_height \(String(describing: image_height)) image_bytesPerPixel \(image_bytesPerPixel)")
             } catch {
                 Log.e("first frame to get size: \(error)")
             }

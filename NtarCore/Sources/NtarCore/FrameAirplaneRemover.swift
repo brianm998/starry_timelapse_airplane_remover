@@ -310,7 +310,15 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
         }
     }
 
+    public func clearOutlierGroupValueCaches() async {
+        await foreachOutlierGroup() { group in
+            await group.clearFeatureValueCache()
+            return .continue
+        }
+    }
+
     public func applyDecisionTreeToAllOutliers() async {
+        Log.d("frame \(self.frame_index) applyDecisionTreeToAllOutliers")
         if let classifier = currentClassifier {
             let start_time = NSDate().timeIntervalSince1970
             await withLimitedTaskGroup(of: Void.self) { taskGroup in
@@ -329,6 +337,7 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
         } else {
             Log.w("no classifier")
         }
+        Log.d("frame \(self.frame_index) DONE applyDecisionTreeToAllOutliers")
     }
     
     public func userSelectAllOutliers(toShouldPaint should_paint: Bool) async {
@@ -485,7 +494,7 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
                 // groups can use these links for decision tree values
                 self.state = .readyForInterFrameProcessing
                 self.outliersLoadedFromFile = true
-                Log.i("loaded \(self.outlier_groups?.groups?.count) outlier groups for frame \(frame_index)")
+                Log.i("loaded \(String(describing: self.outlier_groups?.groups?.count)) outlier groups for frame \(frame_index)")
             } else {
                 self.outlier_groups = OutlierGroups(frame_index: frame_index,
                                                     groups: [:])
@@ -522,7 +531,7 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
         Log.d("frame \(frame_index) about to encode outlier data")
         if let outlier_groups = outlier_groups {
             do {
-                Log.i("frame \(frame_index) REALLY about to encode outlier data \(outlier_groups.encodable_groups?.count)")
+                Log.i("frame \(frame_index) REALLY about to encode outlier data \(String(describing: outlier_groups.encodable_groups?.count))")
                 return try encoder.encode(outlier_groups)
             } catch {
                 Log.e("\(error)")
