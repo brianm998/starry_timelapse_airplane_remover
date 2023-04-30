@@ -120,24 +120,24 @@ public actor FinalProcessor {
                 let end = current_frame_index + config.numConcurrentRenders
                 for i in current_frame_index ..< end {
                     if i >= self.frames.count {
-                        message += ConsoleColor.yellow.rawValue + "-";
+                        message += ConsoleColor.yellow.rawValue + "-"
                     } else {
                         if let _ = self.frames[i] {
-                            message += ConsoleColor.green.rawValue + "*";
+                            message += ConsoleColor.green.rawValue + "*"
                             count += 1
                         } else {
-                            message += ConsoleColor.yellow.rawValue + "-";
+                            message += ConsoleColor.yellow.rawValue + "-"
                         }
                     }
                 }
-                message += ConsoleColor.blue.rawValue+"]"+ConsoleColor.reset.rawValue;
+                message += ConsoleColor.blue.rawValue+"]"+ConsoleColor.reset.rawValue
                 let name = "frames awaiting inter frame processing"
                 message += " \(count) \(name)"
                 await updatable.log(name: name, message: message, value: 2)
             }
         }
     }
-    
+
     func frame(at index: Int) -> FrameAirplaneRemover? {
         return frames[index]
     }
