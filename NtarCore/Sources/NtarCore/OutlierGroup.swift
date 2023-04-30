@@ -518,7 +518,7 @@ public actor OutlierGroup: CustomStringConvertible,
         }        
     }
 
-    public func nonAsyncDecisionTreeValue(for type: Feature) -> Double {
+    fileprivate func nonAsyncDecisionTreeValue(for type: Feature) -> Double {
         let height = IMAGE_HEIGHT!
         let width = IMAGE_WIDTH!
         switch type {
@@ -578,6 +578,7 @@ public actor OutlierGroup: CustomStringConvertible,
     }
     
     public func decisionTreeValue(for type: Feature) async -> Double {
+        Log.d("group \(name) @ frame \(frame_index) decisionTreeValue(for: \(type))")
         switch type {
         case .numberOfNearbyOutliersInSameFrame:
             return await self.numberOfNearbyOutliersInSameFrame
@@ -949,6 +950,7 @@ public actor OutlierGroup: CustomStringConvertible,
         Log.d(message)
         }*/
 
+    
 
     @available(macOS 10.15, *)
     func streakScore(in direction: StreakDirection,

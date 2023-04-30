@@ -121,7 +121,7 @@ public final class OutlierGroupClassifierForest_4e34a241: NamedOutlierGroupClass
     public func classification (
        of features: [OutlierGroup.Feature],   // parallel
        and values: [Double]                   // arrays
-    ) -> Double
+    ) async -> Double
     {
         let _9274b54f: Double = tree_9274b54f.classification(of: features, and: values) * 0.9761016045373019
         let _34f6b02d: Double = tree_34f6b02d.classification(of: features, and: values) * 0.9764894081147899

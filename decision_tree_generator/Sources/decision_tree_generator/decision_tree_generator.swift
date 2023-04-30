@@ -379,8 +379,8 @@ struct decision_tree_generator: ParsableCommand {
                                                 for (treeKey, tree) in decisionTrees {
                                                     await taskGroup.addTask() {
                                                         let decisionTreeShouldPaint =  
-                                                          tree.classification(of: matrix.types,
-                                                                              and: values.values) > 0
+                                                          await tree.classification(of: matrix.types,
+                                                                                    and: values.values) > 0
                                                         return (treeKey, decisionTreeShouldPaint == values.shouldPaint)
                                                     }
                                                 }

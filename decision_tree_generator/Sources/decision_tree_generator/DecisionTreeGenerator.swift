@@ -114,7 +114,6 @@ actor DecisionTreeGenerator {
         var trees_declaration_string = ""
         var trees_classification_string_1 = ""
         var trees_classification_string_2 = ""
-        var trees_classification_string_3 = "return ("
         var trees_name_list_string = "["
         var digest = SHA256()
 
@@ -146,8 +145,7 @@ actor DecisionTreeGenerator {
 
             trees_declaration_string += "    let tree_\(name) = OutlierGroupDecisionTree_\(name)()\n"
             trees_classification_string_1 += "            await taskGroup.addTask() { self.tree_\(name).classification(\(classification_method_call)) * \(score) }\n\n"
-            trees_classification_string_2 += "        let _\(name): Double = tree_\(name).classification(of: features, and: values) * \(score)\n"
-            trees_classification_string_3 += "_\(name)+"            
+            trees_classification_string_2 += "            await taskGroup.addTask() { self.tree_\(name).classification(of: features, and: values) * \(score) }\n\n"
             trees_name_list_string += " \"\(name)\","
 
             trees_type_string += "   \(tree.tree.type)\n\n"
@@ -158,13 +156,9 @@ actor DecisionTreeGenerator {
         let tree_hash_string = tree_hash.compactMap { String(format: "%02x", $0) }.joined()
         let hash_prefix = String(tree_hash_string.prefix(sha_prefix_size))
 
-        trees_classification_string_3.removeLast()
-        trees_classification_string_3 += ")/\(forest.count)"
-
         trees_name_list_string.removeLast()
         trees_name_list_string += "]"
 
-        
         let filename = "\(baseFilename)\(hash_prefix).swift"
 
         var pruneString = ""
@@ -233,10 +227,16 @@ actor DecisionTreeGenerator {
                  public func classification (
                     of features: [OutlierGroup.Feature],   // parallel
                     and values: [Double]                   // arrays
-                 ) -> Double
+                 ) async -> Double
                  {
+                     let score = await withLimitedTaskGroup(of: Double.self) { taskGroup in
+
              \(trees_classification_string_2)
-                     \(trees_classification_string_3)
+                         var total: Double = 0.0
+                         await taskGroup.forEach() { total += $0 }
+                         return total / \(forest.count)
+                     }
+                     return score
                  }
              }
              """
@@ -1236,7 +1236,8 @@ public func runTest(of classifier: OutlierGroupClassifier,
     var numberBad = 0
     
     for positiveData in classifiedData.positiveData {
-        let classification = classifier.classification(of: features, and: positiveData.values)
+        let classification = await classifier.classification(of: features,
+                                                             and: positiveData.values)
         if classification < 0 {
             // wrong
             numberBad += 1
@@ -1247,7 +1248,8 @@ public func runTest(of classifier: OutlierGroupClassifier,
     }
 
     for negativeData in classifiedData.negativeData {
-        let classification = classifier.classification(of: features, and: negativeData.values)
+        let classification = await classifier.classification(of: features,
+                                                             and: negativeData.values)
         if classification < 0 {
             //right
             numberGood += 1

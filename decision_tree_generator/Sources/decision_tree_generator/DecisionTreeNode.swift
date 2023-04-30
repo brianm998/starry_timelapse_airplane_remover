@@ -69,7 +69,7 @@ class DecisionTreeNode: SwiftDecisionTree {
       (
         of features: [OutlierGroup.Feature], // parallel
         and values: [Double]                        // arrays
-      ) -> Double
+      ) async -> Double
     {
         for i in 0 ..< features.count {
             if features[i] == type {
@@ -83,9 +83,9 @@ class DecisionTreeNode: SwiftDecisionTree {
                     }
                 } else {
                     if outlierValue < value {
-                        return lessThan.classification(of: features, and: values)
+                        return await lessThan.classification(of: features, and: values)
                     } else {
-                        return greaterThan.classification(of: features, and: values)
+                        return await greaterThan.classification(of: features, and: values)
                     }
                 }
                 
