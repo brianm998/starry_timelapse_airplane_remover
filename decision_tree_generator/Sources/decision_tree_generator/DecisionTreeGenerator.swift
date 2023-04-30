@@ -145,9 +145,9 @@ actor DecisionTreeGenerator {
             Log.i("have tree \(name) w/ score \(score)")
 
             trees_declaration_string += "    let tree_\(name) = OutlierGroupDecisionTree_\(name)()\n"
-            trees_classification_string_1 += "        let _\(name): Double = tree_\(name).classification(\(classification_method_call)) * \(score)\n"
+            trees_classification_string_1 += "            await taskGroup.addTask() { self.tree_\(name).classification(\(classification_method_call)) * \(score) }\n\n"
             trees_classification_string_2 += "        let _\(name): Double = tree_\(name).classification(of: features, and: values) * \(score)\n"
-            trees_classification_string_3 += "_\(name)+"
+            trees_classification_string_3 += "_\(name)+"            
             trees_name_list_string += " \"\(name)\","
 
             trees_type_string += "   \(tree.tree.type)\n\n"
@@ -218,8 +218,15 @@ actor DecisionTreeGenerator {
                  // returns -1 for negative, +1 for positive
                  public func classification(of group: OutlierGroup) async -> Double {
              \(data_definition_1) = \(data_definition_2)
+
+                     let score = await withLimitedTaskGroup(of: Double.self) { taskGroup in
+             
              \(trees_classification_string_1)
-                     \(trees_classification_string_3)
+                         var total: Double = 0.0
+                         await taskGroup.forEach() { total += $0 }
+                         return total / \(forest.count)
+                     }
+                     return score
                  }
 
                  // returns -1 for negative, +1 for positive
