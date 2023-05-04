@@ -850,16 +850,13 @@ fileprivate func decisionTreeNode(withTrainingData trainingData: ClassifiedData,
                     // we have a linear split between all provided test data
                     // this is an end leaf node, both paths after decision lead to a result
                     //Log.d("clear distinction \(paint_dist.max) < \(not_paint_dist.min)")
-                    
+
                     var ret = FeatureResult(type: type)
                     ret.decisionTreeNode =
-                      DecisionTreeNode(type: type,
-                                       value: (paint_dist.max + not_paint_dist.min) / 2,
-                                       lessThan: FullyPositiveTreeNode(indent: indent + 1),
-                                       lessThanStumpValue: 1,
-                                       greaterThan: FullyNegativeTreeNode(indent: indent + 1),
-                                       greaterThanStumpValue: -1,
-                                       indent: indent)
+                      LinearChoiceTreeNode(type: type,
+                                           min: paint_dist.median,
+                                           max: not_paint_dist.median,
+                                           indent: indent)
                     ret.positiveDist = paint_dist
                     ret.negativeDist = not_paint_dist
                     return [ret]
@@ -867,15 +864,13 @@ fileprivate func decisionTreeNode(withTrainingData trainingData: ClassifiedData,
                     //Log.d("clear distinction \(not_paint_dist.max) < \(paint_dist.min)")
                     // we have a linear split between all provided test data
                     // this is an end leaf node, both paths after decision lead to a result
+                    
                     var ret = FeatureResult(type: type)
                     ret.decisionTreeNode =
-                      DecisionTreeNode(type: type,
-                                       value: (not_paint_dist.max + paint_dist.min) / 2,
-                                       lessThan: FullyNegativeTreeNode(indent: indent + 1),
-                                       lessThanStumpValue: -1,
-                                       greaterThan: FullyPositiveTreeNode(indent: indent + 1),
-                                       greaterThanStumpValue: 1,
-                                       indent: indent)
+                      LinearChoiceTreeNode(type: type,
+                                           min: not_paint_dist.median,
+                                           max: paint_dist.median,
+                                           indent: indent)
                     ret.positiveDist = paint_dist
                     ret.negativeDist = not_paint_dist
                     return [ret]
