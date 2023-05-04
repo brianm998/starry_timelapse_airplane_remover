@@ -1501,12 +1501,17 @@ struct ContentView: View {
 
             if interactionMode == .edit {
                 // try loading outliers if there aren't any present
-                if viewModel.frames[next_frame.frame_index].outlierViews == nil {
+                let frameView = viewModel.frames[next_frame.frame_index]
+                if frameView.outlierViews == nil,
+                   !frameView.loadingOutlierViews
+                {
+                    frameView.loadingOutlierViews = true
                     Task {
                         loading_outliers = true
                         let _ = try await next_frame.loadOutliers()
                         await viewModel.setOutlierGroups(forFrame: next_frame)
-                        loading_outliers = false
+                        frameView.loadingOutlierViews = false
+                        loading_outliers = viewModel.loadingOutlierGroups
                         viewModel.update()
                     }
                 }

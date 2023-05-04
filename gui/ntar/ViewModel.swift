@@ -79,6 +79,11 @@ public class ViewModel: ObservableObject {
         }
         return nil
     }
+
+    var loadingOutlierGroups: Bool {
+        for frame in frames { if frame.loadingOutlierViews { return true } }
+        return false
+    }
     
     /*
     
