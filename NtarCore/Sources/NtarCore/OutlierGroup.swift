@@ -70,6 +70,29 @@ public class OutlierGroups: Codable {
             Log.e("frame \(frame_index) NIL encodable_groups during encode!!!")
         }
     }
+
+    public func write(to dir: String) async throws {
+        if let groups = self.groups {
+
+            Log.d("loaded frame \(self.frame_index) with \(self.groups?.count ?? -1) outlier groups from binary file")
+
+            let frame_dir = "\(dir)/\(frame_index)"
+            
+            try mkdir(frame_dir)
+
+            for group in groups.values {
+                try await group.writeToFile(in: frame_dir)
+            }
+        } else {
+            Log.w("cannot write with no groups")
+        }
+    }
+    
+    public func load(at frame_index: Int,
+                     from dir: String) async throws
+    {
+        
+    }
 }
 
 // represents a single outler group in a frame
