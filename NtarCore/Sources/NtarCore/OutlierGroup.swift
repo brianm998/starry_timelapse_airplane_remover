@@ -88,10 +88,61 @@ public class OutlierGroups: Codable {
         }
     }
     
-    public func load(at frame_index: Int,
-                     from dir: String) async throws
+    public init(at frame_index: Int,
+                from dir: String) async throws
     {
+        self.frame_index = frame_index
+
+        var data_bin_files: [String] = []
         
+        let contents = try file_manager.contentsOfDirectory(atPath: dir)
+        contents.forEach { file in
+            if file.hasSuffix(OutlierGroup.data_bin_suffix) {
+                data_bin_files.append(file)
+            }
+        }
+        var groups: [String: OutlierGroup] = [:]
+        for file in data_bin_files {
+            // load file into data
+            let fileurl = NSURL(fileURLWithPath: "\(dir)/\(file)", isDirectory: false)
+
+            let (group_data, _) = try await URLSession.shared.data(for: URLRequest(url: fileurl as URL))
+            var fu: String = file
+            let fuck = String(fu.dropLast(OutlierGroup.data_bin_suffix.count+1))
+            //Log.d("trying to load group \(fuck)")
+            let group = OutlierGroup(withName: fuck,
+                                     frameIndex: frame_index,
+                                     with: group_data)
+
+            groups[fuck] = group
+            
+            let paint_filename = String(file.dropLast(OutlierGroup.data_bin_suffix.count) + OutlierGroup.paint_json_suffix)
+
+            if file_manager.fileExists(atPath: "\(dir)/\(paint_filename)") {
+                //Log.d("paint_filename \(paint_filename) exists for \(file)")
+                // XXX load this shit up too
+
+                let paintfileurl = NSURL(fileURLWithPath: "\(dir)/\(paint_filename)",
+                                         isDirectory: false)
+
+                let (paint_data, _) = try await URLSession.shared.data(for: URLRequest(url: paintfileurl as URL))
+                
+                // XXX this is json, decode it
+                
+                let decoder = JSONDecoder()
+                decoder.nonConformingFloatDecodingStrategy = .convertFromString(
+                  positiveInfinity: "inf",
+                  negativeInfinity: "-inf",
+                  nan: "nan")
+                
+                await group.shouldPaint(try decoder.decode(PaintReason.self, from: paint_data))
+
+                //Log.d("loaded group.shouldPaint \(await group.shouldPaint) for \(fuck) \(fu)")
+            } else {
+                Log.d("no \(paint_filename) paint_filename for \(file)")
+            }
+        }
+        self.groups = groups
     }
 }
 
@@ -648,6 +699,7 @@ public actor OutlierGroup: CustomStringConvertible,
                 values.append(pixel)
             }
         }
+        // XXX all zero pixels :(
         return Double(values.sorted()[values.count/2]) // SIGABRT HERE :(
     }
 
@@ -1070,6 +1122,8 @@ public actor OutlierGroup: CustomStringConvertible,
         self.size = size_data.withUnsafeBytes { $0.load(as: UInt.self).bigEndian }
         index += 8
 
+        //Log.d("\(self.name) read size \(self.size)")
+        
         let bb_min_x_data = persitentData.subdata(in: index..<index+8)
         let bb_min_x = bb_min_x_data.withUnsafeBytes { $0.load(as: Int.self).bigEndian }
         index += 8
@@ -1097,34 +1151,38 @@ public actor OutlierGroup: CustomStringConvertible,
         let lines_count = lines_count_data.withUnsafeBytes { $0.load(as: Int.self).bigEndian }
         index += 8
 
+        //Log.d("lines_count \(lines_count) index \(index) persitentData.count \(persitentData.count)")
+        
         self.lines = []
         
         for i in 0..<lines_count {
             let theta_data = persitentData.subdata(in: index..<index+8)
-            let theta = lines_count_data.withUnsafeBytes { $0.load(as: Double.self) }
+            let theta = theta_data.withUnsafeBytes { $0.load(as: Double.self) }
             index += 8
 
             let rho_data = persitentData.subdata(in: index..<index+8)
-            let rho = lines_count_data.withUnsafeBytes { $0.load(as: Double.self) }
+            let rho = rho_data.withUnsafeBytes { $0.load(as: Double.self) }
             index += 8
             
             let count_data = persitentData.subdata(in: index..<index+8)
-            let count = lines_count_data.withUnsafeBytes { $0.load(as: Int.self) }
+            let count = count_data.withUnsafeBytes { $0.load(as: Int.self) }
             index += 8
             
             lines.append(Line(theta: theta, rho: rho, count: count))
         }
 
         let pixels_count_data = persitentData.subdata(in: index..<index+8)
-        let pixels_count = lines_count_data.withUnsafeBytes { $0.load(as: Int.self).bigEndian }
+        let pixels_count = pixels_count_data.withUnsafeBytes { $0.load(as: Int.self).bigEndian }
         index += 8
 
         var pixels: [UInt32] = []
+
+        //Log.d("pixels_count \(pixels_count) index \(index) persitentData.count \(persitentData.count)")
         
         for i in 0..<pixels_count {
             let pixel_data = persitentData.subdata(in: index..<index+4)
             index += 4
-            let pixel = lines_count_data.withUnsafeBytes { $0.load(as: UInt32.self).bigEndian }
+            let pixel = pixel_data.withUnsafeBytes { $0.load(as: UInt32.self).bigEndian }
             pixels.append(pixel)
         }
         self.pixels = pixels
@@ -1145,7 +1203,7 @@ public actor OutlierGroup: CustomStringConvertible,
         let size = self.persistentDataSizeBytes
         var data = Data(repeating: 0, count: size)
 
-        Log.d("creating persistent data of size \(size)")
+        Log.d("\(self.name) creating persistent data of size \(size)")
 
         var index: Int = 0
 
@@ -1153,6 +1211,8 @@ public actor OutlierGroup: CustomStringConvertible,
         data.replaceSubrange(index..<index+8, with: size_data)
         index += 8
         
+        Log.d("\(self.name) size \(self.size)")
+
         let bb_min_x = self.bounds.min.x
         let bb_min_x_data = withUnsafeBytes(of: bb_min_x.bigEndian) { Data($0) }
         data.replaceSubrange(index..<index+8, with: bb_min_x_data)
@@ -1182,6 +1242,8 @@ public actor OutlierGroup: CustomStringConvertible,
         data.replaceSubrange(index..<index+8, with: num_lines_data)
         index += 8
 
+        Log.d("\(self.name) self.lines.count \(self.lines.count)")
+
         for line in self.lines {
             let theta_data = withUnsafeBytes(of: line.theta) { Data($0) }
             data.replaceSubrange(index..<index+8, with: theta_data)
@@ -1196,6 +1258,8 @@ public actor OutlierGroup: CustomStringConvertible,
 
         let num_pixels = self.pixels.count
         
+        Log.d("\(self.name) self.pixels.count \(self.pixels.count)")
+
         let num_pixels_data = withUnsafeBytes(of: num_pixels.bigEndian) { Data($0) }
         data.replaceSubrange(index..<index+8, with: num_pixels_data)
         index += 8
@@ -1217,30 +1281,32 @@ public actor OutlierGroup: CustomStringConvertible,
         return data        
     }
 
+    static let data_bin_suffix = "outlier-data.bin"
+    static let paint_json_suffix = "paint.json"
+    
     public func writeToFile(in dir: String) async throws {
-        let filename = "\(dir)/\(await self.name)-outlier-data.bin"
-        let data = await self.persistentData
-        // XXX write data to filename
+        let filename = "\(dir)/\(self.name)-\(OutlierGroup.data_bin_suffix)"
 
         if file_manager.fileExists(atPath: filename) {
-            Log.i("overwriting already existing filename \(filename)")
-            try file_manager.removeItem(atPath: filename)
+            Log.i("not overwriting already existing filename \(filename)")
+            //try file_manager.removeItem(atPath: filename)
+        } else {
+            let data = self.persistentData
+            
+            file_manager.createFile(atPath: filename,
+                                    contents: data,
+                                    attributes: nil)
         }
-
-        file_manager.createFile(atPath: filename,
-                                contents: data,
-                                attributes: nil)
-
         if let shouldPaint = self.shouldPaint {
             // also write out a separate json file with paint reason
-            let filename = "\(dir)/\(self.name)-paint.json"
+            let filename = "\(dir)/\(self.name)-\(OutlierGroup.paint_json_suffix)"
 
             let encoder = JSONEncoder()
             encoder.outputFormatting = .prettyPrinted
 
             let json_data = try encoder.encode(shouldPaint)
             if file_manager.fileExists(atPath: filename) {
-                Log.i("removing already existing \(filename)")
+                Log.i("removing already existing paint reason \(filename)")
                 try file_manager.removeItem(atPath: filename)
             } 
             Log.i("creating \(filename)")                      

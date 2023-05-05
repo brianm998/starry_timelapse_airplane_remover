@@ -2,6 +2,14 @@ import Foundation
 import CoreGraphics
 import Cocoa
 
+public func mkdir(_ path: String) throws {
+    if !file_manager.fileExists(atPath: path) {
+        try file_manager.createDirectory(atPath: path,
+                                         withIntermediateDirectories: false,
+                                         attributes: nil)
+    }
+}
+
 @available(macOS 10.15, *) 
 public class ImageSequenceProcessor<T> {
 
@@ -62,14 +70,6 @@ public class ImageSequenceProcessor<T> {
         self.existing_output_files = [Bool](repeating: false, count: image_sequence.filenames.count)
         self.fully_process = fullyProcess
         self.method_list = try assembleMethodList()
-    }
-
-    func mkdir(_ path: String) throws {
-        if !file_manager.fileExists(atPath: path) {
-            try file_manager.createDirectory(atPath: path,
-                                             withIntermediateDirectories: false,
-                                             attributes: nil)
-        }
     }
 
     func processFrame(number index: Int,

@@ -261,11 +261,42 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
             // look inside outlier_output_dirname for json
             // XXX check for 1_outlier.json file in outliers dir
             
+            // XXX put shit here to load the outlier groups from new format:
+
+            /*
+
+             XXX
+
+             look for dir "\(self.outlier_output_dirname)/\(frame_index)"
+             if found, iterate over all named files in that dir
+
+             look for them by name and suffix, will be two files for each outlier group
+             
+             each one should be an OutlierGroup in new strict binary format
+             load them all into a new OutlierGroup object
+             
+             XXX
+             */
+
             let frame_outliers_binary_filename = "\(self.outlier_output_dirname)/\(frame_index)_outliers.bin"
 
-            Log.i("frame \(frame_index) looking for binary file \(frame_outliers_binary_filename)")
-            
-            if file_manager.fileExists(atPath: frame_outliers_binary_filename) {
+            let frame_outliers_new_binary_dirname = "\(self.outlier_output_dirname)/\(frame_index)"
+            if file_manager.fileExists(atPath: frame_outliers_new_binary_dirname) {
+                do {
+                    start_time_1 = Date().timeIntervalSinceReferenceDate
+                    outlier_groups_for_this_frame = try await OutlierGroups(at: frame_index, from: frame_outliers_new_binary_dirname)
+                    end_time_1 = Date().timeIntervalSinceReferenceDate
+                } catch {
+                    Log.e("frame \(frame_index) error decoding file \(frame_outliers_new_binary_dirname): \(error)")
+                }
+                Log.i("frame \(frame_index) loaded from new binary dir")
+                
+            } else if file_manager.fileExists(atPath: frame_outliers_binary_filename) {
+
+                Log.i("frame \(frame_index) looking for binary file \(frame_outliers_binary_filename)")
+
+                
+                // BinaryCodable binary files (one per frame)
                 Log.i("frame \(frame_index) found binary file \(frame_outliers_binary_filename)")
             
                 do {
@@ -274,6 +305,8 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
                     let decoder = BinaryDecoder()
                     
                     start_time_1 = Date().timeIntervalSinceReferenceDate
+                    // XXX this is obsenely slow with large (~50m) files, like more than 5 minutes to decode
+                    // after only 7 seconds to load the file
                     outlier_groups_for_this_frame = try decoder.decode(OutlierGroups.self, from: data)
                     end_time_1 = Date().timeIntervalSinceReferenceDate
                     Log.d("binary decode took \(end_time_1 - start_time_1) seconds to load binary outlier group data for frame \(frame_index)")
@@ -308,7 +341,7 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
             }
             let end_time = Date().timeIntervalSinceReferenceDate
             Log.d("took \(end_time - start_time) seconds to load outlier group data for frame \(frame_index)")
-            Log.d("TIMES \(start_time_1 - start_time) - \(end_time_1 - start_time_1) - \(end_time - end_time_1) reading outlier group data for frame \(frame_index)")
+            Log.i("TIMES \(start_time_1 - start_time) - \(end_time_1 - start_time_1) - \(end_time - end_time_1) reading outlier group data for frame \(frame_index)")
             
             
             if let _ = outlier_groups_for_this_frame  {

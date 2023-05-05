@@ -216,7 +216,29 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
 
     // write out full OutlierGroup codable binary
     // large, slow, but lots of data
-    public func writeOutliersBinary() {
+
+    /*
+     XXX rename this and rewrite a new version to write out all the outliers
+
+     to a file named by the frame index of this frame and populated with files
+     named by the outlier name in the new format
+
+     make json sidecar file for paintability
+     
+     */
+    public func writeOutliersBinary() async {
+        if config.writeOutlierGroupFiles,
+           let output_dirname = self.outlier_output_dirname
+        {
+            do {
+                try await self.outlier_groups?.write(to: output_dirname)
+            } catch {
+                Log.e("error \(error)")
+            }                
+        }
+    }
+
+    public func writeOutliersBinary_BinaryCodable() {
         if config.writeOutlierGroupFiles,
            let output_dirname = self.outlier_output_dirname
         {
@@ -325,7 +347,7 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
                 await foreachOutlierGroup() { group in
                     await taskGroup.addTask() {
                         let score = await classifier.classification(of: group)
-                        Log.d("frame \(self.frame_index) applying classifier should_paint \(score)")
+                        //Log.d("frame \(self.frame_index) applying classifier should_paint \(score)")
                         await group.shouldPaint(.fromClassifier(score))
                     }
                     return .continue
@@ -532,7 +554,11 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
         if let outlier_groups = outlier_groups {
             do {
                 Log.i("frame \(frame_index) REALLY about to encode outlier data \(String(describing: outlier_groups.encodable_groups?.count))")
-                return try encoder.encode(outlier_groups)
+                let start_time = NSDate().timeIntervalSince1970
+                let ret =  try encoder.encode(outlier_groups)
+                let end_time = NSDate().timeIntervalSince1970
+                Log.i("frame \(frame_index) done encoding outlier data \(String(describing: outlier_groups.encodable_groups?.count)) outliers after \(end_time - start_time) seconds")
+                return ret
             } catch {
                 Log.e("\(error)")
             }
@@ -1110,10 +1136,10 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
             // if we've loaded outliers from a file, only save again if we're in gui mode
             // in GUI mode the user may have made an explicit decision
             if self.overwriteFileLoadedOutlierGroups {
-                self.writeOutliersBinary()
+                await self.writeOutliersBinary()
             }
         } else {
-            self.writeOutliersBinary()
+            await self.writeOutliersBinary()
         }
 
         // these are derived from the outliers binary, and writing them out is ok
