@@ -1034,16 +1034,89 @@ public actor OutlierGroup: CustomStringConvertible,
 
         return size
     }
-/*
-    public init(with persitentData: Data) {
-        var index: Int = 0
-        
-        let size_data = persitentData.subdata(in: index..<8)
-        self.size = size_data.withUnsafeBytes { $0.load(as: UInt.self).bigEndian }
-    }
 
+    public init(withName name: String,
+                frameIndex frame_index: Int,
+                with persitentData: Data) {
+        var index: Int = 0
+
+        self.name = name
+        self.frame_index = frame_index
+        
+        let size_data = persitentData.subdata(in: index..<index+8)
+        self.size = size_data.withUnsafeBytes { $0.load(as: UInt.self).bigEndian }
+        index += 8
+
+        let bb_min_x_data = persitentData.subdata(in: index..<index+8)
+        let bb_min_x = bb_min_x_data.withUnsafeBytes { $0.load(as: Int.self).bigEndian }
+        index += 8
+
+        let bb_min_y_data = persitentData.subdata(in: index..<index+8)
+        let bb_min_y = bb_min_y_data.withUnsafeBytes { $0.load(as: Int.self).bigEndian }
+        index += 8
+
+        let bb_max_x_data = persitentData.subdata(in: index..<index+8)
+        let bb_max_x = bb_max_x_data.withUnsafeBytes { $0.load(as: Int.self).bigEndian }
+        index += 8
+
+        let bb_max_y_data = persitentData.subdata(in: index..<index+8)
+        let bb_max_y = bb_max_y_data.withUnsafeBytes { $0.load(as: Int.self).bigEndian }
+        index += 8
+
+        self.bounds = BoundingBox(min: Coord(x: bb_min_x, y: bb_min_y),
+                                  max: Coord(x: bb_max_x, y: bb_max_y))
+
+        let brightness_data = persitentData.subdata(in: index..<index+8)
+        self.brightness = brightness_data.withUnsafeBytes { $0.load(as: UInt.self).bigEndian }
+        index += 8
+
+        let lines_count_data = persitentData.subdata(in: index..<index+8)
+        let lines_count = lines_count_data.withUnsafeBytes { $0.load(as: Int.self).bigEndian }
+        index += 8
+
+        self.lines = []
+        
+        for i in 0..<lines_count {
+            let theta_data = persitentData.subdata(in: index..<index+8)
+            let theta = lines_count_data.withUnsafeBytes { $0.load(as: Double.self) }
+            index += 8
+
+            let rho_data = persitentData.subdata(in: index..<index+8)
+            let rho = lines_count_data.withUnsafeBytes { $0.load(as: Double.self) }
+            index += 8
+            
+            let count_data = persitentData.subdata(in: index..<index+8)
+            let count = lines_count_data.withUnsafeBytes { $0.load(as: Int.self) }
+            index += 8
+            
+            lines.append(Line(theta: theta, rho: rho, count: count))
+        }
+
+        let pixels_count_data = persitentData.subdata(in: index..<index+8)
+        let pixels_count = lines_count_data.withUnsafeBytes { $0.load(as: Int.self).bigEndian }
+        index += 8
+
+        var pixels: [UInt32] = []
+        
+        for i in 0..<pixels_count {
+            let pixel_data = persitentData.subdata(in: index..<index+4)
+            index += 4
+            let pixel = lines_count_data.withUnsafeBytes { $0.load(as: UInt32.self).bigEndian }
+            pixels.append(pixel)
+        }
+        self.pixels = pixels
+        
+        let mpdd = persitentData.subdata(in: index..<index+2)
+        self.max_pixel_distance = mpdd.withUnsafeBytes { $0.load(as: UInt16.self).bigEndian }
+        index += 2
+
+        let satsrd = persitentData.subdata(in: index..<index+8)
+        self.surfaceAreaToSizeRatio = satsrd.withUnsafeBytes { $0.load(as: Double.self) }
+        index += 8
+        
+        // surfaceAreaToSizeRatio
+    }
     
- */
     public var persistentData: Data {
 
         let size = self.persistentDataSizeBytes
@@ -1119,6 +1192,39 @@ public actor OutlierGroup: CustomStringConvertible,
         index += 8
 
         return data        
+    }
+
+    public func writeToFile(in dir: String) async throws {
+        let filename = "\(dir)/\(await self.name)-outlier-data.bin"
+        let data = await self.persistentData
+        // XXX write data to filename
+
+        if file_manager.fileExists(atPath: filename) {
+            Log.i("overwriting already existing filename \(filename)")
+            try file_manager.removeItem(atPath: filename)
+        }
+
+        file_manager.createFile(atPath: filename,
+                                contents: data,
+                                attributes: nil)
+
+        if let shouldPaint = self.shouldPaint {
+            // also write out a separate json file with paint reason
+            let filename = "\(dir)/\(self.name)-paint.json"
+
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = .prettyPrinted
+
+            let json_data = try encoder.encode(shouldPaint)
+            if file_manager.fileExists(atPath: filename) {
+                Log.i("removing already existing \(filename)")
+                try file_manager.removeItem(atPath: filename)
+            } 
+            Log.i("creating \(filename)")                      
+            file_manager.createFile(atPath: filename,
+                                    contents: json_data,
+                                    attributes: nil)
+        }
     }
 }
 
@@ -1240,3 +1346,5 @@ public func surface_area_to_size_ratio(of pixels: [UInt32], width: Int, height: 
     }
     return Double(surface_area)/Double(size)
 }
+
+fileprivate let file_manager = FileManager.default
