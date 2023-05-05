@@ -10,6 +10,9 @@ You should have received a copy of the GNU General Public License along with nta
 
 */
 
+// https://stackoverflow.com/questions/63018581/fastest-way-to-save-structs-ios-swift
+// XXX look into ContiguousBytes
+
 import Foundation
 import Cocoa
 
@@ -277,7 +280,8 @@ public actor OutlierGroup: CustomStringConvertible,
         case shouldPaint
         case frame_index
     }
-    
+
+    // XXX this is slow as fuck
     public init(from decoder: Decoder) throws {
 	let data = try decoder.container(keyedBy: CodingKeys.self)
 
@@ -285,10 +289,10 @@ public actor OutlierGroup: CustomStringConvertible,
         self.size = try data.decode(UInt.self, forKey: .size)
         self.bounds = try data.decode(BoundingBox.self, forKey: .bounds)
         self.brightness = try data.decode(UInt.self, forKey: .brightness)
-        self.pixels = try data.decode(Array<UInt32>.self, forKey: .pixels)
+        self.pixels = try data.decode(Array<UInt32>.self, forKey: .pixels) // XXX UInt16?
         self.max_pixel_distance = try data.decode(UInt16.self, forKey: .max_pixel_distance)
         self.surfaceAreaToSizeRatio = try data.decode(Double.self, forKey: .surfaceAreaToSizeRatio)
-        self.shouldPaint = try data.decode(PaintReason.self, forKey: .shouldPaint)
+        self.shouldPaint = try data.decode(PaintReason.self, forKey: .shouldPaint) // XXX move out
         self.frame_index = try data.decode(Int.self, forKey: .frame_index)
 
         if false {
@@ -639,8 +643,9 @@ public actor OutlierGroup: CustomStringConvertible,
 
     // use these to compare outliers in same and different frames
     var houghLineHistogram: HoughLineHistogram {
+        let lines = self.lines                            // try to copy
         return HoughLineHistogram(withDegreeIncrement: 5, // XXX hardcoded 5
-                                  lines: self.lines,
+                                  lines: lines,
                                   andGroupSize: self.size)
     }
 
@@ -995,8 +1000,158 @@ public actor OutlierGroup: CustomStringConvertible,
             return score
         }
     }
+
+    public var persistentDataSizeBytes: Int {
+
+        var size = 0
+
+        //size: UInt           (64 bits)
+        size += 8
+
+        //bounds: BoundingBox  (four 64 bit Ints)
+        size += 8 * 4
+
+        //brightness: UInt     (64 bits)
+        size += 8
+
+        //number_lines:        (64 bits)
+        size += 8
+
+        //lines: [Line]        [three 64 bit values]
+        size += lines.count * 8 * 3
+
+        //number_pixels        (64 bits)
+        size += 8
+        
+        //pixels: [UInt32]
+        size += pixels.count * 4
+        
+        //max_pixel_distance: UInt16
+        size += 2
+        
+        //surfaceAreaToSizeRatio: Double (64 bits)
+        size += 8
+
+        return size
+    }
+/*
+    public init(with persitentData: Data) {
+        var index: Int = 0
+        
+        let size_data = persitentData.subdata(in: index..<8)
+        self.size = size_data.withUnsafeBytes { $0.load(as: UInt.self).bigEndian }
+    }
+
+    
+ */
+    public var persistentData: Data {
+
+        let size = self.persistentDataSizeBytes
+        var data = Data(repeating: 0, count: size)
+
+        Log.d("creating persistent data of size \(size)")
+
+        var index: Int = 0
+
+        let size_data = withUnsafeBytes(of: self.size.bigEndian) { Data($0) }
+        data.replaceSubrange(index..<index+8, with: size_data)
+        index += 8
+        
+        let bb_min_x = self.bounds.min.x
+        let bb_min_x_data = withUnsafeBytes(of: bb_min_x.bigEndian) { Data($0) }
+        data.replaceSubrange(index..<index+8, with: bb_min_x_data)
+        index += 8
+        
+        let bb_min_y = self.bounds.min.y
+        let bb_min_y_data = withUnsafeBytes(of: bb_min_y.bigEndian) { Data($0) }
+        data.replaceSubrange(index..<index+8, with: bb_min_y_data)
+        index += 8
+        
+        let bb_max_x = self.bounds.max.x
+        let bb_max_x_data = withUnsafeBytes(of: bb_max_x.bigEndian) { Data($0) }
+        data.replaceSubrange(index..<index+8, with: bb_max_x_data)
+        index += 8
+
+        let bb_max_y = self.bounds.max.y
+        let bb_max_y_data = withUnsafeBytes(of: bb_max_y.bigEndian) { Data($0) }
+        data.replaceSubrange(index..<index+8, with: bb_max_y_data)
+        index += 8
+
+        let brightness_data = withUnsafeBytes(of: self.brightness.bigEndian) { Data($0) }
+        data.replaceSubrange(index..<index+8, with: brightness_data)
+        index += 8
+
+        let num_lines = self.lines.count
+        let num_lines_data = withUnsafeBytes(of: num_lines.bigEndian) { Data($0) }
+        data.replaceSubrange(index..<index+8, with: num_lines_data)
+        index += 8
+
+        for line in self.lines {
+            let theta_data = withUnsafeBytes(of: line.theta) { Data($0) }
+            data.replaceSubrange(index..<index+8, with: theta_data)
+            index += 8
+            let rho_data = withUnsafeBytes(of: line.rho) { Data($0) }
+            data.replaceSubrange(index..<index+8, with: rho_data)
+            index += 8
+            let count_data = withUnsafeBytes(of: line.count.bigEndian) { Data($0) }
+            data.replaceSubrange(index..<index+8, with: count_data)
+            index += 8
+        }
+
+        let num_pixels = self.pixels.count
+        
+        let num_pixels_data = withUnsafeBytes(of: num_pixels.bigEndian) { Data($0) }
+        data.replaceSubrange(index..<index+8, with: num_pixels_data)
+        index += 8
+
+        for i in 0..<num_pixels {
+            let pixel_data = withUnsafeBytes(of: self.pixels[i].bigEndian) { Data($0) }
+            data.replaceSubrange(index..<index+4, with: pixel_data)
+            index += 4
+        }
+
+        let mpdd = withUnsafeBytes(of: self.max_pixel_distance.bigEndian) { Data($0) }
+        data.replaceSubrange(index..<index+2, with: mpdd)
+        index += 2
+
+        data.replaceSubrange(index..<index+8,
+                             with: withUnsafeBytes(of: self.surfaceAreaToSizeRatio) { Data($0) })
+        index += 8
+
+        return data        
+    }
 }
 
+/*
+ xxx XXX XXX
+ XXX XXX XXX
+ XXX XXX XXX
+
+ Plan for ditching BinaryCodable for saving outlier groups:
+
+ instead of writing out a single file for all outliers in a frame,
+ create a directory named by the frame index and each file in it
+ is a file named by the name of the outlier group contained within.
+
+ move should paint reason to a separate json sidecar '-should-paint' file
+
+ read and write a binary structure like this
+ 
+ size: UInt           (64 bits)
+ bounds: BoundingBox  (four 64 bit Ints)
+ brightness: UInt     (64 bits)
+ number_lines:        (64 bits)
+ lines: [Line]        [three 64 bit values]
+ number_pixels        (64 bits)
+ pixels: [UInt32]
+ max_pixel_distance: UInt16
+ surfaceAreaToSizeRatio: Double (64 bits)
+
+ 
+ XXX XXX XXX
+ XXX XXX XXX
+ XXX XXX XXX
+ */
 // this class is a property by property copy of an OutlierGroup,
 // but not an actor so it's both encodable and usable by the view layer
 public class OutlierGroupEncodable: Encodable {
