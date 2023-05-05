@@ -661,17 +661,35 @@ fileprivate func recurseOn(result: DecisionResult, indent: Int,
         let greaterThanNegative = result.greaterThanNegative//.map { $0 }
         
         let less_response_task = await runTask() {
-            let _decisionTypes = decisionTypes
-            let _decisionSplitTypes = decisionSplitTypes
-            let less_tree = await decisionTreeNode(
-              withTrainingData: ClassifiedData(positiveData: lessThanPositive,
-                                               negativeData: lessThanNegative),
-              indented: indent + 1,
-              decisionTypes: _decisionTypes,
-              decisionSplitTypes: _decisionSplitTypes,
-              maxDepth: maxDepth)
-            return TreeResponse(treeNode: less_tree, position: .less,
-                                stumpValue: lessThanStumpValue)
+            /*
+
+             XXX
+
+             handle cases where there is no test data on one side or the other
+
+             in this case, currently we're returning -1 or 1.
+
+             we should try to use the LinearChoiceTreeNode instead, with median data
+             
+            if lessThanPositive.count == 0 {
+
+            } else if lessThanNegative.count == 0 {
+                
+            } else {
+                
+ */
+                let _decisionTypes = decisionTypes
+                let _decisionSplitTypes = decisionSplitTypes
+                let less_tree = await decisionTreeNode(
+                  withTrainingData: ClassifiedData(positiveData: lessThanPositive,
+                                                   negativeData: lessThanNegative),
+                  indented: indent + 1,
+                  decisionTypes: _decisionTypes,
+                  decisionSplitTypes: _decisionSplitTypes,
+                  maxDepth: maxDepth)
+                return TreeResponse(treeNode: less_tree, position: .less,
+                                    stumpValue: lessThanStumpValue)
+//            }
         }
         
         let _decisionTypes = decisionTypes
@@ -790,10 +808,12 @@ fileprivate func decisionTreeNode(withTrainingData trainingData: ClassifiedData,
     }
     if positive_training_data_count == 0 {
         // func was called without any data to paint, return don't paint it all
+        // XXX instead of returning -1, use logic from LinearChoiceTreeNode
         return FullyNegativeTreeNode(indent: indent)
     }
     if negative_training_data_count == 0 {
         // func was called without any data to not paint, return paint it all
+        // XXX instead of returning 1, use logic from LinearChoiceTreeNode
         return FullyPositiveTreeNode(indent: indent)
     }
     
@@ -853,11 +873,21 @@ fileprivate func decisionTreeNode(withTrainingData trainingData: ClassifiedData,
 
                     var ret = FeatureResult(type: type)
                     ret.decisionTreeNode =
+                      DecisionTreeNode(type: type,
+                                       value: (paint_dist.max + not_paint_dist.min) / 2,
+                                       lessThan: FullyPositiveTreeNode(indent: indent + 1),
+                                       lessThanStumpValue: 1,
+                                       greaterThan: FullyNegativeTreeNode(indent: indent + 1),
+                                       greaterThanStumpValue: -1,
+                                       indent: indent)
+                     /*
+                      // this LinearChoiceTreeNode underperformed the above by 1-2%
                       LinearChoiceTreeNode(type: type,
                                            min: paint_dist.median,
                                            max: not_paint_dist.median,
                                            indent: indent)
-                    ret.positiveDist = paint_dist
+                                           ret.positiveDist = paint_dist
+                       */
                     ret.negativeDist = not_paint_dist
                     return [ret]
                 } else if not_paint_dist.max < paint_dist.min {
@@ -867,11 +897,20 @@ fileprivate func decisionTreeNode(withTrainingData trainingData: ClassifiedData,
                     
                     var ret = FeatureResult(type: type)
                     ret.decisionTreeNode =
+                      DecisionTreeNode(type: type,
+                                       value: (not_paint_dist.max + paint_dist.min) / 2,
+                                       lessThan: FullyNegativeTreeNode(indent: indent + 1),
+                                       lessThanStumpValue: -1,
+                                       greaterThan: FullyPositiveTreeNode(indent: indent + 1),
+                                       greaterThanStumpValue: 1,
+                                       indent: indent)
+                      /*
                       LinearChoiceTreeNode(type: type,
                                            min: not_paint_dist.median,
                                            max: paint_dist.median,
                                            indent: indent)
-                    ret.positiveDist = paint_dist
+                                           ret.positiveDist = paint_dist
+                       */
                     ret.negativeDist = not_paint_dist
                     return [ret]
                 } else {
