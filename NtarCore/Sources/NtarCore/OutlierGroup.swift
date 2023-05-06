@@ -22,7 +22,7 @@ internal var IMAGE_HEIGHT: Double?
 
 // represents a single outler group in a frame
 @available(macOS 10.15, *) 
-public actor OutlierGroup: CustomStringConvertible,
+public class OutlierGroup: CustomStringConvertible,
                            Hashable,
                            Equatable,
                            Comparable
@@ -580,8 +580,8 @@ public actor OutlierGroup: CustomStringConvertible,
                                                                           of: self.bounds)
                 {
                     for group in nearby_groups {
-                        let score = await self.thetaHistoCenterLineScore(with: group,
-                                                                         selfHisto: selfHisto)
+                        let score = self.thetaHistoCenterLineScore(with: group,
+                                                                   selfHisto: selfHisto)
                         best_score = max(score, best_score)
                     }
                 }
@@ -590,8 +590,8 @@ public actor OutlierGroup: CustomStringConvertible,
                                                                       of: self.bounds)
                 {
                     for group in nearby_groups {
-                        let score = await self.thetaHistoCenterLineScore(with: group,
-                                                                         selfHisto: selfHisto)
+                        let score = self.thetaHistoCenterLineScore(with: group,
+                                                                   selfHisto: selfHisto)
                         best_score = max(score, best_score)
                     }
                 }
@@ -605,12 +605,12 @@ public actor OutlierGroup: CustomStringConvertible,
     // a score based upon a comparsion of the theta histograms of the this and another group,
     // as well as how well the theta of the other group corresponds to the center line theta between them
     fileprivate func thetaHistoCenterLineScore(with group: OutlierGroup,
-                                           selfHisto: HoughLineHistogram? = nil) async -> Double
+                                               selfHisto: HoughLineHistogram? = nil) -> Double
     {
         var histo = selfHisto
         if histo == nil { histo = self.houghLineHistogram }
         let center_line_theta = self.bounds.centerTheta(with: group.bounds)
-        let other_histo = await group.houghLineHistogram
+        let other_histo = group.houghLineHistogram
         let histo_score = other_histo.matchScore(with: histo!)
         let theta_score = thetaScore(between: center_line_theta, and: other_histo.maxTheta)
         return histo_score*theta_score
@@ -665,7 +665,7 @@ public actor OutlierGroup: CustomStringConvertible,
                                                                           of: self.bounds)
                 {
                     for group in nearby_groups {
-                        let otherHisto = await group.houghLineHistogram
+                        let otherHisto = group.houghLineHistogram
                         let histo_score = otherHisto.matchScore(with: selfHisto)
                         let overlap = await self.pixelOverlap(with: group)
                         maxOverlap = max(overlap * histo_score, maxOverlap)
@@ -677,7 +677,7 @@ public actor OutlierGroup: CustomStringConvertible,
                                                                       of: self.bounds)
                 {
                     for group in nearby_groups {
-                        let otherHisto = await group.houghLineHistogram
+                        let otherHisto = group.houghLineHistogram
                         let histo_score = otherHisto.matchScore(with: selfHisto)
                         let overlap = await self.pixelOverlap(with: group)
                         maxOverlap = max(overlap * histo_score, maxOverlap)
@@ -701,7 +701,7 @@ public actor OutlierGroup: CustomStringConvertible,
                 for group in nearby_groups {
                     if group.name == self.name { continue }
                     let center_line_theta = self.bounds.centerTheta(with: group.bounds)
-                    let otherHisto = await group.houghLineHistogram
+                    let otherHisto = group.houghLineHistogram
                     let other_theta_score = thetaScore(between: center_line_theta, and: otherHisto.maxTheta)
                     let self_theta_score = thetaScore(between: center_line_theta, and: selfHisto.maxTheta)
                     let histo_score = otherHisto.matchScore(with: selfHisto)
@@ -739,7 +739,7 @@ public actor OutlierGroup: CustomStringConvertible,
                 {
 
                     for group in nearby_groups {
-                        if let firstLine = await group.firstLine {
+                        if let firstLine = group.firstLine {
                             let difference = Double(abs(this_theta - firstLine.theta))
                             if difference < smallest_difference {
                                 smallest_difference = difference
@@ -753,7 +753,7 @@ public actor OutlierGroup: CustomStringConvertible,
                                                                       of: self.bounds)
                 {
                     for group in nearby_groups {
-                        if let firstLine = await group.firstLine {
+                        if let firstLine = group.firstLine {
                             let difference = Double(abs(this_theta - firstLine.theta))
                             if difference < smallest_difference {
                                 smallest_difference = difference
@@ -865,8 +865,8 @@ public actor OutlierGroup: CustomStringConvertible,
                                                                of: self.bounds)
         {
             for nearby_group in nearby_groups {
-                let score = await self.thetaHistoCenterLineScore(with: nearby_group,
-                                                                 selfHisto: selfHisto)
+                let score = self.thetaHistoCenterLineScore(with: nearby_group,
+                                                           selfHisto: selfHisto)
                 best_score = max(score, best_score)
                 if score == best_score {
                     bestGroup = nearby_group

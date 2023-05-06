@@ -13,28 +13,26 @@ public class OutlierGroupValueMatrix: Codable {
     public var values: [OutlierGroupValues] = []      // indexed by outlier group first then types later
     
     public func append(outlierGroup: OutlierGroup) async {
-        if let shouldPaint = await outlierGroup.shouldPaint {
+        if let shouldPaint = outlierGroup.shouldPaint {
             values.append(OutlierGroupValues(shouldPaint: shouldPaint.willPaint,
                                              values: await outlierGroup.decisionTreeValues))
         }
     }
     
     public var outlierGroupValues: ([OutlierFeatureData], [OutlierFeatureData]) {
-        get async {
-            var shouldPaintRet: [OutlierFeatureData] = []
-            var shoultNotPaintRet: [OutlierFeatureData] = []
-            for value in values {
-                let groupValues = OutlierFeatureData() { index in 
-                    return value.values[index]
-                }
-                if(value.shouldPaint) {
-                    shouldPaintRet.append(groupValues)
-                } else {
-                    shoultNotPaintRet.append(groupValues)
-                }
+        var shouldPaintRet: [OutlierFeatureData] = []
+        var shoultNotPaintRet: [OutlierFeatureData] = []
+        for value in values {
+            let groupValues = OutlierFeatureData() { index in 
+                return value.values[index]
             }
-            return (shouldPaintRet, shoultNotPaintRet)
+            if(value.shouldPaint) {
+                shouldPaintRet.append(groupValues)
+            } else {
+                shoultNotPaintRet.append(groupValues)
+            }
         }
+        return (shouldPaintRet, shoultNotPaintRet)
     }
 
     public var prettyJson: String? {

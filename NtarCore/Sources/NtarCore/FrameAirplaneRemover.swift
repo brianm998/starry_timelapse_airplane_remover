@@ -243,7 +243,7 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
                 await foreachOutlierGroup() { group in
                     await taskGroup.addTask() {
                         var apply = true
-                        if let shouldPaint = await group.shouldPaint {
+                        if let shouldPaint = group.shouldPaint {
                             switch shouldPaint {
                             case .userSelected(_):
                                 // leave user selected ones in place
@@ -269,7 +269,7 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
 
     public func clearOutlierGroupValueCaches() async {
         await foreachOutlierGroup() { group in
-            await group.clearFeatureValueCache()
+            group.clearFeatureValueCache()
             return .continue
         }
     }
@@ -439,7 +439,7 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
             Log.d("frame \(frame_index) loading outliers")
             if let outlierGroups = await outlierGroupLoader() {
                 for outlier in outlierGroups.members.values {
-                    await outlier.setFrame(self) 
+                    outlier.setFrame(self) 
                 }
                                                                   
                 self.outlier_groups = outlierGroups
@@ -914,7 +914,7 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
         }
 
         for (_, group) in outlier_groups.members {
-            if let reason = await group.shouldPaint {
+            if let reason = group.shouldPaint {
                 if reason.willPaint {
                     Log.d("frame \(frame_index) painting over group \(group) for reason \(reason)")
                     //let x = index % width;
