@@ -34,7 +34,7 @@ public actor OutlierGroup: CustomStringConvertible,
     public let size: UInt              // number of pixels in this outlier group
     public let bounds: BoundingBox     // a bounding box on the image that contains this group
     public let brightness: UInt        // the average amount per pixel of brightness over the limit 
-    public var lines: [Line]           // sorted lines from the hough transform of this outlier group
+    public let lines: [Line]           // sorted lines from the hough transform of this outlier group
 
     // pixel value is zero if pixel is not part of group,
     // otherwise it's the amount brighter this pixel was than those in the adjecent frames 
@@ -1029,7 +1029,7 @@ public actor OutlierGroup: CustomStringConvertible,
 
         //Log.d("lines_count \(lines_count) index \(index) persitentData.count \(persitentData.count)")
         
-        self.lines = []
+        var _lines: [Line] = []
         
         for i in 0..<lines_count {
             let theta_data = persitentData.subdata(in: index..<index+8)
@@ -1044,8 +1044,9 @@ public actor OutlierGroup: CustomStringConvertible,
             let count = count_data.withUnsafeBytes { $0.load(as: Int.self) }
             index += 8
             
-            lines.append(Line(theta: theta, rho: rho, count: count))
+            _lines.append(Line(theta: theta, rho: rho, count: count))
         }
+        self.lines = _lines
 
         let pixels_count_data = persitentData.subdata(in: index..<index+8)
         let pixels_count = pixels_count_data.withUnsafeBytes { $0.load(as: Int.self).bigEndian }
