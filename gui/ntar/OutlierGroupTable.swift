@@ -60,9 +60,9 @@ struct OutlierGroupTableRow: Identifiable {
     let dt_neighboringInterFrameOutlierThetaScore: Double
 
     init(_ group: OutlierGroup) async {
-        name = await group.name
-        size = await group.size
-        let shouldPaint = await group.shouldPaint
+        name = group.name
+        size = group.size
+        let shouldPaint = group.shouldPaint
         if let shouldPaint = shouldPaint {
             willPaint = shouldPaint.willPaint
         } else {
@@ -352,7 +352,7 @@ struct OutlierGroupTable: View {
                                 outlierView.isSelected = false
                             }
                             
-                            var outlier_is_selected = false
+                            //var outlier_is_selected = false
                             for value in newValue {
                                 if let row = viewModel.outlierGroupTableRows.first(where: { $0.id == value }) {
                                     Log.d("selected row \(row.name)")

@@ -313,7 +313,7 @@ public actor FinalProcessor {
         try await self.finishAll() 
         Log.i("FINAL THREAD done finishing all remaining frames")
 
-        if let frameCheckClosure = callbacks.frameCheckClosure {
+        if let _ = callbacks.frameCheckClosure {
             // XXX there is a race condition here if we are in gui
             // mode where we add each frame off to the gui for processing
             // XXX make this better

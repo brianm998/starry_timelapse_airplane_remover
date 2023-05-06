@@ -519,7 +519,7 @@ struct ContentView: View {
                        let _ = Log.d("isDragging")
                        isDragging = true
                        let location = gesture.location
-                       if let drag_start = drag_start {
+                       if drag_start != nil {
                            // updating during drag is too slow
                            drag_end = location
                        } else {

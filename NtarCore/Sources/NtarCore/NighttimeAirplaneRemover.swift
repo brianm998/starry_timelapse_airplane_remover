@@ -61,7 +61,7 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
         self.is_gui = isGUI     // XXX make this better
         self.writeOutputFiles = writeOutputFiles
         
-        var _basename = "\(config.image_sequence_dirname)-ntar-v-\(config.ntar_version)"
+        let _basename = "\(config.image_sequence_dirname)-ntar-v-\(config.ntar_version)"
         self.basename = _basename.replacingOccurrences(of: ".", with: "_")
         outlier_output_dirname = "\(config.outputPath)/\(basename)-outliers"
         preview_output_dirname = "\(config.outputPath)/\(basename)-previews"
@@ -154,7 +154,7 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
                 IMAGE_HEIGHT = Double(test_image.height)
 
                 image_bytesPerPixel = test_image.bytesPerPixel
-                Log.d("first frame to get sizes: image_width \(String(describing: image_width)) image_height \(String(describing: image_height)) image_bytesPerPixel \(image_bytesPerPixel)")
+                Log.d("first frame to get sizes: image_width \(String(describing: image_width)) image_height \(String(describing: image_height)) image_bytesPerPixel \(String(describing: image_bytesPerPixel))")
             } catch {
                 Log.e("first frame to get size: \(error)")
             }

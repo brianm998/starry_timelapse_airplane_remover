@@ -29,7 +29,7 @@ public var currentClassifier: NamedOutlierGroupClassifier? = loadCurrentClassifi
 @available(macOS 10.15, *)
 public func loadCurrentClassifiers() -> NamedOutlierGroupClassifier? {
     let ret = decisionTrees[currentClassifierName]
-    Log.i("loaded current classifier \(ret)")
+    Log.i("loaded current classifier \(String(describing: ret))")
     return ret
 }
 

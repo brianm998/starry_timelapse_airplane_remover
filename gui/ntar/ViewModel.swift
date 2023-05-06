@@ -206,13 +206,13 @@ public class ViewModel: ObservableObject {
             Log.d("got \(outlierGroups.count) groups for frame \(frame.frame_index)")
             var new_outlier_groups: [OutlierGroupView] = []
             for group in outlierGroups {
-                if let cgImage = await group.testImage() { // XXX heap corruption here :(
+                if let cgImage = group.testImage() { // XXX heap corruption here :(
                     var size = CGSize()
                     size.width = CGFloat(cgImage.width)
                     size.height = CGFloat(cgImage.height)
                     let outlierImage = NSImage(cgImage: cgImage, size: size)
                     
-                    let groupView = await OutlierGroupView(group: group,
+                    let groupView = OutlierGroupView(group: group,
                                                            name: group.name,
                                                            bounds: group.bounds,
                                                            image: outlierImage,

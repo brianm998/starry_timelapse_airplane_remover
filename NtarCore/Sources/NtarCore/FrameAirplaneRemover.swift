@@ -864,7 +864,7 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
             }
         }
         self.state = .readyForInterFrameProcessing
-        Log.i("frame \(frame_index) has found \(outlier_groups?.members.count) outlier groups to consider")
+        Log.i("frame \(frame_index) has found \(String(describing: outlier_groups?.members.count)) outlier groups to consider")
     }
 
     public func pixelatedImage() async throws -> PixelatedImage? {
