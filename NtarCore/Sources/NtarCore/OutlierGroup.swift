@@ -25,8 +25,7 @@ internal var IMAGE_HEIGHT: Double?
 public actor OutlierGroup: CustomStringConvertible,
                            Hashable,
                            Equatable,
-                           Comparable,
-                           Decodable // can't be an actor and codable :(
+                           Comparable
 {
     public let name: String
     public let size: UInt              // number of pixels in this outlier group
@@ -211,68 +210,6 @@ public actor OutlierGroup: CustomStringConvertible,
         
         return 0
     }
-
-
-    
-    // manual Decodable conformance so this class can be an actor
-    // Encodable conformance is left to the non-actor class OutlierGroupEncodable
-    enum CodingKeys: String, CodingKey {
-        case name
-        case size
-        case bounds
-        case brightness
-        case lines
-        case pixels
-        case max_pixel_distance
-        case surfaceAreaToSizeRatio
-        case shouldPaint
-        case frame_index
-    }
-
-    // XXX this is slow as fuck
-    public init(from decoder: Decoder) throws {
-	let data = try decoder.container(keyedBy: CodingKeys.self)
-
-        self.name = try data.decode(String.self, forKey: .name)
-        self.size = try data.decode(UInt.self, forKey: .size)
-        self.bounds = try data.decode(BoundingBox.self, forKey: .bounds)
-        self.brightness = try data.decode(UInt.self, forKey: .brightness)
-        self.pixels = try data.decode(Array<UInt32>.self, forKey: .pixels) // XXX UInt16?
-        self.max_pixel_distance = try data.decode(UInt16.self, forKey: .max_pixel_distance)
-        self.surfaceAreaToSizeRatio = try data.decode(Double.self, forKey: .surfaceAreaToSizeRatio)
-        self.shouldPaint = try data.decode(PaintReason.self, forKey: .shouldPaint) // XXX move out
-        self.frame_index = try data.decode(Int.self, forKey: .frame_index)
-
-        if false {
-            // XXX this calculates the lines instead of loading them
-            // however it appears to be slower
-            
-            // the lines are calculated from saved data, not saved themselves
-            let transform = HoughTransform(data_width: bounds.width,
-                                           data_height: bounds.height,
-                                           input_data: pixels,
-                                           max_pixel_distance: max_pixel_distance)
-
-            // we want all the lines, all of them.
-            self.lines = transform.lines(min_count: 1)
-        } else {
-            self.lines = try data.decode(Array<Line>.self, forKey: .lines)
-        }
-    }
-
-    public func encodable() -> OutlierGroupEncodable {
-        return OutlierGroupEncodable(name: self.name,
-                                     size: self.size,
-                                     bounds: self.bounds,
-                                     brightness: self.brightness,
-                                     lines: self.lines,
-                                     pixels: self.pixels,
-                                     max_pixel_distance: self.max_pixel_distance,
-                                     surfaceAreaToSizeRatio: self.surfaceAreaToSizeRatio,
-                                     shouldPaint: self.shouldPaint,
-                                     frame_index: self.frame_index)
-    }
-
 
     // decision code moved from extension because of swift bug:
     // https://forums.swift.org/t/actor-isolation-delegates-in-extensions/60571/6
@@ -1193,74 +1130,6 @@ public actor OutlierGroup: CustomStringConvertible,
                                     contents: json_data,
                                     attributes: nil)
         }
-    }
-}
-
-/*
- xxx XXX XXX
- XXX XXX XXX
- XXX XXX XXX
-
- Plan for ditching BinaryCodable for saving outlier groups:
-
- instead of writing out a single file for all outliers in a frame,
- create a directory named by the frame index and each file in it
- is a file named by the name of the outlier group contained within.
-
- move should paint reason to a separate json sidecar '-should-paint' file
-
- read and write a binary structure like this
- 
- size: UInt           (64 bits)
- bounds: BoundingBox  (four 64 bit Ints)
- brightness: UInt     (64 bits)
- number_lines:        (64 bits)
- lines: [Line]        [three 64 bit values]
- number_pixels        (64 bits)
- pixels: [UInt32]
- max_pixel_distance: UInt16
- surfaceAreaToSizeRatio: Double (64 bits)
-
- 
- XXX XXX XXX
- XXX XXX XXX
- XXX XXX XXX
- */
-// this class is a property by property copy of an OutlierGroup,
-// but not an actor so it's both encodable and usable by the view layer
-public class OutlierGroupEncodable: Encodable {
-    public let name: String
-    public let size: UInt
-    public let bounds: BoundingBox
-    public let brightness: UInt   
-    public let lines: [Line]
-    public let pixels: [UInt32]   
-    public let max_pixel_distance: UInt16
-    public let surfaceAreaToSizeRatio: Double
-    public var shouldPaint: PaintReason?
-    public let frame_index: Int
-
-    public init(name: String,
-                size: UInt,
-                bounds: BoundingBox,
-                brightness: UInt,
-                lines: [Line],
-                pixels: [UInt32],
-                max_pixel_distance: UInt16,
-                surfaceAreaToSizeRatio: Double,
-                shouldPaint: PaintReason?,
-                frame_index: Int)
-    {
-        self.name = name
-        self.size = size
-        self.bounds = bounds
-        self.brightness = brightness
-        self.lines = lines
-        self.pixels = pixels
-        self.max_pixel_distance = max_pixel_distance
-        self.surfaceAreaToSizeRatio = surfaceAreaToSizeRatio
-        self.shouldPaint = shouldPaint
-        self.frame_index = frame_index
     }
 }
 
