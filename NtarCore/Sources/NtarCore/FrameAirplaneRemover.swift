@@ -215,17 +215,7 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
     }
 
     // write out full OutlierGroup codable binary
-    // large, slow, but lots of data
-
-    /*
-     XXX rename this and rewrite a new version to write out all the outliers
-
-     to a file named by the frame index of this frame and populated with files
-     named by the outlier name in the new format
-
-     make json sidecar file for paintability
-     
-     */
+    // large, still not fast, but lots of data
     public func writeOutliersBinary() async {
         if config.writeOutlierGroupFiles,
            let output_dirname = self.outlier_output_dirname
@@ -237,61 +227,7 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
             }                
         }
     }
-
-    public func writeOutliersBinary_BinaryCodable() {
-        if config.writeOutlierGroupFiles,
-           let output_dirname = self.outlier_output_dirname
-        {
-            Log.d("frame \(frame_index) writing outliers to binary")
-            // write to binary outlier data
-            self.outlier_groups?.prepareForEncoding() {
-                if let data = self.outlierBinaryData() {
-                    let filename = "\(self.frame_index)_outliers.bin"
-                    let full_path = "\(output_dirname)/\(filename)"
-                    do {
-                        if file_manager.fileExists(atPath: full_path) {
-                            try file_manager.removeItem(atPath: full_path)
-                            // make this overwrite for new user changes to existing data
-                            Log.i("overwriting \(full_path)")
-                        } 
-                        Log.i("creating \(full_path)")
-                        
-                        file_manager.createFile(atPath: full_path, contents: data, attributes: nil)
-                    } catch {
-                        Log.e("\(error)")
-                    }
-                } else {
-                    Log.e("frame \(self.frame_index) has no outlier binary data :(")
-                }
-            }
-
-        }
-    }
     
-    public func writeOutliersJson() {
-        if config.writeOutlierGroupFiles,
-           let output_dirname = self.outlier_output_dirname
-        {
-            // write to outlier json
-            let json_data = self.outlierJsonData()
-            //Log.e(json_string)
-            
-            let filename = "\(self.frame_index)_outliers.json"
-            let full_path = "\(output_dirname)/\(filename)"
-            do {
-                if file_manager.fileExists(atPath: full_path) {
-                    try file_manager.removeItem(atPath: full_path)
-                    // make this overwrite for new user changes to existing json
-                    Log.i("overwriting \(full_path)")
-                } 
-                Log.i("creating \(full_path)")                      
-                file_manager.createFile(atPath: full_path, contents: json_data, attributes: nil)
-            } catch {
-                Log.e("\(error)")
-            }
-        }
-    }
-
     public func userSelectAllOutliers(toShouldPaint should_paint: Bool,
                                       between startLocation: CGPoint,
                                       and endLocation: CGPoint) async
@@ -548,26 +484,6 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
         self.outlier_groups = try decoder.decode(OutlierGroups.self, from: data)
     }
     
-    func outlierBinaryData() -> Data? {
-        let encoder = BinaryEncoder()
-        Log.d("frame \(frame_index) about to encode outlier data")
-        if let outlier_groups = outlier_groups {
-            do {
-                Log.i("frame \(frame_index) REALLY about to encode outlier data \(String(describing: outlier_groups.encodable_groups?.count))")
-                let start_time = NSDate().timeIntervalSince1970
-                let ret =  try encoder.encode(outlier_groups)
-                let end_time = NSDate().timeIntervalSince1970
-                Log.i("frame \(frame_index) done encoding outlier data \(String(describing: outlier_groups.encodable_groups?.count)) outliers after \(end_time - start_time) seconds")
-                return ret
-            } catch {
-                Log.e("\(error)")
-            }
-        } else {
-            Log.e("no outlier groups to encode to binary data")
-        }
-        return nil
-    }
-
     func outlierJsonData() -> Data {
         let encoder = JSONEncoder()
         encoder.nonConformingFloatEncodingStrategy = .convertToString(positiveInfinity: "inf",
