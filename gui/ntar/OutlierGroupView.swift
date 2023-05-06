@@ -7,7 +7,7 @@ import NtarCore
 
 class OutlierGroupView: ObservableObject {
 
-    init (group: OutlierGroupEncodable,
+    init (group: OutlierGroup,
           name: String,
           bounds: BoundingBox,
           image: NSImage,
@@ -23,7 +23,7 @@ class OutlierGroupView: ObservableObject {
     }
 
     var isSelected = false
-    let group: OutlierGroupEncodable
+    let group: OutlierGroup
     let name: String
     let bounds: BoundingBox
     let image: NSImage

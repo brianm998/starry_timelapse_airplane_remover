@@ -161,15 +161,11 @@ public class ViewModel: ObservableObject {
             }
 
             if self.frames[frame.frame_index].outlierViews == nil {
-                await frame.outlier_groups?.prepareForEncoding() {
-                    Task {
-                        await self.setOutlierGroups(forFrame: frame)
+                await self.setOutlierGroups(forFrame: frame)
 
-                        // refresh ui 
-                        await MainActor.run {
-                            self.objectWillChange.send()
-                        }
-                    } 
+                // refresh ui 
+                await MainActor.run {
+                    self.objectWillChange.send()
                 }
             }
         }
@@ -210,14 +206,13 @@ public class ViewModel: ObservableObject {
             Log.d("got \(outlierGroups.count) groups for frame \(frame.frame_index)")
             var new_outlier_groups: [OutlierGroupView] = []
             for group in outlierGroups {
-                let encodable_group = await group.encodable()
                 if let cgImage = await group.testImage() { // XXX heap corruption here :(
                     var size = CGSize()
                     size.width = CGFloat(cgImage.width)
                     size.height = CGFloat(cgImage.height)
                     let outlierImage = NSImage(cgImage: cgImage, size: size)
                     
-                    let groupView = await OutlierGroupView(group: encodable_group,
+                    let groupView = await OutlierGroupView(group: group,
                                                            name: group.name,
                                                            bounds: group.bounds,
                                                            image: outlierImage,

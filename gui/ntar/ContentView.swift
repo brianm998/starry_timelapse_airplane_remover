@@ -462,8 +462,7 @@ struct ContentView: View {
                                               Task {
                                                   if let frame = viewModel.currentFrame,
                                                      let outlier_groups = await frame.outlier_groups,
-                                                     let groups = outlier_groups.groups,
-                                                     let outlier_group = groups[outlierViewModel.group.name]
+                                                     let outlier_group = outlier_groups.members[outlierViewModel.group.name]
                                                   {
                                                       // update the actor in the background
                                                       await outlier_group.shouldPaint(reason)
