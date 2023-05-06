@@ -182,6 +182,7 @@ struct Ntar: ParsableCommand {
         The default of all cpus works good in most cases.
         May need to be reduced to a lower value if to consume less ram on some machines.
         """)
+    // XXX this isn't respected when loading from a config
     var numConcurrentRenders: Int = ProcessInfo.processInfo.activeProcessorCount
 
     @Flag(name: [.customShort("w"), .customLong("write-outlier-group-files")],
@@ -254,6 +255,7 @@ struct Ntar: ParsableCommand {
                     config = try await Config.read(fromJsonFilename: fuck)
                     dispatch_group.leave()
                 }
+                TaskRunner.maxConcurrentTasks = UInt(config.numConcurrentRenders)
                 dispatch_group.wait()
             } else {
                 // here we are processing a new image sequence 

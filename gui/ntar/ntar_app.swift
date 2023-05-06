@@ -60,6 +60,8 @@ import NtarCore
     - loading outliers
     - have outliers
     - saving
+
+  - show progress in saving in UI
  */
 
 @main
@@ -348,7 +350,7 @@ class ntar_app: App {
                         await MainActor.run {
                             Task {
                                 self.viewModel.current_frame_image = Image(nsImage: baseImage)
-                                await self.viewModel.update()
+                                self.viewModel.update()
                             }
                         }
                     }
@@ -359,7 +361,7 @@ class ntar_app: App {
 
             //self.viewModel.frame = new_frame
             // Perform UI updates
-            await self.viewModel.update()
+            self.viewModel.update()
         } else {
             await MainActor.run {
                 self.viewModel.objectWillChange.send()

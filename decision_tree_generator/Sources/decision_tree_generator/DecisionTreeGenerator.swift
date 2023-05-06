@@ -1,7 +1,6 @@
 import Foundation
 import NtarCore
 import ArgumentParser
-import BinaryCodable
 import CryptoKit
 
 // number of levels (groups of '    ') of indentation to start with 

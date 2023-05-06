@@ -1,6 +1,5 @@
 import Foundation
 import CoreGraphics
-import BinaryCodable
 import Cocoa
 
 /*
@@ -176,7 +175,7 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
 
     // write out just the OutlierGroupValueMatrix, which just what
     // the decision tree needs, and not very large
-    public func writeOutlierValuesBinary() async {
+    public func writeOutlierValuesCSV() async throws {
         if config.writeOutlierGroupFiles,
            let output_dirname = self.outlier_output_dirname
         {
@@ -190,25 +189,7 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
                 }
             }
 
-            let filename = "\(self.frame_index)_outlier_values.bin"
-            let full_path = "\(output_dirname)/\(filename)"
-
-            //if let json = valueMatrix.prettyJson { print(json) }
-            
-            let encoder = BinaryEncoder()
-            Log.d("frame \(frame_index) about to encode outlier data")
-            do {
-                let data = try encoder.encode(valueMatrix)
-                if file_manager.fileExists(atPath: full_path) {
-                    try file_manager.removeItem(atPath: full_path)
-                    // make this overwrite for new user changes to existing data
-                    Log.i("overwriting \(full_path)")
-                } 
-                Log.i("creating \(full_path)")                      
-                file_manager.createFile(atPath: full_path, contents: data, attributes: nil)
-            } catch {
-                Log.e("\(error)")
-            }
+            try valueMatrix.writeCSV(to: "\(output_dirname)/\(self.frame_index)")
         }
     }
 
@@ -997,7 +978,7 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
         await self.writeOutliersBinary()
 
         // write out the classifier feature data for this data point
-        await writeOutlierValuesBinary()
+        try await writeOutlierValuesCSV()
 
         if !self.writeOutputFiles {
             self.state = .complete

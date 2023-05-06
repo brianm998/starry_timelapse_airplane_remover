@@ -1,7 +1,6 @@
 import Foundation
 import NtarCore
 import ArgumentParser
-import BinaryCodable
 import CryptoKit
 
 var start_time: Date = Date()
@@ -326,129 +325,6 @@ struct decision_tree_generator: ParsableCommand {
         dispatch_group.wait()
     }
 
-    
-    // use an exising decision tree to see how well it does against a given sample
-    // this works against config.json files (the slow way) as well as raw data
-    func run_verification_old() {
-        
-        let dispatch_group = DispatchGroup()
-        dispatch_group.enter()
-        Task {
-            
-            var tasks: [Task<TreeTestResults?,Error>] = []
-            
-            var allResults: [TreeTestResults] = []
-            for json_config_file_name in input_filenames {
-                let task: Task<TreeTestResults?,Error> = try await runThrowingTask() {
-                    if json_config_file_name.hasSuffix("config.json") {
-                        do {
-                            return try await runVerification(basedUpon: json_config_file_name)
-                        } catch {
-                            Log.e("\(error)")
-                        }
-                    } else {
-                        if file_manager.fileExists(atPath: json_config_file_name) {
-                            var number_good: [String: Int] = [:]
-                            var number_bad: [String: Int] = [:]
-                            for (treeKey, _) in decisionTrees {
-                                number_good[treeKey] = 0
-                                number_bad[treeKey] = 0
-                            }
-                            
-                            // load a list of OutlierGroupValueMatrix
-                            // and get outlierGroupValues from them
-                            let contents = try file_manager.contentsOfDirectory(atPath: json_config_file_name)
-                            let decoder = BinaryDecoder()
-                            for file in contents {
-                                if file.hasSuffix("_outlier_values.bin") {
-                                    let filename = "\(json_config_file_name)/\(file)"
-                                    do {
-                                        // load data
-                                        // process a frames worth of outlier data
-                                        let imageURL = NSURL(fileURLWithPath: filename, isDirectory: false)
-                                        
-                                        let (data, _) = try await URLSession.shared.data(for: URLRequest(url: imageURL as URL))
-                                        
-                                        let matrix = try decoder.decode(OutlierGroupValueMatrix.self, from: data)
-                                        
-                                        for values in matrix.values {
-                                            // XXX how to reference hash properly here ???
-                                            // could search for classes that conform to a new protocol
-                                            // that defines this specific method, but it's static :(
-                                            await withLimitedTaskGroup(of: (treeKey:String, shouldPaint:Bool).self) { taskGroup in
-                                                for (treeKey, tree) in decisionTrees {
-                                                    await taskGroup.addTask() {
-                                                        let decisionTreeShouldPaint =  
-                                                          await tree.classification(of: matrix.types,
-                                                                                    and: values.values) > 0
-                                                        return (treeKey, decisionTreeShouldPaint == values.shouldPaint)
-                                                    }
-                                                }
-                                                await taskGroup.forEach() { result in
-                                                    if result.shouldPaint {
-                                                        number_good[result.treeKey]! += 1
-                                                    } else {
-                                                        number_bad[result.treeKey]! += 1
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    } catch {
-                                        Log.e("\(error)")
-                                    }
-                                }
-                            }
-                            // XXX combine these all
-                            
-                            //let total = number_good + number_bad
-                            //let percentage_good = Double(number_good)/Double(total)*100
-                            //Log.i("for \(json_config_file_name), out of \(total) \(percentage_good)% success good \(number_good) vs bad \(number_bad)")
-                            
-                            return TreeTestResults(numberGood: number_good,
-                                                   numberBad: number_bad)
-                        }
-                    }
-                    return nil
-                }
-                tasks.append(task)
-                
-                for task in tasks {
-                    let response = try await task.value
-                    if let response = response {
-                        allResults.append(response)
-                    }
-                }
-                var number_good:[String:Int] = [:]
-                var number_bad:[String:Int] = [:]
-                for (treeKey, _) in decisionTrees {
-                    number_good[treeKey] = 0
-                    number_bad[treeKey] = 0
-                }
-                
-                for result in allResults {
-                    for (treeKey, _) in decisionTrees {
-                        number_good[treeKey]! += result.numberGood[treeKey]!
-                        number_bad[treeKey]! += result.numberBad[treeKey]!
-                    }
-                }
-                var outputResults: [DecisionTreeResult] = []
-                for (treeKey, _) in decisionTrees {
-                    let total = number_good[treeKey]! + number_bad[treeKey]!
-                    let percentage_good = Double(number_good[treeKey]!)/Double(total)*100
-                    let message = "For decision Tree \(treeKey) out of a total of \(total) outlier groups, \(percentage_good)% success good \(number_good[treeKey]!) vs bad \(number_bad[treeKey]!)"
-                    outputResults.append(DecisionTreeResult(score: percentage_good,
-                                                            message: message))
-                }
-                // sort these on output by percentage_good
-                for result in outputResults.sorted() {
-                    Log.i(result.message)
-                }
-            }
-            dispatch_group.leave()
-        }
-        dispatch_group.wait()
-    }
-
     // read outlier group values from a stored set of files listed by a config.json
     // the reads the full outliers from file, and can be slow
     private func read(fromConfig json_config_file_name: String) async throws
@@ -714,82 +590,16 @@ struct decision_tree_generator: ParsableCommand {
         var positiveData: [OutlierFeatureData] = []
         var negativeData: [OutlierFeatureData] = []
 
-        try await withLimitedThrowingTaskGroup(of: ClassifiedData.self) { taskGroup in
-            // load a list of OutlierGroupValueMatrix
-            // and get outlierGroupValues from them
-            let contents = try file_manager.contentsOfDirectory(atPath: dirname)
-            for file in contents {
-                if file.hasSuffix("_outlier_values.bin") {
-                    let filename = "\(dirname)/\(file)"
-                    
-                    try await taskGroup.addTask() {
-                        return try await loadDataFrom(filename: filename)
-                    }
-                }
-            }
-            try await taskGroup.forEach() { response in
-                positiveData += response.positiveData
-                negativeData += response.negativeData
-            }
+        if let matrix = try await OutlierGroupValueMatrix(from: dirname) {
+            positiveData = matrix.positiveValues.map { OutlierFeatureData($0) }
+            negativeData = matrix.negativeValues.map { OutlierFeatureData($0) }
+        } else {
+            throw "fuck"
         }
         return ClassifiedData(
           positiveData: positiveData,
           negativeData: negativeData)
     }
-    
-    func loadDataFrom(filename: String) async throws -> ClassifiedData {
-        var local_positive_data: [OutlierFeatureData] = []
-        var local_negative_data: [OutlierFeatureData] = []
-        
-        Log.d("\(filename) loading data")
-        
-        // load data
-        // process a frames worth of outlier data
-        let imageURL = NSURL(fileURLWithPath: filename, isDirectory: false)
-        
-        let (data, _) = try await URLSession.shared.data(for: URLRequest(url: imageURL as URL))
-        
-        //Log.d("\(file) data loaded")
-        let decoder = BinaryDecoder()
-
-        let matrix = try decoder.decode(OutlierGroupValueMatrix.self, from: data)
-
-        var usable = true
-        
-        // XXX make sure the types in the matrix match up with what we expect
-        for type in OutlierGroup.Feature.allCases {
-            if type.sortOrder < matrix.types.count {
-                if matrix.types[type.sortOrder] != type {
-                    Log.e("@ sort order \(type.sortOrder) \(matrix.types[type.sortOrder]) != \(type), cannot use this data")
-                    usable = false
-                }
-            } else {
-                Log.e("@ sort order \(type.sortOrder) is out of range, cannot use this data")
-                usable = false
-            }
-        }
-
-        if usable {
-            for values in matrix.values {
-                let valueMap = OutlierFeatureData() { index in
-                    return values.values[index]
-                }
-                if values.shouldPaint {
-                    local_positive_data.append(valueMap)
-                } else {
-                    local_negative_data.append(valueMap)
-                }
-            }
-        }
-            
-        //Log.i("got \(local_positive_data.count)/\(local_negative_data.count) test data from \(file)")
-        
-        return ClassifiedData(
-          positiveData: local_positive_data,
-          negativeData: local_negative_data)
-
-    }
-
     
     func writeTree(withTypes decisionTypes: [OutlierGroup.Feature],
                    withTrainingData trainingData: ClassifiedData,

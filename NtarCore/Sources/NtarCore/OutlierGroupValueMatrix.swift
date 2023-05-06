@@ -2,52 +2,127 @@ import Foundation
 
 // used for storing only decision tree data for all of the outlier groups in a frame
 @available(macOS 10.15, *) 
-public class OutlierGroupValueMatrix: Codable {
-    public var types: [OutlierGroup.Feature] = OutlierGroup.decisionTreeValueTypes
-
-    public struct OutlierGroupValues: Codable {
-        public let shouldPaint: Bool
-        public let values: [Double]
-    }
+public class OutlierGroupValueMatrix {
     
-    public var values: [OutlierGroupValues] = []      // indexed by outlier group first then types later
+    public var types: [OutlierGroup.Feature]
+
+    public var positiveValues: [[Double]]
+    public var negativeValues: [[Double]]
     
     public func append(outlierGroup: OutlierGroup) async {
         if let shouldPaint = outlierGroup.shouldPaint {
-            values.append(OutlierGroupValues(shouldPaint: shouldPaint.willPaint,
-                                             values: await outlierGroup.decisionTreeValues))
-        }
-    }
-    
-    public var outlierGroupValues: ([OutlierFeatureData], [OutlierFeatureData]) {
-        var shouldPaintRet: [OutlierFeatureData] = []
-        var shoultNotPaintRet: [OutlierFeatureData] = []
-        for value in values {
-            let groupValues = OutlierFeatureData() { index in 
-                return value.values[index]
-            }
-            if(value.shouldPaint) {
-                shouldPaintRet.append(groupValues)
+            let values = await outlierGroup.decisionTreeValues
+            if shouldPaint.willPaint {
+                positiveValues.append(values)
             } else {
-                shoultNotPaintRet.append(groupValues)
+                negativeValues.append(values)
             }
         }
-        return (shouldPaintRet, shoultNotPaintRet)
     }
 
-    public var prettyJson: String? {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = .prettyPrinted
-        
-        do {
-            let data = try encoder.encode(self)
-            if let json_string = String(data: data, encoding: .utf8) {
-                return json_string
-            }
-        } catch {
-            Log.e("\(error)")
+    public static var types_filename = "types.csv"
+    public static var positive_data_filename = "positive_data.csv"
+    public static var negative_data_filename = "negative_data.csv"
+
+    public init() {
+        self.types = OutlierGroup.decisionTreeValueTypes
+        self.positiveValues = []
+        self.negativeValues = []
+    }
+    
+    public init?(from dir: String) async throws {
+        let types_csv_filename = "\(dir)/\(OutlierGroupValueMatrix.types_filename)"
+        if file_manager.fileExists(atPath: types_csv_filename) {
+
+            let url = NSURL(fileURLWithPath: types_csv_filename,
+                            isDirectory: false)
+
+            let (data, _) = try await URLSession.shared.data(for: URLRequest(url: url as URL))
+            let csv_string = String(decoding: data, as: UTF8.self)
+            self.types = csv_string.components(separatedBy: ",").map { OutlierGroup.Feature(rawValue: $0)! }
+        } else {
+            return nil
         }
-        return nil
+
+        let positive_filename = "\(dir)/\(OutlierGroupValueMatrix.positive_data_filename)"
+        if file_manager.fileExists(atPath: positive_filename) {
+
+            let url = NSURL(fileURLWithPath: positive_filename,
+                            isDirectory: false)
+
+            let (data, _) = try await URLSession.shared.data(for: URLRequest(url: url as URL))
+            let positive_string = String(decoding: data, as: UTF8.self)
+            self.positiveValues = positive_string.components(separatedBy: "\n").map { line in
+                line.components(separatedBy: ",").map { NSString(string: $0).doubleValue }
+            }
+        } else {
+            return nil
+        }
+
+        let negative_filename = "\(dir)/\(OutlierGroupValueMatrix.negative_data_filename)"
+        if file_manager.fileExists(atPath: negative_filename) {
+
+            let url = NSURL(fileURLWithPath: negative_filename,
+                            isDirectory: false)
+
+            let (data, _) = try await URLSession.shared.data(for: URLRequest(url: url as URL))
+            let negative_string = String(decoding: data, as: UTF8.self)
+            self.negativeValues = negative_string.components(separatedBy: "\n").map { line in
+                line.components(separatedBy: ",").map { NSString(string: $0).doubleValue }
+            }
+        } else {
+            return nil
+        }
+    }
+
+    public func writeCSV(to dir: String) throws {
+
+        // write out types file
+        let types_csv = self.types.map { $0.rawValue }.joined(separator:",").data(using: .utf8)
+        let types_csv_filename = "\(dir)/\(OutlierGroupValueMatrix.types_filename)"
+        if file_manager.fileExists(atPath: types_csv_filename) {
+            try file_manager.removeItem(atPath: types_csv_filename)
+        }
+        file_manager.createFile(atPath: types_csv_filename,
+                                contents: types_csv,
+                                attributes: nil)
+        
+        var positive_string = ""
+
+        // write out positive values file
+        for values in positiveValues {
+            let line = values.map { "\($0)" }.joined(separator: ",")
+            positive_string += line
+            positive_string += "\n"
+        }
+        let positive_data = positive_string.data(using: .utf8)
+        let positive_filename = "\(dir)/\(OutlierGroupValueMatrix.positive_data_filename)"
+        if file_manager.fileExists(atPath: positive_filename) {
+            try file_manager.removeItem(atPath: positive_filename)
+        }
+        file_manager.createFile(atPath: positive_filename,
+                                contents: positive_data,
+                                attributes: nil)
+
+        // write out negative values file
+        var negative_string = ""
+
+        for values in negativeValues {
+            let line = values.map { "\($0)" }.joined(separator: ",")
+            negative_string += line
+            negative_string += "\n"
+        }
+        let negative_data = negative_string.data(using: .utf8)
+        let negative_filename = "\(dir)/\(OutlierGroupValueMatrix.negative_data_filename)"
+        if file_manager.fileExists(atPath: negative_filename) {
+            try file_manager.removeItem(atPath: negative_filename)
+        }
+        file_manager.createFile(atPath: negative_filename,
+                                contents: negative_data,
+                                attributes: nil)
     }
 }
 
+
+
+fileprivate let file_manager = FileManager.default
