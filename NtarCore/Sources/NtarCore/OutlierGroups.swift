@@ -19,23 +19,23 @@ import Cocoa
 public class OutlierGroups {
     
     public let frame_index: Int
-    public var groups: [String: OutlierGroup] // keyed by name
+    public var members: [String: OutlierGroup] // keyed by name
 
     public init(frame_index: Int,
-                groups: [String: OutlierGroup])
+                members: [String: OutlierGroup])
     {
         self.frame_index = frame_index
-        self.groups = groups
+        self.members = members
     }
     
     public func write(to dir: String) async throws {
-        Log.d("loaded frame \(self.frame_index) with \(self.groups.count) outlier groups from binary file")
+        Log.d("loaded frame \(self.frame_index) with \(self.members.count) outlier groups from binary file")
 
         let frame_dir = "\(dir)/\(frame_index)"
         
         try mkdir(frame_dir)
 
-        for group in groups.values {
+        for group in members.values {
             try await group.writeToFile(in: frame_dir)
         }
     }
@@ -53,7 +53,7 @@ public class OutlierGroups {
                 data_bin_files.append(file)
             }
         }
-        self.groups = try await withLimitedThrowingTaskGroup(of: OutlierGroup.self) { taskGroup in
+        self.members = try await withLimitedThrowingTaskGroup(of: OutlierGroup.self) { taskGroup in
             var groups: [String: OutlierGroup] = [:]
             for file in data_bin_files {
                 // load file into data

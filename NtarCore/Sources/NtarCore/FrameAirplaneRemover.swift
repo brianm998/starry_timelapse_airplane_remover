@@ -82,7 +82,7 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
     
     public func outlierGroups() -> [OutlierGroup]? {
         if let outlier_groups = outlier_groups {
-            let groups = outlier_groups.groups
+            let groups = outlier_groups.members
             return groups.map {$0.value}
         }
         return nil
@@ -90,7 +90,7 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
 
     public func outlierGroups(within distance: Double, of bounding_box: BoundingBox) -> [OutlierGroup]? {
         if let outlier_groups = outlier_groups {
-            let groups = outlier_groups.groups
+            let groups = outlier_groups.members
             var ret: [OutlierGroup] = []
             for (_, group) in groups {
                 if group.bounds.centerDistance(to: bounding_box) < distance {
@@ -304,7 +304,7 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
         }
     }
     
-    var outlierGroupCount: Int { return outlier_groups?.groups.count ?? 0 }
+    var outlierGroupCount: Int { return outlier_groups?.members.count ?? 0 }
     
     public let output_filename: String
 
@@ -438,7 +438,7 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
         if self.outlier_groups == nil {
             Log.d("frame \(frame_index) loading outliers")
             if let outlierGroups = await outlierGroupLoader() {
-                for outlier in outlierGroups.groups.values {
+                for outlier in outlierGroups.members.values {
                     await outlier.setFrame(self) 
                 }
                                                                   
@@ -449,10 +449,10 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
                 // groups can use these links for decision tree values
                 self.state = .readyForInterFrameProcessing
                 self.outliersLoadedFromFile = true
-                Log.i("loaded \(String(describing: self.outlier_groups?.groups.count)) outlier groups for frame \(frame_index)")
+                Log.i("loaded \(String(describing: self.outlier_groups?.members.count)) outlier groups for frame \(frame_index)")
             } else {
                 self.outlier_groups = OutlierGroups(frame_index: frame_index,
-                                                    groups: [:])
+                                                    members: [:])
 
                 Log.i("calculating outlier groups for frame \(frame_index)")
                 // find outlying bright pixels between frames,
@@ -464,7 +464,7 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
     }
 
     public func outlierGroup(named outlier_name: String) -> OutlierGroup? {
-        return outlier_groups?.groups[outlier_name]
+        return outlier_groups?.members[outlier_name]
     }
     
     public func foreachOutlierGroup(between startLocation: CGPoint,
@@ -503,7 +503,7 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
 
     public func foreachOutlierGroup(_ closure: (OutlierGroup)async->LoopReturn) async {
         if let outlier_groups = self.outlier_groups {
-            for (_, group) in outlier_groups.groups {
+            for (_, group) in outlier_groups.members {
                 let result = await closure(group)
                 if result == .break { break }
             }
@@ -860,11 +860,11 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
                                                      frame: self,
                                                      pixels: outlier_amounts,
                                                      max_pixel_distance: config.max_pixel_distance)
-                outlier_groups?.groups[group_name] = new_outlier
+                outlier_groups?.members[group_name] = new_outlier
             }
         }
         self.state = .readyForInterFrameProcessing
-        Log.i("frame \(frame_index) has found \(outlier_groups?.groups.count) outlier groups to consider")
+        Log.i("frame \(frame_index) has found \(outlier_groups?.members.count) outlier groups to consider")
     }
 
     public func pixelatedImage() async throws -> PixelatedImage? {
@@ -913,7 +913,7 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
             return
         }
 
-        for (_, group) in outlier_groups.groups {
+        for (_, group) in outlier_groups.members {
             if let reason = await group.shouldPaint {
                 if reason.willPaint {
                     Log.d("frame \(frame_index) painting over group \(group) for reason \(reason)")
