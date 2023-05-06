@@ -1178,6 +1178,10 @@ public actor OutlierGroup: CustomStringConvertible,
 
             let encoder = JSONEncoder()
             encoder.outputFormatting = .prettyPrinted
+            encoder.nonConformingFloatEncodingStrategy = .convertToString(
+              positiveInfinity: "inf",
+              negativeInfinity: "-inf",
+              nan: "nan")
 
             let json_data = try encoder.encode(shouldPaint)
             if file_manager.fileExists(atPath: filename) {
