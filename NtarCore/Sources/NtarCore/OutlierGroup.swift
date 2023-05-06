@@ -16,8 +16,6 @@ You should have received a copy of the GNU General Public License along with nta
 import Foundation
 import Cocoa
 
-// XXX make a method that gathers all classifier features at once, and keeps them for later
-
 // these need to be setup at startup so the decision tree values are right
 internal var IMAGE_WIDTH: Double?
 internal var IMAGE_HEIGHT: Double?
