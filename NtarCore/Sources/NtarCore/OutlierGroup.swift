@@ -966,7 +966,7 @@ public actor OutlierGroup: CustomStringConvertible,
         
         var _lines: [Line] = []
         
-        for i in 0..<lines_count {
+        for _ in 0..<lines_count {
             let theta_data = persitentData.subdata(in: index..<index+8)
             let theta = theta_data.withUnsafeBytes { $0.load(as: Double.self) }
             index += 8
@@ -991,7 +991,7 @@ public actor OutlierGroup: CustomStringConvertible,
 
         //Log.d("pixels_count \(pixels_count) index \(index) persitentData.count \(persitentData.count)")
         
-        for i in 0..<pixels_count {
+        for _ in 0..<pixels_count {
             let pixel_data = persitentData.subdata(in: index..<index+4)
             index += 4
             let pixel = pixel_data.withUnsafeBytes { $0.load(as: UInt32.self).bigEndian }
@@ -1093,24 +1093,26 @@ public actor OutlierGroup: CustomStringConvertible,
         return data        
     }
 
+    // the suffix on the custom binary file we save each outlier group into
     static let data_bin_suffix = "outlier-data.bin"
+
+    // the suffix of the paint reason json sidecar file for each outlier group
     static let paint_json_suffix = "paint.json"
     
     public func writeToFile(in dir: String) async throws {
         let filename = "\(dir)/\(self.name)-\(OutlierGroup.data_bin_suffix)"
 
         if file_manager.fileExists(atPath: filename) {
+            // we don't modify this outlier data, so not point in persisting it again
             Log.i("not overwriting already existing filename \(filename)")
-            //try file_manager.removeItem(atPath: filename)
         } else {
-            let data = self.persistentData
-            
             file_manager.createFile(atPath: filename,
-                                    contents: data,
+                                    contents: self.persistentData,
                                     attributes: nil)
         }
         if let shouldPaint = self.shouldPaint {
             // also write out a separate json file with paint reason
+            // this can be easily changed later if desired without re-writing the whole binary file
             let filename = "\(dir)/\(self.name)-\(OutlierGroup.paint_json_suffix)"
 
             let encoder = JSONEncoder()

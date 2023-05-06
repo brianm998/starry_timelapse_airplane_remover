@@ -19,29 +19,24 @@ import Cocoa
 public class OutlierGroups {
     
     public let frame_index: Int
-    public var groups: [String: OutlierGroup]?  // keyed by name
+    public var groups: [String: OutlierGroup] // keyed by name
 
     public init(frame_index: Int,
-                groups: [String: OutlierGroup]? = nil)
+                groups: [String: OutlierGroup])
     {
         self.frame_index = frame_index
         self.groups = groups
     }
     
     public func write(to dir: String) async throws {
-        if let groups = self.groups {
+        Log.d("loaded frame \(self.frame_index) with \(self.groups.count) outlier groups from binary file")
 
-            Log.d("loaded frame \(self.frame_index) with \(self.groups?.count ?? -1) outlier groups from binary file")
+        let frame_dir = "\(dir)/\(frame_index)"
+        
+        try mkdir(frame_dir)
 
-            let frame_dir = "\(dir)/\(frame_index)"
-            
-            try mkdir(frame_dir)
-
-            for group in groups.values {
-                try await group.writeToFile(in: frame_dir)
-            }
-        } else {
-            Log.w("cannot write with no groups")
+        for group in groups.values {
+            try await group.writeToFile(in: frame_dir)
         }
     }
     
@@ -66,7 +61,7 @@ public class OutlierGroups {
                     let fileurl = NSURL(fileURLWithPath: "\(dir)/\(file)", isDirectory: false)
 
                     let (group_data, _) = try await URLSession.shared.data(for: URLRequest(url: fileurl as URL))
-                    var fu: String = file
+                    let fu: String = file
                     let fuck = String(fu.dropLast(OutlierGroup.data_bin_suffix.count+1))
                     //Log.d("trying to load group \(fuck)")
                     let group = OutlierGroup(withName: fuck,
