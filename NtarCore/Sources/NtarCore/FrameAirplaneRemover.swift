@@ -319,10 +319,7 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
     private var outliersLoadedFromFile = false
 
     public func maybeApplyOutlierGroupClassifier() async {
-        if !self.outliersLoadedFromFile ||
-           (self.outliersLoadedFromFile &&
-            self.overwriteFileLoadedOutlierGroups)
-        {
+        if !self.outliersLoadedFromFile {
             self.set(state: .interFrameProcessing)
             await self.applyDecisionTreeToAllOutliers()
         }
@@ -367,8 +364,6 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
     
     let fully_process: Bool
 
-    let overwriteFileLoadedOutlierGroups: Bool
-
     // if this is false, just write out outlier data
     let writeOutputFiles: Bool
     
@@ -388,11 +383,9 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
          thumbnailOutputDirname thumbnail_output_dirname: String?,
          outlierGroupLoader: @escaping () async -> OutlierGroups?,
          fullyProcess: Bool = true,
-         overwriteFileLoadedOutlierGroups: Bool = false,
          writeOutputFiles: Bool = true) async throws
     {
         self.fully_process = fullyProcess
-        self.overwriteFileLoadedOutlierGroups = overwriteFileLoadedOutlierGroups
         self.writeOutputFiles = writeOutputFiles
         self.config = config
         self.base_name = baseName
@@ -999,17 +992,11 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
     // does the final painting and then writes out the output files
     public func finish() async throws {
 
-        if self.outliersLoadedFromFile  {
-            // if we've loaded outliers from a file, only save again if we're in gui mode
-            // in GUI mode the user may have made an explicit decision
-            if self.overwriteFileLoadedOutlierGroups {
-                await self.writeOutliersBinary()
-            }
-        } else {
-            await self.writeOutliersBinary()
-        }
+        // write out the outliers binary if it is not there
+        // only overwrite the paint reason if it is there
+        await self.writeOutliersBinary()
 
-        // these are derived from the outliers binary, and writing them out is ok
+        // write out the classifier feature data for this data point
         await writeOutlierValuesBinary()
 
         if !self.writeOutputFiles {

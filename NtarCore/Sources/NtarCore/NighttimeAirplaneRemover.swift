@@ -299,7 +299,6 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
                                               thumbnailOutputDirname: thumbnail_output_dirname,
                                               outlierGroupLoader: loadOutliersFromFile,
                                               fullyProcess: fully_process,
-                                              overwriteFileLoadedOutlierGroups: is_gui,
                                               writeOutputFiles: writeOutputFiles)
    }        
 }
