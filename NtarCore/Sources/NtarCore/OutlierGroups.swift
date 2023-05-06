@@ -16,7 +16,7 @@ import Cocoa
 // this class holds all the outlier groups for a frame
 
 @available(macOS 10.15, *) 
-public class OutlierGroups: Codable {
+public class OutlierGroups {
     
     public let frame_index: Int
     public var groups: [String: OutlierGroup]?  // keyed by name
@@ -28,42 +28,6 @@ public class OutlierGroups: Codable {
         self.groups = groups
     }
     
-    public var encodable_groups: [String: OutlierGroupEncodable]? = nil
-    
-    enum CodingKeys: String, CodingKey {
-        case frame_index
-        case groups
-    }
-
-    public func prepareForEncoding(_ closure: @escaping () -> Void) {
-        Log.d("frame \(frame_index) about to prepare for encoding")
-        Task {
-            Log.d("frame \(frame_index) preparing for encoding")
-            var encodable: [String: OutlierGroupEncodable] = [:]
-            if let groups = self.groups {
-                for (key, value) in groups {
-                    encodable[key] = await value.encodable()
-                }
-                self.encodable_groups = encodable
-            } else {
-                Log.w("frame \(frame_index) has no group")
-            }
-            Log.d("frame \(frame_index) done with encoding")
-            closure()
-        }
-    }
-    
-    public func encode(to encoder: Encoder) throws {
-	var container = encoder.container(keyedBy: CodingKeys.self)
-	try container.encode(frame_index, forKey: .frame_index)
-        if let encodable_groups = encodable_groups {
-            Log.d("frame \(frame_index) encodable_groups.count \(encodable_groups.count)")
-	    try container.encode(encodable_groups, forKey: .groups)
-        } else {
-            Log.e("frame \(frame_index) NIL encodable_groups during encode!!!")
-        }
-    }
-
     public func write(to dir: String) async throws {
         if let groups = self.groups {
 

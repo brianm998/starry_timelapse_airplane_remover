@@ -465,43 +465,6 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
             }
         }
     }
-    
-    func readOutliers(fromJson json: String) throws {
-        if let jsonData = json.data(using: .utf8) {
-            let decoder = JSONDecoder()
-            decoder.nonConformingFloatDecodingStrategy = .convertFromString(
-              positiveInfinity: "inf",
-              negativeInfinity: "-inf",
-              nan: "nan")
-            self.outlier_groups = try decoder.decode(OutlierGroups.self, from: jsonData)
-        } else {
-            Log.e("json erorr: \(json)")
-        }
-    }
-    
-    func readOutliers(fromBinary data: Data) throws {
-        let decoder = BinaryDecoder()
-        self.outlier_groups = try decoder.decode(OutlierGroups.self, from: data)
-    }
-    
-    func outlierJsonData() -> Data {
-        let encoder = JSONEncoder()
-        encoder.nonConformingFloatEncodingStrategy = .convertToString(positiveInfinity: "inf",
-                                                                      negativeInfinity: "-inf",
-                                                                      nan: "nan")
-    //    encoder.outputFormatting = .prettyPrinted
-
-        do {
-            let data = try encoder.encode(outlier_groups)
-//            if let json_string = String(data: data, encoding: .utf8) {
-//                return json_string
-//            }
-            return data
-        } catch {
-            Log.e("\(error)")
-        }
-        return Data()
-    }
 
     public func outlierGroup(named outlier_name: String) -> OutlierGroup? {
         return outlier_groups?.groups?[outlier_name]
