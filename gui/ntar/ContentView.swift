@@ -597,12 +597,12 @@ struct ContentView: View {
 
     // the view for each frame in the filmstrip at the bottom
     func filmStripView(forFrame frame_index: Int, withScroll scroller: ScrollViewProxy) -> some View {
-        var bg_color: Color = .yellow
+        //var bg_color: Color = .yellow
         if let frame = viewModel.frame(atIndex: frame_index) {
             //            if frame.outlierGroupCount() > 0 {
             //                bg_color = .red
             //            } else {
-            bg_color = .green
+            //bg_color = .green
             //            }
         }
         return VStack(alignment: .leading) {
@@ -960,7 +960,7 @@ struct ContentView: View {
                     let start_time = Date().timeIntervalSinceReferenceDate
                     // XXX move to this:
                     //try await withThrowingLimitedTaskGroup(of: Void.self) { taskGroup in
-                    try await withThrowingTaskGroup(of: Void.self) { taskGroup in
+                    try await withLimitedThrowingTaskGroup(of: Void.self) { taskGroup in
                         let max_concurrent = viewModel.config?.numConcurrentRenders ?? 10
                         // this gets "Too many open files" with more than 2000 images :(
                         viewModel.loading_all_outliers = true
@@ -976,7 +976,7 @@ struct ContentView: View {
                                         Log.d("frame \(frameView.frame_index) adding task to load outliers")
                                         current_running += 1
                                         did_load = true
-                                        taskGroup.addTask(priority: .userInitiated) {
+                                        try await taskGroup.addTask(/*priority: .userInitiated*/) {
                                             // XXX style the button during this flow?
                                             Log.d("actually loading outliers for frame \(frame.frame_index)")
                                             try await frame.loadOutliers()
@@ -1526,7 +1526,7 @@ struct ContentView: View {
                     from old_frame: FrameAirplaneRemover?,
                     withScroll scroller: ScrollViewProxy? = nil)
     {
-        Log.d("transition from \(viewModel.currentFrame)")
+        Log.d("transition from \(String(describing: viewModel.currentFrame))")
         let start_time = Date().timeIntervalSinceReferenceDate
 
         if viewModel.current_index >= 0,
