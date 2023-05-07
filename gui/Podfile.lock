@@ -1,7 +1,6 @@
 PODS:
   - BinaryCodable (0.0.1)
-  - NtarCore (0.1.2):
-    - BinaryCodable
+  - NtarCore (0.1.2)
   - SDWebImage (5.15.5):
     - SDWebImage/Core (= 5.15.5)
   - SDWebImage/Core (5.15.5)
@@ -31,7 +30,7 @@ EXTERNAL SOURCES:
 
 SPEC CHECKSUMS:
   BinaryCodable: 7693e29edaab2a1ae165acf76f9803f7497d1ef7
-  NtarCore: 9efcaeeff25f4fdf610929443dd6db8a23874ebd
+  NtarCore: 905dffcb5ef4d2c207dda9e27e682b2024da14b7
   SDWebImage: fd7e1a22f00303e058058278639bf6196ee431fe
   SDWebImageSwiftUI: 54ded4115b4ac6cd60b78f61415f86d070892d98
   Zoomable: 59bba07c49251a6171fa5ee9674750fb75cc75a3
