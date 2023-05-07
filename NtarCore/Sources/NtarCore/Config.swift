@@ -124,15 +124,8 @@ public struct Config: Codable {
     // write out a small thumbnail preview file for each frame
     public var writeFrameThumbnailFiles: Bool
 
-    public var medium_hough_line_score: Double = 0.4 // close to being a line, not really far
     // how far in each direction do we go when doing final processing?
     public var number_final_processing_neighbors_needed = 5 // in each direction
-
-    public var final_theta_diff: Double = 10       // how close in theta/rho outliers need to be between frames
-    public var final_rho_diff: Double = 20        // 20 works
-
-    public var center_line_theta_diff: Double = 18 // used in outlier streak detection
-    // 25 is too large
 
     // the minimum outlier group size at the top of the screen
     // smaller outliers at the top are discarded early on
@@ -144,15 +137,6 @@ public struct Config: Codable {
     // between the bottom and the top of this area, the minimum
     // outlier group size increases
     public var upper_sky_percentage: Double = 66 // top 66% of the screen
-
-
-    // these parameters are used to throw out outlier groups from the
-    // initial list to consider.  Smaller groups than this must have
-    // a hough score this big or greater to be included.
-    public var max_must_look_like_line_size: Int = 500
-    public var max_must_look_like_line_score: Double = 0.25
-    public var surface_area_to_size_max = 0.5
-
 
     public var supported_image_file_types = [".tif", ".tiff"] // XXX move this out
 
