@@ -810,7 +810,7 @@ fileprivate func decisionTreeNode(withTrainingData trainingData: ClassifiedData,
     let positive_training_data_count = trainingData.positiveData.count
     let negative_training_data_count = trainingData.negativeData.count 
     
-    Log.i("new node w/ positive_training_data_count \(positive_training_data_count) negative_training_data_count \(negative_training_data_count)")
+    //Log.d("new node w/ positive_training_data_count \(positive_training_data_count) negative_training_data_count \(negative_training_data_count)")
     
     if positive_training_data_count == 0,
        negative_training_data_count == 0
@@ -835,7 +835,7 @@ fileprivate func decisionTreeNode(withTrainingData trainingData: ClassifiedData,
       Double(positive_training_data_count) /
       Double(negative_training_data_count + positive_training_data_count)
 
-    Log.d("original_split \(original_split)")
+    //Log.d("original_split \(original_split)")
     
     // we have non zero test data of both kinds
     
@@ -879,11 +879,10 @@ fileprivate func decisionTreeNode(withTrainingData trainingData: ClassifiedData,
            let not_paint_dist: ValueDistribution = not_paint_dist_FU
         {
             let task = await runTask() {
-                Log.d("type \(type)")
                 if paint_dist.max < not_paint_dist.min {
                     // we have a linear split between all provided test data
                     // this is an end leaf node, both paths after decision lead to a result
-                    Log.d("clear distinction \(paint_dist.max) < \(not_paint_dist.min)")
+                    //Log.d("clear distinction \(paint_dist.max) < \(not_paint_dist.min)")
 
                     var ret = FeatureResult(type: type)
                     ret.decisionTreeNode =
@@ -906,7 +905,7 @@ fileprivate func decisionTreeNode(withTrainingData trainingData: ClassifiedData,
                     ret.negativeDist = not_paint_dist
                     return [ret]
                 } else if not_paint_dist.max < paint_dist.min {
-                    Log.d("clear distinction \(not_paint_dist.max) < \(paint_dist.min)")
+                    //Log.d("clear distinction \(not_paint_dist.max) < \(paint_dist.min)")
                     // we have a linear split between all provided test data
                     // this is an end leaf node, both paths after decision lead to a result
                     
@@ -975,8 +974,6 @@ fileprivate func decisionTreeNode(withTrainingData trainingData: ClassifiedData,
 
         let max = responses.count
 
-        Log.d("got \(max) responses from task")
-        
         for idx in 0..<max {
             let response = responses[idx]
 
@@ -1043,7 +1040,7 @@ fileprivate func decisionTreeNode(withTrainingData trainingData: ClassifiedData,
                                                       result: decisionResult)) 
             
         } else {
-            Log.d("decisionResult.lessThanSplit \(decisionResult.lessThanSplit) > original_split \(original_split)")
+            //Log.d("decisionResult.lessThanSplit \(decisionResult.lessThanSplit) > original_split \(original_split)")
         }
         if decisionResult.greaterThanSplit > original_split {
             // the greater than split is biggest so far
@@ -1053,7 +1050,7 @@ fileprivate func decisionTreeNode(withTrainingData trainingData: ClassifiedData,
                                                       type: decisionResult.type,
                                                       result: decisionResult)) 
         } else {
-            Log.d("decisionResult.greaterThanSplit \(decisionResult.greaterThanSplit) > original_split \(original_split)")
+            //Log.d("decisionResult.greaterThanSplit \(decisionResult.greaterThanSplit) > original_split \(original_split)")
         }
     }
     
@@ -1260,7 +1257,7 @@ fileprivate struct DecisionResult {
               Double(lessThanPositiveCount) /
               Double(lessThanNegativeCount + lessThanPositiveCount)
         }
-        Log.d("self.lessThanSplit \(self.lessThanSplit) lessThanNegativeCount \(lessThanNegativeCount) lessThanPositiveCount \(lessThanPositiveCount)")
+        //Log.d("self.lessThanSplit \(self.lessThanSplit) lessThanNegativeCount \(lessThanNegativeCount) lessThanPositiveCount \(lessThanPositiveCount)")
 
         // this is the 0-1 percentage of positive on the greater than split
         if greaterThanNegativeCount + greaterThanPositiveCount == 0 {
@@ -1270,7 +1267,7 @@ fileprivate struct DecisionResult {
               Double(greaterThanPositiveCount) /
               Double(greaterThanNegativeCount + greaterThanPositiveCount)
         }
-        Log.d("self.greaterThanSplit \(self.greaterThanSplit) greaterThanNegativeCount \(greaterThanNegativeCount) greaterThanPositiveCount \(greaterThanPositiveCount)")
+        //Log.d("self.greaterThanSplit \(self.greaterThanSplit) greaterThanNegativeCount \(greaterThanNegativeCount) greaterThanPositiveCount \(greaterThanPositiveCount)")
     }
 }
 
