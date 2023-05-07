@@ -197,8 +197,9 @@ public struct Config: Codable {
     // 0.3.0 added machine learning group classification, better threading, and more
     // 0.3.1 added release scripts for distribution, plus bug fixes
     // 0.3.2 fixed bugs, speed up tree forest, removes small outlier group dismissal
+    // 0.3.3 speed up outlier saving, bug fixes, code improvements
 
-    public var ntar_version = "0.3.2"
+    public var ntar_version = "0.3.3"
 
     public func writeJson(named filename: String) {
         
