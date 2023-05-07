@@ -87,6 +87,7 @@ public class OutlierGroup: CustomStringConvertible,
 
         // we want all the lines, all of them.
         self.lines = transform.lines(min_count: 1)
+        _ = self.houghLineHistogram
     }
 
     public static func == (lhs: OutlierGroup, rhs: OutlierGroup) -> Bool {
@@ -527,12 +528,20 @@ public class OutlierGroup: CustomStringConvertible,
         }
     }
 
+    fileprivate var _houghLineHistogram: HoughLineHistogram?
+    
     // use these to compare outliers in same and different frames
     var houghLineHistogram: HoughLineHistogram {
+        // use cached copy if possible
+        if let _houghLineHistogram = _houghLineHistogram { return _houghLineHistogram }
+        
         let lines = self.lines                            // try to copy
-        return HoughLineHistogram(withDegreeIncrement: 5, // XXX hardcoded 5
-                                  lines: lines,
-                                  andGroupSize: self.size)
+        let ret = HoughLineHistogram(withDegreeIncrement: 5, // XXX hardcoded 5
+                                     lines: lines,
+                                     andGroupSize: self.size)
+        // cache it for later
+        _houghLineHistogram = ret
+        return ret
     }
 
     fileprivate var maxHoughTheta: Double {
@@ -1008,6 +1017,8 @@ public class OutlierGroup: CustomStringConvertible,
         index += 8
         
         // surfaceAreaToSizeRatio
+
+        _ = self.houghLineHistogram
     }
     
     public var persistentData: Data {
