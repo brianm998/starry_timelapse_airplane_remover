@@ -21,8 +21,6 @@ Pod::Spec.new do |s|
   s.source_files  = "Sources/**/*.{swift}"
   s.exclude_files = "Sources/ntar/Ntar.swift"
 
-  s.dependency 'BinaryCodable'
-  
   s.pod_target_xcconfig = { 'SWIFT_VERSION' => 5 }
 
 end
