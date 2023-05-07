@@ -132,7 +132,7 @@ struct decision_tree_generator: ParsableCommand {
     
     mutating func run() throws {
         Log.name = "decision_tree_generator-log"
-        Log.handlers[.console] = ConsoleLogHandler(at: .info)
+        Log.handlers[.console] = ConsoleLogHandler(at: .verbose)
         Log.handlers[.file] = try FileLogHandler(at: .verbose) // XXX make this a command line parameter
 
         TaskRunner.maxConcurrentTasks = UInt(numConcurrentRenders)
@@ -432,6 +432,8 @@ struct decision_tree_generator: ParsableCommand {
 
     // actually generate a decision tree forest
     func generate_forest_from_training_data(with forestSize: Int) {
+
+        Log.d("generate_forest_from_training_data")
         
         let dispatch_group = DispatchGroup()
         dispatch_group.enter()
@@ -442,6 +444,7 @@ struct decision_tree_generator: ParsableCommand {
                                                   pruneTree: !noPrune,
                                                   maxDepth: maxDepth)
 
+            
             let base_filename = "../NtarDecisionTrees/Sources/NtarDecisionTrees/OutlierGroupDecisionTreeForest_"
 
             
@@ -483,7 +486,7 @@ struct decision_tree_generator: ParsableCommand {
 
     func loadTrainingData() async throws -> ClassifiedData {
         let trainingData = ClassifiedData()
-        
+
         for json_config_file_name in input_filenames {
             if json_config_file_name.hasSuffix("config.json") {
                 // here we are loading the full outlier groups and analyzing based upon that
@@ -592,10 +595,28 @@ struct decision_tree_generator: ParsableCommand {
 
         if let matrix = try await OutlierGroupValueMatrix(from: dirname) {
             // XXX ignoring the types :(
-            positiveData = matrix.positiveValues.map { OutlierFeatureData($0) }
-            negativeData = matrix.negativeValues.map { OutlierFeatureData($0) }
+
+            var usable = true
+            
+            // XXX make sure the types in the matrix match up with what we expect
+            for type in OutlierGroup.Feature.allCases {
+                if type.sortOrder < matrix.types.count {
+                    if matrix.types[type.sortOrder] != type {
+                        Log.e("@ sort order \(type.sortOrder) \(matrix.types[type.sortOrder]) != \(type), cannot use this data")
+                        usable = false
+                    }
+                } else {
+                    Log.e("@ sort order \(type.sortOrder) is out of range, cannot use this data")
+                    usable = false
+                }
+            }
+            
+            if usable {
+                positiveData = matrix.positiveValues.map { OutlierFeatureData($0) }
+                negativeData = matrix.negativeValues.map { OutlierFeatureData($0) }
+            }
         } else {
-            throw "fuck"
+            throw "fuck"        // XXX un-fuck this
         }
         return ClassifiedData(
           positiveData: positiveData,

@@ -54,6 +54,7 @@ actor DecisionTreeGenerator {
          then write out a classifier which classifies based upon the weighted sum of all of them
          */
 
+        
         var input_data_split = input_data.shuffleSplit(into: treeCount + 1)
 
         var validationData = ClassifiedData()
@@ -440,7 +441,7 @@ actor DecisionTreeGenerator {
           \(treeString)
           \(pruneString)
           */
-
+          
           import Foundation
           import NtarCore
           
@@ -555,9 +556,15 @@ fileprivate func getValueDistributions(of values: [[Double]],
                 sum += value
             }
             sum /= Double(all_values.count)
-            let median = all_values.sorted()[all_values.count/2]
-            return ValueDistribution(type: type, min: min, max: max,
-                                     mean: sum, median: median)
+            var median = 0.0
+            if all_values.count > 0 {
+                median = all_values.sorted()[all_values.count/2]
+            }                   // XXX why are we getting zero sized values?
+            return ValueDistribution(type: type,
+                                     min: min,
+                                     max: max,
+                                     mean: sum,
+                                     median: median)
             
         }
         tasks.append(task)
@@ -590,8 +597,11 @@ fileprivate func getValueDistributions(of values: [[Double]],
             let max = testData.count
             for idx in 0..<max {
                 let valueMap = testData[idx]
-                let value = valueMap.values[type.sortOrder]
-                list.append(value)
+                //Log.d("type.sortOrder \(type.sortOrder) valueMap.values.count \(valueMap.values.count)")
+                if type.sortOrder < valueMap.values.count {
+                    let value = valueMap.values[type.sortOrder]
+                    list.append(value)
+                }
             }
             return DecisionTypeValuesResult(type: type, values: list)
         }
@@ -600,8 +610,12 @@ fileprivate func getValueDistributions(of values: [[Double]],
     
     for task in tasks {
         let response = await task.value
+
         array[response.type.sortOrder] = response.values
+
+//            Log.w("bad data response.values.count \(response.values.count) [\(response.values)]")   // XXX make this better
     }
+
     return array
 }
 
@@ -746,7 +760,7 @@ fileprivate func result(for type: OutlierGroup.Feature,
     let positive_training_data_count = trainingData.positiveData.count
     for index in 0..<positive_training_data_count {
         let group_values = trainingData.positiveData[index]
-        let group_value = group_values.values[type.sortOrder] // crash here
+        let group_value = group_values.values[type.sortOrder] // crash here / bad index here too
 
         if group_value < decisionValue {
             lessThanPositive.append(group_values)
@@ -796,7 +810,7 @@ fileprivate func decisionTreeNode(withTrainingData trainingData: ClassifiedData,
     let positive_training_data_count = trainingData.positiveData.count
     let negative_training_data_count = trainingData.negativeData.count 
     
-    //Log.i("FUCK positive_training_data_count \(positive_training_data_count) negative_training_data_count \(negative_training_data_count)")
+    Log.i("new node w/ positive_training_data_count \(positive_training_data_count) negative_training_data_count \(negative_training_data_count)")
     
     if positive_training_data_count == 0,
        negative_training_data_count == 0
@@ -820,6 +834,8 @@ fileprivate func decisionTreeNode(withTrainingData trainingData: ClassifiedData,
     let original_split =
       Double(positive_training_data_count) /
       Double(negative_training_data_count + positive_training_data_count)
+
+    Log.d("original_split \(original_split)")
     
     // we have non zero test data of both kinds
     
@@ -830,7 +846,6 @@ fileprivate func decisionTreeNode(withTrainingData trainingData: ClassifiedData,
     // index these by outlierGroup.sortOrder
     
     let type_count = OutlierGroup.Feature.allCases.count
-    
     
     // iterate ofer all decision tree types to pick the best one
     // that differentiates the test data
@@ -864,11 +879,11 @@ fileprivate func decisionTreeNode(withTrainingData trainingData: ClassifiedData,
            let not_paint_dist: ValueDistribution = not_paint_dist_FU
         {
             let task = await runTask() {
-                //Log.d("type \(type)")
+                Log.d("type \(type)")
                 if paint_dist.max < not_paint_dist.min {
                     // we have a linear split between all provided test data
                     // this is an end leaf node, both paths after decision lead to a result
-                    //Log.d("clear distinction \(paint_dist.max) < \(not_paint_dist.min)")
+                    Log.d("clear distinction \(paint_dist.max) < \(not_paint_dist.min)")
 
                     var ret = FeatureResult(type: type)
                     ret.decisionTreeNode =
@@ -887,10 +902,11 @@ fileprivate func decisionTreeNode(withTrainingData trainingData: ClassifiedData,
                                            indent: indent)
                                            ret.positiveDist = paint_dist
                        */
+                    ret.positiveDist = paint_dist
                     ret.negativeDist = not_paint_dist
                     return [ret]
                 } else if not_paint_dist.max < paint_dist.min {
-                    //Log.d("clear distinction \(not_paint_dist.max) < \(paint_dist.min)")
+                    Log.d("clear distinction \(not_paint_dist.max) < \(paint_dist.min)")
                     // we have a linear split between all provided test data
                     // this is an end leaf node, both paths after decision lead to a result
                     
@@ -910,10 +926,11 @@ fileprivate func decisionTreeNode(withTrainingData trainingData: ClassifiedData,
                                            indent: indent)
                                            ret.positiveDist = paint_dist
                        */
+                    ret.positiveDist = paint_dist
                     ret.negativeDist = not_paint_dist
                     return [ret]
                 } else {
-                    
+
                     // we do not have a linear split between all provided test data
                     // we need to figure out what type is best to segregate
                     // the test data further
@@ -948,6 +965,8 @@ fileprivate func decisionTreeNode(withTrainingData trainingData: ClassifiedData,
                 }
             }
             tasks.append(task)
+        } else {
+            Log.w("WTF")
         }
     }
           
@@ -955,9 +974,12 @@ fileprivate func decisionTreeNode(withTrainingData trainingData: ClassifiedData,
         let responses = await task.value
 
         let max = responses.count
+
+        Log.d("got \(max) responses from task")
         
         for idx in 0..<max {
-            let response = responses[idx] 
+            let response = responses[idx]
+
             if let result = response.decisionResult {
                 decisionResults.append(result)
             }
@@ -1020,6 +1042,8 @@ fileprivate func decisionTreeNode(withTrainingData trainingData: ClassifiedData,
                                                       type: decisionResult.type,
                                                       result: decisionResult)) 
             
+        } else {
+            Log.d("decisionResult.lessThanSplit \(decisionResult.lessThanSplit) > original_split \(original_split)")
         }
         if decisionResult.greaterThanSplit > original_split {
             // the greater than split is biggest so far
@@ -1028,11 +1052,13 @@ fileprivate func decisionTreeNode(withTrainingData trainingData: ClassifiedData,
             rankedDecisionResults.append(RankedResult(rank: split,
                                                       type: decisionResult.type,
                                                       result: decisionResult)) 
+        } else {
+            Log.d("decisionResult.greaterThanSplit \(decisionResult.greaterThanSplit) > original_split \(original_split)")
         }
     }
     
     // return a direct tree node if we have it (no recursion)
-    // make sure we choose the best one of theese
+    // make sure we choose the best one of these
     if bestTreeNodes.count != 0 {
         if bestTreeNodes.count == 1 {
             return bestTreeNodes[0].result
@@ -1131,6 +1157,7 @@ fileprivate func decisionTreeNode(withTrainingData trainingData: ClassifiedData,
         }
     } else {
         Log.e("no best type, defaulting to false :(")
+        fatalError("FUCK")
         return FullyNegativeTreeNode(indent: indent + 1)
     }
 }
@@ -1225,14 +1252,25 @@ fileprivate struct DecisionResult {
         // XXX somehow factor in how far away the training data is from the split as well?
         
         // this is the 0-1 percentage of positive on the less than split
-        self.lessThanSplit =
-          Double(lessThanPositiveCount) /
-          Double(lessThanNegativeCount + lessThanPositiveCount)
+
+        if lessThanNegativeCount + lessThanPositiveCount == 0 {
+            self.lessThanSplit = 0
+        } else {
+            self.lessThanSplit =
+              Double(lessThanPositiveCount) /
+              Double(lessThanNegativeCount + lessThanPositiveCount)
+        }
+        Log.d("self.lessThanSplit \(self.lessThanSplit) lessThanNegativeCount \(lessThanNegativeCount) lessThanPositiveCount \(lessThanPositiveCount)")
 
         // this is the 0-1 percentage of positive on the greater than split
-        self.greaterThanSplit =
-          Double(greaterThanPositiveCount) /
-          Double(greaterThanNegativeCount + greaterThanPositiveCount)
+        if greaterThanNegativeCount + greaterThanPositiveCount == 0 {
+            self.greaterThanSplit = 0
+        } else {
+            self.greaterThanSplit =
+              Double(greaterThanPositiveCount) /
+              Double(greaterThanNegativeCount + greaterThanPositiveCount)
+        }
+        Log.d("self.greaterThanSplit \(self.greaterThanSplit) greaterThanNegativeCount \(greaterThanNegativeCount) greaterThanPositiveCount \(greaterThanPositiveCount)")
     }
 }
 
