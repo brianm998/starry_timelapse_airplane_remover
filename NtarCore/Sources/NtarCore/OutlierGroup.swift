@@ -1115,7 +1115,7 @@ public class OutlierGroup: CustomStringConvertible,
 
         if file_manager.fileExists(atPath: filename) {
             // we don't modify this outlier data, so not point in persisting it again
-            Log.i("not overwriting already existing filename \(filename)")
+            //Log.i("not overwriting already existing filename \(filename)")
         } else {
             file_manager.createFile(atPath: filename,
                                     contents: self.persistentData,
@@ -1135,10 +1135,10 @@ public class OutlierGroup: CustomStringConvertible,
 
             let json_data = try encoder.encode(shouldPaint)
             if file_manager.fileExists(atPath: filename) {
-                Log.i("removing already existing paint reason \(filename)")
+                //Log.i("removing already existing paint reason \(filename)")
                 try file_manager.removeItem(atPath: filename)
             } 
-            Log.i("creating \(filename)")                      
+            //Log.i("creating \(filename)")                      
             file_manager.createFile(atPath: filename,
                                     contents: json_data,
                                     attributes: nil)
