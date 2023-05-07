@@ -4,6 +4,7 @@ import Cocoa
 import NtarCore
 import Zoomable
 
+
 // the overall view model
 @MainActor
 public class ViewModel: ObservableObject {
@@ -197,9 +198,6 @@ public class ViewModel: ObservableObject {
     }
 
     func setOutlierGroups(forFrame frame: FrameAirplaneRemover) async {
-        self.frames[frame.frame_index].outlierViews = []
-
-        
         let outlierGroups = await frame.outlierGroups()
         let (frame_width, frame_height) = (frame.width, frame.height)
         if let outlierGroups = outlierGroups {
