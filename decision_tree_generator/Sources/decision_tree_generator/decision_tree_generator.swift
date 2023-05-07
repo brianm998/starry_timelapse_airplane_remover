@@ -238,7 +238,7 @@ struct decision_tree_generator: ParsableCommand {
                 //Log.d("should check frame \(frame.frame_index)")
                 if let outlier_group_list = await frame.outlierGroups() {
                     for outlier_group in outlier_group_list {
-                        if let numberGood = await outlier_group.shouldPaint {
+                        if let numberGood = outlier_group.shouldPaint {
                             await withLimitedTaskGroup(of: (treeKey:String, shouldPaint:Bool).self) { taskGroup in
                                 for (treeKey, tree) in decisionTrees {
                                     await taskGroup.addTask() {
@@ -394,8 +394,8 @@ struct decision_tree_generator: ParsableCommand {
                 var local_negative_data: [OutlierFeatureData] = []
                 if let outlier_groups = await frame.outlierGroups() {
                     for outlier_group in outlier_groups {
-                        let name = await outlier_group.name
-                        if let should_paint = await outlier_group.shouldPaint {
+                        let name = outlier_group.name
+                        if let should_paint = outlier_group.shouldPaint {
                             let will_paint = should_paint.willPaint
                             
                             let values = await outlier_group.decisionTreeGroupValues
@@ -591,6 +591,7 @@ struct decision_tree_generator: ParsableCommand {
         var negativeData: [OutlierFeatureData] = []
 
         if let matrix = try await OutlierGroupValueMatrix(from: dirname) {
+            // XXX ignoring the types :(
             positiveData = matrix.positiveValues.map { OutlierFeatureData($0) }
             negativeData = matrix.negativeValues.map { OutlierFeatureData($0) }
         } else {
