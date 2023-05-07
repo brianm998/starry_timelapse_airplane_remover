@@ -155,7 +155,7 @@ public actor UpdatableLog {
             print("\u{001b}[\(index)A", terminator:"") // move cursor up index lines 
             let num_extra_spaces = Int(screen_width)-line.printableLength-1
 
-            Log.i("num_extra_spaces \(num_extra_spaces)")
+            //Log.i("num_extra_spaces \(num_extra_spaces)")
             
             var extra_spaces: String = ""
             
