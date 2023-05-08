@@ -9,7 +9,7 @@ platform :macos, '13.0'
 # https://github.com/CocoaPods/CocoaPods/issues/8073
 # https://openradar.appspot.com/41126633
 
-target 'star' do
+target 'Star' do
   use_frameworks!
 
 #  pod 'ArgumentParser'

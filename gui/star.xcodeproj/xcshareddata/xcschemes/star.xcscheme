@@ -15,8 +15,8 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "D386FA0C298B617300878B56"
-               BuildableName = "star.app"
-               BlueprintName = "star"
+               BuildableName = "Star.app"
+               BlueprintName = "Star"
                ReferencedContainer = "container:star.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
@@ -44,8 +44,8 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "D386FA0C298B617300878B56"
-            BuildableName = "star.app"
-            BlueprintName = "star"
+            BuildableName = "Star.app"
+            BlueprintName = "Star"
             ReferencedContainer = "container:star.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
@@ -61,8 +61,8 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "D386FA0C298B617300878B56"
-            BuildableName = "star.app"
-            BlueprintName = "star"
+            BuildableName = "Star.app"
+            BlueprintName = "Star"
             ReferencedContainer = "container:star.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>

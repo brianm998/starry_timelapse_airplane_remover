@@ -5,7 +5,7 @@ set -e
 # build and notarize with apple the star gui code for ad hoc distribution
 
 BUILD_DIR=.build
-APP_NAME=star
+APP_NAME=Star
 STAR_VERSION=`cd ../StarCore ; perl version.pl`
 PKG_NAME=".build/star_app_${STAR_VERSION}.pkg"
 
