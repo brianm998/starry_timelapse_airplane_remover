@@ -118,17 +118,14 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
             fatalError("no processor")
         }
         // setup the final processor 
-        let final_processor_dispatch_name = "FinalProcessor"
         let finalProcessorTask = Task(priority: .high) {
             // XXX really should have the enter before the task
-            await self.dispatchGroup.enter(final_processor_dispatch_name) 
             // run the final processor as a single separate thread
             var should_process = [Bool](repeating: false, count: self.existing_output_files.count)
             for (index, output_file_exists) in self.existing_output_files.enumerated() {
                 should_process[index] = !output_file_exists
             }
             try await final_processor.run(shouldProcess: should_process)
-            await self.dispatchGroup.leave(final_processor_dispatch_name)
         }
 
         try await super.run()

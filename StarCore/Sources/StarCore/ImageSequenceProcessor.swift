@@ -153,12 +153,8 @@ public class ImageSequenceProcessor<T> {
     public func run() async throws {
         Log.d("run")
         let local_dispatch = DispatchGroup()
-        local_dispatch.enter()
-        Task {
-            try await startup_hook()
-            local_dispatch.leave()
-        }
-        local_dispatch.wait()
+        let task = Task { try await startup_hook() }
+        try await task.value
 
         Log.d("done with startup hook")
         
