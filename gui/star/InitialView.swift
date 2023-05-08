@@ -11,8 +11,14 @@ struct InitialView: View {
 
     func initialView() -> some View {
         VStack {
-            Text("Welcome to the Nighttime Timelapse Airplane Remover")
+            Spacer()
+              .frame(maxHeight: 20)
+            Text("Welcome to The Star,")
               .font(.largeTitle)
+            Spacer()
+              .frame(maxHeight: 10)
+            Text("The Starry Timelapse Airplane Remover")
+                .font(.largeTitle)
             Spacer()
               .frame(maxHeight: 200)
             Text("Choose an option to get started")
@@ -121,6 +127,8 @@ struct InitialView: View {
                               .pickerStyle(.menu)
                         }
                     }
+                    Spacer()
+                      .frame(maxHeight: 20)
                 }
             }
         }

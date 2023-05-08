@@ -15,9 +15,9 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "D331859529F1D685004DBB62"
-               BuildableName = "ntar"
-               BlueprintName = "ntar"
-               ReferencedContainer = "container:ntar.xcodeproj">
+               BuildableName = "star"
+               BlueprintName = "star"
+               ReferencedContainer = "container:star.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
       </BuildActionEntries>
@@ -45,9 +45,9 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "D331859529F1D685004DBB62"
-            BuildableName = "ntar"
-            BlueprintName = "ntar"
-            ReferencedContainer = "container:ntar.xcodeproj">
+            BuildableName = "star"
+            BlueprintName = "star"
+            ReferencedContainer = "container:star.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </LaunchAction>
@@ -62,9 +62,9 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "D331859529F1D685004DBB62"
-            BuildableName = "ntar"
-            BlueprintName = "ntar"
-            ReferencedContainer = "container:ntar.xcodeproj">
+            BuildableName = "star"
+            BlueprintName = "star"
+            ReferencedContainer = "container:star.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </ProfileAction>

@@ -7,11 +7,10 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		D33185A429F1DDD9004DBB62 /* BinaryCodable in Frameworks */ = {isa = PBXBuildFile; productRef = D33185A329F1DDD9004DBB62 /* BinaryCodable */; };
 		D33185A729F1DE10004DBB62 /* ArgumentParser in Frameworks */ = {isa = PBXBuildFile; productRef = D33185A629F1DE10004DBB62 /* ArgumentParser */; };
-		D33185AE29F1E007004DBB62 /* NtarCore in Frameworks */ = {isa = PBXBuildFile; productRef = D33185AD29F1E007004DBB62 /* NtarCore */; };
-		D33185B029F1E079004DBB62 /* ntar_cli.swift in Sources */ = {isa = PBXBuildFile; fileRef = D33185AF29F1E079004DBB62 /* ntar_cli.swift */; };
-		D33185B229F1E2C4004DBB62 /* libNtarDecisionTrees.a in Frameworks */ = {isa = PBXBuildFile; fileRef = D33185B129F1E2C4004DBB62 /* libNtarDecisionTrees.a */; };
+		D33185AE29F1E007004DBB62 /* StarCore in Frameworks */ = {isa = PBXBuildFile; productRef = D33185AD29F1E007004DBB62 /* StarCore */; };
+		D33185B029F1E079004DBB62 /* star_cli.swift in Sources */ = {isa = PBXBuildFile; fileRef = D33185AF29F1E079004DBB62 /* star_cli.swift */; };
+		D33185B229F1E2C4004DBB62 /* libStarDecisionTrees.a in Frameworks */ = {isa = PBXBuildFile; fileRef = D33185B129F1E2C4004DBB62 /* libStarDecisionTrees.a */; };
 		D33185B429F1E67A004DBB62 /* libswift_Concurrency.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = D33185B329F1E67A004DBB62 /* libswift_Concurrency.tbd */; };
 /* End PBXBuildFile section */
 
@@ -28,10 +27,10 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		D331859629F1D685004DBB62 /* ntar */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = ntar; sourceTree = BUILT_PRODUCTS_DIR; };
-		D33185AB29F1DF5E004DBB62 /* NtarCore */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = NtarCore; path = ../NtarCore; sourceTree = "<group>"; };
-		D33185AF29F1E079004DBB62 /* ntar_cli.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; name = ntar_cli.swift; path = Sources/ntar/ntar_cli.swift; sourceTree = SOURCE_ROOT; };
-		D33185B129F1E2C4004DBB62 /* libNtarDecisionTrees.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libNtarDecisionTrees.a; path = ../NtarDecisionTrees/libNtarDecisionTrees.a; sourceTree = "<group>"; };
+		D331859629F1D685004DBB62 /* star */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = star; sourceTree = BUILT_PRODUCTS_DIR; };
+		D33185AB29F1DF5E004DBB62 /* StarCore */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = StarCore; path = ../StarCore; sourceTree = "<group>"; };
+		D33185AF29F1E079004DBB62 /* star_cli.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; name = star_cli.swift; path = Sources/star/star_cli.swift; sourceTree = SOURCE_ROOT; };
+		D33185B129F1E2C4004DBB62 /* libStarDecisionTrees.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libStarDecisionTrees.a; path = ../StarDecisionTrees/libStarDecisionTrees.a; sourceTree = "<group>"; };
 		D33185B329F1E67A004DBB62 /* libswift_Concurrency.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libswift_Concurrency.tbd; path = usr/lib/swift/libswift_Concurrency.tbd; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
 
@@ -41,10 +40,9 @@
 			buildActionMask = 2147483647;
 			files = (
 				D33185B429F1E67A004DBB62 /* libswift_Concurrency.tbd in Frameworks */,
-				D33185B229F1E2C4004DBB62 /* libNtarDecisionTrees.a in Frameworks */,
+				D33185B229F1E2C4004DBB62 /* libStarDecisionTrees.a in Frameworks */,
 				D33185A729F1DE10004DBB62 /* ArgumentParser in Frameworks */,
-				D33185AE29F1E007004DBB62 /* NtarCore in Frameworks */,
-				D33185A429F1DDD9004DBB62 /* BinaryCodable in Frameworks */,
+				D33185AE29F1E007004DBB62 /* StarCore in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -55,7 +53,7 @@
 			isa = PBXGroup;
 			children = (
 				D33185AA29F1DF5E004DBB62 /* Packages */,
-				D331859829F1D685004DBB62 /* ntar */,
+				D331859829F1D685004DBB62 /* star */,
 				D331859729F1D685004DBB62 /* Products */,
 				D33185AC29F1E007004DBB62 /* Frameworks */,
 			);
@@ -64,23 +62,23 @@
 		D331859729F1D685004DBB62 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				D331859629F1D685004DBB62 /* ntar */,
+				D331859629F1D685004DBB62 /* star */,
 			);
 			name = Products;
 			sourceTree = "<group>";
 		};
-		D331859829F1D685004DBB62 /* ntar */ = {
+		D331859829F1D685004DBB62 /* star */ = {
 			isa = PBXGroup;
 			children = (
-				D33185AF29F1E079004DBB62 /* ntar_cli.swift */,
+				D33185AF29F1E079004DBB62 /* star_cli.swift */,
 			);
-			path = ntar;
+			path = star;
 			sourceTree = "<group>";
 		};
 		D33185AA29F1DF5E004DBB62 /* Packages */ = {
 			isa = PBXGroup;
 			children = (
-				D33185AB29F1DF5E004DBB62 /* NtarCore */,
+				D33185AB29F1DF5E004DBB62 /* StarCore */,
 			);
 			name = Packages;
 			sourceTree = "<group>";
@@ -89,7 +87,7 @@
 			isa = PBXGroup;
 			children = (
 				D33185B329F1E67A004DBB62 /* libswift_Concurrency.tbd */,
-				D33185B129F1E2C4004DBB62 /* libNtarDecisionTrees.a */,
+				D33185B129F1E2C4004DBB62 /* libStarDecisionTrees.a */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -97,9 +95,9 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		D331859529F1D685004DBB62 /* ntar */ = {
+		D331859529F1D685004DBB62 /* star */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = D331859D29F1D685004DBB62 /* Build configuration list for PBXNativeTarget "ntar" */;
+			buildConfigurationList = D331859D29F1D685004DBB62 /* Build configuration list for PBXNativeTarget "star" */;
 			buildPhases = (
 				D331859229F1D685004DBB62 /* Sources */,
 				D331859329F1D685004DBB62 /* Frameworks */,
@@ -109,14 +107,13 @@
 			);
 			dependencies = (
 			);
-			name = ntar;
+			name = star;
 			packageProductDependencies = (
-				D33185A329F1DDD9004DBB62 /* BinaryCodable */,
 				D33185A629F1DE10004DBB62 /* ArgumentParser */,
-				D33185AD29F1E007004DBB62 /* NtarCore */,
+				D33185AD29F1E007004DBB62 /* StarCore */,
 			);
-			productName = ntar;
-			productReference = D331859629F1D685004DBB62 /* ntar */;
+			productName = star;
+			productReference = D331859629F1D685004DBB62 /* star */;
 			productType = "com.apple.product-type.tool";
 		};
 /* End PBXNativeTarget section */
@@ -134,7 +131,7 @@
 					};
 				};
 			};
-			buildConfigurationList = D331859129F1D685004DBB62 /* Build configuration list for PBXProject "ntar" */;
+			buildConfigurationList = D331859129F1D685004DBB62 /* Build configuration list for PBXProject "star" */;
 			compatibilityVersion = "Xcode 14.0";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
@@ -144,14 +141,13 @@
 			);
 			mainGroup = D331858D29F1D685004DBB62;
 			packageReferences = (
-				D33185A229F1DDD9004DBB62 /* XCRemoteSwiftPackageReference "BinaryCodable" */,
 				D33185A529F1DE10004DBB62 /* XCRemoteSwiftPackageReference "swift-argument-parser" */,
 			);
 			productRefGroup = D331859729F1D685004DBB62 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				D331859529F1D685004DBB62 /* ntar */,
+				D331859529F1D685004DBB62 /* star */,
 			);
 		};
 /* End PBXProject section */
@@ -161,7 +157,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				D33185B029F1E079004DBB62 /* ntar_cli.swift in Sources */,
+				D33185B029F1E079004DBB62 /* star_cli.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -225,7 +221,7 @@
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-Xlinker",
-					"-L../NtarDecisionTrees",
+					"-L../StarDecisionTrees",
 					"-Xlinker",
 					"-all_load",
 				);
@@ -285,7 +281,7 @@
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-Xlinker",
-					"-L../NtarDecisionTrees",
+					"-L../StarDecisionTrees",
 					"-Xlinker",
 					"-all_load",
 				);
@@ -311,7 +307,7 @@
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-Xlinker",
-					"-L../NtarDecisionTrees",
+					"-L../StarDecisionTrees",
 					"-Xlinker",
 					"-all_load",
 				);
@@ -337,7 +333,7 @@
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-Xlinker",
-					"-L../NtarDecisionTrees",
+					"-L../StarDecisionTrees",
 					"-Xlinker",
 					"-all_load",
 				);
@@ -350,7 +346,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		D331859129F1D685004DBB62 /* Build configuration list for PBXProject "ntar" */ = {
+		D331859129F1D685004DBB62 /* Build configuration list for PBXProject "star" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				D331859B29F1D685004DBB62 /* Debug */,
@@ -359,7 +355,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		D331859D29F1D685004DBB62 /* Build configuration list for PBXNativeTarget "ntar" */ = {
+		D331859D29F1D685004DBB62 /* Build configuration list for PBXNativeTarget "star" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				D331859E29F1D685004DBB62 /* Debug */,
@@ -371,14 +367,6 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
-		D33185A229F1DDD9004DBB62 /* XCRemoteSwiftPackageReference "BinaryCodable" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "git@github.com:christophhagen/BinaryCodable.git";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 1.0.0;
-			};
-		};
 		D33185A529F1DE10004DBB62 /* XCRemoteSwiftPackageReference "swift-argument-parser" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/apple/swift-argument-parser.git";
@@ -390,19 +378,14 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		D33185A329F1DDD9004DBB62 /* BinaryCodable */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = D33185A229F1DDD9004DBB62 /* XCRemoteSwiftPackageReference "BinaryCodable" */;
-			productName = BinaryCodable;
-		};
 		D33185A629F1DE10004DBB62 /* ArgumentParser */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = D33185A529F1DE10004DBB62 /* XCRemoteSwiftPackageReference "swift-argument-parser" */;
 			productName = ArgumentParser;
 		};
-		D33185AD29F1E007004DBB62 /* NtarCore */ = {
+		D33185AD29F1E007004DBB62 /* StarCore */ = {
 			isa = XCSwiftPackageProductDependency;
-			productName = NtarCore;
+			productName = StarCore;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
