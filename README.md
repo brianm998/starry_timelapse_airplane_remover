@@ -1,36 +1,36 @@
 
-# Nighttime Timelapse Airplane Remover
+# Starry Timelapse Airplane Remover
 
-The Nighttime Timelapse Airplane Remover (ntar) is a software package that performs the removal of airplane streaks from night time timelapse videos.
+The Starry Timelapse Airplane Remover (star) is a software package that performs the removal of airplane streaks from night time timelapse videos.
 
 ## Comparison videos from northern esmerelda county, Nevada, USA
 
 It was this nearly cloudless night last year that kicked off this project for me.
 
-The processed video was run through the command line ntar first, and then hand edited with the new gui version of ntar frame by frame for some corrections.
+The processed video was run through the command line star first, and then hand edited with the new gui version of star frame by frame for some corrections.
 
 ### original video
 
 https://vimeo.com/803304507
 
-### processed with ntar 0.2.0
+### processed with star 0.2.0
 
 https://vimeo.com/803303679
 
 ## Description
 
-NTar operates upon a still image sequence, and outputs a modified sequence which can be then rendered into a video with ffmpeg or other software.  It has been designed as part of a post processing workflow, so it currently only operates on 16 bit tiff still image sequences.
+Star operates upon a still image sequence, and outputs a modified sequence which can be then rendered into a video with ffmpeg or other software.  It has been designed as part of a post processing workflow, so it currently only operates on 16 bit tiff still image sequences.
 
-To operate directly on video files, the ntar.pl script is included to use ffmpeg to de-code the given video and then re-encode the ntar results into a video.
+To operate directly on video files, the star.pl script is included to use ffmpeg to de-code the given video and then re-encode the star results into a video.
 
-The purpose of ntar is to remove airplane and satellite streaks from overnight timelapse videos.  These can be distrating to viewers, who often assume them to be 'shooting stars', because the move so fast in a timelapse.  For years I've accepted airplanes in the night sky in my timelapses.  When using shorter shutter speeds, I like them when they can be seen landing.  But when out in really dark skies in the middle of nowhere, I don't like them to show up, and I think such videos often benefit from removing airplanes.
+The purpose of star is to remove airplane and satellite streaks from overnight timelapse videos.  These can be distrating to viewers, who often assume them to be 'shooting stars', because the move so fast in a timelapse.  For years I've accepted airplanes in the night sky in my timelapses.  When using shorter shutter speeds, I like them when they can be seen landing.  But when out in really dark skies in the middle of nowhere, I don't like them to show up, and I think such videos often benefit from removing airplanes.
 
 Be aware that meteor trails will be removed as well, these can be re-added later with the gui front end, but flash on a single frame usually.  I've considered adding a meteor enhancing feature to spread out selected meteors over a few frames, but have yet to do so.
 
 ## Software
 
-NTar contains three applications:
- - the ntar command line application
+Star contains three applications:
+ - the star command line application
  - a gui front end
  - a machine learning decision tree generator
 
@@ -40,7 +40,7 @@ The code is all written in swift.
 
 ### Algorithm
 
-At a high level, ntar operates in a number of steps:
+At a high level, star operates in a number of steps:
 
 1. look at every pixel in every frame and look for pixels that are markedly brighter than those in adjecnt frames.  These are called outliers.
 2. within each frame, group these pixels into groups, discarding some smaller ones.  These are called outlier groups.
@@ -75,13 +75,13 @@ Given a set of labeled data, the decision tree generator writes out a tree of de
 
 If a new classification feature is later added, the decision tree generator can be recompiled and re-run on the same existing data set to potentially improve accuracy.
 
-The best classifier I've developed so far involves splitting up the training data into chunks, and removing one of these chunks from the training set for one of the trees.  I then test these trees against a test set of data that they were not trained on, to produce a score for each tree.  A higher level classifier then combines the scores from all of the trees from this training set, weighted by their scores.  This is similar to getting a group consensus on the final result.  Depending upon the training set, this can boost the overall accuracy by 0.5-2%.  Ntar 0.3.2 has a classifier that showed 98.61% accuracy on non trained test data.  Working to increase the number of nines.
+The best classifier I've developed so far involves splitting up the training data into chunks, and removing one of these chunks from the training set for one of the trees.  I then test these trees against a test set of data that they were not trained on, to produce a score for each tree.  A higher level classifier then combines the scores from all of the trees from this training set, weighted by their scores.  This is similar to getting a group consensus on the final result.  Depending upon the training set, this can boost the overall accuracy by 0.5-2%.  Star 0.3.2 has a classifier that showed 98.61% accuracy on non trained test data.  Working to increase the number of nines.
 
 A future approach is to try something like adaboost.
 
 A completely different approach would be to use a convolutional neural network to better visually identify pixel groups.
 
-Regardless of the classifier used, more data to train means more accuracy in the field.  A future feature of ntar will allow users to submit data sets they've validated themselves, to allow for a larger data set to train from.   
+Regardless of the classifier used, more data to train means more accuracy in the field.  A future feature of star will allow users to submit data sets they've validated themselves, to allow for a larger data set to train from.   
 
 ## Getting Started
 
@@ -89,9 +89,7 @@ Download the latest release from here:
 
 https://github.com/brianm998/nighttime_timelapse_airplane_remover/releases
 
-Two packages are available for installation, both called 'ntar'.
-
-One is for the command line, the other is a graphical application which is a super set of the command line app.
+Two packages are available for installation, the command line application is called 'star', the gui application is called Star.app.
 
 One or both can be installed.
 
@@ -101,22 +99,22 @@ Still under active development, feel free to reach out to me if you have any que
 
 Current workflow
 
-The workflow that I'm using with ntar right now is to process via ntar as the very final step of image sequence processing before rendering video files.
+The workflow that I'm using with star right now is to process via star as the very final step of image sequence processing before rendering video files.
 
-What ntar needs is a sequence of 16 bit tiff files.  If anyone works with any other kind of file, feel free to file a feature request for that.
+What star needs is a sequence of 16 bit tiff files.  If anyone works with any other kind of file, feel free to file a feature request for that.
 
 I use Adobe Lightroom w/ LRTimelapse to generate the initial set of images for each sequence I shoot.  I then process with other software, oftentimes Topaz Denoise for the overnight shots.
 
-Next, I run `ntar -w (path to image sequence)` on the command line to run the initial processing of the sequence through ntar.  This generates a number of directories next to the one you passed, with the same name followed by an extention.  This includes the fully processed set of images that is generated without the `-w` on the commane line, as well as a bunch of sidecar directories with extensions, including a json file of the config that the sequence was processed with.  
+Next, I run `star -w (path to image sequence)` on the command line to run the initial processing of the sequence through star.  This generates a number of directories next to the one you passed, with the same name followed by an extention.  This includes the fully processed set of images that is generated without the `-w` on the commane line, as well as a bunch of sidecar directories with extensions, including a json file of the config that the sequence was processed with.  
 
-This json config file can be then opened in the ntar GUI application, to:
+This json config file can be then opened in the star GUI application, to:
 
  - preview the changes before rendering it
  - make adjustements to any of the changes
 
 If I'm generating a set of data to train from, I'll step through each frame, looking at the parts of the image that have been classified one way or the other to make sure they are right.  This can take an hour or more for a sequence of 2000 frames.
 
-If I'm not planning on using a sequence for data training, I'll first play and scrub through the video in the ntar gui to see if anything looks wrong.  If so, I'll then narrow down on the frame(s) in question and adjust just those.  This can be a lot faster.
+If I'm not planning on using a sequence for data training, I'll first play and scrub through the video in the star gui to see if anything looks wrong.  If so, I'll then narrow down on the frame(s) in question and adjust just those.  This can be a lot faster.
 
 ## Known issues
 
@@ -124,11 +122,11 @@ If I'm not planning on using a sequence for data training, I'll first play and s
 
 When airplanes go through clouds, depending upon how close they are to both you and the clouds, some amount of brightness will increase in the clouds.
 
-As of ntar 0.3.3, the brightest part of this will be detected.  However, after removal, a ghost airplane is sometimes visible, sometimes also with a lasting contrail.  This means that these airplanes are not completely removed, but largely reduced.
+As of star 0.3.3, the brightest part of this will be detected.  However, after removal, a ghost airplane is sometimes visible, sometimes also with a lasting contrail.  This means that these airplanes are not completely removed, but largely reduced.
 
 ### Undetected Vehicles
 
-As of ntar 0.3.3, certain moving vehicles in the video aren't detected, so they're not available for the classifier to decide upon. 
+As of star 0.3.3, certain moving vehicles in the video aren't detected, so they're not available for the classifier to decide upon. 
 
 This includes airplanes that appear as a sequence of small bright dots without changed pixels inbetween them.  The closer the changed pixels look like a line the more likely they will be detected.  If the dots are the same size or smaller than large stars, then they are unlikley to be detected currently.
 
@@ -140,7 +138,7 @@ Further work is required to address these issues.
 
 ### Crashes
 
-When running under heavy load (and with larger -n command line values) ntar is currently prone to memory corruption issues, leading to a crash.
+When running under heavy load (and with larger -n command line values) star is currently prone to memory corruption issues, leading to a crash.
 
 I've tracked this down to a bug in swift itself, and filed https://github.com/apple/swift/issues/65537 to track getting it fixed.
 
@@ -152,9 +150,9 @@ This slowness is one reason I leave much of the processing to the command line a
 
 ### Gui not complete
 
-The ntar gui application does work, but the workflow of working only in the gui isn't fully fleshed out yet.
+The star gui application does work, but the workflow of working only in the gui isn't fully fleshed out yet.
 
-Currently I run `ntar -w` on the command line, and then load up the resulting config file in the gui to correct for any errors after the sequence has been processed on the command line first.
+Currently I run `star -w` on the command line, and then load up the resulting config file in the gui to correct for any errors after the sequence has been processed on the command line first.
 
 In the future I'll make the GUI work better standalone.  Right now it's best used for fixing errors in the classifier, both for creating more training data, as well as making better looking videos.
 
@@ -169,6 +167,6 @@ Common misclassifications are currently:
 
 More data and further algorithmic improvements should increase accuracy and make manually validation results both faster and less necessary.
 
-Ideally ntar will get to a place where for most image sequences it can just 'work' without user doing anything besides telling it what image sequence to process.
+Ideally star will get to a place where for most image sequences it can just 'work' without user doing anything besides telling it what image sequence to process.
 
 Right now it can do that, if a few small errors are ok.  This means a few airplanes are still popping up in one spot or two, and some clouds or terrain are changed when they shouldn't be.
