@@ -1,5 +1,5 @@
 import Foundation
-import NtarCore
+import StarCore
 
 // a classifier which simulates at runtime what the forest classifier is written to do,
 // delegate classification to a set of other weighted classifiers 

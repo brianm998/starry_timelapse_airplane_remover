@@ -1,5 +1,5 @@
 import Foundation
-import NtarCore
+import StarCore
 
 // end leaf node which always returns 100% negative
 @available(macOS 10.15, *) 

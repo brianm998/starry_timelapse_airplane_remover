@@ -9,14 +9,13 @@ platform :macos, '13.0'
 # https://github.com/CocoaPods/CocoaPods/issues/8073
 # https://openradar.appspot.com/41126633
 
-target 'ntar' do
+target 'star' do
   use_frameworks!
 
 #  pod 'ArgumentParser'
-  pod 'NtarCore', :path => "../NtarCore"
+  pod 'StarCore', :path => "../StarCore"
 #  pod 'Zoomable', { :git => "git@github.com:brianm998/Zoomable", :branch => "main" }
   pod 'Zoomable',  :path => "../../Zoomable"
-  pod 'BinaryCodable',  :path => "../../BinaryCodable"
   
   # this gets rid of some localizability warnings on the pods xcode project
   post_install do |installer|

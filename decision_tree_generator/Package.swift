@@ -9,7 +9,7 @@ let package = Package(
         // Dependencies declare other packages that this package depends on.
         // .package(url: /* package url */, from: "1.0.0"),
         .package(url: "https://github.com/apple/swift-argument-parser", from: "1.0.0"),
-        .package(name: "NtarCore", path: "../NtarCore"),
+        .package(name: "StarCore", path: "../StarCore"),
     ],
     targets: [
         // Targets are the basic building blocks of a package. A target can define a module or a test suite.
@@ -18,16 +18,14 @@ let package = Package(
             name: "decision_tree_generator",
             dependencies: [
               .product(name: "ArgumentParser", package: "swift-argument-parser"),
-              .product(name: "NtarCore", package: "NtarCore"),
+              .product(name: "StarCore", package: "StarCore"),
             ],
             linkerSettings: [
               .unsafeFlags([
-                             "-L../NtarDecisionTrees",
+                             "-L../StarDecisionTrees",
                              "-Xlinker", "-all_load",
-                             //"-Xlinker", "-force_load",
-                             //"../NtarDecisionTrees/libNtarDecisionTrees.a"
                            ]),
-              .linkedLibrary("NtarDecisionTrees")
+              .linkedLibrary("StarDecisionTrees")
             ]),
         .testTarget(
             name: "decision_tree_generatorTests",

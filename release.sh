@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# this script produces a new release of ntar
+# this script produces a new release of star
 #
 # created are a zip file in releases/ and local and remote release tags
 
@@ -10,7 +10,7 @@ set -e
 # first build the decision tree code into a static, universal library (.a file)
 # this can be large, and is linked into both the gui and cli apps
 ####
-cd NtarDecisionTrees
+cd StarDecisionTrees
 rm -rf .build
 
 # build for x86
@@ -22,9 +22,9 @@ swift build --configuration release --arch arm64  -Xswiftc -emit-module -Xswiftc
 mv *.a .build/arm64-apple-macosx
 
 # lipo them together into a universal .a file for both archs
-lipo .build/arm64-apple-macosx/libNtarDecisionTrees.a \
-     .build/x86_64-apple-macosx/libNtarDecisionTrees.a \
-     -create -output libNtarDecisionTrees.a
+lipo .build/arm64-apple-macosx/libStarDecisionTrees.a \
+     .build/x86_64-apple-macosx/libStarDecisionTrees.a \
+     -create -output libStarDecisionTrees.a
 
 cd ..
 
@@ -36,7 +36,7 @@ cd cli
 cd ..
 
 # result ends up here:
-# cli/.build/ntar_cli_${NTAR_VERSION}.pkg"
+# cli/.build/star_cli_${STAR_VERSION}.pkg"
 
 
 ####
@@ -47,7 +47,7 @@ cd gui
 cd ..
 
 # results end up here:
-# gui/.build/ntar_app_${NTAR_VERSION}.pkg"
+# gui/.build/star_app_${STAR_VERSION}.pkg"
 
 
 ####
@@ -56,5 +56,5 @@ cd ..
 
 ./finishRelease.sh
 
-# output should be in releases/ntar-${NTAR_VERSION}.zip
-# tag release/${NTAR_VERSION} should be on both local and remote
+# output should be in releases/star-${STAR_VERSION}.zip
+# tag release/${STAR_VERSION} should be on both local and remote

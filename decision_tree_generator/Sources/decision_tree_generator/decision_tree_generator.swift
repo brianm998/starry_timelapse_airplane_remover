@@ -1,5 +1,5 @@
 import Foundation
-import NtarCore
+import StarCore
 import ArgumentParser
 import CryptoKit
 
@@ -445,7 +445,7 @@ struct decision_tree_generator: ParsableCommand {
                                                   maxDepth: maxDepth)
 
             
-            let base_filename = "../NtarDecisionTrees/Sources/NtarDecisionTrees/OutlierGroupDecisionTreeForest_"
+            let base_filename = "../starDecisionTrees/Sources/starDecisionTrees/OutlierGroupDecisionTreeForest_"
 
             
             let (forest, testData) =
@@ -454,7 +454,7 @@ struct decision_tree_generator: ParsableCommand {
                                                  treeCount: forestSize,
                                                  baseFilename: base_filename) 
 
-            let forest_base_filename = "../NtarDecisionTrees/Sources/NtarDecisionTrees/OutlierGroupForestClassifier_"
+            let forest_base_filename = "../starDecisionTrees/Sources/starDecisionTrees/OutlierGroupForestClassifier_"
 
             let classifier = try await generator.writeClassifier(with: forest, baseFilename: forest_base_filename)
 
@@ -667,7 +667,7 @@ struct decision_tree_generator: ParsableCommand {
                                               pruneTree: prune,
                                               maxDepth: maxDepth)
 
-        let base_filename = "../NtarDecisionTrees/Sources/NtarDecisionTrees/OutlierGroupDecisionTree_"
+        let base_filename = "../starDecisionTrees/Sources/starDecisionTrees/OutlierGroupDecisionTree_"
 
         let treeResponse = 
           try await generator.generateTree(withTrainingData: trainingData,

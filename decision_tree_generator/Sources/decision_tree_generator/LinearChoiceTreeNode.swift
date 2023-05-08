@@ -1,5 +1,5 @@
 import Foundation
-import NtarCore
+import StarCore
 
 @available(macOS 10.15, *) 
 class LinearChoiceTreeNode: SwiftDecisionTree {

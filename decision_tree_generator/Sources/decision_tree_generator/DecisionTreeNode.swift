@@ -1,6 +1,6 @@
 
 import Foundation
-import NtarCore
+import StarCore
 
 // decision node which decides upon a value of some type
 // delegating to one of two further code paths

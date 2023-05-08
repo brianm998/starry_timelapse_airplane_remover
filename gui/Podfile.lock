@@ -1,18 +1,16 @@
 PODS:
-  - BinaryCodable (0.0.1)
-  - NtarCore (0.1.2)
   - SDWebImage (5.15.5):
     - SDWebImage/Core (= 5.15.5)
   - SDWebImage/Core (5.15.5)
   - SDWebImageSwiftUI (2.2.2):
     - SDWebImage (~> 5.10)
+  - StarCore (0.1.2)
   - Zoomable (0.0.1):
     - SDWebImage
     - SDWebImageSwiftUI
 
 DEPENDENCIES:
-  - BinaryCodable (from `../../BinaryCodable`)
-  - NtarCore (from `../NtarCore`)
+  - StarCore (from `../StarCore`)
   - Zoomable (from `../../Zoomable`)
 
 SPEC REPOS:
@@ -21,20 +19,17 @@ SPEC REPOS:
     - SDWebImageSwiftUI
 
 EXTERNAL SOURCES:
-  BinaryCodable:
-    :path: "../../BinaryCodable"
-  NtarCore:
-    :path: "../NtarCore"
+  StarCore:
+    :path: "../StarCore"
   Zoomable:
     :path: "../../Zoomable"
 
 SPEC CHECKSUMS:
-  BinaryCodable: 7693e29edaab2a1ae165acf76f9803f7497d1ef7
-  NtarCore: 905dffcb5ef4d2c207dda9e27e682b2024da14b7
   SDWebImage: fd7e1a22f00303e058058278639bf6196ee431fe
   SDWebImageSwiftUI: 54ded4115b4ac6cd60b78f61415f86d070892d98
+  StarCore: 58d0bbb4c4ee7c915bde301cad3a8f8d976518e8
   Zoomable: 59bba07c49251a6171fa5ee9674750fb75cc75a3
 
-PODFILE CHECKSUM: faeaf902fbae8f4f1a623154ee1e9bcf2ff750e5
+PODFILE CHECKSUM: 21200a3a91d459fe5dc6eec5605c9ce7b1842241
 
 COCOAPODS: 1.12.0
