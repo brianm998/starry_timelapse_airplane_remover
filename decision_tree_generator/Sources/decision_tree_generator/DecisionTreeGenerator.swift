@@ -37,29 +37,26 @@ actor DecisionTreeGenerator {
     }
 
     func generateForest(withInputData input_data: ClassifiedData,
+                        andTestData test_data: [ClassifiedData],
                         inputFilenames: [String],
                         treeCount: Int,
-                        baseFilename: String) async throws -> ([TreeForestResult], [ClassifiedData])
+                        baseFilename: String) async throws -> [TreeForestResult]
     {
         /*
-         split the input data into treeCount + 1  evenly spaced groups
+         split the input data into treeCount evenly spaced groups
 
-         use one for test data
+         each tree has one of these data groups removed for validation,
 
-         use the rest for validation and training,
-
-         one for validation and the others for training,
-         creating treeCount different trees
+         not training, creating treeCount different trees.
          
-         then write out a classifier which classifies based upon the weighted sum of all of them
+         finally write out a classifier which decides based upon the weighted
+         sum of all of the trees in this forest, a group consensus.
          */
-
         
-        var input_data_split = input_data.shuffleSplit(into: treeCount + 1)
+        var input_data_split = input_data.shuffleSplit(into: treeCount)
 
         var validationData = ClassifiedData()
-        var testData = input_data_split.removeFirst().split(into: ProcessInfo.processInfo.activeProcessorCount)
-        
+
         let trees = try await withLimitedThrowingTaskGroup(of: TreeForestResult.self) { taskGroup in
             var results: [TreeForestResult] = []
             for validation_index in 0..<input_data_split.count {
@@ -75,7 +72,7 @@ actor DecisionTreeGenerator {
                         }
                     }
 
-                    Log.i("have \(validationData.count) validationData, \(testData.map { $0.count }.reduce(0, +)) testData and \(trainingData.count) trainingData @ validation index \(validation_index)")
+                    Log.i("have \(validationData.count) validationData, \(test_data.map { $0.count }.reduce(0, +)) test_data and \(trainingData.count) trainingData @ validation index \(validation_index)")
                     
                     let tree = try await self.generateTree(withTrainingData: trainingData,
                                                            andTestData: validationData,
@@ -95,7 +92,7 @@ actor DecisionTreeGenerator {
                                             attributes: nil)
 
                     // run test on test data
-                    var (tree_good, tree_bad) = await runTest(of: tree, onChunks: testData)
+                    var (tree_good, tree_bad) = await runTest(of: tree, onChunks: test_data)
                     let score = Double(tree_good)/Double(tree_good + tree_bad)
                     
                     return TreeForestResult(tree: tree, testScore: score)
@@ -105,7 +102,7 @@ actor DecisionTreeGenerator {
             return results
         }
 
-        return (trees, testData)
+        return trees
     }    
 
     func writeClassifier(with forest: [TreeForestResult],

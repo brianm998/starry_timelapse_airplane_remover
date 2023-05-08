@@ -125,9 +125,9 @@ struct decision_tree_generator: ParsableCommand {
     var noPrune = false
     
     @Argument(help: """
-                A list of files, which can be either a reference to a config.json file,
-                or a reference to a directory containing files ending with '_outlier_values.bin'
-        """)
+            A list of files, which can be either a reference to a config.json file,
+            or a reference to a directory containing data csv files.
+            """)
     var input_filenames: [String]
     
     mutating func run() throws {
@@ -447,9 +447,12 @@ struct decision_tree_generator: ParsableCommand {
             
             let base_filename = "../starDecisionTrees/Sources/starDecisionTrees/OutlierGroupDecisionTreeForest_"
 
+            // test data gathered from -t on command line
+            let testData = try await loadTestData().split(into: ProcessInfo.processInfo.activeProcessorCount)
             
-            let (forest, testData) =
+            let forest =
               try await generator.generateForest(withInputData: loadTrainingData(),
+                                                 andTestData: testData,
                                                  inputFilenames: input_filenames,
                                                  treeCount: forestSize,
                                                  baseFilename: base_filename) 
@@ -458,7 +461,7 @@ struct decision_tree_generator: ParsableCommand {
 
             let classifier = try await generator.writeClassifier(with: forest, baseFilename: forest_base_filename)
 
-            // test classifier and see how well it does on the training data
+            // test classifier and see how well it does on the test data
 
             let (good, bad) = await runTest(of: classifier, onChunks: testData)
             let score = Double(good)/Double(good + bad)
