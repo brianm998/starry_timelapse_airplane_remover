@@ -1,7 +1,7 @@
 
 # Starry Timelapse Airplane Remover
 
-The Starry Timelapse Airplane Remover (star) is a software package that performs the removal of airplane streaks from night time timelapse videos.
+The Starry Timelapse Airplane Remover (Star) is a software package that performs the removal of airplane streaks from night time timelapse videos.
 
 ## Comparison videos from northern esmerelda county, Nevada, USA
 
@@ -42,12 +42,13 @@ The code is all written in swift.
 
 At a high level, star operates in a number of steps:
 
-1. look at every pixel in every frame and look for pixels that are markedly brighter than those in adjecnt frames.  These are called outliers.
-2. within each frame, group these pixels into groups, discarding some smaller ones.  These are called outlier groups.
-3. apply some selection criteria to determine which outlier groups to paint over
-4. paint over selected outlier groups in each frame with pixel values from an adjecent frame 
+1. detect groups of brighter (outlying) pixels 
+2. classify these groups into those which should remain and those which should not
+3. paint over the undesirable ones with pixels from an adjecent frame
 
-The tricky part is step #3, trying to decide what outlier groups in the image are airplane streaks.
+Detection is not easy, detect too many changes and computational complexity becomes unweildly.  Detect too little changes and some airplanes will manage to sneak through without even being detected, much less classified.  This step is not fast.
+
+The trickiest part however is step #2, trying to decide what outlier groups in the image are airplane streaks.
 
 #### Original Approach
 
@@ -87,7 +88,7 @@ Regardless of the classifier used, more data to train means more accuracy in the
 
 Download the latest release from here:
 
-https://github.com/brianm998/nighttime_timelapse_airplane_remover/releases
+https://github.com/brianm998/starry_timelapse_airplane_remover/releases
 
 Two packages are available for installation, the command line application is called 'star', the gui application is called Star.app.
 
