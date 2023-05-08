@@ -152,7 +152,6 @@ public class ImageSequenceProcessor<T> {
     
     public func run() async throws {
         Log.d("run")
-        let local_dispatch = DispatchGroup()
         let task = Task { try await startup_hook() }
         try await task.value
 
