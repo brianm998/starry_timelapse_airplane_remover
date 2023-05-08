@@ -20,7 +20,7 @@ public enum DecisionSplitType: String {
 public var decisionTrees: [String: NamedOutlierGroupClassifier] = loadOutlierGroupClassifiers()
 
 // try to load this classifier at runtime
-public let currentClassifierName = "95bc68ea"
+public let currentClassifierName = "56560337"
 
 @available(macOS 10.15, *)
 public var currentClassifier: NamedOutlierGroupClassifier? = loadCurrentClassifiers()
