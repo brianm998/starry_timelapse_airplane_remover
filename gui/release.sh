@@ -77,7 +77,7 @@ ditto \
 
 xcrun notarytool submit \
       "${BUILD_DIR}/${APP_NAME}-for-notarization.zip" \
-      --keychain-profile "star" \
+      --keychain-profile "ntar" \
       --wait 
 
 WAIT_TIME=20
@@ -103,7 +103,7 @@ pkgbuild --root "${BUILD_DIR}/AdHoc/${APP_NAME}.app" \
 
 # not sure if we need to notarize and staple both the app and the package,
 # seems to work now, adjust as if necessary later
-xcrun notarytool submit $PKG_NAME --keychain-profile star --wait
+xcrun notarytool submit $PKG_NAME --keychain-profile ntar --wait
 xcrun stapler staple $PKG_NAME
 
 # set to build for active arch only for development (as it is in git)
