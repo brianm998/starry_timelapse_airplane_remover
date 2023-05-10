@@ -109,28 +109,25 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
     
     public func writePreviewFile(_ image: NSImage) {
         Log.d("frame \(self.frame_index) doing preview")
-        if config.writeFramePreviewFiles {
+        if config.writeFramePreviewFiles,
+           let filename = self.previewFilename
+        {
+            if file_manager.fileExists(atPath: filename) {
+                Log.i("not overwriting already existing preview \(filename)")
+                return
+            }
+            
             Log.d("frame \(self.frame_index) doing preview")
             let preview_size = self.previewSize
             
             if let scaledImage = image.resized(to: preview_size),
-               let imageData = scaledImage.jpegData,
-               let filename = self.previewFilename
+               let imageData = scaledImage.jpegData
             {
-                do {
-                    if file_manager.fileExists(atPath: filename) {
-                        Log.i("overwriting already existing filename \(filename)")
-                        try file_manager.removeItem(atPath: filename)
-                    }
-
-                    // write to file
-                    file_manager.createFile(atPath: filename,
-                                            contents: imageData,
-                                            attributes: nil)
-                    Log.i("frame \(self.frame_index) wrote preview to \(filename)")
-                } catch {
-                    Log.e("\(error)")
-                }
+                // write to file
+                file_manager.createFile(atPath: filename,
+                                        contents: imageData,
+                                        attributes: nil)
+                Log.i("frame \(self.frame_index) wrote preview to \(filename)")
             } else {
                 Log.w("frame \(self.frame_index) WTF")
             }
@@ -141,30 +138,27 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
 
     public func writeThumbnailFile(_ image: NSImage) {
         Log.d("frame \(self.frame_index) doing preview")
-        if config.writeFrameThumbnailFiles {
+        if config.writeFrameThumbnailFiles,
+           let filename = self.thumbnailFilename
+        {
+            if file_manager.fileExists(atPath: filename) {
+                Log.i("not overwriting already existing thumbnail filename \(filename)")
+                return
+            }
+
             Log.d("frame \(self.frame_index) doing thumbnail")
             let thumbnail_width = config.thumbnail_width
             let thumbnail_height = config.thumbnail_height
             let thumbnail_size = NSSize(width: thumbnail_width, height: thumbnail_height)
             
             if let scaledImage = image.resized(to: thumbnail_size),
-               let imageData = scaledImage.jpegData,
-               let filename = self.thumbnailFilename
+               let imageData = scaledImage.jpegData
             {
-                do {
-                    if file_manager.fileExists(atPath: filename) {
-                        Log.i("overwriting already existing filename \(filename)")
-                        try file_manager.removeItem(atPath: filename)
-                    }
-
-                    // write to file
-                    file_manager.createFile(atPath: filename,
-                                            contents: imageData,
-                                            attributes: nil)
-                    Log.i("frame \(self.frame_index) wrote thumbnail to \(filename)")
-                } catch {
-                    Log.e("\(error)")
-                }
+                // write to file
+                file_manager.createFile(atPath: filename,
+                                        contents: imageData,
+                                        attributes: nil)
+                Log.i("frame \(self.frame_index) wrote thumbnail to \(filename)")
             } else {
                 Log.w("frame \(self.frame_index) WTF")
             }
@@ -996,6 +990,9 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
         {
             Log.d("frame \(self.frame_index) doing preview")
             if let baseImage = image.baseImage {
+                // maybe write previews
+                // these are not overwritten as the original
+                // is assumed to be not change
                 self.writePreviewFile(baseImage)
                 self.writeThumbnailFile(baseImage)
             } else {
@@ -1044,7 +1041,7 @@ public actor FrameAirplaneRemover: Equatable, Hashable {
             {
                 do {
                     if file_manager.fileExists(atPath: filename) {
-                        Log.i("overwriting already existing filename \(filename)")
+                        Log.i("overwriting already existing processed preview \(filename)")
                         try file_manager.removeItem(atPath: filename)
                     }
 
