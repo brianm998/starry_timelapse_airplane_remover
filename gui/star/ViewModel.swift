@@ -18,6 +18,9 @@ public class ViewModel: ObservableObject {
     
     @Published var frame_width: CGFloat = 600
     @Published var frame_height: CGFloat = 450
+
+    @Published var showErrorAlert = false
+    @Published var errorMessage: String = ""
     
     var label_text: String = "Started"
 

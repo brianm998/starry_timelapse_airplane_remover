@@ -61,8 +61,28 @@ import StarCore
     - have outliers
     - saving
 
-  - show progress in saving in UI
+    - show progress in saving in UI
+
+
+  - add slider for outlier opacity
+
+  - add overlay grid which shows color based upon what kind of outliers are inside:
+    - blank for nothing
+    - green for only no paint
+    - red for only paint
+    - purple for both
+    - configurable number of boxes on each axis
+
+  - add frame number to all views
+  - show number of outliers in each frame, of each type
+  - feature to allow splitting up outliers that include both cloud and airplane
+  - toggle to make outliers flash (either kind)
+  - function to allow render of all frames that are not present and also those that have changed
+  - add feature to fuzz out some outliers, such as light leak from airplanes into clouds
+    without this, ghost airplanes are still seen, the bright parts of the streak are gone,
+    but a halo around still persists.  XXX somehow detect this beforehand? XXX
  */
+
 
 @main
 class star_app: App {
@@ -186,6 +206,10 @@ class star_app: App {
                 Log.d("outlier json startup done")
             } catch {
                 Log.e("\(error)")
+                await MainActor.run {
+                    viewModel.showErrorAlert = true
+                    viewModel.errorMessage = "\(error)"
+                }
             }
             dispatchGroup.leave()
         }

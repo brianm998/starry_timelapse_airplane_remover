@@ -111,8 +111,14 @@ struct ContentView: View {
                         previously_opened_sheet_showing_item: $previously_opened_sheet_showing_item)
         } else {
             sequenceView()
-        }
+              .alert(isPresented: $viewModel.showErrorAlert) {
+                  Alert(title: Text("Error"),
+                        message: Text(viewModel.errorMessage),
+                        primaryButton: .default(Text("Ok")) { viewModel.sequenceLoaded = false },
+                        secondaryButton: .default(Text("F")) { viewModel.sequenceLoaded = false } )
 
+              }
+        }
     }
     
     // main view of an image seuqence
