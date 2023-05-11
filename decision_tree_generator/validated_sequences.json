@@ -1,0 +1,22 @@
+{
+    "/qp/ntar_validated" : [
+	"LRT_09_24_2022-a7iv-2-aurora-topaz-star-v-0_1_3",
+	"LRT_09_24_2022-a7riiia-1a-aurora-topaz-star-v-0_2_0",
+	"LRT_12_22_2022-a9-2-aurora-topaz-star-v-0_2_0",
+	"LRT_12_22_2022-a7riiia-1-aurora-topaz-star-v-0_2_0",
+	"LRT_02_18_2023-a7iv-2-aurora-topaz-star-v-0_2_0",
+	"LRT_02_18_2023-a7riiia-2-aurora-topaz-star-v-0_2_0",
+	"LRT_04_22_2023-a7iv-3-aurora-topaz-star-v-0_3_2"
+    ],
+    
+    "/rp/ntar_validated" : [
+	"LRT_02_18_2023-a7sii-2-aurora-topaz-star-v-0_2_0",
+	"LRT_06_27_2022-a7iv-1-aurora-topaz-star-v-0_2_0",
+	"LRT_03_25_2023-a7iv-3-aurora-topaz-star-v-0_2_0",
+	"LRT_04_22_2023-a7sii-2-aurora-topaz-star-v-0_3_1",
+	"LRT_04_22_2023-a7riii-1-aurora-topaz-star-v-0_3_2",
+	"LRT_04_22_2023-a7riiia-1-aurora-topaz-star-v-0_3_3",
+	"LRT_03_25_2023-a9-3-aurora-topaz-star-v-0_3_3",
+	"LRT_03_25_2023-a7sii-2-aurora-topaz-star-v-0_3_3"
+    ]
+}
