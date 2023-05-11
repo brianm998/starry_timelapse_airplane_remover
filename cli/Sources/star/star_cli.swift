@@ -194,10 +194,6 @@ struct Star: ParsableCommand {
 
     @Flag(name: .shortAndLong, help:"only write out outlier data, not images")
     var skipOutputFiles = false
-    
-    @Flag(name: .customShort("q"),
-          help:"process individual outlier group image files")
-    var process_outlier_group_images = false
 
     @Argument(help: """
         Image sequence dirname to process. 
@@ -208,32 +204,13 @@ struct Star: ParsableCommand {
 
     mutating func run() throws {
 
+        
         if version {
             print("""
                   Nighttime Timelapse Airplane Remover (star) version \(config.star_version)
                   """)
             return
         }
-        
-        if process_outlier_group_images {
-            let airplanes_group = "outlier_data/airplanes"
-            let non_airplanes_group = "outlier_data/non_airplanes"
-            
-            do {
-                let max_pixel_distance = UInt16((outlierMaxThreshold/100)*0xFFFF) // XXX 16 bit hardcode
-
-                try process_outlier_groups(dirname: airplanes_group,
-                                           max_pixel_distance: max_pixel_distance)
-                try process_outlier_groups(dirname: non_airplanes_group,
-                                           max_pixel_distance: max_pixel_distance)
-            } catch {
-                Log.e(error)
-            }
-            
-            return
-        }
-
-        // /// make this work for saved json file
         
         if var input_image_sequence_dirname = image_sequence_dirname {
 
@@ -393,73 +370,6 @@ struct Star: ParsableCommand {
         }
         Log.dispatchGroup.wait()
     }
-}
-
-// this method reads all the outlier group text files
-// and (if missing) generates a csv file with the hough transform data from it
-@available(macOS 10.15, *)
-func process_outlier_groups(dirname: String,
-                            max_pixel_distance: UInt16) throws {
-    let dispatchGroup = DispatchGroup()
-    let contents = try file_manager.contentsOfDirectory(atPath: dirname)
-    
-    dispatchGroup.enter()
-    Task {
-        await withTaskGroup(of: Void.self) { group in
-            
-            contents.forEach { file in
-                if file.hasSuffix("txt") {
-                    
-                    let base = (file as NSString).deletingPathExtension
-                    
-                    group.addTask {
-                        do {
-                            let contents = try String(contentsOfFile: "\(dirname)/\(file)")
-                            let rows = contents.components(separatedBy: "\n")
-                            let height = rows.count
-                            let width = rows[0].count
-                            let houghTransform = HoughTransform(data_width: width,
-                                                                data_height: height,
-                                                                max_pixel_distance: max_pixel_distance)
-                            Log.d("size [\(width), \(height)]")
-                            for y in 0 ..< height {
-                                for (x, char) in rows[y].enumerated() {
-                                    if char == "*" {
-                                        houghTransform.input_data[y*width + x] = UInt32(max_pixel_distance)
-                                    }
-                                }
-                            }
-                            let lines = houghTransform.lines(min_count: 1,
-                                                             number_of_lines_returned: 100000)
-                            var csv_line_data: String = "";
-                            lines.forEach { line in
-                                csv_line_data += "\(line.theta),\(line.rho),\(line.count)\n"
-                            }
-
-                            let satsr = surface_area_to_size_ratio(of: houghTransform.input_data,
-                                                                   width: width,
-                                                                   height: height)
-                            
-                            let csv_filename = "\(dirname)/\(base)-\(satsr).csv"
-                            if !file_manager.fileExists(atPath: csv_filename) {
-                                
-                                if let data = csv_line_data.data(using: .utf8) {
-                                    file_manager.createFile(atPath: csv_filename,
-                                                            contents: data,
-                                                            attributes: nil)
-                                }
-                            }
-                        } catch {
-                            Log.e(error)
-                        }
-                    } 
-
-                } 
-            }
-        }
-        dispatchGroup.leave()
-    }
-    dispatchGroup.wait()
 }
 
 // needs ArgumentParser, so it's here in cli land
