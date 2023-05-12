@@ -57,6 +57,10 @@ struct ContentView: View {
 
     @State private var sliderValue = 0.0
 
+    @State private var outlierOpacitySliderValue = 1.0
+
+    @State private var savedOutlierOpacitySliderValue = 1.0
+    
     @State private var videoPlayMode: VideoPlayMode = .forward
     
     @State private var previousInteractionMode: InteractionMode = .scrub
@@ -208,7 +212,7 @@ struct ContentView: View {
                                   self.transition(toFrame: new_frame_view,
                                                   from: current_frame,
                                                   withScroll: scroller)
-                              }
+                            }
                         }
                     }
                 }
@@ -281,6 +285,25 @@ struct ContentView: View {
                               refreshCurrentFrame()
                           }
                           .pickerStyle(.segmented)
+                    }
+                    
+                    // outlier opacity slider
+                    if self.interactionMode == .edit {
+                        VStack {
+                            Text("Outlier Group Opacity")
+                            Slider(value: viewModel.animateOutliers ? $savedOutlierOpacitySliderValue : $outlierOpacitySliderValue, in : 0...1)
+                              .frame(maxWidth: 140, alignment: .bottom)
+                              .disabled(viewModel.animateOutliers)
+                        }
+                        Toggle("Animate Outliers", isOn: $viewModel.animateOutliers)
+                          .onChange(of: viewModel.animateOutliers) { mode_on in
+                              if let frame = viewModel.currentFrame {
+                                  Task {
+                                      await viewModel.setOutlierGroups(forFrame: frame)
+                                      refreshCurrentFrame()
+                                  }
+                              }
+                         } 
                     }
                 }
                   .frame(maxWidth: .infinity, alignment: .leading)
@@ -415,6 +438,25 @@ struct ContentView: View {
                               .foregroundColor(paint_color)
                               .offset(x: CGFloat(outlier_center.x - frame_center_x),
                                       y: CGFloat(outlier_center.y - frame_center_y))
+                              .opacity(outlierOpacitySliderValue)
+                              .id(viewModel.animateOutliers)
+                              .onChange(of: viewModel.animateOutliers) { newValue in
+                                  if newValue {
+                                      savedOutlierOpacitySliderValue = outlierOpacitySliderValue
+                                       withAnimation(  Animation.easeInOut(duration:0.2)
+                                                         .repeatForever(autoreverses:true) 
+                                       )
+                                       {
+                                           outlierOpacitySliderValue = 0.0
+                                       }
+                                  } else {
+                                      outlierOpacitySliderValue = savedOutlierOpacitySliderValue
+                                  }
+                                  
+                                  viewModel.objectWillChange.send()
+                                  refreshCurrentFrame()
+                                  Log.i("changed")
+                              }
                             // tap gesture toggles paintability of the tapped group
                               .onTapGesture {
                                   if let origShouldPaint = outlierViewModel.group.shouldPaint {
