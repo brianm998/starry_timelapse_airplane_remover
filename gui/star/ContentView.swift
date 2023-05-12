@@ -75,6 +75,9 @@ struct ContentView: View {
     @State private var showFullResolution = false
 
     @State private var showFilmstrip = true
+
+    @State private var animatePositiveOutliers = true
+    @State private var animateNegativeOutliers = true
     
     @State private var drag_start: CGPoint?
     @State private var drag_end: CGPoint?
@@ -295,6 +298,7 @@ struct ContentView: View {
                               .frame(maxWidth: 140, alignment: .bottom)
                               .disabled(viewModel.animateOutliers)
                         }
+                        VStack {
                         Toggle("Animate Outliers", isOn: $viewModel.animateOutliers)
                           .onChange(of: viewModel.animateOutliers) { mode_on in
                               if let frame = viewModel.currentFrame {
@@ -303,7 +307,14 @@ struct ContentView: View {
                                       refreshCurrentFrame()
                                   }
                               }
-                         } 
+                          }
+                        HStack {
+                            Toggle("red", isOn: $animatePositiveOutliers)
+                              .disabled(viewModel.animateOutliers)
+                            Toggle("green", isOn: $animateNegativeOutliers)
+                              .disabled(viewModel.animateOutliers)
+                        }
+                        }
                     }
                 }
                   .frame(maxWidth: .infinity, alignment: .leading)
@@ -441,7 +452,10 @@ struct ContentView: View {
                               .opacity(outlierOpacitySliderValue)
                               .id(viewModel.animateOutliers)
                               .onChange(of: viewModel.animateOutliers) { newValue in
-                                  if newValue {
+                                  if newValue &&
+                                     ((will_paint && animatePositiveOutliers) ||
+                                      (!will_paint && animateNegativeOutliers))
+                                  {
                                       savedOutlierOpacitySliderValue = outlierOpacitySliderValue
                                        withAnimation(  Animation.easeInOut(duration:0.2)
                                                          .repeatForever(autoreverses:true) 
