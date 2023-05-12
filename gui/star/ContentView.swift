@@ -93,8 +93,9 @@ struct ContentView: View {
     @State private var video_playback_framerate = 30
     @State var video_playing = false
 
-    @State private var skipEmpties = false
-    // if not skip empties, fast forward and reverse do a set number of frames
+    @State private var fastAdvancementType: FastAdvancementType = .normal
+
+    // if fastAdvancementType == .normal, fast forward and reverse do a set number of frames
     @State private var fast_skip_amount = 20
 
     @State private var settings_sheet_showing = false
@@ -325,6 +326,24 @@ struct ContentView: View {
                 if interactionMode == .edit {
 //                if !video_playing {
                     HStack {
+                        let frameView = viewModel.currentFrameView  
+                        VStack {
+                            Text("frame \(viewModel.current_index)")
+                            if let frame = frameView.frame,
+                               let _ = frameView.outlierViews
+                            {
+                                Text("\(frameView.numberOfPositiveOutliers) will paint")
+                                Text("\(frameView.numberOfNegativeOutliers) will not paint")
+                                if frameView.numberOfUndecidedOutliers > 0 {
+                                    Text("\(frameView.numberOfUndecidedOutliers) undecided")
+                                }
+                            }
+                        }.frame(maxWidth: .infinity, alignment: .trailing)
+                          .id(frameView.numberOfPositiveOutliers)
+                          .id(frameView.numberOfNegativeOutliers)
+                          //.id(frameView.outlierViews)
+
+                        
                         let paint_action = {
                             Log.d("PAINT")
                             paint_sheet_showing = !paint_sheet_showing
@@ -356,7 +375,7 @@ struct ContentView: View {
                           SettingsSheetView(isVisible: self.$settings_sheet_showing,
                                             fast_skip_amount: self.$fast_skip_amount,
                                             video_playback_framerate: self.$video_playback_framerate,
-                                            skipEmpties: self.$skipEmpties)
+                                            fastAdvancementType: self.$fastAdvancementType)
                       }
                       .sheet(isPresented: $paint_sheet_showing) {
                           MassivePaintSheetView(isVisible: self.$paint_sheet_showing,
@@ -442,7 +461,7 @@ struct ContentView: View {
                             let will_paint = outlierViewModel.group.shouldPaint?.willPaint ?? false
 
                             // this nested trinary sucks
-                            let paint_color: Color = outlierViewModel.isSelected ? .blue : (will_paint ? .red : .green)
+                            let paint_color = outlierViewModel.selectionColor
 
                             Image(nsImage: outlierViewModel.image)
                               .renderingMode(.template) // makes this VV color work
@@ -451,6 +470,8 @@ struct ContentView: View {
                                       y: CGFloat(outlier_center.y - frame_center_y))
                               .opacity(outlierOpacitySliderValue)
                               .id(viewModel.animateOutliers)
+                              //.id(animatePositiveOutliers)
+                              //.id(animateNegativeOutliers)
                               .onChange(of: viewModel.animateOutliers) { newValue in
                                   if newValue &&
                                      ((will_paint && animatePositiveOutliers) ||
@@ -780,7 +801,7 @@ struct ContentView: View {
         }
     }
     
-    func rightSideButtons() -> some View {
+    func rightSideButtons() -> some View { // XXX not used anymore
         VStack {
 
             paintAllButton()
@@ -1009,9 +1030,11 @@ struct ContentView: View {
                 }
             }
         }
+        let shortcutKey: KeyEquivalent = "d"
         return Button(action: action) {
             Text("Decision Tree All")
         }
+          .keyboardShortcut(shortcutKey, modifiers: [])
           .help("apply the outlier group decision tree to all outlier groups in this frame")
     }
 
@@ -1102,27 +1125,26 @@ struct ContentView: View {
     }
 
     func fastPreviousButtonAction(withScroll scroller: ScrollViewProxy? = nil) {
-        if skipEmpties {
-            if let current_frame = viewModel.currentFrame {
-                self.transitionUntilNotEmpty(from: current_frame,
-                                             forwards: false,
-                                             withScroll: scroller)
-            }
-        } else {
+        if fastAdvancementType == .normal {
             self.transition(numberOfFrames: -fast_skip_amount,
+                            withScroll: scroller)
+        } else if let current_frame = viewModel.currentFrame {
+            self.transition(until: fastAdvancementType,
+                            from: current_frame,
+                            forwards: false,
                             withScroll: scroller)
         }
     }
 
     func fastForwardButtonAction(withScroll scroller: ScrollViewProxy? = nil) {
-        if skipEmpties {
-            if let current_frame = viewModel.currentFrame {
-                self.transitionUntilNotEmpty(from: current_frame,
-                                             forwards: true,
-                                             withScroll: scroller)
-            }
-        } else {
+
+        if fastAdvancementType == .normal {
             self.transition(numberOfFrames: fast_skip_amount,
+                            withScroll: scroller)
+        } else if let current_frame = viewModel.currentFrame {
+            self.transition(until: fastAdvancementType,
+                            from: current_frame,
+                            forwards: true,
                             withScroll: scroller)
         }
     }
@@ -1448,11 +1470,12 @@ struct ContentView: View {
                         from: current_frame,
                         withScroll: scroller)
     }
-    
-    func transitionUntilNotEmpty(from frame: FrameAirplaneRemover,
-                                 forwards: Bool,
-                                 currentIndex: Int? = nil,
-                                 withScroll scroller: ScrollViewProxy? = nil)
+
+    func transition(until fastAdvancementType: FastAdvancementType,
+                    from frame: FrameAirplaneRemover,
+                    forwards: Bool,
+                    currentIndex: Int? = nil,
+                    withScroll scroller: ScrollViewProxy? = nil)
     {
         var frame_index: Int = 0
         if let currentIndex = currentIndex {
@@ -1479,12 +1502,34 @@ struct ContentView: View {
             next_frame_index = frame_index - 1
         }
         let next_frame_view = viewModel.frames[next_frame_index]
-        if next_frame_view.outlierViews?.count == 0 {
-            // skip this one
-            self.transitionUntilNotEmpty(from: frame,
-                                         forwards: forwards,
-                                         currentIndex: next_frame_index,
-                                         withScroll: scroller)
+
+        var skip = false
+
+        switch fastAdvancementType {
+        case .normal:
+            skip = false 
+
+        case .skipEmpties:
+            skip = next_frame_view.outlierViews?.count == 0 
+
+        case .toNextPositive:
+            skip = next_frame_view.numberOfPositiveOutliers == 0
+
+        case .toNextNegative:
+            skip = next_frame_view.numberOfNegativeOutliers == 0
+
+        case .toNextUnknown:
+            skip = next_frame_view.numberOfUndecidedOutliers == 0
+            
+        }
+        
+        // skip this one
+        if skip {
+            self.transition(until: fastAdvancementType,
+                            from: frame,
+                            forwards: forwards,
+                            currentIndex: next_frame_index,
+                            withScroll: scroller)
         } else {
             self.transition(toFrame: next_frame_view,
                             from: frame,

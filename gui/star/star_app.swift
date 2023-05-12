@@ -103,17 +103,7 @@ class star_app: App {
 //    let input_queue: FinalQueue
 
     required init() {
-        
         let dispatch_handler = DispatchHandler()
-//        input_queue = FinalQueue(max_concurrent: 200, // XXX get this number right
-//                                 dispatchGroup: dispatch_handler)
-/*
-        _viewModel = StateObject(wrappedValue: {
-                                     let ret = ViewModel()
-                                     // ret.app = self
-                                     return ret
-                                     }())
- */
         self.viewModel = ViewModel()
         viewModel.app = self
         Task {
@@ -123,53 +113,9 @@ class star_app: App {
                 }
             }
         }
-
-        
-//        Task(priority: .high) {
-//            try await input_queue.start()
-//        }
         
         Log.handlers[.console] = ConsoleLogHandler(at: .info)
         Log.i("Starting Up")
-
-        /*
-        var use_json = true
-
-        if use_json {
-            // this path reads a saved json config file, along with potentially
-            // a set of saved outlier groups for each frame
-
-            //let outlier_dirname = "/pp/tmp/TEST_12_22_2022-a9-2-aurora-topaz-500-star-v-0_1_3-outliers/config.json"
-
-            let outlier_dirname = "/qp/star_validated/LRT_09_24_2022-a7iv-2-aurora-topaz-star-v-0_1_3-outliers/config.json"
-            
-            //let outlier_dirname = "/pp/tmp/LRT_12_22_2022-a9-2-aurora-topaz-star-v-0_2_0-outliers/config.json"
-            //let outlier_dirname = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/test_small_lots-star-v-0_2_0-outliers/config.json"
-            //let outlier_dirname = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/test_small_medium-star-v-0_1_3-outliers/config.json"
-
-            //let outlier_dirname = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/test_a7sii_100-star-v-0_2_0-outliers/config.json"
-            
-            //let outlier_dirname = "/qp/tmp/LRT_09_24_2022-a7iv-2-aurora-topaz-star-v-0_1_3-outliers/config.json"
-
-            //let outlier_dirname = "/rp/tmp/LRT_02_18_2023-a7sii-2-aurora-topaz-star-v-0_2_0-outliers/config.json"
-            //let outlier_dirname = "/rp/tmp/LRT_02_18_2023-a7iv-2-aurora-topaz-star-v-0_2_0-outliers/config.json"
-            
-            
-            startup(withConfig: outlier_dirname)
-            
-        } else {
-            // this path starts from a image sequence only
-            
-            let image_sequence_dirname = "/pp/tmp/TEST_12_22_2022-a9-2-aurora-topaz-500"
-            // XXX take this from the input somehow
-            //let image_sequence_dirname = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/test_small_medium"
-            //let image_sequence_dirname = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/test_small_lots"
-            //let image_sequence_dirname = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/test_small_fix_error"
-            //let image_sequence_dirname = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/test_a7sii_10"        
-            //let image_sequence_dirname = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/test_a9_20"        
-            startup(with: image_sequence_dirname)
-            }
-         */
     }
 
     func startup(withConfig json_config_filename: String) {

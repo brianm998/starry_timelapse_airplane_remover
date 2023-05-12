@@ -1,11 +1,23 @@
 import SwiftUI
 import StarCore
 
+enum FastAdvancementType: String, Equatable, CaseIterable {
+    case normal
+    case skipEmpties
+    case toNextPositive
+    case toNextNegative
+    case toNextUnknown
+    
+    var localizedName: LocalizedStringKey {
+        LocalizedStringKey(rawValue)
+    }
+}
+
 struct SettingsSheetView: View {
     @Binding var isVisible: Bool
     @Binding var fast_skip_amount: Int
     @Binding var video_playback_framerate: Int
-    @Binding var skipEmpties: Bool
+    @Binding var fastAdvancementType: FastAdvancementType 
     
     var body: some View {
         VStack {
@@ -15,14 +27,44 @@ struct SettingsSheetView: View {
             HStack {
                 Spacer()
                 VStack(alignment: .leading) {
-                    Text(skipEmpties ?
-                           "Fast Forward and Reverse skip empties" :
-                           "Fast Forward and Reverse move by \(fast_skip_amount) frames")
+                    switch fastAdvancementType {
+                    case .normal:
+                        Text("Fast Forward and Reverse move by \(fast_skip_amount) frames")
+                    case .skipEmpties:
+                        Text("Skip all frames without outliers")
+                    case .toNextPositive:
+                        Text("Skip to next frame with a positive outlier")
+                    case .toNextNegative:
+                        Text("Skip to next frame with a negative outlier")
+                    case .toNextUnknown:
+                        Text("Skip to next frame with a unknown outlier")
+                    }
                     
-                    Toggle(skipEmpties ? "change to # of frames" : "change to skip empties",
-                           isOn: $skipEmpties)
+                    Picker("Fast Advancement Type", selection: $fastAdvancementType) {
+                        ForEach(FastAdvancementType.allCases, id: \.self) { value in
+                            Text(value.localizedName).tag(value)
+                        }
+                    }
+                      .help("""
+                              How the fast forward and fast reverse buttons work:
 
-                    if !skipEmpties {
+                              normal         - move by some fixed number of frames
+                              skipEmpties    - skip all frames without any outliers
+                              toNextPositive - skip to the next frame with positive outliers
+                              toNextNegative - skip to the next frame with negative outliers
+                              toNextUnknown  - skip to the next frame with unknown outliers
+                              """)
+                      .frame(maxWidth: 280)
+                      .pickerStyle(.segmented)
+
+//                    Toggle(skipEmpties ? "change to # of frames" : "change to skip empties",
+//                           isOn: $skipEmpties)
+
+                    // XXX add advance to has undecided
+                    // XXX add advance to has paintable
+                    // XXX add advance to has not paintable
+                    
+                    if fastAdvancementType == .normal {
                         Picker("Fast Skip", selection: $fast_skip_amount) {
                             ForEach(0 ..< 51) {
                                 Text("\($0) frames")

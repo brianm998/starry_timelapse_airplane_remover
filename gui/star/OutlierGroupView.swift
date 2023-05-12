@@ -29,5 +29,15 @@ class OutlierGroupView: ObservableObject {
     let image: NSImage
     let frame_width: Int
     let frame_height: Int
+
+    var selectionColor: Color {
+        if isSelected { return .blue }
+
+        let will_paint = group.shouldPaint?.willPaint
+        
+        if will_paint == nil { return .orange }
+        if will_paint! { return .red }
+        return .green
+    }
 }
 

@@ -20,6 +20,54 @@ class FrameView: ObservableObject {
         }
     }
 
+    var numberOfPositiveOutliers: Int {
+        var total: Int = 0
+
+        if let outlierViews = outlierViews {
+            for outlierView in outlierViews {
+                if let shouldPaint = outlierView.group.shouldPaint,
+                   shouldPaint.willPaint
+                {
+                    total += 1
+                }
+            }
+        }
+        return total
+    }
+
+    var numberOfNegativeOutliers: Int {
+        var total: Int = 0
+        Log.i("numberOfNegativeOutliers \(outlierViews)")
+
+        if let outlierViews = outlierViews {
+            Log.i("numberOfNegativeOutliers have outlier views")
+            for outlierView in outlierViews {
+                Log.i("numberOfNegativeOutliers outlier view \(outlierView) \(outlierView.group.name) \(outlierView.group.shouldPaint)")
+                if let shouldPaint = outlierView.group.shouldPaint,
+                   !shouldPaint.willPaint
+                {
+                    Log.i("increading count")
+                    total += 1
+                }
+            }
+        }
+        Log.i("numberOfNegativeOutliers \(total)")
+        return total
+    }
+    
+    var numberOfUndecidedOutliers: Int {
+        var total: Int = 0
+
+        if let outlierViews = outlierViews {
+            for outlierView in outlierViews {
+                if outlierView.group.shouldPaint == nil {
+                    total += 1
+                }
+            }
+        }
+        return total
+    }
+
     // optional to distinguish between not loaded and empty list
     @Published var outlierViews: [OutlierGroupView]?
     @Published var loadingOutlierViews: Bool = false
