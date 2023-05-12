@@ -456,20 +456,13 @@ struct ContentView: View {
                                      ((will_paint && animatePositiveOutliers) ||
                                       (!will_paint && animateNegativeOutliers))
                                   {
-                                      savedOutlierOpacitySliderValue = outlierOpacitySliderValue
                                        withAnimation(  Animation.easeInOut(duration:0.2)
                                                          .repeatForever(autoreverses:true) 
                                        )
                                        {
                                            outlierOpacitySliderValue = 0.0
                                        }
-                                  } else {
-                                      outlierOpacitySliderValue = savedOutlierOpacitySliderValue
                                   }
-                                  
-                                  viewModel.objectWillChange.send()
-                                  refreshCurrentFrame()
-                                  Log.i("changed")
                               }
                             // tap gesture toggles paintability of the tapped group
                               .onTapGesture {
@@ -542,6 +535,14 @@ struct ContentView: View {
                               }
                         }
                     }
+                      .onChange(of: viewModel.animateOutliers) { newValue in
+                          if newValue {
+                              savedOutlierOpacitySliderValue = outlierOpacitySliderValue
+                          } else {
+                              outlierOpacitySliderValue = savedOutlierOpacitySliderValue
+                          }
+                      }
+                    
                 }
             }
 
