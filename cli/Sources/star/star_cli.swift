@@ -203,8 +203,6 @@ struct Star: ParsableCommand {
 
 
     mutating func run() throws {
-
-        
         if version {
             print("""
                   Nighttime Timelapse Airplane Remover (star) version \(config.star_version)
@@ -229,7 +227,11 @@ struct Star: ParsableCommand {
                 dispatch_group.enter()
 
                 Task {
-                    config = try await Config.read(fromJsonFilename: fuck)
+                    do {
+                        config = try await Config.read(fromJsonFilename: fuck)
+                    } catch {
+                        print("\(error)")
+                    }
                     dispatch_group.leave()
                 }
                 TaskRunner.maxConcurrentTasks = UInt(config.numConcurrentRenders)
