@@ -71,7 +71,7 @@ public class OutlierGroups {
                     let paint_filename = String(file.dropLast(OutlierGroup.data_bin_suffix.count) + OutlierGroup.paint_json_suffix)
 
                     if file_manager.fileExists(atPath: "\(dir)/\(paint_filename)") {
-                        //Log.d("paint_filename \(paint_filename) exists for \(file)")
+                        //Log.d("paint_filename \(paint_filename) exists for \(file) \(fuck)")
                         // XXX load this shit up too
 
                         let paintfileurl = NSURL(fileURLWithPath: "\(dir)/\(paint_filename)",
@@ -89,9 +89,14 @@ public class OutlierGroups {
                         
                         await group.shouldPaint(try decoder.decode(PaintReason.self, from: paint_data))
 
-                        //Log.d("loaded group.shouldPaint \(await group.shouldPaint) for \(fuck) \(fu)")
+                        //Log.d("loaded group.shouldPaint \(group.shouldPaint) for \(group.name) \(fuck)")
                     } else {
-                        Log.d("no \(paint_filename) paint_filename for \(file)")
+                        // classify it
+                        if let currentClassifier = currentClassifier {
+                            Log.i("no classification for group \(group.name), applying the default classifier now")
+                            let classificationScore = await currentClassifier.classification(of: group)
+                            await group.shouldPaint(.fromClassifier(classificationScore))
+                        }
                     }
                     return group
                 }
