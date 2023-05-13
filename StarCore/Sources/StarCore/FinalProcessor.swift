@@ -173,7 +173,7 @@ public actor FinalProcessor {
         }
     }
 
-    func finish(frame: FrameAirplaneRemover) async throws {
+    nonisolated func finish(frame: FrameAirplaneRemover) async throws {
         // here is where the gui and cli paths diverge
         // if we have a frame check closure, we allow the user to check the frame here
         // but only if there are some outliers to check, otherwise just finish it.
@@ -279,10 +279,10 @@ public actor FinalProcessor {
                         let immutable_start = start_index
                         Log.v("FINAL THREAD frame \(index_to_process) queueing into final queue")
                         if let frame_to_finish = await self.frame(at: immutable_start - 1) {
-                            await frame_to_finish.clearOutlierGroupValueCaches()
                             await self.clearFrame(at: immutable_start - 1)
 
                             try await taskGroup.addTask() { 
+                                await frame_to_finish.clearOutlierGroupValueCaches()
                                 await frame_to_finish.maybeApplyOutlierGroupClassifier()
                                 await frame_to_finish.set(state: .outlierProcessingComplete)
                                 try await self.finish(frame: frame_to_finish)
@@ -311,11 +311,6 @@ public actor FinalProcessor {
         Log.i("FINAL THREAD done finishing all remaining frames")
 
         if let _ = callbacks.frameCheckClosure {
-            // XXX there is a race condition here if we are in gui
-            // mode where we add each frame off to the gui for processing
-            // XXX make this better
-            try await Task.sleep(nanoseconds: 3_000_000_000)
-            
             Log.d("FINAL THREAD check closure")
 
             // XXX look for method to call here
