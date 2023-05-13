@@ -15,7 +15,6 @@ You should have received a copy of the GNU General Public License along with sta
 // a wrapper around the ThrowingTaskGroup that has keeps too many groups from
 // running concurrently
 
-@available(macOS 10.15, *)
 public class ThrowingLimitedTaskGroup<T, Error> where Error: Swift.Error {
     var taskGroup: ThrowingTaskGroup<T, Error>
     let maxConcurrent: Int
@@ -58,7 +57,6 @@ public class ThrowingLimitedTaskGroup<T, Error> where Error: Swift.Error {
 }
 
 
-@available(macOS 10.15, *)
 public func withThrowingLimitedTaskGroup<ChildTaskResult, GroupResult>(
   of childTaskResultType: ChildTaskResult.Type,
   limitedTo maxConcurrent: Int = ProcessInfo.processInfo.activeProcessorCount,

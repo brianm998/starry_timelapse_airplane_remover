@@ -20,7 +20,6 @@ You should have received a copy of the GNU General Public License along with sta
 // delegating each frame to an instance of FrameAirplaneRemover
 // and then using a FinalProcessor to finish processing
 
-@available(macOS 10.15, *) 
 public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemover> {
 
     public var config: Config

@@ -1,7 +1,6 @@
 import Foundation
 import StarCore
 
-@available(macOS 10.15, *) 
 class LinearChoiceTreeNode: SwiftDecisionTree {
     public init (type: OutlierGroup.Feature,
                  min: Double,   // returns -1 if input value is equal to min

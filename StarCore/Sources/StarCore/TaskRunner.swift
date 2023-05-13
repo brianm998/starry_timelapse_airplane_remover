@@ -2,10 +2,8 @@ import Foundation
 
 // an alternative to task groups, looking for thread stability
 
-@available(macOS 10.15, *)
 fileprivate var number_running = NumberRunning()
 
-@available(macOS 10.15, *)
 public class TaskRunner {
     // XXX getting this number right is hard
     // too big and the swift runtime barfs underneath
@@ -15,7 +13,6 @@ public class TaskRunner {
     public static func endSyncIO() async { await number_running.increment() }
 }
 
-@available(macOS 10.15, *)
 fileprivate func determine_max() -> UInt {
     var num_processors = ProcessInfo.processInfo.activeProcessorCount
     num_processors -= num_processors/4
@@ -36,7 +33,6 @@ fileprivate func determine_max() -> UInt {
     // handle each response
  }
  */
-@available(macOS 10.15, *)
 public func runTask<Type>(_ closure: @escaping () async -> Type) async -> Task<Type,Never> {
     //Log.i("runtask with cpuUsage \(cpuUsage())")
     if await number_running.startOnIncrement(to: TaskRunner.maxConcurrentTasks) {
@@ -63,7 +59,6 @@ public func runTask<Type>(_ closure: @escaping () async -> Type) async -> Task<T
     // handle each response
  }
  */
-@available(macOS 10.15, *)
 public func runThrowingTask<Type>(_ closure: @escaping () async throws -> Type) async throws -> Task<Type,Error> {
     if await number_running.startOnIncrement(to: TaskRunner.maxConcurrentTasks) {
         return Task<Type,Error> {

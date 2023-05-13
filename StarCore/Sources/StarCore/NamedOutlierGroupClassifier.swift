@@ -1,7 +1,6 @@
 import Foundation
 
 // a classifier that has a name and can be instantiated
-@available(macOS 10.15, *)
 public protocol NamedOutlierGroupClassifier: OutlierGroupClassifier {
 
     init()
@@ -11,13 +10,11 @@ public protocol NamedOutlierGroupClassifier: OutlierGroupClassifier {
     var name: String { get }
 }
 
-@available(macOS 10.15, *)
 public enum ClassifierType {
     case tree(DecisionTreeParams)
     case forest(DecisionForestParams)
 }
 
-@available(macOS 10.15, *)
 public struct DecisionTreeParams {
 
     public init(name: String,

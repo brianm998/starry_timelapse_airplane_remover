@@ -122,7 +122,6 @@ import Foundation
 
 */
 
-@available(macOS 10.15, *)
 public class Log {
 
     /*
@@ -211,7 +210,6 @@ public class Log {
     }
 }
 
-@available(macOS 10.15, *)
 extension Log {                 
     /*
        Log.verbose()
@@ -272,7 +270,6 @@ extension Log {
     }
 }
 
-@available(macOS 10.15, *)
 extension Log {                 
     /*
        Log.v()
@@ -334,7 +331,6 @@ extension Log {
 }
 
 
-@available(macOS 10.15, *)
 extension Log {                 
     /*
        Log.debug()
@@ -395,7 +391,6 @@ extension Log {
     }
 }
 
-@available(macOS 10.15, *)
 extension Log {                 
     /*
        Log.d()
@@ -456,7 +451,6 @@ extension Log {
     }
 }
 
-@available(macOS 10.15, *)
 extension Log {                 // info
     /*
        Log.info()
@@ -517,7 +511,6 @@ extension Log {                 // info
     }
 }
 
-@available(macOS 10.15, *)
 extension Log {                 // i
     /*
        Log.i()
@@ -578,7 +571,6 @@ extension Log {                 // i
     }
 }
 
-@available(macOS 10.15, *)
 extension Log {
     /*
        Log.warn()
@@ -639,7 +631,6 @@ extension Log {
     }
 }
 
-@available(macOS 10.15, *)
 extension Log {
     /*
        Log.w()
@@ -700,7 +691,6 @@ extension Log {
     }
 }
 
-@available(macOS 10.15, *)
 extension Log {
     /*
        Log.error()
@@ -776,7 +766,6 @@ extension Log {
 
 }
 
-@available(macOS 10.15, *)
 extension Log {
     /*
        Log.e()
@@ -857,7 +846,6 @@ extension Log {
 fileprivate let backgroundTask = BackgroundTask.start(named: "log")
 #endif        
 
-@available(macOS 10.15, *)
 fileprivate extension Log {
     
     static func logInternal(_ message: String? = nil,
@@ -951,7 +939,6 @@ fileprivate extension Log {
 
 #if DEBUG
 // this is helpful when testing logging, to see a few test lines, and then avoid further spew 
-@available(macOS 10.15, *)
 public func LOG_ABORT() {
     Log.dispatchGroup.enter()
     Task {

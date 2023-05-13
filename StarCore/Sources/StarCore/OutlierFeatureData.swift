@@ -1,6 +1,5 @@
 import Foundation
 
-@available(macOS 10.15, *)
 // a typed vector of values for a single outlier group
 public struct OutlierFeatureData {
     // indexed by OutlierGroup.Feature.sortOrder

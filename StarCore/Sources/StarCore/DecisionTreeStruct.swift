@@ -1,6 +1,5 @@
 import Foundation
 
-@available(macOS 10.15, *) 
 public struct DecisionTreeStruct: DecisionTree {
 
     public let name: String

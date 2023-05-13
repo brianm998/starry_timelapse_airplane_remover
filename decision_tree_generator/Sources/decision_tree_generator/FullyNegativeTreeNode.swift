@@ -2,7 +2,6 @@ import Foundation
 import StarCore
 
 // end leaf node which always returns 100% negative
-@available(macOS 10.15, *) 
 struct FullyNegativeTreeNode: SwiftDecisionTree {
     let indent: Int
     var swiftCode: String {

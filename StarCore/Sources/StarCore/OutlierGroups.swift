@@ -15,7 +15,6 @@ import Cocoa
 
 // this class holds all the outlier groups for a frame
 
-@available(macOS 10.15, *) 
 public class OutlierGroups {
     
     public let frame_index: Int

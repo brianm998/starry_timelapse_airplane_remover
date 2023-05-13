@@ -61,7 +61,6 @@ func cpuUsage() -> Double {
 }
 
 @main
-@available(macOS 10.15, *) 
 struct decision_tree_generator: ParsableCommand {
 
     @Flag(name: [.customShort("v"), .customLong("verify")],
@@ -709,7 +708,6 @@ struct decision_tree_generator: ParsableCommand {
     }
 }
 
-@available(macOS 10.15, *) 
 extension OutlierGroup.Feature: ExpressibleByArgument {
 
     public init?(argument: String) {

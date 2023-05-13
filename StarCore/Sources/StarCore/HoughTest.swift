@@ -15,7 +15,6 @@ You should have received a copy of the GNU General Public License along with sta
 */
 
 // this method is used for testing the hough transformation code by itself
-@available(macOS 10.15, *)
 func hough_test(filename: String, output_filename: String) async {
 
     // the output filename needs to be exactly the right size

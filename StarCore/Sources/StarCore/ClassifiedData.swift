@@ -2,7 +2,6 @@ import Foundation
 
 // outlier feature data which is classified for structured learning
 
-@available(macOS 10.15, *) 
 public class ClassifiedData {
     public init() { }
 
@@ -91,7 +90,6 @@ public class ClassifiedData {
     }
 }
 
-@available(macOS 10.15, *)
 extension Array {
     // splits array into some number of chunks of the given size
     func chunks(of size: Int) -> [[Element]] {

@@ -12,7 +12,6 @@ You should have received a copy of the GNU General Public License along with sta
 
 */
 
-@available(macOS 10.15, *) 
 actor MethodList<T> {
     var list: [Int : () async throws -> T]
     var removeClosure: ((Int) -> Void)?

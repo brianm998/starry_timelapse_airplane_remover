@@ -14,7 +14,6 @@ You should have received a copy of the GNU General Public License along with sta
 
 */
 
-@available(macOS 10.15, *)
 public class UpdatableLogHandler: LogHandler {
     public func log(message: String,
                     at fileLocation: String,
@@ -48,7 +47,6 @@ public class UpdatableLogHandler: LogHandler {
     }
 }
 
-@available(macOS 10.15, *)
 public actor UpdatableProgressMonitor {
     let number_of_frames: Int
     let config: Config

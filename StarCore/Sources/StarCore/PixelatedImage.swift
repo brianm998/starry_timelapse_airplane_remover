@@ -14,7 +14,6 @@ import Foundation
 import CoreGraphics
 import Cocoa
 
-@available(macOS 10.15, *) 
 public func loadImage(fromFile filename: String) async throws -> NSImage? {
     Log.d("Loading image from \(filename)")
     let imageURL = NSURL(fileURLWithPath: filename, isDirectory: false)
@@ -27,7 +26,6 @@ public func loadImage(fromFile filename: String) async throws -> NSImage? {
     }
 }
 
-@available(macOS 10.15, *) 
 public class PixelatedImage {
     let width: Int
     let height: Int

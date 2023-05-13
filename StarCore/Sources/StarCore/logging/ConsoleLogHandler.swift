@@ -11,7 +11,6 @@ You should have received a copy of the GNU General Public License along with sta
 */
 import Foundation
 
-@available(macOS 10.15, *)
 public class ConsoleLogHandler: LogHandler {
 
     public let dispatchQueue: DispatchQueue

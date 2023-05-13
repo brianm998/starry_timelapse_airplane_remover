@@ -10,7 +10,6 @@ public func mkdir(_ path: String) throws {
     }
 }
 
-@available(macOS 10.15, *) 
 public class ImageSequenceProcessor<T> {
 
     // the name of the directory holding the image sequence being processed

@@ -14,7 +14,6 @@ You should have received a copy of the GNU General Public License along with sta
 
 */
 
-@available(macOS 10.15, *)
 public actor ImageLoader {
     let filename: String
     private var _image: PixelatedImage?
@@ -34,7 +33,6 @@ public actor ImageLoader {
 }
 
 // allows loading and caching of frames of an image sequence
-@available(macOS 10.15, *)
 public actor ImageSequence {
 
     init(dirname: String,

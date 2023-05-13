@@ -14,7 +14,6 @@ You should have received a copy of the GNU General Public License along with sta
 
 // a wrapper around runThrowingTask that keeps too many tasks from running at the same time
 
-@available(macOS 10.15, *)
 public actor LimitedThrowingTaskGroup<T> {
 
     var tasks: [Task<T,Error>] = []
@@ -41,7 +40,6 @@ public actor LimitedThrowingTaskGroup<T> {
     }
 }
 
-@available(macOS 10.15, *)
 public func withLimitedThrowingTaskGroup<ChildTaskResult, GroupResult>(
   of childTaskResultType: ChildTaskResult.Type,
   limitedTo maxConcurrent: Int = ProcessInfo.processInfo.activeProcessorCount,

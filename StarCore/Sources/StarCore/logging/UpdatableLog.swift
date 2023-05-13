@@ -92,7 +92,6 @@ public class UpdatableLogLine {
 
 var screen_width: UInt16 = 120
 
-@available(macOS 10.15, *) 
 public actor UpdatableLog {
 
     var list: [UpdatableLogLine] = []

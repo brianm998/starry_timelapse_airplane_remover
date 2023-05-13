@@ -25,7 +25,7 @@ public struct HoughLineHistogram {
 
         var ret = 0.0
         
-        for (index, value) in values.enumerated() {
+        for (index, value) in values.enumerated() { // died here :(
             let other_value = other.values[index]
             let min = min(value, other_value)
             ret = max(min, ret)

@@ -37,7 +37,6 @@ public enum FrameProcessingState: Int, CaseIterable, Codable {
     case complete
 }
 
-@available(macOS 10.15, *)
 public actor FrameAirplaneRemover: Equatable, Hashable {
 
     private var state: FrameProcessingState = .unprocessed {

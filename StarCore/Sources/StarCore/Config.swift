@@ -16,7 +16,6 @@ func sixteenBitVersion(ofPercentage percentage: Double) -> UInt16 {
     return UInt16((percentage/100)*Double(0xFFFF))
 }
 
-@available(macOS 10.15, *) 
 public struct Config: Codable {
 
     public init() {
@@ -209,7 +208,6 @@ public struct Config: Codable {
     }
 }
 
-@available(macOS 10.15, *) 
 public class Callbacks {
     public init() { }
     

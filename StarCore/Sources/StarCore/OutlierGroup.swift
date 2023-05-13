@@ -21,7 +21,6 @@ internal var IMAGE_WIDTH: Double?
 internal var IMAGE_HEIGHT: Double?
 
 // represents a single outler group in a frame
-@available(macOS 10.15, *) 
 public class OutlierGroup: CustomStringConvertible,
                            Hashable,
                            Equatable,
@@ -165,8 +164,7 @@ public class OutlierGroup: CustomStringConvertible,
     }
     
     // how many pixels actually overlap between the groups ?  returns 0-1 value of overlap amount
-    @available(macOS 10.15, *)
-    func pixelOverlap(with group_2: OutlierGroup) async -> Double // 1 means total overlap, 0 means none
+        func pixelOverlap(with group_2: OutlierGroup) async -> Double // 1 means total overlap, 0 means none
     {
         let group_1 = self
         // throw out non-overlapping frames, do any slip through?
@@ -859,8 +857,7 @@ public class OutlierGroup: CustomStringConvertible,
 
     
 
-    @available(macOS 10.15, *)
-    fileprivate func streakScore(in direction: StreakDirection,
+        fileprivate func streakScore(in direction: StreakDirection,
                      numberOfFramesLeft: Int,
                      existingValue: Double = 0) async -> Double
     {

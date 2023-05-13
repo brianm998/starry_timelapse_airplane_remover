@@ -4,7 +4,6 @@ import StarCore
 // a classifier which simulates at runtime what the forest classifier is written to do,
 // delegate classification to a set of other weighted classifiers 
 
-@available(macOS 10.15, *)
 struct ForestClassifier: OutlierGroupClassifier {
 
     let trees: [TreeForestResult]

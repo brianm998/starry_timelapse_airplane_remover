@@ -125,14 +125,11 @@ todo:
 
 
 // do these really have to be globals?
-@available(macOS 10.15, *) 
 var config: Config = Config()
 
-@available(macOS 10.15, *) 
 var callbacks = Callbacks()
 
 @main
-@available(macOS 10.15, *) 
 struct Star: ParsableCommand {
 
     @Option(name: [.customShort("c"), .customLong("console-log-level")], help:"""
@@ -376,7 +373,6 @@ struct Star: ParsableCommand {
 
 // needs ArgumentParser, so it's here in cli land
 // allows the log level to be expressed on the command line as an argument
-@available(macOS 10.15, *) 
 extension Log.Level: ExpressibleByArgument { }
 
 fileprivate let file_manager = FileManager.default

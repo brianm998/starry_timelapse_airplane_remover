@@ -4,7 +4,6 @@ import StarCore
 
 // decision node which decides upon a value of some type
 // delegating to one of two further code paths
-@available(macOS 10.15, *) 
 class DecisionTreeNode: SwiftDecisionTree {
 
     public init (type: OutlierGroup.Feature,

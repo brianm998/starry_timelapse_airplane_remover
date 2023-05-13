@@ -2,7 +2,6 @@ import Foundation
 
 // this class is to debug issues with not calling DispatchHandler.leave() properly
 
-@available(macOS 10.15, *)
 public actor DispatchHandler {
 
     // these are helpful for debugging but are not async aware,

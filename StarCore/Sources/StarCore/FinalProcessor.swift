@@ -28,7 +28,6 @@ import Cocoa
 
 // identified airplane trails XXX why is this a global?  put this in the class and make these funcs part of it
 
-@available(macOS 10.15, *)
 actor AirplaneStreaks {
     var streaks: [String:[AirplaneStreakMember]] = [:]
 
@@ -43,10 +42,8 @@ actor AirplaneStreaks {
     var count: Int { return streaks.count }
 }
 
-@available(macOS 10.15, *)
 var airplane_streaks = AirplaneStreaks()
 
-@available(macOS 10.15, *)
 public actor FinalProcessor {
     var frames: [FrameAirplaneRemover?]
     var current_frame_index = 0
@@ -343,7 +340,6 @@ public actor FinalProcessor {
 }    
 
 
-@available(macOS 10.15, *)
 fileprivate func doublyLink(frames: [FrameAirplaneRemover]) async {
     // doubly link frames here so that the decision tree can have acess to other frames
     for (i, frame) in frames.enumerated() {

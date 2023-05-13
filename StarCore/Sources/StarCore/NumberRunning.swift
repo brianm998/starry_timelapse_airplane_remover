@@ -11,7 +11,6 @@ star is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY
 You should have received a copy of the GNU General Public License along with star. If not, see <https://www.gnu.org/licenses/>.
 
 */
-@available(macOS 10.15, *)
 public actor NumberRunning {
     private var count: UInt = 0
 

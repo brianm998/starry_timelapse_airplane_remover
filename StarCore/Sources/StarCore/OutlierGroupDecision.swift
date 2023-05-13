@@ -16,24 +16,20 @@ public enum DecisionSplitType: String {
 }
 
 // a list of all extant decision trees at runtime, indexed by hash prefix
-@available(macOS 10.15, *)
 public var decisionTrees: [String: NamedOutlierGroupClassifier] = loadOutlierGroupClassifiers()
 
 // try to load this classifier at runtime
 public let currentClassifierName = "1ea755d8"
 
-@available(macOS 10.15, *)
 public var currentClassifier: NamedOutlierGroupClassifier? = loadCurrentClassifiers()
 
 
-@available(macOS 10.15, *)
 public func loadCurrentClassifiers() -> NamedOutlierGroupClassifier? {
     let ret = decisionTrees[currentClassifierName]
     Log.i("loaded current classifier \(String(describing: ret))")
     return ret
 }
 
-@available(macOS 10.15, *)
 public func loadOutlierGroupClassifiers() -> [String : NamedOutlierGroupClassifier] {
     let decisionTrees = listClasses { $0.compactMap { $0 as? NamedOutlierGroupClassifier.Type } }
     var ret: [String: NamedOutlierGroupClassifier] = [:]

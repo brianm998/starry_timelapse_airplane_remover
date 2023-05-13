@@ -12,7 +12,6 @@ You should have received a copy of the GNU General Public License along with sta
 
 import Foundation
 
-@available(macOS 10.15, *)
 public protocol LogHandler {
     func log(message: String,
              at fileLocation: String,

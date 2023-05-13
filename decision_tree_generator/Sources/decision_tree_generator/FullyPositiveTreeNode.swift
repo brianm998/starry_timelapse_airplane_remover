@@ -3,7 +3,6 @@ import Foundation
 import StarCore
 
 // end leaf node which always returns 100% positive
-@available(macOS 10.15, *) 
 struct FullyPositiveTreeNode: SwiftDecisionTree {
     let indent: Int
     var swiftCode: String {
