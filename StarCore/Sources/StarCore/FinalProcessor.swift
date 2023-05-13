@@ -16,33 +16,10 @@ import Cocoa
 
 
 // this class handles the final processing of every frame
-// it observes its frames array, and is tasked with finishing
-// each frame.  This means adjusting each frame's should_paint map
-// to be concurent with those of the adjecent frames.
-// at this point each frame has been processed to have a good idea of 
-// what outlier groups to paint and not to paint.
-// this process puts the final touches on the should_paint map of each
-// frame and then sticks into the final queue to which calls finish() on it,
-// which paints based upon the should_paint map, and then saves the output file(s).
-
-
-// identified airplane trails XXX why is this a global?  put this in the class and make these funcs part of it
-
-actor AirplaneStreaks {
-    var streaks: [String:[AirplaneStreakMember]] = [:]
-
-    func removeValue(forKey key: String) {
-        streaks.removeValue(forKey: key)
-    }
-
-    func add(value: [AirplaneStreakMember], forKey key: String) {
-        streaks[key] = value
-    }
-
-    var count: Int { return streaks.count }
-}
-
-var airplane_streaks = AirplaneStreaks()
+// it observes its frames array, and is tasked with finishing each frame.   
+// In order to be able to calculate the classfier features for each outlier group,
+// We need to line up all of the frames in order so that each frame can access
+// some number of neighboring frames in each data when calculating partulcar features.
 
 public actor FinalProcessor {
     var frames: [FrameAirplaneRemover?]
