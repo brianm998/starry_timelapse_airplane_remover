@@ -123,7 +123,7 @@ struct ContentView: View {
                   Alert(title: Text("Error"),
                         message: Text(viewModel.errorMessage),
                         primaryButton: .default(Text("Ok")) { viewModel.sequenceLoaded = false },
-                        secondaryButton: .default(Text("F")) { viewModel.sequenceLoaded = false } )
+                        secondaryButton: .default(Text("Sure")) { viewModel.sequenceLoaded = false } )
 
               }
         }
@@ -800,29 +800,7 @@ struct ContentView: View {
             return .blue
         }
     }
-    
-    func rightSideButtons() -> some View { // XXX not used anymore
-        VStack {
 
-            paintAllButton()
-              .frame(maxWidth: .infinity, alignment: .bottomTrailing)
-            clearAllButton()
-            .frame(maxWidth: .infinity, alignment: .bottomTrailing)
-            outlierInfoButton()
-              .frame(maxWidth: .infinity, alignment: .bottomTrailing)
-            applyAllDecisionTreeButton()
-              .frame(maxWidth: .infinity, alignment: .bottomTrailing)
-            applyDecisionTreeButton()
-              .frame(maxWidth: .infinity, alignment: .bottomTrailing)
-            loadAllOutliersButton()
-              .frame(maxWidth: .infinity, alignment: .bottomTrailing)
-            renderCurrentFrameButton()
-              .frame(maxWidth: .infinity, alignment: .bottomTrailing)
-            renderAllFramesButton()
-              .frame(maxWidth: .infinity, alignment: .bottomTrailing)
-        }.opacity(0.8)
-    }
-    
     func paintAllButton() -> some View {
         Button(action: {
                    setAllCurrentFrameOutliers(to: true, renderImmediately: false)
@@ -902,6 +880,7 @@ struct ContentView: View {
         }
           .help("Render all frames of this sequence with current settings")
     }
+
 
     func renderCurrentFrame(_ closure: (() -> Void)? = nil) async {
         if let frame = viewModel.currentFrame {
