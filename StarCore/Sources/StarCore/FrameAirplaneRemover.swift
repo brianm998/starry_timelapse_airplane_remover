@@ -1013,66 +1013,79 @@ public class FrameAirplaneRemover: Equatable, Hashable {
     // does the final painting and then writes out the output files
     public func finish() async throws {
 
-        // write out the outliers binary if it is not there
-        // only overwrite the paint reason if it is there
-        await self.writeOutliersBinary()
+        try await withLimitedThrowingTaskGroup(of: Void.self) { taskGroup in 
 
-        // write out the classifier feature data for this data point
-        try await writeOutlierValuesCSV()
+            try await taskGroup.addTask() {
+                // write out the outliers binary if it is not there
+                // only overwrite the paint reason if it is there
+                await self.writeOutliersBinary()
+            }
 
-        if !self.writeOutputFiles {
-            self.state = .complete
-            return
-        }
-        
-        self.state = .reloadingImages
-        
-        Log.i("frame \(self.frame_index) finishing")
-        let image = try await image_sequence.getImage(withName: image_sequence.filenames[frame_index]).image()
+            try await taskGroup.addTask() {
+                // write out the classifier feature data for this data point
+                try await self.writeOutlierValuesCSV()
+            }
 
-        writeUprocessedPreviews(image) 
+            if !self.writeOutputFiles {
+                self.state = .complete
+                return
+            }
         
-        var otherFrames: [PixelatedImage] = []
+            self.state = .reloadingImages
+        
+            Log.i("frame \(self.frame_index) finishing")
+            let image = try await image_sequence.getImage(withName: image_sequence.filenames[frame_index]).image()
 
-        // only load the first other frame for painting
-        let otherFrameIndex = otherFrameIndexes[0]
-        let otherFrame = try await image_sequence.getImage(withName: image_sequence.filenames[otherFrameIndex]).image()
-        otherFrames.append(otherFrame)
+            try await taskGroup.addTask() {
+                self.writeUprocessedPreviews(image)
+            }
         
-        let _data = image.raw_image_data
+            var otherFrames: [PixelatedImage] = []
+
+            // only load the first other frame for painting
+            let otherFrameIndex = otherFrameIndexes[0]
+            let otherFrame = try await image_sequence.getImage(withName: image_sequence.filenames[otherFrameIndex]).image()
+            otherFrames.append(otherFrame)
         
-        // copy the original image data as adjecent frames need
-        // to access the original unmodified version
-        guard let _mut_data = CFDataCreateMutableCopy(kCFAllocatorDefault,
+            let _data = image.raw_image_data
+        
+            // copy the original image data as adjecent frames need
+            // to access the original unmodified version
+            guard let _mut_data = CFDataCreateMutableCopy(kCFAllocatorDefault,
                                                       CFDataGetLength(_data as CFData),
                                                       _data as CFData) as? Data
-        else {
-            Log.e("couldn't copy image data")
-            fatalError("couldn't copy image data")
-        }
-        var output_data = _mut_data
+            else {
+                Log.e("couldn't copy image data")
+                fatalError("couldn't copy image data")
+            }
+            var output_data = _mut_data
 
-        self.state = .painting
+            self.state = .painting
                   
-        Log.d("frame \(self.frame_index) painting over airplanes")
+            Log.d("frame \(self.frame_index) painting over airplanes")
                   
-        try await self.paintOverAirplanes(toData: &output_data,
+            try await self.paintOverAirplanes(toData: &output_data,
                                           otherFrames: otherFrames)
         
-        Log.d("frame \(self.frame_index) writing output files")
-        self.state = .writingOutputFile
+            Log.d("frame \(self.frame_index) writing output files")
+            self.state = .writingOutputFile
 
-        writeProcssedPreview(image, with: output_data)
+            try await taskGroup.addTask() {
+                await self.writeProcssedPreview(image, with: output_data)
+            }
 
-        do {
-            // write frame out as a tiff file after processing it
-            try image.writeTIFFEncoding(ofData: output_data,  toFilename: self.output_filename)
-            self.state = .complete
-        } catch {
-            Log.e("\(error)")
+            do {
+                // write frame out as a tiff file after processing it
+                try image.writeTIFFEncoding(ofData: output_data,  toFilename: self.output_filename)
+                self.state = .complete
+            } catch {
+                Log.e("\(error)")
+            }
+
+            try await taskGroup.waitForAll()
+
+            Log.i("frame \(self.frame_index) complete")
         }
-
-        Log.i("frame \(self.frame_index) complete")
     }
     
     public static func == (lhs: FrameAirplaneRemover, rhs: FrameAirplaneRemover) -> Bool {
