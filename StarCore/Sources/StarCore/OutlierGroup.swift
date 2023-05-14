@@ -111,7 +111,7 @@ public class OutlierGroup: CustomStringConvertible,
         self.shouldPaint = should_paint
 
         // XXX update frame that it's different 
-        await self.frame?.markAsChanged()
+        self.frame?.markAsChanged()
     }
 
     // outputs an image the same size as this outlier's bounding box,
@@ -516,12 +516,12 @@ public class OutlierGroup: CustomStringConvertible,
     fileprivate var numberOfNearbyOutliersInSameFrame: Double {
         get async {
             if let frame = frame,
-               let nearby_groups = await frame.outlierGroups(within: self.maxNearbyGroupDistance,
-                                                             of: self.bounds)
+               let nearby_groups = frame.outlierGroups(within: self.maxNearbyGroupDistance,
+                                                       of: self.bounds)
             {
                 return Double(nearby_groups.count)
             } else {
-                fatalError("SHIT")
+                fatalError("Died on frame \(frame_index)")
             }
         }
     }
@@ -582,9 +582,9 @@ public class OutlierGroup: CustomStringConvertible,
                 var best_score = 0.0
                 let selfHisto = self.houghLineHistogram
 
-                if let previous_frame = await frame.previousFrame,
-                   let nearby_groups = await previous_frame.outlierGroups(within: self.maxNearbyGroupDistance,
-                                                                          of: self.bounds)
+                if let previous_frame = frame.previousFrame,
+                   let nearby_groups = previous_frame.outlierGroups(within: self.maxNearbyGroupDistance,
+                                                                    of: self.bounds)
                 {
                     for group in nearby_groups {
                         let score = self.thetaHistoCenterLineScore(with: group,
@@ -592,9 +592,9 @@ public class OutlierGroup: CustomStringConvertible,
                         best_score = max(score, best_score)
                     }
                 }
-                if let next_frame = await frame.nextFrame,
-                   let nearby_groups = await next_frame.outlierGroups(within: self.maxNearbyGroupDistance,
-                                                                      of: self.bounds)
+                if let next_frame = frame.nextFrame,
+                   let nearby_groups = next_frame.outlierGroups(within: self.maxNearbyGroupDistance,
+                                                                of: self.bounds)
                 {
                     for group in nearby_groups {
                         let score = self.thetaHistoCenterLineScore(with: group,
@@ -638,8 +638,8 @@ public class OutlierGroup: CustomStringConvertible,
         get async {
             var maxOverlap = 0.0
             if let frame = frame {
-                if let previous_frame = await frame.previousFrame,
-                   let nearby_groups = await previous_frame.outlierGroups(within: self.maxNearbyGroupDistance,
+                if let previous_frame = frame.previousFrame,
+                   let nearby_groups = previous_frame.outlierGroups(within: self.maxNearbyGroupDistance,
                                                                           of: self.bounds)
                 {
                     for group in nearby_groups {
@@ -647,8 +647,8 @@ public class OutlierGroup: CustomStringConvertible,
                     }
                 }
                 
-                if let next_frame = await frame.nextFrame,
-                   let nearby_groups = await next_frame.outlierGroups(within: self.maxNearbyGroupDistance,
+                if let next_frame = frame.nextFrame,
+                   let nearby_groups = next_frame.outlierGroups(within: self.maxNearbyGroupDistance,
                                                                       of: self.bounds)
                 {
                     for group in nearby_groups {
@@ -667,9 +667,9 @@ public class OutlierGroup: CustomStringConvertible,
             if let frame = frame {
                 let selfHisto = self.houghLineHistogram
 
-                if let previous_frame = await frame.previousFrame,
-                   let nearby_groups = await previous_frame.outlierGroups(within: self.maxNearbyGroupDistance,
-                                                                          of: self.bounds)
+                if let previous_frame = frame.previousFrame,
+                   let nearby_groups = previous_frame.outlierGroups(within: self.maxNearbyGroupDistance,
+                                                                    of: self.bounds)
                 {
                     for group in nearby_groups {
                         let otherHisto = group.houghLineHistogram
@@ -679,9 +679,9 @@ public class OutlierGroup: CustomStringConvertible,
                     }
                 }
                 
-                if let next_frame = await frame.nextFrame,
-                   let nearby_groups = await next_frame.outlierGroups(within: self.maxNearbyGroupDistance,
-                                                                      of: self.bounds)
+                if let next_frame = frame.nextFrame,
+                   let nearby_groups = next_frame.outlierGroups(within: self.maxNearbyGroupDistance,
+                                                                of: self.bounds)
                 {
                     for group in nearby_groups {
                         let otherHisto = group.houghLineHistogram
@@ -699,7 +699,7 @@ public class OutlierGroup: CustomStringConvertible,
         // XXX doesn't use related frames 
         get async {
             if let frame = frame,
-               let nearby_groups = await frame.outlierGroups(within: self.maxNearbyGroupDistance,
+               let nearby_groups = frame.outlierGroups(within: self.maxNearbyGroupDistance,
                                                              of: self.bounds)
             {
                 let selfHisto = self.houghLineHistogram
@@ -739,10 +739,10 @@ public class OutlierGroup: CustomStringConvertible,
             if let frame = frame {
                 let this_theta = self.firstLine?.theta ?? 180
                 var smallest_difference: Double = 360
-                if let previous_frame = await frame.previousFrame,
+                if let previous_frame = frame.previousFrame,
                    let nearby_groups =
-                     await previous_frame.outlierGroups(within: self.maxNearbyGroupDistance,
-                                                            of: self.bounds)
+                     previous_frame.outlierGroups(within: self.maxNearbyGroupDistance,
+                                                  of: self.bounds)
                 {
 
                     for group in nearby_groups {
@@ -755,9 +755,9 @@ public class OutlierGroup: CustomStringConvertible,
                     }
                 }
 
-                if let next_frame = await frame.nextFrame,
-                   let nearby_groups = await next_frame.outlierGroups(within: self.maxNearbyGroupDistance,
-                                                                      of: self.bounds)
+                if let next_frame = frame.nextFrame,
+                   let nearby_groups = next_frame.outlierGroups(within: self.maxNearbyGroupDistance,
+                                                                of: self.bounds)
                 {
                     for group in nearby_groups {
                         if let firstLine = group.firstLine {
@@ -866,9 +866,9 @@ public class OutlierGroup: CustomStringConvertible,
         var bestGroup: OutlierGroup?
         
         if let frame = self.frame,
-           let other_frame = direction == .forwards ? await frame.nextFrame : await frame.previousFrame,
-           let nearby_groups = await other_frame.outlierGroups(within: self.maxNearbyGroupDistance,
-                                                               of: self.bounds)
+           let other_frame = direction == .forwards ? frame.nextFrame : frame.previousFrame,
+           let nearby_groups = other_frame.outlierGroups(within: self.maxNearbyGroupDistance,
+                                                         of: self.bounds)
         {
             for nearby_group in nearby_groups {
                 let score = self.thetaHistoCenterLineScore(with: nearby_group,

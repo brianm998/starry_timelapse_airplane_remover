@@ -56,7 +56,7 @@ public actor FinalProcessor {
     func add(frame: FrameAirplaneRemover) {
         Log.d("add frame \(frame.frame_index)")
         Task {
-            let frame_state = await frame.processingState()
+            let frame_state = frame.processingState()
             Log.d("add frame \(frame.frame_index) with state \(frame_state)")
             
             let index = frame.frame_index
@@ -141,7 +141,7 @@ public actor FinalProcessor {
                     Log.d("adding frame \(frame.frame_index) to final queue")
                     try await taskGroup.addTask() { 
                         await frame.maybeApplyOutlierGroupClassifier()
-                        await frame.set(state: .outlierProcessingComplete)
+                        frame.set(state: .outlierProcessingComplete)
                         try await self.finish(frame: frame)
                     }
                 }
@@ -261,7 +261,7 @@ public actor FinalProcessor {
                             try await taskGroup.addTask() { 
                                 await frame_to_finish.clearOutlierGroupValueCaches()
                                 await frame_to_finish.maybeApplyOutlierGroupClassifier()
-                                await frame_to_finish.set(state: .outlierProcessingComplete)
+                                frame_to_finish.set(state: .outlierProcessingComplete)
                                 try await self.finish(frame: frame_to_finish)
                             }
                         }
@@ -315,15 +315,15 @@ public actor FinalProcessor {
 fileprivate func doublyLink(frames: [FrameAirplaneRemover]) async {
     // doubly link frames here so that the decision tree can have acess to other frames
     for (i, frame) in frames.enumerated() {
-        if await frames[i].previousFrame == nil,
+        if frames[i].previousFrame == nil,
            i > 0
         {
-            await frame.setPreviousFrame(frames[i-1])
+            frame.setPreviousFrame(frames[i-1])
         }
-        if await frames[i].nextFrame == nil,
+        if frames[i].nextFrame == nil,
            i < frames.count - 1
         {
-            await frame.setNextFrame(frames[i+1])
+            frame.setNextFrame(frames[i+1])
         }
     }
 }

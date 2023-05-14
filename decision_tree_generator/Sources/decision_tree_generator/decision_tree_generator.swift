@@ -235,7 +235,7 @@ struct decision_tree_generator: ParsableCommand {
                 }
                 
                 //Log.d("should check frame \(frame.frame_index)")
-                if let outlier_group_list = await frame.outlierGroups() {
+                if let outlier_group_list = frame.outlierGroups() {
                     for outlier_group in outlier_group_list {
                         if let numberGood = outlier_group.shouldPaint {
                             await withLimitedTaskGroup(of: (treeKey:String, shouldPaint:Bool).self) { taskGroup in
@@ -391,7 +391,7 @@ struct decision_tree_generator: ParsableCommand {
                 
                 var local_positive_data: [OutlierFeatureData] = []
                 var local_negative_data: [OutlierFeatureData] = []
-                if let outlier_groups = await frame.outlierGroups() {
+                if let outlier_groups = frame.outlierGroups() {
                     for outlier_group in outlier_groups {
                         let name = outlier_group.name
                         if let should_paint = outlier_group.shouldPaint {

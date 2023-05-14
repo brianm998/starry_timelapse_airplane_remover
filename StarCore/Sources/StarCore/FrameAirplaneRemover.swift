@@ -37,7 +37,7 @@ public enum FrameProcessingState: Int, CaseIterable, Codable {
     case complete
 }
 
-public actor FrameAirplaneRemover: Equatable, Hashable {
+public class FrameAirplaneRemover: Equatable, Hashable {
 
     private var state: FrameProcessingState = .unprocessed {
         willSet {
