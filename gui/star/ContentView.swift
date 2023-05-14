@@ -469,9 +469,46 @@ struct ContentView: View {
                             
                             let will_paint = outlierViewModel.group.shouldPaint?.willPaint ?? false
 
-                            // this nested trinary sucks
                             let paint_color = outlierViewModel.selectionColor
 
+                            if will_paint {
+                                // stick some indicators on the side of the image
+
+                                let arrow_length:CGFloat = CGFloat(outlierViewModel.frame_width)/40
+                                let arrow_height:CGFloat = CGFloat(outlierViewModel.frame_width)/800
+                                
+                                // right side
+                                Rectangle()
+                                  .foregroundColor(.purple)
+                                  .frame(width: arrow_length, height: arrow_height)
+                                  .aspectRatio(CGSize(width: arrow_length, height: arrow_height), contentMode: .fit)
+                                  .offset(x: CGFloat(frame_center_x+Int(arrow_length/2*1.1)),
+                                          y: CGFloat(outlier_center.y - frame_center_y))
+
+                                // upper
+                                Rectangle()
+                                  .foregroundColor(.purple)
+                                  .frame(width: arrow_height, height: arrow_length)
+                                  .aspectRatio(CGSize(width: arrow_height, height: arrow_length), contentMode: .fit)
+                                  .offset(x: CGFloat(outlier_center.x - frame_center_x),
+                                          y: CGFloat(-Int(arrow_length/2) - frame_center_y))
+
+                                // left side
+                                Rectangle()
+                                  .foregroundColor(.purple)
+                                  .frame(width: arrow_length, height: arrow_height)
+                                  .aspectRatio(CGSize(width: arrow_length, height: arrow_height), contentMode: .fit)
+                                  .offset(x: CGFloat(-frame_center_x-Int(arrow_length/2*1.1)),
+                                          y: CGFloat(outlier_center.y - frame_center_y))
+
+                                // lower
+                                Rectangle()
+                                  .foregroundColor(.purple)
+                                  .frame(width: arrow_height, height: arrow_length)
+                                  .aspectRatio(CGSize(width: arrow_height, height: arrow_length), contentMode: .fit)
+                                  .offset(x: CGFloat(outlier_center.x - frame_center_x),
+                                          y: CGFloat(Int(arrow_length/2) + frame_center_y))
+                            }
                             Image(nsImage: outlierViewModel.image)
                               .renderingMode(.template) // makes this VV color work
                               .foregroundColor(paint_color)
@@ -563,7 +600,7 @@ struct ContentView: View {
                                       Log.e("WTF, not already set to paint??")
                                   }
                               }
-                        }
+                         }
                     }
                       .onChange(of: viewModel.animateOutliers) { newValue in
                           if newValue {
