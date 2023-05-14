@@ -395,6 +395,8 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         if fullyProcess {
             try await loadOutliers()
             Log.d("frame \(frame_index) done detecting outlier groups")
+            await self.writeOutliersBinary()
+            Log.d("frame \(frame_index) done writing outlier binaries")
         } else {
             Log.d("frame \(frame_index) loaded without outlier groups")
         }
@@ -646,7 +648,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                 //Log.d("next_outlier_index \(next_outlier_index)")
                 
                 pending_outlier_access_index += 1
-                if let _ = outlier_group_list[next_outlier_index] {
+               if let _ = outlier_group_list[next_outlier_index] {
                     group_size += 1
                     
                     let outlier_x = next_outlier_index % width;
@@ -961,7 +963,52 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                              with: &paint_value, count: self.bytesPerPixel)
         
     }
-    
+
+    private func writeUprocessedPreviews(_ image: PixelatedImage) {
+        if config.writeFramePreviewFiles ||
+           config.writeFrameThumbnailFiles
+        {
+            Log.d("frame \(self.frame_index) doing preview")
+            if let baseImage = image.baseImage {
+                // maybe write previews
+                // these are not overwritten as the original
+                // is assumed to be not change
+                self.writePreviewFile(baseImage)
+                self.writeThumbnailFile(baseImage)
+            } else {
+                Log.w("frame \(self.frame_index) NO BASE IMAGE")
+            }
+        }
+    }
+
+    private func writeProcssedPreview(_ image: PixelatedImage, with output_data: Data) {
+        // write out a preview of the processed file
+        if config.writeFrameProcessedPreviewFiles {
+            if let processed_preview_image = image.baseImage(ofSize: self.previewSize,
+                                                             fromData: output_data),
+               let imageData = processed_preview_image.jpegData,
+               let filename = self.processedPreviewFilename
+            {
+                do {
+                    if file_manager.fileExists(atPath: filename) {
+                        Log.i("overwriting already existing processed preview \(filename)")
+                        try file_manager.removeItem(atPath: filename)
+                    }
+
+                    // write to file
+                    file_manager.createFile(atPath: filename,
+                                            contents: imageData,
+                                            attributes: nil)
+                    Log.i("frame \(self.frame_index) wrote preview to \(filename)")
+                } catch {
+                    Log.e("\(error)")
+                }
+            } else {
+                Log.w("frame \(self.frame_index) WTF")
+            }
+        }
+    }
+
     // run after should_paint has been set for each group, 
     // does the final painting and then writes out the output files
     public func finish() async throws {
@@ -983,23 +1030,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         Log.i("frame \(self.frame_index) finishing")
         let image = try await image_sequence.getImage(withName: image_sequence.filenames[frame_index]).image()
 
-
-        if config.writeFramePreviewFiles ||
-           config.writeFrameThumbnailFiles
-        {
-            Log.d("frame \(self.frame_index) doing preview")
-            if let baseImage = image.baseImage {
-                // maybe write previews
-                // these are not overwritten as the original
-                // is assumed to be not change
-                self.writePreviewFile(baseImage)
-                self.writeThumbnailFile(baseImage)
-            } else {
-                Log.w("frame \(self.frame_index) NO BASE IMAGE")
-            }
-        }
-        
-        // maybe write out pre-updated scaled preview image here?
+        writeUprocessedPreviews(image) 
         
         var otherFrames: [PixelatedImage] = []
 
@@ -1031,31 +1062,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         Log.d("frame \(self.frame_index) writing output files")
         self.state = .writingOutputFile
 
-        // write out a preview of the processed file
-        if config.writeFrameProcessedPreviewFiles {
-            if let processed_preview_image = image.baseImage(ofSize: self.previewSize,
-                                                            fromData: output_data),
-               let imageData = processed_preview_image.jpegData,
-               let filename = self.processedPreviewFilename
-            {
-                do {
-                    if file_manager.fileExists(atPath: filename) {
-                        Log.i("overwriting already existing processed preview \(filename)")
-                        try file_manager.removeItem(atPath: filename)
-                    }
-
-                    // write to file
-                    file_manager.createFile(atPath: filename,
-                                            contents: imageData,
-                                            attributes: nil)
-                    Log.i("frame \(self.frame_index) wrote preview to \(filename)")
-                } catch {
-                    Log.e("\(error)")
-                }
-            } else {
-                Log.w("frame \(self.frame_index) WTF")
-            }
-        }
+        writeProcssedPreview(image, with: output_data)
 
         do {
             // write frame out as a tiff file after processing it
