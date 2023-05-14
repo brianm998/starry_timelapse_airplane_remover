@@ -16,14 +16,13 @@ class FrameView: ObservableObject {
     let frame_index: Int
     var frame: FrameAirplaneRemover? {
         didSet {
-            Log.d("frame \(frame_index) set frame to \(frame)")
+            Log.d("frame \(frame_index) set frame to \(String(describing: frame))")
         }
     }
 
-    var numberOfPositiveOutliers: Int {
-        var total: Int = 0
-
+    var numberOfPositiveOutliers: Int? {
         if let outlierViews = outlierViews {
+            var total: Int = 0
             for outlierView in outlierViews {
                 if let shouldPaint = outlierView.group.shouldPaint,
                    shouldPaint.willPaint
@@ -31,15 +30,16 @@ class FrameView: ObservableObject {
                     total += 1
                 }
             }
+            return total
         }
-        return total
+        return nil
     }
 
-    var numberOfNegativeOutliers: Int {
-        var total: Int = 0
+    var numberOfNegativeOutliers: Int? {
         Log.i("numberOfNegativeOutliers \(outlierViews)")
 
         if let outlierViews = outlierViews {
+            var total: Int = 0
             Log.i("numberOfNegativeOutliers have outlier views")
             for outlierView in outlierViews {
                 Log.i("numberOfNegativeOutliers outlier view \(outlierView) \(outlierView.group.name) \(outlierView.group.shouldPaint)")
@@ -50,22 +50,23 @@ class FrameView: ObservableObject {
                     total += 1
                 }
             }
+            Log.i("numberOfNegativeOutliers \(total)")
+            return total
         }
-        Log.i("numberOfNegativeOutliers \(total)")
-        return total
+        return nil
     }
     
-    var numberOfUndecidedOutliers: Int {
-        var total: Int = 0
-
+    var numberOfUndecidedOutliers: Int? {
         if let outlierViews = outlierViews {
+            var total: Int = 0
             for outlierView in outlierViews {
                 if outlierView.group.shouldPaint == nil {
                     total += 1
                 }
             }
+            return total
         }
-        return total
+        return nil
     }
 
     // optional to distinguish between not loaded and empty list
@@ -73,7 +74,7 @@ class FrameView: ObservableObject {
     @Published var loadingOutlierViews: Bool = false
 
     // we don't keep full resolution images here
-    
+
     @Published var thumbnail_image: Image = initial_image
     @Published var preview_image: Image = initial_image
     @Published var processed_preview_image: Image = initial_image

@@ -329,13 +329,22 @@ struct ContentView: View {
                         let frameView = viewModel.currentFrameView  
                         VStack {
                             Text("frame \(viewModel.current_index)")
-                            if let frame = frameView.frame,
+                            if /*let frame = frameView.frame,*/
                                let _ = frameView.outlierViews
                             {
-                                Text("\(frameView.numberOfPositiveOutliers) will paint")
-                                Text("\(frameView.numberOfNegativeOutliers) will not paint")
-                                if frameView.numberOfUndecidedOutliers > 0 {
-                                    Text("\(frameView.numberOfUndecidedOutliers) undecided")
+                                if let num_positive = frameView.numberOfPositiveOutliers {
+                                    Text("\(num_positive) will paint")
+                                      .foregroundColor(num_positive == 0 ? .white : .red)
+                                }
+                                if let num_negative = frameView.numberOfNegativeOutliers {
+                                    Text("\(num_negative) will not paint")
+                                      .foregroundColor(num_negative == 0 ? .white : .green)
+                                }
+                                if let num_undecided = frameView.numberOfUndecidedOutliers,
+                                   num_undecided > 0
+                                {
+                                    Text("\(num_undecided) undecided")
+                                      .foregroundColor(.orange)
                                 }
                             }
                         }.frame(maxWidth: .infinity, alignment: .trailing)
@@ -503,7 +512,7 @@ struct ContentView: View {
                                                   // make this row the only selected one
                                                   let frame_view = viewModel.frames[outlierViewModel.group.frame_index]
                                                   if let frame = frame_view.frame,
-                                                     let group = await frame.outlierGroup(named: outlierViewModel.group.name)
+                                                     let group = frame.outlierGroup(named: outlierViewModel.group.name)
                                                   {
                                                       if let outlier_views = frame_view.outlierViews {
                                                           for outlier_view in outlier_views {
@@ -537,7 +546,7 @@ struct ContentView: View {
                                               
                                               Task {
                                                   if let frame = viewModel.currentFrame,
-                                                     let outlier_groups = await frame.outlier_groups,
+                                                     let outlier_groups = frame.outlier_groups,
                                                      let outlier_group = outlier_groups.members[outlierViewModel.group.name]
                                                   {
                                                       // update the actor in the background
@@ -682,13 +691,13 @@ struct ContentView: View {
     // the view for each frame in the filmstrip at the bottom
     func filmStripView(forFrame frame_index: Int, withScroll scroller: ScrollViewProxy) -> some View {
         //var bg_color: Color = .yellow
-        if let frame = viewModel.frame(atIndex: frame_index) {
+        //if let frame = viewModel.frame(atIndex: frame_index) {
             //            if frame.outlierGroupCount() > 0 {
             //                bg_color = .red
             //            } else {
             //bg_color = .green
             //            }
-        }
+       // }
         return VStack(alignment: .leading) {
             Spacer().frame(maxHeight: 8)
             HStack{
@@ -697,7 +706,7 @@ struct ContentView: View {
             }.frame(maxHeight: 10)
             if frame_index >= 0 && frame_index < viewModel.frames.count {
                 let frameView = viewModel.frames[frame_index]
-                let stroke_width: CGFloat = 4
+              //  let stroke_width: CGFloat = 4
                 if viewModel.current_index == frame_index {
                     
                     frameView.thumbnail_image
@@ -1133,9 +1142,8 @@ struct ContentView: View {
 
         // XXX these should really use modifiers but those don't work :(
         let start_shortcut_key: KeyEquivalent = "b" // make this bottom arror
-        let fast_previous_shortut_key: KeyEquivalent = "z"
+        let fast_previous_shortcut_key: KeyEquivalent = "z"
         let fast_next_shortcut_key: KeyEquivalent = "x"
-        let previous_shortut_key: KeyEquivalent = .leftArrow
         let previous_shortcut_key: KeyEquivalent = .leftArrow
         let backwards_shortcut_key: KeyEquivalent = "r"
         let end_button_shortcut_key: KeyEquivalent = "f" // make this top arror
@@ -1159,11 +1167,11 @@ struct ContentView: View {
                 
                 // fast previous button
                 button(named: "backward.fill",
-                       shortcutKey: fast_previous_shortut_key,
+                       shortcutKey: fast_previous_shortcut_key,
                        color: button_color,
                        toolTip: """
                          back \(fast_skip_amount) frames
-                         (keyboard shortcut '\(fast_previous_shortut_key.character)')
+                         (keyboard shortcut '\(fast_previous_shortcut_key.character)')
                          """)
                 {
                     self.fastPreviousButtonAction(withScroll: scroller)
@@ -1171,7 +1179,7 @@ struct ContentView: View {
                 
                 // previous button
                 button(named: "backward.frame.fill",
-                       shortcutKey: previous_shortut_key,
+                       shortcutKey: previous_shortcut_key,
                        color: button_color,
                        toolTip: """
                          back one frame
@@ -1489,17 +1497,24 @@ struct ContentView: View {
             skip = false 
 
         case .skipEmpties:
-            skip = next_frame_view.outlierViews?.count == 0 
+            if let outlierViews = next_frame_view.outlierViews {
+                skip = outlierViews.count == 0
+            }
 
         case .toNextPositive:
-            skip = next_frame_view.numberOfPositiveOutliers == 0
+            if let num = next_frame_view.numberOfPositiveOutliers {
+                skip = num == 0
+            }
 
         case .toNextNegative:
-            skip = next_frame_view.numberOfNegativeOutliers == 0
+            if let num = next_frame_view.numberOfNegativeOutliers {
+                skip = num == 0
+            }
 
         case .toNextUnknown:
-            skip = next_frame_view.numberOfUndecidedOutliers == 0
-            
+            if let num = next_frame_view.numberOfUndecidedOutliers {
+                skip = num == 0
+            }
         }
         
         // skip this one
@@ -1636,7 +1651,7 @@ struct ContentView: View {
             if let frame_to_save = old_frame {
 
                 Task {
-                    let frame_changed = await frame_to_save.hasChanges()
+                    let frame_changed = frame_to_save.hasChanges()
 
                     // only save changes to frames that have been changed
                     if frame_changed {

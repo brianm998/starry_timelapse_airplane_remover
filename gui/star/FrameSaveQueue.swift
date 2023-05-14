@@ -49,25 +49,26 @@ class FrameSaveQueue {
             Log.d("actually saving frame \(frame.frame_index)")
             self.saving[frame.frame_index] = frame
             Task {
+                frame.changesHandled()
 //                await self.finalProcessor.final_queue.add(atIndex: frame.frame_index) {
-                    Log.i("frame \(frame.frame_index) finishing")
-                    try await frame.loadOutliers()
-                    try await frame.finish()
-                    Log.i("frame \(frame.frame_index) finished")
-                    let dispatchGroup = DispatchGroup()
-                    dispatchGroup.enter()
-                    await MainActor.run {
-                        self.saving[frame.frame_index] = nil
-                        Task {
-                            Log.i("frame \(frame.frame_index) about to purge output files")
-                            await frame.purgeCachedOutputFiles()
-                            Log.i("frame \(frame.frame_index) about to call completion closure")
-                            await completionClosure()
-                            Log.i("frame \(frame.frame_index) completion closure called")
-                            dispatchGroup.leave()
-                        }
+                Log.i("frame \(frame.frame_index) finishing")
+                try await frame.loadOutliers()
+                try await frame.finish()
+                Log.i("frame \(frame.frame_index) finished")
+                let dispatchGroup = DispatchGroup()
+                dispatchGroup.enter()
+                await MainActor.run {
+                    self.saving[frame.frame_index] = nil
+                    Task {
+                        Log.i("frame \(frame.frame_index) about to purge output files")
+                        await frame.purgeCachedOutputFiles()
+                        Log.i("frame \(frame.frame_index) about to call completion closure")
+                        await completionClosure()
+                        Log.i("frame \(frame.frame_index) completion closure called")
+                        dispatchGroup.leave()
                     }
-                    dispatchGroup.wait()
+                }
+                dispatchGroup.wait()
 //                }
             }
         }
@@ -77,8 +78,6 @@ class FrameSaveQueue {
                      waitTime: TimeInterval = 5,
                      completionClosure: @escaping () async -> Void) {
 
-        _ = Task { await frame.changesHandled() }
-        
         Log.w("frame \(frame.frame_index) entering pergatory")
         if let candidate = pergatory[frame.frame_index] {
             candidate.retainLonger()

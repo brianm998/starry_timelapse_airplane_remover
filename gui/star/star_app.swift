@@ -97,13 +97,8 @@ class star_app: App {
 
     /*@StateObject*/ private var viewModel: ViewModel
 
-    // the state of each frame indexed by frame #
-    //var frame_states: [Int: FrameProcessingState] = [:]
-    
-//    let input_queue: FinalQueue
-
     required init() {
-        let dispatch_handler = DispatchHandler()
+        //let dispatch_handler = DispatchHandler()
         self.viewModel = ViewModel()
         viewModel.app = self
         Task {
@@ -114,7 +109,7 @@ class star_app: App {
             }
         }
         
-        Log.handlers[.console] = ConsoleLogHandler(at: .info)
+        Log.handlers[.console] = ConsoleLogHandler(at: .warn)
         Log.i("Starting Up")
     }
 
@@ -201,7 +196,7 @@ class star_app: App {
             output_path = input_image_sequence_path
         }
 
-        var config = Config(outputPath: output_path,
+        let config = Config(outputPath: output_path,
                             outlierMaxThreshold: self.outlierMaxThreshold,
                             outlierMinThreshold: self.outlierMinThreshold,
                             minGroupSize: self.minGroupSize,
@@ -240,7 +235,7 @@ class star_app: App {
     }
 
     @MainActor func make_callbacks() -> Callbacks {
-        var callbacks = Callbacks()
+        let callbacks = Callbacks()
 
 
         // get the full number of images in the sequcne
@@ -360,6 +355,24 @@ class star_app: App {
                   contentView.loadAllOutliersButton()
                   contentView.renderCurrentFrameButton()
                   contentView.renderAllFramesButton()
+              }
+              /*
+              CommandGroup(replacing: .newItem) {
+//                  CommandMenu("File") {
+                      Button("New Window") {
+                          Log.e("NEW WINDOW")
+                      }
+//                  }
+}
+
+               */
+              CommandMenu("File") {
+                  Button("Close") {
+                      Log.e("CLOSE")
+                  }
+                  Button("Other Button") {
+                      Log.e("Other Button")
+                  }
               }
               CommandMenu("Playback") {
                   Button("Show first frame") {
