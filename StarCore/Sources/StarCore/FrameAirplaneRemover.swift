@@ -1071,7 +1071,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
             self.state = .writingOutputFile
 
             try await taskGroup.addTask() {
-                await self.writeProcssedPreview(image, with: output_data)
+                self.writeProcssedPreview(image, with: output_data)
             }
 
             do {
