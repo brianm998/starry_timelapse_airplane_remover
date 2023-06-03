@@ -6,6 +6,7 @@ import Zoomable
 
 
 // the overall view model
+@MainActor
 public final class ViewModel: ObservableObject {
     var app: star_app?
     var config: Config?
@@ -176,7 +177,7 @@ public final class ViewModel: ObservableObject {
         }
     }
 
-    func append(frame: FrameAirplaneRemover) {
+    func append(frame: FrameAirplaneRemover) async {
         Log.d("appending frame \(frame.frame_index)")
         self.frames[frame.frame_index].frame = frame
 
@@ -191,14 +192,14 @@ public final class ViewModel: ObservableObject {
             }
             if have_all {
                 Log.d("WE HAVE THEM ALL")
-                self.initial_load_in_progress = false
+                await MainActor.run {
+                    self.initial_load_in_progress = false
+                }
             }
         }
         Log.d("set self.frames[\(frame.frame_index)].frame")
 
-        Task {
-            await refresh(frame: frame)
-        }
+        await refresh(frame: frame)
     }
 
     func setOutlierGroups(forFrame frame: FrameAirplaneRemover) async {

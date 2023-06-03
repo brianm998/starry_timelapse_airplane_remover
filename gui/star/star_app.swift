@@ -95,9 +95,10 @@ class star_app: App {
     var should_write_outlier_group_files = true // XXX see what happens
     var process_outlier_group_images = false
 
-    private var viewModel = ViewModel()
+    private var viewModel: ViewModel
     
     required init() {
+        self.viewModel = ViewModel()
         self.viewModel.app = self
         Task {
             for window in NSApp.windows {
@@ -269,13 +270,15 @@ class star_app: App {
 
             // XXX we may need to introduce some kind of queue here to avoid hitting
             // too many open files on larger sequences :(
-            self.addToViewModel(frame: new_frame)
+            Task {
+                await self.addToViewModel(frame: new_frame)
+            }
         }
         
         return callbacks
     }
 
-    @MainActor func addToViewModel(frame new_frame: FrameAirplaneRemover) {
+    @MainActor func addToViewModel(frame new_frame: FrameAirplaneRemover) async {
         Log.d("addToViewModel(frame: \(new_frame.frame_index))")
 
         if self.viewModel.config == nil {
@@ -286,10 +289,12 @@ class star_app: App {
         if self.viewModel.frame_width != CGFloat(new_frame.width) ||
            self.viewModel.frame_height != CGFloat(new_frame.height)
         {
-            self.viewModel.frame_width = CGFloat(new_frame.width)
-            self.viewModel.frame_height = CGFloat(new_frame.height)
+            await MainActor.run {
+                self.viewModel.frame_width = CGFloat(new_frame.width)
+                self.viewModel.frame_height = CGFloat(new_frame.height)
+            }
         }
-        self.viewModel.append(frame: new_frame)
+        await self.viewModel.append(frame: new_frame)
 
        // Log.d("addToViewModel self.viewModel.frame \(self.viewModel.frame)")
 
@@ -301,29 +306,28 @@ class star_app: App {
 
             // XXX not getting preview here
 
-            Task {
-                do {
-                    if let baseImage = try await new_frame.baseImage() {
-                        if self.viewModel.current_index == new_frame.frame_index {
-                            await MainActor.run {
-                                Task {
-                                    self.viewModel.current_frame_image = Image(nsImage: baseImage)
-                                    self.viewModel.update()
-                                }
+
+            do {
+                if let baseImage = try await new_frame.baseImage() {
+                    if self.viewModel.current_index == new_frame.frame_index {
+                        await MainActor.run {
+                            Task {
+                                self.viewModel.current_frame_image = Image(nsImage: baseImage)
+                                self.viewModel.update()
                             }
                         }
                     }
-                } catch {
-                    Log.e("error")
                 }
-
-                // Perform UI updates
-                await MainActor.run {
-                    self.viewModel.update()
-                }
+            } catch {
+                Log.e("error")
             }
+
+            // Perform UI updates
+            self.viewModel.update()
         } else {
-            self.viewModel.objectWillChange.send()
+            await MainActor.run {
+                self.viewModel.objectWillChange.send()
+            }
             // update view for thumbnails
         }
     }
