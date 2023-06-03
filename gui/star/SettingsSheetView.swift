@@ -55,7 +55,6 @@ struct SettingsSheetView: View {
                               toNextUnknown  - skip to the next frame with unknown outliers
                               """)
                       .frame(maxWidth: 280)
-                      .pickerStyle(.segmented)
 
 //                    Toggle(skipEmpties ? "change to # of frames" : "change to skip empties",
 //                           isOn: $skipEmpties)
