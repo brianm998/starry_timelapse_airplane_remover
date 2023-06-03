@@ -257,4 +257,21 @@ public final class ViewModel: ObservableObject {
         }
         return frames[current_index]
     }
+
+    // prepare for another sequence
+    func unloadSequence() {
+        self.sequenceLoaded = false
+        self.frames = [FrameView(0)]
+        self.current_frame_image = nil
+        self.current_frame_image_index = 0
+        self.initial_load_in_progress = false
+        self.loading_all_outliers = false
+        self.number_of_frames_with_outliers_loaded = 0
+        self.number_of_frames_loaded = 0
+        self.outlierGroupTableRows = []
+        self.outlierGroupWindowFrame = nil
+        self.selectedOutliers = Set<OutlierGroupTableRow.ID>()
+        self.current_index = 0
+        self.image_sequence_size = 0
+    }
 }

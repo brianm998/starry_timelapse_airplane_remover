@@ -349,7 +349,9 @@ class star_app: App {
                   // XXX don't really care it's dismissed
               }
                 
-        }
+        } .commands {
+              StarCommands(contentView: contentView)
+          }
         // this shows up as stars and wand in the upper right of the menu bar
         // always there when app is running, even when another app is used
         MenuBarExtra {

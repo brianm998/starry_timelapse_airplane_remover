@@ -21,23 +21,15 @@ struct StarCommands: Commands {
             contentView.renderCurrentFrameButton()
             contentView.renderAllFramesButton()
         }
-        /*
-         CommandGroup(replacing: .newItem) {
-         //                  CommandMenu("File") {
-         Button("New Window") {
-         Log.e("NEW WINDOW")
-         }
-         //                  }
-         }
-
-         */
-
-        CommandMenu("File") {
+        // replace File -> Close 
+        CommandGroup(replacing: .saveItem) {
             Button("Close") {
-                Log.e("CLOSE")
-            }
-            Button("Other Button") {
-                Log.e("Other Button")
+                Task {
+                    await MainActor.run {
+                        // XXX make sure the current sequence isn't still processing somehow
+                        contentView.viewModel.unloadSequence()
+                    }
+                }
             }
         }
         CommandMenu("Playback") {
