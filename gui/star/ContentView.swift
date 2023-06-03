@@ -421,7 +421,8 @@ struct ContentView: View {
 
                 case .edit: 
                     GeometryReader { geometry in
-                        let min = geometry.size.height/viewModel.frame_height
+                        let extra_space_on_edges: CGFloat = 140
+                        let min = (geometry.size.height/(viewModel.frame_height+extra_space_on_edges))
                         let full_max = self.showFullResolution ? 1 : 0.3
                         let max = min < full_max ? full_max : min
 
