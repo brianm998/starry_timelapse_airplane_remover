@@ -21,6 +21,10 @@ struct StarCommands: Commands {
             contentView.renderCurrentFrameButton()
             contentView.renderAllFramesButton()
         }
+
+        // remove File -> New Window 
+        CommandGroup(replacing: .newItem) { }
+        
         // replace File -> Close 
         CommandGroup(replacing: .saveItem) {
             Button("Close") {
