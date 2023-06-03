@@ -89,14 +89,22 @@ public class OutlierGroups {
                         await group.shouldPaint(try decoder.decode(PaintReason.self, from: paint_data))
 
                         //Log.d("loaded group.shouldPaint \(group.shouldPaint) for \(group.name) \(fuck)")
-                    } else {
+                    }
+
+                    /*
+                     XXX this causes a failure on startup when there is no classification
+                     for this outlier group yet
+                     the crash is because of no loaded frame yet
+                     else {
                         // classify it
+                        
                         if let currentClassifier = currentClassifier {
                             Log.i("no classification for group \(group.name), applying the default classifier now")
                             let classificationScore = await currentClassifier.classification(of: group)
                             await group.shouldPaint(.fromClassifier(classificationScore))
                         }
                     }
+                     */
                     return group
                 }
             }
