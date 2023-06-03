@@ -95,12 +95,10 @@ class star_app: App {
     var should_write_outlier_group_files = true // XXX see what happens
     var process_outlier_group_images = false
 
-    /*@StateObject*/ private var viewModel: ViewModel
-
+    private var viewModel = ViewModel()
+    
     required init() {
-        //let dispatch_handler = DispatchHandler()
-        self.viewModel = ViewModel()
-        viewModel.app = self
+        self.viewModel.app = self
         Task {
             for window in NSApp.windows {
                 if window.title.hasPrefix("Outlier") {
@@ -271,17 +269,13 @@ class star_app: App {
 
             // XXX we may need to introduce some kind of queue here to avoid hitting
             // too many open files on larger sequences :(
-            Task {
-//                await self.input_queue.add(atIndex: new_frame.frame_index) {
-                    await self.addToViewModel(frame: new_frame)
-//                }
-            }
+            self.addToViewModel(frame: new_frame)
         }
         
         return callbacks
     }
 
-    @MainActor func addToViewModel(frame new_frame: FrameAirplaneRemover) async {
+    @MainActor func addToViewModel(frame new_frame: FrameAirplaneRemover) {
         Log.d("addToViewModel(frame: \(new_frame.frame_index))")
 
         if self.viewModel.config == nil {
@@ -292,12 +286,10 @@ class star_app: App {
         if self.viewModel.frame_width != CGFloat(new_frame.width) ||
            self.viewModel.frame_height != CGFloat(new_frame.height)
         {
-            await MainActor.run {
-                self.viewModel.frame_width = CGFloat(new_frame.width)
-                self.viewModel.frame_height = CGFloat(new_frame.height)
-            }
+            self.viewModel.frame_width = CGFloat(new_frame.width)
+            self.viewModel.frame_height = CGFloat(new_frame.height)
         }
-        await self.viewModel.append(frame: new_frame)
+        self.viewModel.append(frame: new_frame)
 
        // Log.d("addToViewModel self.viewModel.frame \(self.viewModel.frame)")
 
@@ -308,101 +300,51 @@ class star_app: App {
             Log.i("got frame index \(new_frame.frame_index)")
 
             // XXX not getting preview here
-            
-            do {
-                if let baseImage = try await new_frame.baseImage() {
-                    if self.viewModel.current_index == new_frame.frame_index {
-                        await MainActor.run {
-                            Task {
-                                self.viewModel.current_frame_image = Image(nsImage: baseImage)
-                                self.viewModel.update()
+
+            Task {
+                do {
+                    if let baseImage = try await new_frame.baseImage() {
+                        if self.viewModel.current_index == new_frame.frame_index {
+                            await MainActor.run {
+                                Task {
+                                    self.viewModel.current_frame_image = Image(nsImage: baseImage)
+                                    self.viewModel.update()
+                                }
                             }
                         }
                     }
+                } catch {
+                    Log.e("error")
                 }
-            } catch {
-                Log.e("error")
-            }
 
-            //self.viewModel.frame = new_frame
-            // Perform UI updates
-            self.viewModel.update()
-        } else {
-            await MainActor.run {
-                self.viewModel.objectWillChange.send()
+                // Perform UI updates
+                await MainActor.run {
+                    self.viewModel.update()
+                }
             }
+        } else {
+            self.viewModel.objectWillChange.send()
             // update view for thumbnails
         }
     }
 
+    
     var body: some Scene {
         let contentView = ContentView(viewModel: viewModel)
+        
         WindowGroup {
             contentView
         }
           .commands {
-              CommandMenu("Actions") {
-                  contentView.paintAllButton()
-                    .keyboardShortcut("p", modifiers: [])
-                  //.disabled(!viewModel.sequenceLoaded)
-
-                  contentView.clearAllButton()
-                    .keyboardShortcut("c", modifiers: [])
-
-                  contentView.outlierInfoButton()
-                  contentView.applyAllDecisionTreeButton()
-                  contentView.applyDecisionTreeButton()
-                  contentView.loadAllOutliersButton()
-                  contentView.renderCurrentFrameButton()
-                  contentView.renderAllFramesButton()
-              }
-              /*
-              CommandGroup(replacing: .newItem) {
-//                  CommandMenu("File") {
-                      Button("New Window") {
-                          Log.e("NEW WINDOW")
-                      }
-//                  }
-}
-
-               */
-              CommandMenu("File") {
-                  Button("Close") {
-                      Log.e("CLOSE")
-                  }
-                  Button("Other Button") {
-                      Log.e("Other Button")
-                  }
-              }
-              CommandMenu("Playback") {
-                  Button("Show first frame") {
-                      contentView.goToFirstFrameButtonAction()
-                  }
-                  Button("Go back many frames") {
-                      contentView.fastPreviousButtonAction()
-                  }
-                  Button("Go back one frame") {
-                      contentView.transition(numberOfFrames: -1)
-                  }
-                  Button(contentView.video_playing ? "Pause Video" : "Play Video") {
-                      contentView.togglePlay()
-                  }
-                  Button("Advance one frame") {
-                      contentView.transition(numberOfFrames: 1)
-                  }
-                  Button("Advance many frames") {
-                      contentView.fastPreviousButtonAction()
-                  }
-                  Button("Show last frame") {
-                      contentView.goToFirstFrameButtonAction()
-                  }
-              }
+              StarCommands(contentView: contentView)
           }
+        
         WindowGroup(id: "foobar") {
             OutlierGroupTable(viewModel: viewModel)
               { 
                   // XXX don't really care it's dismissed
               }
+                
         }
         // this shows up as stars and wand in the upper right of the menu bar
         // always there when app is running, even when another app is used
@@ -434,4 +376,7 @@ extension Array {
     }
 }
 
+
+
 fileprivate let file_manager = FileManager.default
+
