@@ -50,25 +50,26 @@ class FrameSaveQueue {
             self.saving[frame.frame_index] = frame
             Task {
                 frame.changesHandled()
+                self.saving[frame.frame_index] = nil
 //                await self.finalProcessor.final_queue.add(atIndex: frame.frame_index) {
                 Log.i("frame \(frame.frame_index) finishing")
                 try await frame.loadOutliers()
                 try await frame.finish()
                 Log.i("frame \(frame.frame_index) finished")
-                let dispatchGroup = DispatchGroup()
-                dispatchGroup.enter()
-                await MainActor.run {
-                    self.saving[frame.frame_index] = nil
-                    Task {
+                //let dispatchGroup = DispatchGroup()
+                //dispatchGroup.enter()
+                let save_task = await MainActor.run {
+                    return Task {
                         Log.i("frame \(frame.frame_index) about to purge output files")
                         await frame.purgeCachedOutputFiles()
                         Log.i("frame \(frame.frame_index) about to call completion closure")
                         await completionClosure()
                         Log.i("frame \(frame.frame_index) completion closure called")
-                        dispatchGroup.leave()
+                        //dispatchGroup.leave()
                     }
                 }
-                dispatchGroup.wait()
+                await save_task.value
+               // dispatchGroup.wait()
 //                }
             }
         }
