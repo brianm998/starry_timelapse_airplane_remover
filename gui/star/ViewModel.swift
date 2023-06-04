@@ -37,7 +37,7 @@ public final class ViewModel: ObservableObject {
     var label_text: String = "Started"
 
     // view class for each frame in the sequence in order
-    @Published var frames: [FrameView] = [FrameView(0)]
+    @Published var frames: [FrameViewModel] = [FrameViewModel(0)]
 
     // the image we're showing to the user right now
     @Published var current_frame_image: Image?
@@ -87,7 +87,7 @@ public final class ViewModel: ObservableObject {
     }
     
     // currently selected index in the sequence
-    var currentFrameView: FrameView {
+    var currentFrameView: FrameViewModel {
         if current_index < 0 { current_index = 0 }
         if current_index >= frames.count { current_index = frames.count - 1 }
         return frames[current_index]
@@ -117,7 +117,7 @@ public final class ViewModel: ObservableObject {
     func set(numberOfFrames: Int) {
         Task {
             await MainActor.run {
-                frames = Array<FrameView>(count: numberOfFrames) { i in FrameView(i) }
+                frames = Array<FrameViewModel>(count: numberOfFrames) { i in FrameViewModel(i) }
             }
         }
     }
@@ -254,7 +254,7 @@ public final class ViewModel: ObservableObject {
         return frames[index].frame
     }
     
-    func nextFrame() -> FrameView {
+    func nextFrame() -> FrameViewModel {
         if current_index < frames.count - 1 {
             current_index += 1
         }
@@ -267,7 +267,7 @@ public final class ViewModel: ObservableObject {
         return frames[current_index]
     }
 
-    func previousFrame() -> FrameView {
+    func previousFrame() -> FrameViewModel {
         if current_index > 0 {
             current_index -= 1
         } else {
@@ -279,7 +279,7 @@ public final class ViewModel: ObservableObject {
     // prepare for another sequence
     func unloadSequence() {
         self.sequenceLoaded = false
-        self.frames = [FrameView(0)]
+        self.frames = [FrameViewModel(0)]
         self.current_frame_image = nil
         self.current_frame_image_index = 0
         self.initial_load_in_progress = false

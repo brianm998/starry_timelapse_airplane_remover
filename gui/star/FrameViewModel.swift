@@ -6,7 +6,7 @@ import StarCore
 
 
 // UI view class used for each frame
-class FrameView: ObservableObject {
+class FrameViewModel: ObservableObject {
     init(_ frame_index: Int) {
         self.frame_index = frame_index
     }

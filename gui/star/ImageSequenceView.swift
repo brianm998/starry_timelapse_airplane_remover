@@ -388,6 +388,7 @@ struct ImageSequenceView: View {
             image
 
             if interactionMode == .edit {
+                // in edit mode, show outliers groups 
                 let current_frame_view = viewModel.currentFrameView
                 if let outlierViews = current_frame_view.outlierViews {
                     ForEach(0 ..< outlierViews.count, id: \.self) { idx in
@@ -1025,7 +1026,7 @@ struct ImageSequenceView: View {
                             renderImmediately: renderImmediately)
     }
     
-    func setAllFrameOutliers(in frame_view: FrameView,
+    func setAllFrameOutliers(in frame_view: FrameViewModel,
                              to shouldPaint: Bool,
                              renderImmediately: Bool = true)
     {
@@ -1172,7 +1173,7 @@ struct ImageSequenceView: View {
         }
     }
 
-    func transition(toFrame new_frame_view: FrameView,
+    func transition(toFrame new_frame_view: FrameViewModel,
                     from old_frame: FrameAirplaneRemover?,
                     withScroll scroller: ScrollViewProxy? = nil)
     {
