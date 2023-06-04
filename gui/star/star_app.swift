@@ -90,10 +90,9 @@ import StarCore
 @main
 class star_app: App {
 
-    private var viewModel: ViewModel
+    @StateObject private var viewModel = ViewModel()
     
     required init() {
-        self.viewModel = ViewModel()
         Task {
             for window in NSApp.windows {
                 if window.title.hasPrefix("Outlier") {
