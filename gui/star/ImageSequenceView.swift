@@ -98,34 +98,10 @@ struct ImageSequenceView: View {
                               .frame(maxWidth: 200, maxHeight: 200)
                               .opacity(should_show_progress ? 0.8 : 0)
                           )
-                    }
 
-                    if loading_outliers {
-                        HStack {
-                            Text("Loading Outliers for this frame")
-                            Spacer()
-                            ProgressView()
-                              .progressViewStyle(.linear)
-                              .frame(maxWidth: .infinity)
-                        }
+                        // show progress bars on top of the image at the bottom
+                        progressBars()
                     }
-
-                    if viewModel.initial_load_in_progress {
-                        HStack {
-                            Text("Loading Image Sequence")
-                            Spacer()
-                            ProgressView(value: viewModel.frameLoadingProgress)
-                        }
-                    }
-
-                    if viewModel.loading_all_outliers {
-                        HStack {
-                            Text("Loading Outlier Groups for all frames")
-                            Spacer()
-                            ProgressView(value: viewModel.outlierLoadingProgress)
-                        }
-                    }
-                    
                     VStack {
                         // buttons below the selected frame 
                         bottomControls(withScroll: scroller)
@@ -140,31 +116,9 @@ struct ImageSequenceView: View {
                             Spacer().frame(maxHeight: 10/*, alignment: .bottom*/)
                         }
 
+                        // scub slider at the bottom
                         if viewModel.image_sequence_size > 0 {
-                            if interactionMode == .edit {
-                                Spacer().frame(maxHeight: 20)
-                            }
-                            let start = 0.0
-                            let end = Double(viewModel.image_sequence_size)
-                            Slider(value: $sliderValue, in : start...end)
-                              .frame(maxWidth: .infinity, alignment: .bottom)
-                              .disabled(viewModel.video_playing)
-                              .onChange(of: sliderValue) { value in
-                                  let frame_index = Int(sliderValue)
-                                  Log.i("transition to \(frame_index)")
-                                  // XXX do more than just this
-                                  var new_frame_index = Int(value)
-                                  //viewModel.current_index = Int(value)
-                                  if new_frame_index < 0 { new_frame_index = 0 }
-                                  if new_frame_index >= viewModel.frames.count {
-                                      new_frame_index = viewModel.frames.count - 1
-                                  }
-                                  let new_frame_view = viewModel.frames[new_frame_index]
-                                  let current_frame = viewModel.currentFrame
-                                  self.transition(toFrame: new_frame_view,
-                                                  from: current_frame,
-                                                  withScroll: scroller)
-                            }
+                            scrubSlider(withScroll: scroller)
                         }
                     }
                 }
@@ -183,6 +137,68 @@ struct ImageSequenceView: View {
           }
     }
 
+    // progress bars for loading indications
+    func progressBars() -> some View {
+        VStack {
+            if loading_outliers {
+                HStack {
+                    Text("Loading Outliers for this frame")
+                    Spacer()
+                    ProgressView()
+                      .progressViewStyle(.linear)
+                      .frame(maxWidth: .infinity)
+                }
+            }
+
+            if viewModel.initial_load_in_progress {
+                HStack {
+                    Text("Loading Image Sequence")
+                    Spacer()
+                    ProgressView(value: viewModel.frameLoadingProgress)
+                }
+
+            }
+
+            if viewModel.loading_all_outliers {
+                HStack {
+                    Text("Loading Outlier Groups for all frames")
+                    Spacer()
+                    ProgressView(value: viewModel.outlierLoadingProgress)
+                }
+            }
+        }
+          .frame(maxHeight: .infinity, alignment: .bottom)
+          .opacity(0.6)
+
+    }
+
+    // slider at the bottom that scrubs the frame position
+    func scrubSlider(withScroll scroller: ScrollViewProxy) -> some View {
+        if interactionMode == .edit {
+            Spacer().frame(maxHeight: 20)
+        }
+        let start = 0.0
+        let end = Double(viewModel.image_sequence_size)
+        return Slider(value: $sliderValue, in : start...end)
+          .frame(maxWidth: .infinity, alignment: .bottom)
+          .disabled(viewModel.video_playing)
+          .onChange(of: sliderValue) { value in
+              let frame_index = Int(sliderValue)
+              Log.i("transition to \(frame_index)")
+              // XXX do more than just this
+              var new_frame_index = Int(value)
+              //viewModel.current_index = Int(value)
+              if new_frame_index < 0 { new_frame_index = 0 }
+              if new_frame_index >= viewModel.frames.count {
+                  new_frame_index = viewModel.frames.count - 1
+              }
+              let new_frame_view = viewModel.frames[new_frame_index]
+              let current_frame = viewModel.currentFrame
+              self.transition(toFrame: new_frame_view,
+                              from: current_frame,
+                              withScroll: scroller)
+          }
+    }
 
     // controls below the selected frame and above the filmstrip
     func bottomControls(withScroll scroller: ScrollViewProxy) -> some View {
@@ -451,84 +467,84 @@ struct ImageSequenceView: View {
 
     var selectionDragGesture: some Gesture {
         DragGesture()
-                   .onChanged { gesture in
-                       let _ = Log.d("isDragging")
-                       isDragging = true
-                       let location = gesture.location
-                       if drag_start != nil {
-                           // updating during drag is too slow
-                           drag_end = location
-                       } else {
-                           drag_start = gesture.startLocation
-                       }
-                       //Log.d("location \(location)")
-                   }
-                   .onEnded { gesture in
-                       isDragging = false
-                       let end_location = gesture.location
-                       if let drag_start = drag_start {
-                           Log.d("end location \(end_location) drag start \(drag_start)")
+          .onChanged { gesture in
+              let _ = Log.d("isDragging")
+              isDragging = true
+              let location = gesture.location
+              if drag_start != nil {
+                  // updating during drag is too slow
+                  drag_end = location
+              } else {
+                  drag_start = gesture.startLocation
+              }
+              //Log.d("location \(location)")
+          }
+          .onEnded { gesture in
+              isDragging = false
+              let end_location = gesture.location
+              if let drag_start = drag_start {
+                  Log.d("end location \(end_location) drag start \(drag_start)")
+                  
+                  let frameView = viewModel.currentFrameView
+                  
+                  var should_paint = false
+                  var paint_choice = true
+                  
+                  switch viewModel.selectionMode {
+                  case .paint:
+                      should_paint = true
+                  case .clear:
+                      should_paint = false
+                  case .details:
+                      paint_choice = false
+                  }
+                  
+                  if paint_choice {
+                      frameView.userSelectAllOutliers(toShouldPaint: should_paint,
+                                                      between: drag_start,
+                                                      and: end_location)
+                      if let frame = frameView.frame {
+                          Task {
+                              // is view layer updated? (NO)
+                              await frame.userSelectAllOutliers(toShouldPaint: should_paint,
+                                                                between: drag_start,
+                                                                and: end_location)
+                              refreshCurrentFrame()
+                              viewModel.update()
+                          }
+                      }
+                  } else {
+                      let _ = Log.d("DETAILS")
 
-                           let frameView = viewModel.currentFrameView
+                      if let frame = frameView.frame {
+                          Task {
+                              //var new_outlier_info: [OutlierGroup] = []
+                              var _outlierGroupTableRows: [OutlierGroupTableRow] = []
+                              
+                              await frame.foreachOutlierGroup(between: drag_start,
+                                                              and: end_location) { group in
+                                  Log.d("group \(group)")
+                                  //new_outlier_info.append(group)
 
-                           var should_paint = false
-                           var paint_choice = true
-                           
-                           switch viewModel.selectionMode {
-                           case .paint:
-                               should_paint = true
-                           case .clear:
-                               should_paint = false
-                           case .details:
-                               paint_choice = false
-                           }
-
-                           if paint_choice {
-                               frameView.userSelectAllOutliers(toShouldPaint: should_paint,
-                                                               between: drag_start,
-                                                               and: end_location)
-                               if let frame = frameView.frame {
-                                   Task {
-                                       // is view layer updated? (NO)
-                                       await frame.userSelectAllOutliers(toShouldPaint: should_paint,
-                                                                         between: drag_start,
-                                                                         and: end_location)
-                                       refreshCurrentFrame()
-                                       viewModel.update()
-                                   }
-                               }
-                           } else {
-                               let _ = Log.d("DETAILS")
-
-                               if let frame = frameView.frame {
-                                   Task {
-                                       //var new_outlier_info: [OutlierGroup] = []
-                                       var _outlierGroupTableRows: [OutlierGroupTableRow] = []
-                                       
-                                       await frame.foreachOutlierGroup(between: drag_start,
-                                                                       and: end_location) { group in
-                                           Log.d("group \(group)")
-                                           //new_outlier_info.append(group)
-
-                                           let new_row = await OutlierGroupTableRow(group)
-                                           _outlierGroupTableRows.append(new_row)
-                                           return .continue
-                                       }
-                                       await MainActor.run {
-                                           self.viewModel.outlierGroupWindowFrame = frame
-                                           self.viewModel.outlierGroupTableRows = _outlierGroupTableRows
-                                           Log.d("outlierGroupTableRows \(viewModel.outlierGroupTableRows.count)")
-                                           self.viewModel.showOutlierGroupTableWindow()
-                                       }
-                                   }
-                               } 
-                               
-                               // XXX show the details here somehow
-                           }
-                       }
-                       drag_start = nil
-                       drag_end = nil
-                   }
+                                  let new_row = await OutlierGroupTableRow(group)
+                                  _outlierGroupTableRows.append(new_row)
+                                  return .continue
+                              }
+                              await MainActor.run {
+                                  self.viewModel.outlierGroupWindowFrame = frame
+                                  self.viewModel.outlierGroupTableRows = _outlierGroupTableRows
+                                  Log.d("outlierGroupTableRows \(viewModel.outlierGroupTableRows.count)")
+                                  self.viewModel.showOutlierGroupTableWindow()
+                              }
+                          }
+                      } 
+                      
+                      // XXX show the details here somehow
+                  }
+              }
+              drag_start = nil
+              drag_end = nil
+          }
     }
 
     // the view for each frame in the filmstrip at the bottom
