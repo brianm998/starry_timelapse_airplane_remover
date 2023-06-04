@@ -81,6 +81,9 @@ import StarCore
   - add feature to fuzz out some outliers, such as light leak from airplanes into clouds
     without this, ghost airplanes are still seen, the bright parts of the streak are gone,
     but a halo around still persists.  XXX somehow detect this beforehand? XXX
+
+  - refactor the view model class so that it doesn't crash when closed when processing 
+    problem now is that we re-use the same view model class, need to create another properly
  */
 
 
@@ -136,11 +139,7 @@ class star_app: App {
                 await MainActor.run {
                     self.viewModel.eraser = eraser // XXX rename this crap
                     self.viewModel.config = config
-                    if let fp = eraser.final_processor {
-                        self.viewModel.frameSaveQueue = FrameSaveQueue(fp)
-                    } else {
-                        fatalError("fucking fix this")
-                    }
+                    self.viewModel.frameSaveQueue = FrameSaveQueue()
                 }
 
                 Log.d("outlier json startup done")
@@ -220,13 +219,7 @@ class star_app: App {
 
             self.viewModel.eraser = eraser // XXX rename this crap
             self.viewModel.config = config
-
-            if let fp = eraser.final_processor {
-                self.viewModel.frameSaveQueue = FrameSaveQueue(fp)
-            } else {
-                fatalError("fucking fix this")
-            }
-            
+            self.viewModel.frameSaveQueue = FrameSaveQueue()
         } catch {
             Log.e("\(error)")
         }

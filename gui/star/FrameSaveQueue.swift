@@ -4,9 +4,9 @@ import Cocoa
 import StarCore
 import Zoomable
 
-class FrameSaveQueue {
+class FrameSaveQueue: ObservableObject {
 
-    class Pergatory {
+    class Purgatory {
         var timer: Timer
         let frame: FrameAirplaneRemover
         let block: @Sendable (Timer) -> Void
@@ -14,7 +14,8 @@ class FrameSaveQueue {
         
         init(frame: FrameAirplaneRemover,
              waitTime: TimeInterval = 5,
-             block: @escaping @Sendable (Timer) -> Void) {
+             block: @escaping @Sendable (Timer) -> Void)
+        {
             self.frame = frame
             self.wait_time = waitTime
             self.timer = Timer.scheduledTimer(withTimeInterval: waitTime,
@@ -28,14 +29,10 @@ class FrameSaveQueue {
         }
     }
 
-    var pergatory: [Int: Pergatory] = [:] // both indexed by frame_index
-    var saving: [Int: FrameAirplaneRemover] = [:]
+    @Published var purgatory: [Int: Purgatory] = [:] // both indexed by frame_index
+    @Published var saving: [Int: FrameAirplaneRemover] = [:]
 
-    let finalProcessor: FinalProcessor
-    
-    init(_ finalProcessor: FinalProcessor) {
-        self.finalProcessor = finalProcessor
-    }
+    init() { }
 
     // no purgatory
     func saveNow(frame: FrameAirplaneRemover, completionClosure: @escaping () async -> Void) {
@@ -49,15 +46,14 @@ class FrameSaveQueue {
             Log.d("actually saving frame \(frame.frame_index)")
             self.saving[frame.frame_index] = frame
             Task {
-                frame.changesHandled()
-                self.saving[frame.frame_index] = nil
-//                await self.finalProcessor.final_queue.add(atIndex: frame.frame_index) {
                 Log.i("frame \(frame.frame_index) finishing")
                 try await frame.loadOutliers()
                 try await frame.finish()
+                frame.changesHandled()
                 Log.i("frame \(frame.frame_index) finished")
-                //let dispatchGroup = DispatchGroup()
-                //dispatchGroup.enter()
+
+                self.saving[frame.frame_index] = nil
+                
                 let save_task = await MainActor.run {
                     return Task {
                         Log.i("frame \(frame.frame_index) about to purge output files")
@@ -69,32 +65,30 @@ class FrameSaveQueue {
                     }
                 }
                 await save_task.value
-               // dispatchGroup.wait()
-//                }
             }
         }
     }
+
+    func endPurgatory(for frame_index: Int) {
+        self.purgatory[frame_index] = nil
+    }
     
     func readyToSave(frame: FrameAirplaneRemover,
-                     waitTime: TimeInterval = 5,
+                     waitTime: TimeInterval = 12,
                      completionClosure: @escaping () async -> Void) {
 
-        Log.w("frame \(frame.frame_index) entering pergatory")
-        if let candidate = pergatory[frame.frame_index] {
+        Log.w("frame \(frame.frame_index) entering purgatory")
+        if let candidate = purgatory[frame.frame_index] {
             candidate.retainLonger()
         } else {
-            let candidate = Pergatory(frame: frame, waitTime: waitTime) { timer in
-                Log.w("pergatory has ended for frame \(frame.frame_index)")
-                self.pergatory[frame.frame_index] = nil
-                if let _ = self.saving[frame.frame_index] {
-                    // go back to pergatory
-                    // going back to purgatory seems like hell, it never stops :(
-                    //self.readyToSave(frame: frame, completionClosure: completionClosure)
-                    Log.e("pergatory problem for frame \(frame.frame_index)")
-                } else {
-                    self.saveNow(frame: frame, completionClosure: completionClosure)
+            let candidate = Purgatory(frame: frame, waitTime: waitTime) { timer in
+                Task {
+                    Log.w("purgatory has ended for frame \(frame.frame_index)")
+                    await self.endPurgatory(for: frame.frame_index)
+                    await self.saveNow(frame: frame, completionClosure: completionClosure)
                 }
             }
+            purgatory[frame.frame_index] = candidate
         }
     }
 }

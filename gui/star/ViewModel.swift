@@ -5,14 +5,15 @@ import StarCore
 import Zoomable
 
 
-// the overall view model
+// the overall view model for a particular sequence
 @MainActor
 public final class ViewModel: ObservableObject {
     var app: star_app?
     var config: Config?
     var eraser: NighttimeAirplaneRemover?
-    var frameSaveQueue: FrameSaveQueue?
     var no_image_explaination_text: String = "Loading..."
+
+    @Published var frameSaveQueue: FrameSaveQueue?
 
     @Published var animateOutliers = false
     

@@ -326,12 +326,24 @@ struct ContentView: View {
                 if interactionMode == .edit {
 //                if !video_playing {
                     HStack {
-                        let frameView = viewModel.currentFrameView  
+                        let frameView = viewModel.currentFrameView
                         VStack {
+                            let num_purgatory = viewModel.frameSaveQueue?.purgatory.count ?? -1
+                            if num_purgatory > 0 {
+                                Text("\(num_purgatory) frames in purgatory")
+                                  .foregroundColor(.yellow)
+                            }
+                            let num_saving = viewModel.frameSaveQueue?.saving.count ?? -1
+                            if num_saving > 0 {
+                                Text("saving \(num_saving) frames")
+                                  .foregroundColor(.green)
+                            }
+//                        }
+//                          .border(.green)
+//                          .frame(maxWidth: .infinity, alignment: .trailing)
+//                        VStack {
                             Text("frame \(viewModel.current_index)")
-                            if /*let frame = frameView.frame,*/
-                               let _ = frameView.outlierViews
-                            {
+                            if let _ = frameView.outlierViews {
                                 if let num_positive = frameView.numberOfPositiveOutliers {
                                     Text("\(num_positive) will paint")
                                       .foregroundColor(num_positive == 0 ? .white : .red)
@@ -352,7 +364,6 @@ struct ContentView: View {
                           .id(frameView.numberOfNegativeOutliers)
                           //.id(frameView.outlierViews)
 
-                        
                         let paint_action = {
                             Log.d("PAINT")
                             paint_sheet_showing = !paint_sheet_showing
@@ -939,7 +950,7 @@ struct ContentView: View {
         if let frameSaveQueue = viewModel.frameSaveQueue
         {
             self.rendering_current_frame = true // XXX might not be right anymore
-            frameSaveQueue.saveNow(frame: frame) {
+            await frameSaveQueue.saveNow(frame: frame) {
                 await viewModel.refresh(frame: frame)
                 refreshCurrentFrame()
                 self.rendering_current_frame = false
