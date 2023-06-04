@@ -7,9 +7,42 @@ fileprivate var video_play_timer: Timer?
 
 fileprivate var current_video_frame = 0
 
+enum VideoPlayMode: String, Equatable, CaseIterable {
+    case forward
+    case reverse
+}
 
-// this is the main view of an image sequence 
-// can scrub, play, edit frames, etc
+enum FrameViewMode: String, Equatable, CaseIterable {
+    case original
+    case processed
+
+    var localizedName: LocalizedStringKey {
+        LocalizedStringKey(rawValue)
+    }
+}
+
+enum SelectionMode: String, Equatable, CaseIterable {
+    case paint
+    case clear
+    case details
+    
+    var localizedName: LocalizedStringKey {
+        LocalizedStringKey(rawValue)
+    }
+}
+
+enum InteractionMode: String, Equatable, CaseIterable {
+    case edit
+    case scrub
+
+    var localizedName: LocalizedStringKey {
+        LocalizedStringKey(rawValue)
+    }
+}
+
+
+// the main view of an image sequence 
+// user can scrub, play, edit frames, etc
 
 struct ImageSequenceView: View {
     @ObservedObject var viewModel: ViewModel

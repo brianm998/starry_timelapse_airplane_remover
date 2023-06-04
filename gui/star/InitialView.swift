@@ -3,7 +3,10 @@ import StarCore
 
 struct InitialView: View {
     @ObservedObject var viewModel: ViewModel
-    @Binding var previously_opened_sheet_showing_item: String
+
+    @State private var previously_opened_sheet_showing_item: String =
+      UserPreferences.shared.sortedSequenceList.count > 0 ?
+      UserPreferences.shared.sortedSequenceList[0] : ""      
 
     var body: some View {
         VStack {
