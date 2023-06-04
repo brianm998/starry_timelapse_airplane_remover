@@ -4,7 +4,7 @@ import Cocoa
 import StarCore
 import Zoomable
 
-class FrameSaveQueue: ObservableObject {
+@MainActor class FrameSaveQueue: ObservableObject {
 
     class Purgatory {
         var timer: Timer
@@ -22,11 +22,6 @@ class FrameSaveQueue: ObservableObject {
                                               repeats: false, block: block)
             self.block = block
         }
-
-        func retainLonger() {
-            self.timer = Timer.scheduledTimer(withTimeInterval: wait_time,
-                                              repeats: false, block: block)
-        }
     }
 
     @Published var purgatory: [Int: Purgatory] = [:] // both indexed by frame_index
@@ -34,42 +29,45 @@ class FrameSaveQueue: ObservableObject {
 
     init() { }
 
+    func doneSaving(frame frame_index: Int) {
+        self.saving[frame_index] = nil
+    }
+    
     // no purgatory
     func saveNow(frame: FrameAirplaneRemover, completionClosure: @escaping () async -> Void) {
         Log.i("saveNow for frame \(frame.frame_index)")
         // check to see if it's not already being saved
         if self.saving[frame.frame_index] != nil {
             // another save is in progress
-            Log.d("setting frame \(frame.frame_index) to readyToSave because already saving frame \(frame.frame_index)")
-            self.readyToSave(frame: frame, waitTime: 0.01, completionClosure: completionClosure)
+            Log.i("setting frame \(frame.frame_index) to readyToSave because already saving frame \(frame.frame_index)")
+            self.readyToSave(frame: frame, waitTime: 5, completionClosure: completionClosure)
         } else {
-            Log.d("actually saving frame \(frame.frame_index)")
+            Log.i("actually saving frame \(frame.frame_index)")
             self.saving[frame.frame_index] = frame
+            frame.changesHandled()
             Task {
-                Log.i("frame \(frame.frame_index) finishing")
-                try await frame.loadOutliers()
-                try await frame.finish()
-                frame.changesHandled()
-                Log.i("frame \(frame.frame_index) finished")
+                do {
+                    try await frame.loadOutliers()
+                    try await frame.finish()
 
-                self.saving[frame.frame_index] = nil
-                
-                let save_task = await MainActor.run {
-                    return Task {
-                        Log.i("frame \(frame.frame_index) about to purge output files")
-                        await frame.purgeCachedOutputFiles()
-                        Log.i("frame \(frame.frame_index) about to call completion closure")
-                        await completionClosure()
-                        Log.i("frame \(frame.frame_index) completion closure called")
-                        //dispatchGroup.leave()
+                    let save_task = await MainActor.run {
+                        // XXX this VVV doesn't always update in the UI without user action
+                        self.doneSaving(frame: frame.frame_index)
+                        return Task {
+                            await frame.purgeCachedOutputFiles()
+                            await completionClosure()
+                        }
                     }
+                    await save_task.value
+                } catch {
+                    Log.e("error \(error)")
                 }
-                await save_task.value
             }
         }
     }
 
     func endPurgatory(for frame_index: Int) {
+        Log.i("ending purgatory for frame \(frame_index)")
         self.purgatory[frame_index] = nil
     }
     
@@ -77,17 +75,20 @@ class FrameSaveQueue: ObservableObject {
                      waitTime: TimeInterval = 12,
                      completionClosure: @escaping () async -> Void) {
 
-        Log.w("frame \(frame.frame_index) entering purgatory")
         if let candidate = purgatory[frame.frame_index] {
-            candidate.retainLonger()
+            Log.i("frame \(frame.frame_index) is already in purgatory")
         } else {
+            Log.i("frame \(frame.frame_index) entering purgatory")
             let candidate = Purgatory(frame: frame, waitTime: waitTime) { timer in
+                Log.i("purgatory has ended for frame \(frame.frame_index)")
                 Task {
-                    Log.w("purgatory has ended for frame \(frame.frame_index)")
-                    await self.endPurgatory(for: frame.frame_index)
-                    await self.saveNow(frame: frame, completionClosure: completionClosure)
+                    await MainActor.run {
+                        /*await*/ self.endPurgatory(for: frame.frame_index)
+                        /*await*/ self.saveNow(frame: frame, completionClosure: completionClosure)
+                    }
                 }
             }
+            Log.i("starting purgatory for frame \(frame.frame_index)")
             purgatory[frame.frame_index] = candidate
         }
     }
