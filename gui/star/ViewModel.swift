@@ -17,6 +17,15 @@ public final class ViewModel: ObservableObject {
 
     @Published var frameSaveQueue: FrameSaveQueue?
 
+    @Published var videoPlayMode: VideoPlayMode = .forward
+    
+    @Published var video_playing = false
+
+    @Published var fastAdvancementType: FastAdvancementType = .normal
+
+    // if fastAdvancementType == .normal, fast forward and reverse do a set number of frames
+    @Published var fast_skip_amount = 20
+    
     @Published var sequenceLoaded = false
     
     @Published var frame_width: CGFloat = 600

@@ -49,6 +49,200 @@ enum InteractionMode: String, Equatable, CaseIterable {
     }
 }
 
+struct SystemButton: View {
+
+    let name: String
+    let shortcutKey: KeyEquivalent
+    let modifiers: EventModifiers
+    let color: Color
+    let size: CGFloat
+    let toolTip: String
+    let action: () -> Void
+
+    init(named name: String,
+         shortcutKey: KeyEquivalent,
+         modifiers: EventModifiers = [],
+         color: Color,
+         size: CGFloat = 30,
+         toolTip: String,
+         action: @escaping () -> Void)
+    {
+        self.name = name
+        self.shortcutKey = shortcutKey
+        self.modifiers = modifiers
+        self.color = color
+        self.size = size
+        self.toolTip = toolTip
+        self.action = action
+    }
+    var body: some View {
+        //Log.d("button \(name) using modifiers \(modifiers)")
+        return ZStack {
+            Button("", action: action)
+              .opacity(0)
+              .keyboardShortcut(shortcutKey, modifiers: modifiers)
+            
+            Button(action: action) {
+                buttonImage(name, size: size)
+            }
+              .buttonStyle(PlainButtonStyle())                            
+              .help(toolTip)
+              .foregroundColor(color)
+        }
+    }
+}
+
+func buttonImage(_ name: String, size: CGFloat) -> some View {
+    return Image(systemName: name)
+      .resizable()
+      .aspectRatio(contentMode: .fit)
+      .frame(maxWidth: size,
+             maxHeight: size,
+             alignment: .center)
+}
+
+
+
+// an HStack of buttons to advance backwards and fowards through the sequence
+struct VideoPlaybackButtons : View {
+    @ObservedObject var viewModel: ViewModel
+    let contentView: ContentView
+    var scroller: ScrollViewProxy
+
+    var body: some View {
+        // XXX these should really use modifiers but those don't work :(
+        let start_shortcut_key: KeyEquivalent = "b" // make this bottom arror
+        let fast_previous_shortcut_key: KeyEquivalent = "z"
+        let fast_next_shortcut_key: KeyEquivalent = "x"
+        let previous_shortcut_key: KeyEquivalent = .leftArrow
+        let backwards_shortcut_key: KeyEquivalent = "r"
+        let end_button_shortcut_key: KeyEquivalent = "f" // make this top arror
+
+        let button_color = Color(white: 202/256)
+        
+        return HStack {
+            // go to start button
+
+            if !viewModel.video_playing {
+                SystemButton(named: "backward.end.fill",
+                            shortcutKey: start_shortcut_key,
+                            color: button_color,
+                            toolTip: """
+                              go to start of sequence
+                              (keyboard shortcut '\(start_shortcut_key.character)')
+                              """)
+                {
+                    contentView.goToFirstFrameButtonAction(withScroll: scroller)
+                }
+                
+                // fast previous button
+                SystemButton(named: "backward.fill",
+                            shortcutKey: fast_previous_shortcut_key,
+                            color: button_color,
+                            toolTip: """
+                              back \(viewModel.fast_skip_amount) frames
+                              (keyboard shortcut '\(fast_previous_shortcut_key.character)')
+                              """)
+                {
+                    contentView.fastPreviousButtonAction(withScroll: scroller)
+                }
+                
+                // previous button
+                SystemButton(named: "backward.frame.fill",
+                            shortcutKey: previous_shortcut_key,
+                            color: button_color,
+                            toolTip: """
+                              back one frame
+                              (keyboard shortcut left arrow)
+                              """)
+                {
+                    contentView.transition(numberOfFrames: -1,
+                                    withScroll: scroller)
+                }
+
+                // play backwards button
+                SystemButton(named: "arrowtriangle.backward",
+                            shortcutKey: backwards_shortcut_key,
+                            color: button_color,
+                            size: 40,
+                            toolTip: """
+                              play in reverse
+                              (keyboard shortcut '\(backwards_shortcut_key)')
+                              """)
+                {
+                    contentView.viewModel.videoPlayMode = .reverse
+                    contentView.togglePlay(scroller)
+                }
+            }
+
+            ZStack {
+                // backwards button is not shown, so we use this to have shortcut still work
+                if viewModel.video_playing {
+                    Button("") {
+                        contentView.togglePlay(scroller)
+                    }
+                      .opacity(0)
+                      .keyboardShortcut(backwards_shortcut_key, modifiers: [])
+                } 
+            
+                // play/pause button
+                SystemButton(named: viewModel.video_playing ? "pause.fill" : "play.fill", // pause.fill
+                            shortcutKey: " ",
+                            color: viewModel.video_playing ? .blue : button_color,
+                            size: 40,
+                            toolTip: """
+                              Play / Pause
+                              """)
+                {
+                    contentView.viewModel.videoPlayMode = .forward
+                    contentView.togglePlay(scroller)
+                    //Log.w("play button not yet implemented")
+                }
+            }
+            if !viewModel.video_playing {
+                
+                // next button
+                SystemButton(named: "forward.frame.fill",
+                            shortcutKey: .rightArrow,
+                            color: button_color,
+                            toolTip: """
+                              forward one frame
+                              (keyboard shortcut right arrow)
+                              """)
+                {
+                    contentView.transition(numberOfFrames: 1,
+                                    withScroll: scroller)
+                }
+                
+                // fast next button
+                SystemButton(named: "forward.fill",
+                            shortcutKey: fast_next_shortcut_key,
+                            color: button_color,
+                            toolTip: """
+                              forward \(viewModel.fast_skip_amount) frames
+                              (keyboard shortcut '\(fast_next_shortcut_key.character)')
+                              """)
+                {
+                    contentView.fastForwardButtonAction(withScroll: scroller)
+                }
+                
+                
+                // end button
+                SystemButton(named: "forward.end.fill",
+                            shortcutKey: end_button_shortcut_key,
+                            color: button_color,
+                            toolTip: """
+                              advance to end of sequence
+                              (keyboard shortcut '\(end_button_shortcut_key.character)')
+                              """)
+                {
+                    contentView.goToLastFrameButtonAction(withScroll: scroller)
+                }
+            }
+        }        
+    }
+}
+
 // the overall level of the app
 @available(macOS 13.0, *) 
 struct ContentView: View {
@@ -57,8 +251,6 @@ struct ContentView: View {
 
     @State private var sliderValue = 0.0
 
-    @State private var videoPlayMode: VideoPlayMode = .forward
-    
     @State private var previousInteractionMode: InteractionMode = .scrub
 
     // enum for how we show each frame
@@ -82,12 +274,6 @@ struct ContentView: View {
     @State private var updating_frame_batch = false
 
     @State private var video_playback_framerate = 30
-    @State var video_playing = false
-
-    @State private var fastAdvancementType: FastAdvancementType = .normal
-
-    // if fastAdvancementType == .normal, fast forward and reverse do a set number of frames
-    @State private var fast_skip_amount = 20
 
     @State private var settings_sheet_showing = false
     @State private var paint_sheet_showing = false
@@ -189,7 +375,7 @@ struct ContentView: View {
                             let end = Double(viewModel.image_sequence_size)
                             Slider(value: $sliderValue, in : start...end)
                               .frame(maxWidth: .infinity, alignment: .bottom)
-                              .disabled(video_playing)
+                              .disabled(viewModel.video_playing)
                               .onChange(of: sliderValue) { value in
                                   let frame_index = Int(sliderValue)
                                   Log.i("transition to \(frame_index)")
@@ -220,7 +406,9 @@ struct ContentView: View {
     func bottomControls(withScroll scroller: ScrollViewProxy) -> some View {
         HStack {
             ZStack {
-                videoPlaybackButtons(scroller)
+                VideoPlaybackButtons(viewModel: viewModel,
+                                     contentView: self,
+                                     scroller: scroller)
                   .frame(maxWidth: .infinity, alignment: .center)
 
                 HStack {
@@ -247,7 +435,7 @@ struct ContentView: View {
                                   Choose between quickly scrubbing around the video
                                   and editing an individual frame.
                                 """)
-                          .disabled(video_playing)
+                          .disabled(viewModel.video_playing)
                           .onChange(of: interactionMode) { mode in
                               Log.d("interactionMode change \(mode)")
                               switch mode {
@@ -266,7 +454,7 @@ struct ContentView: View {
                                 Text(value.localizedName).tag(value)
                             }
                         }
-                          .disabled(video_playing)
+                          .disabled(viewModel.video_playing)
                           .help("""
                                   Show each frame as either the original   
                                   or with star processing applied.
@@ -362,9 +550,9 @@ struct ContentView: View {
                       .frame(maxWidth: .infinity, alignment: .trailing)
                       .sheet(isPresented: $settings_sheet_showing) {
                           SettingsSheetView(isVisible: self.$settings_sheet_showing,
-                                            fast_skip_amount: self.$fast_skip_amount,
+                                            fast_skip_amount: $viewModel.fast_skip_amount,
                                             video_playback_framerate: self.$video_playback_framerate,
-                                            fastAdvancementType: self.$fastAdvancementType)
+                                            fastAdvancementType: $viewModel.fastAdvancementType)
                       }
                       .sheet(isPresented: $paint_sheet_showing) {
                           MassivePaintSheetView(isVisible: self.$paint_sheet_showing,
@@ -969,11 +1157,11 @@ struct ContentView: View {
     }
 
     func fastPreviousButtonAction(withScroll scroller: ScrollViewProxy? = nil) {
-        if fastAdvancementType == .normal {
-            self.transition(numberOfFrames: -fast_skip_amount,
+        if viewModel.fastAdvancementType == .normal {
+            self.transition(numberOfFrames: -viewModel.fast_skip_amount,
                             withScroll: scroller)
         } else if let current_frame = viewModel.currentFrame {
-            self.transition(until: fastAdvancementType,
+            self.transition(until: viewModel.fastAdvancementType,
                             from: current_frame,
                             forwards: false,
                             withScroll: scroller)
@@ -982,150 +1170,15 @@ struct ContentView: View {
 
     func fastForwardButtonAction(withScroll scroller: ScrollViewProxy? = nil) {
 
-        if fastAdvancementType == .normal {
-            self.transition(numberOfFrames: fast_skip_amount,
+        if viewModel.fastAdvancementType == .normal {
+            self.transition(numberOfFrames: viewModel.fast_skip_amount,
                             withScroll: scroller)
         } else if let current_frame = viewModel.currentFrame {
-            self.transition(until: fastAdvancementType,
+            self.transition(until: viewModel.fastAdvancementType,
                             from: current_frame,
                             forwards: true,
                             withScroll: scroller)
         }
-    }
-
-    // an HStack of buttons to advance backwards and fowards through the sequence
-    func videoPlaybackButtons(_ scroller: ScrollViewProxy) -> some View {
-
-        // XXX these should really use modifiers but those don't work :(
-        let start_shortcut_key: KeyEquivalent = "b" // make this bottom arror
-        let fast_previous_shortcut_key: KeyEquivalent = "z"
-        let fast_next_shortcut_key: KeyEquivalent = "x"
-        let previous_shortcut_key: KeyEquivalent = .leftArrow
-        let backwards_shortcut_key: KeyEquivalent = "r"
-        let end_button_shortcut_key: KeyEquivalent = "f" // make this top arror
-
-        let button_color = Color(white: 202/256)
-        
-        return HStack {
-            // go to start button
-
-            if !video_playing {
-                button(named: "backward.end.fill",
-                       shortcutKey: start_shortcut_key,
-                       color: button_color,
-                       toolTip: """
-                         go to start of sequence
-                         (keyboard shortcut '\(start_shortcut_key.character)')
-                         """)
-                {
-                    self.goToFirstFrameButtonAction(withScroll: scroller)
-                }
-                
-                // fast previous button
-                button(named: "backward.fill",
-                       shortcutKey: fast_previous_shortcut_key,
-                       color: button_color,
-                       toolTip: """
-                         back \(fast_skip_amount) frames
-                         (keyboard shortcut '\(fast_previous_shortcut_key.character)')
-                         """)
-                {
-                    self.fastPreviousButtonAction(withScroll: scroller)
-                }
-                
-                // previous button
-                button(named: "backward.frame.fill",
-                       shortcutKey: previous_shortcut_key,
-                       color: button_color,
-                       toolTip: """
-                         back one frame
-                         (keyboard shortcut left arrow)
-                         """)
-                {
-                    self.transition(numberOfFrames: -1,
-                                    withScroll: scroller)
-                }
-
-                // play backwards button
-                button(named: "arrowtriangle.backward",
-                       shortcutKey: backwards_shortcut_key,
-                       color: button_color,
-                       size: 40,
-                       toolTip: """
-                         play in reverse
-                         (keyboard shortcut '\(backwards_shortcut_key)')
-                         """)
-                {
-                    self.videoPlayMode = .reverse
-                    self.togglePlay(scroller)
-                }
-            }
-
-            ZStack {
-                // backwards button is not shown, so we use this to have shortcut still work
-                if video_playing {
-                    Button("") {
-                        self.togglePlay(scroller)
-                    }
-                      .opacity(0)
-                      .keyboardShortcut(backwards_shortcut_key, modifiers: [])
-                } 
-            
-                // play/pause button
-                button(named: video_playing ? "pause.fill" : "play.fill", // pause.fill
-                       shortcutKey: " ",
-                       color: video_playing ? .blue : button_color,
-                       size: 40,
-                       toolTip: """
-                         Play / Pause
-                         """)
-                {
-                    self.videoPlayMode = .forward
-                    self.togglePlay(scroller)
-                    //Log.w("play button not yet implemented")
-                }
-            }
-            if !video_playing {
-                
-                // next button
-                button(named: "forward.frame.fill",
-                       shortcutKey: .rightArrow,
-                       color: button_color,
-                       toolTip: """
-                         forward one frame
-                         (keyboard shortcut right arrow)
-                         """)
-                {
-                    self.transition(numberOfFrames: 1,
-                                    withScroll: scroller)
-                }
-                
-                // fast next button
-                button(named: "forward.fill",
-                       shortcutKey: fast_next_shortcut_key,
-                       color: button_color,
-                       toolTip: """
-                         forward \(fast_skip_amount) frames
-                         (keyboard shortcut '\(fast_next_shortcut_key.character)')
-                         """)
-                {
-                    self.fastForwardButtonAction(withScroll: scroller)
-                }
-                
-                
-                // end button
-                button(named: "forward.end.fill",
-                       shortcutKey: end_button_shortcut_key,
-                       color: button_color,
-                       toolTip: """
-                         advance to end of sequence
-                         (keyboard shortcut '\(end_button_shortcut_key.character)')
-                         """)
-                {
-                    self.goToLastFrameButtonAction(withScroll: scroller)
-                }
-            }
-        }        
     }
 
     func stopVideo(_ scroller: ScrollViewProxy? = nil) {
@@ -1143,7 +1196,7 @@ struct ContentView: View {
             self.sliderValue = Double(viewModel.current_index)
         }
         
-        video_playing = false
+        viewModel.video_playing = false
         self.background_color = .gray
         
         if let scroller = scroller {
@@ -1159,8 +1212,8 @@ struct ContentView: View {
     }
     
     func togglePlay(_ scroller: ScrollViewProxy? = nil) {
-        self.video_playing = !self.video_playing
-        if video_playing {
+        viewModel.video_playing = !viewModel.video_playing
+        if viewModel.video_playing {
 
             self.previousInteractionMode = self.interactionMode
             self.interactionMode = .scrub
@@ -1186,7 +1239,7 @@ struct ContentView: View {
                         viewModel.current_frame_image =
                           self.viewModel.frames[current_idx].preview_image
 
-                        switch self.videoPlayMode {
+                        switch self.viewModel.videoPlayMode {
                         case .forward:
                             current_video_frame = current_idx + 1
 
@@ -1215,7 +1268,7 @@ struct ContentView: View {
                         viewModel.current_frame_image =
                           self.viewModel.frames[current_idx].processed_preview_image
 
-                        switch self.videoPlayMode {
+                        switch self.viewModel.videoPlayMode {
                         case .forward:
                             current_video_frame = current_idx + 1
 
@@ -1264,38 +1317,6 @@ struct ContentView: View {
         }
     }
 
-
-    func buttonImage(_ name: String, size: CGFloat) -> some View {
-        return Image(systemName: name)
-          .resizable()
-          .aspectRatio(contentMode: .fit)
-          .frame(maxWidth: size,
-                 maxHeight: size,
-                 alignment: .center)
-    }
-    
-    func button(named button_name: String,
-                shortcutKey: KeyEquivalent,
-                modifiers: EventModifiers = [],
-                color: Color,
-                size: CGFloat = 30,
-                toolTip: String,
-                action: @escaping () -> Void) -> some View
-    {
-        //Log.d("button \(button_name) using modifiers \(modifiers)")
-        return ZStack {
-            Button("", action: action)
-              .opacity(0)
-              .keyboardShortcut(shortcutKey, modifiers: modifiers)
-            
-            Button(action: action) {
-                buttonImage(button_name, size: size)
-            }
-              .buttonStyle(PlainButtonStyle())                            
-              .help(toolTip)
-              .foregroundColor(color)
-        }
-    }
 
     func transition(numberOfFrames: Int,
                     withScroll scroller: ScrollViewProxy? = nil)

@@ -46,9 +46,11 @@ struct StarCommands: Commands {
             Button("Go back one frame") {
                 contentView.transition(numberOfFrames: -1)
             }
-            Button(contentView.video_playing ? "Pause Video" : "Play Video") {
+            /*
+            Button(contentView.viewModel.video_playing ? "Pause Video" : "Play Video") {
                 contentView.togglePlay()
             }
+             */
             Button("Advance one frame") {
                 contentView.transition(numberOfFrames: 1)
             }
