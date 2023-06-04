@@ -13,10 +13,10 @@ public final class ViewModel: ObservableObject {
     var eraser: NighttimeAirplaneRemover?
     var no_image_explaination_text: String = "Loading..."
 
+    @Environment(\.openWindow) private var openWindow
+
     @Published var frameSaveQueue: FrameSaveQueue?
 
-    @Published var animateOutliers = false
-    
     @Published var sequenceLoaded = false
     
     @Published var frame_width: CGFloat = 600
@@ -53,6 +53,12 @@ public final class ViewModel: ObservableObject {
     @Published var outlierGroupWindowFrame: FrameAirplaneRemover?
 
     @Published var selectedOutliers = Set<OutlierGroupTableRow.ID>()
+
+    @Published var selectionMode = SelectionMode.paint
+
+    @Published var outlierOpacitySliderValue = 1.0
+
+    @Published var savedOutlierOpacitySliderValue = 1.0
     
     // the frame number of the frame we're currently showing
     var current_index = 0
@@ -216,12 +222,13 @@ public final class ViewModel: ObservableObject {
                     size.height = CGFloat(cgImage.height)
                     let outlierImage = NSImage(cgImage: cgImage, size: size)
                     
-                    let groupView = OutlierGroupView(group: group,
-                                                           name: group.name,
-                                                           bounds: group.bounds,
-                                                           image: outlierImage,
-                                                           frame_width: frame_width,
-                                                           frame_height: frame_height)
+                    let groupView = OutlierGroupView(viewModel: self,
+                                                     group: group,
+                                                     name: group.name,
+                                                     bounds: group.bounds,
+                                                     image: outlierImage,
+                                                     frame_width: frame_width,
+                                                     frame_height: frame_height)
                     new_outlier_groups.append(groupView)
                 } else {
                     Log.e("frame \(frame.frame_index) outlier group no image")
@@ -274,5 +281,22 @@ public final class ViewModel: ObservableObject {
         self.selectedOutliers = Set<OutlierGroupTableRow.ID>()
         self.current_index = 0
         self.image_sequence_size = 0
+    }
+
+    func showOutlierGroupTableWindow() {
+        let windows = NSApp.windows
+        var show = true
+        for window in windows {
+            Log.d("window.title \(window.title) window.subtitle \(window.subtitle) ")
+            if window.title.hasPrefix(OUTLIER_WINDOW_PREFIX) {
+                window.makeKey()
+                window.orderFrontRegardless()
+                //window.objectWillChange.send()
+                show = false
+            }
+        }
+        if show {
+            openWindow(id: "foobar")
+        }
     }
 }

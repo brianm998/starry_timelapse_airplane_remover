@@ -57,10 +57,6 @@ struct ContentView: View {
 
     @State private var sliderValue = 0.0
 
-    @State private var outlierOpacitySliderValue = 1.0
-
-    @State private var savedOutlierOpacitySliderValue = 1.0
-    
     @State private var videoPlayMode: VideoPlayMode = .forward
     
     @State private var previousInteractionMode: InteractionMode = .scrub
@@ -68,17 +64,12 @@ struct ContentView: View {
     // enum for how we show each frame
     @State private var frameViewMode = FrameViewMode.processed
 
-    @State private var selectionMode = SelectionMode.paint
-    
     // should we show full resolution images on the main frame?
     // faster low res previews otherwise
     @State private var showFullResolution = false
 
     @State private var showFilmstrip = true
 
-    @State private var animatePositiveOutliers = true
-    @State private var animateNegativeOutliers = true
-    
     @State private var drag_start: CGPoint?
     @State private var drag_end: CGPoint?
     @State private var isDragging = false
@@ -105,8 +96,6 @@ struct ContentView: View {
     @State private var previously_opened_sheet_showing_item: String =
       UserPreferences.shared.sortedSequenceList.count > 0 ?
       UserPreferences.shared.sortedSequenceList[0] : ""      
-
-    @Environment(\.openWindow) private var openWindow
 
     init(viewModel: ViewModel) {
         self.viewModel = viewModel
@@ -295,36 +284,17 @@ struct ContentView: View {
                     if self.interactionMode == .edit {
                         VStack {
                             Text("Outlier Group Opacity")
-                            Slider(value: viewModel.animateOutliers ? $savedOutlierOpacitySliderValue : $outlierOpacitySliderValue, in : 0...1)
+                            
+                            let value = $viewModel.outlierOpacitySliderValue
+                            
+                            Slider(value: value, in : 0...1)
                               .frame(maxWidth: 140, alignment: .bottom)
-                              .disabled(viewModel.animateOutliers)
-                        }
-                        VStack {
-                        Toggle("Animate Outliers", isOn: $viewModel.animateOutliers)
-                          .onChange(of: viewModel.animateOutliers) { mode_on in
-                              if let frame = viewModel.currentFrame {
-                                  Task {
-                                      await viewModel.setOutlierGroups(forFrame: frame)
-                                      refreshCurrentFrame()
-                                  }
-                              }
-                          }
-                        HStack {
-                            Toggle("red", isOn: $animatePositiveOutliers)
-                              .disabled(viewModel.animateOutliers)
-                            Toggle("green", isOn: $animateNegativeOutliers)
-                              .disabled(viewModel.animateOutliers)
-                        }
                         }
                     }
                 }
                   .frame(maxWidth: .infinity, alignment: .leading)
 
-
-                
-                
                 if interactionMode == .edit {
-//                if !video_playing {
                     HStack {
                         let frameView = viewModel.currentFrameView
                         VStack {
@@ -472,155 +442,10 @@ struct ContentView: View {
                 if let outlierViews = current_frame_view.outlierViews {
                     ForEach(0 ..< outlierViews.count, id: \.self) { idx in
                         if idx < outlierViews.count {
-                            let outlierViewModel = outlierViews[idx]
-                            
-                            let frame_center_x = outlierViewModel.frame_width/2
-                            let frame_center_y = outlierViewModel.frame_height/2
-                            let outlier_center = outlierViewModel.bounds.center
-                            
-                            let will_paint = outlierViewModel.group.shouldPaint?.willPaint ?? false
-
-                            let paint_color = outlierViewModel.selectionColor
-
-                            if will_paint {
-                                // stick some indicators on the side of the image
-
-                                let arrow_length:CGFloat = CGFloat(outlierViewModel.frame_width)/40
-                                let arrow_height:CGFloat = CGFloat(outlierViewModel.frame_width)/800
-                                
-                                // right side
-                                Rectangle()
-                                  .foregroundColor(.purple)
-                                  .frame(width: arrow_length, height: arrow_height)
-                                  .aspectRatio(CGSize(width: arrow_length, height: arrow_height), contentMode: .fit)
-                                  .offset(x: CGFloat(frame_center_x+Int(arrow_length/2*1.1)),
-                                          y: CGFloat(outlier_center.y - frame_center_y))
-
-                                // upper
-                                Rectangle()
-                                  .foregroundColor(.purple)
-                                  .frame(width: arrow_height, height: arrow_length)
-                                  .aspectRatio(CGSize(width: arrow_height, height: arrow_length), contentMode: .fit)
-                                  .offset(x: CGFloat(outlier_center.x - frame_center_x),
-                                          y: CGFloat(-Int(arrow_length/2) - frame_center_y))
-
-                                // left side
-                                Rectangle()
-                                  .foregroundColor(.purple)
-                                  .frame(width: arrow_length, height: arrow_height)
-                                  .aspectRatio(CGSize(width: arrow_length, height: arrow_height), contentMode: .fit)
-                                  .offset(x: CGFloat(-frame_center_x-Int(arrow_length/2*1.1)),
-                                          y: CGFloat(outlier_center.y - frame_center_y))
-
-                                // lower
-                                Rectangle()
-                                  .foregroundColor(.purple)
-                                  .frame(width: arrow_height, height: arrow_length)
-                                  .aspectRatio(CGSize(width: arrow_height, height: arrow_length), contentMode: .fit)
-                                  .offset(x: CGFloat(outlier_center.x - frame_center_x),
-                                          y: CGFloat(Int(arrow_length/2) + frame_center_y))
-                            }
-                            Image(nsImage: outlierViewModel.image)
-                              .renderingMode(.template) // makes this VV color work
-                              .foregroundColor(paint_color)
-                              .offset(x: CGFloat(outlier_center.x - frame_center_x),
-                                      y: CGFloat(outlier_center.y - frame_center_y))
-                              .opacity(outlierOpacitySliderValue)
-                              .id(viewModel.animateOutliers)
-                              //.id(animatePositiveOutliers)
-                              //.id(animateNegativeOutliers)
-                              .onChange(of: viewModel.animateOutliers) { newValue in
-                                  if newValue &&
-                                     ((will_paint && animatePositiveOutliers) ||
-                                      (!will_paint && animateNegativeOutliers))
-                                  {
-                                       withAnimation(  Animation.easeInOut(duration:0.2)
-                                                         .repeatForever(autoreverses:true) 
-                                       )
-                                       {
-                                           outlierOpacitySliderValue = 0.0
-                                       }
-                                  }
-                              }
-                            // tap gesture toggles paintability of the tapped group
-                              .onTapGesture {
-                                  if let origShouldPaint = outlierViewModel.group.shouldPaint {
-                                      // change the paintability of this outlier group
-                                      // set it to user selected opposite previous value
-                                      Task {
-                                          if selectionMode == .details {
-                                              // here we want to select just this outlier
-
-                                              if self.viewModel.outlierGroupTableRows.count == 1,
-                                                 self.viewModel.outlierGroupTableRows[0].name == outlierViewModel.group.name
-                                              {
-                                                  // just toggle the selectablility of this one
-                                                  // XXX need separate enums for selection does paint and selection does do info
-                                              } else {
-                                                  // make this row the only selected one
-                                                  let frame_view = viewModel.frames[outlierViewModel.group.frame_index]
-                                                  if let frame = frame_view.frame,
-                                                     let group = frame.outlierGroup(named: outlierViewModel.group.name)
-                                                  {
-                                                      if let outlier_views = frame_view.outlierViews {
-                                                          for outlier_view in outlier_views {
-                                                              if outlier_view.name != outlierViewModel.group.name {
-                                                                  outlier_view.isSelected = false
-                                                              }
-                                                          }
-                                                      }
-                                                      let new_row = await OutlierGroupTableRow(group)
-                                                      outlierViewModel.isSelected = true
-                                                      await MainActor.run {
-                                                          self.viewModel.outlierGroupWindowFrame = frame
-                                                          self.viewModel.outlierGroupTableRows = [new_row]
-                                                          self.viewModel.selectedOutliers = [new_row.id]
-                                                          showOutlierGroupTableWindow()
-                                                          self.viewModel.update()
-
-                                                      }
-                                                  } else {
-                                                      Log.w("couldn't find frame")
-                                                  }
-                                              }
-                                          
-                                          } else {
-                                          
-                                              let reason = PaintReason.userSelected(!origShouldPaint.willPaint)
-                                          
-                                              // update the view model to show the change quickly
-                                              outlierViewModel.group.shouldPaint = reason
-                                              self.viewModel.update()
-                                              
-                                              Task {
-                                                  if let frame = viewModel.currentFrame,
-                                                     let outlier_groups = frame.outlier_groups,
-                                                     let outlier_group = outlier_groups.members[outlierViewModel.group.name]
-                                                  {
-                                                      // update the actor in the background
-                                                      await outlier_group.shouldPaint(reason)
-                                                      self.viewModel.update()
-                                                  } else {
-                                                      Log.e("HOLY FUCK")
-                                                  }
-                                              }
-                                          }
-                                          // update the view model so it shows up on screen
-                                      }
-                                  } else {
-                                      Log.e("WTF, not already set to paint??")
-                                  }
-                              }
-                         }
+                            // the actual outlier view
+                            outlierViews[idx].body
+                        }
                     }
-                      .onChange(of: viewModel.animateOutliers) { newValue in
-                          if newValue {
-                              savedOutlierOpacitySliderValue = outlierOpacitySliderValue
-                          } else {
-                              outlierOpacitySliderValue = savedOutlierOpacitySliderValue
-                          }
-                      }
-                    
                 }
             }
 
@@ -679,7 +504,7 @@ struct ContentView: View {
                            var should_paint = false
                            var paint_choice = true
                            
-                           switch selectionMode {
+                           switch viewModel.selectionMode {
                            case .paint:
                                should_paint = true
                            case .clear:
@@ -723,7 +548,7 @@ struct ContentView: View {
                                            self.viewModel.outlierGroupWindowFrame = frame
                                            self.viewModel.outlierGroupTableRows = _outlierGroupTableRows
                                            Log.d("outlierGroupTableRows \(viewModel.outlierGroupTableRows.count)")
-                                           showOutlierGroupTableWindow()
+                                           self.viewModel.showOutlierGroupTableWindow()
                                        }
                                    }
                                } 
@@ -848,7 +673,7 @@ struct ContentView: View {
     }
 
     func selectionColor() -> Color {
-        switch selectionMode {
+        switch viewModel.selectionMode {
         case .paint:
             return .red
         case .clear:
@@ -995,23 +820,6 @@ struct ContentView: View {
           .help("apply the outlier group decision tree to all selected outlier groups in this frame")
     }
 
-    func showOutlierGroupTableWindow() {
-        let windows = NSApp.windows
-        var show = true
-        for window in windows {
-            Log.d("window.title \(window.title) window.subtitle \(window.subtitle) ")
-            if window.title.hasPrefix(OUTLIER_WINDOW_PREFIX) {
-                window.makeKey()
-                window.orderFrontRegardless()
-                //window.objectWillChange.send()
-                show = false
-            }
-        }
-        if show {
-            openWindow(id: "foobar")
-        }
-    }
-    
     func outlierInfoButton() -> some View {
         let action: () -> Void = {
             Task {
@@ -1025,7 +833,7 @@ struct ContentView: View {
                     await MainActor.run {
                         self.viewModel.outlierGroupWindowFrame = frame
                         self.viewModel.outlierGroupTableRows = _outlierGroupTableRows
-                        showOutlierGroupTableWindow()
+                        self.viewModel.showOutlierGroupTableWindow()
                     }
                 }
             }
@@ -1431,7 +1239,7 @@ struct ContentView: View {
     func toggleViews() -> some View {
         HStack() {
             VStack(alignment: .leading) {
-                Picker("selection mode", selection: $selectionMode) {
+                Picker("selection mode", selection: $viewModel.selectionMode) {
                     ForEach(SelectionMode.allCases, id: \.self) { value in
                         Text(value.localizedName).tag(value)
                     }
