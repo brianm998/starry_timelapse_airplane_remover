@@ -338,10 +338,9 @@ struct ContentView: View {
                                 Text("saving \(num_saving) frames")
                                   .foregroundColor(.green)
                             }
-//                        }
-//                          .border(.green)
-//                          .frame(maxWidth: .infinity, alignment: .trailing)
-//                        VStack {
+                        }
+                          .frame(alignment: .trailing)
+                        VStack {
                             Text("frame \(viewModel.current_index)")
                             if let _ = frameView.outlierViews {
                                 if let num_positive = frameView.numberOfPositiveOutliers {
@@ -359,7 +358,7 @@ struct ContentView: View {
                                       .foregroundColor(.orange)
                                 }
                             }
-                        }.frame(maxWidth: .infinity, alignment: .trailing)
+                        }.frame(alignment: .trailing)
                           .id(frameView.numberOfPositiveOutliers)
                           .id(frameView.numberOfNegativeOutliers)
                           //.id(frameView.outlierViews)
