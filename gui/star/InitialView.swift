@@ -6,10 +6,6 @@ struct InitialView: View {
     @Binding var previously_opened_sheet_showing_item: String
 
     var body: some View {
-        initialView()
-    }
-
-    func initialView() -> some View {
         VStack {
             Spacer()
               .frame(maxHeight: 20)
