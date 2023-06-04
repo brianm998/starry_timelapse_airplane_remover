@@ -40,17 +40,17 @@ class FrameView: ObservableObject {
 
         if let outlierViews = outlierViews {
             var total: Int = 0
-            Log.i("numberOfNegativeOutliers have outlier views")
+            Log.v("numberOfNegativeOutliers have outlier views")
             for outlierView in outlierViews {
-                Log.i("numberOfNegativeOutliers outlier view \(outlierView) \(outlierView.group.name) \(outlierView.group.shouldPaint)")
+                Log.v("numberOfNegativeOutliers outlier view \(outlierView) \(outlierView.group.name) \(outlierView.group.shouldPaint)")
                 if let shouldPaint = outlierView.group.shouldPaint,
                    !shouldPaint.willPaint
                 {
-                    Log.i("increading count")
+                    Log.v("increading count")
                     total += 1
                 }
             }
-            Log.i("numberOfNegativeOutliers \(total)")
+            Log.v("numberOfNegativeOutliers \(total)")
             return total
         }
         return nil
