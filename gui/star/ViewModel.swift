@@ -320,5 +320,138 @@ public final class ViewModel: ObservableObject {
             openWindow(id: "foobar")
         }
     }
+
+    func startup(withConfig json_config_filename: String) async {
+        Log.d("outlier_json_startup with \(json_config_filename)")
+        // first read config from json
+
+        UserPreferences.shared.justOpened(filename: json_config_filename)
+        
+        
+        do {
+            let config = try await Config.read(fromJsonFilename: json_config_filename)
+            
+            let callbacks = await make_callbacks()
+            
+            let eraser = try NighttimeAirplaneRemover(with: config,
+                                                      callbacks: callbacks,
+                                                      processExistingFiles: true,/*,
+                                                                                   maxResidentImages: 32*/
+                                                      fullyProcess: false,
+                                                      isGUI: true)
+            
+            await MainActor.run {
+                self.eraser = eraser // XXX rename this crap
+                self.config = config
+                self.frameSaveQueue = FrameSaveQueue()
+            }
+            
+            Log.d("outlier json startup done")
+        } catch {
+            Log.e("\(error)")
+            await MainActor.run {
+                self.showErrorAlert = true
+                self.errorMessage = "\(error)"
+            }
+        }
+    }
+    @MainActor func make_callbacks() -> Callbacks {
+        let callbacks = Callbacks()
+
+
+        // get the full number of images in the sequcne
+        callbacks.imageSequenceSizeClosure = { image_sequence_size in
+            self.image_sequence_size = image_sequence_size
+            Log.i("read image_sequence_size \(image_sequence_size)")
+            self.set(numberOfFrames: image_sequence_size)
+        }
+        
+        // count numbers here for max running
+        // XXX this method is obsolete
+        callbacks.countOfFramesToCheck = {
+//            let count = await self.framesToCheck.count()
+            //Log.i("XXX count \(count)")
+            return 1//count
+        }
+
+        
+        callbacks.frameStateChangeCallback = { frame, state in
+            // XXX do something here
+            Log.d("frame \(frame.frame_index) changed to state \(state)")
+            Task {
+                await MainActor.run {
+                    //self.frame_states[frame.frame_index] = state
+                    self.objectWillChange.send()
+                }
+            }
+        }
+
+        // called when we should check a frame
+        callbacks.frameCheckClosure = { new_frame in
+            Log.d("frameCheckClosure for frame \(new_frame.frame_index)")
+
+            // XXX we may need to introduce some kind of queue here to avoid hitting
+            // too many open files on larger sequences :(
+            Task {
+                await self.addToViewModel(frame: new_frame)
+            }
+        }
+        
+        return callbacks
+    }
+
+    @MainActor func addToViewModel(frame new_frame: FrameAirplaneRemover) async {
+        Log.d("addToViewModel(frame: \(new_frame.frame_index))")
+
+        if self.config == nil {
+            // XXX why this doesn't work initially befounds me,
+            // but without doing this here there is no config present...
+            //self.config = self.config
+            Log.e("FUCK, config is nil")
+        }
+        if self.frame_width != CGFloat(new_frame.width) ||
+           self.frame_height != CGFloat(new_frame.height)
+        {
+            await MainActor.run {
+                self.frame_width = CGFloat(new_frame.width)
+                self.frame_height = CGFloat(new_frame.height)
+            }
+        }
+        await self.append(frame: new_frame)
+
+       // Log.d("addToViewModel self.frame \(self.frame)")
+
+        // is this the currently selected frame?
+        if self.current_index == new_frame.frame_index {
+            self.label_text = "frame \(new_frame.frame_index)"
+
+            Log.i("got frame index \(new_frame.frame_index)")
+
+            // XXX not getting preview here
+
+
+            do {
+                if let baseImage = try await new_frame.baseImage() {
+                    if self.current_index == new_frame.frame_index {
+                        await MainActor.run {
+                            Task {
+                                self.current_frame_image = Image(nsImage: baseImage)
+                                self.update()
+                            }
+                        }
+                    }
+                }
+            } catch {
+                Log.e("error")
+            }
+
+            // Perform UI updates
+            self.update()
+        } else {
+            await MainActor.run {
+                self.objectWillChange.send()
+            }
+        }
+    }
 }
 

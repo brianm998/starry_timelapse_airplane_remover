@@ -99,26 +99,24 @@ struct ImageSequenceView: View {
                         // show progress bars on top of the image at the bottom
                         ProgressBars(viewModel: viewModel)
                     }
-                    VStack {
-                        // buttons below the selected frame 
-                        bottomControls(withScroll: scroller)
-                        
-                        if interactionMode == .edit,
-                           showFilmstrip
-                        {
-                            Spacer().frame(maxHeight: 30)
-                            // the filmstrip at the bottom
-                            FilmstripView(viewModel: viewModel,
-                                          imageSequenceView: self,
-                                          scroller: scroller)
-                              .frame(maxWidth: .infinity/*, alignment: .bottom*/)
-                            Spacer().frame(maxHeight: 10/*, alignment: .bottom*/)
-                        }
+                    // buttons below the selected frame 
+                    bottomControls(withScroll: scroller)
+                    
+                    if interactionMode == .edit,
+                       showFilmstrip
+                    {
+                        Spacer().frame(maxHeight: 30)
+                        // the filmstrip at the bottom
+                        FilmstripView(viewModel: viewModel,
+                                      imageSequenceView: self,
+                                      scroller: scroller)
+                          .frame(maxWidth: .infinity/*, alignment: .bottom*/)
+                        Spacer().frame(maxHeight: 10/*, alignment: .bottom*/)
+                    }
 
-                        // scub slider at the bottom
-                        if viewModel.image_sequence_size > 0 {
-                            scrubSlider(withScroll: scroller)
-                        }
+                    // scub slider at the bottom
+                    if viewModel.image_sequence_size > 0 {
+                        scrubSlider(withScroll: scroller)
                     }
                 }
             }
@@ -165,6 +163,7 @@ struct ImageSequenceView: View {
     }
 
     // controls below the selected frame and above the filmstrip
+    // XXX this is a mess, clean it up
     func bottomControls(withScroll scroller: ScrollViewProxy) -> some View {
         HStack {
             ZStack {

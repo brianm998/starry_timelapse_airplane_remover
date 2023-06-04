@@ -42,7 +42,7 @@ struct InitialView: View {
                             
                             Task.detached(priority: .userInitiated) {
                                 do {
-                                    await viewModel.app?.startup(withConfig: path)
+                                    await viewModel.startup(withConfig: path)
                             
                                     Log.d("viewModel.eraser \(await viewModel.eraser)")
                                     try await viewModel.eraser?.run()
@@ -104,7 +104,7 @@ struct InitialView: View {
                                 
                                 Task.detached(priority: .userInitiated) {
                                     do {
-                                        await viewModel.app?.startup(withConfig: previously_opened_sheet_showing_item)
+                                        await viewModel.startup(withConfig: previously_opened_sheet_showing_item)
                                         try await viewModel.eraser?.run()
                                     } catch {
                                         Log.e("\(error)")

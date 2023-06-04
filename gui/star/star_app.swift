@@ -115,45 +115,6 @@ class star_app: App {
         Log.i("Starting Up")
     }
 
-    func startup(withConfig json_config_filename: String) {
-        Log.d("outlier_json_startup with \(json_config_filename)")
-        // first read config from json
-        let dispatchGroup = DispatchGroup()
-        dispatchGroup.enter()
-
-        UserPreferences.shared.justOpened(filename: json_config_filename)
-        
-        Task {
-            do {
-                let config = try await Config.read(fromJsonFilename: json_config_filename)
-
-                let callbacks = await make_callbacks()
-                
-                let eraser = try NighttimeAirplaneRemover(with: config,
-                                                          callbacks: callbacks,
-                                                          processExistingFiles: true,/*,
-                                                                                       maxResidentImages: 32*/
-                                                          fullyProcess: false,
-                                                          isGUI: true)
-
-                await MainActor.run {
-                    self.viewModel.eraser = eraser // XXX rename this crap
-                    self.viewModel.config = config
-                    self.viewModel.frameSaveQueue = FrameSaveQueue()
-                }
-
-                Log.d("outlier json startup done")
-            } catch {
-                Log.e("\(error)")
-                await MainActor.run {
-                    viewModel.showErrorAlert = true
-                    viewModel.errorMessage = "\(error)"
-                }
-            }
-            dispatchGroup.leave()
-        }
-        dispatchGroup.wait()
-    }
     
     @MainActor func startup(withNewImageSequence image_sequence_dirname: String) {
 
@@ -208,7 +169,7 @@ class star_app: App {
 
         
         
-        let callbacks = make_callbacks()
+        let callbacks = viewModel.make_callbacks()
         Log.i("have config")
 
         do {
@@ -224,105 +185,6 @@ class star_app: App {
             Log.e("\(error)")
         }
 
-    }
-
-    @MainActor func make_callbacks() -> Callbacks {
-        let callbacks = Callbacks()
-
-
-        // get the full number of images in the sequcne
-        callbacks.imageSequenceSizeClosure = { image_sequence_size in
-            self.viewModel.image_sequence_size = image_sequence_size
-            Log.i("read image_sequence_size \(image_sequence_size)")
-            self.viewModel.set(numberOfFrames: image_sequence_size)
-        }
-        
-        // count numbers here for max running
-        // XXX this method is obsolete
-        callbacks.countOfFramesToCheck = {
-//            let count = await self.framesToCheck.count()
-            //Log.i("XXX count \(count)")
-            return 1//count
-        }
-
-        
-        callbacks.frameStateChangeCallback = { frame, state in
-            // XXX do something here
-            Log.d("frame \(frame.frame_index) changed to state \(state)")
-            Task {
-                await MainActor.run {
-                    //self.frame_states[frame.frame_index] = state
-                    self.viewModel.objectWillChange.send()
-                }
-            }
-        }
-
-        // called when we should check a frame
-        callbacks.frameCheckClosure = { new_frame in
-            Log.d("frameCheckClosure for frame \(new_frame.frame_index)")
-
-            // XXX we may need to introduce some kind of queue here to avoid hitting
-            // too many open files on larger sequences :(
-            Task {
-                await self.addToViewModel(frame: new_frame)
-            }
-        }
-        
-        return callbacks
-    }
-
-    @MainActor func addToViewModel(frame new_frame: FrameAirplaneRemover) async {
-        Log.d("addToViewModel(frame: \(new_frame.frame_index))")
-
-        if self.viewModel.config == nil {
-            // XXX why this doesn't work initially befounds me,
-            // but without doing this here there is no config present...
-            self.viewModel.config = self.viewModel.config
-        }
-        if self.viewModel.frame_width != CGFloat(new_frame.width) ||
-           self.viewModel.frame_height != CGFloat(new_frame.height)
-        {
-            await MainActor.run {
-                self.viewModel.frame_width = CGFloat(new_frame.width)
-                self.viewModel.frame_height = CGFloat(new_frame.height)
-            }
-        }
-        await self.viewModel.append(frame: new_frame)
-
-       // Log.d("addToViewModel self.viewModel.frame \(self.viewModel.frame)")
-
-        // is this the currently selected frame?
-        if self.viewModel.current_index == new_frame.frame_index {
-            self.viewModel.label_text = "frame \(new_frame.frame_index)"
-
-            Log.i("got frame index \(new_frame.frame_index)")
-
-            // XXX not getting preview here
-
-
-            do {
-                if let baseImage = try await new_frame.baseImage() {
-                    if self.viewModel.current_index == new_frame.frame_index {
-                        await MainActor.run {
-                            Task {
-                                self.viewModel.current_frame_image = Image(nsImage: baseImage)
-                                self.viewModel.update()
-                            }
-                        }
-                    }
-                }
-            } catch {
-                Log.e("error")
-            }
-
-            // Perform UI updates
-            self.viewModel.update()
-        } else {
-            await MainActor.run {
-                self.viewModel.objectWillChange.send()
-            }
-            // update view for thumbnails
-        }
     }
 
     
