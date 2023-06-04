@@ -99,7 +99,7 @@ struct ImageSequenceView: View {
                           )
 
                         // show progress bars on top of the image at the bottom
-                        progressBars()
+                        ProgressBars(viewModel: viewModel)
                     }
                     VStack {
                         // buttons below the selected frame 
@@ -134,41 +134,6 @@ struct ImageSequenceView: View {
                     secondaryButton: .default(Text("Sure")) { viewModel.sequenceLoaded = false } )
               
           }
-    }
-
-    // progress bars for loading indications
-    func progressBars() -> some View {
-        VStack {
-            if viewModel.loading_outliers {
-                HStack {
-                    Text("Loading Outliers for this frame")
-                    Spacer()
-                    ProgressView()
-                      .progressViewStyle(.linear)
-                      .frame(maxWidth: .infinity)
-                }
-            }
-
-            if viewModel.initial_load_in_progress {
-                HStack {
-                    Text("Loading Image Sequence")
-                    Spacer()
-                    ProgressView(value: viewModel.frameLoadingProgress)
-                }
-
-            }
-
-            if viewModel.loading_all_outliers {
-                HStack {
-                    Text("Loading Outlier Groups for all frames")
-                    Spacer()
-                    ProgressView(value: viewModel.outlierLoadingProgress)
-                }
-            }
-        }
-          .frame(maxHeight: .infinity, alignment: .bottom)
-          .opacity(0.6)
-
     }
 
     // slider at the bottom that scrubs the frame position
