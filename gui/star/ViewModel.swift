@@ -53,7 +53,8 @@ public final class ViewModel: ObservableObject {
 
     @Published var initial_load_in_progress = false
     @Published var loading_all_outliers = false
-
+    @Published var loading_outliers = false
+    
     @Published var number_of_frames_with_outliers_loaded = 0
 
     @Published var number_of_frames_loaded = 0

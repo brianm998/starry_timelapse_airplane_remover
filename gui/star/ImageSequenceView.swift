@@ -68,7 +68,6 @@ struct ImageSequenceView: View {
     @State private var background_brightness: Double = 0.33
     @State private var background_color: Color = .gray
 
-    @State private var loading_outliers = false
     @State private var rendering_current_frame = false
     @State private var rendering_all_frames = false
     @State private var updating_frame_batch = false
@@ -140,7 +139,7 @@ struct ImageSequenceView: View {
     // progress bars for loading indications
     func progressBars() -> some View {
         VStack {
-            if loading_outliers {
+            if viewModel.loading_outliers {
                 HStack {
                     Text("Loading Outliers for this frame")
                     Spacer()
@@ -1180,11 +1179,11 @@ struct ImageSequenceView: View {
                 {
                     frameView.loadingOutlierViews = true
                     Task {
-                        loading_outliers = true
+                        viewModel.loading_outliers = true
                         let _ = try await next_frame.loadOutliers()
                         await viewModel.setOutlierGroups(forFrame: next_frame)
                         frameView.loadingOutlierViews = false
-                        loading_outliers = viewModel.loadingOutlierGroups
+                        viewModel.loading_outliers = viewModel.loadingOutlierGroups
                         viewModel.update()
                     }
                 }
