@@ -8,18 +8,20 @@ struct StarCommands: Commands {
 
     var body: some Commands {
         CommandMenu("Actions") {
-            contentView.paintAllButton()
+            PaintAllButton(contentView: contentView)
               .keyboardShortcut("p", modifiers: [])
-
-            contentView.clearAllButton()
+            ClearAllButton(contentView: contentView)
               .keyboardShortcut("c", modifiers: [])
-
+            
+            /*
             contentView.outlierInfoButton()
             contentView.applyAllDecisionTreeButton()
             contentView.applyDecisionTreeButton()
-            contentView.loadAllOutliersButton()
             contentView.renderCurrentFrameButton()
             contentView.renderAllFramesButton()
+             */
+            
+            LoadAllOutliersButton(viewModel: contentView.viewModel)
         }
 
         // remove File -> New Window 
@@ -38,27 +40,27 @@ struct StarCommands: Commands {
         }
         CommandMenu("Playback") {
             Button("Show first frame") {
-                contentView.goToFirstFrameButtonAction()
+                contentView.imageSequenceView.goToFirstFrameButtonAction()
             }
             Button("Go back many frames") {
-                contentView.fastPreviousButtonAction()
+                contentView.imageSequenceView.fastPreviousButtonAction()
             }
             Button("Go back one frame") {
-                contentView.transition(numberOfFrames: -1)
+                contentView.imageSequenceView.transition(numberOfFrames: -1)
             }
             /*
             Button(contentView.viewModel.video_playing ? "Pause Video" : "Play Video") {
-                contentView.togglePlay()
+                contentView.imageSequenceView.togglePlay()
             }
              */
             Button("Advance one frame") {
-                contentView.transition(numberOfFrames: 1)
+                contentView.imageSequenceView.transition(numberOfFrames: 1)
             }
             Button("Advance many frames") {
-                contentView.fastPreviousButtonAction()
+                contentView.imageSequenceView.fastPreviousButtonAction()
             }
             Button("Show last frame") {
-                contentView.goToFirstFrameButtonAction()
+                contentView.imageSequenceView.goToFirstFrameButtonAction()
             }
         }
     }

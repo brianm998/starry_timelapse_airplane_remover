@@ -4,7 +4,7 @@ import SwiftUI
 // an HStack of buttons to advance backwards and fowards through the sequence
 struct VideoPlaybackButtons : View {
     @ObservedObject var viewModel: ViewModel
-    let contentView: ContentView
+    let imageSequenceView: ImageSequenceView
     var scroller: ScrollViewProxy
 
     var body: some View {
@@ -30,7 +30,7 @@ struct VideoPlaybackButtons : View {
                               (keyboard shortcut '\(start_shortcut_key.character)')
                               """)
                 {
-                    contentView.goToFirstFrameButtonAction(withScroll: scroller)
+                    imageSequenceView.goToFirstFrameButtonAction(withScroll: scroller)
                 }
                 
                 // fast previous button
@@ -42,7 +42,7 @@ struct VideoPlaybackButtons : View {
                               (keyboard shortcut '\(fast_previous_shortcut_key.character)')
                               """)
                 {
-                    contentView.fastPreviousButtonAction(withScroll: scroller)
+                    imageSequenceView.fastPreviousButtonAction(withScroll: scroller)
                 }
                 
                 // previous button
@@ -54,7 +54,7 @@ struct VideoPlaybackButtons : View {
                               (keyboard shortcut left arrow)
                               """)
                 {
-                    contentView.transition(numberOfFrames: -1,
+                    imageSequenceView.transition(numberOfFrames: -1,
                                     withScroll: scroller)
                 }
 
@@ -68,8 +68,8 @@ struct VideoPlaybackButtons : View {
                               (keyboard shortcut '\(backwards_shortcut_key)')
                               """)
                 {
-                    contentView.viewModel.videoPlayMode = .reverse
-                    contentView.togglePlay(scroller)
+                    imageSequenceView.viewModel.videoPlayMode = .reverse
+                    imageSequenceView.togglePlay(scroller)
                 }
             }
 
@@ -77,7 +77,7 @@ struct VideoPlaybackButtons : View {
                 // backwards button is not shown, so we use this to have shortcut still work
                 if viewModel.video_playing {
                     Button("") {
-                        contentView.togglePlay(scroller)
+                        imageSequenceView.togglePlay(scroller)
                     }
                       .opacity(0)
                       .keyboardShortcut(backwards_shortcut_key, modifiers: [])
@@ -92,8 +92,8 @@ struct VideoPlaybackButtons : View {
                               Play / Pause
                               """)
                 {
-                    contentView.viewModel.videoPlayMode = .forward
-                    contentView.togglePlay(scroller)
+                    imageSequenceView.viewModel.videoPlayMode = .forward
+                    imageSequenceView.togglePlay(scroller)
                     //Log.w("play button not yet implemented")
                 }
             }
@@ -108,7 +108,7 @@ struct VideoPlaybackButtons : View {
                               (keyboard shortcut right arrow)
                               """)
                 {
-                    contentView.transition(numberOfFrames: 1,
+                    imageSequenceView.transition(numberOfFrames: 1,
                                     withScroll: scroller)
                 }
                 
@@ -121,7 +121,7 @@ struct VideoPlaybackButtons : View {
                               (keyboard shortcut '\(fast_next_shortcut_key.character)')
                               """)
                 {
-                    contentView.fastForwardButtonAction(withScroll: scroller)
+                    imageSequenceView.fastForwardButtonAction(withScroll: scroller)
                 }
                 
                 
@@ -134,7 +134,7 @@ struct VideoPlaybackButtons : View {
                               (keyboard shortcut '\(end_button_shortcut_key.character)')
                               """)
                 {
-                    contentView.goToLastFrameButtonAction(withScroll: scroller)
+                    imageSequenceView.goToLastFrameButtonAction(withScroll: scroller)
                 }
             }
         }        
