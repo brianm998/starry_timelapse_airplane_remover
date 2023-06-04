@@ -8,7 +8,6 @@ import Zoomable
 // the overall view model for a particular sequence
 @MainActor
 public final class ViewModel: ObservableObject {
-    var app: star_app?
     var config: Config?
     var eraser: NighttimeAirplaneRemover?
     var no_image_explaination_text: String = "Loading..."
@@ -355,6 +354,79 @@ public final class ViewModel: ObservableObject {
             }
         }
     }
+    
+    @MainActor func startup(withNewImageSequence image_sequence_dirname: String) {
+
+        let outlierMaxThreshold: Double = 13
+        let outlierMinThreshold: Double = 9
+        let minGroupSize: Int = 80      // groups smaller than this are completely ignored
+        let numConcurrentRenders: Int = ProcessInfo.processInfo.activeProcessorCount
+        let should_write_outlier_group_files = true // XXX see what happens
+        let process_outlier_group_images = false
+
+        
+        // XXX copied from star.swift
+        var input_image_sequence_dirname = image_sequence_dirname 
+
+        while input_image_sequence_dirname.hasSuffix("/") {
+            // remove any trailing '/' chars,
+            // otherwise our created output dir(s) will end up inside this dir,
+            // not alongside it
+            _ = input_image_sequence_dirname.removeLast()
+        }
+
+        if !input_image_sequence_dirname.hasPrefix("/") {
+            let full_path =
+              file_manager.currentDirectoryPath + "/" + 
+              input_image_sequence_dirname
+            input_image_sequence_dirname = full_path
+        }
+        
+        var filename_paths = input_image_sequence_dirname.components(separatedBy: "/")
+        var input_image_sequence_path: String = ""
+        var input_image_sequence_name: String = ""
+        if let last_element = filename_paths.last {
+            filename_paths.removeLast()
+            input_image_sequence_path = filename_paths.joined(separator: "/")
+            if input_image_sequence_path.count == 0 { input_image_sequence_path = "/" }
+            input_image_sequence_name = last_element
+        } else {
+            input_image_sequence_path = "/"
+            input_image_sequence_name = input_image_sequence_dirname
+        }
+
+        let config = Config(outputPath: input_image_sequence_path,
+                            outlierMaxThreshold: outlierMaxThreshold,
+                            outlierMinThreshold: outlierMinThreshold,
+                            minGroupSize: minGroupSize,
+                            numConcurrentRenders: numConcurrentRenders,
+                            imageSequenceName: input_image_sequence_name,
+                            imageSequencePath: input_image_sequence_path,
+                            writeOutlierGroupFiles: should_write_outlier_group_files,
+                            writeFramePreviewFiles: should_write_outlier_group_files,
+                            writeFrameProcessedPreviewFiles: should_write_outlier_group_files,
+                            writeFrameThumbnailFiles: should_write_outlier_group_files)
+
+        
+        
+        let callbacks = self.make_callbacks()
+        Log.i("have config")
+
+        do {
+            let eraser = try NighttimeAirplaneRemover(with: config,
+                                                      callbacks: callbacks,
+                                                      processExistingFiles: true,
+                                                      isGUI: true)
+
+            self.eraser = eraser // XXX rename this crap
+            self.config = config
+            self.frameSaveQueue = FrameSaveQueue()
+        } catch {
+            Log.e("\(error)")
+        }
+
+    }
+    
     @MainActor func make_callbacks() -> Callbacks {
         let callbacks = Callbacks()
 
@@ -454,4 +526,6 @@ public final class ViewModel: ObservableObject {
         }
     }
 }
+
+fileprivate let file_manager = FileManager.default
 

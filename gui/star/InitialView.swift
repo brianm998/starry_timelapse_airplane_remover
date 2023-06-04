@@ -36,7 +36,7 @@ struct InitialView: View {
                         if let returnedUrl = openPanel.url
                         {
                             let path = returnedUrl.path
-                            Log.d("url path \(path) viewModel.app \(viewModel.app)")
+                            Log.d("url path \(path)")
                             viewModel.sequenceLoaded = true
                             viewModel.initial_load_in_progress = true
                             
@@ -79,7 +79,7 @@ struct InitialView: View {
                                     viewModel.initial_load_in_progress = true
                                     Task.detached(priority: .userInitiated) {
                                         do {
-                                            await viewModel.app?.startup(withNewImageSequence: path)
+                                            await viewModel.startup(withNewImageSequence: path)
                                             try await viewModel.eraser?.run()
                                         } catch {
                                             Log.e("\(error)")

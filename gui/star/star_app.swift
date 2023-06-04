@@ -90,19 +90,10 @@ import StarCore
 @main
 class star_app: App {
 
-    var outputPath: String?
-    var outlierMaxThreshold: Double = 13
-    var outlierMinThreshold: Double = 9
-    var minGroupSize: Int = 80      // groups smaller than this are completely ignored
-    var numConcurrentRenders: Int = ProcessInfo.processInfo.activeProcessorCount
-    var should_write_outlier_group_files = true // XXX see what happens
-    var process_outlier_group_images = false
-
     private var viewModel: ViewModel
     
     required init() {
         self.viewModel = ViewModel()
-        self.viewModel.app = self
         Task {
             for window in NSApp.windows {
                 if window.title.hasPrefix("Outlier") {
@@ -114,79 +105,6 @@ class star_app: App {
         Log.handlers[.console] = ConsoleLogHandler(at: .warn)
         Log.i("Starting Up")
     }
-
-    
-    @MainActor func startup(withNewImageSequence image_sequence_dirname: String) {
-
-        // XXX copied from star.swift
-        var input_image_sequence_dirname = image_sequence_dirname 
-
-        while input_image_sequence_dirname.hasSuffix("/") {
-            // remove any trailing '/' chars,
-            // otherwise our created output dir(s) will end up inside this dir,
-            // not alongside it
-            _ = input_image_sequence_dirname.removeLast()
-        }
-
-        if !input_image_sequence_dirname.hasPrefix("/") {
-            let full_path =
-              file_manager.currentDirectoryPath + "/" + 
-              input_image_sequence_dirname
-            input_image_sequence_dirname = full_path
-        }
-        
-        var filename_paths = input_image_sequence_dirname.components(separatedBy: "/")
-        var input_image_sequence_path: String = ""
-        var input_image_sequence_name: String = ""
-        if let last_element = filename_paths.last {
-            filename_paths.removeLast()
-            input_image_sequence_path = filename_paths.joined(separator: "/")
-            if input_image_sequence_path.count == 0 { input_image_sequence_path = "/" }
-            input_image_sequence_name = last_element
-        } else {
-            input_image_sequence_path = "/"
-            input_image_sequence_name = input_image_sequence_dirname
-        }
-
-        var output_path = ""
-        if let outputPath = self.outputPath {
-            output_path = outputPath
-        } else {
-            output_path = input_image_sequence_path
-        }
-
-        let config = Config(outputPath: output_path,
-                            outlierMaxThreshold: self.outlierMaxThreshold,
-                            outlierMinThreshold: self.outlierMinThreshold,
-                            minGroupSize: self.minGroupSize,
-                            numConcurrentRenders: self.numConcurrentRenders,
-                            imageSequenceName: input_image_sequence_name,
-                            imageSequencePath: input_image_sequence_path,
-                            writeOutlierGroupFiles: self.should_write_outlier_group_files,
-                            writeFramePreviewFiles: self.should_write_outlier_group_files,
-                            writeFrameProcessedPreviewFiles: self.should_write_outlier_group_files,
-                            writeFrameThumbnailFiles: self.should_write_outlier_group_files)
-
-        
-        
-        let callbacks = viewModel.make_callbacks()
-        Log.i("have config")
-
-        do {
-            let eraser = try NighttimeAirplaneRemover(with: config,
-                                                      callbacks: callbacks,
-                                                      processExistingFiles: true,
-                                                      isGUI: true)
-
-            self.viewModel.eraser = eraser // XXX rename this crap
-            self.viewModel.config = config
-            self.viewModel.frameSaveQueue = FrameSaveQueue()
-        } catch {
-            Log.e("\(error)")
-        }
-
-    }
-
     
     var body: some Scene {
         let contentView = ContentView(viewModel: viewModel)
@@ -238,6 +156,4 @@ extension Array {
 }
 
 
-
-fileprivate let file_manager = FileManager.default
 
