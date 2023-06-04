@@ -1705,7 +1705,10 @@ struct ContentView: View {
                     if frame_changed {
                         self.saveToFile(frame: frame_to_save) {
                             Log.d("completion closure called for frame \(frame_to_save.frame_index)")
-                            Task { await viewModel.refresh(frame: frame_to_save) }
+                            Task {
+                                await viewModel.refresh(frame: frame_to_save)
+                                self.viewModel.update()
+                            }
                         }
                     }
                 }
