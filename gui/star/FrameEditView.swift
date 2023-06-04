@@ -1,6 +1,8 @@
 import SwiftUI
 import StarCore
 
+// the view for when the user wants to edit what outlier groups are painted and not
+
 struct FrameEditView: View {
     @ObservedObject var viewModel: ViewModel
     let image: Image

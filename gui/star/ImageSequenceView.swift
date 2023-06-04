@@ -89,7 +89,7 @@ struct ImageSequenceView: View {
                                   showFullResolution: self.$showFullResolution)
                           .frame(maxWidth: .infinity, alignment: .center)
                           .overlay(
-                            ProgressView()
+                            ProgressView() // XXX this overlay sucks, change it
                               .scaleEffect(8, anchor: .center) // this is blocky scaled up 
                               .progressViewStyle(CircularProgressViewStyle(tint: .yellow))
                               .frame(maxWidth: 200, maxHeight: 200)
@@ -108,7 +108,9 @@ struct ImageSequenceView: View {
                         {
                             Spacer().frame(maxHeight: 30)
                             // the filmstrip at the bottom
-                            filmstrip(withScroll: scroller)
+                            FilmstripView(viewModel: viewModel,
+                                          imageSequenceView: self,
+                                          scroller: scroller)
                               .frame(maxWidth: .infinity/*, alignment: .bottom*/)
                             Spacer().frame(maxHeight: 10/*, alignment: .bottom*/)
                         }
@@ -335,56 +337,6 @@ struct ImageSequenceView: View {
         }
     }
 
-
-    // the view for each frame in the filmstrip at the bottom
-    func filmStripView(forFrame frame_index: Int, withScroll scroller: ScrollViewProxy) -> some View {
-        //var bg_color: Color = .yellow
-        //if let frame = viewModel.frame(atIndex: frame_index) {
-            //            if frame.outlierGroupCount() > 0 {
-            //                bg_color = .red
-            //            } else {
-            //bg_color = .green
-            //            }
-       // }
-        return VStack(alignment: .leading) {
-            Spacer().frame(maxHeight: 8)
-            HStack{
-                Spacer().frame(maxWidth: 10)
-                Text("\(frame_index)").foregroundColor(.white)
-            }.frame(maxHeight: 10)
-            if frame_index >= 0 && frame_index < viewModel.frames.count {
-                let frameView = viewModel.frames[frame_index]
-              //  let stroke_width: CGFloat = 4
-                if viewModel.current_index == frame_index {
-                    
-                    frameView.thumbnail_image
-                      .foregroundColor(.orange)
-                    
-                } else {
-                    frameView.thumbnail_image
-                }
-            }
-            Spacer().frame(maxHeight: 8)
-        }
-          .frame(minWidth: CGFloat((viewModel.config?.thumbnail_width ?? 80) + 8),
-                 minHeight: CGFloat((viewModel.config?.thumbnail_height ?? 50) + 30))
-        // highlight the selected frame
-          .background(viewModel.current_index == frame_index ? Color(white: 0.45) : Color(white: 0.22))
-          .onTapGesture {
-              // XXX move this out 
-              //viewModel.label_text = "loading..."
-              // XXX set loading image here
-              // grab frame and try to show it
-              let frame_view = viewModel.frames[frame_index]
-              
-              let current_frame = viewModel.currentFrame
-              self.transition(toFrame: frame_view,
-                              from: current_frame,
-                              withScroll: scroller)
-          }
-        
-    }
-    
     // used when advancing between frames
     func saveToFile(frame frame_to_save: FrameAirplaneRemover, completionClosure: @escaping () -> Void) {
         Log.d("saveToFile frame \(frame_to_save.frame_index)")
@@ -396,30 +348,6 @@ struct ImageSequenceView: View {
         }
     }
     
-    func filmstrip(withScroll scroller: ScrollViewProxy) -> some View {
-        HStack {
-            if viewModel.image_sequence_size == 0 {
-                Text("Loading Film Strip")
-                  .font(.largeTitle)
-                  .frame(minHeight: 50)
-                  .transition(.moveAndFade)
-            } else {
-                ScrollView(.horizontal) {
-                    LazyHStack(spacing: 0) {
-                        ForEach(0..<viewModel.image_sequence_size, id: \.self) { frame_index in
-                            self.filmStripView(forFrame: frame_index, withScroll: scroller)
-                              .help("show frame \(frame_index)")
-                        }
-                    }
-                }
-                  .frame(minHeight: CGFloat((viewModel.config?.thumbnail_height ?? 50) + 30))
-                  .transition(.moveAndFade)
-            }
-        }
-          .frame(maxWidth: .infinity, maxHeight: 50)
-          .background(viewModel.image_sequence_size == 0 ? .yellow : .clear)
-    }
-
     func renderAllFramesButton() -> some View {
         let action: () -> Void = {
             Task {
@@ -1038,5 +966,4 @@ struct ImageSequenceView: View {
         let end_time = Date().timeIntervalSinceReferenceDate
         Log.d("transition to frame \(new_frame_view.frame_index) took \(end_time - start_time) seconds")
     }
-
 }
