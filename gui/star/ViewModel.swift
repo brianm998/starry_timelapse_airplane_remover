@@ -66,6 +66,17 @@ public final class ViewModel: ObservableObject {
 
     @Published var selectionMode = SelectionMode.paint
 
+    var selectionColor: Color {
+        switch self.selectionMode {
+        case .paint:
+            return .red
+        case .clear:
+            return .green
+        case .details:
+            return .blue
+        }
+    }
+
     @Published var outlierOpacitySliderValue = 1.0
 
     @Published var savedOutlierOpacitySliderValue = 1.0

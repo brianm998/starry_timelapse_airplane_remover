@@ -1,6 +1,5 @@
 import SwiftUI
 import StarCore
-import Zoomable
 
 // XXX Fing global :(
 fileprivate var video_play_timer: Timer?
@@ -62,9 +61,6 @@ struct ImageSequenceView: View {
 
     @State private var showFilmstrip = true
 
-    @State private var drag_start: CGPoint?
-    @State private var drag_end: CGPoint?
-    @State private var isDragging = false
     @State private var background_brightness: Double = 0.33
     @State private var background_color: Color = .gray
 
@@ -88,7 +84,9 @@ struct ImageSequenceView: View {
 
                     // selected frame 
                     ZStack {
-                        currentFrameView()
+                        FrameView(viewModel: viewModel,
+                                  interactionMode: self.$interactionMode,
+                                  showFullResolution: self.$showFullResolution)
                           .frame(maxWidth: .infinity, alignment: .center)
                           .overlay(
                             ProgressView()
@@ -336,181 +334,7 @@ struct ImageSequenceView: View {
             }
         }
     }
-    
-    // shows either a zoomable view of the current frame
-    // just the frame itself for scrubbing and video playback
-    // or a place holder when we have no image for it yet
-    func currentFrameView() -> some View {
-        HStack {
-            if let frame_image = self.viewModel.current_frame_image {
-                switch self.interactionMode {
-                case .scrub:
-                    frame_image
-                      .resizable()
-                      .aspectRatio(contentMode: . fit)
 
-                case .edit: 
-                    GeometryReader { geometry in
-                        let extra_space_on_edges: CGFloat = 140
-                        let min = (geometry.size.height/(viewModel.frame_height+extra_space_on_edges))
-                        let full_max = self.showFullResolution ? 1 : 0.3
-                        let max = min < full_max ? full_max : min
-
-                        ZoomableView(size: CGSize(width: viewModel.frame_width,
-                                                  height: viewModel.frame_height),
-                                     min: min,
-                                     max: max,
-                                     showsIndicators: true)
-                        {
-                            // the currently visible frame
-                            self.frameView(frame_image)//.aspectRatio(contentMode: .fill)
-                        }
-                          .transition(.moveAndFade)
-                    }
-                }
-            } else {
-                // XXX pre-populate this crap as an image
-                ZStack {
-                    Rectangle()
-                      .foregroundColor(.yellow)
-                      .aspectRatio(CGSize(width: 4, height: 3), contentMode: .fit)
-                    Text(viewModel.no_image_explaination_text)
-                }
-                  .transition(.moveAndFade)
-            }
-        }
-    }
-
-    // this is the main frame with outliers on top of it
-    func frameView( _ image: Image) -> some View {
-        ZStack {
-            // the main image shown
-            image
-
-            if interactionMode == .edit {
-                // in edit mode, show outliers groups 
-                let current_frame_view = viewModel.currentFrameView
-                if let outlierViews = current_frame_view.outlierViews {
-                    ForEach(0 ..< outlierViews.count, id: \.self) { idx in
-                        if idx < outlierViews.count {
-                            // the actual outlier view
-                            outlierViews[idx].body
-                        }
-                    }
-                }
-            }
-
-            // this is the selection overlay
-            if isDragging,
-               let drag_start = drag_start,
-               let drag_end = drag_end
-            {
-                let width = abs(drag_start.x-drag_end.x)
-                let height = abs(drag_start.y-drag_end.y)
-
-                let _ = Log.d("drag_start \(drag_start) drag_end \(drag_end) width \(width) height \(height)")
-
-                let drag_x_offset = drag_end.x > drag_start.x ? drag_end.x : drag_start.x
-                let drag_y_offset = drag_end.y > drag_start.y ? drag_end.y : drag_start.y
-
-                Rectangle()
-                  .fill(selectionColor().opacity(0.2))
-                  .overlay(
-                    Rectangle()
-                      .stroke(style: StrokeStyle(lineWidth: 2))
-                      .foregroundColor(selectionColor().opacity(0.8))
-                  )                
-                  .frame(width: width, height: height)
-                  .offset(x: CGFloat(-viewModel.frame_width/2) + drag_x_offset - width/2,
-                          y: CGFloat(-viewModel.frame_height/2) + drag_y_offset - height/2)
-            }
-        }
-        // XXX selecting and zooming conflict with eachother
-          .gesture(self.selectionDragGesture)
-        
-    }
-
-    var selectionDragGesture: some Gesture {
-        DragGesture()
-          .onChanged { gesture in
-              let _ = Log.d("isDragging")
-              isDragging = true
-              let location = gesture.location
-              if drag_start != nil {
-                  // updating during drag is too slow
-                  drag_end = location
-              } else {
-                  drag_start = gesture.startLocation
-              }
-              //Log.d("location \(location)")
-          }
-          .onEnded { gesture in
-              isDragging = false
-              let end_location = gesture.location
-              if let drag_start = drag_start {
-                  Log.d("end location \(end_location) drag start \(drag_start)")
-                  
-                  let frameView = viewModel.currentFrameView
-                  
-                  var should_paint = false
-                  var paint_choice = true
-                  
-                  switch viewModel.selectionMode {
-                  case .paint:
-                      should_paint = true
-                  case .clear:
-                      should_paint = false
-                  case .details:
-                      paint_choice = false
-                  }
-                  
-                  if paint_choice {
-                      frameView.userSelectAllOutliers(toShouldPaint: should_paint,
-                                                      between: drag_start,
-                                                      and: end_location)
-                      if let frame = frameView.frame {
-                          Task {
-                              // is view layer updated? (NO)
-                              await frame.userSelectAllOutliers(toShouldPaint: should_paint,
-                                                                between: drag_start,
-                                                                and: end_location)
-                              refreshCurrentFrame()
-                              viewModel.update()
-                          }
-                      }
-                  } else {
-                      let _ = Log.d("DETAILS")
-
-                      if let frame = frameView.frame {
-                          Task {
-                              //var new_outlier_info: [OutlierGroup] = []
-                              var _outlierGroupTableRows: [OutlierGroupTableRow] = []
-                              
-                              await frame.foreachOutlierGroup(between: drag_start,
-                                                              and: end_location) { group in
-                                  Log.d("group \(group)")
-                                  //new_outlier_info.append(group)
-
-                                  let new_row = await OutlierGroupTableRow(group)
-                                  _outlierGroupTableRows.append(new_row)
-                                  return .continue
-                              }
-                              await MainActor.run {
-                                  self.viewModel.outlierGroupWindowFrame = frame
-                                  self.viewModel.outlierGroupTableRows = _outlierGroupTableRows
-                                  Log.d("outlierGroupTableRows \(viewModel.outlierGroupTableRows.count)")
-                                  self.viewModel.showOutlierGroupTableWindow()
-                              }
-                          }
-                      } 
-                      
-                      // XXX show the details here somehow
-                  }
-              }
-              drag_start = nil
-              drag_end = nil
-          }
-    }
 
     // the view for each frame in the filmstrip at the bottom
     func filmStripView(forFrame frame_index: Int, withScroll scroller: ScrollViewProxy) -> some View {
@@ -572,17 +396,6 @@ struct ImageSequenceView: View {
         }
     }
     
-    func selectionColor() -> Color {
-        switch viewModel.selectionMode {
-        case .paint:
-            return .red
-        case .clear:
-            return .green
-        case .details:
-            return .blue
-        }
-    }
-
     func filmstrip(withScroll scroller: ScrollViewProxy) -> some View {
         HStack {
             if viewModel.image_sequence_size == 0 {
