@@ -256,6 +256,8 @@ public final class ViewModel: ObservableObject {
                     }
                 }
                 await self.frames[frame.frame_index].outlierViews = new_outlier_groups
+
+                await MainActor.run { self.objectWillChange.send() }
             }
         }
     }
@@ -504,7 +506,6 @@ public final class ViewModel: ObservableObject {
             Log.i("got frame index \(new_frame.frame_index)")
 
             // XXX not getting preview here
-
 
             do {
                 if let baseImage = try await new_frame.baseImage() {
