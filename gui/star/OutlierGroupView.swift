@@ -106,6 +106,7 @@ struct OutlierGroupView: View {
               .offset(x: CGFloat(outlier_center.x) - CGFloat(frame_center_x),
                       y: CGFloat(outlier_center.y) - CGFloat(frame_center_y))
               .opacity(groupViewModel.viewModel.outlierOpacitySliderValue)
+              .onHover { self.groupViewModel.arrowSelected = $0 }
             
             // tap gesture toggles paintability of the tapped group
               .onTapGesture {
