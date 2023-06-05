@@ -80,6 +80,13 @@ class FrameViewModel: ObservableObject {
     @Published var processed_preview_image: Image = initial_image
     @Published var test_paint_preview_image: Image = initial_image
 
+    public func update() {
+        self.objectWillChange.send()
+        if let views = self.outlierViews {
+            for view in views { view.objectWillChange.send() }
+        }
+    }
+    
     // this does a view layer only translation so that we don't have
     // to wait for the longer running background process to update the view
     public func userSelectAllOutliers(toShouldPaint should_paint: Bool,

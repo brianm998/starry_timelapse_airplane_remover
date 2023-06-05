@@ -107,13 +107,14 @@ struct FrameEditView: View {
                       frameView.userSelectAllOutliers(toShouldPaint: should_paint,
                                                       between: drag_start,
                                                       and: end_location)
+                      //update the view layer
+                      frameView.update()
                       if let frame = frameView.frame {
-                          Task {
-                              // is view layer updated? (NO)
-                              await frame.userSelectAllOutliers(toShouldPaint: should_paint,
+                          let new_value = should_paint
+                          Task.detached {
+                              await frame.userSelectAllOutliers(toShouldPaint: new_value,
                                                                 between: drag_start,
                                                                 and: end_location)
-                              viewModel.update()
                           }
                       }
                   } else {
