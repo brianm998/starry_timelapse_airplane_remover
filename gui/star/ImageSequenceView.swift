@@ -884,13 +884,17 @@ struct ImageSequenceView: View {
                    !frameView.loadingOutlierViews
                 {
                     frameView.loadingOutlierViews = true
-                    Task {
-                        viewModel.loading_outliers = true
+                    viewModel.loading_outliers = true
+                    Task.detached  {
                         let _ = try await next_frame.loadOutliers()
-                        await viewModel.setOutlierGroups(forFrame: next_frame)
-                        frameView.loadingOutlierViews = false
-                        viewModel.loading_outliers = viewModel.loadingOutlierGroups
-                        viewModel.update()
+                        await MainActor.run {
+                            Task {
+                                await viewModel.setOutlierGroups(forFrame: next_frame)
+                                frameView.loadingOutlierViews = false
+                                viewModel.loading_outliers = viewModel.loadingOutlierGroups
+                                viewModel.update()
+                            }
+                        }
                     }
                 }
             }

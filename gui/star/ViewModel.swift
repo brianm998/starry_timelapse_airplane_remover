@@ -230,31 +230,33 @@ public final class ViewModel: ObservableObject {
     }
 
     func setOutlierGroups(forFrame frame: FrameAirplaneRemover) async {
-        let outlierGroups = frame.outlierGroups()
-        let (frame_width, frame_height) = (frame.width, frame.height)
-        if let outlierGroups = outlierGroups {
-            Log.d("got \(outlierGroups.count) groups for frame \(frame.frame_index)")
-            var new_outlier_groups: [OutlierGroupViewModel] = []
-            for group in outlierGroups {
-                if let cgImage = group.testImage() { // XXX heap corruption here :(
-                    var size = CGSize()
-                    size.width = CGFloat(cgImage.width)
-                    size.height = CGFloat(cgImage.height)
-                    let outlierImage = NSImage(cgImage: cgImage, size: size)
-                    
-                    let groupView = OutlierGroupViewModel(viewModel: self,
-                                                          group: group,
-                                                          name: group.name,
-                                                          bounds: group.bounds,
-                                                          image: outlierImage,
-                                                          frame_width: frame_width,
-                                                          frame_height: frame_height)
-                    new_outlier_groups.append(groupView)
-                } else {
-                    Log.e("frame \(frame.frame_index) outlier group no image")
+        Task.detached  {
+            let outlierGroups = frame.outlierGroups()
+            let (frame_width, frame_height) = (frame.width, frame.height)
+            if let outlierGroups = outlierGroups {
+                Log.d("got \(outlierGroups.count) groups for frame \(frame.frame_index)")
+                var new_outlier_groups: [OutlierGroupViewModel] = []
+                for group in outlierGroups {
+                    if let cgImage = group.testImage() { // XXX heap corruption here :(
+                        var size = CGSize()
+                        size.width = CGFloat(cgImage.width)
+                        size.height = CGFloat(cgImage.height)
+                        let outlierImage = NSImage(cgImage: cgImage, size: size)
+                        
+                        let groupView = await OutlierGroupViewModel(viewModel: self,
+                                                              group: group,
+                                                              name: group.name,
+                                                              bounds: group.bounds,
+                                                              image: outlierImage,
+                                                              frame_width: frame_width,
+                                                              frame_height: frame_height)
+                        new_outlier_groups.append(groupView)
+                    } else {
+                        Log.e("frame \(frame.frame_index) outlier group no image")
+                    }
                 }
+                await self.frames[frame.frame_index].outlierViews = new_outlier_groups
             }
-            self.frames[frame.frame_index].outlierViews = new_outlier_groups
         }
     }
     
