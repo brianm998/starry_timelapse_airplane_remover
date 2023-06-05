@@ -32,13 +32,13 @@ struct FrameView: View {
 
                 case .edit: 
                     GeometryReader { geometry in
-                        let extra_space_on_edges: CGFloat = 140
-                        let min = (geometry.size.height/(viewModel.frame_height+extra_space_on_edges))
+                        let extra_space_on_edges: CGFloat = CGFloat(self.viewModel.frame_width)/20
+                        let min = (geometry.size.height/(viewModel.frame_height+extra_space_on_edges/2))
                         let full_max = self.showFullResolution ? 1 : 0.3
                         let max = min < full_max ? full_max : min
 
-                        ZoomableView(size: CGSize(width: viewModel.frame_width,
-                                                  height: viewModel.frame_height),
+                        ZoomableView(size: CGSize(width: viewModel.frame_width+extra_space_on_edges*2,
+                                                  height: viewModel.frame_height+extra_space_on_edges*2),
                                      min: min,
                                      max: max,
                                      showsIndicators: true)

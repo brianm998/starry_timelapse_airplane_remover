@@ -89,10 +89,11 @@ import StarCore
 
 @main
 class star_app: App {
-
-    @StateObject private var viewModel = ViewModel()
+    
+    private var viewModel: ViewModel
     
     required init() {
+        self.viewModel = ViewModel()
         Task {
             for window in NSApp.windows {
                 if window.title.hasPrefix("Outlier") {
@@ -106,6 +107,9 @@ class star_app: App {
     }
     
     var body: some Scene {
+        
+      
+        
         let contentView = ContentView(viewModel: viewModel)
         
         WindowGroup {

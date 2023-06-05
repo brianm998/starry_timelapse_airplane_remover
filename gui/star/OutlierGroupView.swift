@@ -3,7 +3,7 @@ import SwiftUI
 import Cocoa
 import StarCore
 
-
+// the view for a single outlier group on a frame
 
 class OutlierGroupView: ObservableObject {
 
@@ -31,7 +31,8 @@ class OutlierGroupView: ObservableObject {
     let name: String
     let bounds: BoundingBox
     let image: NSImage
-    let frame_width: Int
+
+    let frame_width: Int        // these can come from the view model
     let frame_height: Int
 
     var selectionColor: Color {
@@ -59,40 +60,57 @@ class OutlierGroupView: ObservableObject {
             if will_paint {
                 // stick some indicators on the side of the image
 
-                let arrow_length:CGFloat = CGFloat(self.frame_width)/40
-                let arrow_height:CGFloat = CGFloat(self.frame_width)/800
+                let arrow_length:CGFloat = CGFloat(self.frame_width)/20
+                let arrow_height:CGFloat = CGFloat(self.frame_width)/400
                 
                 // right side
+
                 Rectangle()
                   .foregroundColor(.purple)
-                  .frame(width: arrow_length, height: arrow_height)
-                  .aspectRatio(CGSize(width: arrow_length, height: arrow_height), contentMode: .fit)
                   .offset(x: CGFloat(frame_center_x)+arrow_length/2,
                           y: CGFloat(outlier_center.y) - CGFloat(frame_center_y))
+                  .frame(width: arrow_length, height: arrow_height)
+                  .opacity(viewModel.outlierOpacitySliderValue)
+                  .onHover { over in
+                      // XXX turn on state to draw lines to outlier
+                      Log.w("LINE over \(over)")
+                  }
 
                 // upper
                 Rectangle()
                   .foregroundColor(.purple)
                   .frame(width: arrow_height, height: arrow_length)
-                  .aspectRatio(CGSize(width: arrow_height, height: arrow_length), contentMode: .fit)
+                  .opacity(viewModel.outlierOpacitySliderValue)
                   .offset(x: CGFloat(outlier_center.x) - CGFloat(frame_center_x),
                           y: -arrow_length/2 - CGFloat(frame_center_y))
+                  .onHover { over in
+                      // XXX turn on state to draw lines to outlier
+                      Log.w("LINE over \(over)")
+                  }
 
                 // left side
                 Rectangle()
                   .foregroundColor(.purple)
                   .frame(width: arrow_length, height: arrow_height)
-                  .aspectRatio(CGSize(width: arrow_length, height: arrow_height), contentMode: .fit)
+                  .opacity(viewModel.outlierOpacitySliderValue)
                   .offset(x: -arrow_length/2 - CGFloat(frame_center_x),
                           y: CGFloat(outlier_center.y) - CGFloat(frame_center_y))
+                  .onHover { over in
+                      // XXX turn on state to draw lines to outlier
+                      Log.w("LINE over \(over)")
+                  }
 
                 // lower
                 Rectangle()
                   .foregroundColor(.purple)
                   .frame(width: arrow_height, height: arrow_length)
-                  .aspectRatio(CGSize(width: arrow_height, height: arrow_length), contentMode: .fit)
+                  .opacity(viewModel.outlierOpacitySliderValue)
                   .offset(x: CGFloat(outlier_center.x) - CGFloat(frame_center_x),
                           y: CGFloat(frame_center_y) + arrow_length/2)
+                  .onHover { over in
+                      // XXX turn on state to draw lines to outlier
+                      Log.w("LINE over \(over)")
+                  }
             }
             Image(nsImage: self.image)
               .renderingMode(.template) // makes this VV color work
@@ -100,8 +118,7 @@ class OutlierGroupView: ObservableObject {
               .offset(x: CGFloat(outlier_center.x) - CGFloat(frame_center_x),
                       y: CGFloat(outlier_center.y) - CGFloat(frame_center_y))
               .opacity(viewModel.outlierOpacitySliderValue)
-
-              
+            
             // tap gesture toggles paintability of the tapped group
               .onTapGesture {
                   if let origShouldPaint = self.group.shouldPaint {

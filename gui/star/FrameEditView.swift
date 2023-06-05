@@ -25,7 +25,7 @@ struct FrameEditView: View {
         ZStack {
             // the main image shown
             image
-
+                .frame(width: viewModel.frame_width, height: viewModel.frame_height)
             if interactionMode == .edit {
                 // in edit mode, show outliers groups 
                 let current_frame_view = viewModel.currentFrameView
@@ -64,9 +64,11 @@ struct FrameEditView: View {
                           y: CGFloat(-viewModel.frame_height/2) + drag_y_offset - height/2)
             }
         }
+
         // XXX selecting and zooming conflict with eachother
           .gesture(self.selectionDragGesture)
     }
+
     var selectionDragGesture: some Gesture {
         DragGesture()
           .onChanged { gesture in
