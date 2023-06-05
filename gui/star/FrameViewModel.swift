@@ -70,7 +70,7 @@ class FrameViewModel: ObservableObject {
     }
 
     // optional to distinguish between not loaded and empty list
-    @Published var outlierViews: [OutlierGroupView]?
+    @Published var outlierViews: [OutlierGroupViewModel]?
     @Published var loadingOutlierViews: Bool = false
 
     // we don't keep full resolution images here

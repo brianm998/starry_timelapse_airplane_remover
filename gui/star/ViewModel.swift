@@ -230,11 +230,11 @@ public final class ViewModel: ObservableObject {
     }
 
     func setOutlierGroups(forFrame frame: FrameAirplaneRemover) async {
-        let outlierGroups = await frame.outlierGroups()
+        let outlierGroups = frame.outlierGroups()
         let (frame_width, frame_height) = (frame.width, frame.height)
         if let outlierGroups = outlierGroups {
             Log.d("got \(outlierGroups.count) groups for frame \(frame.frame_index)")
-            var new_outlier_groups: [OutlierGroupView] = []
+            var new_outlier_groups: [OutlierGroupViewModel] = []
             for group in outlierGroups {
                 if let cgImage = group.testImage() { // XXX heap corruption here :(
                     var size = CGSize()
@@ -242,13 +242,13 @@ public final class ViewModel: ObservableObject {
                     size.height = CGFloat(cgImage.height)
                     let outlierImage = NSImage(cgImage: cgImage, size: size)
                     
-                    let groupView = OutlierGroupView(viewModel: self,
-                                                     group: group,
-                                                     name: group.name,
-                                                     bounds: group.bounds,
-                                                     image: outlierImage,
-                                                     frame_width: frame_width,
-                                                     frame_height: frame_height)
+                    let groupView = OutlierGroupViewModel(viewModel: self,
+                                                          group: group,
+                                                          name: group.name,
+                                                          bounds: group.bounds,
+                                                          image: outlierImage,
+                                                          frame_width: frame_width,
+                                                          frame_height: frame_height)
                     new_outlier_groups.append(groupView)
                 } else {
                     Log.e("frame \(frame.frame_index) outlier group no image")
@@ -316,7 +316,9 @@ public final class ViewModel: ObservableObject {
             }
         }
         if show {
-            openWindow(id: "foobar")
+            openWindow(id: "foobar") // XXX /Users/brian/git/nighttime_timelapse_airplane_remover/gui/star/ViewModel.swift:319 Accessing Environment<OpenWindowAction>'s value outside of being installed on a View. This will always read the default value and will not update.
+            // /Users/brian/git/nighttime_timelapse_airplane_remover/gui/star/ViewModel.swift:319 Use of OpenWindowAction requires the SwiftUI App Lifecycle.
+
         }
     }
 
@@ -330,7 +332,7 @@ public final class ViewModel: ObservableObject {
         do {
             let config = try await Config.read(fromJsonFilename: json_config_filename)
             
-            let callbacks = await make_callbacks()
+            let callbacks = make_callbacks()
             
             let eraser = try NighttimeAirplaneRemover(with: config,
                                                       callbacks: callbacks,

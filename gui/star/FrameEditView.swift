@@ -33,7 +33,7 @@ struct FrameEditView: View {
                     ForEach(0 ..< outlierViews.count, id: \.self) { idx in
                         if idx < outlierViews.count {
                             // the actual outlier view
-                            outlierViews[idx].body
+                            outlierViews[idx].view
                         }
                     }
                 }
