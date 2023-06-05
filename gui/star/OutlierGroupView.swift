@@ -45,37 +45,16 @@ struct OutlierGroupView: View {
                 // stick some indicators on the side of the image
 
                 // right side
-
                 Rectangle()
                   .foregroundColor(.purple)
                   .offset(x: CGFloat(frame_center_x)+arrow_length/2,
                           y: CGFloat(outlier_center.y) - CGFloat(frame_center_y))
                   .frame(width: arrow_length, height: arrow_height)
                   .opacity(groupViewModel.viewModel.outlierOpacitySliderValue)
-                  .onHover { hover in
-                      Task {
-                          await MainActor.run {
-                              // XXX WHY is self.groupViewModel.arrowSelected always false ??? WTF???
-                              Log.w("hover \(hover)")
-                              if hover {
-                                  Log.e("setting that crap to true")
-                                  // XXX XXX XXX
-                                  // XXX XXX XXX
-                                  // XXX XXX XXX
-                                  
-                                  // why does this show false ?
-
-                                  // XXX XXX XXX
-                                  // XXX XXX XXX
-                                  // XXX XXX XXX
-                                  self.groupViewModel.arrowSelected = true
-                              } else {
-                                  Log.e("setting that crap to false")
-                                  self.groupViewModel.arrowSelected = false
-                              }
-                              Log.w("arrowSelected \(self.groupViewModel.arrowSelected)")
-                              self.groupViewModel.viewModel.update()
-                          }
+                  .onHover { self.groupViewModel.arrowSelected = $0 }
+                  .onTapGesture {
+                      if let shouldPaint = self.groupViewModel.group.shouldPaint {
+                          togglePaintReason(shouldPaint)
                       }
                   }
 
@@ -86,11 +65,11 @@ struct OutlierGroupView: View {
                   .opacity(groupViewModel.viewModel.outlierOpacitySliderValue)
                   .offset(x: CGFloat(outlier_center.x) - CGFloat(frame_center_x),
                           y: -arrow_length/2 - CGFloat(frame_center_y))
-                  .onHover { hover in
-                      Log.w("hover \(hover)")
-                      self.groupViewModel.arrowSelected = hover
-                      Log.w("arrowSelected \(self.groupViewModel.arrowSelected)")
-                      self.groupViewModel.viewModel.update()
+                  .onHover { self.groupViewModel.arrowSelected = $0 }
+                  .onTapGesture {
+                      if let shouldPaint = self.groupViewModel.group.shouldPaint {
+                          togglePaintReason(shouldPaint)
+                      }
                   }
 
                 // left side
@@ -100,11 +79,11 @@ struct OutlierGroupView: View {
                   .opacity(groupViewModel.viewModel.outlierOpacitySliderValue)
                   .offset(x: -arrow_length/2 - CGFloat(frame_center_x),
                           y: CGFloat(outlier_center.y) - CGFloat(frame_center_y))
-                  .onHover { hover in
-                      Log.w("hover \(hover)")
-                      self.groupViewModel.arrowSelected = hover
-                      Log.w("arrowSelected \(self.groupViewModel.arrowSelected)")
-                      self.groupViewModel.viewModel.update()
+                  .onHover { self.groupViewModel.arrowSelected = $0 }
+                  .onTapGesture {
+                      if let shouldPaint = self.groupViewModel.group.shouldPaint {
+                          togglePaintReason(shouldPaint)
+                      }
                   }
 
                 // lower
@@ -114,11 +93,11 @@ struct OutlierGroupView: View {
                   .opacity(groupViewModel.viewModel.outlierOpacitySliderValue)
                   .offset(x: CGFloat(outlier_center.x) - CGFloat(frame_center_x),
                           y: CGFloat(frame_center_y) + arrow_length/2)
-                  .onHover { hover in
-                      Log.w("hover \(hover)")
-                      self.groupViewModel.arrowSelected = hover
-                      Log.w("arrowSelected \(self.groupViewModel.arrowSelected)")
-                      self.groupViewModel.viewModel.update()
+                  .onHover { self.groupViewModel.arrowSelected = $0 }
+                  .onTapGesture {
+                      if let shouldPaint = self.groupViewModel.group.shouldPaint {
+                          togglePaintReason(shouldPaint)
+                      }
                   }
             }
             Image(nsImage: self.groupViewModel.image)
@@ -171,25 +150,7 @@ struct OutlierGroupView: View {
                               }
                               
                           } else {
-                              
-                              let reason = PaintReason.userSelected(!origShouldPaint.willPaint)
-                              
-                              // update the view model to show the change quickly
-                              self.groupViewModel.group.shouldPaint = reason
-                              self.groupViewModel.viewModel.update()
-                              
-                              Task {
-                                  if let frame = self.groupViewModel.viewModel.currentFrame,
-                                     let outlier_groups = frame.outlier_groups,
-                                     let outlier_group = outlier_groups.members[self.groupViewModel.group.name]
-                                  {
-                                      // update the actor in the background
-                                      await outlier_group.shouldPaint(reason)
-                                      self.groupViewModel.viewModel.update()
-                                  } else {
-                                      Log.e("HOLY FUCK")
-                                  }
-                              }
+                              togglePaintReason(origShouldPaint)
                           }
                           // update the view model so it shows up on screen
                       }
@@ -197,6 +158,27 @@ struct OutlierGroupView: View {
                       Log.e("WTF, not already set to paint??")
                   }
               }
+        }
+    }
+
+    func togglePaintReason(_ origShouldPaint: PaintReason) {
+        let reason = PaintReason.userSelected(!origShouldPaint.willPaint)
+        
+        // update the view model to show the change quickly
+        self.groupViewModel.group.shouldPaint = reason
+        self.groupViewModel.objectWillChange.send() 
+
+        Task {
+            if let frame = self.groupViewModel.viewModel.currentFrame,
+               let outlier_groups = frame.outlier_groups,
+               let outlier_group = outlier_groups.members[self.groupViewModel.group.name]
+            {
+                // update the actor in the background
+                await outlier_group.shouldPaint(reason)
+                self.groupViewModel.viewModel.update()
+            } else {
+                Log.e("HOLY FUCK")
+            }
         }
     }
 }
