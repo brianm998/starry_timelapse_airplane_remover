@@ -234,9 +234,9 @@ struct ImageSequenceView: View {
                         VStack {
                             Text("Outlier Group Opacity")
                             
-                            let value = $viewModel.outlierOpacitySliderValue
-                            
-                            Slider(value: value, in : 0...1)
+                            Slider(value: $viewModel.outlierOpacitySliderValue, in : 0...1) { _ in
+                                viewModel.update()
+                            }
                               .frame(maxWidth: 140, alignment: .bottom)
                         }
                     }
