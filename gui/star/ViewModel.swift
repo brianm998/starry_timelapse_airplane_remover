@@ -138,7 +138,8 @@ public final class ViewModel: ObservableObject {
     }
     
     @MainActor func update() {
-        Task { self.objectWillChange.send() }
+        self.currentFrameView.update()
+        self.objectWillChange.send()
     }
 
     func refresh(frame: FrameAirplaneRemover) async {
