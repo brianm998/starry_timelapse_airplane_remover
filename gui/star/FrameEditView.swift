@@ -22,7 +22,7 @@ struct FrameEditView: View {
     }
     
     var body: some View {
-        ZStack {
+        ZStack(alignment: .bottomLeading) {
             // the main image shown
             image
                 .frame(width: viewModel.frame_width, height: viewModel.frame_height)
@@ -38,6 +38,24 @@ struct FrameEditView: View {
                     }
                 }
             }
+
+            /*
+             this is a transparent rectangle at the bottom left of the screen
+             which is necessary to avoid a bug in onHover { } for the outlier groups
+
+             this bug appears when a user hovers close to the natural placement in the
+             parent view for an outlier group, even when that view has been offset to a
+             different location.  This bug then fires onHover { } for two locations for each
+             outlier group, with most of them clustered in the default placement, which
+             here is dictated by alignment: .bottomLeading
+             both in the ZStack above and in the outlier group views inside
+             */
+            Rectangle()
+              .foregroundColor(.clear)
+              .frame(width: 1200, height: 800) // XXX arbitrary constants, could use screen size?
+              .onHover { _ in }
+
+
 
             // this is the selection overlay
             if isDragging,
@@ -64,6 +82,7 @@ struct FrameEditView: View {
                           y: CGFloat(-viewModel.frame_height/2) + drag_y_offset - height/2)
             }
         }
+
 
         // XXX selecting and zooming conflict with eachother
           .gesture(self.selectionDragGesture)

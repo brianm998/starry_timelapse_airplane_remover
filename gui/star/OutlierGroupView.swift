@@ -9,26 +9,62 @@ struct OutlierGroupView: View {
     @ObservedObject var groupViewModel: OutlierGroupViewModel
 
     var body: some View {
-        ZStack {
-            let frame_center_x = self.groupViewModel.frame_width/2
-            let frame_center_y = self.groupViewModel.frame_height/2
+        ZStack(alignment: .bottomLeading) {
+            let frame_width = CGFloat(self.groupViewModel.frame_width)
+            let frame_height = CGFloat(self.groupViewModel.frame_height)
+
             let outlier_center = self.groupViewModel.bounds.center
+            let outlier_min = self.groupViewModel.bounds.min
+            let outlier_max = self.groupViewModel.bounds.max
             
             let will_paint = self.groupViewModel.willPaint ?? false
             
             let paint_color = self.groupViewModel.selectionColor
 
-            let arrow_length:CGFloat = CGFloat(self.groupViewModel.frame_width)/20
-            let arrow_height:CGFloat = CGFloat(self.groupViewModel.frame_width)/400
+            let arrow_length = frame_width/20
+            let arrow_height = frame_width/300
+
+            let line_width = arrow_height/4
+
+            // this centers the arrows on the lines
+            let fiddle = arrow_height/2 - arrow_height/8
             
             if will_paint {
-                // stick some indicators on the side of the image
+                // arrow indicators on the side of the image
 
-                // right side
+                // left arrow
                 Rectangle()
                   .foregroundColor(.purple)
-                  .offset(x: CGFloat(frame_center_x)+arrow_length/2,
-                          y: CGFloat(outlier_center.y) - CGFloat(frame_center_y))
+                  .frame(width: arrow_length, height: arrow_height)
+                  .opacity(groupViewModel.viewModel.outlierOpacitySliderValue)
+                  .offset(x: -arrow_length,
+                          y: CGFloat(outlier_center.y) - frame_height + fiddle)
+                  .onHover { self.groupViewModel.arrowSelected = $0 }
+                  .onTapGesture {
+                      if let shouldPaint = self.groupViewModel.group.shouldPaint {
+                          togglePaintReason(shouldPaint)
+                      }
+                  }
+
+                // top arrow
+                Rectangle()
+                  .foregroundColor(.purple)
+                  .frame(width: arrow_height, height: arrow_length)
+                  .opacity(groupViewModel.viewModel.outlierOpacitySliderValue)
+                  .offset(x: CGFloat(outlier_center.x) - fiddle,
+                          y: -frame_height)
+                  .onHover { self.groupViewModel.arrowSelected = $0 }
+                  .onTapGesture {
+                      if let shouldPaint = self.groupViewModel.group.shouldPaint {
+                          togglePaintReason(shouldPaint)
+                      }
+                  }
+
+                // right arrow
+                Rectangle()
+                  .foregroundColor(.purple)
+                  .offset(x: frame_width,
+                          y: CGFloat(outlier_center.y) - frame_height + fiddle)
                   .frame(width: arrow_length, height: arrow_height)
                   .opacity(groupViewModel.viewModel.outlierOpacitySliderValue)
                   .onHover { self.groupViewModel.arrowSelected = $0 }
@@ -38,41 +74,12 @@ struct OutlierGroupView: View {
                       }
                   }
 
-                // upper
+                // bottom arrow
                 Rectangle()
                   .foregroundColor(.purple)
                   .frame(width: arrow_height, height: arrow_length)
                   .opacity(groupViewModel.viewModel.outlierOpacitySliderValue)
-                  .offset(x: CGFloat(outlier_center.x) - CGFloat(frame_center_x),
-                          y: -arrow_length/2 - CGFloat(frame_center_y))
-                  .onHover { self.groupViewModel.arrowSelected = $0 }
-                  .onTapGesture {
-                      if let shouldPaint = self.groupViewModel.group.shouldPaint {
-                          togglePaintReason(shouldPaint)
-                      }
-                  }
-
-                // left side
-                Rectangle()
-                  .foregroundColor(.purple)
-                  .frame(width: arrow_length, height: arrow_height)
-                  .opacity(groupViewModel.viewModel.outlierOpacitySliderValue)
-                  .offset(x: -arrow_length/2 - CGFloat(frame_center_x),
-                          y: CGFloat(outlier_center.y) - CGFloat(frame_center_y))
-                  .onHover { self.groupViewModel.arrowSelected = $0 }
-                  .onTapGesture {
-                      if let shouldPaint = self.groupViewModel.group.shouldPaint {
-                          togglePaintReason(shouldPaint)
-                      }
-                  }
-
-                // lower
-                Rectangle()
-                  .foregroundColor(.purple)
-                  .frame(width: arrow_height, height: arrow_length)
-                  .opacity(groupViewModel.viewModel.outlierOpacitySliderValue)
-                  .offset(x: CGFloat(outlier_center.x) - CGFloat(frame_center_x),
-                          y: CGFloat(frame_center_y) + arrow_length/2)
+                  .offset(x: CGFloat(outlier_center.x) - fiddle, y: arrow_length)
                   .onHover { self.groupViewModel.arrowSelected = $0 }
                   .onTapGesture {
                       if let shouldPaint = self.groupViewModel.group.shouldPaint {
@@ -81,79 +88,77 @@ struct OutlierGroupView: View {
                   }
 
 
-                // lines across the frame to mark this outlier
+                // lines across the frame between the arrows and outlier group bounds
                 if self.groupViewModel.arrowSelected {
                     let width_1 = CGFloat(outlier_center.x - self.groupViewModel.bounds.width/2)
 
-                    // horizontal line to the left of the outlier
-                    Rectangle()
-                      .foregroundColor(.purple)
-                      .blendMode(.difference)
-                      .frame(width: width_1,
-                             height: arrow_height/4)
-                      .opacity(groupViewModel.viewModel.outlierOpacitySliderValue/2)
-                      .offset(x: -CGFloat(frame_center_x) + width_1 / 2,
-                              y: CGFloat(outlier_center.y) - CGFloat(frame_center_y))
+                    let height_1 = CGFloat(outlier_center.y - self.groupViewModel.bounds.height/2)
+
+                    let height_2 = CGFloat(groupViewModel.frame_height) -
+                      height_1 - CGFloat(self.groupViewModel.bounds.height)
 
                     let width_2 = CGFloat(groupViewModel.frame_width) -
                       width_1 -
                       CGFloat(self.groupViewModel.bounds.width)
 
-                    // top
+                    // left line
+                    Rectangle()
+                      .foregroundColor(.purple)
+                      .blendMode(.difference)
+                      .frame(width: width_1,
+                             height: line_width)
+                      .opacity(groupViewModel.viewModel.outlierOpacitySliderValue/2)
+                      .offset(x: 0, y: CGFloat(outlier_center.y) - frame_height)
+
+                    // top line 
+                    Rectangle()
+                      .foregroundColor(.purple)
+                      .blendMode(.difference)
+                      .frame(width: line_width,
+                             height: height_1)
+                      .opacity(groupViewModel.viewModel.outlierOpacitySliderValue/2)
+                      .offset(x: CGFloat(outlier_center.x),
+                              y: CGFloat(outlier_min.y)-frame_height)
+
+                    // right line
                     Rectangle()
                       .foregroundColor(.purple)
                       .blendMode(.difference)
                       .frame(width: width_2,
-                             height: arrow_height/4)
+                             height: line_width)
                       .opacity(groupViewModel.viewModel.outlierOpacitySliderValue/2)
-                      .offset(x: -CGFloat(frame_center_x) + width_1 +  CGFloat(self.groupViewModel.bounds.width) + width_2/2,
-                              y: CGFloat(outlier_center.y) - CGFloat(frame_center_y))
-                    
-                    
-                    let height_1 = CGFloat(outlier_center.y - self.groupViewModel.bounds.height/2)
+                      .offset(x: CGFloat(outlier_max.x),
+                              y: CGFloat(outlier_center.y) - frame_height)
 
-                    // horizontal line to the right of the outlier
+                    // bottom line
                     Rectangle()
                       .foregroundColor(.purple)
                       .blendMode(.difference)
-                      .frame(width: arrow_height/4,
-                             height: height_1)
-                      .opacity(groupViewModel.viewModel.outlierOpacitySliderValue/2)
-                      .offset(x: CGFloat(outlier_center.x) - CGFloat(frame_center_x),
-                              y: -CGFloat(frame_center_y) + height_1 / 2)
-
-                    let height_2 = CGFloat(groupViewModel.frame_height) -
-                      height_1 -
-                      CGFloat(self.groupViewModel.bounds.height)
-                    
-                    // bottom
-                    Rectangle()
-                      .foregroundColor(.purple)
-                      .blendMode(.difference)
-                      .frame(width: arrow_height/4,
+                      .frame(width: line_width,
                              height: height_2)
                       .opacity(groupViewModel.viewModel.outlierOpacitySliderValue/2)
-                      .offset(x: CGFloat(outlier_center.x) - CGFloat(frame_center_x),
-                              y: -CGFloat(frame_center_y) + height_1 +  CGFloat(self.groupViewModel.bounds.height) + height_2/2)
+                      .offset(x: CGFloat(outlier_center.x), y: 0)
                 }
             }
-            if self.groupViewModel.arrowSelected {
-                // underlay for when this outlier group is hovered over
-
-                Rectangle()
-                  .foregroundColor(will_paint ? .purple : .yellow)
-                  .offset(x: CGFloat(outlier_center.x) - CGFloat(frame_center_x),
-                          y: CGFloat(outlier_center.y) - CGFloat(frame_center_y))
-                  .frame(width: CGFloat(self.groupViewModel.bounds.width),
-                         height: CGFloat(self.groupViewModel.bounds.height))
-                  .opacity(groupViewModel.viewModel.outlierOpacitySliderValue/4)
+            ZStack(alignment: .bottomLeading) {
+                if self.groupViewModel.arrowSelected {
+                    // underlay for when this outlier group is hovered over
+                    Rectangle()
+                      .foregroundColor(will_paint ? .purple : .yellow)
+                      .opacity(groupViewModel.viewModel.outlierOpacitySliderValue/4)
+                      .contentShape(Rectangle())
+                }
+                Image(nsImage: self.groupViewModel.image)
+                  .renderingMode(.template) // makes this VV color work
+                  .foregroundColor(paint_color)
+                  .contentShape(Rectangle())
+                  .blendMode(.hardLight)
+                  .opacity(groupViewModel.viewModel.outlierOpacitySliderValue)
             }
-            Image(nsImage: self.groupViewModel.image)
-              .renderingMode(.template) // makes this VV color work
-              .foregroundColor(paint_color)
-              .offset(x: CGFloat(outlier_center.x) - CGFloat(frame_center_x),
-                      y: CGFloat(outlier_center.y) - CGFloat(frame_center_y))
-              .opacity(groupViewModel.viewModel.outlierOpacitySliderValue)
+              .offset(x: CGFloat(outlier_min.x),
+                      y: CGFloat(outlier_min.y) - frame_height + CGFloat(self.groupViewModel.bounds.height))
+              .frame(width: CGFloat(self.groupViewModel.bounds.width),
+                     height: CGFloat(self.groupViewModel.bounds.height))
               .onHover { self.groupViewModel.arrowSelected = $0 }
             
             // tap gesture toggles paintability of the tapped group
