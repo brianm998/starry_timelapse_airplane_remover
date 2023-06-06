@@ -65,10 +65,10 @@ struct FrameEditView: View {
                 let width = abs(drag_start.x-drag_end.x)
                 let height = abs(drag_start.y-drag_end.y)
 
-                let _ = Log.d("drag_start \(drag_start) drag_end \(drag_end) width \(width) height \(height)")
+                let _ = Log.v("drag_start \(drag_start) drag_end \(drag_end) width \(width) height \(height)")
 
-                let drag_x_offset = drag_end.x > drag_start.x ? drag_end.x : drag_start.x
-                let drag_y_offset = drag_end.y > drag_start.y ? drag_end.y : drag_start.y
+                let drag_x_offset = drag_end.x > drag_start.x ? drag_start.x : drag_end.x
+                let drag_y_offset = drag_end.y > drag_start.y ?  drag_start.y : drag_end.y
 
                 Rectangle()
                   .fill(viewModel.selectionColor.opacity(0.2))
@@ -78,8 +78,8 @@ struct FrameEditView: View {
                       .foregroundColor(viewModel.selectionColor.opacity(0.8))
                   )                
                   .frame(width: width, height: height)
-                  .offset(x: CGFloat(-viewModel.frame_width/2) + drag_x_offset - width/2,
-                          y: CGFloat(-viewModel.frame_height/2) + drag_y_offset - height/2)
+                  .offset(x: drag_x_offset,
+                          y: CGFloat(-viewModel.frame_height) + drag_y_offset + height)
             }
         }
 
@@ -100,13 +100,13 @@ struct FrameEditView: View {
               } else {
                   drag_start = gesture.startLocation
               }
-              //Log.d("location \(location)")
+              Log.v("location \(location)")
           }
           .onEnded { gesture in
               isDragging = false
               let end_location = gesture.location
               if let drag_start = drag_start {
-                  Log.d("end location \(end_location) drag start \(drag_start)")
+                  Log.v("end location \(end_location) drag start \(drag_start)")
                   
                   let frameView = viewModel.currentFrameView
                   

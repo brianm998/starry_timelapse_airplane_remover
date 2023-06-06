@@ -12,18 +12,11 @@ struct OutlierGroupView: View {
         ZStack(alignment: .bottomLeading) {
             let frame_width = CGFloat(self.groupViewModel.frame_width)
             let frame_height = CGFloat(self.groupViewModel.frame_height)
-
-            let outlier_center = self.groupViewModel.bounds.center
-            let outlier_min = self.groupViewModel.bounds.min
-            let outlier_max = self.groupViewModel.bounds.max
-            
+            let bounds = self.groupViewModel.bounds
             let will_paint = self.groupViewModel.willPaint ?? false
-            
             let paint_color = self.groupViewModel.selectionColor
-
             let arrow_length = frame_width/20
             let arrow_height = frame_width/300
-
             let line_width = arrow_height/4
 
             // this centers the arrows on the lines
@@ -38,7 +31,7 @@ struct OutlierGroupView: View {
                   .frame(width: arrow_length, height: arrow_height)
                   .opacity(groupViewModel.viewModel.outlierOpacitySliderValue)
                   .offset(x: -arrow_length,
-                          y: CGFloat(outlier_center.y) - frame_height + fiddle)
+                          y: CGFloat(bounds.center.y) - frame_height + fiddle)
                   .onHover { self.groupViewModel.arrowSelected = $0 }
                   .onTapGesture {
                       if let shouldPaint = self.groupViewModel.group.shouldPaint {
@@ -51,7 +44,7 @@ struct OutlierGroupView: View {
                   .foregroundColor(.purple)
                   .frame(width: arrow_height, height: arrow_length)
                   .opacity(groupViewModel.viewModel.outlierOpacitySliderValue)
-                  .offset(x: CGFloat(outlier_center.x) - fiddle,
+                  .offset(x: CGFloat(bounds.center.x) - fiddle,
                           y: -frame_height)
                   .onHover { self.groupViewModel.arrowSelected = $0 }
                   .onTapGesture {
@@ -64,7 +57,7 @@ struct OutlierGroupView: View {
                 Rectangle()
                   .foregroundColor(.purple)
                   .offset(x: frame_width,
-                          y: CGFloat(outlier_center.y) - frame_height + fiddle)
+                          y: CGFloat(bounds.center.y) - frame_height + fiddle)
                   .frame(width: arrow_length, height: arrow_height)
                   .opacity(groupViewModel.viewModel.outlierOpacitySliderValue)
                   .onHover { self.groupViewModel.arrowSelected = $0 }
@@ -79,7 +72,7 @@ struct OutlierGroupView: View {
                   .foregroundColor(.purple)
                   .frame(width: arrow_height, height: arrow_length)
                   .opacity(groupViewModel.viewModel.outlierOpacitySliderValue)
-                  .offset(x: CGFloat(outlier_center.x) - fiddle, y: arrow_length)
+                  .offset(x: CGFloat(bounds.center.x) - fiddle, y: arrow_length)
                   .onHover { self.groupViewModel.arrowSelected = $0 }
                   .onTapGesture {
                       if let shouldPaint = self.groupViewModel.group.shouldPaint {
@@ -90,16 +83,16 @@ struct OutlierGroupView: View {
 
                 // lines across the frame between the arrows and outlier group bounds
                 if self.groupViewModel.arrowSelected {
-                    let width_1 = CGFloat(outlier_center.x - self.groupViewModel.bounds.width/2)
+                    let width_1 = CGFloat(bounds.center.x - bounds.width/2)
 
-                    let height_1 = CGFloat(outlier_center.y - self.groupViewModel.bounds.height/2)
+                    let height_1 = CGFloat(bounds.center.y - bounds.height/2)
 
                     let height_2 = CGFloat(groupViewModel.frame_height) -
-                      height_1 - CGFloat(self.groupViewModel.bounds.height)
+                      height_1 - CGFloat(bounds.height)
 
                     let width_2 = CGFloat(groupViewModel.frame_width) -
                       width_1 -
-                      CGFloat(self.groupViewModel.bounds.width)
+                      CGFloat(bounds.width)
 
                     // left line
                     Rectangle()
@@ -108,7 +101,7 @@ struct OutlierGroupView: View {
                       .frame(width: width_1,
                              height: line_width)
                       .opacity(groupViewModel.viewModel.outlierOpacitySliderValue/2)
-                      .offset(x: 0, y: CGFloat(outlier_center.y) - frame_height)
+                      .offset(x: 0, y: CGFloat(bounds.center.y) - frame_height)
 
                     // top line 
                     Rectangle()
@@ -117,8 +110,8 @@ struct OutlierGroupView: View {
                       .frame(width: line_width,
                              height: height_1)
                       .opacity(groupViewModel.viewModel.outlierOpacitySliderValue/2)
-                      .offset(x: CGFloat(outlier_center.x),
-                              y: CGFloat(outlier_min.y)-frame_height)
+                      .offset(x: CGFloat(bounds.center.x),
+                              y: CGFloat(bounds.min.y)-frame_height)
 
                     // right line
                     Rectangle()
@@ -127,8 +120,8 @@ struct OutlierGroupView: View {
                       .frame(width: width_2,
                              height: line_width)
                       .opacity(groupViewModel.viewModel.outlierOpacitySliderValue/2)
-                      .offset(x: CGFloat(outlier_max.x),
-                              y: CGFloat(outlier_center.y) - frame_height)
+                      .offset(x: CGFloat(bounds.max.x),
+                              y: CGFloat(bounds.center.y) - frame_height)
 
                     // bottom line
                     Rectangle()
@@ -137,7 +130,7 @@ struct OutlierGroupView: View {
                       .frame(width: line_width,
                              height: height_2)
                       .opacity(groupViewModel.viewModel.outlierOpacitySliderValue/2)
-                      .offset(x: CGFloat(outlier_center.x), y: 0)
+                      .offset(x: CGFloat(bounds.center.x), y: 0)
                 }
             }
             ZStack(alignment: .bottomLeading) {
@@ -148,6 +141,7 @@ struct OutlierGroupView: View {
                       .opacity(groupViewModel.viewModel.outlierOpacitySliderValue/4)
                       .contentShape(Rectangle())
                 }
+                // the actual outlier group image
                 Image(nsImage: self.groupViewModel.image)
                   .renderingMode(.template) // makes this VV color work
                   .foregroundColor(paint_color)
@@ -155,10 +149,10 @@ struct OutlierGroupView: View {
                   .blendMode(.hardLight)
                   .opacity(groupViewModel.viewModel.outlierOpacitySliderValue)
             }
-              .offset(x: CGFloat(outlier_min.x),
-                      y: CGFloat(outlier_min.y) - frame_height + CGFloat(self.groupViewModel.bounds.height))
-              .frame(width: CGFloat(self.groupViewModel.bounds.width),
-                     height: CGFloat(self.groupViewModel.bounds.height))
+              .offset(x: CGFloat(bounds.min.x),
+                      y: CGFloat(bounds.min.y) - frame_height + CGFloat(bounds.height))
+              .frame(width: CGFloat(bounds.width),
+                     height: CGFloat(bounds.height))
               .onHover { self.groupViewModel.arrowSelected = $0 }
             
             // tap gesture toggles paintability of the tapped group
