@@ -9,15 +9,19 @@ struct OutlierGroupView: View {
     @ObservedObject var groupViewModel: OutlierGroupViewModel
 
     var body: some View {
+        // .bottomLeading alignment is used to avoid a bug in .onHover and onTap
+        // which is described in more detail in FrameEditView
         ZStack(alignment: .bottomLeading) {
             let frame_width = CGFloat(self.groupViewModel.frame_width)
             let frame_height = CGFloat(self.groupViewModel.frame_height)
             let bounds = self.groupViewModel.bounds
             let will_paint = self.groupViewModel.willPaint ?? false
             let paint_color = self.groupViewModel.selectionColor
-            let arrow_length = frame_width/40
-            let arrow_height = frame_width/300
-            let line_width = arrow_height/4
+            let arrow_length = self.arrowLength
+            let arrow_height = self.arrowHeight
+            let line_width = self.lineWidth
+            let center_x = CGFloat(bounds.center.x)
+            let center_y = CGFloat(bounds.center.y)
 
             // this centers the arrows on the lines
             let fiddle = arrow_height/2 - line_width/2
@@ -25,64 +29,28 @@ struct OutlierGroupView: View {
             if will_paint {
                 // arrow indicators on the side of the image
 
-                // left arrow
-                Image(systemName: "arrow.right")
-                  .resizable()
-                  .foregroundColor(.purple)
+                // arrow on left side
+                arrowImage(named: "arrow.right")
                   .frame(width: arrow_length, height: arrow_height)
-                  .opacity(groupViewModel.viewModel.outlierOpacitySliderValue)
                   .offset(x: -arrow_length,
-                          y: CGFloat(bounds.center.y) - frame_height + fiddle)
-                  .onHover { self.groupViewModel.arrowSelected = $0 }
-                  .onTapGesture {
-                      if let shouldPaint = self.groupViewModel.group.shouldPaint {
-                          togglePaintReason(shouldPaint)
-                      }
-                  }
+                          y: center_y - frame_height + fiddle)
 
-                // top arrow
-                Image(systemName: "arrow.down")
-                  .resizable()
-                  .foregroundColor(.purple)
+                // arrow on top
+                arrowImage(named: "arrow.down")
                   .frame(width: arrow_height, height: arrow_length)
-                  .opacity(groupViewModel.viewModel.outlierOpacitySliderValue)
-                  .offset(x: CGFloat(bounds.center.x) - fiddle,
+                  .offset(x: center_x - fiddle,
                           y: -frame_height)
-                  .onHover { self.groupViewModel.arrowSelected = $0 }
-                  .onTapGesture {
-                      if let shouldPaint = self.groupViewModel.group.shouldPaint {
-                          togglePaintReason(shouldPaint)
-                      }
-                  }
 
-                // right arrow
-                Image(systemName: "arrow.left")
-                  .resizable()
-                  .foregroundColor(.purple)
-                  .offset(x: frame_width,
-                          y: CGFloat(bounds.center.y) - frame_height + fiddle)
+                // arrow on right side
+                arrowImage(named: "arrow.left")
                   .frame(width: arrow_length, height: arrow_height)
-                  .opacity(groupViewModel.viewModel.outlierOpacitySliderValue)
-                  .onHover { self.groupViewModel.arrowSelected = $0 }
-                  .onTapGesture {
-                      if let shouldPaint = self.groupViewModel.group.shouldPaint {
-                          togglePaintReason(shouldPaint)
-                      }
-                  }
+                  .offset(x: frame_width,
+                          y: center_y - frame_height + fiddle)
 
-                // bottom arrow
-                Image(systemName: "arrow.up")
-                  .resizable()
-                  .foregroundColor(.purple)
+                // arrow on bottom 
+                arrowImage(named: "arrow.up")
                   .frame(width: arrow_height, height: arrow_length)
-                  .opacity(groupViewModel.viewModel.outlierOpacitySliderValue)
-                  .offset(x: CGFloat(bounds.center.x) - fiddle, y: arrow_length)
-                  .onHover { self.groupViewModel.arrowSelected = $0 }
-                  .onTapGesture {
-                      if let shouldPaint = self.groupViewModel.group.shouldPaint {
-                          togglePaintReason(shouldPaint)
-                      }
-                  }
+                  .offset(x: center_x - fiddle, y: arrow_length)
 
 
                 // lines across the frame between the arrows and outlier group bounds
@@ -98,41 +66,29 @@ struct OutlierGroupView: View {
                       top_line_height - CGFloat(bounds.height)
 
                     // left line
-                    Rectangle()
-                      .foregroundColor(.purple)
-                      .blendMode(.difference)
+                    outlierFrameLine()
                       .frame(width: left_line_width,
                              height: line_width)
-                      .opacity(groupViewModel.viewModel.outlierOpacitySliderValue/2)
                       .offset(x: 0, y: CGFloat(bounds.center.y) - frame_height)
 
                     // top line 
-                    Rectangle()
-                      .foregroundColor(.purple)
-                      .blendMode(.difference)
+                    outlierFrameLine()
                       .frame(width: line_width,
                              height: top_line_height)
-                      .opacity(groupViewModel.viewModel.outlierOpacitySliderValue/2)
                       .offset(x: CGFloat(bounds.center.x),
                               y: CGFloat(bounds.min.y)-frame_height)
 
                     // right line
-                    Rectangle()
-                      .foregroundColor(.purple)
-                      .blendMode(.difference)
+                    outlierFrameLine()
                       .frame(width: right_line_width,
                              height: line_width)
-                      .opacity(groupViewModel.viewModel.outlierOpacitySliderValue/2)
                       .offset(x: CGFloat(bounds.max.x),
                               y: CGFloat(bounds.center.y) - frame_height)
 
                     // bottom line
-                    Rectangle()
-                      .foregroundColor(.purple)
-                      .blendMode(.difference)
+                    outlierFrameLine()
                       .frame(width: line_width,
                              height: bottom_line_height)
-                      .opacity(groupViewModel.viewModel.outlierOpacitySliderValue/2)
                       .offset(x: CGFloat(bounds.center.x), y: 0)
                 }
             }
@@ -232,5 +188,38 @@ struct OutlierGroupView: View {
             }
         }
     }
+
+    // images for arrows at edge of frame that point towards outlier groups
+    private func arrowImage(named imageName: String) -> some View {
+        Image(systemName: imageName)
+          .resizable()
+          .foregroundColor(.purple)
+          .opacity(groupViewModel.viewModel.outlierOpacitySliderValue)
+          .onHover { self.groupViewModel.arrowSelected = $0 }
+          .onTapGesture {
+              if let shouldPaint = self.groupViewModel.group.shouldPaint {
+                  togglePaintReason(shouldPaint)
+              }
+          }
+    }
+
+    public func outlierFrameLine() -> some View {
+        Rectangle()
+          .foregroundColor(.purple)
+          .blendMode(.difference)
+          .opacity(groupViewModel.viewModel.outlierOpacitySliderValue/2)
+    }
+    
+    private var arrowLength: CGFloat {
+        let frame_width = CGFloat(self.groupViewModel.frame_width)
+        return frame_width/40
+    }
+
+    private var arrowHeight: CGFloat {
+        let frame_width = CGFloat(self.groupViewModel.frame_width)
+        return frame_width/300
+    }
+    
+    private var lineWidth: CGFloat { self.arrowHeight/4 }
 }
 
