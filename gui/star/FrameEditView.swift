@@ -24,10 +24,11 @@ struct FrameEditView: View {
     }
     
     var body: some View {
+        // alignment is .bottomLeading because of the bug outlied below
         ZStack(alignment: .bottomLeading) {
             // the main image shown
             image
-                .frame(width: viewModel.frame_width, height: viewModel.frame_height)
+              .frame(width: viewModel.frame_width, height: viewModel.frame_height)
             if interactionMode == .edit {
                 // in edit mode, show outliers groups 
                 let current_frame_view = viewModel.currentFrameView

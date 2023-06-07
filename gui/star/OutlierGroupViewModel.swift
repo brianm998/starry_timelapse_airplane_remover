@@ -24,9 +24,9 @@ class OutlierGroupViewModel: ObservableObject {
 
     @ObservedObject var viewModel: ViewModel
     
-    @Published var arrowSelected = false
+    @Published var arrowSelected = false // hovered over on frame view
 
-    @Published var isSelected = false
+    @Published var isSelected = false // selected for the details view
 
     let group: OutlierGroup
     let name: String

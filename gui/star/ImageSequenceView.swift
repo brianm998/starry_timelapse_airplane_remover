@@ -110,8 +110,8 @@ struct ImageSequenceView: View {
                         FilmstripView(viewModel: viewModel,
                                       imageSequenceView: self,
                                       scroller: scroller)
-                          .frame(maxWidth: .infinity/*, alignment: .bottom*/)
-                        Spacer().frame(maxHeight: 10/*, alignment: .bottom*/)
+                          .frame(maxWidth: .infinity)
+                        Spacer().frame(minHeight: 15, maxHeight: 25)
                     }
 
                     // scub slider at the bottom
