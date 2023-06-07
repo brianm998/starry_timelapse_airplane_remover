@@ -6,9 +6,10 @@ import StarCore
 // the view for a single outlier group on a frame
 
 struct OutlierGroupView: View {
-    @Environment(\.openWindow) private var openWindow
 
     @ObservedObject var groupViewModel: OutlierGroupViewModel
+
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         // .bottomLeading alignment is used to avoid a bug in .onHover and onTap
@@ -121,52 +122,10 @@ struct OutlierGroupView: View {
                   if let origShouldPaint = self.groupViewModel.group.shouldPaint {
                       // change the paintability of this outlier group
                       // set it to user selected opposite previous value
-                      Task {
-                          if self.groupViewModel.viewModel.selectionMode == .details {
-                              Log.w("DETAILS")
-                              // here we want to select just this outlier
-
-                              if self.groupViewModel.viewModel.outlierGroupTableRows.count == 1,
-                                 self.groupViewModel.viewModel.outlierGroupTableRows[0].name == self.groupViewModel.group.name
-                              {
-                                  // just toggle the selectablility of this one
-                                  // XXX need separate enums for selection does paint and selection does do info
-                              } else {
-                                  // make this row the only selected one
-                                  let frame_view = self.groupViewModel.viewModel.frames[self.groupViewModel.group.frame_index]
-                                  if let frame = frame_view.frame,
-                                     let group = frame.outlierGroup(named: self.groupViewModel.group.name)
-                                  {
-                                      if let outlier_views = frame_view.outlierViews {
-                                          for outlier_view in outlier_views {
-                                              if outlier_view.name != self.groupViewModel.group.name {
-                                                  outlier_view.isSelected = false
-                                              }
-                                          }
-                                      }
-                                      let new_row = await OutlierGroupTableRow(group)
-                                      self.groupViewModel.isSelected = true
-                                      await MainActor.run {
-                                          self.groupViewModel.viewModel.outlierGroupWindowFrame = frame
-                                          self.groupViewModel.viewModel.outlierGroupTableRows = [new_row]
-                                          self.groupViewModel.viewModel.selectedOutliers = [new_row.id]
-
-                                          if self.groupViewModel.viewModel.shouldShowOutlierGroupTableWindow() {
-                                              openWindow(id: "foobar") 
-                                          }
-
-                                          self.groupViewModel.viewModel.update()
-
-                                      }
-                                  } else {
-                                      Log.w("couldn't find frame")
-                                  }
-                              }
-                              
-                          } else {
-                              togglePaintReason(origShouldPaint)
-                          }
-                          // update the view model so it shows up on screen
+                      if self.groupViewModel.viewModel.selectionMode == .details {
+                          handleDetailsMode()
+                      } else {
+                          togglePaintReason(origShouldPaint)
                       }
                   } else {
                       Log.e("WTF, not already set to paint??")
@@ -175,6 +134,52 @@ struct OutlierGroupView: View {
         }
     }
 
+    // used when user taps on outlier group in with selection mode set to details
+    func handleDetailsMode() {
+        Task {
+            Log.w("DETAILS")
+            // here we want to select just this outlier
+
+            if self.groupViewModel.viewModel.outlierGroupTableRows.count == 1,
+               self.groupViewModel.viewModel.outlierGroupTableRows[0].name == self.groupViewModel.group.name
+            {
+                // just toggle the selectablility of this one
+                // XXX need separate enums for selection does paint and selection does do info
+            } else {
+                // make this row the only selected one
+                let frame_view = self.groupViewModel.viewModel.frames[self.groupViewModel.group.frame_index]
+                if let frame = frame_view.frame,
+                   let group = frame.outlierGroup(named: self.groupViewModel.group.name)
+                {
+                    if let outlier_views = frame_view.outlierViews {
+                        for outlier_view in outlier_views {
+                            if outlier_view.name != self.groupViewModel.group.name {
+                                outlier_view.isSelected = false
+                            }
+                        }
+                    }
+                    let new_row = await OutlierGroupTableRow(group)
+                    self.groupViewModel.isSelected = true
+                    await MainActor.run {
+                        self.groupViewModel.viewModel.outlierGroupWindowFrame = frame
+                        self.groupViewModel.viewModel.outlierGroupTableRows = [new_row]
+                        self.groupViewModel.viewModel.selectedOutliers = [new_row.id]
+
+                        if self.groupViewModel.viewModel.shouldShowOutlierGroupTableWindow() {
+                            openWindow(id: "foobar") 
+                        }
+
+                        self.groupViewModel.viewModel.update()
+
+                    }
+                } else {
+                    Log.w("couldn't find frame")
+                }
+            }
+        }
+    }
+
+    // used when user selects an outlier group outisde of details selection mode 
     func togglePaintReason(_ origShouldPaint: PaintReason) {
         let reason = PaintReason.userSelected(!origShouldPaint.willPaint)
         
