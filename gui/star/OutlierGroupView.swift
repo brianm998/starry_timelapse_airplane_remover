@@ -15,18 +15,19 @@ struct OutlierGroupView: View {
             let bounds = self.groupViewModel.bounds
             let will_paint = self.groupViewModel.willPaint ?? false
             let paint_color = self.groupViewModel.selectionColor
-            let arrow_length = frame_width/20
+            let arrow_length = frame_width/40
             let arrow_height = frame_width/300
             let line_width = arrow_height/4
 
             // this centers the arrows on the lines
-            let fiddle = arrow_height/2 - arrow_height/8
+            let fiddle = arrow_height/2 - line_width/2
             
             if will_paint {
                 // arrow indicators on the side of the image
 
                 // left arrow
-                Rectangle()
+                Image(systemName: "arrow.right")
+                  .resizable()
                   .foregroundColor(.purple)
                   .frame(width: arrow_length, height: arrow_height)
                   .opacity(groupViewModel.viewModel.outlierOpacitySliderValue)
@@ -40,7 +41,8 @@ struct OutlierGroupView: View {
                   }
 
                 // top arrow
-                Rectangle()
+                Image(systemName: "arrow.down")
+                  .resizable()
                   .foregroundColor(.purple)
                   .frame(width: arrow_height, height: arrow_length)
                   .opacity(groupViewModel.viewModel.outlierOpacitySliderValue)
@@ -54,7 +56,8 @@ struct OutlierGroupView: View {
                   }
 
                 // right arrow
-                Rectangle()
+                Image(systemName: "arrow.left")
+                  .resizable()
                   .foregroundColor(.purple)
                   .offset(x: frame_width,
                           y: CGFloat(bounds.center.y) - frame_height + fiddle)
@@ -68,7 +71,8 @@ struct OutlierGroupView: View {
                   }
 
                 // bottom arrow
-                Rectangle()
+                Image(systemName: "arrow.up")
+                  .resizable()
                   .foregroundColor(.purple)
                   .frame(width: arrow_height, height: arrow_length)
                   .opacity(groupViewModel.viewModel.outlierOpacitySliderValue)
@@ -83,22 +87,21 @@ struct OutlierGroupView: View {
 
                 // lines across the frame between the arrows and outlier group bounds
                 if self.groupViewModel.arrowSelected {
-                    let width_1 = CGFloat(bounds.center.x - bounds.width/2)
+                    let left_line_width = CGFloat(bounds.center.x - bounds.width/2)
 
-                    let height_1 = CGFloat(bounds.center.y - bounds.height/2)
+                    let right_line_width = CGFloat(groupViewModel.frame_width) -
+                      left_line_width - CGFloat(bounds.width)
 
-                    let height_2 = CGFloat(groupViewModel.frame_height) -
-                      height_1 - CGFloat(bounds.height)
+                    let top_line_height = CGFloat(bounds.center.y - bounds.height/2)
 
-                    let width_2 = CGFloat(groupViewModel.frame_width) -
-                      width_1 -
-                      CGFloat(bounds.width)
+                    let bottom_line_height = CGFloat(groupViewModel.frame_height) -
+                      top_line_height - CGFloat(bounds.height)
 
                     // left line
                     Rectangle()
                       .foregroundColor(.purple)
                       .blendMode(.difference)
-                      .frame(width: width_1,
+                      .frame(width: left_line_width,
                              height: line_width)
                       .opacity(groupViewModel.viewModel.outlierOpacitySliderValue/2)
                       .offset(x: 0, y: CGFloat(bounds.center.y) - frame_height)
@@ -108,7 +111,7 @@ struct OutlierGroupView: View {
                       .foregroundColor(.purple)
                       .blendMode(.difference)
                       .frame(width: line_width,
-                             height: height_1)
+                             height: top_line_height)
                       .opacity(groupViewModel.viewModel.outlierOpacitySliderValue/2)
                       .offset(x: CGFloat(bounds.center.x),
                               y: CGFloat(bounds.min.y)-frame_height)
@@ -117,7 +120,7 @@ struct OutlierGroupView: View {
                     Rectangle()
                       .foregroundColor(.purple)
                       .blendMode(.difference)
-                      .frame(width: width_2,
+                      .frame(width: right_line_width,
                              height: line_width)
                       .opacity(groupViewModel.viewModel.outlierOpacitySliderValue/2)
                       .offset(x: CGFloat(bounds.max.x),
@@ -128,7 +131,7 @@ struct OutlierGroupView: View {
                       .foregroundColor(.purple)
                       .blendMode(.difference)
                       .frame(width: line_width,
-                             height: height_2)
+                             height: bottom_line_height)
                       .opacity(groupViewModel.viewModel.outlierOpacitySliderValue/2)
                       .offset(x: CGFloat(bounds.center.x), y: 0)
                 }
