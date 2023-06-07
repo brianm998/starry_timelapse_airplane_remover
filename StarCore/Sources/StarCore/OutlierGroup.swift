@@ -114,9 +114,15 @@ public class OutlierGroup: CustomStringConvertible,
         self.frame?.markAsChanged()
     }
 
+    private var cachedTestImage: CGImage? 
+    
     // outputs an image the same size as this outlier's bounding box,
     // coloring the outlier pixels red if will paint, green if not
     public func testImage() -> CGImage? {
+
+        // return cached version if present
+        if let ret = cachedTestImage { ret }
+        
         let bytesPerPixel = 64/8
         
         var image_data = Data(count: self.bounds.width*self.bounds.height*bytesPerPixel)
@@ -147,17 +153,19 @@ public class OutlierGroup: CustomStringConvertible,
         
         let colorSpace = CGColorSpaceCreateDeviceRGB()
         if let dataProvider = CGDataProvider(data: image_data as CFData) {
-            return CGImage(width: self.bounds.width,
-                           height: self.bounds.height,
-                           bitsPerComponent: 16,
-                           bitsPerPixel: bytesPerPixel*8,
-                           bytesPerRow: self.bounds.width*bytesPerPixel,
-                           space: colorSpace,
-                           bitmapInfo: bitmapInfo,
-                           provider: dataProvider,
-                           decode: nil,
-                           shouldInterpolate: false,
-                           intent: .defaultIntent)
+            let ret = CGImage(width: self.bounds.width,
+                              height: self.bounds.height,
+                              bitsPerComponent: 16,
+                              bitsPerPixel: bytesPerPixel*8,
+                              bytesPerRow: self.bounds.width*bytesPerPixel,
+                              space: colorSpace,
+                              bitmapInfo: bitmapInfo,
+                              provider: dataProvider,
+                              decode: nil,
+                              shouldInterpolate: false,
+                              intent: .defaultIntent)
+            cachedTestImage = ret
+            return ret
         } else {
             return nil
         }
