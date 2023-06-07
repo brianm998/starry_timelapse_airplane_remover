@@ -308,7 +308,7 @@ public final class ViewModel: ObservableObject {
         self.image_sequence_size = 0
     }
 
-    func showOutlierGroupTableWindow() {
+    func shouldShowOutlierGroupTableWindow() -> Bool {
         let windows = NSApp.windows
         var show = true
         for window in windows {
@@ -320,11 +320,7 @@ public final class ViewModel: ObservableObject {
                 show = false
             }
         }
-        if show {
-            openWindow(id: "foobar") // XXX /Users/brian/git/nighttime_timelapse_airplane_remover/gui/star/ViewModel.swift:319 Accessing Environment<OpenWindowAction>'s value outside of being installed on a View. This will always read the default value and will not update.
-            // /Users/brian/git/nighttime_timelapse_airplane_remover/gui/star/ViewModel.swift:319 Use of OpenWindowAction requires the SwiftUI App Lifecycle.
-
-        }
+        return show
     }
 
     func startup(withConfig json_config_filename: String) async {

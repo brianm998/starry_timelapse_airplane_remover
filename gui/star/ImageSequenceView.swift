@@ -429,31 +429,6 @@ struct ImageSequenceView: View {
           .help("apply the outlier group decision tree to all selected outlier groups in this frame")
     }
 
-    func outlierInfoButton() -> some View {
-        let action: () -> Void = {
-            Task {
-                var _outlierGroupTableRows: [OutlierGroupTableRow] = []
-                if let frame = viewModel.currentFrame {
-                    await frame.foreachOutlierGroup() { group in
-                        let new_row = await OutlierGroupTableRow(group)
-                        _outlierGroupTableRows.append(new_row)
-                        return .continue
-                    }
-                    await MainActor.run {
-                        self.viewModel.outlierGroupWindowFrame = frame
-                        self.viewModel.outlierGroupTableRows = _outlierGroupTableRows
-                        self.viewModel.showOutlierGroupTableWindow()
-                    }
-                }
-            }
-            return
-        }
-        return Button(action: action) {
-            Text("Outlier Info")
-        }
-          .help("Open the outlier info table window for all outlier groups in this frame")
-    }
-
     func applyAllDecisionTreeButton() -> some View {
         Log.d("applyAllDecisionTreeButton")
         let action: () -> Void = {

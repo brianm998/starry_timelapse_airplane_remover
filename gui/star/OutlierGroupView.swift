@@ -6,6 +6,8 @@ import StarCore
 // the view for a single outlier group on a frame
 
 struct OutlierGroupView: View {
+    @Environment(\.openWindow) private var openWindow
+
     @ObservedObject var groupViewModel: OutlierGroupViewModel
 
     var body: some View {
@@ -121,6 +123,7 @@ struct OutlierGroupView: View {
                       // set it to user selected opposite previous value
                       Task {
                           if self.groupViewModel.viewModel.selectionMode == .details {
+                              Log.w("DETAILS")
                               // here we want to select just this outlier
 
                               if self.groupViewModel.viewModel.outlierGroupTableRows.count == 1,
@@ -147,7 +150,11 @@ struct OutlierGroupView: View {
                                           self.groupViewModel.viewModel.outlierGroupWindowFrame = frame
                                           self.groupViewModel.viewModel.outlierGroupTableRows = [new_row]
                                           self.groupViewModel.viewModel.selectedOutliers = [new_row.id]
-                                          self.groupViewModel.viewModel.showOutlierGroupTableWindow()
+
+                                          if self.groupViewModel.viewModel.shouldShowOutlierGroupTableWindow() {
+                                              openWindow(id: "foobar") 
+                                          }
+
                                           self.groupViewModel.viewModel.update()
 
                                       }

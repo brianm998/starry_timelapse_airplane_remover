@@ -5,6 +5,8 @@ import StarCore
 
 struct FrameEditView: View {
     @ObservedObject var viewModel: ViewModel
+    @Environment(\.openWindow) private var openWindow
+
     let image: Image
     @Binding private var interactionMode: InteractionMode
 
@@ -157,7 +159,9 @@ struct FrameEditView: View {
                                   self.viewModel.outlierGroupWindowFrame = frame
                                   self.viewModel.outlierGroupTableRows = _outlierGroupTableRows
                                   Log.d("outlierGroupTableRows \(viewModel.outlierGroupTableRows.count)")
-                                  self.viewModel.showOutlierGroupTableWindow()
+                                  if self.viewModel.shouldShowOutlierGroupTableWindow() {
+                                      openWindow(id: "foobar") 
+                                  }
                               }
                           }
                       } 
