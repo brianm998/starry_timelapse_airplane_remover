@@ -2,9 +2,10 @@ import SwiftUI
 import StarCore
 
     
-// shows either a zoomable view of the current frame
+// shows either an editable view of the current frame or
 // just the frame itself for scrubbing and video playback
-// or a place holder when we have no image for it yet
+// falling back to a place holder when we have no image for
+// the current frame yet
 
 struct FrameView: View {
     @ObservedObject var viewModel: ViewModel
@@ -21,30 +22,45 @@ struct FrameView: View {
     }
     
     var body: some View {
-        HStack {
+        ZStack {
             if let frame_image = self.viewModel.current_frame_image {
                 switch self.interactionMode {
                 case .scrub:
+                    // the current frame by itself for fast video playback and scrubbing 
                     frame_image
                       .resizable()
                       .aspectRatio(contentMode: . fit)
 
                 case .edit: 
-                    // the currently visible frame
+                    // the currently visible frame with outliers made visible
                     FrameEditView(viewModel: viewModel,
                                   image: frame_image,
                                   interactionMode: self.$interactionMode,
                                   showFullResolution: self.$showFullResolution)
                 }
             } else {
-                ZStack {
-                    Rectangle()
-                      .foregroundColor(.yellow)
-                      .aspectRatio(CGSize(width: 4, height: 3), contentMode: .fit)
-                    Text(viewModel.no_image_explaination_text)
-                }
-                  .transition(.moveAndFade)
+                // no image, show loading view
+                self.loadingView
             }
+        }
+    }
+
+    // initial view for when we've not loaded images yet
+    var loadingView: some View {
+        GeometryReader { geometry in
+            ZStack {
+                Rectangle()
+                  .foregroundColor(.yellow)
+                  .aspectRatio(CGSize(width: 4, height: 3), contentMode: .fit)
+                Text(viewModel.no_image_explaination_text)
+                  .font(.system(size: min(geometry.size.width,
+                                          geometry.size.height) * 0.2))
+                  .frame(width: .infinity,
+                         height: geometry.size.height/3)
+                  .opacity(0.6)
+            }
+              .frame(maxWidth: .infinity, maxHeight: .infinity)
+              .transition(.moveAndFade)
         }
     }
 }
