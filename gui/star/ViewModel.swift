@@ -233,7 +233,6 @@ public final class ViewModel: ObservableObject {
     func setOutlierGroups(forFrame frame: FrameAirplaneRemover) async {
         Task.detached  {
             let outlierGroups = frame.outlierGroups()
-            let (frame_width, frame_height) = (frame.width, frame.height)
             if let outlierGroups = outlierGroups {
                 Log.d("got \(outlierGroups.count) groups for frame \(frame.frame_index)")
                 var new_outlier_groups: [OutlierGroupViewModel] = []
@@ -248,9 +247,7 @@ public final class ViewModel: ObservableObject {
                                                               group: group,
                                                               name: group.name,
                                                               bounds: group.bounds,
-                                                              image: outlierImage,
-                                                              frame_width: frame_width,
-                                                              frame_height: frame_height)
+                                                              image: outlierImage)
                         new_outlier_groups.append(groupView)
                     } else {
                         Log.e("frame \(frame.frame_index) outlier group no image")
@@ -487,10 +484,9 @@ public final class ViewModel: ObservableObject {
         if self.frame_width != CGFloat(new_frame.width) ||
            self.frame_height != CGFloat(new_frame.height)
         {
-            await MainActor.run {
-                self.frame_width = CGFloat(new_frame.width)
-                self.frame_height = CGFloat(new_frame.height)
-            }
+            // grab frame size from first frame
+            self.frame_width = CGFloat(new_frame.width)
+            self.frame_height = CGFloat(new_frame.height)
         }
         await self.append(frame: new_frame)
 
