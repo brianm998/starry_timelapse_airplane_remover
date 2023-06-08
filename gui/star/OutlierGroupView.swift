@@ -98,16 +98,19 @@ struct OutlierGroupView: View {
             ZStack(alignment: .bottomLeading) {
                 if self.groupViewModel.arrowSelected {
                     // underlay for when this outlier group is hovered over
-                    Rectangle()
-                      .foregroundColor(will_paint ? .purple : .yellow)
-                      .opacity(groupViewModel.viewModel.outlierOpacitySliderValue/4)
-                      .contentShape(Rectangle())
+                    Rectangle() // fill that is transparent
+                      .foregroundColor(paint_color)
+                      .opacity(groupViewModel.viewModel.outlierOpacitySliderValue/8)
+                    Rectangle() // a border that's not transparent
+                      .stroke(style: StrokeStyle(lineWidth: 4))
+                      .foregroundColor(paint_color)
+                      .opacity(groupViewModel.viewModel.outlierOpacitySliderValue/2)
                 }
                 // the actual outlier group image
                 Image(nsImage: self.groupViewModel.image)
                   .renderingMode(.template) // makes this VV color work
                   .foregroundColor(paint_color)
-                  .contentShape(Rectangle())
+//                  .contentShape(Rectangle())
                   .blendMode(.hardLight)
                   .opacity(groupViewModel.viewModel.outlierOpacitySliderValue)
             }
@@ -205,7 +208,7 @@ struct OutlierGroupView: View {
     private func arrowImage(named imageName: String) -> some View {
         Image(systemName: imageName)
           .resizable()
-          .foregroundColor(.white)
+          .foregroundColor(self.groupViewModel.arrowSelected ? .red : .white)
           .opacity(groupViewModel.viewModel.outlierOpacitySliderValue)
           .onHover { self.groupViewModel.arrowSelected = $0 }
           .onTapGesture {
@@ -217,7 +220,7 @@ struct OutlierGroupView: View {
 
     public func outlierFrameLine() -> some View {
         Rectangle()
-          .foregroundColor(.purple)
+          .foregroundColor(.red)
           .blendMode(.difference)
           .opacity(groupViewModel.viewModel.outlierOpacitySliderValue/2)
     }
@@ -234,6 +237,6 @@ struct OutlierGroupView: View {
         return frame_width/viewModel.outlier_arrow_height
     }
     
-    private var lineWidth: CGFloat { self.arrowHeight/4 }
+    private var lineWidth: CGFloat { self.arrowHeight/8 }
 }
 
