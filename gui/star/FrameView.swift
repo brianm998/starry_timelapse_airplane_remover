@@ -32,13 +32,15 @@ struct FrameView: View {
 
                 case .edit: 
                     GeometryReader { geometry in
-                        let extra_space_on_edges: CGFloat = CGFloat(self.viewModel.frame_width)/20
-                        let min = (geometry.size.height/(viewModel.frame_height+extra_space_on_edges/2))
+                        // this is to account for the outlier arrows on the sides of the frame
+                        let outlier_arrow_length = self.viewModel.frame_width/self.viewModel.outlier_arrow_length
+                        
+                        let min = (geometry.size.height/(viewModel.frame_height+outlier_arrow_length*2))
                         let full_max = self.showFullResolution ? 1 : 0.3
                         let max = min < full_max ? full_max : min
 
-                        ZoomableView(size: CGSize(width: viewModel.frame_width+extra_space_on_edges*2,
-                                                  height: viewModel.frame_height+extra_space_on_edges*2),
+                        ZoomableView(size: CGSize(width: viewModel.frame_width+outlier_arrow_length*2,
+                                                  height: viewModel.frame_height+outlier_arrow_length*2),
                                      min: min,
                                      max: max,
                                      showsIndicators: true)
@@ -47,13 +49,11 @@ struct FrameView: View {
                             FrameEditView(viewModel: viewModel,
                                           image: frame_image,
                                           interactionMode: self.$interactionMode)
-                            //self.frameView(frame_image)//.aspectRatio(contentMode: .fill)
                         }
                           .transition(.moveAndFade)
                     }
                 }
             } else {
-                // XXX pre-populate this crap as an image
                 ZStack {
                     Rectangle()
                       .foregroundColor(.yellow)

@@ -15,8 +15,8 @@ struct OutlierGroupView: View {
         // .bottomLeading alignment is used to avoid a bug in .onHover and onTap
         // which is described in more detail in FrameEditView
         ZStack(alignment: .bottomLeading) {
-            let frame_width = CGFloat(self.groupViewModel.viewModel.frame_width)
-            let frame_height = CGFloat(self.groupViewModel.viewModel.frame_height)
+            let frame_width = self.groupViewModel.viewModel.frame_width
+            let frame_height = self.groupViewModel.viewModel.frame_height
             let bounds = self.groupViewModel.bounds
             let will_paint = self.groupViewModel.willPaint ?? false
             let paint_color = self.groupViewModel.selectionColor
@@ -60,12 +60,12 @@ struct OutlierGroupView: View {
                 if self.groupViewModel.arrowSelected {
                     let left_line_width = CGFloat(bounds.center.x - bounds.width/2)
 
-                    let right_line_width = CGFloat(groupViewModel.viewModel.frame_width) -
+                    let right_line_width = groupViewModel.viewModel.frame_width -
                       left_line_width - CGFloat(bounds.width)
 
                     let top_line_height = CGFloat(bounds.center.y - bounds.height/2)
 
-                    let bottom_line_height = CGFloat(groupViewModel.viewModel.frame_height) -
+                    let bottom_line_height = groupViewModel.viewModel.frame_height -
                       top_line_height - CGFloat(bounds.height)
 
                     // left line
@@ -223,13 +223,15 @@ struct OutlierGroupView: View {
     }
     
     private var arrowLength: CGFloat {
-        let frame_width = CGFloat(self.groupViewModel.viewModel.frame_width)
-        return frame_width/40
+        let viewModel = self.groupViewModel.viewModel
+        let frame_width = viewModel.frame_width
+        return frame_width/viewModel.outlier_arrow_length
     }
 
     private var arrowHeight: CGFloat {
-        let frame_width = CGFloat(self.groupViewModel.viewModel.frame_width)
-        return frame_width/300
+        let viewModel = self.groupViewModel.viewModel
+        let frame_width = viewModel.frame_width
+        return frame_width/viewModel.outlier_arrow_height
     }
     
     private var lineWidth: CGFloat { self.arrowHeight/4 }

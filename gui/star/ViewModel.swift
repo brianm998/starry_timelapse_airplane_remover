@@ -27,9 +27,15 @@ public final class ViewModel: ObservableObject {
     
     @Published var sequenceLoaded = false
     
-    @Published var frame_width: CGFloat = 600
+    @Published var frame_width: CGFloat = 600 // placeholders until first frame is read
     @Published var frame_height: CGFloat = 450
 
+    // how long the arrows are
+    @Published var outlier_arrow_length: CGFloat = 70 // relative to the frame width above
+
+    // how high they are (if pointing sideways)
+    @Published var outlier_arrow_height: CGFloat = 180
+    
     @Published var showErrorAlert = false
     @Published var errorMessage: String = ""
     
