@@ -205,7 +205,7 @@ struct OutlierGroupView: View {
     private func arrowImage(named imageName: String) -> some View {
         Image(systemName: imageName)
           .resizable()
-          .foregroundColor(.purple)
+          .foregroundColor(.white)
           .opacity(groupViewModel.viewModel.outlierOpacitySliderValue)
           .onHover { self.groupViewModel.arrowSelected = $0 }
           .onTapGesture {
