@@ -1,6 +1,5 @@
 import SwiftUI
 import StarCore
-import Zoomable
 
     
 // shows either a zoomable view of the current frame
@@ -31,27 +30,11 @@ struct FrameView: View {
                       .aspectRatio(contentMode: . fit)
 
                 case .edit: 
-                    GeometryReader { geometry in
-                        // this is to account for the outlier arrows on the sides of the frame
-                        let outlier_arrow_length = self.viewModel.frame_width/self.viewModel.outlier_arrow_length
-                        
-                        let min = (geometry.size.height/(viewModel.frame_height+outlier_arrow_length*2))
-                        let full_max = self.showFullResolution ? 1 : 0.3
-                        let max = min < full_max ? full_max : min
-
-                        ZoomableView(size: CGSize(width: viewModel.frame_width+outlier_arrow_length*2,
-                                                  height: viewModel.frame_height+outlier_arrow_length*2),
-                                     min: min,
-                                     max: max,
-                                     showsIndicators: true)
-                        {
-                            // the currently visible frame
-                            FrameEditView(viewModel: viewModel,
-                                          image: frame_image,
-                                          interactionMode: self.$interactionMode)
-                        }
-                          .transition(.moveAndFade)
-                    }
+                    // the currently visible frame
+                    FrameEditView(viewModel: viewModel,
+                                  image: frame_image,
+                                  interactionMode: self.$interactionMode,
+                                  showFullResolution: self.$showFullResolution)
                 }
             } else {
                 ZStack {

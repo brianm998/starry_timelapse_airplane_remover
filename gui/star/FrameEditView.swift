@@ -1,5 +1,6 @@
 import SwiftUI
 import StarCore
+import Zoomable
 
 // the view for when the user wants to edit what outlier groups are painted and not
 
@@ -9,6 +10,7 @@ struct FrameEditView: View {
 
     let image: Image
     @Binding private var interactionMode: InteractionMode
+    @Binding private var showFullResolution: Bool
 
     @State private var isDragging = false
     @State private var drag_start: CGPoint?
@@ -16,14 +18,39 @@ struct FrameEditView: View {
 
     public init(viewModel: ViewModel,
                 image: Image,
-                interactionMode: Binding<InteractionMode>)
+                interactionMode: Binding<InteractionMode>,
+                showFullResolution: Binding<Bool>)
     {
         self.viewModel = viewModel
         self.image = image
         _interactionMode = interactionMode
+        _showFullResolution = showFullResolution
+    }
+
+    var body: some View {
+        // wrap the frame view with a zoomable view
+        GeometryReader { geometry in
+            // this is to account for the outlier arrows on the sides of the frame
+            let outlier_arrow_length = self.viewModel.frame_width/self.viewModel.outlier_arrow_length
+            
+            let min = (geometry.size.height/(viewModel.frame_height+outlier_arrow_length*2))
+            let full_max = self.showFullResolution ? 1 : 0.3
+            let max = min < full_max ? full_max : min
+
+            ZoomableView(size: CGSize(width: viewModel.frame_width+outlier_arrow_length*2,
+                                      height: viewModel.frame_height+outlier_arrow_length*2),
+                         min: min,
+                         max: max,
+                         showsIndicators: true)
+            {
+                // the currently visible frame
+                self.imageView
+            }
+              .transition(.moveAndFade)
+        }
     }
     
-    var body: some View {
+    var imageView: some View {
         // alignment is .bottomLeading because of the bug outlied below
         ZStack(alignment: .bottomLeading) {
             // the main image shown
