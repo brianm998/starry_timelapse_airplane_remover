@@ -104,6 +104,7 @@ struct OutlierGroupView: View {
                     Rectangle() // a border that's not transparent
                       .stroke(style: StrokeStyle(lineWidth: 4))
                       .foregroundColor(paint_color)
+                      .blendMode(.difference)
                       .opacity(groupViewModel.viewModel.outlierOpacitySliderValue/2)
                 }
                 // the actual outlier group image
@@ -172,7 +173,6 @@ struct OutlierGroupView: View {
                         }
 
                         self.groupViewModel.viewModel.update()
-
                     }
                 } else {
                     Log.w("couldn't find frame")
