@@ -29,6 +29,23 @@ class OutlierGroupViewModel: ObservableObject {
     let bounds: BoundingBox
     let image: NSImage
 
+    func selectArrow(_ selected: Bool) {
+        if selected,
+           let frame = group.frame,
+           let outlierViewModels = viewModel.frames[frame.frame_index].outlierViews
+        {
+            // deselect all others first
+            for outlierViewModel in outlierViewModels {
+                if outlierViewModel.name != name,
+                   outlierViewModel.arrowSelected
+                {
+                    outlierViewModel.arrowSelected = false
+                }
+            }
+        }
+        arrowSelected = selected
+    }
+    
     var selectionColor: Color {
         if isSelected { return .blue }
 

@@ -247,9 +247,9 @@ struct ImageSequenceView: View {
                     HStack {
                         let frameView = viewModel.currentFrameView
                         VStack {
-                            let num_purgatory = viewModel.frameSaveQueue?.purgatory.count ?? -1
-                            if num_purgatory > 0 {
-                                Text("\(num_purgatory) frames in purgatory")
+                            let num_changed = viewModel.numberOfFramesChanged
+                            if num_changed > 0 {
+                                Text("\(num_changed) frames changed")
                                   .foregroundColor(.yellow)
                             }
                             let num_saving = viewModel.frameSaveQueue?.saving.count ?? -1

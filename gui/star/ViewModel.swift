@@ -119,13 +119,23 @@ public final class ViewModel: ObservableObject {
         return nil
     }
 
+    var numberOfFramesChanged: Int {
+        var ret = frameSaveQueue?.purgatory.count ?? 0
+        if let current_frame = self.currentFrame,
+           current_frame.hasChanges(),
+           !(frameSaveQueue?.frameIsInPurgatory(current_frame.frame_index) ?? false)
+        {
+            ret += 1            // XXX make sure the current frame isn't in purgatory
+        }
+        return ret
+    }
+    
     var loadingOutlierGroups: Bool {
         for frame in frames { if frame.loadingOutlierViews { return true } }
         return false
     }
     
     /*
-    
     var currentThumbnailImage: Image? {
         return frames[current_index].thumbnail_image
     }
@@ -250,10 +260,10 @@ public final class ViewModel: ObservableObject {
                         let outlierImage = NSImage(cgImage: cgImage, size: size)
                         
                         let groupView = await OutlierGroupViewModel(viewModel: self,
-                                                              group: group,
-                                                              name: group.name,
-                                                              bounds: group.bounds,
-                                                              image: outlierImage)
+                                                                    group: group,
+                                                                    name: group.name,
+                                                                    bounds: group.bounds,
+                                                                    image: outlierImage)
                         new_outlier_groups.append(groupView)
                     } else {
                         Log.e("frame \(frame.frame_index) outlier group no image")

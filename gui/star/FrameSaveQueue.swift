@@ -4,7 +4,7 @@ import Cocoa
 import StarCore
 import Zoomable
 
-@MainActor class FrameSaveQueue: ObservableObject {
+class FrameSaveQueue: ObservableObject {
 
     class Purgatory {
         var timer: Timer
@@ -29,6 +29,10 @@ import Zoomable
 
     init() { }
 
+    func frameIsInPurgatory(_ frame_index: Int) -> Bool {
+        return purgatory.keys.contains(frame_index)
+    }
+    
     func doneSaving(frame frame_index: Int) {
         self.saving[frame_index] = nil
     }

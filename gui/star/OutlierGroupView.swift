@@ -110,7 +110,6 @@ struct OutlierGroupView: View {
                 Image(nsImage: self.groupViewModel.image)
                   .renderingMode(.template) // makes this VV color work
                   .foregroundColor(paint_color)
-//                  .contentShape(Rectangle())
                   .blendMode(.hardLight)
                   .opacity(groupViewModel.viewModel.outlierOpacitySliderValue)
             }
@@ -118,7 +117,7 @@ struct OutlierGroupView: View {
                       y: CGFloat(bounds.min.y) - frame_height + CGFloat(bounds.height))
               .frame(width: CGFloat(bounds.width),
                      height: CGFloat(bounds.height))
-              .onHover { self.groupViewModel.arrowSelected = $0 }
+              .onHover { self.groupViewModel.selectArrow($0) }
             
             // tap gesture toggles paintability of the tapped group
               .onTapGesture {
@@ -210,7 +209,7 @@ struct OutlierGroupView: View {
           .resizable()
           .foregroundColor(self.groupViewModel.arrowSelected ? .red : .white)
           .opacity(groupViewModel.viewModel.outlierOpacitySliderValue)
-          .onHover { self.groupViewModel.arrowSelected = $0 }
+          .onHover { self.groupViewModel.selectArrow($0) }
           .onTapGesture {
               if let shouldPaint = self.groupViewModel.group.shouldPaint {
                   togglePaintReason(shouldPaint)
