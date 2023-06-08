@@ -30,6 +30,7 @@ struct FrameView: View {
                     frame_image
                       .resizable()
                       .aspectRatio(contentMode: . fit)
+                      .padding([.top])
 
                 case .edit: 
                     // the currently visible frame with outliers made visible
@@ -53,12 +54,10 @@ struct FrameView: View {
                   .foregroundColor(.yellow)
                   .aspectRatio(CGSize(width: 4, height: 3), contentMode: .fit)
                 Text(viewModel.no_image_explaination_text)
-                  .font(.system(size: min(geometry.size.width,
-                                          geometry.size.height) * 0.2))
-                  .frame(width: .infinity,
-                         height: geometry.size.height/3)
+                  .font(.system(size: geometry.size.height/6))
                   .opacity(0.6)
             }
+              .padding([.top])
               .frame(maxWidth: .infinity, maxHeight: .infinity)
               .transition(.moveAndFade)
         }

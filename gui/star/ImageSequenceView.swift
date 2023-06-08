@@ -120,8 +120,8 @@ struct ImageSequenceView: View {
                     }
                 }
             }
-              .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-              .padding()
+              .frame(maxWidth: .infinity, maxHeight: .infinity)
+              .padding([.bottom, .leading, .trailing])
               .background(background_color)
         }
 
