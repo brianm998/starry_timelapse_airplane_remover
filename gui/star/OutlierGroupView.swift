@@ -29,7 +29,7 @@ struct OutlierGroupView: View {
             // this centers the arrows on the lines
             let fiddle = arrow_height/2 - line_width/2
             
-            if will_paint {
+            if self.groupViewModel.arrowSelected || will_paint {
                 // arrow indicators on the side of the image
 
                 // arrow on left side
@@ -54,47 +54,48 @@ struct OutlierGroupView: View {
                 arrowImage(named: "arrow.up")
                   .frame(width: arrow_height, height: arrow_length)
                   .offset(x: center_x - fiddle, y: arrow_length)
-
-
-                // lines across the frame between the arrows and outlier group bounds
-                if self.groupViewModel.arrowSelected {
-                    let left_line_width = CGFloat(bounds.center.x - bounds.width/2)
-
-                    let right_line_width = groupViewModel.viewModel.frame_width -
-                      left_line_width - CGFloat(bounds.width)
-
-                    let top_line_height = CGFloat(bounds.center.y - bounds.height/2)
-
-                    let bottom_line_height = groupViewModel.viewModel.frame_height -
-                      top_line_height - CGFloat(bounds.height)
-
-                    // left line
-                    outlierFrameLine()
-                      .frame(width: left_line_width,
-                             height: line_width)
-                      .offset(x: 0, y: CGFloat(bounds.center.y) - frame_height)
-
-                    // top line 
-                    outlierFrameLine()
-                      .frame(width: line_width,
-                             height: top_line_height)
-                      .offset(x: CGFloat(bounds.center.x),
-                              y: CGFloat(bounds.min.y)-frame_height)
-
-                    // right line
-                    outlierFrameLine()
-                      .frame(width: right_line_width,
-                             height: line_width)
-                      .offset(x: CGFloat(bounds.max.x),
-                              y: CGFloat(bounds.center.y) - frame_height)
-
-                    // bottom line
-                    outlierFrameLine()
-                      .frame(width: line_width,
-                             height: bottom_line_height)
-                      .offset(x: CGFloat(bounds.center.x), y: 0)
-                }
             }
+            
+            if self.groupViewModel.arrowSelected {
+                
+                // lines across the frame between the arrows and outlier group bounds
+                let left_line_width = CGFloat(bounds.center.x - bounds.width/2)
+
+                let right_line_width = groupViewModel.viewModel.frame_width -
+                  left_line_width - CGFloat(bounds.width)
+
+                let top_line_height = CGFloat(bounds.center.y - bounds.height/2)
+
+                let bottom_line_height = groupViewModel.viewModel.frame_height -
+                  top_line_height - CGFloat(bounds.height)
+
+                // left line
+                outlierFrameLine()
+                  .frame(width: left_line_width,
+                         height: line_width)
+                  .offset(x: 0, y: CGFloat(bounds.center.y) - frame_height)
+
+                // top line 
+                outlierFrameLine()
+                  .frame(width: line_width,
+                         height: top_line_height)
+                  .offset(x: CGFloat(bounds.center.x),
+                          y: CGFloat(bounds.min.y)-frame_height)
+
+                // right line
+                outlierFrameLine()
+                  .frame(width: right_line_width,
+                         height: line_width)
+                  .offset(x: CGFloat(bounds.max.x),
+                          y: CGFloat(bounds.center.y) - frame_height)
+
+                // bottom line
+                outlierFrameLine()
+                  .frame(width: line_width,
+                         height: bottom_line_height)
+                  .offset(x: CGFloat(bounds.center.x), y: 0)
+            }
+            
             ZStack(alignment: .bottomLeading) {
                 if self.groupViewModel.arrowSelected {
                     // underlay for when this outlier group is hovered over
@@ -207,7 +208,7 @@ struct OutlierGroupView: View {
     private func arrowImage(named imageName: String) -> some View {
         Image(systemName: imageName)
           .resizable()
-          .foregroundColor(self.groupViewModel.arrowSelected ? .red : .white)
+          .foregroundColor(self.selectionColor)
           .opacity(groupViewModel.viewModel.outlierOpacitySliderValue)
           .onHover { self.groupViewModel.selectArrow($0) }
           .onTapGesture {
@@ -217,9 +218,25 @@ struct OutlierGroupView: View {
           }
     }
 
+    private var selectionColor: Color {
+        if self.groupViewModel.arrowSelected {
+            if let shouldPaint = self.groupViewModel.group.shouldPaint {
+                if shouldPaint.willPaint {
+                    return .red
+                } else {
+                    return .green
+                }
+            } else {
+                return .orange
+            }
+        } else {
+            return .white
+        }
+    }
+    
     public func outlierFrameLine() -> some View {
         Rectangle()
-          .foregroundColor(.red)
+          .foregroundColor(self.selectionColor)
           .blendMode(.difference)
           .opacity(groupViewModel.viewModel.outlierOpacitySliderValue/2)
     }
