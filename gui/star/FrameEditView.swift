@@ -160,7 +160,7 @@ struct FrameEditView: View {
                       frameView.update()
                       if let frame = frameView.frame {
                           let new_value = should_paint
-                          Task.detached {
+                          Task.detached(priority: .userInitiated) {
                               await frame.userSelectAllOutliers(toShouldPaint: new_value,
                                                                 between: drag_start,
                                                                 and: end_location)

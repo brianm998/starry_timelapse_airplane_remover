@@ -860,7 +860,7 @@ struct ImageSequenceView: View {
                 {
                     frameView.loadingOutlierViews = true
                     viewModel.loading_outliers = true
-                    Task.detached  {
+                    Task.detached(priority: .userInitiated) {
                         let _ = try await next_frame.loadOutliers()
                         await MainActor.run {
                             Task {
