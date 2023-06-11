@@ -46,14 +46,35 @@ class OutlierGroupViewModel: ObservableObject {
         arrowSelected = selected
     }
     
-    var selectionColor: Color {
+    var groupColor: Color {
         if isSelected { return .blue }
 
-        let will_paint = self.willPaint
-        
-        if will_paint == nil { return .orange }
-        if will_paint! { return .red }
-        return .green
+        if let will_paint = self.willPaint {
+            if will_paint {
+                return .red
+            } else {
+                return .green
+            }
+        } else {
+            return .orange
+        }
+    }
+    
+    var arrowColor: Color {
+
+        if let will_paint = self.willPaint {
+            if self.arrowSelected {            
+                if will_paint {
+                    return .red
+                } else {
+                    return .green
+                }
+            } else {
+                return .white
+            }
+        } else {
+            return .orange
+        }
     }
 
     var willPaint: Bool? { group.shouldPaint?.willPaint }

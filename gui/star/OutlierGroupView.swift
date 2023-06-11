@@ -18,8 +18,9 @@ struct OutlierGroupView: View {
             let frame_width = self.groupViewModel.viewModel.frame_width
             let frame_height = self.groupViewModel.viewModel.frame_height
             let bounds = self.groupViewModel.bounds
+            let unknown_paint = self.groupViewModel.willPaint == nil
             let will_paint = self.groupViewModel.willPaint ?? false
-            let paint_color = self.groupViewModel.selectionColor
+            let paint_color = self.groupViewModel.groupColor
             let arrow_length = self.arrowLength
             let arrow_height = self.arrowHeight
             let line_width = self.lineWidth
@@ -29,7 +30,7 @@ struct OutlierGroupView: View {
             // this centers the arrows on the lines
             let fiddle = arrow_height/2 - line_width/2
             
-            if self.groupViewModel.arrowSelected || will_paint {
+            if self.groupViewModel.arrowSelected || will_paint || unknown_paint {
                 // arrow indicators on the side of the image
 
                 // arrow on left side
@@ -183,11 +184,15 @@ struct OutlierGroupView: View {
     }
 
     // used when user selects an outlier group outisde of details selection mode 
-    func togglePaintReason(_ origShouldPaint: PaintReason) {
-        let reason = PaintReason.userSelected(!origShouldPaint.willPaint)
+    func togglePaintReason(_ origShouldPaint: PaintReason?) {
+        var will_paint = true
+        if let origShouldPaint = origShouldPaint {
+            will_paint = origShouldPaint.willPaint
+        }
+        let should_paint = PaintReason.userSelected(!will_paint)
         
         // update the view model to show the change quickly
-        self.groupViewModel.group.shouldPaint = reason
+        self.groupViewModel.group.shouldPaint = should_paint
         self.groupViewModel.objectWillChange.send() 
 
         Task {
@@ -196,7 +201,7 @@ struct OutlierGroupView: View {
                let outlier_group = outlier_groups.members[self.groupViewModel.group.name]
             {
                 // update the actor in the background
-                await outlier_group.shouldPaint(reason)
+                await outlier_group.shouldPaint(should_paint)
                 self.groupViewModel.viewModel.update()
             } else {
                 Log.e("HOLY FUCK")
@@ -208,35 +213,17 @@ struct OutlierGroupView: View {
     private func arrowImage(named imageName: String) -> some View {
         Image(systemName: imageName)
           .resizable()
-          .foregroundColor(self.selectionColor)
+          .foregroundColor(self.groupViewModel.arrowColor)
           .opacity(groupViewModel.viewModel.outlierOpacitySliderValue)
           .onHover { self.groupViewModel.selectArrow($0) }
           .onTapGesture {
-              if let shouldPaint = self.groupViewModel.group.shouldPaint {
-                  togglePaintReason(shouldPaint)
-              }
+              togglePaintReason(self.groupViewModel.group.shouldPaint)
           }
     }
 
-    private var selectionColor: Color {
-        if self.groupViewModel.arrowSelected {
-            if let shouldPaint = self.groupViewModel.group.shouldPaint {
-                if shouldPaint.willPaint {
-                    return .red
-                } else {
-                    return .green
-                }
-            } else {
-                return .orange
-            }
-        } else {
-            return .white
-        }
-    }
-    
     public func outlierFrameLine() -> some View {
         Rectangle()
-          .foregroundColor(self.selectionColor)
+          .foregroundColor(self.groupViewModel.arrowColor)
           .blendMode(.difference)
           .opacity(groupViewModel.viewModel.outlierOpacitySliderValue/2)
     }
