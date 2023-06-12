@@ -223,6 +223,14 @@ public final class ViewModel: ObservableObject {
 
     func append(frame: FrameAirplaneRemover) async {
         Log.d("appending frame \(frame.frame_index)")
+
+        guard frame.frame_index >= 0,
+              frame.frame_index < self.frames.count
+        else {
+            Log.w("cannot add frame with index \(frame.frame_index) to array with \(self.frames.count) elements")
+            return 
+        }
+        
         self.frames[frame.frame_index].frame = frame
 
         number_of_frames_loaded += 1
@@ -247,7 +255,7 @@ public final class ViewModel: ObservableObject {
     }
 
     func setOutlierGroups(forFrame frame: FrameAirplaneRemover) async {
-        Task.detached  {
+        Task.detached(priority: .userInitiated) {
             let outlierGroups = frame.outlierGroups()
             if let outlierGroups = outlierGroups {
                 Log.d("got \(outlierGroups.count) groups for frame \(frame.frame_index)")
