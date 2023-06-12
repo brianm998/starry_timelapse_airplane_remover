@@ -133,7 +133,8 @@ struct OutlierGroupView: View {
                           togglePaintReason(origShouldPaint)
                       }
                   } else {
-                      Log.e("WTF, not already set to paint??")
+                      // handle outliers without a paint decision 
+                      togglePaintReason()
                   }
               }
         }
@@ -184,7 +185,7 @@ struct OutlierGroupView: View {
     }
 
     // used when user selects an outlier group outisde of details selection mode 
-    func togglePaintReason(_ origShouldPaint: PaintReason?) {
+    func togglePaintReason(_ origShouldPaint: PaintReason? = nil) {
         var will_paint = true
         if let origShouldPaint = origShouldPaint {
             will_paint = origShouldPaint.willPaint
