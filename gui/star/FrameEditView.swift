@@ -164,6 +164,9 @@ struct FrameEditView: View {
                               await frame.userSelectAllOutliers(toShouldPaint: new_value,
                                                                 between: drag_start,
                                                                 and: end_location)
+                              await MainActor.run {
+                                  viewModel.update()
+                              }
                           }
                       }
                   } else {
