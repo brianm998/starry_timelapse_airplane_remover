@@ -140,6 +140,10 @@ public final class ViewModel: ObservableObject {
         return frames[current_index].thumbnail_image
     }
 */
+
+    var eraserTask: Task<(),Never>?
+
+    
     func set(numberOfFrames: Int) {
         Task {
             await MainActor.run {
@@ -314,6 +318,10 @@ public final class ViewModel: ObservableObject {
 
     // prepare for another sequence
     func unloadSequence() {
+        if let eraserTask = eraserTask {
+            eraserTask.cancel()
+            self.eraserTask = nil
+        }
         self.sequenceLoaded = false
         self.frames = [FrameViewModel(0)]
         self.current_frame_image = nil

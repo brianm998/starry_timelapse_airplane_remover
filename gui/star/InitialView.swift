@@ -8,6 +8,38 @@ struct InitialView: View {
       UserPreferences.shared.sortedSequenceList.count > 0 ?
       UserPreferences.shared.sortedSequenceList[0] : ""      
 
+    func loadConfig()  {
+        Log.d("load config")
+
+        let openPanel = NSOpenPanel()
+        openPanel.allowedFileTypes = ["json"]
+        openPanel.allowsMultipleSelection = false
+        openPanel.canChooseDirectories = false
+        openPanel.canChooseFiles = true
+        let response = openPanel.runModal()
+        if response == .OK {
+            if let returnedUrl = openPanel.url
+            {
+                let path = returnedUrl.path
+                Log.d("url path \(path)")
+                viewModel.sequenceLoaded = true
+                viewModel.initial_load_in_progress = true
+
+                viewModel.eraserTask = Task.detached(priority: .userInitiated) {
+                    do {
+                        await viewModel.startup(withConfig: path)
+                        
+                        Log.d("viewModel.eraser \(await viewModel.eraser)")
+                        try await viewModel.eraser?.run()
+                    } catch {
+                        Log.e("\(error)")
+                    }
+                }
+            }
+        }
+    }
+
+    
     var body: some View {
         VStack {
             Spacer()
@@ -23,40 +55,9 @@ struct InitialView: View {
             Text("Choose an option to get started")
             
             HStack {
-                let loadConfig = {
-                    Log.d("load config")
-
-                    let openPanel = NSOpenPanel()
-                    openPanel.allowedFileTypes = ["json"]
-                    openPanel.allowsMultipleSelection = false
-                    openPanel.canChooseDirectories = false
-                    openPanel.canChooseFiles = true
-                    let response = openPanel.runModal()
-                    if response == .OK {
-                        if let returnedUrl = openPanel.url
-                        {
-                            let path = returnedUrl.path
-                            Log.d("url path \(path)")
-                            viewModel.sequenceLoaded = true
-                            viewModel.initial_load_in_progress = true
-                            
-                            Task.detached(priority: .userInitiated) {
-                                do {
-                                    await viewModel.startup(withConfig: path)
-                            
-                                    Log.d("viewModel.eraser \(await viewModel.eraser)")
-                                    try await viewModel.eraser?.run()
-                                } catch {
-                                    Log.e("\(error)")
-                                }
-                            }
-                        }
-                    }
-                }
-
                 VStack {
                     HStack {
-                        Button(action: loadConfig) {
+                        Button(action: self.loadConfig) {
                             Text("Load Config").font(.largeTitle)
                         }.buttonStyle(ShrinkingButton())
                           .help("Load a json config file from a previous run of star")
@@ -77,7 +78,7 @@ struct InitialView: View {
                                     
                                     viewModel.sequenceLoaded = true
                                     viewModel.initial_load_in_progress = true
-                                    Task.detached(priority: .userInitiated) {
+                                    viewModel.eraserTask = Task.detached(priority: .userInitiated) {
                                         do {
                                             await viewModel.startup(withNewImageSequence: path)
                                             try await viewModel.eraser?.run()
@@ -102,7 +103,7 @@ struct InitialView: View {
                                 viewModel.sequenceLoaded = true
                                 viewModel.initial_load_in_progress = true
                                 
-                                Task.detached(priority: .userInitiated) {
+                                viewModel.eraserTask = Task.detached(priority: .userInitiated) {
                                     do {
                                         await viewModel.startup(withConfig: previously_opened_sheet_showing_item)
                                         try await viewModel.eraser?.run()

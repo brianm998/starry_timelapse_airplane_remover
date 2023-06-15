@@ -84,16 +84,17 @@ import StarCore
 
   - refactor the view model class so that it doesn't crash when closed when processing 
     problem now is that we re-use the same view model class, need to create another properly
+
+  - orange unknown outlier groups not clickable directly (but are clickable on arrows)
+    check to see if selection works or not
+
  */
 
 
 @main
 class star_app: App {
     
-    private var viewModel: ViewModel
-    
     required init() {
-        self.viewModel = ViewModel()
         Task {
             for window in NSApp.windows {
                 if window.title.hasPrefix("Outlier") {
@@ -107,9 +108,8 @@ class star_app: App {
     }
     
     var body: some Scene {
-        
-      
-        
+        let viewModel = ViewModel()
+
         let contentView = ContentView(viewModel: viewModel)
         
         WindowGroup {
@@ -119,7 +119,7 @@ class star_app: App {
               StarCommands(contentView: contentView)
           }
         
-        WindowGroup(id: "foobar") {
+        WindowGroup(id: "foobar") { // XXX hardcoded constant should be centralized
             OutlierGroupTable(viewModel: viewModel)
               { 
                   // XXX don't really care it's dismissed
