@@ -13,7 +13,7 @@ You should have received a copy of the GNU General Public License along with sta
 import Foundation
 import CoreGraphics
 import Cocoa
-
+import Combine
 
 // this class handles the final processing of every frame
 // it observes its frames array, and is tasked with finishing each frame.   
@@ -34,15 +34,18 @@ public actor FinalProcessor {
     
     var is_asleep = false
 
+    var publishCancellable: AnyCancellable?
+    
     // are we running on the gui?
     public let is_gui: Bool
 
     init(with config: Config,
          callbacks: Callbacks,
+         publisher: PassthroughSubject<FrameAirplaneRemover, Never>,
          numberOfFrames frame_count: Int,
          dispatchGroup dispatch_group: DispatchHandler,
          imageSequence: ImageSequence,
-         isGUI: Bool)
+         isGUI: Bool) async
     {
         self.is_gui = isGUI
         self.config = config
@@ -51,8 +54,13 @@ public actor FinalProcessor {
         self.frame_count = frame_count
         self.dispatch_group = dispatch_group
         self.image_sequence = imageSequence
+        publishCancellable = publisher.sink { frame in
+            Task {
+                await self.add(frame: frame)
+            }
+        }
     }
-
+    
     func add(frame: FrameAirplaneRemover) async {
         Log.d("add frame \(frame.frame_index)")
 

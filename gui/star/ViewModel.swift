@@ -352,42 +352,31 @@ public final class ViewModel: ObservableObject {
         return show
     }
 
-    func startup(withConfig json_config_filename: String) async {
+    func startup(withConfig json_config_filename: String) async throws {
         Log.d("outlier_json_startup with \(json_config_filename)")
         // first read config from json
 
         UserPreferences.shared.justOpened(filename: json_config_filename)
         
+        let config = try await Config.read(fromJsonFilename: json_config_filename)
         
-        do {
-            let config = try await Config.read(fromJsonFilename: json_config_filename)
-            
-            let callbacks = make_callbacks()
-            
-            let eraser = try NighttimeAirplaneRemover(with: config,
-                                                      callbacks: callbacks,
-                                                      processExistingFiles: true,/*,
-                                                                                   maxResidentImages: 32*/
-                                                      fullyProcess: false,
-                                                      isGUI: true)
-            
-            await MainActor.run {
-                self.eraser = eraser // XXX rename this crap
-                self.config = config
-                self.frameSaveQueue = FrameSaveQueue()
-            }
-            
-            Log.d("outlier json startup done")
-        } catch {
-            Log.e("\(error)")
-            await MainActor.run {
-                self.showErrorAlert = true
-                self.errorMessage = "\(error)"
-            }
+        let callbacks = make_callbacks()
+        
+        let eraser = try await NighttimeAirplaneRemover(with: config,
+                                                        callbacks: callbacks,
+                                                        processExistingFiles: true,/*,
+                                                                                     maxResidentImages: 32*/
+                                                        fullyProcess: false,
+                                                        isGUI: true)
+        
+        await MainActor.run {
+            self.eraser = eraser // XXX rename this crap
+            self.config = config
+            self.frameSaveQueue = FrameSaveQueue()
         }
     }
     
-    @MainActor func startup(withNewImageSequence image_sequence_dirname: String) {
+    @MainActor func startup(withNewImageSequence image_sequence_dirname: String) async throws {
 
         let outlierMaxThreshold: Double = 13
         let outlierMinThreshold: Double = 9
@@ -444,19 +433,14 @@ public final class ViewModel: ObservableObject {
         let callbacks = self.make_callbacks()
         Log.i("have config")
 
-        do {
-            let eraser = try NighttimeAirplaneRemover(with: config,
-                                                      callbacks: callbacks,
-                                                      processExistingFiles: true,
-                                                      isGUI: true)
+        let eraser = try await NighttimeAirplaneRemover(with: config,
+                                                        callbacks: callbacks,
+                                                        processExistingFiles: true,
+                                                        isGUI: true)
 
-            self.eraser = eraser // XXX rename this crap
-            self.config = config
-            self.frameSaveQueue = FrameSaveQueue()
-        } catch {
-            Log.e("\(error)")
-        }
-
+        self.eraser = eraser // XXX rename this crap
+        self.config = config
+        self.frameSaveQueue = FrameSaveQueue()
     }
     
     @MainActor func make_callbacks() -> Callbacks {

@@ -325,11 +325,11 @@ struct Star: ParsableCommand {
             let writeOutputFiles = !skipOutputFiles
             Task {
                 do {
-                    let eraser = try NighttimeAirplaneRemover(with: config,
-                                                              callbacks: callbacks,
-                                                              processExistingFiles: false,
-                                                              maxResidentImages: 40, // XXX
-                                                              writeOutputFiles: writeOutputFiles)
+                    let eraser = try await NighttimeAirplaneRemover(with: config,
+                                                                    callbacks: callbacks,
+                                                                    processExistingFiles: false,
+                                                                    maxResidentImages: 40, // XXX
+                                                                    writeOutputFiles: writeOutputFiles)
                     
                     var upm: UpdatableProgressMonitor?
                     

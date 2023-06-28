@@ -78,12 +78,16 @@ struct InitialView: View {
 
                 viewModel.eraserTask = Task.detached(priority: .userInitiated) {
                     do {
-                        await viewModel.startup(withConfig: path)
+                        try await viewModel.startup(withConfig: path)
                         
                         Log.d("viewModel.eraser \(await viewModel.eraser)")
                         try await viewModel.eraser?.run()
                     } catch {
                         Log.e("\(error)")
+                        await MainActor.run {
+                            self.viewModel.showErrorAlert = true
+                            self.viewModel.errorMessage = "\(error)"
+                        }
                     }
                 }
             }
@@ -108,10 +112,14 @@ struct InitialView: View {
                 viewModel.initial_load_in_progress = true
                 viewModel.eraserTask = Task.detached(priority: .userInitiated) {
                     do {
-                        await viewModel.startup(withNewImageSequence: path)
+                        try await viewModel.startup(withNewImageSequence: path)
                         try await viewModel.eraser?.run()
                     } catch {
                         Log.e("\(error)")
+                        await MainActor.run {
+                            self.viewModel.showErrorAlert = true
+                            self.viewModel.errorMessage = "\(error)"
+                        }
                     }
                 }
             }
@@ -126,10 +134,14 @@ struct InitialView: View {
         
         viewModel.eraserTask = Task.detached(priority: .userInitiated) {
             do {
-                await viewModel.startup(withConfig: previously_opened_sheet_showing_item)
+                try await viewModel.startup(withConfig: previously_opened_sheet_showing_item)
                 try await viewModel.eraser?.run()
             } catch {
                 Log.e("\(error)")
+                await MainActor.run {
+                    self.viewModel.showErrorAlert = true
+                    self.viewModel.errorMessage = "\(error)"
+                }
             }
         }
     }

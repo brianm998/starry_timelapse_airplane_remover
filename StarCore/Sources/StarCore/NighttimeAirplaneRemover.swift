@@ -49,15 +49,13 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
     
     let publisher = PassthroughSubject<FrameAirplaneRemover, Never>()
 
-    var publishCancellable: AnyCancellable?
-    
     public init(with config: Config,
                 callbacks: Callbacks,
                 processExistingFiles: Bool,
                 maxResidentImages: Int? = nil,
                 fullyProcess: Bool = true,
                 isGUI: Bool = false,
-                writeOutputFiles: Bool = true) throws
+                writeOutputFiles: Bool = true) async throws
     {
         self.config = config
         self.callbacks = callbacks
@@ -104,20 +102,13 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
             }
         }
 
-        let processor = FinalProcessor(with: config,
-                                       callbacks: callbacks,
-                                       numberOfFrames: image_sequence_size,
-                                       dispatchGroup: dispatchGroup,
-                                       imageSequence: image_sequence,
-                                       isGUI: is_gui || processExistingFiles)
-
-        publishCancellable = publisher.sink { frame in
-            Task {
-                await processor.add(frame: frame)
-            }
-        }
-
-        final_processor = processor
+        final_processor = await FinalProcessor(with: config,
+                                               callbacks: callbacks,
+                                               publisher: publisher,
+                                               numberOfFrames: image_sequence_size,
+                                               dispatchGroup: dispatchGroup,
+                                               imageSequence: image_sequence,
+                                               isGUI: is_gui || processExistingFiles)
     }
 
     public override func run() async throws {
