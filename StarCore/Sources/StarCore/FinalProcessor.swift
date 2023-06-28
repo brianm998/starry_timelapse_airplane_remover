@@ -34,6 +34,8 @@ public actor FinalProcessor {
     
     var is_asleep = false
 
+    // this is kept around to keep the subscription active
+    // will be canceled upon de-init
     var publishCancellable: AnyCancellable?
     
     // are we running on the gui?
@@ -54,27 +56,19 @@ public actor FinalProcessor {
         self.frame_count = frame_count
         self.dispatch_group = dispatch_group
         self.image_sequence = imageSequence
+
+        // this is called when frames are published for us
         publishCancellable = publisher.sink { frame in
-            Task {
-                await self.add(frame: frame)
+
+            let index = frame.frame_index
+            if index > self.max_added_index {
+                self.max_added_index = index
             }
-        }
-    }
-    
-    func add(frame: FrameAirplaneRemover) async {
-        Log.d("add frame \(frame.frame_index)")
 
-        let frame_state = frame.processingState()
-        Log.d("add frame \(frame.frame_index) with state \(frame_state)")
-        
-        let index = frame.frame_index
-        if index > max_added_index {
-            max_added_index = index
+            Log.d("frame \(index) added for final inter-frame analysis \(self.max_added_index)")
+            self.frames[index] = frame
+            self.log()
         }
-
-        Log.d("frame \(index) added for final inter-frame analysis \(max_added_index)")
-        frames[index] = frame
-        log()
     }
 
     func clearFrame(at index: Int) {

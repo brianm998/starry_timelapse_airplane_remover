@@ -883,7 +883,7 @@ struct ImageSequenceView: View {
         if let frameSaveQueue = viewModel.frameSaveQueue
         {
             self.rendering_current_frame = true // XXX might not be right anymore
-            await frameSaveQueue.saveNow(frame: frame) {
+            frameSaveQueue.saveNow(frame: frame) {
                 await viewModel.refresh(frame: frame)
                 refreshCurrentFrame()
                 self.rendering_current_frame = false
