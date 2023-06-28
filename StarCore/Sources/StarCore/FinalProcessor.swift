@@ -31,6 +31,7 @@ public actor FinalProcessor {
 
     let config: Config
     let callbacks: Callbacks
+    let shouldProcess: [Bool]
     
     var is_asleep = false
 
@@ -42,12 +43,13 @@ public actor FinalProcessor {
     public let is_gui: Bool
 
     init(with config: Config,
-         callbacks: Callbacks,
-         publisher: PassthroughSubject<FrameAirplaneRemover, Never>,
-         numberOfFrames frame_count: Int,
-         dispatchGroup dispatch_group: DispatchHandler,
-         imageSequence: ImageSequence,
-         isGUI: Bool) async
+        callbacks: Callbacks,
+        publisher: PassthroughSubject<FrameAirplaneRemover, Never>,
+        numberOfFrames frame_count: Int,
+        shouldProcess: [Bool],
+        dispatchGroup dispatch_group: DispatchHandler,
+        imageSequence: ImageSequence,
+        isGUI: Bool) async
     {
         self.is_gui = isGUI
         self.config = config
@@ -56,6 +58,7 @@ public actor FinalProcessor {
         self.frame_count = frame_count
         self.dispatch_group = dispatch_group
         self.image_sequence = imageSequence
+        self.shouldProcess = shouldProcess
 
         // this is called when frames are published for us
         publishCancellable = publisher.sink { frame in
@@ -174,7 +177,7 @@ public actor FinalProcessor {
         Log.d("frame \(frame.frame_index) finished")
     }
 
-    nonisolated func run(shouldProcess: [Bool]) async throws {
+    nonisolated func run() async throws {
 
         let frame_count = await frames.count
         

@@ -102,13 +102,19 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
             }
         }
 
+        var should_process = [Bool](repeating: false, count: self.existing_output_files.count)
+        for (index, output_file_exists) in self.existing_output_files.enumerated() {
+            should_process[index] = !output_file_exists
+        }
+        
         final_processor = await FinalProcessor(with: config,
-                                               callbacks: callbacks,
-                                               publisher: publisher,
-                                               numberOfFrames: image_sequence_size,
-                                               dispatchGroup: dispatchGroup,
-                                               imageSequence: image_sequence,
-                                               isGUI: is_gui || processExistingFiles)
+                                           callbacks: callbacks,
+                                           publisher: publisher,
+                                           numberOfFrames: image_sequence_size,
+                                           shouldProcess: should_process,
+                                           dispatchGroup: dispatchGroup,
+                                           imageSequence: image_sequence,
+                                           isGUI: is_gui || processExistingFiles)
     }
 
     public override func run() async throws {
@@ -122,11 +128,7 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
         let finalProcessorTask = Task(priority: .high) {
             // XXX really should have the enter before the task
             // run the final processor as a single separate thread
-            var should_process = [Bool](repeating: false, count: self.existing_output_files.count)
-            for (index, output_file_exists) in self.existing_output_files.enumerated() {
-                should_process[index] = !output_file_exists
-            }
-            try await final_processor.run(shouldProcess: should_process)
+            try await final_processor.run()
         }
 
         try await super.run()
