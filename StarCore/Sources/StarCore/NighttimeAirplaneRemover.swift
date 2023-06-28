@@ -1,6 +1,7 @@
 import Foundation
 import CoreGraphics
 import Cocoa
+import Combine
 
 /*
 
@@ -45,6 +46,10 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
     public let writeOutputFiles: Bool
     
     public let basename: String
+    
+    let publisher = PassthroughSubject<FrameAirplaneRemover, Never>()
+
+    var publishCancellable: AnyCancellable?
     
     public init(with config: Config,
                 callbacks: Callbacks,
@@ -98,13 +103,19 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
                 remaining_images_closure(await self.method_list.count)
             }
         }
-        
+
         let processor = FinalProcessor(with: config,
                                        callbacks: callbacks,
                                        numberOfFrames: image_sequence_size,
                                        dispatchGroup: dispatchGroup,
                                        imageSequence: image_sequence,
                                        isGUI: is_gui || processExistingFiles)
+
+        publishCancellable = publisher.sink { frame in
+            Task {
+                await processor.add(frame: frame)
+            }
+        }
 
         final_processor = processor
     }
@@ -216,20 +227,9 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
 
     override func result_hook(with result: FrameAirplaneRemover) async {
 
-        Log.d("result hook for frame \(result.frame_index)")
+        // send this frame to the final processor
         
-        // next step is to add this frame_plane_remover to an array of optionals
-        // indexed by frame number
-        // then create a new class that uses the diapatchGroup to keep the process alive
-        // and processes sequentially through them as they are available, doing
-        // analysis of the outlier groups between frames and making them look better
-        // by doing further analysis and cleanup
-
-        if let final_processor = final_processor {
-            await final_processor.add(frame: result)
-        } else {
-            fatalError("should not happen")
-        }
+        publisher.send(result)
     }
 
     // called async, check for access to shared data

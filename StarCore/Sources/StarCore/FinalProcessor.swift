@@ -33,10 +33,10 @@ public actor FinalProcessor {
     let callbacks: Callbacks
     
     var is_asleep = false
-    
+
     // are we running on the gui?
     public let is_gui: Bool
-    
+
     init(with config: Config,
          callbacks: Callbacks,
          numberOfFrames frame_count: Int,
@@ -53,21 +53,20 @@ public actor FinalProcessor {
         self.image_sequence = imageSequence
     }
 
-    func add(frame: FrameAirplaneRemover) {
+    func add(frame: FrameAirplaneRemover) async {
         Log.d("add frame \(frame.frame_index)")
-        Task {
-            let frame_state = frame.processingState()
-            Log.d("add frame \(frame.frame_index) with state \(frame_state)")
-            
-            let index = frame.frame_index
-            if index > max_added_index {
-                max_added_index = index
-            }
 
-            Log.d("frame \(index) added for final inter-frame analysis \(max_added_index)")
-            frames[index] = frame
-            log()
+        let frame_state = frame.processingState()
+        Log.d("add frame \(frame.frame_index) with state \(frame_state)")
+        
+        let index = frame.frame_index
+        if index > max_added_index {
+            max_added_index = index
         }
+
+        Log.d("frame \(index) added for final inter-frame analysis \(max_added_index)")
+        frames[index] = frame
+        log()
     }
 
     func clearFrame(at index: Int) {
@@ -262,7 +261,11 @@ public actor FinalProcessor {
                                 await frame_to_finish.clearOutlierGroupValueCaches()
                                 await frame_to_finish.maybeApplyOutlierGroupClassifier()
                                 frame_to_finish.set(state: .outlierProcessingComplete)
-                                try await self.finish(frame: frame_to_finish)
+
+//                                try await taskGroup.addTask() { 
+                                    // XXX VVV this is blocking other tasks
+                                    try await self.finish(frame: frame_to_finish)
+  //                              }
                             }
                         }
                         Log.v("FINAL THREAD frame \(index_to_process) done queueing into final queue")
