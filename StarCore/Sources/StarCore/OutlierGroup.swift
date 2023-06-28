@@ -121,7 +121,7 @@ public class OutlierGroup: CustomStringConvertible,
     public func testImage() -> CGImage? {
 
         // return cached version if present
-        if let ret = cachedTestImage { ret }
+        if let ret = cachedTestImage { return ret }
         
         let bytesPerPixel = 64/8
         
@@ -469,7 +469,7 @@ public class OutlierGroup: CustomStringConvertible,
         case .maxHoughTheta:
             return self.maxHoughTheta
         default:
-            fatalError("called with bad value \(type)")
+            fatalError("called with bad value \(type) @ index \(frame_index)")
         }
     }
 
@@ -612,7 +612,7 @@ public class OutlierGroup: CustomStringConvertible,
                 }
                 return best_score
             } else {
-                fatalError("SHIT")
+                fatalError("NO FRAME for histogramStreakDetection @ index \(frame_index)")
             }
         }
     }
@@ -779,7 +779,7 @@ public class OutlierGroup: CustomStringConvertible,
                 
                 return smallest_difference
             } else {
-                fatalError("SHIT")
+                fatalError("NO FRAME @ index \(frame_index)")
             }
         }
     }
