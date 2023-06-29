@@ -11,16 +11,16 @@ struct ScrubSliderView: View {
             Spacer().frame(maxHeight: 20)
         }
         let start = 0.0
-        let end = Double(viewModel.image_sequence_size)
+        let end = Double(viewModel.imageSequenceSize)
         return Slider(value: $viewModel.sliderValue, in : start...end)
           .frame(maxWidth: .infinity, alignment: .bottom)
-          .disabled(viewModel.video_playing)
+          .disabled(viewModel.videoPlaying)
           .onChange(of: viewModel.sliderValue) { value in
               let frame_index = Int(viewModel.sliderValue)
               Log.i("transition to \(frame_index)")
               // XXX do more than just this
               var new_frame_index = Int(value)
-              //viewModel.current_index = Int(value)
+              //viewModel.currentIndex = Int(value)
               if new_frame_index < 0 { new_frame_index = 0 }
               if new_frame_index >= viewModel.frames.count {
                   new_frame_index = viewModel.frames.count - 1

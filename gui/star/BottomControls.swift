@@ -37,7 +37,7 @@ struct BottomControls: View {
                                   Choose between quickly scrubbing around the video
                                   and editing an individual frame.
                                 """)
-                          .disabled(viewModel.video_playing)
+                          .disabled(viewModel.videoPlaying)
                           .onChange(of: viewModel.interactionMode) { mode in
                               Log.d("interactionMode change \(mode)")
                               switch mode {
@@ -56,7 +56,7 @@ struct BottomControls: View {
                                 Text(value.localizedName).tag(value)
                             }
                         }
-                          .disabled(viewModel.video_playing)
+                          .disabled(viewModel.videoPlaying)
                           .help("""
                                   Show each frame as either the original   
                                   or with star processing applied.
@@ -101,7 +101,7 @@ struct BottomControls: View {
                         }
                           .frame(alignment: .trailing)
                         VStack {
-                            Text("frame \(viewModel.current_index)")
+                            Text("frame \(viewModel.currentIndex)")
                             if let _ = frameView.outlierViews {
                                 if let num_positive = frameView.numberOfPositiveOutliers {
                                     Text("\(num_positive) will paint")
@@ -125,7 +125,7 @@ struct BottomControls: View {
 
                         let paint_action = {
                             Log.d("PAINT")
-                            viewModel.paint_sheet_showing = !viewModel.paint_sheet_showing
+                            viewModel.paintSheetShowing = !viewModel.paintSheetShowing
                         }
                         Button(action: paint_action) {
                             buttonImage("square.stack.3d.forward.dottedline", size: 44)
@@ -137,7 +137,7 @@ struct BottomControls: View {
                         
                         let gear_action = {
                             Log.d("GEAR")
-                            viewModel.settings_sheet_showing = !viewModel.settings_sheet_showing
+                            viewModel.settingsSheetShowing = !viewModel.settingsSheetShowing
                         }
                         Button(action: gear_action) {
                             buttonImage("gearshape.fill", size: 44)
@@ -150,22 +150,22 @@ struct BottomControls: View {
                         toggleViews()
                     }
                       .frame(maxWidth: .infinity, alignment: .trailing)
-                      .sheet(isPresented: $viewModel.settings_sheet_showing) {
-                          SettingsSheetView(isVisible: self.$viewModel.settings_sheet_showing,
-                                            fast_skip_amount: $viewModel.fast_skip_amount,
-                                            video_playback_framerate: self.$viewModel.video_playback_framerate,
+                      .sheet(isPresented: $viewModel.settingsSheetShowing) {
+                          SettingsSheetView(isVisible: self.$viewModel.settingsSheetShowing,
+                                            fastSkipAmount: $viewModel.fastSkipAmount,
+                                            videoPlaybackFramerate: self.$viewModel.videoPlaybackFramerate,
                                             fastAdvancementType: $viewModel.fastAdvancementType)
                       }
-                      .sheet(isPresented: $viewModel.paint_sheet_showing) {
-                          MassivePaintSheetView(isVisible: self.$viewModel.paint_sheet_showing) { should_paint, start_index, end_index in
+                      .sheet(isPresented: $viewModel.paintSheetShowing) {
+                          MassivePaintSheetView(isVisible: self.$viewModel.paintSheetShowing) { should_paint, start_index, end_index in
                               
-                              viewModel.updating_frame_batch = true
+                              viewModel.updatingFrameBatch = true
                               
                               for idx in start_index ... end_index {
                                   // XXX use a task group?
                                   viewModel.setAllFrameOutliers(in: viewModel.frames[idx], to: should_paint)
                               }
-                              viewModel.updating_frame_batch = false
+                              viewModel.updatingFrameBatch = false
                               
                               Log.d("should_paint \(should_paint), start_index \(start_index), end_index \(end_index)")
                           }

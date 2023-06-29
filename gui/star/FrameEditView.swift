@@ -29,14 +29,14 @@ struct FrameEditView: View {
         // wrap the frame view with a zoomable view
         GeometryReader { geometry in
             // this is to account for the outlier arrows on the sides of the frame
-            let outlier_arrow_length = self.viewModel.frame_width/self.viewModel.outlier_arrow_length
+            let outlier_arrow_length = self.viewModel.frameWidth/self.viewModel.outlier_arrow_length
             
-            let min = (geometry.size.height/(viewModel.frame_height+outlier_arrow_length*2))
+            let min = (geometry.size.height/(viewModel.frameHeight+outlier_arrow_length*2))
             let full_max = self.showFullResolution ? 1 : 0.3
             let max = min < full_max ? full_max : min
 
-            ZoomableView(size: CGSize(width: viewModel.frame_width+outlier_arrow_length*2,
-                                   height: viewModel.frame_height+outlier_arrow_length*2),
+            ZoomableView(size: CGSize(width: viewModel.frameWidth+outlier_arrow_length*2,
+                                   height: viewModel.frameHeight+outlier_arrow_length*2),
                          min: min,
                          max: max,
                          showsIndicators: true)
@@ -53,7 +53,7 @@ struct FrameEditView: View {
         ZStack(alignment: .bottomLeading) {
             // the main image shown
             image
-              .frame(width: viewModel.frame_width, height: viewModel.frame_height)
+              .frame(width: viewModel.frameWidth, height: viewModel.frameHeight)
             if interactionMode == .edit {
                 // in edit mode, show outliers groups 
                 let current_frame_view = viewModel.currentFrameView
@@ -107,11 +107,9 @@ struct FrameEditView: View {
                   )                
                   .frame(width: width, height: height)
                   .offset(x: drag_x_offset,
-                          y: CGFloat(-viewModel.frame_height) + drag_y_offset + height)
+                          y: CGFloat(-viewModel.frameHeight) + drag_y_offset + height)
             }
         }
-
-
         // XXX selecting and zooming conflict with eachother
           .gesture(self.selectionDragGesture)
     }

@@ -74,7 +74,7 @@ struct InitialView: View {
                 let path = returnedUrl.path
                 Log.d("url path \(path)")
                 viewModel.sequenceLoaded = true
-                viewModel.initial_load_in_progress = true
+                viewModel.initialLoadInProgress = true
 
                 viewModel.eraserTask = Task.detached(priority: .userInitiated) {
                     do {
@@ -109,7 +109,7 @@ struct InitialView: View {
                 Log.d("url path \(path)")
                 
                 viewModel.sequenceLoaded = true
-                viewModel.initial_load_in_progress = true
+                viewModel.initialLoadInProgress = true
                 viewModel.eraserTask = Task.detached(priority: .userInitiated) {
                     do {
                         try await viewModel.startup(withNewImageSequence: path)
@@ -130,7 +130,7 @@ struct InitialView: View {
         Log.d("load image sequence")
         
         viewModel.sequenceLoaded = true
-        viewModel.initial_load_in_progress = true
+        viewModel.initialLoadInProgress = true
         
         viewModel.eraserTask = Task.detached(priority: .userInitiated) {
             do {

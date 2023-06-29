@@ -17,7 +17,7 @@ struct FilmstripImageView: View {
             if frame_index >= 0 && frame_index < viewModel.frames.count {
                 let frameView = viewModel.frames[frame_index]
               //  let stroke_width: CGFloat = 4
-                if viewModel.current_index == frame_index {
+                if viewModel.currentIndex == frame_index {
                     
                     frameView.thumbnail_image
                       .foregroundColor(.orange)
@@ -31,7 +31,7 @@ struct FilmstripImageView: View {
           .frame(minWidth: CGFloat((viewModel.config?.thumbnail_width ?? 80) + 8),
                  minHeight: CGFloat((viewModel.config?.thumbnail_height ?? 50) + 30))
         // highlight the selected frame
-          .background(viewModel.current_index == frame_index ? Color(white: 0.45) : Color(white: 0.22))
+          .background(viewModel.currentIndex == frame_index ? Color(white: 0.45) : Color(white: 0.22))
           .onTapGesture {
               // XXX move this out 
               //viewModel.label_text = "loading..."

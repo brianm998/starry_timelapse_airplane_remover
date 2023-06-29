@@ -13,9 +13,9 @@ struct ImageSequenceView: View {
             ScrollViewReader { scroller in
                 VStack {
                     let should_show_progress =
-                      viewModel.rendering_current_frame            ||
-                      viewModel.updating_frame_batch               ||
-                      viewModel.rendering_all_frames
+                      viewModel.renderingCurrentFrame            ||
+                      viewModel.updatingFrameBatch               ||
+                      viewModel.renderingAllFrames
 
                     // selected frame 
                     ZStack {
@@ -49,14 +49,14 @@ struct ImageSequenceView: View {
                     }
 
                     // scub slider at the bottom
-                    if viewModel.image_sequence_size > 0 {
+                    if viewModel.imageSequenceSize > 0 {
                         ScrubSliderView(scroller: scroller)
                     }
                 }
             }
               .frame(maxWidth: .infinity, maxHeight: .infinity)
               .padding([.bottom, .leading, .trailing])
-              .background(viewModel.background_color)
+              .background(viewModel.backgroundColor)
         }
 
           .alert(isPresented: $viewModel.showErrorAlert) {

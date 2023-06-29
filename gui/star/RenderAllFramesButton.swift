@@ -9,7 +9,7 @@ struct RenderAllFramesButton: View {
             Task {
                 await withLimitedTaskGroup(of: Void.self) { taskGroup in
                     var number_to_save = 0
-                    self.viewModel.rendering_all_frames = true
+                    self.viewModel.renderingAllFrames = true
                     for frameView in viewModel.frames {
                         if let frame = frameView.frame,
                            let frameSaveQueue = viewModel.frameSaveQueue
@@ -19,13 +19,13 @@ struct RenderAllFramesButton: View {
                                 frameSaveQueue.saveNow(frame: frame) {
                                     await viewModel.refresh(frame: frame)
                                     /*
-                                     if frame.frame_index == viewModel.current_index {
+                                     if frame.frame_index == viewModel.currentIndex {
                                      refreshCurrentFrame()
                                      }
                                      */
                                     number_to_save -= 1
                                     if number_to_save == 0 {
-                                        self.viewModel.rendering_all_frames = false
+                                        self.viewModel.renderingAllFrames = false
                                     }
                                 }
                             }

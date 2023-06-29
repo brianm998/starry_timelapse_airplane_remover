@@ -20,7 +20,7 @@ struct VideoPlaybackButtons : View {
         return HStack {
             // go to start button
 
-            if !viewModel.video_playing {
+            if !viewModel.videoPlaying {
                 SystemButton(named: "backward.end.fill",
                             shortcutKey: start_shortcut_key,
                             color: button_color,
@@ -37,7 +37,7 @@ struct VideoPlaybackButtons : View {
                             shortcutKey: fast_previous_shortcut_key,
                             color: button_color,
                             toolTip: """
-                              back \(viewModel.fast_skip_amount) frames
+                              back \(viewModel.fastSkipAmount) frames
                               (keyboard shortcut '\(fast_previous_shortcut_key.character)')
                               """)
                 {
@@ -74,7 +74,7 @@ struct VideoPlaybackButtons : View {
 
             ZStack {
                 // backwards button is not shown, so we use this to have shortcut still work
-                if viewModel.video_playing {
+                if viewModel.videoPlaying {
                     Button("") {
                         viewModel.togglePlay(scroller)
                     }
@@ -83,9 +83,9 @@ struct VideoPlaybackButtons : View {
                 } 
             
                 // play/pause button
-                SystemButton(named: viewModel.video_playing ? "pause.fill" : "play.fill", // pause.fill
+                SystemButton(named: viewModel.videoPlaying ? "pause.fill" : "play.fill", // pause.fill
                             shortcutKey: " ",
-                            color: viewModel.video_playing ? .blue : button_color,
+                            color: viewModel.videoPlaying ? .blue : button_color,
                             size: 40,
                             toolTip: """
                               Play / Pause
@@ -96,7 +96,7 @@ struct VideoPlaybackButtons : View {
                     //Log.w("play button not yet implemented")
                 }
             }
-            if !viewModel.video_playing {
+            if !viewModel.videoPlaying {
                 
                 // next button
                 SystemButton(named: "forward.frame.fill",
@@ -116,7 +116,7 @@ struct VideoPlaybackButtons : View {
                             shortcutKey: fast_next_shortcut_key,
                             color: button_color,
                             toolTip: """
-                              forward \(viewModel.fast_skip_amount) frames
+                              forward \(viewModel.fastSkipAmount) frames
                               (keyboard shortcut '\(fast_next_shortcut_key.character)')
                               """)
                 {

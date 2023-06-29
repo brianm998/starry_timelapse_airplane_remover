@@ -10,7 +10,7 @@ struct FilmstripView: View {
 
     var body: some View {
         HStack {
-            if viewModel.image_sequence_size == 0 {
+            if viewModel.imageSequenceSize == 0 {
                 Text("Loading Film Strip")
                   .font(.largeTitle)
                   .frame(minHeight: 50)
@@ -18,7 +18,7 @@ struct FilmstripView: View {
             } else {
                 ScrollView(.horizontal) {
                     LazyHStack(spacing: 0) {
-                        ForEach(0..<viewModel.image_sequence_size, id: \.self) { frame_index in
+                        ForEach(0..<viewModel.imageSequenceSize, id: \.self) { frame_index in
                             FilmstripImageView(frame_index: frame_index,
                                             scroller: scroller)
                               .help("show frame \(frame_index)")
@@ -30,7 +30,7 @@ struct FilmstripView: View {
             }
         }
           .frame(maxWidth: .infinity, maxHeight: 50)
-          .background(viewModel.image_sequence_size == 0 ? .yellow : .clear)
+          .background(viewModel.imageSequenceSize == 0 ? .yellow : .clear)
     }
 }
 

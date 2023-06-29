@@ -50,17 +50,17 @@ public final class ViewModel: ObservableObject {
 
     @Published var videoPlayMode: VideoPlayMode = .forward
     
-    @Published var video_playing = false
+    @Published var videoPlaying = false
 
     @Published var fastAdvancementType: FastAdvancementType = .normal
 
     // if fastAdvancementType == .normal, fast forward and reverse do a set number of frames
-    @Published var fast_skip_amount = 20
+    @Published var fastSkipAmount = 20
     
     @Published var sequenceLoaded = false
     
-    @Published var frame_width: CGFloat = 600 // placeholders until first frame is read
-    @Published var frame_height: CGFloat = 450
+    @Published var frameWidth: CGFloat = 600 // placeholders until first frame is read
+    @Published var frameHeight: CGFloat = 450
 
     // how long the arrows are
     @Published var outlier_arrow_length: CGFloat = 70 // relative to the frame width above
@@ -77,24 +77,24 @@ public final class ViewModel: ObservableObject {
     @Published var frames: [FrameViewModel] = [FrameViewModel(0)]
 
     // the image we're showing to the user right now
-    @Published var current_frame_image: Image?
+    @Published var currentFrameImage: Image?
 
-    // the frame index of the image that produced the current_frame_image
-    var current_frame_image_index: Int = 0
+    // the frame index of the image that produced the currentFrameImage
+    var currentFrameImageIndex: Int = 0
 
-    // the frame index of the image that produced the current_frame_image
-    var current_frame_image_was_preview = false
+    // the frame index of the image that produced the currentFrameImage
+    var currentFrameImageWasPreview = false
 
     // the view mode that we set this image with
-    var current_frame_image_view_mode: FrameViewMode = .original // XXX really orig?
+    var currentFrameImageViewMode: FrameViewMode = .original // XXX really orig?
 
-    @Published var initial_load_in_progress = false
-    @Published var loading_all_outliers = false
-    @Published var loading_outliers = false
+    @Published var initialLoadInProgress = false
+    @Published var loadingAllOutliers = false
+    @Published var loadingOutliers = false
     
-    @Published var number_of_frames_with_outliers_loaded = 0
+    @Published var numberOfFramesWithOutliersLoaded = 0
 
-    @Published var number_of_frames_loaded = 0
+    @Published var numberOfFramesLoaded = 0
 
     @Published var outlierGroupTableRows: [OutlierGroupTableRow] = []
     @Published var outlierGroupWindowFrame: FrameAirplaneRemover?
@@ -102,7 +102,7 @@ public final class ViewModel: ObservableObject {
     @Published var selectedOutliers = Set<OutlierGroupTableRow.ID>()
 
     @Published var selectionMode = SelectionMode.paint
-    @Published var rendering_current_frame = false
+    @Published var renderingCurrentFrame = false
 
     var selectionColor: Color {
         switch self.selectionMode {
@@ -134,44 +134,44 @@ public final class ViewModel: ObservableObject {
 
     @Published var showFilmstrip = true
 
-    @Published var background_color: Color = .gray
+    @Published var backgroundColor: Color = .gray
 
-    @Published var rendering_all_frames = false
-    @Published var updating_frame_batch = false
+    @Published var renderingAllFrames = false
+    @Published var updatingFrameBatch = false
 
-    @Published var video_playback_framerate = 30
+    @Published var videoPlaybackFramerate = 30
 
-    @Published var settings_sheet_showing = false
-    @Published var paint_sheet_showing = false
+    @Published var settingsSheetShowing = false
+    @Published var paintSheetShowing = false
     
     // the frame number of the frame we're currently showing
-    var current_index = 0
+    var currentIndex = 0
 
     // number of frames in the sequence we're processing
-    var image_sequence_size: Int = 0
+    var imageSequenceSize: Int = 0
 
     var outlierLoadingProgress: Double {
-        if image_sequence_size == 0 { return 0 }
-        return Double(number_of_frames_with_outliers_loaded)/Double(image_sequence_size)
+        if imageSequenceSize == 0 { return 0 }
+        return Double(numberOfFramesWithOutliersLoaded)/Double(imageSequenceSize)
     }
     
     var frameLoadingProgress: Double {
-        if image_sequence_size == 0 { return 0 }
-        return Double(number_of_frames_loaded)/Double(image_sequence_size)
+        if imageSequenceSize == 0 { return 0 }
+        return Double(numberOfFramesLoaded)/Double(imageSequenceSize)
     }
     
     // currently selected index in the sequence
     var currentFrameView: FrameViewModel {
-        if current_index < 0 { current_index = 0 }
-        if current_index >= frames.count { current_index = frames.count - 1 }
-        return frames[current_index]
+        if currentIndex < 0 { currentIndex = 0 }
+        if currentIndex >= frames.count { currentIndex = frames.count - 1 }
+        return frames[currentIndex]
     }
     
     var currentFrame: FrameAirplaneRemover? {
-        if current_index >= 0,
-           current_index < frames.count
+        if currentIndex >= 0,
+           currentIndex < frames.count
         {
-            return frames[current_index].frame
+            return frames[currentIndex].frame
         }
         return nil
     }
@@ -278,8 +278,8 @@ public final class ViewModel: ObservableObject {
         
         self.frames[frame.frame_index].frame = frame
 
-        number_of_frames_loaded += 1
-        if self.initial_load_in_progress {
+        numberOfFramesLoaded += 1
+        if self.initialLoadInProgress {
             var have_all = true
             for frame in self.frames {
                 if frame.frame == nil {
@@ -290,7 +290,7 @@ public final class ViewModel: ObservableObject {
             if have_all {
                 Log.d("WE HAVE THEM ALL")
                 await MainActor.run {
-                    self.initial_load_in_progress = false
+                    self.initialLoadInProgress = false
                 }
             }
         }
@@ -335,25 +335,25 @@ public final class ViewModel: ObservableObject {
     }
     
     func nextFrame() -> FrameViewModel {
-        if current_index < frames.count - 1 {
-            current_index += 1
+        if currentIndex < frames.count - 1 {
+            currentIndex += 1
         }
-        Log.d("next frame returning frame from index \(current_index)")
-        if let frame = frames[current_index].frame {
+        Log.d("next frame returning frame from index \(currentIndex)")
+        if let frame = frames[currentIndex].frame {
             Log.d("frame has index \(frame.frame_index)")
         } else {
             Log.d("NO FRAME")
         }
-        return frames[current_index]
+        return frames[currentIndex]
     }
 
     func previousFrame() -> FrameViewModel {
-        if current_index > 0 {
-            current_index -= 1
+        if currentIndex > 0 {
+            currentIndex -= 1
         } else {
-            current_index = 0
+            currentIndex = 0
         }
-        return frames[current_index]
+        return frames[currentIndex]
     }
 
     // prepare for another sequence
@@ -364,17 +364,17 @@ public final class ViewModel: ObservableObject {
         }
         self.sequenceLoaded = false
         self.frames = [FrameViewModel(0)]
-        self.current_frame_image = nil
-        self.current_frame_image_index = 0
-        self.initial_load_in_progress = false
-        self.loading_all_outliers = false
-        self.number_of_frames_with_outliers_loaded = 0
-        self.number_of_frames_loaded = 0
+        self.currentFrameImage = nil
+        self.currentFrameImageIndex = 0
+        self.initialLoadInProgress = false
+        self.loadingAllOutliers = false
+        self.numberOfFramesWithOutliersLoaded = 0
+        self.numberOfFramesLoaded = 0
         self.outlierGroupTableRows = []
         self.outlierGroupWindowFrame = nil
         self.selectedOutliers = Set<OutlierGroupTableRow.ID>()
-        self.current_index = 0
-        self.image_sequence_size = 0
+        self.currentIndex = 0
+        self.imageSequenceSize = 0
     }
 
     func shouldShowOutlierGroupTableWindow() -> Bool {
@@ -483,10 +483,10 @@ public final class ViewModel: ObservableObject {
 
 
         // get the full number of images in the sequcne
-        callbacks.imageSequenceSizeClosure = { image_sequence_size in
-            self.image_sequence_size = image_sequence_size
-            Log.i("read image_sequence_size \(image_sequence_size)")
-            self.set(numberOfFrames: image_sequence_size)
+        callbacks.imageSequenceSizeClosure = { imageSequenceSize in
+            self.imageSequenceSize = imageSequenceSize
+            Log.i("read imageSequenceSize \(imageSequenceSize)")
+            self.set(numberOfFrames: imageSequenceSize)
         }
         
         // count numbers here for max running
@@ -532,19 +532,19 @@ public final class ViewModel: ObservableObject {
             //self.config = self.config
             Log.e("FUCK, config is nil")
         }
-        if self.frame_width != CGFloat(new_frame.width) ||
-           self.frame_height != CGFloat(new_frame.height)
+        if self.frameWidth != CGFloat(new_frame.width) ||
+           self.frameHeight != CGFloat(new_frame.height)
         {
             // grab frame size from first frame
-            self.frame_width = CGFloat(new_frame.width)
-            self.frame_height = CGFloat(new_frame.height)
+            self.frameWidth = CGFloat(new_frame.width)
+            self.frameHeight = CGFloat(new_frame.height)
         }
         await self.append(frame: new_frame)
 
        // Log.d("addToViewModel self.frame \(self.frame)")
 
         // is this the currently selected frame?
-        if self.current_index == new_frame.frame_index {
+        if self.currentIndex == new_frame.frame_index {
             self.label_text = "frame \(new_frame.frame_index)"
 
             Log.i("got frame index \(new_frame.frame_index)")
@@ -553,10 +553,10 @@ public final class ViewModel: ObservableObject {
 
             do {
                 if let baseImage = try await new_frame.baseImage() {
-                    if self.current_index == new_frame.frame_index {
+                    if self.currentIndex == new_frame.frame_index {
                         await MainActor.run {
                             Task {
-                                self.current_frame_image = Image(nsImage: baseImage)
+                                self.currentFrameImage = Image(nsImage: baseImage)
                                 self.update()
                             }
                         }
@@ -611,14 +611,14 @@ public extension ViewModel {
                     await render(frame: frame) {
                         Task {
                             await self.refresh(frame: frame)
-                            if frame.frame_index == self.current_index {
+                            if frame.frame_index == self.currentIndex {
                                 self.refreshCurrentFrame() // XXX not always current
                             }
                             self.update()
                         }
                     }
                 } else {
-                    if frame.frame_index == self.current_index {
+                    if frame.frame_index == self.currentIndex {
                         self.refreshCurrentFrame() // XXX not always current
                     }
                     self.update()
@@ -632,11 +632,11 @@ public extension ViewModel {
     func render(frame: FrameAirplaneRemover, closure: (() -> Void)? = nil) async {
         if let frameSaveQueue = self.frameSaveQueue
         {
-            self.rendering_current_frame = true // XXX might not be right anymore
+            self.renderingCurrentFrame = true // XXX might not be right anymore
             frameSaveQueue.saveNow(frame: frame) {
                 await self.refresh(frame: frame)
                 self.refreshCurrentFrame()
-                self.rendering_current_frame = false
+                self.renderingCurrentFrame = false
                 closure?()
             }
         }
@@ -649,19 +649,19 @@ public extension ViewModel {
         Log.d("transition from \(String(describing: self.currentFrame))")
         let start_time = Date().timeIntervalSinceReferenceDate
 
-        if self.current_index >= 0,
-           self.current_index < self.frames.count
+        if self.currentIndex >= 0,
+           self.currentIndex < self.frames.count
         {
-            self.frames[self.current_index].isCurrentFrame = false
+            self.frames[self.currentIndex].isCurrentFrame = false
         }
         self.frames[new_frame_view.frame_index].isCurrentFrame = true
-        self.current_index = new_frame_view.frame_index
-        self.sliderValue = Double(self.current_index)
+        self.currentIndex = new_frame_view.frame_index
+        self.sliderValue = Double(self.currentIndex)
         
         if interactionMode == .edit,
            let scroller = scroller
         {
-            scroller.scrollTo(self.current_index, anchor: .center)
+            scroller.scrollTo(self.currentIndex, anchor: .center)
 
             //self.label_text = "frame \(new_frame_view.frame_index)"
 
@@ -697,54 +697,54 @@ public extension ViewModel {
 
     func refreshCurrentFrame() {
         // XXX maybe don't wait for frame?
-        Log.d("refreshCurrentFrame \(self.current_index)")
-        let new_frame_view = self.frames[self.current_index]
+        Log.d("refreshCurrentFrame \(self.currentIndex)")
+        let new_frame_view = self.frames[self.currentIndex]
         if let next_frame = new_frame_view.frame {
 
             // usually stick the preview image in there first if we have it
             var show_preview = true
 
             if showFullResolution &&
-               self.current_frame_image_index == new_frame_view.frame_index &&
-               self.current_frame_image_view_mode == self.frameViewMode &&
-               !self.current_frame_image_was_preview
+               self.currentFrameImageIndex == new_frame_view.frame_index &&
+               self.currentFrameImageViewMode == self.frameViewMode &&
+               !self.currentFrameImageWasPreview
             {
                 // showing the preview in this case causes flickering
                 show_preview = false
             }
                  
             if show_preview {
-                self.current_frame_image_index = new_frame_view.frame_index
-                self.current_frame_image_was_preview = true
-                self.current_frame_image_view_mode = self.frameViewMode
+                self.currentFrameImageIndex = new_frame_view.frame_index
+                self.currentFrameImageWasPreview = true
+                self.currentFrameImageViewMode = self.frameViewMode
 
                 switch self.frameViewMode {
                 case .original:
-                    self.current_frame_image = new_frame_view.preview_image//.resizable()
+                    self.currentFrameImage = new_frame_view.preview_image//.resizable()
                 case .processed:
-                    self.current_frame_image = new_frame_view.processed_preview_image//.resizable()
+                    self.currentFrameImage = new_frame_view.processed_preview_image//.resizable()
                 }
             }
             if showFullResolution {
-                if next_frame.frame_index == self.current_index {
+                if next_frame.frame_index == self.currentIndex {
                     Task {
                         do {
-                            self.current_frame_image_index = new_frame_view.frame_index
-                            self.current_frame_image_was_preview = false
-                            self.current_frame_image_view_mode = self.frameViewMode
+                            self.currentFrameImageIndex = new_frame_view.frame_index
+                            self.currentFrameImageWasPreview = false
+                            self.currentFrameImageViewMode = self.frameViewMode
                             
                             switch self.frameViewMode {
                             case .original:
                                 if let baseImage = try await next_frame.baseImage() {
-                                    if next_frame.frame_index == self.current_index {
-                                        self.current_frame_image = Image(nsImage: baseImage)
+                                    if next_frame.frame_index == self.currentIndex {
+                                        self.currentFrameImage = Image(nsImage: baseImage)
                                     }
                                 }
                                 
                             case .processed:
                                 if let baseImage = try await next_frame.baseOutputImage() {
-                                    if next_frame.frame_index == self.current_index {
-                                        self.current_frame_image = Image(nsImage: baseImage)
+                                    if next_frame.frame_index == self.currentIndex {
+                                        self.currentFrameImage = Image(nsImage: baseImage)
                                     }
                                 }
                             }
@@ -762,14 +762,14 @@ public extension ViewModel {
                    !frameView.loadingOutlierViews
                 {
                     frameView.loadingOutlierViews = true
-                    self.loading_outliers = true
+                    self.loadingOutliers = true
                     Task.detached(priority: .userInitiated) {
                         let _ = try await next_frame.loadOutliers()
                         await MainActor.run {
                             Task {
                                 await self.setOutlierGroups(forFrame: next_frame)
                                 frameView.loadingOutlierViews = false
-                                self.loading_outliers = self.loadingOutlierGroups
+                                self.loadingOutliers = self.loadingOutlierGroups
                                 self.update()
                             }
                         }
@@ -777,7 +777,7 @@ public extension ViewModel {
                 }
             }
         } else {
-            Log.d("WTF for frame \(self.current_index)")
+            Log.d("WTF for frame \(self.currentIndex)")
             self.update()
         }
     }
@@ -788,7 +788,7 @@ public extension ViewModel {
     {
         let current_frame = self.currentFrame
 
-        var new_index = self.current_index + numberOfFrames
+        var new_index = self.currentIndex + numberOfFrames
         if new_index < 0 { new_index = 0 }
         if new_index >= self.frames.count {
             new_index = self.frames.count-1
@@ -886,18 +886,18 @@ public extension ViewModel {
 
     // starts or stops video from playing
     func togglePlay(_ scroller: ScrollViewProxy? = nil) {
-        self.video_playing = !self.video_playing
-        if self.video_playing {
+        self.videoPlaying = !self.videoPlaying
+        if self.videoPlaying {
 
             self.previousInteractionMode = self.interactionMode
             self.interactionMode = .scrub
 
-            Log.d("playing @ \(self.video_playback_framerate) fps")
-            current_video_frame = self.current_index
+            Log.d("playing @ \(self.videoPlaybackFramerate) fps")
+            current_video_frame = self.currentIndex
 
             switch self.frameViewMode {
             case .original:
-                video_play_timer = Timer.scheduledTimer(withTimeInterval: 1/Double(self.video_playback_framerate),
+                video_play_timer = Timer.scheduledTimer(withTimeInterval: 1/Double(self.videoPlaybackFramerate),
                                                         repeats: true) { timer in
                     let current_idx = current_video_frame
                     // play each frame of the video in sequence
@@ -908,7 +908,7 @@ public extension ViewModel {
                     } else {
 
                         // play each frame of the video in sequence
-                        self.current_frame_image =
+                        self.currentFrameImage =
                           self.frames[current_idx].preview_image
 
                         switch self.videoPlayMode {
@@ -927,7 +927,7 @@ public extension ViewModel {
                     }
                 }
             case .processed:
-                video_play_timer = Timer.scheduledTimer(withTimeInterval: 1/Double(self.video_playback_framerate),
+                video_play_timer = Timer.scheduledTimer(withTimeInterval: 1/Double(self.videoPlaybackFramerate),
                                                         repeats: true) { timer in
 
                     let current_idx = current_video_frame
@@ -937,7 +937,7 @@ public extension ViewModel {
                     {
                         self.stopVideo(scroller)
                     } else {
-                        self.current_frame_image =
+                        self.currentFrameImage =
                           self.frames[current_idx].processed_preview_image
 
                         switch self.videoPlayMode {
@@ -969,15 +969,15 @@ public extension ViewModel {
         if current_video_frame >= 0,
            current_video_frame < self.frames.count
         {
-            self.current_index = current_video_frame
-            self.sliderValue = Double(self.current_index)
+            self.currentIndex = current_video_frame
+            self.sliderValue = Double(self.currentIndex)
         } else {
-            self.current_index = 0
-            self.sliderValue = Double(self.current_index)
+            self.currentIndex = 0
+            self.sliderValue = Double(self.currentIndex)
         }
         
-        self.video_playing = false
-        self.background_color = .gray
+        self.videoPlaying = false
+        self.backgroundColor = .gray
         
         if let scroller = scroller {
             // delay the scroller a little bit to allow the view to adjust
@@ -985,7 +985,7 @@ public extension ViewModel {
             // and is ignored, leaving the scroll view unmoved.
             Task {
                 await MainActor.run {
-                    scroller.scrollTo(self.current_index, anchor: .center)
+                    scroller.scrollTo(self.currentIndex, anchor: .center)
                 }
             }
         }
@@ -1007,7 +1007,7 @@ public extension ViewModel {
 
     func fastPreviousButtonAction(withScroll scroller: ScrollViewProxy? = nil) {
         if self.fastAdvancementType == .normal {
-            self.transition(numberOfFrames: -self.fast_skip_amount,
+            self.transition(numberOfFrames: -self.fastSkipAmount,
                             withScroll: scroller)
         } else if let current_frame = self.currentFrame {
             self.transition(until: self.fastAdvancementType,
@@ -1020,7 +1020,7 @@ public extension ViewModel {
     func fastForwardButtonAction(withScroll scroller: ScrollViewProxy? = nil) {
 
         if self.fastAdvancementType == .normal {
-            self.transition(numberOfFrames: self.fast_skip_amount,
+            self.transition(numberOfFrames: self.fastSkipAmount,
                             withScroll: scroller)
         } else if let current_frame = self.currentFrame {
             self.transition(until: self.fastAdvancementType,

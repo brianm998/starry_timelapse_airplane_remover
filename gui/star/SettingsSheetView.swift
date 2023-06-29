@@ -15,8 +15,8 @@ public enum FastAdvancementType: String, Equatable, CaseIterable {
 
 struct SettingsSheetView: View {
     @Binding var isVisible: Bool
-    @Binding var fast_skip_amount: Int
-    @Binding var video_playback_framerate: Int
+    @Binding var fastSkipAmount: Int
+    @Binding var videoPlaybackFramerate: Int
     @Binding var fastAdvancementType: FastAdvancementType 
     
     var body: some View {
@@ -29,7 +29,7 @@ struct SettingsSheetView: View {
                 VStack(alignment: .leading) {
                     switch fastAdvancementType {
                     case .normal:
-                        Text("Fast Forward and Reverse move by \(fast_skip_amount) frames")
+                        Text("Fast Forward and Reverse move by \(fastSkipAmount) frames")
                     case .skipEmpties:
                         Text("Skip all frames without outliers")
                     case .toNextPositive:
@@ -64,14 +64,14 @@ struct SettingsSheetView: View {
                     // XXX add advance to has not paintable
                     
                     if fastAdvancementType == .normal {
-                        Picker("Fast Skip", selection: $fast_skip_amount) {
+                        Picker("Fast Skip", selection: $fastSkipAmount) {
                             ForEach(0 ..< 51) {
                                 Text("\($0) frames")
                             }
                         }.frame(maxWidth: 200)
                     }
                     let frame_rates = [1, 2, 3, 5, 10, 15, 20, 25, 30]
-                    Picker("Frame Rate", selection: $video_playback_framerate) {
+                    Picker("Frame Rate", selection: $videoPlaybackFramerate) {
                         ForEach(frame_rates, id: \.self) {
                             Text("\($0) fps")
                         }

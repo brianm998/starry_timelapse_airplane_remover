@@ -21,7 +21,7 @@ public struct FrameView: View {
     
     public var body: some View {
         ZStack {
-            if let frame_image = self.viewModel.current_frame_image {
+            if let frame_image = self.viewModel.currentFrameImage {
                 switch self.interactionMode {
                 case .scrub:
                     // the current frame by itself for fast video playback and scrubbing 

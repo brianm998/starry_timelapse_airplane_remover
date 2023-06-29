@@ -11,7 +11,7 @@ struct ApplyAllDecisionTreeButton: View {
             Task {
                 Log.d("doh")
                 do {
-                    //Log.d("doh index \(viewModel.current_index) frame \(viewModel.frames[0].frame) have_all_frames \(viewModel.have_all_frames)")
+                    //Log.d("doh index \(viewModel.currentIndex) frame \(viewModel.frames[0].frame) have_all_frames \(viewModel.have_all_frames)")
                     if let frame = viewModel.currentFrame {
                         Log.d("doh")
                         await frame.applyDecisionTreeToAllOutliers()
@@ -20,7 +20,7 @@ struct ApplyAllDecisionTreeButton: View {
                             Log.d("doh")
                             Task {
                                 await viewModel.refresh(frame: frame)
-                                if frame.frame_index == viewModel.current_index {
+                                if frame.frame_index == viewModel.currentIndex {
                                     viewModel.refreshCurrentFrame() // XXX not always still current
                                 }
                                 await viewModel.setOutlierGroups(forFrame: frame)

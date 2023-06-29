@@ -13,9 +13,9 @@ struct LoadAllOutliersButton: View {
                     try await withLimitedThrowingTaskGroup(of: Void.self) { taskGroup in
                         let max_concurrent = viewModel.config?.numConcurrentRenders ?? 10
                         // this gets "Too many open files" with more than 2000 images :(
-                        viewModel.loading_all_outliers = true
+                        viewModel.loadingAllOutliers = true
                         Log.d("foobar starting")
-                        viewModel.number_of_frames_with_outliers_loaded = 0
+                        viewModel.numberOfFramesWithOutliersLoaded = 0
                         for frameView in viewModel.frames {
                             Log.d("frame \(frameView.frame_index) attempting to load outliers")
                             var did_load = false
@@ -35,7 +35,7 @@ struct LoadAllOutliersButton: View {
                                             Task {
                                                 await MainActor.run {
                                                     Task {
-                                                        viewModel.number_of_frames_with_outliers_loaded += 1
+                                                        viewModel.numberOfFramesWithOutliersLoaded += 1
                                                         await viewModel.setOutlierGroups(forFrame: frame)
                                                     }
                                                 }
@@ -59,7 +59,7 @@ struct LoadAllOutliersButton: View {
                         }
                         
                         let end_time = Date().timeIntervalSinceReferenceDate
-                        viewModel.loading_all_outliers = false
+                        viewModel.loadingAllOutliers = false
                         Log.d("foobar loaded outliers for \(viewModel.frames.count) frames in \(end_time - start_time) seconds")
                     }                                 
                 } catch {

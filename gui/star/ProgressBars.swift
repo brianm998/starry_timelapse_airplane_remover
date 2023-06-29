@@ -8,7 +8,7 @@ struct ProgressBars: View {
 
     var body: some View {
         VStack {
-            if viewModel.loading_outliers {
+            if viewModel.loadingOutliers {
                 HStack {
                     Text("Loading Outliers for this frame")
                     Spacer()
@@ -18,7 +18,7 @@ struct ProgressBars: View {
                 }
             }
 
-            if viewModel.initial_load_in_progress {
+            if viewModel.initialLoadInProgress {
                 HStack {
                     Text("Loading Image Sequence")
                     Spacer()
@@ -27,7 +27,7 @@ struct ProgressBars: View {
 
             }
 
-            if viewModel.loading_all_outliers {
+            if viewModel.loadingAllOutliers {
                 HStack {
                     Text("Loading Outlier Groups for all frames")
                     Spacer()
