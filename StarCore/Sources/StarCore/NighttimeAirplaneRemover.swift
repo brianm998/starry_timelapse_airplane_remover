@@ -27,16 +27,16 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
     public var callbacks: Callbacks
 
     // the name of the directory to create when writing outlier group files
-    let outlier_output_dirname: String
+    let outlierOutputDirname: String
 
     // the name of the directory to create when writing frame previews
-    let preview_output_dirname: String
+    let previewOutputDirname: String
 
     // the name of the directory to create when writing processed frame previews
-    let processed_preview_output_dirname: String
+    let processed_previewOutputDirname: String
 
     // the name of the directory to create when writing frame thumbnails (small previews)
-    let thumbnail_output_dirname: String
+    let thumbnailOutputDirname: String
 
     public var final_processor: FinalProcessor?    
 
@@ -64,10 +64,10 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
 
         let _basename = "\(config.image_sequence_dirname)-star-v-\(config.star_version)"
         self.basename = _basename.replacingOccurrences(of: ".", with: "_")
-        outlier_output_dirname = "\(config.outputPath)/\(basename)-outliers"
-        preview_output_dirname = "\(config.outputPath)/\(basename)-previews"
-        processed_preview_output_dirname = "\(config.outputPath)/\(basename)-processed-previews"
-        thumbnail_output_dirname = "\(config.outputPath)/\(basename)-thumbnails"
+        outlierOutputDirname = "\(config.outputPath)/\(basename)-outliers"
+        previewOutputDirname = "\(config.outputPath)/\(basename)-previews"
+        processed_previewOutputDirname = "\(config.outputPath)/\(basename)-processed-previews"
+        thumbnailOutputDirname = "\(config.outputPath)/\(basename)-thumbnails"
 
         try super.init(imageSequenceDirname: "\(config.image_sequence_path)/\(config.image_sequence_dirname)",
                        outputDirname: "\(config.outputPath)/\(basename)",
@@ -160,18 +160,18 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
         }
         if config.writeOutlierGroupFiles {
             // doesn't do mkdir -p, if a base dir is missing it just hangs :(
-            try mkdir(outlier_output_dirname) // XXX this can fail silently and pause the whole process :(
+            try mkdir(outlierOutputDirname) // XXX this can fail silently and pause the whole process :(
         }
         if config.writeFramePreviewFiles {
-            try mkdir(preview_output_dirname) 
+            try mkdir(previewOutputDirname) 
         }
 
         if config.writeFrameProcessedPreviewFiles {
-            try mkdir(processed_preview_output_dirname)
+            try mkdir(processed_previewOutputDirname)
         }
 
         if config.writeFrameThumbnailFiles {
-            try mkdir(thumbnail_output_dirname)
+            try mkdir(thumbnailOutputDirname)
         }
 
         if config.writeOutlierGroupFiles          ||
@@ -238,7 +238,7 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
                      image_height: Int,
                      image_bytesPerPixel: Int) async throws -> FrameAirplaneRemover
     {
-        var outlier_groups_for_this_frame: OutlierGroups?
+        var outlierGroupsForThisFrame: OutlierGroups?
 
         let loadOutliersFromFile: () async -> OutlierGroups? = {
 
@@ -246,11 +246,11 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
             var end_time_1: Double = 0
             var start_time_1: Double = 0
 
-            let frame_outliers_new_binary_dirname = "\(self.outlier_output_dirname)/\(frameIndex)"
+            let frame_outliers_new_binary_dirname = "\(self.outlierOutputDirname)/\(frameIndex)"
             if file_manager.fileExists(atPath: frame_outliers_new_binary_dirname) {
                 do {
                     start_time_1 = Date().timeIntervalSinceReferenceDate
-                    outlier_groups_for_this_frame = try await OutlierGroups(at: frameIndex, from: frame_outliers_new_binary_dirname)
+                    outlierGroupsForThisFrame = try await OutlierGroups(at: frameIndex, from: frame_outliers_new_binary_dirname)
                     end_time_1 = Date().timeIntervalSinceReferenceDate
                 } catch {
                     Log.e("frame \(frameIndex) error decoding file \(frame_outliers_new_binary_dirname): \(error)")
@@ -263,12 +263,12 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
             Log.i("TIMES \(start_time_1 - start_time) - \(end_time_1 - start_time_1) - \(end_time - end_time_1) reading outlier group data for frame \(frameIndex)")
             
             
-            if let _ = outlier_groups_for_this_frame  {
+            if let _ = outlierGroupsForThisFrame  {
                 Log.i("loading frame \(frameIndex) with outlier groups from file")
             } else {
                 Log.d("loading frame \(frameIndex)")
             }
-            return outlier_groups_for_this_frame
+            return outlierGroupsForThisFrame
         }
         
         return try await FrameAirplaneRemover(with: config,
@@ -281,10 +281,10 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
                                           otherFrameIndexes: otherFrameIndexes,
                                           outputFilename: output_filename,
                                           baseName: base_name,
-                                          outlierOutputDirname: outlier_output_dirname,
-                                          previewOutputDirname: preview_output_dirname,
-                                          processedPreviewOutputDirname: processed_preview_output_dirname,
-                                          thumbnailOutputDirname: thumbnail_output_dirname,
+                                          outlierOutputDirname: outlierOutputDirname,
+                                          previewOutputDirname: previewOutputDirname,
+                                          processedPreviewOutputDirname: processed_previewOutputDirname,
+                                          thumbnailOutputDirname: thumbnailOutputDirname,
                                           outlierGroupLoader: loadOutliersFromFile,
                                           fullyProcess: fully_process,
                                           writeOutputFiles: writeOutputFiles)

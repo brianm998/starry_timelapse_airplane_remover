@@ -62,10 +62,10 @@ public class FrameAirplaneRemover: Equatable, Hashable {
     public let otherFrameIndexes: [Int] // used in found outliers and paint only
     nonisolated public let frameIndex: Int
 
-    public let outlier_output_dirname: String?
-    public let preview_output_dirname: String?
-    public let processed_preview_output_dirname: String?
-    public let thumbnail_output_dirname: String?
+    public let outlierOutputDirname: String?
+    public let previewOutputDirname: String?
+    public let processedPreviewOutputDirname: String?
+    public let thumbnailOutputDirname: String?
 
     // populated by pruning
     public var outlier_groups: OutlierGroups?
@@ -170,7 +170,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
     // the decision tree needs, and not very large
     public func writeOutlierValuesCSV() async throws {
         if config.writeOutlierGroupFiles,
-           let output_dirname = self.outlier_output_dirname
+           let output_dirname = self.outlierOutputDirname
         {
             // write out the decision tree value matrix too
 
@@ -191,7 +191,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
     // large, still not fast, but lots of data
     public func writeOutliersBinary() async {
         if config.writeOutlierGroupFiles,
-           let output_dirname = self.outlier_output_dirname
+           let output_dirname = self.outlierOutputDirname
         {
             do {
                 try await self.outlier_groups?.write(to: output_dirname)
@@ -302,22 +302,22 @@ public class FrameAirplaneRemover: Equatable, Hashable {
     public func didLoadOutliersFromFile() -> Bool { outliersLoadedFromFile }
     
     nonisolated public var previewFilename: String? {
-        if let preview_output_dirname = preview_output_dirname {
-            return "\(preview_output_dirname)/\(base_name).jpg" // XXX this makes it .tif.jpg
+        if let previewOutputDirname = previewOutputDirname {
+            return "\(previewOutputDirname)/\(base_name).jpg" // XXX this makes it .tif.jpg
         }
         return nil
     }
     
     nonisolated public var processedPreviewFilename: String? {
-        if let processed_preview_output_dirname = processed_preview_output_dirname {
-            return "\(processed_preview_output_dirname)/\(base_name).jpg"
+        if let processedPreviewOutputDirname = processedPreviewOutputDirname {
+            return "\(processedPreviewOutputDirname)/\(base_name).jpg"
         }
         return nil
     }
     
     nonisolated public var thumbnailFilename: String? {
-        if let thumbnail_output_dirname = thumbnail_output_dirname {
-            return "\(thumbnail_output_dirname)/\(base_name).jpg"
+        if let thumbnailOutputDirname = thumbnailOutputDirname {
+            return "\(thumbnailOutputDirname)/\(base_name).jpg"
         }
         return nil
     }
@@ -351,10 +351,10 @@ public class FrameAirplaneRemover: Equatable, Hashable {
          otherFrameIndexes: [Int],
          outputFilename output_filename: String,
          baseName: String,       // source filename without path
-         outlierOutputDirname outlier_output_dirname: String?,
-         previewOutputDirname preview_output_dirname: String?,
-         processedPreviewOutputDirname processed_preview_output_dirname: String?,
-         thumbnailOutputDirname thumbnail_output_dirname: String?,
+         outlierOutputDirname outlierOutputDirname: String?,
+         previewOutputDirname previewOutputDirname: String?,
+         processedPreviewOutputDirname processedPreviewOutputDirname: String?,
+         thumbnailOutputDirname thumbnailOutputDirname: String?,
          outlierGroupLoader: @escaping () async -> OutlierGroups?,
          fullyProcess: Bool = true,
          writeOutputFiles: Bool = true) async throws
@@ -374,10 +374,10 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         self.otherFrameIndexes = otherFrameIndexes
         self.output_filename = output_filename
 
-        self.outlier_output_dirname = outlier_output_dirname
-        self.preview_output_dirname = preview_output_dirname
-        self.processed_preview_output_dirname = processed_preview_output_dirname
-        self.thumbnail_output_dirname = thumbnail_output_dirname
+        self.outlierOutputDirname = outlierOutputDirname
+        self.previewOutputDirname = previewOutputDirname
+        self.processedPreviewOutputDirname = processedPreviewOutputDirname
+        self.thumbnailOutputDirname = thumbnailOutputDirname
         self.width = width
         self.height = height
 

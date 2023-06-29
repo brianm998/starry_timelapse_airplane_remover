@@ -198,8 +198,8 @@ struct OutlierGroupView: View {
 
         Task {
             if let frame = self.groupViewModel.viewModel.currentFrame,
-               let outlier_groups = frame.outlier_groups,
-               let outlier_group = outlier_groups.members[self.groupViewModel.group.name]
+               let outlierGroups = frame.outlier_groups,
+               let outlier_group = outlierGroups.members[self.groupViewModel.group.name]
             {
                 // update the actor in the background
                 await outlier_group.shouldPaint(should_paint)

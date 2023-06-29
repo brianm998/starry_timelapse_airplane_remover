@@ -304,7 +304,7 @@ public final class ViewModel: ObservableObject {
             let outlierGroups = frame.outlierGroups()
             if let outlierGroups = outlierGroups {
                 Log.d("got \(outlierGroups.count) groups for frame \(frame.frameIndex)")
-                var new_outlier_groups: [OutlierGroupViewModel] = []
+                var newOutlierGroups: [OutlierGroupViewModel] = []
                 for group in outlierGroups {
                     if let cgImage = group.testImage() { // XXX heap corruption here :(
                         var size = CGSize()
@@ -316,12 +316,12 @@ public final class ViewModel: ObservableObject {
                                                                     name: group.name,
                                                                     bounds: group.bounds,
                                                                     image: outlierImage)
-                        new_outlier_groups.append(groupView)
+                        newOutlierGroups.append(groupView)
                     } else {
                         Log.e("frame \(frame.frameIndex) outlier group no image")
                     }
                 }
-                await self.frames[frame.frameIndex].outlierViews = new_outlier_groups
+                await self.frames[frame.frameIndex].outlierViews = newOutlierGroups
 
                 await MainActor.run { self.objectWillChange.send() }
             }
