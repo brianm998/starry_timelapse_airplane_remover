@@ -4,14 +4,14 @@ import StarCore
 // this is the menu bar at the top of the screen
 
 struct StarCommands: Commands {
-    let contentView: ContentView
+    let viewModel: ViewModel
 
     var body: some Commands {
         CommandMenu("Actions") {
 
-            PaintAllButton(viewModel: contentView.viewModel)
+            PaintAllButton(viewModel: viewModel)
               .keyboardShortcut("p", modifiers: [])
-            ClearAllButton(viewModel: contentView.viewModel)
+            ClearAllButton(viewModel: viewModel)
               .keyboardShortcut("c", modifiers: [])
             
             /*
@@ -22,7 +22,7 @@ struct StarCommands: Commands {
             contentView.renderAllFramesButton()
              */
             
-            LoadAllOutliersButton(viewModel: contentView.viewModel)
+            LoadAllOutliersButton(viewModel: viewModel)
         }
 
         // remove File -> New Window 
@@ -34,7 +34,7 @@ struct StarCommands: Commands {
                 Task {
                     await MainActor.run {
                         // XXX make sure the current sequence isn't still processing somehow
-                        contentView.viewModel.unloadSequence()
+                        viewModel.unloadSequence()
                     }
                 }
             }

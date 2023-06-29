@@ -109,15 +109,12 @@ class star_app: App {
     
     var body: some Scene {
         let viewModel = ViewModel()
-
-        let contentView = ContentView(viewModel: viewModel)
         
         WindowGroup {
-            contentView
+            ContentView(viewModel: viewModel)
+        }.commands {
+            StarCommands(viewModel: viewModel)
         }
-          .commands {
-              StarCommands(contentView: contentView)
-          }
         
         WindowGroup(id: "foobar") { // XXX hardcoded constant should be centralized
             OutlierGroupTable(viewModel: viewModel)
@@ -126,8 +123,8 @@ class star_app: App {
               }
                 
         } .commands {
-              StarCommands(contentView: contentView)
-          }
+              StarCommands(viewModel: viewModel)
+        }
         // this shows up as stars and wand in the upper right of the menu bar
         // always there when app is running, even when another app is used
         MenuBarExtra {
