@@ -63,15 +63,15 @@ public final class ViewModel: ObservableObject {
     @Published var frameHeight: CGFloat = 450
 
     // how long the arrows are
-    @Published var outlier_arrow_length: CGFloat = 70 // relative to the frame width above
+    @Published var outlierArrowLength: CGFloat = 70 // relative to the frame width above
 
     // how high they are (if pointing sideways)
-    @Published var outlier_arrow_height: CGFloat = 180
+    @Published var outlierArrowHeight: CGFloat = 180
     
     @Published var showErrorAlert = false
     @Published var errorMessage: String = ""
     
-    var label_text: String = "Started"
+    var labelText: String = "Started"
 
     // view class for each frame in the sequence in order
     @Published var frames: [FrameViewModel] = [FrameViewModel(0)]
@@ -178,9 +178,9 @@ public final class ViewModel: ObservableObject {
 
     var numberOfFramesChanged: Int {
         var ret = frameSaveQueue?.purgatory.count ?? 0
-        if let current_frame = self.currentFrame,
-           current_frame.hasChanges(),
-           !(frameSaveQueue?.frameIsInPurgatory(current_frame.frameIndex) ?? false)
+        if let currentFrame = self.currentFrame,
+           currentFrame.hasChanges(),
+           !(frameSaveQueue?.frameIsInPurgatory(currentFrame.frameIndex) ?? false)
         {
             ret += 1            // XXX make sure the current frame isn't in purgatory
         }
@@ -434,7 +434,7 @@ public final class ViewModel: ObservableObject {
 
         if !input_image_sequence_dirname.hasPrefix("/") {
             let full_path =
-              file_manager.currentDirectoryPath + "/" + 
+              FileManager.default.currentDirectoryPath + "/" + 
               input_image_sequence_dirname
             input_image_sequence_dirname = full_path
         }
@@ -453,19 +453,17 @@ public final class ViewModel: ObservableObject {
         }
 
         let config = Config(outputPath: input_image_sequence_path,
-                            outlierMaxThreshold: Defaults.outlierMaxThreshold,
-                            outlierMinThreshold: Defaults.outlierMinThreshold,
-                            minGroupSize: Defaults.minGroupSize,
-                            numConcurrentRenders: numConcurrentRenders,
-                            imageSequenceName: input_image_sequence_name,
-                            imageSequencePath: input_image_sequence_path,
-                            writeOutlierGroupFiles: should_write_outlier_group_files,
-                            writeFramePreviewFiles: should_write_outlier_group_files,
-                            writeFrameProcessedPreviewFiles: should_write_outlier_group_files,
-                            writeFrameThumbnailFiles: should_write_outlier_group_files)
+                          outlierMaxThreshold: Defaults.outlierMaxThreshold,
+                          outlierMinThreshold: Defaults.outlierMinThreshold,
+                          minGroupSize: Defaults.minGroupSize,
+                          numConcurrentRenders: numConcurrentRenders,
+                          imageSequenceName: input_image_sequence_name,
+                          imageSequencePath: input_image_sequence_path,
+                          writeOutlierGroupFiles: should_write_outlier_group_files,
+                          writeFramePreviewFiles: should_write_outlier_group_files,
+                          writeFrameProcessedPreviewFiles: should_write_outlier_group_files,
+                          writeFrameThumbnailFiles: should_write_outlier_group_files)
 
-        
-        
         let callbacks = self.make_callbacks()
         Log.i("have config")
 
@@ -546,7 +544,7 @@ public final class ViewModel: ObservableObject {
 
         // is this the currently selected frame?
         if self.currentIndex == new_frame.frameIndex {
-            self.label_text = "frame \(new_frame.frameIndex)"
+            self.labelText = "frame \(new_frame.frameIndex)"
 
             Log.i("got frame index \(new_frame.frameIndex)")
 
@@ -582,8 +580,8 @@ public extension ViewModel {
     func setAllCurrentFrameOutliers(to shouldPaint: Bool,
                                 renderImmediately: Bool = true)
     {
-        let current_frame_view = self.currentFrameView
-        setAllFrameOutliers(in: current_frame_view,
+        let currentFrame_view = self.currentFrameView
+        setAllFrameOutliers(in: currentFrame_view,
                             to: shouldPaint,
                             renderImmediately: renderImmediately)
     }
@@ -664,7 +662,7 @@ public extension ViewModel {
         {
             scroller.scrollTo(self.currentIndex, anchor: .center)
 
-            //self.label_text = "frame \(new_frame_view.frameIndex)"
+            //self.labelText = "frame \(new_frame_view.frameIndex)"
 
             // only save frame when we are also scrolling (i.e. not scrubbing)
             if let frame_to_save = old_frame {
@@ -787,7 +785,7 @@ public extension ViewModel {
     func transition(numberOfFrames: Int,
                     withScroll scroller: ScrollViewProxy? = nil)
     {
-        let current_frame = self.currentFrame
+        let currentFrame = self.currentFrame
 
         var new_index = self.currentIndex + numberOfFrames
         if new_index < 0 { new_index = 0 }
@@ -797,7 +795,7 @@ public extension ViewModel {
         let new_frame_view = self.frames[new_index]
         
         self.transition(toFrame: new_frame_view,
-                        from: current_frame,
+                        from: currentFrame,
                         withScroll: scroller)
     }
 
@@ -894,13 +892,13 @@ public extension ViewModel {
             self.interactionMode = .scrub
 
             Log.d("playing @ \(self.videoPlaybackFramerate) fps")
-            current_video_frame = self.currentIndex
+            currentVideoFrame = self.currentIndex
 
             switch self.frameViewMode {
             case .original:
-                video_play_timer = Timer.scheduledTimer(withTimeInterval: 1/Double(self.videoPlaybackFramerate),
+                videoPlayTimer = Timer.scheduledTimer(withTimeInterval: 1/Double(self.videoPlaybackFramerate),
                                                         repeats: true) { timer in
-                    let current_idx = current_video_frame
+                    let current_idx = currentVideoFrame
                     // play each frame of the video in sequence
                     if current_idx >= self.frames.count ||
                          current_idx < 0
@@ -914,13 +912,13 @@ public extension ViewModel {
 
                         switch self.videoPlayMode {
                         case .forward:
-                            current_video_frame = current_idx + 1
+                            currentVideoFrame = current_idx + 1
 
                         case .reverse:
-                            current_video_frame = current_idx - 1
+                            currentVideoFrame = current_idx - 1
                         }
                         
-                        if current_video_frame >= self.frames.count {
+                        if currentVideoFrame >= self.frames.count {
                             self.stopVideo(scroller)
                         } else {
                             self.sliderValue = Double(current_idx)
@@ -928,10 +926,10 @@ public extension ViewModel {
                     }
                 }
             case .processed:
-                video_play_timer = Timer.scheduledTimer(withTimeInterval: 1/Double(self.videoPlaybackFramerate),
+                videoPlayTimer = Timer.scheduledTimer(withTimeInterval: 1/Double(self.videoPlaybackFramerate),
                                                         repeats: true) { timer in
 
-                    let current_idx = current_video_frame
+                    let current_idx = currentVideoFrame
                     // play each frame of the video in sequence
                     if current_idx >= self.frames.count ||
                        current_idx < 0
@@ -943,13 +941,13 @@ public extension ViewModel {
 
                         switch self.videoPlayMode {
                         case .forward:
-                            current_video_frame = current_idx + 1
+                            currentVideoFrame = current_idx + 1
 
                         case .reverse:
-                            current_video_frame = current_idx - 1
+                            currentVideoFrame = current_idx - 1
                         }
                         
-                        if current_video_frame >= self.frames.count {
+                        if currentVideoFrame >= self.frames.count {
                             self.stopVideo(scroller)
                         } else {
                             self.sliderValue = Double(current_idx)
@@ -963,14 +961,14 @@ public extension ViewModel {
     }
 
     func stopVideo(_ scroller: ScrollViewProxy? = nil) {
-        video_play_timer?.invalidate()
+        videoPlayTimer?.invalidate()
 
         self.interactionMode = self.previousInteractionMode
         
-        if current_video_frame >= 0,
-           current_video_frame < self.frames.count
+        if currentVideoFrame >= 0,
+           currentVideoFrame < self.frames.count
         {
-            self.currentIndex = current_video_frame
+            self.currentIndex = currentVideoFrame
             self.sliderValue = Double(self.currentIndex)
         } else {
             self.currentIndex = 0
@@ -1010,9 +1008,9 @@ public extension ViewModel {
         if self.fastAdvancementType == .normal {
             self.transition(numberOfFrames: -self.fastSkipAmount,
                             withScroll: scroller)
-        } else if let current_frame = self.currentFrame {
+        } else if let currentFrame = self.currentFrame {
             self.transition(until: self.fastAdvancementType,
-                            from: current_frame,
+                            from: currentFrame,
                             forwards: false,
                             withScroll: scroller)
         }
@@ -1023,9 +1021,9 @@ public extension ViewModel {
         if self.fastAdvancementType == .normal {
             self.transition(numberOfFrames: self.fastSkipAmount,
                             withScroll: scroller)
-        } else if let current_frame = self.currentFrame {
+        } else if let currentFrame = self.currentFrame {
             self.transition(until: self.fastAdvancementType,
-                            from: current_frame,
+                            from: currentFrame,
                             forwards: true,
                             withScroll: scroller)
         }
@@ -1034,10 +1032,7 @@ public extension ViewModel {
 }
 
 // XXX Fing global :(
-fileprivate var video_play_timer: Timer?
+fileprivate var videoPlayTimer: Timer?
 
-fileprivate var current_video_frame = 0
-
-
-fileprivate let file_manager = FileManager.default
+fileprivate var currentVideoFrame = 0
 

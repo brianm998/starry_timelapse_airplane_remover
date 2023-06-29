@@ -29,14 +29,14 @@ struct FrameEditView: View {
         // wrap the frame view with a zoomable view
         GeometryReader { geometry in
             // this is to account for the outlier arrows on the sides of the frame
-            let outlier_arrow_length = self.viewModel.frameWidth/self.viewModel.outlier_arrow_length
+            let outlierArrowLength = self.viewModel.frameWidth/self.viewModel.outlierArrowLength
             
-            let min = (geometry.size.height/(viewModel.frameHeight+outlier_arrow_length*2))
+            let min = (geometry.size.height/(viewModel.frameHeight+outlierArrowLength*2))
             let full_max = self.showFullResolution ? 1 : 0.3
             let max = min < full_max ? full_max : min
 
-            ZoomableView(size: CGSize(width: viewModel.frameWidth+outlier_arrow_length*2,
-                                   height: viewModel.frameHeight+outlier_arrow_length*2),
+            ZoomableView(size: CGSize(width: viewModel.frameWidth+outlierArrowLength*2,
+                                   height: viewModel.frameHeight+outlierArrowLength*2),
                          min: min,
                          max: max,
                          showsIndicators: true)

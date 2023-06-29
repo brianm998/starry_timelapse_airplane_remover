@@ -232,13 +232,13 @@ struct OutlierGroupView: View {
     private var arrowLength: CGFloat {
         let viewModel = self.groupViewModel.viewModel
         let frameWidth = viewModel.frameWidth
-        return frameWidth/viewModel.outlier_arrow_length
+        return frameWidth/viewModel.outlierArrowLength
     }
 
     private var arrowHeight: CGFloat {
         let viewModel = self.groupViewModel.viewModel
         let frameWidth = viewModel.frameWidth
-        return frameWidth/viewModel.outlier_arrow_height
+        return frameWidth/viewModel.outlierArrowHeight
     }
     
     private var lineWidth: CGFloat { self.arrowHeight/8 }

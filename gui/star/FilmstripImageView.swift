@@ -34,7 +34,7 @@ struct FilmstripImageView: View {
           .background(viewModel.currentIndex == frameIndex ? Color(white: 0.45) : Color(white: 0.22))
           .onTapGesture {
               // XXX move this out 
-              //viewModel.label_text = "loading..."
+              //viewModel.labelText = "loading..."
               // XXX set loading image here
               // grab frame and try to show it
               let frame_view = viewModel.frames[frameIndex]
