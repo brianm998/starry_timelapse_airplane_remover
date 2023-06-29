@@ -6,9 +6,9 @@ struct MassivePaintSheetView: View {
     @Binding var isVisible: Bool
     var closure: (Bool, Int, Int) -> Void
 
-    @State var start_index: Int = 0
-    @State var end_index: Int = 1   // XXX 1
-    @State var should_paint = false
+    @State var startIndex: Int = 0
+    @State var endIndex: Int = 1   // XXX 1
+    @State var shouldPaint = false
 
     init(isVisible: Binding<Bool>,
          closure: @escaping (Bool, Int, Int) -> Void)
@@ -23,29 +23,29 @@ struct MassivePaintSheetView: View {
             Spacer()
             VStack {
                 Spacer()
-                Text((should_paint ? "Paint" : "Clear") + " \(end_index-start_index) frames from")
+                Text((shouldPaint ? "Paint" : "Clear") + " \(endIndex-startIndex) frames from")
                 Spacer()
-                Picker("start frame", selection: $start_index) {
+                Picker("start frame", selection: $startIndex) {
                     ForEach(0 ..< viewModel.frames.count, id: \.self) {
                         Text("frame \($0)")
                     }
                 }
                 Spacer()
-                Picker("to end frame", selection: $end_index) {
+                Picker("to end frame", selection: $endIndex) {
                     ForEach(0 ..< viewModel.frames.count, id: \.self) {
                         Text("frame \($0)")
                     }
                 }
-                Toggle("should paint", isOn: $should_paint)
+                Toggle("should paint", isOn: $shouldPaint)
 
                 HStack {
                     Button("Cancel") {
                         self.isVisible = false
                     }
                     
-                    Button(should_paint ? "Paint All" : "Clear All") {
+                    Button(shouldPaint ? "Paint All" : "Clear All") {
                         self.isVisible = false
-                        closure(should_paint, start_index, end_index)
+                        closure(shouldPaint, startIndex, endIndex)
                     }
                 }
                 Spacer()

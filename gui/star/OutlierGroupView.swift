@@ -190,10 +190,10 @@ struct OutlierGroupView: View {
         if let origShouldPaint = origShouldPaint {
             will_paint = origShouldPaint.willPaint
         }
-        let should_paint = PaintReason.userSelected(!will_paint)
+        let shouldPaint = PaintReason.userSelected(!will_paint)
         
         // update the view model to show the change quickly
-        self.groupViewModel.group.shouldPaint = should_paint
+        self.groupViewModel.group.shouldPaint = shouldPaint
         self.groupViewModel.objectWillChange.send() 
 
         Task {
@@ -202,7 +202,7 @@ struct OutlierGroupView: View {
                let outlier_group = outlierGroups.members[self.groupViewModel.group.name]
             {
                 // update the actor in the background
-                await outlier_group.shouldPaint(should_paint)
+                await outlier_group.shouldPaint(shouldPaint)
                 self.groupViewModel.viewModel.update()
             } else {
                 Log.e("HOLY FUCK")

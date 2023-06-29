@@ -136,26 +136,26 @@ struct FrameEditView: View {
                   
                   let frameView = viewModel.currentFrameView
                   
-                  var should_paint = false
+                  var shouldPaint = false
                   var paint_choice = true
                   
                   switch viewModel.selectionMode {
                   case .paint:
-                      should_paint = true
+                      shouldPaint = true
                   case .clear:
-                      should_paint = false
+                      shouldPaint = false
                   case .details:
                       paint_choice = false
                   }
                   
                   if paint_choice {
-                      frameView.userSelectAllOutliers(toShouldPaint: should_paint,
+                      frameView.userSelectAllOutliers(toShouldPaint: shouldPaint,
                                                       between: drag_start,
                                                       and: end_location)
                       //update the view layer
                       frameView.update()
                       if let frame = frameView.frame {
-                          let new_value = should_paint
+                          let new_value = shouldPaint
                           Task.detached(priority: .userInitiated) {
                               await frame.userSelectAllOutliers(toShouldPaint: new_value,
                                                                 between: drag_start,

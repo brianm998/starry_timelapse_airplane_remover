@@ -144,34 +144,34 @@ struct decision_tree_generator: ParsableCommand {
         Log.i("train-data: \(inputFilenames)")
         Log.d("in debug mode")
         if verificationMode {
-            run_verification()
+            runVerification()
         } else {
             if let forestSize = forestSize {
                 // generate a forest of trees
                 // this ignores given test data,
                 // instead separating out the input data
                 // into train, validate and test segments
-                generate_forest_from_training_data(with: forestSize)                
+                generateForestFromTrainingData(with: forestSize)                
             } else {
                 // generate a single tree
                 // this prunes from the give test data
-                generate_tree_from_training_data()
+                generateTreeFromTrainingData()
             }
         }
         Log.dispatchGroup.wait()
     }
 
-    func runVerification(basedUpon json_config_file_name: String) async throws -> TreeTestResults {
+    func runVerification(basedUpon jsonConfigFileName: String) async throws -> TreeTestResults {
 
-        var num_similar_outlier_groups:[String:Int] = [:]
-        var num_different_outlier_groups:[String:Int] = [:]
+        var numSimilarOutlierGroups: [String:Int] = [:]
+        var numDifferentOutlierGroups: [String:Int] = [:]
         for (treeKey, _) in decisionTrees {
-            num_similar_outlier_groups[treeKey] = 0
-            num_different_outlier_groups[treeKey] = 0
+            numSimilarOutlierGroups[treeKey] = 0
+            numDifferentOutlierGroups[treeKey] = 0
         }
         
-        let config = try await Config.read(fromJsonFilename: json_config_file_name)
-        Log.d("got config from \(json_config_file_name)")
+        let config = try await Config.read(fromJsonFilename: jsonConfigFileName)
+        Log.d("got config from \(jsonConfigFileName)")
         
         let callbacks = Callbacks()
 
@@ -180,10 +180,10 @@ struct decision_tree_generator: ParsableCommand {
         var endClosure: () -> Void = { }
         
         // called when we should check a frame
-        callbacks.frameCheckClosure = { new_frame in
-            frames.append(new_frame)
+        callbacks.frameCheckClosure = { newFrame in
+            frames.append(newFrame)
             endClosure()
-            Log.d("frameCheckClosure for frame \(new_frame.frameIndex)")
+            Log.d("frameCheckClosure for frame \(newFrame.frameIndex)")
         }
         
         callbacks.countOfFramesToCheck = { 1 }
@@ -192,14 +192,14 @@ struct decision_tree_generator: ParsableCommand {
                                                   callbacks: callbacks,
                                                   processExistingFiles: true,
                                                   fullyProcess: false)
-        let sequence_size = await eraser.imageSequence.filenames.count
+        let sequenceSize = await eraser.imageSequence.filenames.count
         endClosure = {
-            if frames.count == sequence_size {
+            if frames.count == sequenceSize {
                 eraser.shouldRun = false
             }
         }
         
-        Log.i("got \(sequence_size) frames")
+        Log.i("got \(sequenceSize) frames")
         // XXX run it and get the outlier groups
 
         try await eraser.run()
@@ -227,31 +227,31 @@ struct decision_tree_generator: ParsableCommand {
             // check all outlier groups
             
             let task = await runTask() {
-                var number_good: [String: Int] = [:]
-                var number_bad: [String: Int] = [:]
+                var numberGood: [String: Int] = [:]
+                var numberBad: [String: Int] = [:]
                 for (treeKey, _) in decisionTrees {
-                    number_good[treeKey] = 0
-                    number_bad[treeKey] = 0
+                    numberGood[treeKey] = 0
+                    numberBad[treeKey] = 0
                 }
                 
                 //Log.d("should check frame \(frame.frameIndex)")
-                if let outlier_group_list = frame.outlierGroupList() {
-                    for outlier_group in outlier_group_list {
-                        if let numberGood = outlier_group.shouldPaint {
+                if let outlierGroupList = frame.outlierGroupList() {
+                    for outlierGroup in outlierGroupList {
+                        if let numberGoodShouldPaint = outlierGroup.shouldPaint {
                             await withLimitedTaskGroup(of: (treeKey:String, shouldPaint:Bool).self) { taskGroup in
                                 for (treeKey, tree) in decisionTrees {
                                     await taskGroup.addTask() {
                                         let decisionTreeShouldPaint =  
-                                          await tree.classification(of: outlier_group) > 0
+                                          await tree.classification(of: outlierGroup) > 0
                                         
-                                        return (treeKey, decisionTreeShouldPaint == numberGood.willPaint)
+                                        return (treeKey, decisionTreeShouldPaint == numberGoodShouldPaint.willPaint)
                                     }
                                 }
                                 await taskGroup.forEach() { result in
                                     if result.shouldPaint {
-                                        number_good[result.treeKey]! += 1
+                                        numberGood[result.treeKey]! += 1
                                     } else {
-                                        number_bad[result.treeKey]! += 1
+                                        numberBad[result.treeKey]! += 1
                                     }
                                 }
                                 
@@ -262,9 +262,9 @@ struct decision_tree_generator: ParsableCommand {
                     //Log.e("WTF")
                     //fatalError("DIED HERE")
                 }
-                //Log.d("number_good \(number_good) number_bad \(number_bad)")
-                return TreeTestResults(numberGood: number_good,
-                                       numberBad: number_bad)
+                //Log.d("numberGood \(numberGood) numberBad \(numberBad)")
+                return TreeTestResults(numberGood: numberGood,
+                                       numberBad: numberBad)
             }
             tasks.append(task)
         }
@@ -274,47 +274,47 @@ struct decision_tree_generator: ParsableCommand {
             
             Log.d("got response response.numberGood \(response.numberGood) response.numberBad \(response.numberBad) ")
             for (treeKey, _) in decisionTrees {
-                num_similar_outlier_groups[treeKey]! += response.numberGood[treeKey]!
-                num_different_outlier_groups[treeKey]! += response.numberBad[treeKey]!
+                numSimilarOutlierGroups[treeKey]! += response.numberGood[treeKey]!
+                numDifferentOutlierGroups[treeKey]! += response.numberBad[treeKey]!
             }
         }
         
         Log.d("checkpoint at end")
-        return TreeTestResults(numberGood: num_similar_outlier_groups,
-                               numberBad: num_different_outlier_groups)
+        return TreeTestResults(numberGood: numSimilarOutlierGroups,
+                               numberBad: numDifferentOutlierGroups)
     }
 
-    func run_verification() {
+    func runVerification() {
         let dispatchGroup = DispatchGroup()
         dispatchGroup.enter()
         Task {
             let classifiedData = ClassifiedData()
-            for input_dirname in inputFilenames {
-                if fileManager.fileExists(atPath: input_dirname) {
-                    classifiedData += try await loadDataFrom(dirname: input_dirname)
+            for inputDirname in inputFilenames {
+                if fileManager.fileExists(atPath: inputDirname) {
+                    classifiedData += try await loadDataFrom(dirname: inputDirname)
                 }
             }
             // we've loaded all the classified data
 
             var results = TreeTestResults()
 
-            let chunked_test_data = classifiedData.split(into: ProcessInfo.processInfo.activeProcessorCount)
+            let chunkedTestData = classifiedData.split(into: ProcessInfo.processInfo.activeProcessorCount)
             
             for (_, tree) in decisionTrees {
-                let (num_good, num_bad) = await runTest(of: tree, onChunks: chunked_test_data)
-                results.numberGood[tree.name] = num_good
-                results.numberBad[tree.name] = num_bad
+                let (numGood, numBad) = await runTest(of: tree, onChunks: chunkedTestData)
+                results.numberGood[tree.name] = numGood
+                results.numberBad[tree.name] = numBad
             }
 
             var outputResults: [DecisionTreeResult] = []
             for (treeKey, _) in decisionTrees {
                 let total = results.numberGood[treeKey]! + results.numberBad[treeKey]!
-                let percentage_good = Double(results.numberGood[treeKey]!)/Double(total)*100
-                let message = "For decision Tree \(treeKey) out of a total of \(total) outlier groups, \(percentage_good)% success good \(results.numberGood[treeKey]!) vs bad \(results.numberBad[treeKey]!)"
-                outputResults.append(DecisionTreeResult(score: percentage_good,
+                let percentageGood = Double(results.numberGood[treeKey]!)/Double(total)*100
+                let message = "For decision Tree \(treeKey) out of a total of \(total) outlier groups, \(percentageGood)% success good \(results.numberGood[treeKey]!) vs bad \(results.numberBad[treeKey]!)"
+                outputResults.append(DecisionTreeResult(score: percentageGood,
                                                         message: message))
             }
-            // sort these on output by percentage_good
+            // sort these on output by percentageGood
             for result in outputResults.sorted() {
                 Log.i(result.message)
             }
@@ -326,14 +326,14 @@ struct decision_tree_generator: ParsableCommand {
 
     // read outlier group values from a stored set of files listed by a config.json
     // the reads the full outliers from file, and can be slow
-    private func read(fromConfig json_config_file_name: String) async throws
+    private func read(fromConfig jsonConfigFileName: String) async throws
       -> ([OutlierFeatureData], // should paint
           [OutlierFeatureData]) // should not paint
     {
         var positiveData: [OutlierFeatureData] = []
         var negativeData: [OutlierFeatureData] = []
-        let config = try await Config.read(fromJsonFilename: json_config_file_name)
-        Log.d("got config from \(json_config_file_name)")
+        let config = try await Config.read(fromJsonFilename: jsonConfigFileName)
+        Log.d("got config from \(jsonConfigFileName)")
         
         let callbacks = Callbacks()
 
@@ -342,27 +342,27 @@ struct decision_tree_generator: ParsableCommand {
         var endClosure: () -> Void = { }
         
         // called when we should check a frame
-        callbacks.frameCheckClosure = { new_frame in
-            Log.d("frameCheckClosure for frame \(new_frame.frameIndex)")
-            frames.append(new_frame)
+        callbacks.frameCheckClosure = { newFrame in
+            Log.d("frameCheckClosure for frame \(newFrame.frameIndex)")
+            frames.append(newFrame)
             endClosure()
         }
         
         callbacks.countOfFramesToCheck = { 1 }
 
         let eraser = try await NighttimeAirplaneRemover(with: config,
-                                                   callbacks: callbacks,
-                                                   processExistingFiles: true,
-                                                   fullyProcess: false)
-        let sequence_size = await eraser.imageSequence.filenames.count
+                                                        callbacks: callbacks,
+                                                        processExistingFiles: true,
+                                                        fullyProcess: false)
+        let sequenceSize = await eraser.imageSequence.filenames.count
         endClosure = {
-            Log.d("end enclosure frames.count \(frames.count) sequence_size \(sequence_size)")
-            if frames.count == sequence_size {
+            Log.d("end enclosure frames.count \(frames.count) sequenceSize \(sequenceSize)")
+            if frames.count == sequenceSize {
                 eraser.shouldRun = false
             }
         }
         
-        Log.d("got \(sequence_size) frames")
+        Log.d("got \(sequenceSize) frames")
         // XXX run it and get the outlier groups
 
         try await eraser.run()
@@ -389,20 +389,20 @@ struct decision_tree_generator: ParsableCommand {
         for frame in frames {
             let task = await runTask() {
                 
-                var local_positive_data: [OutlierFeatureData] = []
-                var local_negative_data: [OutlierFeatureData] = []
-                if let outlier_groups = frame.outlierGroupList() {
-                    for outlier_group in outlier_groups {
-                        let name = outlier_group.name
-                        if let should_paint = outlier_group.shouldPaint {
-                            let will_paint = should_paint.willPaint
+                var localPositiveData: [OutlierFeatureData] = []
+                var localNegativeData: [OutlierFeatureData] = []
+                if let outlierGroups = frame.outlierGroupList() {
+                    for outlierGroup in outlierGroups {
+                        let name = outlierGroup.name
+                        if let shouldPaint = outlierGroup.shouldPaint {
+                            let willPaint = shouldPaint.willPaint
                             
-                            let values = await outlier_group.decisionTreeGroupValues
+                            let values = await outlierGroup.decisionTreeGroupValues
                             
-                            if will_paint {
-                                local_positive_data.append(values)
+                            if willPaint {
+                                localPositiveData.append(values)
                             } else {
-                                local_negative_data.append(values)
+                                localNegativeData.append(values)
                             }
                         } else {
                             Log.e("outlier group \(name) has no shouldPaint value")
@@ -414,8 +414,8 @@ struct decision_tree_generator: ParsableCommand {
                     fatalError("cannot get outlier groups for frame \(frame.frameIndex)")
                 }
                 return ClassifiedData(
-                  positiveData: local_positive_data,
-                  negativeData: local_negative_data)
+                  positiveData: localPositiveData,
+                  negativeData: localNegativeData)
             }
             tasks.append(task)
         }
@@ -430,9 +430,9 @@ struct decision_tree_generator: ParsableCommand {
     }
 
     // actually generate a decision tree forest
-    func generate_forest_from_training_data(with forestSize: Int) {
+    func generateForestFromTrainingData(with forestSize: Int) {
 
-        Log.d("generate_forest_from_training_data")
+        Log.d("generateForestFromTrainingData")
         
         let dispatchGroup = DispatchGroup()
         dispatchGroup.enter()
@@ -444,7 +444,7 @@ struct decision_tree_generator: ParsableCommand {
                                                   maxDepth: maxDepth)
 
             
-            let base_filename = "../starDecisionTrees/Sources/starDecisionTrees/OutlierGroupDecisionTreeForest_"
+            let baseFilename = "../starDecisionTrees/Sources/starDecisionTrees/OutlierGroupDecisionTreeForest_"
 
             // test data gathered from -t on command line
             let testData = try await loadTestData().split(into: ProcessInfo.processInfo.activeProcessorCount)
@@ -454,11 +454,11 @@ struct decision_tree_generator: ParsableCommand {
                                                  andTestData: testData,
                                                  inputFilenames: inputFilenames,
                                                  treeCount: forestSize,
-                                                 baseFilename: base_filename) 
+                                                 baseFilename: baseFilename) 
 
-            let forest_base_filename = "../starDecisionTrees/Sources/starDecisionTrees/OutlierGroupForestClassifier_"
+            let forestBaseFilename = "../starDecisionTrees/Sources/starDecisionTrees/OutlierGroupForestClassifier_"
 
-            let classifier = try await generator.writeClassifier(with: forest, baseFilename: forest_base_filename)
+            let classifier = try await generator.writeClassifier(with: forest, baseFilename: forestBaseFilename)
 
             // test classifier and see how well it does on the test data
 
@@ -489,28 +489,28 @@ struct decision_tree_generator: ParsableCommand {
     func loadTrainingData() async throws -> ClassifiedData {
         let trainingData = ClassifiedData()
 
-        for json_config_file_name in inputFilenames {
-            if json_config_file_name.hasSuffix("config.json") {
+        for jsonConfigFileName in inputFilenames {
+            if jsonConfigFileName.hasSuffix("config.json") {
                 // here we are loading the full outlier groups and analyzing based upon that
                 // comprehensive, but slow
-                Log.d("should read \(json_config_file_name)")
+                Log.d("should read \(jsonConfigFileName)")
 
                 do {
-                    let (more_should_paint, more_should_not_paint) =
-                      try await read(fromConfig: json_config_file_name)
+                    let (moreShouldPaint, moreShouldNotPaint) =
+                      try await read(fromConfig: jsonConfigFileName)
                     
-                    trainingData.positiveData += more_should_paint
-                    trainingData.negativeData += more_should_not_paint
+                    trainingData.positiveData += moreShouldPaint
+                    trainingData.negativeData += moreShouldNotPaint
                 } catch {
-                    Log.w("couldn't get config from \(json_config_file_name)")
+                    Log.w("couldn't get config from \(jsonConfigFileName)")
                     Log.e("\(error)")
-                    fatalError("couldn't get config from \(json_config_file_name)")
+                    fatalError("couldn't get config from \(jsonConfigFileName)")
                 }
             } else {
                 // here we are reading pre-computed values for each data point
-                if fileManager.fileExists(atPath: json_config_file_name) {
+                if fileManager.fileExists(atPath: jsonConfigFileName) {
                     // load here
-                    let result = try await loadDataFrom(dirname: json_config_file_name)
+                    let result = try await loadDataFrom(dirname: jsonConfigFileName)
                     trainingData.positiveData += result.positiveData
                     trainingData.negativeData += result.negativeData
                 }
@@ -520,7 +520,7 @@ struct decision_tree_generator: ParsableCommand {
     }
     
     // actually generate a decision tree
-    func generate_tree_from_training_data() {
+    func generateTreeFromTrainingData() {
         
         let dispatchGroup = DispatchGroup()
         dispatchGroup.enter()
