@@ -1,4 +1,4 @@
-//
+                                                     //
 //  ContentView.swift
 //  star
 //
@@ -15,19 +15,16 @@ import StarCore
 @available(macOS 13.0, *) 
 struct ContentView: View {
     @ObservedObject var viewModel: ViewModel
-    let imageSequenceView: ImageSequenceView
     
     init(viewModel: ViewModel) {
         self.viewModel = viewModel
-        self.imageSequenceView = ImageSequenceView(viewModel: viewModel)
     }
     
     var body: some View {
-        //let scaling_anchor = UnitPoint(x: 0.75, y: 0.75)
-        if !viewModel.sequenceLoaded {
-            InitialView(viewModel: viewModel)
+        if viewModel.sequenceLoaded {
+            ImageSequenceView(viewModel: viewModel)
         } else {
-            self.imageSequenceView
+            InitialView(viewModel: viewModel)
         }
     }
 }
@@ -38,11 +35,11 @@ struct ContentView_Previews: PreviewProvider {
         ContentView(viewModel: ViewModel())
     }
 }
-
+/*
 extension AnyTransition {
     static var moveAndFade: AnyTransition {
-        //AnyTransition.move(edge: .trailing)
-        //AnyTransition.slide
+//        AnyTransition.move(edge: .trailing)
+//        AnyTransition.slide
         .asymmetric(
           insertion: .move(edge: .trailing).combined(with: .opacity),
           removal: .scale.combined(with: .opacity)
@@ -50,3 +47,4 @@ extension AnyTransition {
 
     }
 }
+*/

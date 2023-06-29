@@ -4,11 +4,11 @@ import StarCore
 // this button paints everything
 
 struct PaintAllButton: View {
-    let contentView: ContentView
+    let viewModel: ViewModel
 
     var body: some View {
         Button(action: {
-            contentView.imageSequenceView.setAllCurrentFrameOutliers(to: true, renderImmediately: false)
+            viewModel.setAllCurrentFrameOutliers(to: true, renderImmediately: false)
         }) {
             Text("Paint All")
         }

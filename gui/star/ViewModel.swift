@@ -70,6 +70,7 @@ public final class ViewModel: ObservableObject {
     @Published var selectedOutliers = Set<OutlierGroupTableRow.ID>()
 
     @Published var selectionMode = SelectionMode.paint
+    @Published var rendering_current_frame = false
 
     var selectionColor: Color {
         switch self.selectionMode {
@@ -85,6 +86,33 @@ public final class ViewModel: ObservableObject {
     @Published var outlierOpacitySliderValue = 1.0
 
     @Published var savedOutlierOpacitySliderValue = 1.0
+
+    @Published var sliderValue = 0.0
+
+    @Published var interactionMode: InteractionMode = .scrub
+
+    @Published var previousInteractionMode: InteractionMode = .scrub
+
+
+
+    // enum for how we show each frame
+    @Published var frameViewMode = FrameViewMode.processed
+
+    // should we show full resolution images on the main frame?
+    // faster low res previews otherwise
+    @Published var showFullResolution = false
+
+    @Published var showFilmstrip = true
+
+    @Published var background_color: Color = .gray
+
+    @Published var rendering_all_frames = false
+    @Published var updating_frame_batch = false
+
+    @Published var video_playback_framerate = 30
+
+    @Published var settings_sheet_showing = false
+    @Published var paint_sheet_showing = false
     
     // the frame number of the frame we're currently showing
     var current_index = 0
@@ -170,7 +198,7 @@ public final class ViewModel: ObservableObject {
 
         let preview_width = config?.preview_width ?? Config.default_preview_width
         let preview_height = config?.preview_height ?? Config.default_preview_height
-        let preview_size = NSSize(width: preview_width, height: preview_height)
+        //let preview_size = NSSize(width: preview_width, height: preview_height)
         
         Task {
             var pixImage: PixelatedImage?
@@ -383,7 +411,7 @@ public final class ViewModel: ObservableObject {
         let minGroupSize: Int = 80      // groups smaller than this are completely ignored
         let numConcurrentRenders: Int = ProcessInfo.processInfo.activeProcessorCount
         let should_write_outlier_group_files = true // XXX see what happens
-        let process_outlier_group_images = false
+        //let process_outlier_group_images = false
 
         
         // XXX copied from star.swift
@@ -537,6 +565,324 @@ public final class ViewModel: ObservableObject {
             await MainActor.run {
                 self.objectWillChange.send()
             }
+        }
+    }
+}
+
+// methods used in image sequence view
+public extension ViewModel {
+    func setAllCurrentFrameOutliers(to shouldPaint: Bool,
+                                renderImmediately: Bool = true)
+    {
+        let current_frame_view = self.currentFrameView
+        setAllFrameOutliers(in: current_frame_view,
+                            to: shouldPaint,
+                            renderImmediately: renderImmediately)
+    }
+    
+    func setAllFrameOutliers(in frame_view: FrameViewModel,
+                          to shouldPaint: Bool,
+                          renderImmediately: Bool = true)
+    {
+        Log.d("setAllFrameOutliers in frame \(frame_view.frame_index) to should paint \(shouldPaint)")
+        let reason = PaintReason.userSelected(shouldPaint)
+        
+        // update the view model first
+        if let outlierViews = frame_view.outlierViews {
+            outlierViews.forEach { outlierView in
+                outlierView.group.shouldPaint = reason
+            }
+        }
+
+        if let frame = frame_view.frame {
+            // update the real actor in the background
+            Task {
+                await frame.userSelectAllOutliers(toShouldPaint: shouldPaint)
+
+                if renderImmediately {
+                    // XXX make render here an option in settings
+                    await render(frame: frame) {
+                        Task {
+                            await self.refresh(frame: frame)
+                            if frame.frame_index == self.current_index {
+                                self.refreshCurrentFrame() // XXX not always current
+                            }
+                            self.update()
+                        }
+                    }
+                } else {
+                    if frame.frame_index == self.current_index {
+                        self.refreshCurrentFrame() // XXX not always current
+                    }
+                    self.update()
+                }
+            }
+        } else {
+            Log.w("frame \(frame_view.frame_index) has no frame")
+        }
+    }
+
+    func render(frame: FrameAirplaneRemover, closure: (() -> Void)? = nil) async {
+        if let frameSaveQueue = self.frameSaveQueue
+        {
+            self.rendering_current_frame = true // XXX might not be right anymore
+            frameSaveQueue.saveNow(frame: frame) {
+                await self.refresh(frame: frame)
+                self.refreshCurrentFrame()
+                self.rendering_current_frame = false
+                closure?()
+            }
+        }
+    }
+
+    func transition(toFrame new_frame_view: FrameViewModel,
+                    from old_frame: FrameAirplaneRemover?,
+                    withScroll scroller: ScrollViewProxy? = nil)
+    {
+        Log.d("transition from \(String(describing: self.currentFrame))")
+        let start_time = Date().timeIntervalSinceReferenceDate
+
+        if self.current_index >= 0,
+           self.current_index < self.frames.count
+        {
+            self.frames[self.current_index].isCurrentFrame = false
+        }
+        self.frames[new_frame_view.frame_index].isCurrentFrame = true
+        self.current_index = new_frame_view.frame_index
+        self.sliderValue = Double(self.current_index)
+        
+        if interactionMode == .edit,
+           let scroller = scroller
+        {
+            scroller.scrollTo(self.current_index, anchor: .center)
+
+            //self.label_text = "frame \(new_frame_view.frame_index)"
+
+            // only save frame when we are also scrolling (i.e. not scrubbing)
+            if let frame_to_save = old_frame {
+
+                Task {
+                    let frame_changed = frame_to_save.hasChanges()
+
+                    // only save changes to frames that have been changed
+                    if frame_changed {
+                        self.saveToFile(frame: frame_to_save) {
+                            Log.d("completion closure called for frame \(frame_to_save.frame_index)")
+                            Task {
+                                await self.refresh(frame: frame_to_save)
+                                self.self.update()
+                            }
+                        }
+                    }
+                }
+            } else {
+                Log.w("no old frame to save")
+            }
+        } else {
+            Log.d("no scroller")
+        }
+        
+        refreshCurrentFrame()
+
+        let end_time = Date().timeIntervalSinceReferenceDate
+        Log.d("transition to frame \(new_frame_view.frame_index) took \(end_time - start_time) seconds")
+    }
+
+    func refreshCurrentFrame() {
+        // XXX maybe don't wait for frame?
+        Log.d("refreshCurrentFrame \(self.current_index)")
+        let new_frame_view = self.frames[self.current_index]
+        if let next_frame = new_frame_view.frame {
+
+            // usually stick the preview image in there first if we have it
+            var show_preview = true
+
+            /*
+            Log.d("showFullResolution \(showFullResolution)")
+            Log.d("self.current_frame_image_index \(self.current_frame_image_index)")
+            Log.d("new_frame_view.frame_index \(new_frame_view.frame_index)")
+            Log.d("self.current_frame_image_view_mode \(self.current_frame_image_view_mode)")
+            Log.d("self.frameViewMode \(self.frameViewMode)")
+            Log.d("self.current_frame_image_was_preview \(self.current_frame_image_was_preview)")
+             */
+
+            if showFullResolution &&
+               self.current_frame_image_index == new_frame_view.frame_index &&
+               self.current_frame_image_view_mode == self.frameViewMode &&
+               !self.current_frame_image_was_preview
+            {
+                // showing the preview in this case causes flickering
+                show_preview = false
+            }
+                 
+            if show_preview {
+                self.current_frame_image_index = new_frame_view.frame_index
+                self.current_frame_image_was_preview = true
+                self.current_frame_image_view_mode = self.frameViewMode
+
+                switch self.frameViewMode {
+                case .original:
+                    self.current_frame_image = new_frame_view.preview_image//.resizable()
+                case .processed:
+                    self.current_frame_image = new_frame_view.processed_preview_image//.resizable()
+                }
+            }
+            if showFullResolution {
+                if next_frame.frame_index == self.current_index {
+                    Task {
+                        do {
+                            self.current_frame_image_index = new_frame_view.frame_index
+                            self.current_frame_image_was_preview = false
+                            self.current_frame_image_view_mode = self.frameViewMode
+                            
+                            switch self.frameViewMode {
+                            case .original:
+                                if let baseImage = try await next_frame.baseImage() {
+                                    if next_frame.frame_index == self.current_index {
+                                        self.current_frame_image = Image(nsImage: baseImage)
+                                    }
+                                }
+                                
+                            case .processed:
+                                if let baseImage = try await next_frame.baseOutputImage() {
+                                    if next_frame.frame_index == self.current_index {
+                                        self.current_frame_image = Image(nsImage: baseImage)
+                                    }
+                                }
+                            }
+                        } catch {
+                            Log.e("error")
+                        }
+                    }
+                }
+            }
+
+            if interactionMode == .edit {
+                // try loading outliers if there aren't any present
+                let frameView = self.frames[next_frame.frame_index]
+                if frameView.outlierViews == nil,
+                   !frameView.loadingOutlierViews
+                {
+                    frameView.loadingOutlierViews = true
+                    self.loading_outliers = true
+                    Task.detached(priority: .userInitiated) {
+                        let _ = try await next_frame.loadOutliers()
+                        await MainActor.run {
+                            Task {
+                                await self.setOutlierGroups(forFrame: next_frame)
+                                frameView.loadingOutlierViews = false
+                                self.loading_outliers = self.loadingOutlierGroups
+                                self.update()
+                            }
+                        }
+                    }
+                }
+            }
+        } else {
+            Log.d("WTF for frame \(self.current_index)")
+            self.update()
+        }
+    }
+
+
+    func transition(numberOfFrames: Int,
+                    withScroll scroller: ScrollViewProxy? = nil)
+    {
+        let current_frame = self.currentFrame
+
+        var new_index = self.current_index + numberOfFrames
+        if new_index < 0 { new_index = 0 }
+        if new_index >= self.frames.count {
+            new_index = self.frames.count-1
+        }
+        let new_frame_view = self.frames[new_index]
+        
+        self.transition(toFrame: new_frame_view,
+                        from: current_frame,
+                        withScroll: scroller)
+    }
+
+    func transition(until fastAdvancementType: FastAdvancementType,
+                    from frame: FrameAirplaneRemover,
+                    forwards: Bool,
+                    currentIndex: Int? = nil,
+                    withScroll scroller: ScrollViewProxy? = nil)
+    {
+        var frame_index: Int = 0
+        if let currentIndex = currentIndex {
+            frame_index = currentIndex
+        } else {
+            frame_index = frame.frame_index
+        }
+        
+        if (!forwards && frame_index == 0) ||  
+           (forwards && frame_index >= self.frames.count - 1)
+        {
+            if frame_index != frame.frame_index {
+                self.transition(toFrame: self.frames[frame_index],
+                                from: frame,
+                                withScroll: scroller)
+            }
+            return
+        }
+        
+        var next_frame_index = 0
+        if forwards {
+            next_frame_index = frame_index + 1
+        } else {
+            next_frame_index = frame_index - 1
+        }
+        let next_frame_view = self.frames[next_frame_index]
+
+        var skip = false
+
+        switch fastAdvancementType {
+        case .normal:
+            skip = false 
+
+        case .skipEmpties:
+            if let outlierViews = next_frame_view.outlierViews {
+                skip = outlierViews.count == 0
+            }
+
+        case .toNextPositive:
+            if let num = next_frame_view.numberOfPositiveOutliers {
+                skip = num == 0
+            }
+
+        case .toNextNegative:
+            if let num = next_frame_view.numberOfNegativeOutliers {
+                skip = num == 0
+            }
+
+        case .toNextUnknown:
+            if let num = next_frame_view.numberOfUndecidedOutliers {
+                skip = num == 0
+            }
+        }
+        
+        // skip this one
+        if skip {
+            self.transition(until: fastAdvancementType,
+                            from: frame,
+                            forwards: forwards,
+                            currentIndex: next_frame_index,
+                            withScroll: scroller)
+        } else {
+            self.transition(toFrame: next_frame_view,
+                            from: frame,
+                            withScroll: scroller)
+        }
+    }
+
+    // used when advancing between frames
+    func saveToFile(frame frame_to_save: FrameAirplaneRemover, completionClosure: @escaping () -> Void) {
+        Log.d("saveToFile frame \(frame_to_save.frame_index)")
+        if let frameSaveQueue = self.frameSaveQueue {
+            frameSaveQueue.readyToSave(frame: frame_to_save, completionClosure: completionClosure)
+        } else {
+            Log.e("FUCK")
+            fatalError("SETUP WRONG")
         }
     }
 }

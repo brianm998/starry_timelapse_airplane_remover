@@ -52,7 +52,7 @@ struct FilmstripImageView: View {
               let frame_view = viewModel.frames[frame_index]
               
               let current_frame = viewModel.currentFrame
-              imageSequenceView.transition(toFrame: frame_view,
+              viewModel.transition(toFrame: frame_view,
                                            from: current_frame,
                                            withScroll: scroller)
           }

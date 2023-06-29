@@ -1,7 +1,7 @@
 import SwiftUI
 import StarCore
 
-enum FastAdvancementType: String, Equatable, CaseIterable {
+public enum FastAdvancementType: String, Equatable, CaseIterable {
     case normal
     case skipEmpties
     case toNextPositive

@@ -8,9 +8,10 @@ struct StarCommands: Commands {
 
     var body: some Commands {
         CommandMenu("Actions") {
-            PaintAllButton(contentView: contentView)
+
+            PaintAllButton(viewModel: contentView.viewModel)
               .keyboardShortcut("p", modifiers: [])
-            ClearAllButton(contentView: contentView)
+            ClearAllButton(viewModel: contentView.viewModel)
               .keyboardShortcut("c", modifiers: [])
             
             /*
@@ -36,31 +37,6 @@ struct StarCommands: Commands {
                         contentView.viewModel.unloadSequence()
                     }
                 }
-            }
-        }
-        CommandMenu("Playback") {
-            Button("Show first frame") {
-                contentView.imageSequenceView.goToFirstFrameButtonAction()
-            }
-            Button("Go back many frames") {
-                contentView.imageSequenceView.fastPreviousButtonAction()
-            }
-            Button("Go back one frame") {
-                contentView.imageSequenceView.transition(numberOfFrames: -1)
-            }
-            /*
-            Button(contentView.viewModel.video_playing ? "Pause Video" : "Play Video") {
-                contentView.imageSequenceView.togglePlay()
-            }
-             */
-            Button("Advance one frame") {
-                contentView.imageSequenceView.transition(numberOfFrames: 1)
-            }
-            Button("Advance many frames") {
-                contentView.imageSequenceView.fastPreviousButtonAction()
-            }
-            Button("Show last frame") {
-                contentView.imageSequenceView.goToFirstFrameButtonAction()
             }
         }
     }

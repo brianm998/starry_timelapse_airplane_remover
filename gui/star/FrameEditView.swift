@@ -46,7 +46,7 @@ struct FrameEditView: View {
                 // the currently visible frame
                 self.imageView
             }
-              .transition(.moveAndFade)
+              //.transition(.moveAndFade)
         }
     }
     

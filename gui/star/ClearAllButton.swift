@@ -4,11 +4,11 @@ import StarCore
 // this button clears everything
 
 struct ClearAllButton: View {
-    let contentView: ContentView
+    let viewModel: ViewModel
 
     var body: some View {
         Button(action: {
-            contentView.imageSequenceView.setAllCurrentFrameOutliers(to: false, renderImmediately: false)
+            viewModel.setAllCurrentFrameOutliers(to: false, renderImmediately: false)
         }) {
             Text("Clear All")
         }

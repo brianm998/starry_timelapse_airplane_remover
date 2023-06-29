@@ -59,7 +59,7 @@ struct FrameView: View {
             }
               .padding([.top])
               .frame(maxWidth: .infinity, maxHeight: .infinity)
-              .transition(.moveAndFade)
+             // .transition(.moveAndFade)
         }
     }
 }

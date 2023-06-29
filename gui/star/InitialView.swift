@@ -63,7 +63,7 @@ struct InitialView: View {
         Log.d("load config")
 
         let openPanel = NSOpenPanel()
-        openPanel.allowedFileTypes = ["json"]
+        openPanel.allowedFileTypes = ["json"] // 'allowedFileTypes' was deprecated in macOS 12.0: Use -allowedContentTypes instead
         openPanel.allowsMultipleSelection = false
         openPanel.canChooseDirectories = false
         openPanel.canChooseFiles = true

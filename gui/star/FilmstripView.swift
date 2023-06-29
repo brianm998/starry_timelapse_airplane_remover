@@ -23,7 +23,7 @@ struct FilmstripView: View {
                 Text("Loading Film Strip")
                   .font(.largeTitle)
                   .frame(minHeight: 50)
-                  .transition(.moveAndFade)
+                  //.transition(.moveAndFade)
             } else {
                 ScrollView(.horizontal) {
                     LazyHStack(spacing: 0) {
@@ -37,7 +37,7 @@ struct FilmstripView: View {
                     }
                 }
                   .frame(minHeight: CGFloat((viewModel.config?.thumbnail_height ?? 50) + 30))
-                  .transition(.moveAndFade)
+                  //.transition(.moveAndFade)
             }
         }
           .frame(maxWidth: .infinity, maxHeight: 50)

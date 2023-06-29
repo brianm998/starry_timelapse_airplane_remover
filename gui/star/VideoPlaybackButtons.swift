@@ -54,7 +54,7 @@ struct VideoPlaybackButtons : View {
                               (keyboard shortcut left arrow)
                               """)
                 {
-                    imageSequenceView.transition(numberOfFrames: -1,
+                    viewModel.transition(numberOfFrames: -1,
                                     withScroll: scroller)
                 }
 
@@ -108,7 +108,7 @@ struct VideoPlaybackButtons : View {
                               (keyboard shortcut right arrow)
                               """)
                 {
-                    imageSequenceView.transition(numberOfFrames: 1,
+                    viewModel.transition(numberOfFrames: 1,
                                     withScroll: scroller)
                 }
                 
