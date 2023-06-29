@@ -223,32 +223,4 @@ struct ImageSequenceView: View {
           .keyboardShortcut(shortcutKey, modifiers: [])
           .help("apply the outlier group decision tree to all outlier groups in this frame")
     }
-
-    func toggleViews() -> some View {
-        HStack() {
-            VStack(alignment: .leading) {
-                Picker("selection mode", selection: $viewModel.selectionMode) {
-                    ForEach(SelectionMode.allCases, id: \.self) { value in
-                        Text(value.localizedName).tag(value)
-                    }
-                }
-                  .help("""
-                          What happens when outlier groups are selected?
-                            paint   - they will be marked for painting
-                            clear   - they will be marked for not painting
-                            details - they will be shown in the info window
-                        """)
-                 .frame(maxWidth: 280)
-                 .pickerStyle(.segmented)
-
-                HStack {
-                    Toggle("full resolution", isOn: $viewModel.showFullResolution)
-                      .onChange(of: viewModel.showFullResolution) { mode_on in
-                          viewModel.refreshCurrentFrame()
-                      }
-                    Toggle("show filmstip", isOn: $viewModel.showFilmstrip)
-                }
-            }
-        }
-    }
 }
