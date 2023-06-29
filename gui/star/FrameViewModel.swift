@@ -36,13 +36,13 @@ public class FrameViewModel: ObservableObject {
     }
 
     var numberOfNegativeOutliers: Int? {
-        Log.i("numberOfNegativeOutliers \(outlierViews)")
+        Log.i("numberOfNegativeOutliers \(String(describing: outlierViews))")
 
         if let outlierViews = outlierViews {
             var total: Int = 0
             Log.v("numberOfNegativeOutliers have outlier views")
             for outlierView in outlierViews {
-                Log.v("numberOfNegativeOutliers outlier view \(outlierView) \(outlierView.group.name) \(outlierView.group.shouldPaint)")
+                Log.v("numberOfNegativeOutliers outlier view \(outlierView) \(outlierView.group.name) \(String(describing: outlierView.group.shouldPaint))")
                 if let shouldPaint = outlierView.group.shouldPaint,
                    !shouldPaint.willPaint
                 {

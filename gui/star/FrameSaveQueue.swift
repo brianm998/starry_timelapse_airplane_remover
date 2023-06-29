@@ -79,7 +79,7 @@ class FrameSaveQueue: ObservableObject {
                      waitTime: TimeInterval = 12,
                      completionClosure: @escaping () async -> Void) {
 
-        if let candidate = purgatory[frame.frameIndex] {
+        if let _ = purgatory[frame.frameIndex] {
             Log.i("frame \(frame.frameIndex) is already in purgatory")
         } else {
             Log.i("frame \(frame.frameIndex) entering purgatory")
