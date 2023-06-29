@@ -108,13 +108,13 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
         }
         
         finalProcessor = await FinalProcessor(with: config,
-                                          callbacks: callbacks,
-                                          publisher: publisher,
-                                          numberOfFrames: imageSequenceSize,
-                                          shouldProcess: shouldProcess,
-                                          dispatchGroup: dispatchGroup,
-                                          imageSequence: imageSequence,
-                                          isGUI: isGUI || processExistingFiles)
+                                              callbacks: callbacks,
+                                              publisher: publisher,
+                                              numberOfFrames: imageSequenceSize,
+                                              shouldProcess: shouldProcess,
+                                              dispatchGroup: dispatchGroup,
+                                              imageSequence: imageSequence,
+                                              isGUI: isGUI || processExistingFiles)
     }
 
     public override func run() async throws {

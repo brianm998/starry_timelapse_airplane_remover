@@ -184,7 +184,7 @@ struct StarCli: ParsableCommand {
 
     @Flag(name: [.customShort("w"), .customLong("write-outlier-group-files")],
           help:"Write individual outlier group image files")
-    var should_write_outlier_group_files = false
+    var shouldWriteOutlierGroupFiles = false
 
     @Flag(name: .shortAndLong, help:"Show version number")
     var version = false
@@ -207,18 +207,18 @@ struct StarCli: ParsableCommand {
             return
         }
         
-        if var input_imageSequenceDirname = imageSequenceDirname {
+        if var inputImageSequenceDirname = imageSequenceDirname {
 
             // XXX there is a bug w/ saved configs where the 'imageSequencePath' is '.'
             // and the 'imageSequenceDirname' starts with '/', won't start up properly
             
             var inputImageSequencePath: String = ""
             var inputImageSequenceName: String = ""
-            if input_imageSequenceDirname.hasSuffix("config.json") {
+            if inputImageSequenceDirname.hasSuffix("config.json") {
                 // here we are reading a previously saved config
-                inputImageSequencePath = input_imageSequenceDirname
+                inputImageSequencePath = inputImageSequenceDirname
 
-                let fuck = input_imageSequenceDirname
+                let fuck = inputImageSequenceDirname
                 
                 let dispatchGroup = DispatchGroup()
                 dispatchGroup.enter()
@@ -235,50 +235,50 @@ struct StarCli: ParsableCommand {
                 dispatchGroup.wait()
             } else {
                 // here we are processing a new image sequence 
-                while input_imageSequenceDirname.hasSuffix("/") {
+                while inputImageSequenceDirname.hasSuffix("/") {
                     // remove any trailing '/' chars,
                     // otherwise our created output dir(s) will end up inside this dir,
                     // not alongside it
-                    _ = input_imageSequenceDirname.removeLast()
+                    _ = inputImageSequenceDirname.removeLast()
                 }
 
-                if !input_imageSequenceDirname.hasPrefix("/") {
-                    let full_path =
-                      file_manager.currentDirectoryPath + "/" + 
-                      input_imageSequenceDirname
-                    input_imageSequenceDirname = full_path
+                if !inputImageSequenceDirname.hasPrefix("/") {
+                    let fullPath =
+                      fileManager.currentDirectoryPath + "/" + 
+                      inputImageSequenceDirname
+                    inputImageSequenceDirname = fullPath
                 }
                 
-                var filename_paths = input_imageSequenceDirname.components(separatedBy: "/")
-                if let last_element = filename_paths.last {
-                    filename_paths.removeLast()
-                    inputImageSequencePath = filename_paths.joined(separator: "/")
+                var filenamePaths = inputImageSequenceDirname.components(separatedBy: "/")
+                if let lastElement = filenamePaths.last {
+                    filenamePaths.removeLast()
+                    inputImageSequencePath = filenamePaths.joined(separator: "/")
                     if inputImageSequencePath.count == 0 { inputImageSequencePath = "/" }
-                    inputImageSequenceName = last_element
+                    inputImageSequenceName = lastElement
                 } else {
                     inputImageSequencePath = "/"
-                    inputImageSequenceName = input_imageSequenceDirname
+                    inputImageSequenceName = inputImageSequenceDirname
                 }
 
-                var output_path = ""
+                var _outputPath = ""
                 if let outputPath = outputPath {
-                    output_path = outputPath
+                    _outputPath = outputPath
                 } else {
-                    output_path = inputImageSequencePath
+                    _outputPath = inputImageSequencePath
                 }
 
-                config = Config(outputPath: output_path,
+                config = Config(outputPath: _outputPath,
                                 outlierMaxThreshold: outlierMaxThreshold,
                                 outlierMinThreshold: outlierMinThreshold,
                                 minGroupSize: minGroupSize,
                                 numConcurrentRenders: numConcurrentRenders,
                                 imageSequenceName: inputImageSequenceName,
                                 imageSequencePath: inputImageSequencePath,
-                                writeOutlierGroupFiles: should_write_outlier_group_files,
+                                writeOutlierGroupFiles: shouldWriteOutlierGroupFiles,
                                 // maybe make a separate command line parameter for these VVV? 
-                                writeFramePreviewFiles: should_write_outlier_group_files,
-                                writeFrameProcessedPreviewFiles: should_write_outlier_group_files,
-                                writeFrameThumbnailFiles: should_write_outlier_group_files)
+                                writeFramePreviewFiles: shouldWriteOutlierGroupFiles,
+                                writeFrameProcessedPreviewFiles: shouldWriteOutlierGroupFiles,
+                                writeFrameThumbnailFiles: shouldWriteOutlierGroupFiles)
 
                 Log.nameSuffix = inputImageSequenceName
                 // no name suffix on json config path
@@ -319,9 +319,9 @@ struct StarCli: ParsableCommand {
                 print("caught SIGKILL \(foo)")
             }
             
-            Log.i("looking for files to processes in \(input_imageSequenceDirname)")
-            let local_dispatch = DispatchGroup()
-            local_dispatch.enter()
+            Log.i("looking for files to processes in \(inputImageSequenceDirname)")
+            let localDispatch = DispatchGroup()
+            localDispatch.enter()
             let writeOutputFiles = !skipOutputFiles
             Task {
                 do {
@@ -361,9 +361,9 @@ struct StarCli: ParsableCommand {
                 } catch {
                     Log.e("\(error)")
                 }
-                local_dispatch.leave()
+                localDispatch.leave()
             }
-            local_dispatch.wait()
+            localDispatch.wait()
         } else {
             throw ValidationError("need to provide input")
         }
@@ -375,4 +375,4 @@ struct StarCli: ParsableCommand {
 // allows the log level to be expressed on the command line as an argument
 extension Log.Level: ExpressibleByArgument { }
 
-fileprivate let file_manager = FileManager.default
+fileprivate let fileManager = FileManager.default
