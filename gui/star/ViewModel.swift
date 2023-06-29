@@ -197,7 +197,7 @@ public final class ViewModel: ObservableObject {
     func set(numberOfFrames: Int) {
         Task {
             await MainActor.run {
-                frames = Array<FrameViewModel>(count: numberOfFrames) { i in FrameViewModel(i) }
+                frames = [FrameViewModel](count: numberOfFrames) { i in FrameViewModel(i) }
             }
         }
     }
@@ -810,10 +810,10 @@ public extension ViewModel {
     }
 
     func transition(until fastAdvancementType: FastAdvancementType,
-                    from frame: FrameAirplaneRemover,
-                    forwards: Bool,
-                    currentIndex: Int? = nil,
-                    withScroll scroller: ScrollViewProxy? = nil)
+                  from frame: FrameAirplaneRemover,
+                  forwards: Bool,
+                  currentIndex: Int? = nil,
+                  withScroll scroller: ScrollViewProxy? = nil)
     {
         var frame_index: Int = 0
         if let currentIndex = currentIndex {

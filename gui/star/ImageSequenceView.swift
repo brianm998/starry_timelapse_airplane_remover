@@ -20,7 +20,7 @@ struct ImageSequenceView: View {
                     // selected frame 
                     ZStack {
                         FrameView(interactionMode: self.$viewModel.interactionMode,
-                                  showFullResolution: self.$viewModel.showFullResolution)
+                                 showFullResolution: self.$viewModel.showFullResolution)
                           .frame(maxWidth: .infinity, alignment: .center)
                           .overlay(
                             ProgressView() // XXX this overlay sucks, change it

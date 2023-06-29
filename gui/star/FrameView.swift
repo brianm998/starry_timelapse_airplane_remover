@@ -12,7 +12,6 @@ public struct FrameView: View {
     @Binding private var interactionMode: InteractionMode
     @Binding private var showFullResolution: Bool
 
-
     public init(interactionMode: Binding<InteractionMode>,
                showFullResolution: Binding<Bool>)
     {

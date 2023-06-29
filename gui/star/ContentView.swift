@@ -1,15 +1,11 @@
-                                                     //
+//
 //  ContentView.swift
 //  star
 //
 //  Created by Brian Martin on 2/1/23.
 //
 
-import Foundation
 import SwiftUI
-import Cocoa
-import StarCore
-
 
 // the overall view of the app
 @available(macOS 13.0, *) 
