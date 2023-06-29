@@ -130,7 +130,7 @@ var config: Config = Config()
 var callbacks = Callbacks()
 
 @main
-struct Star: ParsableCommand {
+struct StarCli: ParsableCommand {
 
     @Option(name: [.customShort("c"), .customLong("console-log-level")], help:"""
         The logging level that star will output directly to the terminal.
