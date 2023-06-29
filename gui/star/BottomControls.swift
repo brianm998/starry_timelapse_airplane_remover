@@ -6,20 +6,40 @@ import StarCore
 struct BottomControls: View {
     @EnvironmentObject var viewModel: ViewModel
     let scroller: ScrollViewProxy
+
+    @State private var useHStack = true
     
     var body: some View {
         HStack {
-            ZStack {
-                self.leftView()
-                  .frame(maxWidth: .infinity, alignment: .leading)
-
-                VideoPlaybackButtons(scroller: scroller)
-                  .frame(maxWidth: .infinity, alignment: .center)
-
-                self.rightView()
-                  .frame(maxWidth: .infinity, alignment: .trailing)
+            if useHStack {
+                HStack {
+                    self.leftView()
+                      .frame(maxWidth: .infinity, alignment: .leading)
+                    
+                    VideoPlaybackButtons(scroller: scroller)
+                    
+                    self.rightView()
+                      .frame(maxWidth: .infinity, alignment: .trailing)
+                }
+            } else {
+                VStack {
+                    self.leftView()
+                      .frame(maxWidth: .infinity, alignment: .leading)
+                    
+                    VideoPlaybackButtons(scroller: scroller)
+                    
+                    self.rightView()
+                      .frame(maxWidth: .infinity, alignment: .trailing)
+                }
             }
         }
+          .readSize { newSize in
+              if viewModel.interactionMode == .edit {
+                  self.useHStack = newSize.width > 1200
+              } else {
+                  self.useHStack = newSize.width > 800
+              }
+          }
     }
 
     func rightView() -> some View {
@@ -206,4 +226,22 @@ struct BottomControls: View {
             }
         }
     }
+}
+
+// XXX move these
+extension View {
+  func readSize(onChange: @escaping (CGSize) -> Void) -> some View {
+    background(
+      GeometryReader { geometryProxy in
+        Color.clear
+          .preference(key: SizePreferenceKey.self, value: geometryProxy.size)
+      }
+    )
+    .onPreferenceChange(SizePreferenceKey.self, perform: onChange)
+  }
+}
+
+struct SizePreferenceKey: PreferenceKey {
+  static var defaultValue: CGSize = .zero
+  static func reduce(value: inout CGSize, nextValue: () -> CGSize) {}
 }

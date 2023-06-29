@@ -32,6 +32,7 @@ struct ImageSequenceView: View {
                     // show progress bars on top of the image at the bottom
                     ProgressBars()
                 }
+                Spacer()
                 // buttons below the selected frame 
                 BottomControls(scroller: scroller)
                 
