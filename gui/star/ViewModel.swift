@@ -4,6 +4,38 @@ import Cocoa
 import StarCore
 import Zoomable
 
+enum VideoPlayMode: String, Equatable, CaseIterable {
+    case forward
+    case reverse
+}
+
+enum FrameViewMode: String, Equatable, CaseIterable {
+    case original
+    case processed
+
+    var localizedName: LocalizedStringKey {
+        LocalizedStringKey(rawValue)
+    }
+}
+
+enum SelectionMode: String, Equatable, CaseIterable {
+    case paint
+    case clear
+    case details
+    
+    var localizedName: LocalizedStringKey {
+        LocalizedStringKey(rawValue)
+    }
+}
+
+enum InteractionMode: String, Equatable, CaseIterable {
+    case edit
+    case scrub
+
+    var localizedName: LocalizedStringKey {
+        LocalizedStringKey(rawValue)
+    }
+}
 
 // the overall view model
 @MainActor
