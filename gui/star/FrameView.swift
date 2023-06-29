@@ -33,8 +33,8 @@ public struct FrameView: View {
                 case .edit: 
                     // the currently visible frame with outliers made visible
                     FrameEditView(image: frame_image,
-                                interactionMode: self.$interactionMode,
-                                showFullResolution: self.$showFullResolution)
+                                  interactionMode: self.$interactionMode,
+                                  showFullResolution: self.$showFullResolution)
                 }
             } else {
                 // no image, show loading view

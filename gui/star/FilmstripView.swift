@@ -20,7 +20,7 @@ struct FilmstripView: View {
                     LazyHStack(spacing: 0) {
                         ForEach(0..<viewModel.imageSequenceSize, id: \.self) { frameIndex in
                             FilmstripImageView(frameIndex: frameIndex,
-                                            scroller: scroller)
+                                               scroller: scroller)
                               .help("show frame \(frameIndex)")
                         }
                     }

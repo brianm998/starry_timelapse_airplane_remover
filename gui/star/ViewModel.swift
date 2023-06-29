@@ -553,7 +553,7 @@ public final class ViewModel: ObservableObject {
             do {
                 if let baseImage = try await newFrame.baseImage() {
                     if self.currentIndex == newFrame.frameIndex {
-                        await MainActor.run {
+                        _ = await MainActor.run {
                             Task {
                                 self.currentFrameImage = Image(nsImage: baseImage)
                                 self.update()
@@ -763,7 +763,7 @@ public extension ViewModel {
                     self.loadingOutliers = true
                     Task.detached(priority: .userInitiated) {
                         let _ = try await nextFrame.loadOutliers()
-                        await MainActor.run {
+                        _ = await MainActor.run {
                             Task {
                                 await self.setOutlierGroups(forFrame: nextFrame)
                                 frameView.loadingOutlierViews = false

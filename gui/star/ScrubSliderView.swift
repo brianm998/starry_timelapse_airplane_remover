@@ -8,7 +8,7 @@ struct ScrubSliderView: View {
     
     var body: some View {
         if viewModel.interactionMode == .edit {
-            Spacer().frame(maxHeight: 20)
+            _ = Spacer().frame(maxHeight: 20)
         }
         let start = 0.0
         let end = Double(viewModel.imageSequenceSize)

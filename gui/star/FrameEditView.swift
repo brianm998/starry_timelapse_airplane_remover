@@ -36,7 +36,7 @@ struct FrameEditView: View {
             let max = min < full_max ? full_max : min
 
             ZoomableView(size: CGSize(width: viewModel.frameWidth+outlierArrowLength*2,
-                                   height: viewModel.frameHeight+outlierArrowLength*2),
+                                      height: viewModel.frameHeight+outlierArrowLength*2),
                          min: min,
                          max: max,
                          showsIndicators: true)
