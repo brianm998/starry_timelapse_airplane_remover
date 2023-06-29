@@ -63,7 +63,7 @@ struct InitialView: View {
         Log.d("load config")
 
         let openPanel = NSOpenPanel()
-        openPanel.allowedFileTypes = ["json"] // 'allowedFileTypes' was deprecated in macOS 12.0: Use -allowedContentTypes instead
+        openPanel.allowedContentTypes = [.json]
         openPanel.allowsMultipleSelection = false
         openPanel.canChooseDirectories = false
         openPanel.canChooseFiles = true
@@ -80,7 +80,7 @@ struct InitialView: View {
                     do {
                         try await viewModel.startup(withConfig: path)
                         
-                        Log.d("viewModel.eraser \(await viewModel.eraser)")
+                        Log.d("viewModel.eraser \(String(describing: await viewModel.eraser))")
                         try await viewModel.eraser?.run()
                     } catch {
                         Log.e("\(error)")
