@@ -7,21 +7,20 @@ import StarCore
 // falling back to a place holder when we have no image for
 // the current frame yet
 
-struct FrameView: View {
-    @ObservedObject var viewModel: ViewModel
+public struct FrameView: View {
+    @EnvironmentObject var viewModel: ViewModel
     @Binding private var interactionMode: InteractionMode
     @Binding private var showFullResolution: Bool
 
-    public init(viewModel: ViewModel,
-                interactionMode: Binding<InteractionMode>,
-                showFullResolution: Binding<Bool>)
+
+    public init(interactionMode: Binding<InteractionMode>,
+               showFullResolution: Binding<Bool>)
     {
-        self.viewModel = viewModel
         _interactionMode = interactionMode
         _showFullResolution = showFullResolution
     }
     
-    var body: some View {
+    public var body: some View {
         ZStack {
             if let frame_image = self.viewModel.current_frame_image {
                 switch self.interactionMode {
@@ -34,8 +33,7 @@ struct FrameView: View {
 
                 case .edit: 
                     // the currently visible frame with outliers made visible
-                    FrameEditView(viewModel: viewModel,
-                                  image: frame_image,
+                    FrameEditView(image: frame_image,
                                   interactionMode: self.$interactionMode,
                                   showFullResolution: self.$showFullResolution)
                 }

@@ -4,7 +4,7 @@ import StarCore
 // this button paints everything
 
 struct PaintAllButton: View {
-    let viewModel: ViewModel
+    @EnvironmentObject var viewModel: ViewModel
 
     var body: some View {
         Button(action: {

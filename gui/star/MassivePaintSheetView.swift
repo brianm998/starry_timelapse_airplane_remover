@@ -2,8 +2,8 @@ import SwiftUI
 import StarCore
 
 struct MassivePaintSheetView: View {
+    @EnvironmentObject var viewModel: ViewModel
     @Binding var isVisible: Bool
-    @ObservedObject var viewModel: ViewModel
     var closure: (Bool, Int, Int) -> Void
 
     @State var start_index: Int = 0
@@ -11,12 +11,10 @@ struct MassivePaintSheetView: View {
     @State var should_paint = false
 
     init(isVisible: Binding<Bool>,
-         viewModel: ViewModel,
          closure: @escaping (Bool, Int, Int) -> Void)
     {
         self._isVisible = isVisible
         self.closure = closure
-        self.viewModel = viewModel
     }
     
     var body: some View {

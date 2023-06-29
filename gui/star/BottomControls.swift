@@ -10,8 +10,7 @@ struct BottomControls: View {
     var body: some View {
         HStack {
             ZStack {
-                VideoPlaybackButtons(viewModel: viewModel,
-                                     scroller: scroller)
+                VideoPlaybackButtons(scroller: scroller)
                   .frame(maxWidth: .infinity, alignment: .center)
 
                 HStack {
@@ -158,9 +157,7 @@ struct BottomControls: View {
                                             fastAdvancementType: $viewModel.fastAdvancementType)
                       }
                       .sheet(isPresented: $viewModel.paint_sheet_showing) {
-                          MassivePaintSheetView(isVisible: self.$viewModel.paint_sheet_showing,
-                                                viewModel: viewModel)
-                          { should_paint, start_index, end_index in
+                          MassivePaintSheetView(isVisible: self.$viewModel.paint_sheet_showing) { should_paint, start_index, end_index in
                               
                               viewModel.updating_frame_batch = true
                               

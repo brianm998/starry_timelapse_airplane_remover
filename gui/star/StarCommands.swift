@@ -9,19 +9,25 @@ struct StarCommands: Commands {
     var body: some Commands {
         CommandMenu("Actions") {
 
-            PaintAllButton(viewModel: viewModel)
+            PaintAllButton()
+              .environmentObject(viewModel)
               .keyboardShortcut("p", modifiers: [])
-            ClearAllButton(viewModel: viewModel)
+            ClearAllButton()
+              .environmentObject(viewModel)
               .keyboardShortcut("c", modifiers: [])
             /*
             contentView.outlierInfoButton()
              */
-            ApplyAllDecisionTreeButton(viewModel: viewModel)
-            ApplyDecisionTreeButton(viewModel: viewModel)
-            RenderCurrentFrameButton(viewModel: viewModel)
-            RenderAllFramesButton(viewModel: viewModel)
-            
-            LoadAllOutliersButton(viewModel: viewModel)
+            ApplyAllDecisionTreeButton()
+              .environmentObject(viewModel)
+            ApplyDecisionTreeButton()
+              .environmentObject(viewModel)
+            RenderCurrentFrameButton()
+              .environmentObject(viewModel)
+            RenderAllFramesButton()
+              .environmentObject(viewModel)
+            LoadAllOutliersButton()
+              .environmentObject(viewModel)
         }
 
         // remove File -> New Window 

@@ -113,19 +113,18 @@ class star_app: App {
         WindowGroup {
             ContentView()
               .environmentObject(viewModel)
-        }
-          .commands {
-            StarCommands(viewModel: viewModel)
+        }.commands {
+           StarCommands(viewModel: viewModel)
         }
         
         WindowGroup(id: "foobar") { // XXX hardcoded constant should be centralized
-            OutlierGroupTable(viewModel: viewModel)
+            OutlierGroupTable()
               { 
                   // XXX don't really care it's dismissed
               }
-                
-        } .commands {
-              StarCommands(viewModel: viewModel)
+              .environmentObject(viewModel)
+        }.commands {
+           StarCommands(viewModel: viewModel)
         }
         // this shows up as stars and wand in the upper right of the menu bar
         // always there when app is running, even when another app is used

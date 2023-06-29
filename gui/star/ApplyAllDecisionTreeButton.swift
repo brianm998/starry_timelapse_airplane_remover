@@ -2,7 +2,7 @@ import SwiftUI
 import StarCore
 
 struct ApplyAllDecisionTreeButton: View {
-    @ObservedObject var viewModel: ViewModel
+    @EnvironmentObject var viewModel: ViewModel
     
     var body: some View {
         Log.d("applyAllDecisionTreeButton")

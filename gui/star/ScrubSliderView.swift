@@ -3,7 +3,7 @@ import StarCore
 
 // slider at the bottom that scrubs the frame position
 struct ScrubSliderView: View {
-    @ObservedObject var viewModel: ViewModel
+    @EnvironmentObject var viewModel: ViewModel
     let scroller: ScrollViewProxy
     
     var body: some View {

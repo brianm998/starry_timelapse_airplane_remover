@@ -5,7 +5,7 @@ import Zoomable
 // the view for when the user wants to edit what outlier groups are painted and not
 
 struct FrameEditView: View {
-    @ObservedObject var viewModel: ViewModel
+    @EnvironmentObject var viewModel: ViewModel
     @Environment(\.openWindow) private var openWindow
 
     let image: Image
@@ -16,12 +16,10 @@ struct FrameEditView: View {
     @State private var drag_start: CGPoint?
     @State private var drag_end: CGPoint?
 
-    public init(viewModel: ViewModel,
-                image: Image,
-                interactionMode: Binding<InteractionMode>,
-                showFullResolution: Binding<Bool>)
+    public init(image: Image,
+               interactionMode: Binding<InteractionMode>,
+               showFullResolution: Binding<Bool>)
     {
-        self.viewModel = viewModel
         self.image = image
         _interactionMode = interactionMode
         _showFullResolution = showFullResolution

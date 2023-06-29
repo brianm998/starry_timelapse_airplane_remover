@@ -19,8 +19,7 @@ struct ImageSequenceView: View {
 
                     // selected frame 
                     ZStack {
-                        FrameView(viewModel: viewModel,
-                                  interactionMode: self.$viewModel.interactionMode,
+                        FrameView(interactionMode: self.$viewModel.interactionMode,
                                   showFullResolution: self.$viewModel.showFullResolution)
                           .frame(maxWidth: .infinity, alignment: .center)
                           .overlay(
@@ -51,8 +50,7 @@ struct ImageSequenceView: View {
 
                     // scub slider at the bottom
                     if viewModel.image_sequence_size > 0 {
-                        ScrubSliderView(viewModel: viewModel,
-                                      scroller: scroller)
+                        ScrubSliderView(scroller: scroller)
                     }
                 }
             }

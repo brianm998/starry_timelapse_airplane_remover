@@ -4,12 +4,12 @@ import Cocoa
 import StarCore
 import Zoomable
 
-enum VideoPlayMode: String, Equatable, CaseIterable {
+public enum VideoPlayMode: String, Equatable, CaseIterable {
     case forward
     case reverse
 }
 
-enum FrameViewMode: String, Equatable, CaseIterable {
+public enum FrameViewMode: String, Equatable, CaseIterable {
     case original
     case processed
 
@@ -18,7 +18,7 @@ enum FrameViewMode: String, Equatable, CaseIterable {
     }
 }
 
-enum SelectionMode: String, Equatable, CaseIterable {
+public enum SelectionMode: String, Equatable, CaseIterable {
     case paint
     case clear
     case details
@@ -28,7 +28,7 @@ enum SelectionMode: String, Equatable, CaseIterable {
     }
 }
 
-enum InteractionMode: String, Equatable, CaseIterable {
+public enum InteractionMode: String, Equatable, CaseIterable {
     case edit
     case scrub
 
@@ -316,8 +316,7 @@ public final class ViewModel: ObservableObject {
                         size.height = CGFloat(cgImage.height)
                         let outlierImage = NSImage(cgImage: cgImage, size: size)
                         
-                        let groupView = await OutlierGroupViewModel(viewModel: self,
-                                                                    group: group,
+                        let groupView = await OutlierGroupViewModel(group: group,
                                                                     name: group.name,
                                                                     bounds: group.bounds,
                                                                     image: outlierImage)

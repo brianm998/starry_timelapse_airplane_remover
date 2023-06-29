@@ -99,19 +99,9 @@ struct OutlierGroupTableRow: Identifiable {
 }
 
 struct OutlierGroupTable: View {
-    @ObservedObject var viewModel: ViewModel
+    @EnvironmentObject var viewModel: ViewModel
 
     var closure: () -> Void
-
-    init(viewModel: ViewModel,
-         closure: @escaping () -> Void)
-    {
-        self.closure = closure
-        self.viewModel = viewModel
-
-        // this doesn't work here :(
-        //outlierGroupTableRows.sort(using: OutlierGroupTableRow.size)
-    }
 
     var nameColumn: DTColumn {
         TableColumn("name", value: \.name)

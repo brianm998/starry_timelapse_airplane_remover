@@ -3,7 +3,7 @@ import SwiftUI
 
 // an HStack of buttons to advance backwards and fowards through the sequence
 struct VideoPlaybackButtons : View {
-    @ObservedObject var viewModel: ViewModel
+    @EnvironmentObject var viewModel: ViewModel
     var scroller: ScrollViewProxy
 
     var body: some View {

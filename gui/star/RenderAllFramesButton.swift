@@ -2,7 +2,7 @@ import SwiftUI
 import StarCore
 
 struct RenderAllFramesButton: View {
-    @ObservedObject var viewModel: ViewModel
+    @EnvironmentObject var viewModel: ViewModel
     
     var body: some View {
         let action: () -> Void = {
