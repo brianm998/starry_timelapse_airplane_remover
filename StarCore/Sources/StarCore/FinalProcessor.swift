@@ -89,8 +89,8 @@ public actor FinalProcessor {
             // show what frames are in place to be processed
             Task(priority: .userInitiated) {
                 var padding = ""
-                if self.config.numConcurrentRenders < config.progress_bar_length {
-                    padding = String(repeating: " ", count: (config.progress_bar_length - self.config.numConcurrentRenders))
+                if self.config.numConcurrentRenders < config.progressBarLength {
+                    padding = String(repeating: " ", count: (config.progressBarLength - self.config.numConcurrentRenders))
                 }
                 
                 var message: String = padding + ConsoleColor.blue.rawValue + "["
@@ -220,8 +220,8 @@ public actor FinalProcessor {
 
                 var images_to_process: [FrameAirplaneRemover] = []
                 
-                var start_index = index_to_process - config.number_final_processing_neighbors_needed
-                var end_index = index_to_process + config.number_final_processing_neighbors_needed
+                var start_index = index_to_process - config.numberFinalProcessingNeighborsNeeded
+                var end_index = index_to_process + config.numberFinalProcessingNeighborsNeeded
                 if start_index < 0 {
                     start_index = 0
                 }
@@ -253,7 +253,7 @@ public actor FinalProcessor {
                     await self.incrementCurrentFrameIndex()
                     
                     if start_index > 0,
-                       index_to_process < frame_count - config.number_final_processing_neighbors_needed - 1
+                       index_to_process < frame_count - config.numberFinalProcessingNeighborsNeeded - 1
                     {
                         // maybe finish a previous frame
                         // leave the ones at the end to finishAll()

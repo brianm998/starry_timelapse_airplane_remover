@@ -36,7 +36,7 @@ public actor ImageLoader {
 public actor ImageSequence {
 
     init(dirname: String,
-         supported_image_file_types: [String],
+         supportedImageFileTypes: [String],
          max_images: Int? = nil) throws
     {
         self.max_images = max_images
@@ -46,7 +46,7 @@ public actor ImageSequence {
         }
         let contents = try file_manager.contentsOfDirectory(atPath: dirname)
         contents.forEach { file in
-            supported_image_file_types.forEach { type in
+            supportedImageFileTypes.forEach { type in
                 if file.hasSuffix(type) {
                     image_files.append("\(dirname)/\(file)")
                 } 
@@ -103,13 +103,13 @@ public actor ImageSequence {
         {
             // calculate the max number of images to keep in ram at once
             // use the amount of physical ram / size of images
-            let memory_size_bytes = ProcessInfo.processInfo.physicalMemory
+            let memorySizeBytes = ProcessInfo.processInfo.physicalMemory
 
             // this is a rough guess, 16 bits per pixel, 4 components per pixel
             let bytes_per_image = ImageSequence.image_width*ImageSequence.image_height*8
 
             // this is a rule of thumb, not exact
-            _max_images = Int(memory_size_bytes / UInt64(bytes_per_image)) / 5 // XXX hardcoded constant
+            _max_images = Int(memorySizeBytes / UInt64(bytes_per_image)) / 5 // XXX hardcoded constant
 
             let never_go_over_max = 100 // XXX hardcoded max
             if _max_images > never_go_over_max { _max_images = never_go_over_max }

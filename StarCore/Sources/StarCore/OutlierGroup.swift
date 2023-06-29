@@ -36,7 +36,7 @@ public class OutlierGroup: CustomStringConvertible,
     // otherwise it's the amount brighter this pixel was than those in the adjecent frames 
     public let pixels: [UInt32]        // indexed by y * bounds.width + x
 
-    public let max_pixel_distance: UInt16
+    public let maxPixelDistance: UInt16
     public let surfaceAreaToSizeRatio: Double
 
     // after init, shouldPaint is usually set to a base value based upon different statistics 
@@ -65,7 +65,7 @@ public class OutlierGroup: CustomStringConvertible,
          bounds: BoundingBox,
          frame: FrameAirplaneRemover,
          pixels: [UInt32],
-         max_pixel_distance: UInt16) async
+         maxPixelDistance: UInt16) async
     {
         self.name = name
         self.size = size
@@ -74,7 +74,7 @@ public class OutlierGroup: CustomStringConvertible,
         self.frameIndex = frame.frameIndex
         self.frame = frame
         self.pixels = pixels
-        self.max_pixel_distance = max_pixel_distance
+        self.maxPixelDistance = maxPixelDistance
         self.surfaceAreaToSizeRatio = surface_area_to_size_ratio(of: pixels,
                                                                  width: bounds.width,
                                                                  height: bounds.height)
@@ -82,7 +82,7 @@ public class OutlierGroup: CustomStringConvertible,
         let transform = HoughTransform(data_width: bounds.width,
                                        data_height: bounds.height,
                                        input_data: pixels,
-                                       max_pixel_distance: max_pixel_distance)
+                                       maxPixelDistance: maxPixelDistance)
 
         // we want all the lines, all of them.
         self.lines = transform.lines(min_count: 1)
@@ -926,7 +926,7 @@ public class OutlierGroup: CustomStringConvertible,
         //pixels: [UInt32]
         size += pixels.count * 4
         
-        //max_pixel_distance: UInt16
+        //maxPixelDistance: UInt16
         size += 2
         
         //surfaceAreaToSizeRatio: Double (64 bits)
@@ -1014,7 +1014,7 @@ public class OutlierGroup: CustomStringConvertible,
         self.pixels = pixels
         
         let mpdd = persitentData.subdata(in: index..<index+2)
-        self.max_pixel_distance = mpdd.withUnsafeBytes { $0.load(as: UInt16.self).bigEndian }
+        self.maxPixelDistance = mpdd.withUnsafeBytes { $0.load(as: UInt16.self).bigEndian }
         index += 2
 
         let satsrd = persitentData.subdata(in: index..<index+8)
@@ -1098,7 +1098,7 @@ public class OutlierGroup: CustomStringConvertible,
             index += 4
         }
 
-        let mpdd = withUnsafeBytes(of: self.max_pixel_distance.bigEndian) { Data($0) }
+        let mpdd = withUnsafeBytes(of: self.maxPixelDistance.bigEndian) { Data($0) }
         data.replaceSubrange(index..<index+2, with: mpdd)
         index += 2
 

@@ -88,8 +88,8 @@ public actor UpdatableProgressMonitor {
         var updates: [() async -> Void] = []
 
         var padding = ""
-        if self.config.numConcurrentRenders < config.progress_bar_length {
-            padding = String(repeating: " ", count: (config.progress_bar_length - self.config.numConcurrentRenders))
+        if self.config.numConcurrentRenders < config.progressBarLength {
+            padding = String(repeating: " ", count: (config.progressBarLength - self.config.numConcurrentRenders))
         }
 
         if let loadingImages = frames[.loadingImages] {
@@ -184,7 +184,7 @@ public actor UpdatableProgressMonitor {
               Double(self.number_of_frames)
             updates.append() {
                 await updatable.log(name: "complete",
-                                    message: progress_bar(length: self.config.progress_bar_length, progress: progress) +
+                                    message: progress_bar(length: self.config.progressBarLength, progress: progress) +
                                       " \(complete.count) / \(self.number_of_frames) frames complete",
                                     value: 100)
             }

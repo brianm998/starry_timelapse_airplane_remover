@@ -13,7 +13,7 @@ public func mkdir(_ path: String) throws {
 public class ImageSequenceProcessor<T> {
 
     // the name of the directory holding the image sequence being processed
-    public let image_sequence_dirname: String
+    public let imageSequenceDirname: String
 
     // the name of the directory to write processed images to
     public let output_dirname: String
@@ -21,7 +21,7 @@ public class ImageSequenceProcessor<T> {
     // the max number of frames to process at one time
     public let max_concurrent_renders: Int
 
-    public let number_final_processing_neighbors_needed: Int
+    public let numberFinalProcessingNeighborsNeeded: Int
     
     // the following properties get included into the output videoname
     
@@ -48,22 +48,22 @@ public class ImageSequenceProcessor<T> {
     // if false, frames are handed back without outliers detected
     let fully_process: Bool
     
-    init(imageSequenceDirname image_sequence_dirname: String,
+    init(imageSequenceDirname imageSequenceDirname: String,
          outputDirname output_dirname: String,
          maxConcurrent max_concurrent: Int = 5,
-         supported_image_file_types: [String],
-         number_final_processing_neighbors_needed: Int,
+         supportedImageFileTypes: [String],
+         numberFinalProcessingNeighborsNeeded: Int,
          processExistingFiles: Bool,
          max_images: Int? = nil,
          fullyProcess: Bool = true) throws
     {
         self.number_running = NumberRunning()
         self.max_concurrent_renders = max_concurrent
-        self.image_sequence_dirname = image_sequence_dirname
+        self.imageSequenceDirname = imageSequenceDirname
         self.output_dirname = output_dirname
-        self.number_final_processing_neighbors_needed = number_final_processing_neighbors_needed
-        self.image_sequence = try ImageSequence(dirname: image_sequence_dirname,
-                                                supported_image_file_types: supported_image_file_types,
+        self.numberFinalProcessingNeighborsNeeded = numberFinalProcessingNeighborsNeeded
+        self.image_sequence = try ImageSequence(dirname: imageSequenceDirname,
+                                                supportedImageFileTypes: supportedImageFileTypes,
                                                 max_images: max_images)
         self.should_process = [Bool](repeating: processExistingFiles, count: image_sequence.filenames.count)
         self.existing_output_files = [Bool](repeating: false, count: image_sequence.filenames.count)
@@ -83,7 +83,7 @@ public class ImageSequenceProcessor<T> {
         /*
            read all existing output files 
            sort them into frame order
-           remove ones within number_final_processing_neighbors_needed frames of holes
+           remove ones within numberFinalProcessingNeighborsNeeded frames of holes
            make sure these re-runs doesn't bork on existing files later
            only process below based upon this info
         */
@@ -100,8 +100,8 @@ public class ImageSequenceProcessor<T> {
         
         for (index, output_file_already_exists) in existing_output_files.enumerated() {
             if !output_file_already_exists {
-                var start_idx = index - number_final_processing_neighbors_needed
-                var end_idx = index + number_final_processing_neighbors_needed
+                var start_idx = index - numberFinalProcessingNeighborsNeeded
+                var end_idx = index + numberFinalProcessingNeighborsNeeded
                 if start_idx < 0 { start_idx = 0 }
                 if end_idx >= existing_output_files.count {
                     end_idx = existing_output_files.count - 1

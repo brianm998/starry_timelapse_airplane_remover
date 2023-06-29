@@ -25,7 +25,7 @@ struct FilmstripView: View {
                         }
                     }
                 }
-                  .frame(minHeight: CGFloat((viewModel.config?.thumbnail_height ?? 50) + 30))
+                  .frame(minHeight: CGFloat((viewModel.config?.thumbnailHeight ?? 50) + 30))
                   //.transition(.moveAndFade)
             }
         }

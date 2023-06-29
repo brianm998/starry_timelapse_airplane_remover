@@ -101,9 +101,9 @@ public class FrameAirplaneRemover: Equatable, Hashable {
     }
     
     var previewSize: NSSize {
-        let preview_width = config.preview_width
-        let preview_height = config.preview_height
-        return NSSize(width: preview_width, height: preview_height)
+        let previewWidth = config.previewWidth
+        let previewHeight = config.previewHeight
+        return NSSize(width: previewWidth, height: previewHeight)
     }
     
     public func writePreviewFile(_ image: NSImage) {
@@ -146,9 +146,9 @@ public class FrameAirplaneRemover: Equatable, Hashable {
             }
 
             Log.d("frame \(self.frameIndex) doing thumbnail")
-            let thumbnail_width = config.thumbnail_width
-            let thumbnail_height = config.thumbnail_height
-            let thumbnail_size = NSSize(width: thumbnail_width, height: thumbnail_height)
+            let thumbnailWidth = config.thumbnailWidth
+            let thumbnailHeight = config.thumbnailHeight
+            let thumbnail_size = NSSize(width: thumbnailWidth, height: thumbnailHeight)
             
             if let scaledImage = image.resized(to: thumbnail_size),
                let imageData = scaledImage.jpegData
@@ -620,7 +620,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         // then label all adject outliers
         for (index, outlier_amount) in outlier_amount_list.enumerated() {
             
-            if outlier_amount <= config.max_pixel_distance { continue }
+            if outlier_amount <= config.maxPixelDistance { continue }
             
             let outlier_groupname = outlier_group_list[index]
             if outlier_groupname != nil { continue }
@@ -654,12 +654,12 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                     let outlier_x = next_outlier_index % width;
                     let outlier_y = next_outlier_index / width;
 
-                    //Log.e("min_pixel_distance \(min_pixel_distance) max_pixel_distance \(max_pixel_distance)")
+                    //Log.e("minPixelDistance \(minPixelDistance) maxPixelDistance \(maxPixelDistance)")
                     
                     if outlier_x > 0 { // add left neighbor
                         let left_neighbor_index = outlier_y * width + outlier_x - 1
                         let left_neighbor_amount = outlier_amount_list[left_neighbor_index]
-                        if left_neighbor_amount > config.min_pixel_distance,
+                        if left_neighbor_amount > config.minPixelDistance,
                            outlier_group_list[left_neighbor_index] == nil
                         {
                             pending_outliers[pending_outlier_insert_index] = left_neighbor_index
@@ -671,7 +671,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                     if outlier_x < width - 1 { // add right neighbor
                         let right_neighbor_index = outlier_y * width + outlier_x + 1
                         let right_neighbor_amount = outlier_amount_list[right_neighbor_index]
-                        if right_neighbor_amount > config.min_pixel_distance,
+                        if right_neighbor_amount > config.minPixelDistance,
                            outlier_group_list[right_neighbor_index] == nil
                         {
                             pending_outliers[pending_outlier_insert_index] = right_neighbor_index
@@ -683,7 +683,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                     if outlier_y > 0 { // add top neighbor
                         let top_neighbor_index = (outlier_y - 1) * width + outlier_x
                         let top_neighbor_amount = outlier_amount_list[top_neighbor_index]
-                        if top_neighbor_amount > config.min_pixel_distance,
+                        if top_neighbor_amount > config.minPixelDistance,
                            outlier_group_list[top_neighbor_index] == nil
                         {
                             pending_outliers[pending_outlier_insert_index] = top_neighbor_index
@@ -695,7 +695,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                     if outlier_y < height - 1 { // add bottom neighbor
                         let bottom_neighbor_index = (outlier_y + 1) * width + outlier_x
                         let bottom_neighbor_amount = outlier_amount_list[bottom_neighbor_index]
-                        if bottom_neighbor_amount > config.min_pixel_distance,
+                        if bottom_neighbor_amount > config.minPixelDistance,
                            outlier_group_list[bottom_neighbor_index] == nil
                         {
                             pending_outliers[pending_outlier_insert_index] = bottom_neighbor_index
@@ -791,12 +791,12 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                 {
                     let group_center_y = bounding_box.center.y
 
-                    let upper_area_size = Double(height)*config.upper_sky_percentage/100
+                    let upper_area_size = Double(height)*config.upperSkyPercentage/100
 
                     if group_center_y < Int(upper_area_size) {
                         // 1 if at top, 0 if at bottom of the upper area
                         let how_close_to_top = (upper_area_size - Double(group_center_y)) / upper_area_size
-                        let min_size_for_this_group = config.minGroupSize + Int(Double(config.min_group_size_at_top - config.minGroupSize) * how_close_to_top)
+                        let min_size_for_this_group = config.minGroupSize + Int(Double(config.minGroupSizeAtTop - config.minGroupSize) * how_close_to_top)
                         Log.v("min_size_for_this_group \(min_size_for_this_group) how_close_to_top \(how_close_to_top) group_center_y \(group_center_y) height \(height)")
                         if group_size < min_size_for_this_group {
                             Log.v("frame \(frameIndex) skipping group of size \(group_size) < \(min_size_for_this_group) @ center_y \(group_center_y)")
@@ -828,7 +828,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                                                      bounds: bounding_box,
                                                      frame: self,
                                                      pixels: outlier_amounts,
-                                                     max_pixel_distance: config.max_pixel_distance)
+                                                     maxPixelDistance: config.maxPixelDistance)
                 outlierGroups?.members[group_name] = new_outlier
             }
         }
@@ -897,13 +897,13 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                                 
                                 var alpha: Double = 0
                                 
-                                if pixel_amount > config.max_pixel_distance {
+                                if pixel_amount > config.maxPixelDistance {
                                     alpha = 1
-                                } else if pixel_amount < config.min_pixel_distance {
+                                } else if pixel_amount < config.minPixelDistance {
                                     alpha = 0
                                 } else {
-                                    alpha = Double(UInt16(pixel_amount) - config.min_pixel_distance) /
-                                      Double(config.max_pixel_distance - config.min_pixel_distance)
+                                    alpha = Double(UInt16(pixel_amount) - config.minPixelDistance) /
+                                      Double(config.maxPixelDistance - config.minPixelDistance)
                                 }
                                 
                                 if alpha > 0 {

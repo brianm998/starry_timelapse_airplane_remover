@@ -209,9 +209,9 @@ public final class ViewModel: ObservableObject {
 
     func refresh(frame: FrameAirplaneRemover) async {
         Log.d("refreshing frame \(frame.frameIndex)")
-        let thumbnail_width = config?.thumbnail_width ?? Config.default_thumbnail_width
-        let thumbnail_height = config?.thumbnail_height ?? Config.default_thumbnail_height
-        let thumbnail_size = NSSize(width: thumbnail_width, height: thumbnail_height)
+        let thumbnailWidth = config?.thumbnailWidth ?? Config.defaultThumbnailWidth
+        let thumbnailHeight = config?.thumbnailHeight ?? Config.defaultThumbnailHeight
+        let thumbnail_size = NSSize(width: thumbnailWidth, height: thumbnailHeight)
         
         Task {
             var pixImage: PixelatedImage?
@@ -417,48 +417,48 @@ public final class ViewModel: ObservableObject {
         }
     }
     
-    @MainActor func startup(withNewImageSequence image_sequence_dirname: String) async throws {
+    @MainActor func startup(withNewImageSequence imageSequenceDirname: String) async throws {
 
         let numConcurrentRenders: Int = ProcessInfo.processInfo.activeProcessorCount
         let should_write_outlier_group_files = true // XXX see what happens
         
         // XXX copied from star.swift
-        var input_image_sequence_dirname = image_sequence_dirname 
+        var input_imageSequenceDirname = imageSequenceDirname 
 
-        while input_image_sequence_dirname.hasSuffix("/") {
+        while input_imageSequenceDirname.hasSuffix("/") {
             // remove any trailing '/' chars,
             // otherwise our created output dir(s) will end up inside this dir,
             // not alongside it
-            _ = input_image_sequence_dirname.removeLast()
+            _ = input_imageSequenceDirname.removeLast()
         }
 
-        if !input_image_sequence_dirname.hasPrefix("/") {
+        if !input_imageSequenceDirname.hasPrefix("/") {
             let full_path =
               FileManager.default.currentDirectoryPath + "/" + 
-              input_image_sequence_dirname
-            input_image_sequence_dirname = full_path
+              input_imageSequenceDirname
+            input_imageSequenceDirname = full_path
         }
         
-        var filename_paths = input_image_sequence_dirname.components(separatedBy: "/")
-        var input_image_sequence_path: String = ""
+        var filename_paths = input_imageSequenceDirname.components(separatedBy: "/")
+        var input_imageSequencePath: String = ""
         var input_image_sequence_name: String = ""
         if let last_element = filename_paths.last {
             filename_paths.removeLast()
-            input_image_sequence_path = filename_paths.joined(separator: "/")
-            if input_image_sequence_path.count == 0 { input_image_sequence_path = "/" }
+            input_imageSequencePath = filename_paths.joined(separator: "/")
+            if input_imageSequencePath.count == 0 { input_imageSequencePath = "/" }
             input_image_sequence_name = last_element
         } else {
-            input_image_sequence_path = "/"
-            input_image_sequence_name = input_image_sequence_dirname
+            input_imageSequencePath = "/"
+            input_image_sequence_name = input_imageSequenceDirname
         }
 
-        let config = Config(outputPath: input_image_sequence_path,
+        let config = Config(outputPath: input_imageSequencePath,
                           outlierMaxThreshold: Defaults.outlierMaxThreshold,
                           outlierMinThreshold: Defaults.outlierMinThreshold,
                           minGroupSize: Defaults.minGroupSize,
                           numConcurrentRenders: numConcurrentRenders,
                           imageSequenceName: input_image_sequence_name,
-                          imageSequencePath: input_image_sequence_path,
+                          imageSequencePath: input_imageSequencePath,
                           writeOutlierGroupFiles: should_write_outlier_group_files,
                           writeFramePreviewFiles: should_write_outlier_group_files,
                           writeFrameProcessedPreviewFiles: should_write_outlier_group_files,

@@ -62,18 +62,18 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
         self.is_gui = isGUI     // XXX make this better
         self.writeOutputFiles = writeOutputFiles
 
-        let _basename = "\(config.image_sequence_dirname)-star-v-\(config.star_version)"
+        let _basename = "\(config.imageSequenceDirname)-star-v-\(config.starVersion)"
         self.basename = _basename.replacingOccurrences(of: ".", with: "_")
         outlierOutputDirname = "\(config.outputPath)/\(basename)-outliers"
         previewOutputDirname = "\(config.outputPath)/\(basename)-previews"
         processed_previewOutputDirname = "\(config.outputPath)/\(basename)-processed-previews"
         thumbnailOutputDirname = "\(config.outputPath)/\(basename)-thumbnails"
 
-        try super.init(imageSequenceDirname: "\(config.image_sequence_path)/\(config.image_sequence_dirname)",
+        try super.init(imageSequenceDirname: "\(config.imageSequencePath)/\(config.imageSequenceDirname)",
                        outputDirname: "\(config.outputPath)/\(basename)",
                        maxConcurrent: config.numConcurrentRenders,
-                       supported_image_file_types: config.supported_image_file_types,
-                       number_final_processing_neighbors_needed: config.number_final_processing_neighbors_needed,
+                       supportedImageFileTypes: config.supportedImageFileTypes,
+                       numberFinalProcessingNeighborsNeeded: config.numberFinalProcessingNeighborsNeeded,
                        processExistingFiles: processExistingFiles,
                        max_images: maxResidentImages,
                        fullyProcess: fullyProcess);
@@ -90,7 +90,7 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
                 Task(priority: .userInitiated) {
                     let progress = Double(number_of_unprocessed)/Double(image_sequence_size)
                     await updatable.log(name: "unprocessed frames",
-                                        message: reverse_progress_bar(length: config.progress_bar_length, progress: progress) + " \(number_of_unprocessed) frames waiting to process",
+                                        message: reverse_progress_bar(length: config.progressBarLength, progress: progress) + " \(number_of_unprocessed) frames waiting to process",
                                          value: -1)
                 }
             }

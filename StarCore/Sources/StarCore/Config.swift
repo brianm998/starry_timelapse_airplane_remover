@@ -24,18 +24,18 @@ public struct Config: Codable {
         self.outlierMinThreshold = 0
         self.minGroupSize = 0
         self.numConcurrentRenders = 0
-        self.image_sequence_dirname = ""
-        self.image_sequence_path = ""
+        self.imageSequenceDirname = ""
+        self.imageSequencePath = ""
         self.writeOutlierGroupFiles = false
         self.writeFramePreviewFiles = false
         self.writeFrameProcessedPreviewFiles = false
         self.writeFrameThumbnailFiles = false
 
         // XXX 16 bit hardcode
-        self.min_pixel_distance = sixteenBitVersion(ofPercentage: outlierMaxThreshold)
+        self.minPixelDistance = sixteenBitVersion(ofPercentage: outlierMaxThreshold)
 
         // XXX 16 bit hardcode
-        self.max_pixel_distance = sixteenBitVersion(ofPercentage: outlierMinThreshold)
+        self.maxPixelDistance = sixteenBitVersion(ofPercentage: outlierMinThreshold)
     }
 
     // returns a stored json config file
@@ -69,18 +69,18 @@ public struct Config: Codable {
         self.outlierMinThreshold = outlierMinThreshold
         self.minGroupSize = minGroupSize
         self.numConcurrentRenders = numConcurrentRenders
-        self.image_sequence_dirname = imageSequenceName
-        self.image_sequence_path = imageSequencePath
+        self.imageSequenceDirname = imageSequenceName
+        self.imageSequencePath = imageSequencePath
         self.writeOutlierGroupFiles = writeOutlierGroupFiles
         self.writeFramePreviewFiles = writeFramePreviewFiles
         self.writeFrameProcessedPreviewFiles = writeFrameProcessedPreviewFiles
         self.writeFrameThumbnailFiles = writeFrameThumbnailFiles
 
         // XXX 16 bit hardcode
-        self.min_pixel_distance = sixteenBitVersion(ofPercentage: outlierMaxThreshold)
+        self.minPixelDistance = sixteenBitVersion(ofPercentage: outlierMaxThreshold)
 
         // XXX 16 bit hardcode
-        self.max_pixel_distance = sixteenBitVersion(ofPercentage: outlierMinThreshold)
+        self.maxPixelDistance = sixteenBitVersion(ofPercentage: outlierMinThreshold)
         TaskRunner.maxConcurrentTasks = UInt(numConcurrentRenders)
     }
 
@@ -91,13 +91,13 @@ public struct Config: Codable {
     public var outlierMaxThreshold: Double
 
     // computed over 16 bits per pixel from the value above
-    public var min_pixel_distance: UInt16
+    public var minPixelDistance: UInt16
 
     // min percentage difference between same pixels on different frames to consider an outlier
     public var outlierMinThreshold: Double
 
     // computed over 16 bits per pixel from the value above
-    public var max_pixel_distance: UInt16
+    public var maxPixelDistance: UInt16
     
     // groups smaller than this are ignored
     public var minGroupSize: Int
@@ -106,10 +106,10 @@ public struct Config: Codable {
     public var numConcurrentRenders: Int
 
     // the name of the directory containing the input sequence
-    public var image_sequence_dirname: String
+    public var imageSequenceDirname: String
 
     // where the input image sequence dir lives
-    public var image_sequence_path: String
+    public var imageSequencePath: String
     
     // write out individual outlier group images
     public var writeOutlierGroupFiles: Bool
@@ -124,42 +124,42 @@ public struct Config: Codable {
     public var writeFrameThumbnailFiles: Bool
 
     // how far in each direction do we go when doing final processing?
-    public var number_final_processing_neighbors_needed = 5 // in each direction
+    public var numberFinalProcessingNeighborsNeeded = 5 // in each direction
 
     // the minimum outlier group size at the top of the screen
     // smaller outliers at the top are discarded early on
-    public var min_group_size_at_top = 400
+    public var minGroupSizeAtTop = 400
     
 
     // what percentage of the top of the screen is considered far enough
     // above the horizon to not need really small outlier groups
     // between the bottom and the top of this area, the minimum
     // outlier group size increases
-    public var upper_sky_percentage: Double = 66 // top 66% of the screen
+    public var upperSkyPercentage: Double = 66 // top 66% of the screen
 
-    public var supported_image_file_types = [".tif", ".tiff"] // XXX move this out
+    public var supportedImageFileTypes = [".tif", ".tiff"] // XXX move this out
 
     // XXX use this to try to avoid running out of memory somehow
     // maybe determine megapixels of images, and guestimate usage and
     // avoid spawaning too many threads?
-    public var memory_size_bytes = ProcessInfo.processInfo.physicalMemory
-    public var memory_size_gigs = ProcessInfo.processInfo.physicalMemory/(1024*1024*1024)
+    public var memorySizeBytes = ProcessInfo.processInfo.physicalMemory
+    public var memorySizeGigs = ProcessInfo.processInfo.physicalMemory/(1024*1024*1024)
 
     // used by updatable log
-    public var progress_bar_length = 50
+    public var progressBarLength = 50
 
-    public var preview_width: Int = default_preview_width
-    public var preview_height: Int = default_preview_height
+    public var previewWidth: Int = defaultPreviewWidth
+    public var previewHeight: Int = defaultPreviewHeight
 
     // XXX try making these larger now that video plays better
-    public static var default_preview_width: Int = 1617 // 1080p in 4/3 aspect ratio
-    public static var default_preview_height: Int = 1080
+    public static var defaultPreviewWidth: Int = 1617 // 1080p in 4/3 aspect ratio
+    public static var defaultPreviewHeight: Int = 1080
     
-    public var thumbnail_width: Int = default_thumbnail_width
-    public var thumbnail_height: Int = default_thumbnail_height
+    public var thumbnailWidth: Int = defaultThumbnailWidth
+    public var thumbnailHeight: Int = defaultThumbnailHeight
 
-    public static var default_thumbnail_width: Int = 80
-    public static var default_thumbnail_height: Int = 60
+    public static var defaultThumbnailWidth: Int = 80
+    public static var defaultThumbnailHeight: Int = 60
     
     // 0.0.2 added more detail group hough transormation analysis, based upon a data set
     // 0.0.3 included the data set analysis to include group size and fill, and to use histograms
@@ -182,7 +182,7 @@ public struct Config: Codable {
     // 0.3.2 fixed bugs, speed up tree forest, removes small outlier group dismissal
     // 0.3.3 speed up outlier saving, bug fixes, code improvements, renamed to star
 
-    public var star_version = "0.3.3" // XXX move this out
+    public var starVersion = "0.3.3" // XXX move this out
 
     public func writeJson(named filename: String) {
         
@@ -192,14 +192,14 @@ public struct Config: Codable {
             encoder.outputFormatting = .prettyPrinted
 
             do {
-                let json_data = try encoder.encode(self)
+                let jsonData = try encoder.encode(self)
 
-                let full_path = "\(self.outputPath)/\(filename)"
-                if file_manager.fileExists(atPath: full_path) {
-                    Log.w("cannot write to \(full_path), it already exists")
+                let fullPath = "\(self.outputPath)/\(filename)"
+                if fileManager.fileExists(atPath: fullPath) {
+                    Log.w("cannot write to \(fullPath), it already exists")
                 } else {
-                    Log.i("creating \(full_path)")                      
-                    file_manager.createFile(atPath: full_path, contents: json_data, attributes: nil)
+                    Log.i("creating \(fullPath)")                      
+                    fileManager.createFile(atPath: fullPath, contents: jsonData, attributes: nil)
                 }
             } catch {
                 Log.e("\(error)")
@@ -225,4 +225,4 @@ public class Callbacks {
 
 }
 
-fileprivate let file_manager = FileManager.default
+fileprivate let fileManager = FileManager.default

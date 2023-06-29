@@ -196,29 +196,29 @@ struct Star: ParsableCommand {
         Image sequence dirname to process. 
         Should include a sequence of 16 bit tiff files, sortable by name.
         """)
-    var image_sequence_dirname: String?
+    var imageSequenceDirname: String?
 
 
     mutating func run() throws {
         if version {
             print("""
-                  Nighttime Timelapse Airplane Remover (star) version \(config.star_version)
+                  Nighttime Timelapse Airplane Remover (star) version \(config.starVersion)
                   """)
             return
         }
         
-        if var input_image_sequence_dirname = image_sequence_dirname {
+        if var input_imageSequenceDirname = imageSequenceDirname {
 
-            // XXX there is a bug w/ saved configs where the 'image_sequence_path' is '.'
-            // and the 'image_sequence_dirname' starts with '/', won't start up properly
+            // XXX there is a bug w/ saved configs where the 'imageSequencePath' is '.'
+            // and the 'imageSequenceDirname' starts with '/', won't start up properly
             
-            var input_image_sequence_path: String = ""
+            var input_imageSequencePath: String = ""
             var input_image_sequence_name: String = ""
-            if input_image_sequence_dirname.hasSuffix("config.json") {
+            if input_imageSequenceDirname.hasSuffix("config.json") {
                 // here we are reading a previously saved config
-                input_image_sequence_path = input_image_sequence_dirname
+                input_imageSequencePath = input_imageSequenceDirname
 
-                let fuck = input_image_sequence_dirname
+                let fuck = input_imageSequenceDirname
                 
                 let dispatch_group = DispatchGroup()
                 dispatch_group.enter()
@@ -235,36 +235,36 @@ struct Star: ParsableCommand {
                 dispatch_group.wait()
             } else {
                 // here we are processing a new image sequence 
-                while input_image_sequence_dirname.hasSuffix("/") {
+                while input_imageSequenceDirname.hasSuffix("/") {
                     // remove any trailing '/' chars,
                     // otherwise our created output dir(s) will end up inside this dir,
                     // not alongside it
-                    _ = input_image_sequence_dirname.removeLast()
+                    _ = input_imageSequenceDirname.removeLast()
                 }
 
-                if !input_image_sequence_dirname.hasPrefix("/") {
+                if !input_imageSequenceDirname.hasPrefix("/") {
                     let full_path =
                       file_manager.currentDirectoryPath + "/" + 
-                      input_image_sequence_dirname
-                    input_image_sequence_dirname = full_path
+                      input_imageSequenceDirname
+                    input_imageSequenceDirname = full_path
                 }
                 
-                var filename_paths = input_image_sequence_dirname.components(separatedBy: "/")
+                var filename_paths = input_imageSequenceDirname.components(separatedBy: "/")
                 if let last_element = filename_paths.last {
                     filename_paths.removeLast()
-                    input_image_sequence_path = filename_paths.joined(separator: "/")
-                    if input_image_sequence_path.count == 0 { input_image_sequence_path = "/" }
+                    input_imageSequencePath = filename_paths.joined(separator: "/")
+                    if input_imageSequencePath.count == 0 { input_imageSequencePath = "/" }
                     input_image_sequence_name = last_element
                 } else {
-                    input_image_sequence_path = "/"
-                    input_image_sequence_name = input_image_sequence_dirname
+                    input_imageSequencePath = "/"
+                    input_image_sequence_name = input_imageSequenceDirname
                 }
 
                 var output_path = ""
                 if let outputPath = outputPath {
                     output_path = outputPath
                 } else {
-                    output_path = input_image_sequence_path
+                    output_path = input_imageSequencePath
                 }
 
                 config = Config(outputPath: output_path,
@@ -273,7 +273,7 @@ struct Star: ParsableCommand {
                                 minGroupSize: minGroupSize,
                                 numConcurrentRenders: numConcurrentRenders,
                                 imageSequenceName: input_image_sequence_name,
-                                imageSequencePath: input_image_sequence_path,
+                                imageSequencePath: input_imageSequencePath,
                                 writeOutlierGroupFiles: should_write_outlier_group_files,
                                 // maybe make a separate command line parameter for these VVV? 
                                 writeFramePreviewFiles: should_write_outlier_group_files,
@@ -296,8 +296,8 @@ struct Star: ParsableCommand {
                 if let updatable = callbacks.updatable {
                     Log.handlers[.console] = UpdatableLogHandler(updatable)
                     let name = input_image_sequence_name
-                    let path = input_image_sequence_path
-                    let message = "star v\(config.star_version) is processing images from sequence in \(path)/\(name)"
+                    let path = input_imageSequencePath
+                    let message = "star v\(config.starVersion) is processing images from sequence in \(path)/\(name)"
                     Task {
                         await updatable.log(name: "star",
                                             message: message,
@@ -319,7 +319,7 @@ struct Star: ParsableCommand {
                 print("caught SIGKILL \(foo)")
             }
             
-            Log.i("looking for files to processes in \(input_image_sequence_dirname)")
+            Log.i("looking for files to processes in \(input_imageSequenceDirname)")
             let local_dispatch = DispatchGroup()
             local_dispatch.enter()
             let writeOutputFiles = !skipOutputFiles

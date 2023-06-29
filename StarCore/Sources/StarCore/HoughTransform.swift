@@ -30,7 +30,7 @@ public class HoughTransform {
     // x axis is theta, always 0 to 360
     let hough_width = 360       // units are theta (degrees)
 
-    let max_pixel_distance: UInt16
+    let maxPixelDistance: UInt16
     
     public var input_data: [UInt32]
     var counts: [[Double]]
@@ -38,14 +38,14 @@ public class HoughTransform {
     let dr: Double
     let dth: Double
 
-    public convenience init(data_width: Int, data_height: Int, max_pixel_distance: UInt16) {
+    public convenience init(data_width: Int, data_height: Int, maxPixelDistance: UInt16) {
         self.init(data_width: data_width,
                   data_height: data_height,
                   input_data: [UInt32](repeating: 0, count: data_width*data_height),
-                  max_pixel_distance: max_pixel_distance)
+                  maxPixelDistance: maxPixelDistance)
     }
 
-    public init(data_width: Int, data_height: Int, input_data: [UInt32], max_pixel_distance: UInt16) {
+    public init(data_width: Int, data_height: Int, input_data: [UInt32], maxPixelDistance: UInt16) {
         self.data_width = data_width
         self.data_height = data_height
         self.rmax = sqrt(Double(data_width*data_width + data_height*data_height))
@@ -55,7 +55,7 @@ public class HoughTransform {
         self.counts = [[Double]](repeating: [Double](repeating: 0, count: hough_height),
                                  count: Int(hough_width))
         self.input_data = input_data
-        self.max_pixel_distance = max_pixel_distance
+        self.maxPixelDistance = maxPixelDistance
     }
 
     func resetCounts() {
@@ -77,7 +77,7 @@ public class HoughTransform {
             for y in 0 ..< self.data_height {
                 let offset = (y * data_width) + x
                 let pixel_value = input_data[offset]
-                if pixel_value > max_pixel_distance {
+                if pixel_value > maxPixelDistance {
                     // record pixel
                     for k in 0 ..< Int(hough_width) {
                         let th = dth * Double(k)
