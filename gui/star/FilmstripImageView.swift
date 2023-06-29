@@ -16,7 +16,6 @@ struct FilmstripImageView: View {
             }.frame(maxHeight: 10)
             if frameIndex >= 0 && frameIndex < viewModel.frames.count {
                 let frameView = viewModel.frames[frameIndex]
-              //  let stroke_width: CGFloat = 4
                 if viewModel.currentIndex == frameIndex {
                     
                     frameView.thumbnailImage
@@ -37,12 +36,12 @@ struct FilmstripImageView: View {
               //viewModel.labelText = "loading..."
               // XXX set loading image here
               // grab frame and try to show it
-              let frame_view = viewModel.frames[frameIndex]
+              let frameView = viewModel.frames[frameIndex]
               
-              let current_frame = viewModel.currentFrame
-              viewModel.transition(toFrame: frame_view,
-                                           from: current_frame,
-                                           withScroll: scroller)
+              let currentFrame = viewModel.currentFrame
+              viewModel.transition(toFrame: frameView,
+                                   from: currentFrame,
+                                   withScroll: scroller)
           }
     }
 }

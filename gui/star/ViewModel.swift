@@ -667,10 +667,10 @@ public extension ViewModel {
             // only save frame when we are also scrolling (i.e. not scrubbing)
             if let frameToSave = oldFrame {
                 Task {
-                    let frame_changed = frameToSave.hasChanges()
+                    let frameChanged = frameToSave.hasChanges()
 
                     // only save changes to frames that have been changed
-                    if frame_changed {
+                    if frameChanged {
                         self.saveToFile(frame: frameToSave) {
                             Log.d("completion closure called for frame \(frameToSave.frameIndex)")
                             Task {
@@ -697,10 +697,10 @@ public extension ViewModel {
         // XXX maybe don't wait for frame?
         Log.d("refreshCurrentFrame \(self.currentIndex)")
         let newFrameView = self.frames[self.currentIndex]
-        if let next_frame = newFrameView.frame {
+        if let nextFrame = newFrameView.frame {
 
             // usually stick the preview image in there first if we have it
-            var show_preview = true
+            var showPreview = true
 
             if showFullResolution &&
                self.currentFrameImageIndex == newFrameView.frameIndex &&
@@ -708,10 +708,10 @@ public extension ViewModel {
                !self.currentFrameImageWasPreview
             {
                 // showing the preview in this case causes flickering
-                show_preview = false
+                showPreview = false
             }
                  
-            if show_preview {
+            if showPreview {
                 self.currentFrameImageIndex = newFrameView.frameIndex
                 self.currentFrameImageWasPreview = true
                 self.currentFrameImageViewMode = self.frameViewMode
@@ -724,7 +724,7 @@ public extension ViewModel {
                 }
             }
             if showFullResolution {
-                if next_frame.frameIndex == self.currentIndex {
+                if nextFrame.frameIndex == self.currentIndex {
                     Task {
                         do {
                             self.currentFrameImageIndex = newFrameView.frameIndex
@@ -733,15 +733,15 @@ public extension ViewModel {
                             
                             switch self.frameViewMode {
                             case .original:
-                                if let baseImage = try await next_frame.baseImage() {
-                                    if next_frame.frameIndex == self.currentIndex {
+                                if let baseImage = try await nextFrame.baseImage() {
+                                    if nextFrame.frameIndex == self.currentIndex {
                                         self.currentFrameImage = Image(nsImage: baseImage)
                                     }
                                 }
                                 
                             case .processed:
-                                if let baseImage = try await next_frame.baseOutputImage() {
-                                    if next_frame.frameIndex == self.currentIndex {
+                                if let baseImage = try await nextFrame.baseOutputImage() {
+                                    if nextFrame.frameIndex == self.currentIndex {
                                         self.currentFrameImage = Image(nsImage: baseImage)
                                     }
                                 }
@@ -755,17 +755,17 @@ public extension ViewModel {
 
             if interactionMode == .edit {
                 // try loading outliers if there aren't any present
-                let frameView = self.frames[next_frame.frameIndex]
+                let frameView = self.frames[nextFrame.frameIndex]
                 if frameView.outlierViews == nil,
                    !frameView.loadingOutlierViews
                 {
                     frameView.loadingOutlierViews = true
                     self.loadingOutliers = true
                     Task.detached(priority: .userInitiated) {
-                        let _ = try await next_frame.loadOutliers()
+                        let _ = try await nextFrame.loadOutliers()
                         await MainActor.run {
                             Task {
-                                await self.setOutlierGroups(forFrame: next_frame)
+                                await self.setOutlierGroups(forFrame: nextFrame)
                                 frameView.loadingOutlierViews = false
                                 self.loadingOutliers = self.loadingOutlierGroups
                                 self.update()
@@ -786,12 +786,12 @@ public extension ViewModel {
     {
         let currentFrame = self.currentFrame
 
-        var new_index = self.currentIndex + numberOfFrames
-        if new_index < 0 { new_index = 0 }
-        if new_index >= self.frames.count {
-            new_index = self.frames.count-1
+        var newIndex = self.currentIndex + numberOfFrames
+        if newIndex < 0 { newIndex = 0 }
+        if newIndex >= self.frames.count {
+            newIndex = self.frames.count-1
         }
-        let newFrameView = self.frames[new_index]
+        let newFrameView = self.frames[newIndex]
         
         self.transition(toFrame: newFrameView,
                         from: currentFrame,
@@ -822,13 +822,13 @@ public extension ViewModel {
             return
         }
         
-        var next_frameIndex = 0
+        var nextFrameIndex = 0
         if forwards {
-            next_frameIndex = frameIndex + 1
+            nextFrameIndex = frameIndex + 1
         } else {
-            next_frameIndex = frameIndex - 1
+            nextFrameIndex = frameIndex - 1
         }
-        let next_frame_view = self.frames[next_frameIndex]
+        let nextFrameView = self.frames[nextFrameIndex]
 
         var skip = false
 
@@ -837,22 +837,22 @@ public extension ViewModel {
             skip = false 
 
         case .skipEmpties:
-            if let outlierViews = next_frame_view.outlierViews {
+            if let outlierViews = nextFrameView.outlierViews {
                 skip = outlierViews.count == 0
             }
 
         case .toNextPositive:
-            if let num = next_frame_view.numberOfPositiveOutliers {
+            if let num = nextFrameView.numberOfPositiveOutliers {
                 skip = num == 0
             }
 
         case .toNextNegative:
-            if let num = next_frame_view.numberOfNegativeOutliers {
+            if let num = nextFrameView.numberOfNegativeOutliers {
                 skip = num == 0
             }
 
         case .toNextUnknown:
-            if let num = next_frame_view.numberOfUndecidedOutliers {
+            if let num = nextFrameView.numberOfUndecidedOutliers {
                 skip = num == 0
             }
         }
@@ -862,10 +862,10 @@ public extension ViewModel {
             self.transition(until: fastAdvancementType,
                             from: frame,
                             forwards: forwards,
-                            currentIndex: next_frameIndex,
+                            currentIndex: nextFrameIndex,
                             withScroll: scroller)
         } else {
-            self.transition(toFrame: next_frame_view,
+            self.transition(toFrame: nextFrameView,
                             from: frame,
                             withScroll: scroller)
         }

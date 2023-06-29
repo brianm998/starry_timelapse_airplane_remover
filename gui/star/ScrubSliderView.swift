@@ -19,16 +19,16 @@ struct ScrubSliderView: View {
               let frameIndex = Int(viewModel.sliderValue)
               Log.i("transition to \(frameIndex)")
               // XXX do more than just this
-              var new_frameIndex = Int(value)
+              var newFrameIndex = Int(value)
               //viewModel.currentIndex = Int(value)
-              if new_frameIndex < 0 { new_frameIndex = 0 }
-              if new_frameIndex >= viewModel.frames.count {
-                  new_frameIndex = viewModel.frames.count - 1
+              if newFrameIndex < 0 { newFrameIndex = 0 }
+              if newFrameIndex >= viewModel.frames.count {
+                  newFrameIndex = viewModel.frames.count - 1
               }
-              let new_frame_view = viewModel.frames[new_frameIndex]
-              let current_frame = viewModel.currentFrame
-              self.viewModel.transition(toFrame: new_frame_view,
-                                     from: current_frame,
+              let newFrameView = viewModel.frames[newFrameIndex]
+              let currentFrame = viewModel.currentFrame
+              self.viewModel.transition(toFrame: newFrameView,
+                                     from: currentFrame,
                                      withScroll: scroller)
           }
     }
