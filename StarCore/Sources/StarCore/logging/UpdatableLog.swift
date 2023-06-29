@@ -26,35 +26,35 @@ public enum ConsoleColor: String, CaseIterable {
 }
 
 // progress is between 0 and 1
-public func progress_bar(length: Int, progress: Double) -> String {
+public func progressBar(length: Int, progress: Double) -> String {
 
-    var progress_bar: String = ConsoleColor.blue.rawValue + "["
+    var progressBar: String = ConsoleColor.blue.rawValue + "["
     for i in 0 ..< length {
         if Double(i)/Double(length) < progress {
-            progress_bar += ConsoleColor.green.rawValue + "*";
+            progressBar += ConsoleColor.green.rawValue + "*";
         } else {
-            progress_bar += ConsoleColor.yellow.rawValue + "-";
+            progressBar += ConsoleColor.yellow.rawValue + "-";
         }
     }
-    progress_bar += ConsoleColor.blue.rawValue+"]"+ConsoleColor.reset.rawValue;
+    progressBar += ConsoleColor.blue.rawValue+"]"+ConsoleColor.reset.rawValue;
 
-    return progress_bar
+    return progressBar
 }
 
 // progress is between 0 and 1
-public func reverse_progress_bar(length: Int, progress: Double) -> String {
+public func reverseProgressBar(length: Int, progress: Double) -> String {
 
-    var progress_bar: String = ConsoleColor.blue.rawValue + "["
+    var progressBar: String = ConsoleColor.blue.rawValue + "["
     for i in (0 ..< length).reversed() {
         if Double(i)/Double(length) < progress {
-            progress_bar += ConsoleColor.green.rawValue + "*";
+            progressBar += ConsoleColor.green.rawValue + "*";
         } else {
-            progress_bar += ConsoleColor.yellow.rawValue + "-";
+            progressBar += ConsoleColor.yellow.rawValue + "-";
         }
     }
-    progress_bar += ConsoleColor.blue.rawValue+"]"+ConsoleColor.reset.rawValue;
+    progressBar += ConsoleColor.blue.rawValue+"]"+ConsoleColor.reset.rawValue;
 
-    return progress_bar
+    return progressBar
 }
 
 public class UpdatableLogLine {

@@ -3,9 +3,9 @@ import StarCore
 
 class LinearChoiceTreeNode: SwiftDecisionTree {
     public init (type: OutlierGroup.Feature,
-                 min: Double,   // returns -1 if input value is equal to min
-                 max: Double,   // returns +1 if input value is equal to max
-                 indent: Int)
+                min: Double,   // returns -1 if input value is equal to min
+                max: Double,   // returns +1 if input value is equal to max
+                indent: Int)
     {
         self.type = type
         self.min = min

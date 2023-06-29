@@ -4,7 +4,7 @@ import ArgumentParser
 import CryptoKit
 
 // number of levels (groups of '    ') of indentation to start with 
-let initial_indent = 2
+let initialIndent = 2
 
 struct TreeForestResult {
     let tree: DecisionTreeStruct
@@ -35,7 +35,7 @@ actor DecisionTreeGenerator {
     }
 
     func generateForest(withInputData inputData: ClassifiedData,
-                        andTestData test_data: [ClassifiedData],
+                        andTestData testData: [ClassifiedData],
                         inputFilenames: [String],
                         treeCount: Int,
                         baseFilename: String) async throws -> [TreeForestResult]
@@ -51,47 +51,47 @@ actor DecisionTreeGenerator {
          sum of all of the trees in this forest, a group consensus.
          */
         
-        var inputData_split = inputData.shuffleSplit(into: treeCount)
+        let inputDataSplit = inputData.shuffleSplit(into: treeCount)
 
         var validationData = ClassifiedData()
 
         let trees = try await withLimitedThrowingTaskGroup(of: TreeForestResult.self) { taskGroup in
             var results: [TreeForestResult] = []
-            for validation_index in 0..<inputData_split.count {
+            for validationIndex in 0..<inputDataSplit.count {
                 try await taskGroup.addTask() { 
                     // generate a tree from this validation data
-                    validationData = inputData_split[validation_index]
+                    validationData = inputDataSplit[validationIndex]
                     
                     // use the remaining data for training
                     let trainingData = ClassifiedData()
-                    for i in 0..<inputData_split.count {
-                        if i != validation_index {
-                            trainingData += inputData_split[i]
+                    for i in 0..<inputDataSplit.count {
+                        if i != validationIndex {
+                            trainingData += inputDataSplit[i]
                         }
                     }
 
-                    Log.i("have \(validationData.count) validationData, \(test_data.map { $0.count }.reduce(0, +)) test_data and \(trainingData.count) trainingData @ validation index \(validation_index)")
+                    Log.i("have \(validationData.count) validationData, \(testData.map { $0.count }.reduce(0, +)) testData and \(trainingData.count) trainingData @ validation index \(validationIndex)")
                     
                     let tree = try await self.generateTree(withTrainingData: trainingData,
                                                            andTestData: validationData,
                                                            inputFilenames: inputFilenames,
                                                            baseFilename: baseFilename,
-                                                           treeIndex: validation_index)
+                                                           treeIndex: validationIndex)
 
                     // save this generated swift code to a file
-                    if file_manager.fileExists(atPath: tree.filename) {
+                    if fileManager.fileExists(atPath: tree.filename) {
                         Log.i("overwriting already existing filename \(tree.filename)")
-                        try file_manager.removeItem(atPath: tree.filename)
+                        try fileManager.removeItem(atPath: tree.filename)
                     }
 
                     // write to file
-                    file_manager.createFile(atPath: tree.filename,
+                    fileManager.createFile(atPath: tree.filename,
                                             contents: tree.swiftCode.data(using: .utf8),
                                             attributes: nil)
 
                     // run test on test data
-                    var (tree_good, tree_bad) = await runTest(of: tree, onChunks: test_data)
-                    let score = Double(tree_good)/Double(tree_good + tree_bad)
+                    var (treeGood, treeBad) = await runTest(of: tree, onChunks: testData)
+                    let score = Double(treeGood)/Double(treeGood + treeBad)
                     
                     return TreeForestResult(tree: tree, testScore: score)
                 }
@@ -106,55 +106,55 @@ actor DecisionTreeGenerator {
     func writeClassifier(with forest: [TreeForestResult],
                          baseFilename: String) async throws -> OutlierGroupClassifier
     {
-        var trees_declaration_string = ""
-        var trees_classification_string_1 = ""
-        var trees_classification_string_2 = ""
-        var trees_name_list_string = "["
+        var treesDeclarationString = ""
+        var treesClassificationString1 = ""
+        var treesClassificationString2 = ""
+        var treesNameListString = "["
         var digest = SHA256()
 
-        var data_definition_1 = "        let ("
-        var data_definition_2 = "await ("
-        var classification_method_call = ""
+        var dataDefinition1 = "        let ("
+        var dataDefinition2 = "await ("
+        var classificationMethodCall = ""
         for type in decisionTypes {
-            data_definition_1 += "\(type), "
-            data_definition_2 += "group.decisionTreeValue(for: .\(type)), "
-            classification_method_call += "\(type): \(type), "
+            dataDefinition1 += "\(type), "
+            dataDefinition2 += "group.decisionTreeValue(for: .\(type)), "
+            classificationMethodCall += "\(type): \(type), "
         }        
-        classification_method_call.removeLast()
-        classification_method_call.removeLast()
+        classificationMethodCall.removeLast()
+        classificationMethodCall.removeLast()
 
-        data_definition_1.removeLast()
-        data_definition_1.removeLast()
-        data_definition_2.removeLast()
-        data_definition_2.removeLast()
+        dataDefinition1.removeLast()
+        dataDefinition1.removeLast()
+        dataDefinition2.removeLast()
+        dataDefinition2.removeLast()
 
-        data_definition_1 += ")"
-        data_definition_2 += ")"
+        dataDefinition1 += ")"
+        dataDefinition2 += ")"
         
-        var trees_type_string = ""
+        var treesTypeString = ""
         
         for tree in forest {
             let score = tree.testScore
             let name = tree.tree.name
             Log.i("have tree \(name) w/ score \(score)")
 
-            trees_declaration_string += "    let tree_\(name) = OutlierGroupDecisionTree_\(name)()\n"
-            trees_classification_string_1 += "            await taskGroup.addTask() { self.tree_\(name).classification(\(classification_method_call)) * \(score) }\n\n"
-            trees_classification_string_2 += "            await taskGroup.addTask() { self.tree_\(name).classification(of: features, and: values) * \(score) }\n\n"
-            trees_name_list_string += " \"\(name)\","
+            treesDeclarationString += "    let tree_\(name) = OutlierGroupDecisionTree_\(name)()\n"
+            treesClassificationString1 += "            await taskGroup.addTask() { self.tree_\(name).classification(\(classificationMethodCall)) * \(score) }\n\n"
+            treesClassificationString2 += "            await taskGroup.addTask() { self.tree_\(name).classification(of: features, and: values) * \(score) }\n\n"
+            treesNameListString += " \"\(name)\","
 
-            trees_type_string += "   \(tree.tree.type)\n\n"
+            treesTypeString += "   \(tree.tree.type)\n\n"
             
             digest.update(data: Data(name.utf8))
         }
-        let tree_hash = digest.finalize()
-        let tree_hash_string = tree_hash.compactMap { String(format: "%02x", $0) }.joined()
-        let hash_prefix = String(tree_hash_string.prefix(sha_prefix_size))
+        let treeHash = digest.finalize()
+        let treeHashString = treeHash.compactMap { String(format: "%02x", $0) }.joined()
+        let hashPrefix = String(treeHashString.prefix(shaPrefixSize))
 
-        trees_name_list_string.removeLast()
-        trees_name_list_string += "]"
+        treesNameListString.removeLast()
+        treesNameListString += "]"
 
-        let filename = "\(baseFilename)\(hash_prefix).swift"
+        let filename = "\(baseFilename)\(hashPrefix).swift"
 
         var pruneString = ""
         if pruneTree {
@@ -170,11 +170,11 @@ actor DecisionTreeGenerator {
             depthString = "Trees were computed to a maximum depth of \(maxDepth) levels"
         }
         
-        let generation_date = Date()
-        let swift_string =
+        let generationDate = Date()
+        let swiftString =
              """
              /*
-                written by decision_tree_generator on \(generation_date).
+                written by decision_tree_generator on \(generationDate).
 
                 The classifications of \(forest.count) trees are combined here with weights from test data.
                 
@@ -182,7 +182,7 @@ actor DecisionTreeGenerator {
 
                 \(pruneString)
 
-             \(trees_type_string)
+             \(treesTypeString)
               */
 
              import Foundation
@@ -192,24 +192,24 @@ actor DecisionTreeGenerator {
              // DO NOT EDIT THIS FILE
              // DO NOT EDIT THIS FILE
 
-             public final class OutlierGroupClassifierForest_\(hash_prefix): NamedOutlierGroupClassifier {
+             public final class OutlierGroupClassifierForest_\(hashPrefix): NamedOutlierGroupClassifier {
 
                  public init() { }
 
-                 public let name = "\(hash_prefix)"
+                 public let name = "\(hashPrefix)"
                  
-                 public let type: ClassifierType = .forest(DecisionForestParams(name: \"\(hash_prefix)\",
+                 public let type: ClassifierType = .forest(DecisionForestParams(name: \"\(hashPrefix)\",
                                                                                 treeCount: \(forest.count),
-                                                                                treeNames: \(trees_name_list_string)))
+                                                                                treeNames: \(treesNameListString)))
 
-             \(trees_declaration_string)
+             \(treesDeclarationString)
                  // returns -1 for negative, +1 for positive
                  public func classification(of group: OutlierGroup) async -> Double {
-             \(data_definition_1) = \(data_definition_2)
+             \(dataDefinition1) = \(dataDefinition2)
 
                      let score = await withLimitedTaskGroup(of: Double.self) { taskGroup in
              
-             \(trees_classification_string_1)
+             \(treesClassificationString1)
                          var total: Double = 0.0
                          await taskGroup.forEach() { total += $0 }
                          return total / \(forest.count)
@@ -225,7 +225,7 @@ actor DecisionTreeGenerator {
                  {
                      let score = await withLimitedTaskGroup(of: Double.self) { taskGroup in
 
-             \(trees_classification_string_2)
+             \(treesClassificationString2)
                          var total: Double = 0.0
                          await taskGroup.forEach() { total += $0 }
                          return total / \(forest.count)
@@ -235,14 +235,14 @@ actor DecisionTreeGenerator {
              }
              """
         // save this generated swift code to a file
-        if file_manager.fileExists(atPath: filename) {
+        if fileManager.fileExists(atPath: filename) {
             Log.i("overwriting already existing filename \(filename)")
-            try file_manager.removeItem(atPath: filename)
+            try fileManager.removeItem(atPath: filename)
         }
 
         // write to file
-        file_manager.createFile(atPath: filename,
-                                contents: swift_string.data(using: .utf8),
+        fileManager.createFile(atPath: filename,
+                                contents: swiftString.data(using: .utf8),
                                 attributes: nil)
 
         return ForestClassifier(trees: forest)
@@ -255,13 +255,13 @@ actor DecisionTreeGenerator {
                       baseFilename: String,
                       treeIndex: Int? = nil) async throws -> DecisionTreeStruct
     {
-        let end_time = Date()
+        let endTime = Date()
 
         let formatter = DateComponentsFormatter()
         formatter.calendar = Calendar.current
         formatter.allowedUnits = [.day, .hour, .minute, .second]
         formatter.unitsStyle = .full
-        let duration_string = formatter.string(from: start_time, to: end_time) ?? "??"
+        let durationString = formatter.string(from: startTime, to: endTime) ?? "??"
         
         let indentation = "        "
         var digest = SHA256()
@@ -279,17 +279,17 @@ actor DecisionTreeGenerator {
             digest.update(data: Data("NO PRUNE".utf8))
         }
         
-        var input_files_string = ""
-        var input_files_array = "\(indentation)["
+        var inputFilesString = ""
+        var inputFilesArray = "\(indentation)["
         for inputFilename in inputFilenames {
-            input_files_string += "     - \(inputFilename)\n"
-            input_files_array += "\n\(indentation)    \"\(inputFilename)\","
+            inputFilesString += "     - \(inputFilename)\n"
+            inputFilesArray += "\n\(indentation)    \"\(inputFilename)\","
             digest.update(data: Data(inputFilename.utf8))
         }
-        input_files_array.removeLast()
-        input_files_array += "\n\(indentation)]"
+        inputFilesArray.removeLast()
+        inputFilesArray += "\n\(indentation)]"
 
-        let generation_date = Date()
+        let generationDate = Date()
 
         for type in decisionTypes {
             digest.update(data: Data(type.rawValue.utf8))
@@ -301,33 +301,33 @@ actor DecisionTreeGenerator {
 
         digest.update(data: Data("\(maxDepth)".utf8))
         
-        let tree_hash = digest.finalize()
-        let tree_hash_string = tree_hash.compactMap { String(format: "%02x", $0) }.joined()
-        let generation_date_since_1970 = generation_date.timeIntervalSince1970
+        let treeHash = digest.finalize()
+        let treeHashString = treeHash.compactMap { String(format: "%02x", $0) }.joined()
+        let generationDateSince1970 = generationDate.timeIntervalSince1970
 
-        var function_signature = ""
-        var function_parameters = ""
-        var function2_parameters = ""
+        var functionSignature = ""
+        var functionParameters = ""
+        var function2Parameters = ""
         
         for type in decisionTypes {
-            function_parameters += "            \(type): await group.decisionTreeValue(for: .\(type)),\n"
-            function2_parameters += "         \(type): map[.\(type)]!,\n"
-            function_signature += "            \(type): Double,\n"
+            functionParameters += "            \(type): await group.decisionTreeValue(for: .\(type)),\n"
+            function2Parameters += "         \(type): map[.\(type)]!,\n"
+            functionSignature += "            \(type): Double,\n"
         }
-        function_signature.removeLast()        
-        function_signature.removeLast()
-        function_parameters.removeLast()
-        function_parameters.removeLast()
-        function2_parameters.removeLast()
-        function2_parameters.removeLast()
+        functionSignature.removeLast()        
+        functionSignature.removeLast()
+        functionParameters.removeLast()
+        functionParameters.removeLast()
+        function2Parameters.removeLast()
+        function2Parameters.removeLast()
 
-        let hash_prefix = String(tree_hash_string.prefix(sha_prefix_size))
+        let hashPrefix = String(treeHashString.prefix(shaPrefixSize))
 
-        let filename = "\(baseFilename)\(hash_prefix).swift"
+        let filename = "\(baseFilename)\(hashPrefix).swift"
 
         // check to see if this file exists or not
         /*
-        if file_manager.fileExists(atPath: filename) {
+        if fileManager.fileExists(atPath: filename) {
             // Don't do anything
             throw "decision tree already exists at \(filename)"
         }
@@ -345,21 +345,21 @@ actor DecisionTreeGenerator {
 
         var skippedDecisionTypeString = "    public let notUsedDecisionTypes: [OutlierGroup.Feature] = [\n"
 
-        var was_added = false
+        var wasAdded = false
         for type in OutlierGroup.Feature.allCases {
-            var should_add = true
+            var shouldAdd = true
             for requestedType in decisionTypes {
                 if type == requestedType {
-                    should_add = false
+                    shouldAdd = false
                     break
                 }
             }
-            if should_add {
-                was_added = true 
+            if shouldAdd {
+                wasAdded = true 
                 skippedDecisionTypeString += "        .\(type.rawValue),\n"
             }
         }
-        if was_added {
+        if wasAdded {
             skippedDecisionTypeString.removeLast()
             skippedDecisionTypeString.removeLast()
         }
@@ -380,19 +380,19 @@ actor DecisionTreeGenerator {
 
         // the root tree node with all of the test data 
         var tree = await decisionTreeNode(withTrainingData: trainingData,
-                                          indented: initial_indent,
+                                          indented: initialIndent,
                                           decisionTypes: decisionTypes,
                                           decisionSplitTypes: decisionSplitTypes,
                                           maxDepth: maxDepth)
 
         // prune this mother fucker with test data
 
-        var generated_swift_code: String = ""
+        var generatedSwiftCode: String = ""
         if pruneTree {
             // this can take a long time
             tree = await prune(tree: tree, with: testData)
         }
-        generated_swift_code = tree.swiftCode
+        generatedSwiftCode = tree.swiftCode
 
         Log.d("got root")
 
@@ -422,16 +422,16 @@ actor DecisionTreeGenerator {
               """
         }
         
-        let swift_string = """
+        let swiftString = """
           /*
-             written by decision_tree_generator on \(generation_date) in \(duration_string)
+             written by decision_tree_generator on \(generationDate) in \(durationString)
 
              with training data consisting of:
                - \(trainingData.positiveData.count) groups known to be positive
                - \(trainingData.negativeData.count) groups known to be negative
 
              from input data described by:
-          \(input_files_string)
+          \(inputFilesString)
           \(treeString)
           \(pruneString)
           */
@@ -443,14 +443,14 @@ actor DecisionTreeGenerator {
           // DO NOT EDIT THIS FILE
           // DO NOT EDIT THIS FILE
 
-          public final class OutlierGroupDecisionTree_\(hash_prefix): DecisionTree {
+          public final class OutlierGroupDecisionTree_\(hashPrefix): DecisionTree {
               public init() { }
-              public let sha256 = "\(tree_hash_string)"
-              public let name = "\(hash_prefix)"
-              public let sha256Prefix = "\(hash_prefix)"
+              public let sha256 = "\(treeHashString)"
+              public let name = "\(hashPrefix)"
+              public let sha256Prefix = "\(hashPrefix)"
               public let maxDepth = \(maxDepth)
-              public let type: ClassifierType = .tree(DecisionTreeParams(name: \"\(hash_prefix)\",
-                                                         inputSequences: \(input_files_array),
+              public let type: ClassifierType = .tree(DecisionTreeParams(name: \"\(hashPrefix)\",
+                                                         inputSequences: \(inputFilesArray),
                                                          positiveTrainingSize: \(trainingData.positiveData.count),
                                                          negativeTrainingSize: \(trainingData.negativeData.count),
                                                          decisionTypes: \(decisionTypeString),
@@ -458,7 +458,7 @@ actor DecisionTreeGenerator {
                                                          maxDepth: \(maxDepth),
                                                          pruned: \(pruneTree)))
               
-              public let generationSecondsSince1970 = \(generation_date_since_1970)
+              public let generationSecondsSince1970 = \(generationDateSince1970)
 
               // the list of decision types this tree did not use
           \(skippedDecisionTypeString)
@@ -467,7 +467,7 @@ actor DecisionTreeGenerator {
               // return value is between -1 and 1, 1 is paint
               public func classification(of group: OutlierGroup) async -> Double {
                   return self.classification(
-          \(function_parameters)
+          \(functionParameters)
                   )
               }
 
@@ -485,38 +485,38 @@ actor DecisionTreeGenerator {
                     map[type] = value
                 }
                 return classification(
-          \(function2_parameters)
+          \(function2Parameters)
                 )
               }
 
               // the actual tree resides here
               // return value is between -1 and 1, 1 is paint
               public func classification(
-          \(function_signature)
+          \(functionSignature)
                     ) -> Double
               {
-          \(generated_swift_code)
+          \(generatedSwiftCode)
               }
           }
           """
 
-        return DecisionTreeStruct(name: hash_prefix,
-                                  swiftCode: swift_string,
-                                  tree: tree,
-                                  filename: filename,
-                                  sha256: tree_hash_string,
-                                  generationSecondsSince1970: generation_date_since_1970,
-                                  inputSequences: inputFilenames,
-                                  decisionTypes: decisionTypes,
-                                  type: .tree(DecisionTreeParams(name: hash_prefix,
-                                                                 inputSequences: inputFilenames,
-                                                                 positiveTrainingSize: trainingData.positiveData.count,
-                                                                 negativeTrainingSize: trainingData.negativeData.count,
-                                                                 decisionTypes: decisionTypes,
-                                                                 decisionSplitTypes: decisionSplitTypes,
-                                                                 maxDepth: maxDepth,
-                                                                 pruned: pruneTree)))
-        }
+        return DecisionTreeStruct(name: hashPrefix,
+                               swiftCode: swiftString,
+                               tree: tree,
+                               filename: filename,
+                               sha256: treeHashString,
+                               generationSecondsSince1970: generationDateSince1970,
+                               inputSequences: inputFilenames,
+                               decisionTypes: decisionTypes,
+                               type: .tree(DecisionTreeParams(name: hashPrefix,
+                                                          inputSequences: inputFilenames,
+                                                          positiveTrainingSize: trainingData.positiveData.count,
+                                                          negativeTrainingSize: trainingData.negativeData.count,
+                                                          decisionTypes: decisionTypes,
+                                                          decisionSplitTypes: decisionSplitTypes,
+                                                          maxDepth: maxDepth,
+                                                          pruned: pruneTree)))
+    }
 
 }
 
@@ -525,32 +525,32 @@ fileprivate func getValueDistributions(of values: [[Double]],
                                        on decisionTypes: [OutlierGroup.Feature])
       async -> [ValueDistribution?]
 {
-    let type_count = OutlierGroup.Feature.allCases.count
+    let typeCount = OutlierGroup.Feature.allCases.count
     
-    var array = [ValueDistribution?](repeating: nil, count: type_count)
+    var array = [ValueDistribution?](repeating: nil, count: typeCount)
     
     var tasks: [Task<ValueDistribution,Never>] = []
     
     // for each type, calculate a min/max/mean/median for both paint and not
     for type in decisionTypes {
-        let all_values = values[type.sortOrder] 
+        let allValues = values[type.sortOrder] 
         let task = await runTask() {
             var min =  Double.greatestFiniteMagnitude
             var max = -Double.greatestFiniteMagnitude
             var sum = 0.0
-            //Log.d("all values for paint \(type): \(all_values)")
+            //Log.d("all values for paint \(type): \(allValues)")
             
-            let count = all_values.count
+            let count = allValues.count
             for idx in 0..<count {
-                let value = all_values[idx] 
+                let value = allValues[idx] 
                 if value < min { min = value }
                 if value > max { max = value }
                 sum += value
             }
-            sum /= Double(all_values.count)
+            sum /= Double(allValues.count)
             var median = 0.0
-            if all_values.count > 0 {
-                median = all_values.sorted()[all_values.count/2]
+            if allValues.count > 0 {
+                median = allValues.sorted()[allValues.count/2]
             }                   // XXX why are we getting zero sized values?
             return ValueDistribution(type: type,
                                      min: min,
@@ -575,10 +575,10 @@ fileprivate func getValueDistributions(of values: [[Double]],
                                on decisionTypes: [OutlierGroup.Feature]) 
       async -> [[Double]]
 {
-    let type_count = OutlierGroup.Feature.allCases.count
+    let typeCount = OutlierGroup.Feature.allCases.count
     
     var array = [Array<Double>](repeating: [],
-                                count: type_count)
+                                count: typeCount)
     
     var tasks: [Task<DecisionTypeValuesResult,Never>] = []
     
@@ -619,8 +619,8 @@ fileprivate func recurseOn(result: DecisionResult, indent: Int,
     
     // we've identified the best type to differentiate the test data
     // output a tree node with this type and value
-    var less_response: TreeResponse?
-    var greater_response: TreeResponse?
+    var lessResponse: TreeResponse?
+    var greaterResponse: TreeResponse?
     
     let lessThanPaintCount = result.lessThanPositive.count
     let lessThanNotPaintCount = result.lessThanNegative.count
@@ -663,7 +663,7 @@ fileprivate func recurseOn(result: DecisionResult, indent: Int,
         let greaterThanPositive = result.greaterThanPositive//.map { $0 }
         let greaterThanNegative = result.greaterThanNegative//.map { $0 }
         
-        let less_response_task = await runTask() {
+        let lessResponseTask = await runTask() {
             /*
 
              XXX
@@ -683,43 +683,43 @@ fileprivate func recurseOn(result: DecisionResult, indent: Int,
  */
                 let _decisionTypes = decisionTypes
                 let _decisionSplitTypes = decisionSplitTypes
-                let less_tree = await decisionTreeNode(
+                let lessTree = await decisionTreeNode(
                   withTrainingData: ClassifiedData(positiveData: lessThanPositive,
                                                    negativeData: lessThanNegative),
                   indented: indent + 1,
                   decisionTypes: _decisionTypes,
                   decisionSplitTypes: _decisionSplitTypes,
                   maxDepth: maxDepth)
-                return TreeResponse(treeNode: less_tree, position: .less,
-                                    stumpValue: lessThanStumpValue)
+                return TreeResponse(treeNode: lessTree, position: .less,
+                                  stumpValue: lessThanStumpValue)
 //            }
         }
         
         let _decisionTypes = decisionTypes
         let _decisionSplitTypes = decisionSplitTypes
-        let greater_tree = await decisionTreeNode(
+        let greaterTree = await decisionTreeNode(
               withTrainingData: ClassifiedData(positiveData: greaterThanPositive,
                                                negativeData: greaterThanNegative),
               indented: indent + 1,
               decisionTypes: _decisionTypes,
               decisionSplitTypes: _decisionSplitTypes,
               maxDepth: maxDepth)
-        greater_response = TreeResponse(treeNode: greater_tree, position: .greater,
+        greaterResponse = TreeResponse(treeNode: greaterTree, position: .greater,
                                         stumpValue: greaterThanStumpValue)
         
-        less_response = await less_response_task.value
+        lessResponse = await lessResponseTask.value
     }
     
-    if let less_response = less_response,
-       let greater_response = greater_response
+    if let lessResponse = lessResponse,
+       let greaterResponse = greaterResponse
     {
-        var ret = DecisionTreeNode(type: result.type,
-                                   value: result.value,
-                                   lessThan: less_response.treeNode,
-                                   lessThanStumpValue: less_response.stumpValue,
-                                   greaterThan: greater_response.treeNode,
-                                   greaterThanStumpValue: greater_response.stumpValue,
-                                   indent: indent)
+        let ret = DecisionTreeNode(type: result.type,
+                                value: result.value,
+                                lessThan: lessResponse.treeNode,
+                                lessThanStumpValue: lessResponse.stumpValue,
+                                greaterThan: greaterResponse.treeNode,
+                                greaterThanStumpValue: greaterResponse.stumpValue,
+                                indent: indent)
         
         return ret
     } else {
@@ -730,7 +730,7 @@ fileprivate func recurseOn(result: DecisionResult, indent: Int,
 
 fileprivate func at(max indent: Int, at maxDepth: Int) -> Bool {
     if maxDepth < 0 { return false } // no limit
-    return indent - initial_indent > maxDepth
+    return indent - initialIndent > maxDepth
 }
 
 fileprivate func result(for type: OutlierGroup.Feature,
@@ -746,29 +746,29 @@ fileprivate func result(for type: OutlierGroup.Feature,
     
     // calculate how the data would split if we used the above decision value
     
-    let positive_training_data_count = trainingData.positiveData.count
-    for index in 0..<positive_training_data_count {
-        let group_values = trainingData.positiveData[index]
-        let group_value = group_values.values[type.sortOrder] // crash here / bad index here too
+    let positiveTrainingDataCount = trainingData.positiveData.count
+    for index in 0..<positiveTrainingDataCount {
+        let groupValues = trainingData.positiveData[index]
+        let groupValue = groupValues.values[type.sortOrder] // crash here / bad index here too
 
-        if group_value < decisionValue {
-            lessThanPositive.append(group_values)
+        if groupValue < decisionValue {
+            lessThanPositive.append(groupValues)
         } else {
-            greaterThanPositive.append(group_values)
+            greaterThanPositive.append(groupValues)
         }
     }
     
-    let negative_training_data_count = trainingData.negativeData.count 
-    for index in 0..<negative_training_data_count {
-        let group_values = trainingData.negativeData[index]
-        let group_value = group_values.values[type.sortOrder]
-        if group_value < decisionValue {
-            lessThanNegative.append(group_values)
+    let negativeTrainingDataCount = trainingData.negativeData.count 
+    for index in 0..<negativeTrainingDataCount {
+        let groupValues = trainingData.negativeData[index]
+        let groupValue = groupValues.values[type.sortOrder]
+        if groupValue < decisionValue {
+            lessThanNegative.append(groupValues)
         } else {
-            greaterThanNegative.append(group_values)
+            greaterThanNegative.append(groupValues)
         }
     }
-    /*  */      
+
     var ret = FeatureResult(type: type)
     ret.decisionResult =
       await DecisionResult(type: type,
@@ -790,40 +790,35 @@ fileprivate func decisionTreeNode(withTrainingData trainingData: ClassifiedData,
                                   maxDepth: Int)
   async -> SwiftDecisionTree
 {
-    /*        
-              if indent == initial_indent {
-              Log.i("decisionTreeNode with indent \(indent) positive_trainingData.count \(positive_trainingData.count) negative_trainingData.count \(negative_trainingData.count)")
-              }
-     */
-    let positive_training_data_count = trainingData.positiveData.count
-    let negative_training_data_count = trainingData.negativeData.count 
+    let positiveTrainingDataCount = trainingData.positiveData.count
+    let negativeTrainingDataCount = trainingData.negativeData.count 
     
-    //Log.d("new node w/ positive_training_data_count \(positive_training_data_count) negative_training_data_count \(negative_training_data_count)")
+    //Log.d("new node w/ positiveTrainingDataCount \(positiveTrainingDataCount) negativeTrainingDataCount \(negativeTrainingDataCount)")
     
-    if positive_training_data_count == 0,
-       negative_training_data_count == 0
+    if positiveTrainingDataCount == 0,
+       negativeTrainingDataCount == 0
     {
         // in this case it's not clear what to return so we blow up
         Log.e("Cannot calculate anything with no input data")
         fatalError("no input data not allowed")
     }
-    if positive_training_data_count == 0 {
+    if positiveTrainingDataCount == 0 {
         // func was called without any data to paint, return don't paint it all
         // XXX instead of returning -1, use logic from LinearChoiceTreeNode
         return FullyNegativeTreeNode(indent: indent)
     }
-    if negative_training_data_count == 0 {
+    if negativeTrainingDataCount == 0 {
         // func was called without any data to not paint, return paint it all
         // XXX instead of returning 1, use logic from LinearChoiceTreeNode
         return FullyPositiveTreeNode(indent: indent)
     }
     
     // this is the 0-1 percentage of positivity
-    let original_split =
-      Double(positive_training_data_count) /
-      Double(negative_training_data_count + positive_training_data_count)
+    let originalSplit =
+      Double(positiveTrainingDataCount) /
+      Double(negativeTrainingDataCount + positiveTrainingDataCount)
 
-    //Log.d("original_split \(original_split)")
+    //Log.d("originalSplit \(originalSplit)")
     
     // we have non zero test data of both kinds
     
@@ -833,25 +828,25 @@ fileprivate func decisionTreeNode(withTrainingData trainingData: ClassifiedData,
     // raw values for each type
     // index these by outlierGroup.sortOrder
     
-    let type_count = OutlierGroup.Feature.allCases.count
+    let typeCount = OutlierGroup.Feature.allCases.count
     
     // iterate ofer all decision tree types to pick the best one
     // that differentiates the test data
     
-    let positive_task = await runTask() {
+    let positiveTask = await runTask() {
         // indexed by outlierGroup.sortOrder
         let positiveValues = await transform(testData: trainingData.positiveData, on: decisionTypes)
         return await getValueDistributions(of: positiveValues, on: decisionTypes)
     }
     
-    let negative_task = await runTask() {
+    let negativeTask = await runTask() {
         // indexed by outlierGroup.sortOrder
         let negativeValues = await transform(testData: trainingData.negativeData, on: decisionTypes)
         return await getValueDistributions(of: negativeValues, on: decisionTypes)
     }
     
-    let positiveDist = await positive_task.value
-    let negativeDist = await negative_task.value
+    let positiveDist = await positiveTask.value
+    let negativeDist = await negativeTask.value
     
     var tasks: [Task<Array<FeatureResult>,Never>] = []
     
@@ -861,21 +856,21 @@ fileprivate func decisionTreeNode(withTrainingData trainingData: ClassifiedData,
     var decisionTreeNodes: [FeatureResult] = []
     
     for type in decisionTypes {
-        if let paint_dist_FU: ValueDistribution? = positiveDist[type.sortOrder],
-           let not_paint_dist_FU: ValueDistribution? = negativeDist[type.sortOrder],
-           let paint_dist: ValueDistribution = paint_dist_FU,
-           let not_paint_dist: ValueDistribution = not_paint_dist_FU
+        if let paintDistFU: ValueDistribution? = positiveDist[type.sortOrder],
+           let notPaintDistFU: ValueDistribution? = negativeDist[type.sortOrder],
+           let paintDist: ValueDistribution = paintDistFU,
+           let notPaintDist: ValueDistribution = notPaintDistFU
         {
             let task = await runTask() {
-                if paint_dist.max < not_paint_dist.min {
+                if paintDist.max < notPaintDist.min {
                     // we have a linear split between all provided test data
                     // this is an end leaf node, both paths after decision lead to a result
-                    //Log.d("clear distinction \(paint_dist.max) < \(not_paint_dist.min)")
+                    //Log.d("clear distinction \(paintDist.max) < \(notPaintDist.min)")
 
                     var ret = FeatureResult(type: type)
                     ret.decisionTreeNode =
                       DecisionTreeNode(type: type,
-                                       value: (paint_dist.max + not_paint_dist.min) / 2,
+                                       value: (paintDist.max + notPaintDist.min) / 2,
                                        lessThan: FullyPositiveTreeNode(indent: indent + 1),
                                        lessThanStumpValue: 1,
                                        greaterThan: FullyNegativeTreeNode(indent: indent + 1),
@@ -884,23 +879,23 @@ fileprivate func decisionTreeNode(withTrainingData trainingData: ClassifiedData,
                      /*
                       // this LinearChoiceTreeNode underperformed the above by 1-2%
                       LinearChoiceTreeNode(type: type,
-                                           min: paint_dist.median,
-                                           max: not_paint_dist.median,
+                                           min: paintDist.median,
+                                           max: notPaintDist.median,
                                            indent: indent)
-                                           ret.positiveDist = paint_dist
+                                           ret.positiveDist = paintDist
                        */
-                    ret.positiveDist = paint_dist
-                    ret.negativeDist = not_paint_dist
+                    ret.positiveDist = paintDist
+                    ret.negativeDist = notPaintDist
                     return [ret]
-                } else if not_paint_dist.max < paint_dist.min {
-                    //Log.d("clear distinction \(not_paint_dist.max) < \(paint_dist.min)")
+                } else if notPaintDist.max < paintDist.min {
+                    //Log.d("clear distinction \(notPaintDist.max) < \(paintDist.min)")
                     // we have a linear split between all provided test data
                     // this is an end leaf node, both paths after decision lead to a result
                     
                     var ret = FeatureResult(type: type)
                     ret.decisionTreeNode =
                       DecisionTreeNode(type: type,
-                                       value: (not_paint_dist.max + paint_dist.min) / 2,
+                                       value: (notPaintDist.max + paintDist.min) / 2,
                                        lessThan: FullyNegativeTreeNode(indent: indent + 1),
                                        lessThanStumpValue: -1,
                                        greaterThan: FullyPositiveTreeNode(indent: indent + 1),
@@ -908,13 +903,13 @@ fileprivate func decisionTreeNode(withTrainingData trainingData: ClassifiedData,
                                        indent: indent)
                       /*
                       LinearChoiceTreeNode(type: type,
-                                           min: not_paint_dist.median,
-                                           max: paint_dist.median,
+                                           min: notPaintDist.median,
+                                           max: paintDist.median,
                                            indent: indent)
-                                           ret.positiveDist = paint_dist
+                                           ret.positiveDist = paintDist
                        */
-                    ret.positiveDist = paint_dist
-                    ret.negativeDist = not_paint_dist
+                    ret.positiveDist = paintDist
+                    ret.negativeDist = notPaintDist
                     return [ret]
                 } else {
 
@@ -924,8 +919,8 @@ fileprivate func decisionTreeNode(withTrainingData trainingData: ClassifiedData,
                     
                     // test this type to see how much we can split the data based upon it
                     /*
-                     if indent == initial_indent {
-                     Log.d("for \(type) paint_dist min \(paint_dist.min) median \(paint_dist.median) mean \(paint_dist.mean) max \(paint_dist.max) not_paint_dist min \(not_paint_dist.min) mean \(not_paint_dist.mean) median \(not_paint_dist.max) median \(not_paint_dist.max)")
+                     if indent == initialIndent {
+                     Log.d("for \(type) paintDist min \(paintDist.min) median \(paintDist.median) mean \(paintDist.mean) max \(paintDist.max) notPaintDist min \(notPaintDist.min) mean \(notPaintDist.mean) median \(notPaintDist.max) median \(notPaintDist.max)")
                      }
                      */
                     
@@ -936,14 +931,14 @@ fileprivate func decisionTreeNode(withTrainingData trainingData: ClassifiedData,
                         case .mean:
                             let result = await
                               result(for: type,
-                                     decisionValue: (paint_dist.mean + not_paint_dist.mean) / 2,
+                                     decisionValue: (paintDist.mean + notPaintDist.mean) / 2,
                                      withTrainingData: trainingData)
                             ret.append(result)
                             
                         case .median:
                             let result = await 
                               result(for: type,
-                                     decisionValue: (paint_dist.median + not_paint_dist.median) / 2,
+                                     decisionValue: (paintDist.median + notPaintDist.median) / 2,
                                      withTrainingData: trainingData)
                             ret.append(result)
                         }
@@ -981,29 +976,29 @@ fileprivate func decisionTreeNode(withTrainingData trainingData: ClassifiedData,
     var rankedDecisionResults: [RankedResult<DecisionResult>] = []
     var bestTreeNodes: [RankedResult<SwiftDecisionTree>] = []
     
-    let number_responses = decisionTreeNodes.count
-    for idx in 0..<number_responses {
+    let numberResponses = decisionTreeNodes.count
+    for idx in 0..<numberResponses {
         let response = decisionTreeNodes[idx] 
         
         // these are direct splits that evenly cleave the input data into separate groups
         if let decisionTreeNode = response.decisionTreeNode,
-           let paint_dist = response.positiveDist,
-           let not_paint_dist = response.negativeDist
+           let paintDist = response.positiveDist,
+           let notPaintDist = response.negativeDist
         {
             // check each direct decision result and choose the best one
             // based upon the difference between their edges and their means
-            if paint_dist.max < not_paint_dist.min {
+            if paintDist.max < notPaintDist.min {
                 let split =
-                  (not_paint_dist.min - paint_dist.max) /
-                  (not_paint_dist.median - paint_dist.median)
+                  (notPaintDist.min - paintDist.max) /
+                  (notPaintDist.median - paintDist.median)
                 let result = RankedResult(rank: split,
                                           type: response.type,
                                           result: decisionTreeNode)
                 bestTreeNodes.append(result)
-            } else if not_paint_dist.max < paint_dist.min {
+            } else if notPaintDist.max < paintDist.min {
                 let split =
-                  (paint_dist.min - not_paint_dist.max) /
-                  (paint_dist.median - not_paint_dist.median)
+                  (paintDist.min - notPaintDist.max) /
+                  (paintDist.median - notPaintDist.median)
                 let result = RankedResult(rank: split,
                                           type: response.type,
                                           result: decisionTreeNode)
@@ -1019,26 +1014,26 @@ fileprivate func decisionTreeNode(withTrainingData trainingData: ClassifiedData,
         
         // choose the type with the best distribution 
         // that will generate the shortest tree
-        if decisionResult.lessThanSplit > original_split {
+        if decisionResult.lessThanSplit > originalSplit {
             // the less than split is biggest so far
-            let split = decisionResult.lessThanSplit - original_split
+            let split = decisionResult.lessThanSplit - originalSplit
             
             rankedDecisionResults.append(RankedResult(rank: split,
                                                       type: decisionResult.type,
                                                       result: decisionResult)) 
             
         } else {
-            //Log.d("decisionResult.lessThanSplit \(decisionResult.lessThanSplit) > original_split \(original_split)")
+            //Log.d("decisionResult.lessThanSplit \(decisionResult.lessThanSplit) > originalSplit \(originalSplit)")
         }
-        if decisionResult.greaterThanSplit > original_split {
+        if decisionResult.greaterThanSplit > originalSplit {
             // the greater than split is biggest so far
-            let split = decisionResult.greaterThanSplit - original_split
+            let split = decisionResult.greaterThanSplit - originalSplit
             
             rankedDecisionResults.append(RankedResult(rank: split,
                                                       type: decisionResult.type,
                                                       result: decisionResult)) 
         } else {
-            //Log.d("decisionResult.greaterThanSplit \(decisionResult.greaterThanSplit) > original_split \(original_split)")
+            //Log.d("decisionResult.greaterThanSplit \(decisionResult.greaterThanSplit) > originalSplit \(originalSplit)")
         }
     }
     
@@ -1111,7 +1106,7 @@ fileprivate func decisionTreeNode(withTrainingData trainingData: ClassifiedData,
             
             if maxList.count == 1 {
                 /*
-                 if indent == initial_indent {
+                 if indent == initialIndent {
                         Log.i("maxlist count is one, using type \(maxList[0].result.type)")
                         }
                         
@@ -1129,7 +1124,7 @@ fileprivate func decisionTreeNode(withTrainingData trainingData: ClassifiedData,
                 
                 let maxSort = maxList.sorted { $0.type < $1.type }
                 /*
-                 if indent == initial_indent {
+                 if indent == initialIndent {
                  Log.i("sorted by type is one, using type \(maxSort[0].result.type)")
                  }
                  */                  
@@ -1258,8 +1253,8 @@ public func runTest(of classifier: OutlierGroupClassifier,
 {
     // handle more than one classified data batch and run in parallel
     
-    var number_good: Int = 0
-    var number_bad: Int = 0
+    var numberGood: Int = 0
+    var numberBad: Int = 0
     
     await withLimitedTaskGroup(of: (positive: Int,negative: Int).self) { taskGroup in
         for i in 0 ..< classifiedData.count {
@@ -1268,11 +1263,11 @@ public func runTest(of classifier: OutlierGroupClassifier,
             }
         }
         await taskGroup.forEach()  { result in
-            number_good += result.positive
-            number_bad += result.negative
+            numberGood += result.positive
+            numberBad += result.negative
         }
     }
-    return (number_good, number_bad)
+    return (numberGood, numberBad)
 }
 
 public func runTest(of classifier: OutlierGroupClassifier,
@@ -1317,77 +1312,77 @@ fileprivate func prune(tree: SwiftDecisionTree,
 
     // then run tests in parallel
 
-    let chunked_test_data = testData.split(into: ProcessInfo.processInfo.activeProcessorCount)
+    let chunkedTestData = testData.split(into: ProcessInfo.processInfo.activeProcessorCount)
 
-    var (best_good, best_bad) = await runTest(of: tree, onChunks: chunked_test_data)
+    var (bestGood, bestBad) = await runTest(of: tree, onChunks: chunkedTestData)
 
-    let total = best_good + best_bad
+    let total = bestGood + bestBad
     
-    var best_percentage_good = Double(best_good)/Double(total)*100
-    let orig_percentage_good = best_percentage_good
+    var bestPercentageGood = Double(bestGood)/Double(total)*100
+    let origPercentageGood = bestPercentageGood
     
-    if best_bad == 0 {
+    if bestBad == 0 {
         // can't get better than this, on point trying
-        Log.i("not pruning tree with \(best_percentage_good) initial test results.  Use a different test data set for pruning.")
+        Log.i("not pruning tree with \(bestPercentageGood) initial test results.  Use a different test data set for pruning.")
         return tree
     } 
     
-    Log.i("Prune start: best_good \(best_good), best_bad \(best_bad) \(best_percentage_good)% good on \(testData.count) data points")
+    Log.i("Prune start: bestGood \(bestGood), bestBad \(bestBad) \(bestPercentageGood)% good on \(testData.count) data points")
 
     // prune from the root node, checking how well the tree performs on the test data
     // with and without stumping the node in question.
     // If the non-stumped test results aren't better, then cut the tree off at that node
     
-    if let root_node = tree as? DecisionTreeNode {
+    if let rootNode = tree as? DecisionTreeNode {
         // iterate over every DecisionTreeNode and try stumping it and comparing to the
         // best found score so far
         
-        var nodesToStump: [DecisionTreeNode] = [root_node]
+        var nodesToStump: [DecisionTreeNode] = [rootNode]
     
         while nodesToStump.count > 0 {
-            let stump_node = nodesToStump.removeFirst()
-            if !stump_node.stump {
-                stump_node.stump = true
+            let stumpNode = nodesToStump.removeFirst()
+            if !stumpNode.stump {
+                stumpNode.stump = true
 
-                let (good, bad) = await runTest(of: tree, onChunks: chunked_test_data)
+                let (good, bad) = await runTest(of: tree, onChunks: chunkedTestData)
                 /*
                  >= stumps when they're equal
                  >  doesn't stump in that case
                  */
-                if good > best_good {
-                    best_good = good
-                    best_percentage_good = Double(best_good)/Double(total)*100
+                if good > bestGood {
+                    bestGood = good
+                    bestPercentageGood = Double(bestGood)/Double(total)*100
                     // this was better, keep the stump
-                    Log.i("pruning \(nodesToStump.count) nodes \(best_percentage_good)% good better by \(good-best_good) on \(testData.count) data points keeping stump w/ best_good \(best_good) \(best_percentage_good)% good")
+                    Log.i("pruning \(nodesToStump.count) nodes \(bestPercentageGood)% good better by \(good-bestGood) on \(testData.count) data points keeping stump w/ bestGood \(bestGood) \(bestPercentageGood)% good")
                 } else {
                     // it was worse, remove stump
-                    stump_node.stump = false
-                    if let less_node = stump_node.lessThan as? DecisionTreeNode {
+                    stumpNode.stump = false
+                    if let lessNode = stumpNode.lessThan as? DecisionTreeNode {
                         // XXX narrow down data to that on this side
 
-                        if let _ = less_node.lessThan as? DecisionTreeNode,
-                           let _ = less_node.greaterThan as? DecisionTreeNode
+                        if let _ = lessNode.lessThan as? DecisionTreeNode,
+                           let _ = lessNode.greaterThan as? DecisionTreeNode
                         {
-                            nodesToStump.append(less_node)
+                            nodesToStump.append(lessNode)
                         }
                     }
-                    if let greater_node = stump_node.greaterThan as? DecisionTreeNode {
+                    if let greaterNode = stumpNode.greaterThan as? DecisionTreeNode {
                         // XXX narrow down data to that on this side
-                        if let _ = greater_node.lessThan as? DecisionTreeNode,
-                           let _ = greater_node.greaterThan as? DecisionTreeNode
+                        if let _ = greaterNode.lessThan as? DecisionTreeNode,
+                           let _ = greaterNode.greaterThan as? DecisionTreeNode
                         {
-                            nodesToStump.append(greater_node)
+                            nodesToStump.append(greaterNode)
                         }
                     }
-                    Log.i("Prune check: worse by \(good-best_good) on \(testData.count) data points")
+                    Log.i("Prune check: worse by \(good-bestGood) on \(testData.count) data points")
                 }
             }
         }
     }
 
-    Log.i("after pruning, \(orig_percentage_good)% to \(best_percentage_good)%, a \(best_percentage_good-orig_percentage_good)% improvement")
+    Log.i("after pruning, \(origPercentageGood)% to \(bestPercentageGood)%, a \(bestPercentageGood-origPercentageGood)% improvement")
     
     return tree
 }
 
-fileprivate let file_manager = FileManager.default
+fileprivate let fileManager = FileManager.default

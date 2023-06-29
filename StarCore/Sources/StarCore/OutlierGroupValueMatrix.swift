@@ -19,9 +19,9 @@ public class OutlierGroupValueMatrix {
         }
     }
 
-    public static var types_filename = "types.csv"
-    public static var positive_data_filename = "positive_data.csv"
-    public static var negative_data_filename = "negative_data.csv"
+    public static var typesFilename = "types.csv"
+    public static var positiveDataFilename = "positive_data.csv"
+    public static var negativeDataFilename = "negative_data.csv"
 
     public init() {
         self.types = OutlierGroup.decisionTreeValueTypes
@@ -30,10 +30,10 @@ public class OutlierGroupValueMatrix {
     }
     
     public init?(from dir: String) async throws {
-        let types_csv_filename = "\(dir)/\(OutlierGroupValueMatrix.types_filename)"
-        if file_manager.fileExists(atPath: types_csv_filename) {
+        let typesCSVFilename = "\(dir)/\(OutlierGroupValueMatrix.typesFilename)"
+        if fileManager.fileExists(atPath: typesCSVFilename) {
 
-            let url = NSURL(fileURLWithPath: types_csv_filename,
+            let url = NSURL(fileURLWithPath: typesCSVFilename,
                             isDirectory: false)
 
             let (data, _) = try await URLSession.shared.data(for: URLRequest(url: url as URL))
@@ -43,8 +43,8 @@ public class OutlierGroupValueMatrix {
             return nil
         }
 
-        let positive_filename = "\(dir)/\(OutlierGroupValueMatrix.positive_data_filename)"
-        if file_manager.fileExists(atPath: positive_filename) {
+        let positive_filename = "\(dir)/\(OutlierGroupValueMatrix.positiveDataFilename)"
+        if fileManager.fileExists(atPath: positive_filename) {
 
             let url = NSURL(fileURLWithPath: positive_filename,
                             isDirectory: false)
@@ -63,8 +63,8 @@ public class OutlierGroupValueMatrix {
             return nil
         }
 
-        let negative_filename = "\(dir)/\(OutlierGroupValueMatrix.negative_data_filename)"
-        if file_manager.fileExists(atPath: negative_filename) {
+        let negative_filename = "\(dir)/\(OutlierGroupValueMatrix.negativeDataFilename)"
+        if fileManager.fileExists(atPath: negative_filename) {
 
             let url = NSURL(fileURLWithPath: negative_filename,
                             isDirectory: false)
@@ -90,51 +90,51 @@ public class OutlierGroupValueMatrix {
     public func writeCSV(to dir: String) throws {
 
         // write out types file
-        let types_csv = self.types.map { $0.rawValue }.joined(separator:",").data(using: .utf8)
-        let types_csv_filename = "\(dir)/\(OutlierGroupValueMatrix.types_filename)"
-        if file_manager.fileExists(atPath: types_csv_filename) {
-            try file_manager.removeItem(atPath: types_csv_filename)
+        let typesCSV = self.types.map { $0.rawValue }.joined(separator:",").data(using: .utf8)
+        let typesCSVFilename = "\(dir)/\(OutlierGroupValueMatrix.typesFilename)"
+        if fileManager.fileExists(atPath: typesCSVFilename) {
+            try fileManager.removeItem(atPath: typesCSVFilename)
         }
-        file_manager.createFile(atPath: types_csv_filename,
-                                contents: types_csv,
+        fileManager.createFile(atPath: typesCSVFilename,
+                                contents: typesCSV,
                                 attributes: nil)
         
-        var positive_string = ""
+        var positiveString = ""
 
         // write out positive values file
         for values in positiveValues {
             let line = values.map { "\($0)" }.joined(separator: ",")
-            positive_string += line
-            positive_string += "\n"
+            positiveString += line
+            positiveString += "\n"
         }
-        let positive_data = positive_string.data(using: .utf8)
-        let positive_filename = "\(dir)/\(OutlierGroupValueMatrix.positive_data_filename)"
-        if file_manager.fileExists(atPath: positive_filename) {
-            try file_manager.removeItem(atPath: positive_filename)
+        let positiveData = positiveString.data(using: .utf8)
+        let positiveFilename = "\(dir)/\(OutlierGroupValueMatrix.positiveDataFilename)"
+        if fileManager.fileExists(atPath: positiveFilename) {
+            try fileManager.removeItem(atPath: positiveFilename)
         }
-        file_manager.createFile(atPath: positive_filename,
-                                contents: positive_data,
-                                attributes: nil)
+        fileManager.createFile(atPath: positiveFilename,
+                             contents: positiveData,
+                             attributes: nil)
 
         // write out negative values file
-        var negative_string = ""
+        var negativeString = ""
 
         for values in negativeValues {
             let line = values.map { "\($0)" }.joined(separator: ",")
-            negative_string += line
-            negative_string += "\n"
+            negativeString += line
+            negativeString += "\n"
         }
-        let negative_data = negative_string.data(using: .utf8)
-        let negative_filename = "\(dir)/\(OutlierGroupValueMatrix.negative_data_filename)"
-        if file_manager.fileExists(atPath: negative_filename) {
-            try file_manager.removeItem(atPath: negative_filename)
+        let negativeData = negativeString.data(using: .utf8)
+        let negativeFilename = "\(dir)/\(OutlierGroupValueMatrix.negativeDataFilename)"
+        if fileManager.fileExists(atPath: negativeFilename) {
+            try fileManager.removeItem(atPath: negativeFilename)
         }
-        file_manager.createFile(atPath: negative_filename,
-                                contents: negative_data,
+        fileManager.createFile(atPath: negativeFilename,
+                                contents: negativeData,
                                 attributes: nil)
     }
 }
 
 
 
-fileprivate let file_manager = FileManager.default
+fileprivate let fileManager = FileManager.default

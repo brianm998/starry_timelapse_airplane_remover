@@ -22,16 +22,16 @@ public class UpdatableLogHandler: LogHandler {
                     at logLevel: Log.Level)
     {
         Task(priority: .userInitiated) {
-            var log_message = ""
+            var logMessage = ""
             if let data = data {
-                log_message = "\(logLevel.emo) \(logLevel) | \(fileLocation): \(message) | \(data.description)"
+                logMessage = "\(logLevel.emo) \(logLevel) | \(fileLocation): \(message) | \(data.description)"
             } else {
-                log_message = "\(logLevel.emo) \(logLevel) | \(fileLocation): \(message)"
+                logMessage = "\(logLevel.emo) \(logLevel) | \(fileLocation): \(message)"
             }        
 
             let now = NSDate().timeIntervalSince1970
             await updatable.log(name: "\(now)",
-                                message: log_message,
+                                message: logMessage,
                                 value: now)
         }
     }
@@ -48,7 +48,7 @@ public class UpdatableLogHandler: LogHandler {
 }
 
 public actor UpdatableProgressMonitor {
-    let number_of_frames: Int
+    let numberOfFrames: Int
     let config: Config
     let callbacks: Callbacks
     
@@ -56,26 +56,28 @@ public actor UpdatableProgressMonitor {
     
     var frames: [FrameProcessingState: Set<FrameAirplaneRemover>] = [:]
     public init(frameCount: Int, config: Config, callbacks: Callbacks) {
-        self.number_of_frames = frameCount
+        self.numberOfFrames = frameCount
         self.config = config
         self.callbacks = callbacks
     }
 
-    private var last_update_time: TimeInterval?
+    private var lastUpdateTime: TimeInterval?
     
-    public func stateChange(for frame: FrameAirplaneRemover, to new_state: FrameProcessingState) {
+    public func stateChange(for frame: FrameAirplaneRemover,
+                          to newState: FrameProcessingState)
+    {
         for state in FrameProcessingState.allCases {
-            if state == new_state { continue }
-            if var state_items = frames[state] {
-                state_items.remove(frame)
-                frames[state] = state_items
+            if state == newState { continue }
+            if var stateItems = frames[state] {
+                stateItems.remove(frame)
+                frames[state] = stateItems
             }
         }
-        if var set = frames[new_state] {
+        if var set = frames[newState] {
             set.insert(frame)
-            frames[new_state] = set
+            frames[newState] = set
         } else {
-            frames[new_state] = [frame]
+            frames[newState] = [frame]
         }
 
         redraw()
@@ -98,7 +100,7 @@ public actor UpdatableProgressMonitor {
               Double(self.config.numConcurrentRenders)
             updates.append() {
                 await updatable.log(name: "loadingImages",
-                                     message: padding + progress_bar(length: self.config.numConcurrentRenders,
+                                     message: padding + progressBar(length: self.config.numConcurrentRenders,
                                                                      progress: progress) +
                                        " \(loadingImages.count) frames loading images",
                                      value: 0.9)
@@ -110,7 +112,7 @@ public actor UpdatableProgressMonitor {
               Double(self.config.numConcurrentRenders)
             updates.append() {
                 await updatable.log(name: "detectingOutliers",
-                                    message: padding + progress_bar(length: self.config.numConcurrentRenders,
+                                    message: padding + progressBar(length: self.config.numConcurrentRenders,
                                                                     progress: progress) +
                                       " \(detectingOutliers.count) frames detecting outliers",
                                     value: 1)
@@ -122,7 +124,7 @@ public actor UpdatableProgressMonitor {
               Double(self.config.numConcurrentRenders)
             updates.append() {
                 await updatable.log(name: "interFrameProcessing",
-                                    message: padding + progress_bar(length: self.config.numConcurrentRenders,
+                                    message: padding + progressBar(length: self.config.numConcurrentRenders,
                                                                     progress: progress) +
                                       " \(interFrameProcessing.count) frames classifing outlier groups",
                                     value: 3)
@@ -135,7 +137,7 @@ public actor UpdatableProgressMonitor {
               Double(self.config.numConcurrentRenders)       
             updates.append() {
                 await updatable.log(name: "outlierProcessingComplete",
-                                    message: padding + progress_bar(length: self.config.numConcurrentRenders,
+                                    message: padding + progressBar(length: self.config.numConcurrentRenders,
                                                                     progress: progress) +
                                       " \(outlierProcessingComplete.count) frames ready to paint",
                                     value: 4)
@@ -148,7 +150,7 @@ public actor UpdatableProgressMonitor {
               Double(self.config.numConcurrentRenders)      
             updates.append() {
                 await updatable.log(name: "reloadingImages",
-                                    message: padding + progress_bar(length: self.config.numConcurrentRenders, 
+                                    message: padding + progressBar(length: self.config.numConcurrentRenders, 
                                                                     progress: progress) +
                                       " \(reloadingImages.count) frames reloadingImages",
                                     value: 5)
@@ -160,7 +162,7 @@ public actor UpdatableProgressMonitor {
               Double(self.config.numConcurrentRenders)      
             updates.append() {
                 await updatable.log(name: "painting",
-                                    message: padding + progress_bar(length: self.config.numConcurrentRenders, 
+                                    message: padding + progressBar(length: self.config.numConcurrentRenders, 
                                                                     progress: progress) +
                                       " \(painting.count) frames painting",
                                     value: 5)
@@ -172,7 +174,7 @@ public actor UpdatableProgressMonitor {
               Double(self.config.numConcurrentRenders)        
             updates.append() {
                 await updatable.log(name: "writingOutputFile",
-                                    message: padding + progress_bar(length: self.config.numConcurrentRenders,
+                                    message: padding + progressBar(length: self.config.numConcurrentRenders,
                                                                     progress: progress) +
                                       " \(writingOutputFile.count) frames writing to disk",
                                     value: 6)
@@ -181,11 +183,11 @@ public actor UpdatableProgressMonitor {
         if let complete = frames[.complete] {
             let progress =
               Double(complete.count) /
-              Double(self.number_of_frames)
+              Double(self.numberOfFrames)
             updates.append() {
                 await updatable.log(name: "complete",
-                                    message: progress_bar(length: self.config.progressBarLength, progress: progress) +
-                                      " \(complete.count) / \(self.number_of_frames) frames complete",
+                                    message: progressBar(length: self.config.progressBarLength, progress: progress) +
+                                      " \(complete.count) / \(self.numberOfFrames) frames complete",
                                     value: 100)
             }
         } else {

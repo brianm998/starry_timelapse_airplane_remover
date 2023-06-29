@@ -90,7 +90,7 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
                 Task(priority: .userInitiated) {
                     let progress = Double(numberOfUnprocessed)/Double(imageSequenceSize)
                     await updatable.log(name: "unprocessed frames",
-                                        message: reverse_progress_bar(length: config.progressBarLength, progress: progress) + " \(numberOfUnprocessed) frames waiting to process",
+                                        message: reverseProgressBar(length: config.progressBarLength, progress: progress) + " \(numberOfUnprocessed) frames waiting to process",
                                          value: -1)
                 }
             }
@@ -144,15 +144,15 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
         {
             Log.d("loading first frame to get sizes")
             do {
-                let test_image = try await imageSequence.getImage(withName: imageSequence.filenames[0]).image()
-                imageWidth = test_image.width
-                imageHeight = test_image.height
+                let testImage = try await imageSequence.getImage(withName: imageSequence.filenames[0]).image()
+                imageWidth = testImage.width
+                imageHeight = testImage.height
 
                 // in OutlierGroup.swift
-                IMAGE_WIDTH = Double(test_image.width)
-                IMAGE_HEIGHT = Double(test_image.height)
+                IMAGE_WIDTH = Double(testImage.width)
+                IMAGE_HEIGHT = Double(testImage.height)
 
-                imageBytesPerPixel = test_image.bytesPerPixel
+                imageBytesPerPixel = testImage.bytesPerPixel
                 Log.d("first frame to get sizes: imageWidth \(String(describing: imageWidth)) imageHeight \(String(describing: imageHeight)) imageBytesPerPixel \(String(describing: imageBytesPerPixel))")
             } catch {
                 Log.e("first frame to get size: \(error)")
@@ -186,12 +186,9 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
     // called by the superclass to process each frame
     // called async check access to shared data
     override func processFrame(number index: Int,
-                               outputFilename: String,
-                               baseName: String) async throws -> FrameAirplaneRemover
+                            outputFilename: String,
+                            baseName: String) async throws -> FrameAirplaneRemover
     {
-        //Log.e("full_image_path \(full_image_path)")
-        // load images outside the main thread
-
         var otherFrameIndexes: [Int] = []
         
         if index > 0 {
@@ -202,16 +199,16 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
         }
         
         // the other frames that we use to detect outliers and repaint from
-        let frame_plane_remover =
+        let framePlaneRemover =
           try await self.createFrame(atIndex: index,
-                                     otherFrameIndexes: otherFrameIndexes,
-                                     outputFilename: "\(self.outputDirname)/\(baseName)",
-                                     baseName: baseName,
-                                     imageWidth: imageWidth!,
-                                     imageHeight: imageHeight!,
-                                     imageBytesPerPixel: imageBytesPerPixel!)
+                                  otherFrameIndexes: otherFrameIndexes,
+                                  outputFilename: "\(self.outputDirname)/\(baseName)",
+                                  baseName: baseName,
+                                  imageWidth: imageWidth!,
+                                  imageHeight: imageHeight!,
+                                  imageBytesPerPixel: imageBytesPerPixel!)
 
-        return frame_plane_remover
+        return framePlaneRemover
     }
 
     public var imageWidth: Int?
@@ -242,16 +239,16 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
 
         let loadOutliersFromFile: () async -> OutlierGroups? = {
 
-            let start_time = Date().timeIntervalSinceReferenceDate
-            var end_time_1: Double = 0
-            var start_time_1: Double = 0
+            let startTime = Date().timeIntervalSinceReferenceDate
+            var endTime1: Double = 0
+            var startTime1: Double = 0
 
             let frame_outliers_new_binary_dirname = "\(self.outlierOutputDirname)/\(frameIndex)"
-            if file_manager.fileExists(atPath: frame_outliers_new_binary_dirname) {
+            if FileManager.default.fileExists(atPath: frame_outliers_new_binary_dirname) {
                 do {
-                    start_time_1 = Date().timeIntervalSinceReferenceDate
+                    startTime1 = Date().timeIntervalSinceReferenceDate
                     outlierGroupsForThisFrame = try await OutlierGroups(at: frameIndex, from: frame_outliers_new_binary_dirname)
-                    end_time_1 = Date().timeIntervalSinceReferenceDate
+                    endTime1 = Date().timeIntervalSinceReferenceDate
                 } catch {
                     Log.e("frame \(frameIndex) error decoding file \(frame_outliers_new_binary_dirname): \(error)")
                 }
@@ -259,9 +256,8 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
                 
             } 
             let end_time = Date().timeIntervalSinceReferenceDate
-            Log.d("took \(end_time - start_time) seconds to load outlier group data for frame \(frameIndex)")
-            Log.i("TIMES \(start_time_1 - start_time) - \(end_time_1 - start_time_1) - \(end_time - end_time_1) reading outlier group data for frame \(frameIndex)")
-            
+            Log.d("took \(end_time - startTime) seconds to load outlier group data for frame \(frameIndex)")
+            Log.i("TIMES \(startTime1 - startTime) - \(endTime1 - startTime1) - \(end_time - endTime1) reading outlier group data for frame \(frameIndex)")
             
             if let _ = outlierGroupsForThisFrame  {
                 Log.i("loading frame \(frameIndex) with outlier groups from file")
@@ -292,5 +288,3 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
 }
               
               
-
-fileprivate let file_manager = FileManager.default

@@ -19,11 +19,11 @@ struct FilmstripImageView: View {
               //  let stroke_width: CGFloat = 4
                 if viewModel.currentIndex == frameIndex {
                     
-                    frameView.thumbnail_image
+                    frameView.thumbnailImage
                       .foregroundColor(.orange)
                     
                 } else {
-                    frameView.thumbnail_image
+                    frameView.thumbnailImage
                 }
             }
             Spacer().frame(maxHeight: 8)

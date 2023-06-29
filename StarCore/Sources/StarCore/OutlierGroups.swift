@@ -21,7 +21,7 @@ public class OutlierGroups {
     public var members: [String: OutlierGroup] // keyed by name
 
     public init(frameIndex: Int,
-                members: [String: OutlierGroup])
+               members: [String: OutlierGroup])
     {
         self.frameIndex = frameIndex
         self.members = members
@@ -30,53 +30,53 @@ public class OutlierGroups {
     public func write(to dir: String) async throws {
         Log.d("loaded frame \(self.frameIndex) with \(self.members.count) outlier groups from binary file")
 
-        let frame_dir = "\(dir)/\(frameIndex)"
+        let frameDir = "\(dir)/\(frameIndex)"
         
-        try mkdir(frame_dir)
+        try mkdir(frameDir)
 
         for group in members.values {
-            try await group.writeToFile(in: frame_dir)
+            try await group.writeToFile(in: frameDir)
         }
     }
     
     public init(at frameIndex: Int,
-                from dir: String) async throws
+               from dir: String) async throws
     {
         self.frameIndex = frameIndex
 
-        var data_bin_files: [String] = []
+        var dataBinFiles: [String] = []
         
-        let contents = try file_manager.contentsOfDirectory(atPath: dir)
+        let contents = try fileManager.contentsOfDirectory(atPath: dir)
         contents.forEach { file in
-            if file.hasSuffix(OutlierGroup.data_bin_suffix) {
-                data_bin_files.append(file)
+            if file.hasSuffix(OutlierGroup.dataBinSuffix) {
+                dataBinFiles.append(file)
             }
         }
         self.members = try await withLimitedThrowingTaskGroup(of: OutlierGroup.self) { taskGroup in
             var groups: [String: OutlierGroup] = [:]
-            for file in data_bin_files {
+            for file in dataBinFiles {
                 // load file into data
                 try await taskGroup.addTask() {
                     let fileurl = NSURL(fileURLWithPath: "\(dir)/\(file)", isDirectory: false)
-
-                    let (group_data, _) = try await URLSession.shared.data(for: URLRequest(url: fileurl as URL))
+ 
+                    let (groupData, _) = try await URLSession.shared.data(for: URLRequest(url: fileurl as URL))
                     let fu: String = file
-                    let fuck = String(fu.dropLast(OutlierGroup.data_bin_suffix.count+1))
+                    let fuck = String(fu.dropLast(OutlierGroup.dataBinSuffix.count+1))
                     //Log.d("trying to load group \(fuck)")
                     let group = OutlierGroup(withName: fuck,
-                                             frameIndex: frameIndex,
-                                             with: group_data)
+                                          frameIndex: frameIndex,
+                                          with:groupData)
                     
-                    let paint_filename = String(file.dropLast(OutlierGroup.data_bin_suffix.count) + OutlierGroup.paint_json_suffix)
+                    let paintFilename = String(file.dropLast(OutlierGroup.dataBinSuffix.count) + OutlierGroup.paintJsonSuffix)
 
-                    if file_manager.fileExists(atPath: "\(dir)/\(paint_filename)") {
-                        //Log.d("paint_filename \(paint_filename) exists for \(file) \(fuck)")
+                    if fileManager.fileExists(atPath: "\(dir)/\(paintFilename)") {
+                        //Log.d("paintFilename \(paintFilename) exists for \(file) \(fuck)")
                         // XXX load this shit up too
 
-                        let paintfileurl = NSURL(fileURLWithPath: "\(dir)/\(paint_filename)",
+                        let paintfileurl = NSURL(fileURLWithPath: "\(dir)/\(paintFilename)",
                                                  isDirectory: false)
 
-                        let (paint_data, _) = try await URLSession.shared.data(for: URLRequest(url: paintfileurl as URL))
+                        let (paintData, _) = try await URLSession.shared.data(for: URLRequest(url: paintfileurl as URL))
                         
                         // XXX this is json, decode it
                         
@@ -86,7 +86,7 @@ public class OutlierGroups {
                           negativeInfinity: "-inf",
                           nan: "nan")
                         
-                        await group.shouldPaint(try decoder.decode(PaintReason.self, from: paint_data))
+                        await group.shouldPaint(try decoder.decode(PaintReason.self, from: paintData))
 
                         //Log.d("loaded group.shouldPaint \(group.shouldPaint) for \(group.name) \(fuck)")
                     }
@@ -116,5 +116,5 @@ public class OutlierGroups {
     }
 }
 
-fileprivate let file_manager = FileManager.default
+fileprivate let fileManager = FileManager.default
 

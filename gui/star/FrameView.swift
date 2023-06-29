@@ -50,7 +50,7 @@ public struct FrameView: View {
                 Rectangle()
                   .foregroundColor(.yellow)
                   .aspectRatio(CGSize(width: 4, height: 3), contentMode: .fit)
-                Text(viewModel.no_image_explaination_text)
+                Text(viewModel.noImageExplainationText)
                   .font(.system(size: geometry.size.height/6))
                   .opacity(0.6)
             }

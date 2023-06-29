@@ -75,9 +75,9 @@ public class OutlierGroup: CustomStringConvertible,
         self.frame = frame
         self.pixels = pixels
         self.maxPixelDistance = maxPixelDistance
-        self.surfaceAreaToSizeRatio = surface_area_to_size_ratio(of: pixels,
-                                                                 width: bounds.width,
-                                                                 height: bounds.height)
+        self.surfaceAreaToSizeRatio = ratioOfSurfaceAreaToSize(of: pixels,
+                                                               width: bounds.width,
+                                                               height: bounds.height)
         // do a hough transform on just this outlier group
         let transform = HoughTransform(dataWidth: bounds.width,
                                        dataHeight: bounds.height,
@@ -106,9 +106,9 @@ public class OutlierGroup: CustomStringConvertible,
         hasher.combine(frameIndex)
     }
     
-    public func shouldPaint(_ should_paint: PaintReason) async {
-        //Log.d("\(self) should paint \(should_paint)")
-        self.shouldPaint = should_paint
+    public func shouldPaint(_ shouldPaint: PaintReason) async {
+        //Log.d("\(self) should paint \(shouldPaint)")
+        self.shouldPaint = shouldPaint
 
         // XXX update frame that it's different 
         self.frame?.markAsChanged()
@@ -125,12 +125,12 @@ public class OutlierGroup: CustomStringConvertible,
         
         let bytesPerPixel = 64/8
         
-        var image_data = Data(count: self.bounds.width*self.bounds.height*bytesPerPixel)
+        var imageData = Data(count: self.bounds.width*self.bounds.height*bytesPerPixel)
         for x in 0 ..< self.bounds.width {
             for y in 0 ..< self.bounds.height {
-                let pixel_index = y*self.bounds.width + x
+                let pixelIndex = y*self.bounds.width + x
                 var pixel = Pixel()
-                if self.pixels[pixel_index] != 0 {
+                if self.pixels[pixelIndex] != 0 {
                     // the real color is set in the view layer 
                     pixel.red = 0xFFFF
                     pixel.green = 0xFFFF
@@ -141,7 +141,7 @@ public class OutlierGroup: CustomStringConvertible,
                     
                     let offset = (Int(y) * bytesPerPixel*self.bounds.width) + (Int(x) * bytesPerPixel)
                     
-                    image_data.replaceSubrange(offset ..< offset+bytesPerPixel,
+                    imageData.replaceSubrange(offset ..< offset+bytesPerPixel,
                                                with: &nextValue,
                                                count: bytesPerPixel)
 
@@ -152,7 +152,7 @@ public class OutlierGroup: CustomStringConvertible,
         let bitmapInfo = CGBitmapInfo(rawValue: CGImageAlphaInfo.last.rawValue)
         
         let colorSpace = CGColorSpaceCreateDeviceRGB()
-        if let dataProvider = CGDataProvider(data: image_data as CFData) {
+        if let dataProvider = CGDataProvider(data: imageData as CFData) {
             let ret = CGImage(width: self.bounds.width,
                               height: self.bounds.height,
                               bitsPerComponent: 16,
@@ -172,47 +172,47 @@ public class OutlierGroup: CustomStringConvertible,
     }
     
     // how many pixels actually overlap between the groups ?  returns 0-1 value of overlap amount
-        func pixelOverlap(with group_2: OutlierGroup) async -> Double // 1 means total overlap, 0 means none
+    func pixelOverlap(with group2: OutlierGroup) async -> Double // 1 means total overlap, 0 means none
     {
-        let group_1 = self
+        let group1 = self
         // throw out non-overlapping frames, do any slip through?
-        if group_1.bounds.min.x > group_2.bounds.max.x || group_1.bounds.min.y > group_2.bounds.max.y { return 0 }
-        if group_2.bounds.min.x > group_1.bounds.max.x || group_2.bounds.min.y > group_1.bounds.max.y { return 0 }
+        if group1.bounds.min.x > group2.bounds.max.x || group1.bounds.min.y > group2.bounds.max.y { return 0 }
+        if group2.bounds.min.x > group1.bounds.max.x || group2.bounds.min.y > group1.bounds.max.y { return 0 }
 
-        var min_x = group_1.bounds.min.x
-        var min_y = group_1.bounds.min.y
-        var max_x = group_1.bounds.max.x
-        var max_y = group_1.bounds.max.y
+        var minX = group1.bounds.min.x
+        var minY = group1.bounds.min.y
+        var maxX = group1.bounds.max.x
+        var maxY = group1.bounds.max.y
         
-        if group_2.bounds.min.x > min_x { min_x = group_2.bounds.min.x }
-        if group_2.bounds.min.y > min_y { min_y = group_2.bounds.min.y }
+        if group2.bounds.min.x > minX { minX = group2.bounds.min.x }
+        if group2.bounds.min.y > minY { minY = group2.bounds.min.y }
         
-        if group_2.bounds.max.x < max_x { max_x = group_2.bounds.max.x }
-        if group_2.bounds.max.y < max_y { max_y = group_2.bounds.max.y }
+        if group2.bounds.max.x < maxX { maxX = group2.bounds.max.x }
+        if group2.bounds.max.y < maxY { maxY = group2.bounds.max.y }
         
         // XXX could search a smaller space probably
 
-        var overlap_pixel_amount = 0;
+        var overlapPixelAmount = 0;
         
-        for x in min_x ... max_x {
-            for y in min_y ... max_y {
-                let outlier_1_index = (y - group_1.bounds.min.y) * group_1.bounds.width + (x - group_1.bounds.min.x)
-                let outlier_2_index = (y - group_2.bounds.min.y) * group_2.bounds.width + (x - group_2.bounds.min.x)
-                if outlier_1_index > 0,
-                   outlier_1_index < group_1.pixels.count,
-                   group_1.pixels[outlier_1_index] != 0,
-                   outlier_2_index > 0,
-                   outlier_2_index < group_2.pixels.count,
-                   group_2.pixels[outlier_2_index] != 0
+        for x in minX ... maxX {
+            for y in minY ... maxY {
+                let outlier1Index = (y - group1.bounds.min.y) * group1.bounds.width + (x - group1.bounds.min.x)
+                let outlier2Index = (y - group2.bounds.min.y) * group2.bounds.width + (x - group2.bounds.min.x)
+                if outlier1Index > 0,
+                   outlier1Index < group1.pixels.count,
+                   group1.pixels[outlier1Index] != 0,
+                   outlier2Index > 0,
+                   outlier2Index < group2.pixels.count,
+                   group2.pixels[outlier2Index] != 0
                 {
-                    overlap_pixel_amount += 1
+                    overlapPixelAmount += 1
                 }
             }
         }
 
-        if overlap_pixel_amount > 0 {
-            let avg_group_size = (Double(group_1.size) + Double(group_2.size)) / 2
-            return Double(overlap_pixel_amount)/avg_group_size
+        if overlapPixelAmount > 0 {
+            let avgGroupSize = (Double(group1.size) + Double(group2.size)) / 2
+            return Double(overlapPixelAmount)/avgGroupSize
         }
         
         return 0
@@ -524,10 +524,10 @@ public class OutlierGroup: CustomStringConvertible,
     fileprivate var numberOfNearbyOutliersInSameFrame: Double {
         get async {
             if let frame = frame,
-               let nearby_groups = frame.outlierGroups(within: self.maxNearbyGroupDistance,
+               let nearbyGroups = frame.outlierGroups(within: self.maxNearbyGroupDistance,
                                                        of: self.bounds)
             {
-                return Double(nearby_groups.count)
+                return Double(nearbyGroups.count)
             } else {
                 fatalError("Died on frame \(frameIndex)")
             }
@@ -570,47 +570,47 @@ public class OutlierGroup: CustomStringConvertible,
 
     // returns 1 if they are the same
     // returns 0 if they are 180 degrees apart
-    fileprivate func thetaScore(between theta_1: Double, and theta_2: Double) -> Double {
+    fileprivate func thetaScore(between theta1: Double, and theta2: Double) -> Double {
 
-        var theta_1_opposite = theta_1 + 180
-        if theta_1_opposite > 360 { theta_1_opposite -= 360 }
+        var theta1Opposite = theta1 + 180
+        if theta1Opposite > 360 { theta1Opposite -= 360 }
 
-        var opposite_difference = theta_1_opposite - theta_2
+        var oppositeDifference = theta1Opposite - theta2
 
-        if opposite_difference <   0 { opposite_difference += 360 }
-        if opposite_difference > 360 { opposite_difference -= 360 }
+        if oppositeDifference <   0 { oppositeDifference += 360 }
+        if oppositeDifference > 360 { oppositeDifference -= 360 }
 
-        return opposite_difference / 180.0
+        return oppositeDifference / 180.0
     }
     
     // tries to find a streak with hough line histograms
     fileprivate var histogramStreakDetection: Double {
         get async {
             if let frame = frame {
-                var best_score = 0.0
+                var bestScore = 0.0
                 let selfHisto = self.houghLineHistogram
 
-                if let previous_frame = frame.previousFrame,
-                   let nearby_groups = previous_frame.outlierGroups(within: self.maxNearbyGroupDistance,
+                if let previousFrame = frame.previousFrame,
+                   let nearbyGroups = previousFrame.outlierGroups(within: self.maxNearbyGroupDistance,
                                                                     of: self.bounds)
                 {
-                    for group in nearby_groups {
+                    for group in nearbyGroups {
                         let score = self.thetaHistoCenterLineScore(with: group,
                                                                    selfHisto: selfHisto)
-                        best_score = max(score, best_score)
+                        bestScore = max(score, bestScore)
                     }
                 }
-                if let next_frame = frame.nextFrame,
-                   let nearby_groups = next_frame.outlierGroups(within: self.maxNearbyGroupDistance,
+                if let nextFrame = frame.nextFrame,
+                   let nearbyGroups = nextFrame.outlierGroups(within: self.maxNearbyGroupDistance,
                                                                 of: self.bounds)
                 {
-                    for group in nearby_groups {
+                    for group in nearbyGroups {
                         let score = self.thetaHistoCenterLineScore(with: group,
                                                                    selfHisto: selfHisto)
-                        best_score = max(score, best_score)
+                        bestScore = max(score, bestScore)
                     }
                 }
-                return best_score
+                return bestScore
             } else {
                 fatalError("NO FRAME for histogramStreakDetection @ index \(frameIndex)")
             }
@@ -624,20 +624,20 @@ public class OutlierGroup: CustomStringConvertible,
     {
         var histo = selfHisto
         if histo == nil { histo = self.houghLineHistogram }
-        let center_line_theta = self.bounds.centerTheta(with: group.bounds)
-        let other_histo = group.houghLineHistogram
-        let histo_score = other_histo.matchScore(with: histo!)
-        let theta_score = thetaScore(between: center_line_theta, and: other_histo.maxTheta)
-        return histo_score*theta_score
+        let centerLineTheta = self.bounds.centerTheta(with: group.bounds)
+        let otherHisto = group.houghLineHistogram
+        let histoScore = otherHisto.matchScore(with: histo!)
+        let thetaScore = thetaScore(between: centerLineTheta, and: otherHisto.maxTheta)
+        return histoScore*thetaScore
     }
     
     // tries to find a streak with hough line histograms
     // make this recursive to go back 3 frames in each direction
     fileprivate var longerHistogramStreakDetection: Double {
         get async {
-            let number_of_frames = 10 // how far in each direction to go
-            let forwardScore = await self.streakScore(in: .forwards, numberOfFramesLeft: number_of_frames)
-            let backwardScore = await self.streakScore(in: .backwards, numberOfFramesLeft: number_of_frames)
+            let numberOfFrames = 10 // how far in each direction to go
+            let forwardScore = await self.streakScore(in: .forwards, numberOfFramesLeft: numberOfFrames)
+            let backwardScore = await self.streakScore(in: .backwards, numberOfFramesLeft: numberOfFrames)
             return forwardScore + backwardScore
         }
     }
@@ -646,20 +646,20 @@ public class OutlierGroup: CustomStringConvertible,
         get async {
             var maxOverlap = 0.0
             if let frame = frame {
-                if let previous_frame = frame.previousFrame,
-                   let nearby_groups = previous_frame.outlierGroups(within: self.maxNearbyGroupDistance,
+                if let previousFrame = frame.previousFrame,
+                   let nearbyGroups = previousFrame.outlierGroups(within: self.maxNearbyGroupDistance,
                                                                           of: self.bounds)
                 {
-                    for group in nearby_groups {
+                    for group in nearbyGroups {
                         maxOverlap = max(await self.pixelOverlap(with: group), maxOverlap)
                     }
                 }
                 
-                if let next_frame = frame.nextFrame,
-                   let nearby_groups = next_frame.outlierGroups(within: self.maxNearbyGroupDistance,
+                if let nextFrame = frame.nextFrame,
+                   let nearbyGroups = nextFrame.outlierGroups(within: self.maxNearbyGroupDistance,
                                                                       of: self.bounds)
                 {
-                    for group in nearby_groups {
+                    for group in nearbyGroups {
                         maxOverlap = max(await self.pixelOverlap(with: group), maxOverlap)
                     }
                 }
@@ -675,27 +675,27 @@ public class OutlierGroup: CustomStringConvertible,
             if let frame = frame {
                 let selfHisto = self.houghLineHistogram
 
-                if let previous_frame = frame.previousFrame,
-                   let nearby_groups = previous_frame.outlierGroups(within: self.maxNearbyGroupDistance,
+                if let previousFrame = frame.previousFrame,
+                   let nearbyGroups = previousFrame.outlierGroups(within: self.maxNearbyGroupDistance,
                                                                     of: self.bounds)
                 {
-                    for group in nearby_groups {
+                    for group in nearbyGroups {
                         let otherHisto = group.houghLineHistogram
-                        let histo_score = otherHisto.matchScore(with: selfHisto)
+                        let histoScore = otherHisto.matchScore(with: selfHisto)
                         let overlap = await self.pixelOverlap(with: group)
-                        maxOverlap = max(overlap * histo_score, maxOverlap)
+                        maxOverlap = max(overlap * histoScore, maxOverlap)
                     }
                 }
                 
-                if let next_frame = frame.nextFrame,
-                   let nearby_groups = next_frame.outlierGroups(within: self.maxNearbyGroupDistance,
+                if let nextFrame = frame.nextFrame,
+                   let nearbyGroups = nextFrame.outlierGroups(within: self.maxNearbyGroupDistance,
                                                                 of: self.bounds)
                 {
-                    for group in nearby_groups {
+                    for group in nearbyGroups {
                         let otherHisto = group.houghLineHistogram
-                        let histo_score = otherHisto.matchScore(with: selfHisto)
+                        let histoScore = otherHisto.matchScore(with: selfHisto)
                         let overlap = await self.pixelOverlap(with: group)
-                        maxOverlap = max(overlap * histo_score, maxOverlap)
+                        maxOverlap = max(overlap * histoScore, maxOverlap)
                     }
                 }
             }            
@@ -707,24 +707,24 @@ public class OutlierGroup: CustomStringConvertible,
         // XXX doesn't use related frames 
         get async {
             if let frame = frame,
-               let nearby_groups = frame.outlierGroups(within: self.maxNearbyGroupDistance,
+               let nearbyGroups = frame.outlierGroups(within: self.maxNearbyGroupDistance,
                                                              of: self.bounds)
             {
                 let selfHisto = self.houghLineHistogram
                 var ret = 0.0
                 var count = 0
-                for group in nearby_groups {
+                for group in nearbyGroups {
                     if group.name == self.name { continue }
-                    let center_line_theta = self.bounds.centerTheta(with: group.bounds)
+                    let centerLineTheta = self.bounds.centerTheta(with: group.bounds)
                     let otherHisto = group.houghLineHistogram
-                    let other_theta_score = thetaScore(between: center_line_theta, and: otherHisto.maxTheta)
-                    let self_theta_score = thetaScore(between: center_line_theta, and: selfHisto.maxTheta)
-                    let histo_score = otherHisto.matchScore(with: selfHisto)
+                    let otherThetaScore = thetaScore(between: centerLineTheta, and: otherHisto.maxTheta)
+                    let selfThetaScore = thetaScore(between: centerLineTheta, and: selfHisto.maxTheta)
+                    let histoScore = otherHisto.matchScore(with: selfHisto)
 
                     // modify this score by how close the theta of
                     // the line between the outlier groups center points
                     // is to the the theta of both of them
-                    ret += self_theta_score * other_theta_score * histo_score
+                    ret += selfThetaScore * otherThetaScore * histoScore
                     count += 1
                 }
                 if count > 0 { ret /= Double(count) }
@@ -745,39 +745,39 @@ public class OutlierGroup: CustomStringConvertible,
          */
         get async {
             if let frame = frame {
-                let this_theta = self.firstLine?.theta ?? 180
-                var smallest_difference: Double = 360
-                if let previous_frame = frame.previousFrame,
-                   let nearby_groups =
-                     previous_frame.outlierGroups(within: self.maxNearbyGroupDistance,
+                let thisTheta = self.firstLine?.theta ?? 180
+                var smallestDifference: Double = 360
+                if let previousFrame = frame.previousFrame,
+                   let nearbyGroups =
+                     previousFrame.outlierGroups(within: self.maxNearbyGroupDistance,
                                                   of: self.bounds)
                 {
 
-                    for group in nearby_groups {
+                    for group in nearbyGroups {
                         if let firstLine = group.firstLine {
-                            let difference = Double(abs(this_theta - firstLine.theta))
-                            if difference < smallest_difference {
-                                smallest_difference = difference
+                            let difference = Double(abs(thisTheta - firstLine.theta))
+                            if difference < smallestDifference {
+                                smallestDifference = difference
                             }
                         }
                     }
                 }
 
-                if let next_frame = frame.nextFrame,
-                   let nearby_groups = next_frame.outlierGroups(within: self.maxNearbyGroupDistance,
+                if let nextFrame = frame.nextFrame,
+                   let nearbyGroups = nextFrame.outlierGroups(within: self.maxNearbyGroupDistance,
                                                                 of: self.bounds)
                 {
-                    for group in nearby_groups {
+                    for group in nearbyGroups {
                         if let firstLine = group.firstLine {
-                            let difference = Double(abs(this_theta - firstLine.theta))
-                            if difference < smallest_difference {
-                                smallest_difference = difference
+                            let difference = Double(abs(thisTheta - firstLine.theta))
+                            if difference < smallestDifference {
+                                smallestDifference = difference
                             }
                         }
                     }
                 }
                 
-                return smallest_difference
+                return smallestDifference
             } else {
                 fatalError("NO FRAME @ index \(frameIndex)")
             }
@@ -785,29 +785,29 @@ public class OutlierGroup: CustomStringConvertible,
     }
 
     fileprivate var maxThetaDiffOfFirst10HoughLines: Double {
-        var max_diff = 0.0
-        let first_theta = self.lines[0].theta
+        var maxDiff = 0.0
+        let firstTheta = self.lines[0].theta
         var max = 10;
         if self.lines.count < max { max = self.lines.count }
         for i in 0..<max {
-            let this_theta = self.lines[i].theta
-            let this_diff = abs(this_theta - first_theta)
-            if this_diff > max_diff { max_diff = this_diff }
+            let thisTheta = self.lines[i].theta
+            let thisDiff = abs(thisTheta - firstTheta)
+            if thisDiff > maxDiff { maxDiff = thisDiff }
         }
-        return max_diff
+        return maxDiff
     }
     
     fileprivate var maxRhoDiffOfFirst10HoughLines: Double {
-        var max_diff = 0.0
-        let first_rho = self.lines[0].rho
+        var maxDiff = 0.0
+        let firstRho = self.lines[0].rho
         var max = 10;
         if self.lines.count < max { max = self.lines.count }
         for i in 0..<max {
-            let this_rho = self.lines[i].rho
-            let this_diff = abs(this_rho - first_rho)
-            if this_diff > max_diff { max_diff = this_diff }
+            let thisRho = self.lines[i].rho
+            let thisDiff = abs(thisRho - firstRho)
+            if thisDiff > maxDiff { maxDiff = thisDiff }
         }
-        return max_diff
+        return maxDiff
     }
     
     fileprivate var avgCountOfFirst10HoughLines: Double {
@@ -823,25 +823,25 @@ public class OutlierGroup: CustomStringConvertible,
     }
 
     fileprivate var maxThetaDiffOfAllHoughLines: Double {
-        var max_diff = 0.0
-        let first_theta = self.lines[0].theta
+        var maxDiff = 0.0
+        let firstTheta = self.lines[0].theta
         for i in 1..<self.lines.count {
-            let this_theta = self.lines[i].theta
-            let this_diff = abs(this_theta - first_theta)
-            if this_diff > max_diff { max_diff = this_diff }
+            let thisTheta = self.lines[i].theta
+            let thisDiff = abs(thisTheta - firstTheta)
+            if thisDiff > maxDiff { maxDiff = thisDiff }
         }
-        return max_diff
+        return maxDiff
     }
     
     fileprivate var maxRhoDiffOfAllHoughLines: Double {
-        var max_diff = 0.0
-        let first_rho = self.lines[0].rho
+        var maxDiff = 0.0
+        let firstRho = self.lines[0].rho
         for i in 1..<self.lines.count {
-            let this_rho = self.lines[i].rho
-            let this_diff = abs(this_rho - first_rho)
-            if this_diff > max_diff { max_diff = this_diff }
+            let thisRho = self.lines[i].rho
+            let thisDiff = abs(thisRho - firstRho)
+            if thisDiff > maxDiff { maxDiff = thisDiff }
         }
-        return max_diff
+        return maxDiff
     }
     
     fileprivate var avgCountOfAllHoughLines: Double {
@@ -870,32 +870,32 @@ public class OutlierGroup: CustomStringConvertible,
                      existingValue: Double = 0) async -> Double
     {
         let selfHisto = self.houghLineHistogram
-        var best_score = 0.0
+        var bestScore = 0.0
         var bestGroup: OutlierGroup?
         
         if let frame = self.frame,
-           let other_frame = direction == .forwards ? frame.nextFrame : frame.previousFrame,
-           let nearby_groups = other_frame.outlierGroups(within: self.maxNearbyGroupDistance,
+           let otherFrame = direction == .forwards ? frame.nextFrame : frame.previousFrame,
+           let nearbyGroups = otherFrame.outlierGroups(within: self.maxNearbyGroupDistance,
                                                          of: self.bounds)
         {
-            for nearby_group in nearby_groups {
-                let score = self.thetaHistoCenterLineScore(with: nearby_group,
+            for nearbyGroup in nearbyGroups {
+                let score = self.thetaHistoCenterLineScore(with: nearbyGroup,
                                                            selfHisto: selfHisto)
-                best_score = max(score, best_score)
-                if score == best_score {
-                    bestGroup = nearby_group
+                bestScore = max(score, bestScore)
+                if score == bestScore {
+                    bestGroup = nearbyGroup
                 }
             }
         }
 
-        let score = existingValue + best_score
+        let score = existingValue + bestScore
         
         if numberOfFramesLeft != 0,
            let bestGroup = bestGroup
         {
             return await bestGroup.streakScore(in: direction,
-                                               numberOfFramesLeft: numberOfFramesLeft - 1,
-                                               existingValue: score)
+                                           numberOfFramesLeft: numberOfFramesLeft - 1,
+                                           existingValue: score)
         } else {
             return score
         }
@@ -943,72 +943,72 @@ public class OutlierGroup: CustomStringConvertible,
         self.name = name
         self.frameIndex = frameIndex
         
-        let size_data = persitentData.subdata(in: index..<index+8)
-        self.size = size_data.withUnsafeBytes { $0.load(as: UInt.self).bigEndian }
+        let sizeData = persitentData.subdata(in: index..<index+8)
+        self.size = sizeData.withUnsafeBytes { $0.load(as: UInt.self).bigEndian }
         index += 8
 
         //Log.d("\(self.name) read size \(self.size)")
         
-        let bb_min_x_data = persitentData.subdata(in: index..<index+8)
-        let bb_min_x = bb_min_x_data.withUnsafeBytes { $0.load(as: Int.self).bigEndian }
+        let bbMinXData = persitentData.subdata(in: index..<index+8)
+        let bbMinX = bbMinXData.withUnsafeBytes { $0.load(as: Int.self).bigEndian }
         index += 8
 
-        let bb_min_y_data = persitentData.subdata(in: index..<index+8)
-        let bb_min_y = bb_min_y_data.withUnsafeBytes { $0.load(as: Int.self).bigEndian }
+        let bbMinYData = persitentData.subdata(in: index..<index+8)
+        let bbMinY = bbMinYData.withUnsafeBytes { $0.load(as: Int.self).bigEndian }
         index += 8
 
-        let bb_max_x_data = persitentData.subdata(in: index..<index+8)
-        let bb_max_x = bb_max_x_data.withUnsafeBytes { $0.load(as: Int.self).bigEndian }
+        let bbMaxXData = persitentData.subdata(in: index..<index+8)
+        let bbMaxX = bbMaxXData.withUnsafeBytes { $0.load(as: Int.self).bigEndian }
         index += 8
 
-        let bb_max_y_data = persitentData.subdata(in: index..<index+8)
-        let bb_max_y = bb_max_y_data.withUnsafeBytes { $0.load(as: Int.self).bigEndian }
+        let bbMaxYData = persitentData.subdata(in: index..<index+8)
+        let bbMaxY = bbMaxYData.withUnsafeBytes { $0.load(as: Int.self).bigEndian }
         index += 8
 
-        self.bounds = BoundingBox(min: Coord(x: bb_min_x, y: bb_min_y),
-                                  max: Coord(x: bb_max_x, y: bb_max_y))
+        self.bounds = BoundingBox(min: Coord(x: bbMinX, y: bbMinY),
+                               max: Coord(x: bbMaxX, y: bbMaxY))
 
-        let brightness_data = persitentData.subdata(in: index..<index+8)
-        self.brightness = brightness_data.withUnsafeBytes { $0.load(as: UInt.self).bigEndian }
+        let brightnessData = persitentData.subdata(in: index..<index+8)
+        self.brightness = brightnessData.withUnsafeBytes { $0.load(as: UInt.self).bigEndian }
         index += 8
 
-        let lines_count_data = persitentData.subdata(in: index..<index+8)
-        let lines_count = lines_count_data.withUnsafeBytes { $0.load(as: Int.self).bigEndian }
+        let linesCountData = persitentData.subdata(in: index..<index+8)
+        let linesCount = linesCountData.withUnsafeBytes { $0.load(as: Int.self).bigEndian }
         index += 8
 
-        //Log.d("lines_count \(lines_count) index \(index) persitentData.count \(persitentData.count)")
+        //Log.d("linesCount \(linesCount) index \(index) persitentData.count \(persitentData.count)")
         
         var _lines: [Line] = []
         
-        for _ in 0..<lines_count {
-            let theta_data = persitentData.subdata(in: index..<index+8)
-            let theta = theta_data.withUnsafeBytes { $0.load(as: Double.self) }
+        for _ in 0..<linesCount {
+            let thetaData = persitentData.subdata(in: index..<index+8)
+            let theta = thetaData.withUnsafeBytes { $0.load(as: Double.self) }
             index += 8
 
-            let rho_data = persitentData.subdata(in: index..<index+8)
-            let rho = rho_data.withUnsafeBytes { $0.load(as: Double.self) }
+            let rhoData = persitentData.subdata(in: index..<index+8)
+            let rho = rhoData.withUnsafeBytes { $0.load(as: Double.self) }
             index += 8
             
-            let count_data = persitentData.subdata(in: index..<index+8)
-            let count = count_data.withUnsafeBytes { $0.load(as: Int.self) }
+            let countData = persitentData.subdata(in: index..<index+8)
+            let count = countData.withUnsafeBytes { $0.load(as: Int.self) }
             index += 8
             
             _lines.append(Line(theta: theta, rho: rho, count: count))
         }
         self.lines = _lines
 
-        let pixels_count_data = persitentData.subdata(in: index..<index+8)
-        let pixels_count = pixels_count_data.withUnsafeBytes { $0.load(as: Int.self).bigEndian }
+        let pixelsCountData = persitentData.subdata(in: index..<index+8)
+        let pixelsCount = pixelsCountData.withUnsafeBytes { $0.load(as: Int.self).bigEndian }
         index += 8
 
         var pixels: [UInt32] = []
 
-        //Log.d("pixels_count \(pixels_count) index \(index) persitentData.count \(persitentData.count)")
+        //Log.d("pixelsCount \(pixelsCount) index \(index) persitentData.count \(persitentData.count)")
         
-        for _ in 0..<pixels_count {
-            let pixel_data = persitentData.subdata(in: index..<index+4)
+        for _ in 0..<pixelsCount {
+            let pixelData = persitentData.subdata(in: index..<index+4)
             index += 4
-            let pixel = pixel_data.withUnsafeBytes { $0.load(as: UInt32.self).bigEndian }
+            let pixel = pixelData.withUnsafeBytes { $0.load(as: UInt32.self).bigEndian }
             pixels.append(pixel)
         }
         self.pixels = pixels
@@ -1035,66 +1035,66 @@ public class OutlierGroup: CustomStringConvertible,
 
         var index: Int = 0
 
-        let size_data = withUnsafeBytes(of: self.size.bigEndian) { Data($0) }
-        data.replaceSubrange(index..<index+8, with: size_data)
+        let sizeData = withUnsafeBytes(of: self.size.bigEndian) { Data($0) }
+        data.replaceSubrange(index..<index+8, with: sizeData)
         index += 8
         
         //Log.d("\(self.name) size \(self.size)")
 
-        let bb_min_x = self.bounds.min.x
-        let bb_min_x_data = withUnsafeBytes(of: bb_min_x.bigEndian) { Data($0) }
-        data.replaceSubrange(index..<index+8, with: bb_min_x_data)
+        let bbMinX = self.bounds.min.x
+        let bbMinXData = withUnsafeBytes(of: bbMinX.bigEndian) { Data($0) }
+        data.replaceSubrange(index..<index+8, with: bbMinXData)
         index += 8
         
-        let bb_min_y = self.bounds.min.y
-        let bb_min_y_data = withUnsafeBytes(of: bb_min_y.bigEndian) { Data($0) }
-        data.replaceSubrange(index..<index+8, with: bb_min_y_data)
+        let bbMinY = self.bounds.min.y
+        let bbMinYData = withUnsafeBytes(of: bbMinY.bigEndian) { Data($0) }
+        data.replaceSubrange(index..<index+8, with: bbMinYData)
         index += 8
         
-        let bb_max_x = self.bounds.max.x
-        let bb_max_x_data = withUnsafeBytes(of: bb_max_x.bigEndian) { Data($0) }
-        data.replaceSubrange(index..<index+8, with: bb_max_x_data)
+        let bbMaxX = self.bounds.max.x
+        let bbMaxXData = withUnsafeBytes(of: bbMaxX.bigEndian) { Data($0) }
+        data.replaceSubrange(index..<index+8, with: bbMaxXData)
         index += 8
 
-        let bb_max_y = self.bounds.max.y
-        let bb_max_y_data = withUnsafeBytes(of: bb_max_y.bigEndian) { Data($0) }
-        data.replaceSubrange(index..<index+8, with: bb_max_y_data)
+        let bbMaxY = self.bounds.max.y
+        let bbMaxYData = withUnsafeBytes(of: bbMaxY.bigEndian) { Data($0) }
+        data.replaceSubrange(index..<index+8, with: bbMaxYData)
         index += 8
 
-        let brightness_data = withUnsafeBytes(of: self.brightness.bigEndian) { Data($0) }
-        data.replaceSubrange(index..<index+8, with: brightness_data)
+        let brightnessData = withUnsafeBytes(of: self.brightness.bigEndian) { Data($0) }
+        data.replaceSubrange(index..<index+8, with: brightnessData)
         index += 8
 
-        let num_lines = self.lines.count
-        let num_lines_data = withUnsafeBytes(of: num_lines.bigEndian) { Data($0) }
-        data.replaceSubrange(index..<index+8, with: num_lines_data)
+        let numLines = self.lines.count
+        let numLinesData = withUnsafeBytes(of: numLines.bigEndian) { Data($0) }
+        data.replaceSubrange(index..<index+8, with: numLinesData)
         index += 8
 
         //Log.d("\(self.name) self.lines.count \(self.lines.count)")
 
         for line in self.lines {
-            let theta_data = withUnsafeBytes(of: line.theta) { Data($0) }
-            data.replaceSubrange(index..<index+8, with: theta_data)
+            let thetaData = withUnsafeBytes(of: line.theta) { Data($0) }
+            data.replaceSubrange(index..<index+8, with: thetaData)
             index += 8
-            let rho_data = withUnsafeBytes(of: line.rho) { Data($0) }
-            data.replaceSubrange(index..<index+8, with: rho_data)
+            let rhoData = withUnsafeBytes(of: line.rho) { Data($0) }
+            data.replaceSubrange(index..<index+8, with: rhoData)
             index += 8
-            let count_data = withUnsafeBytes(of: line.count.bigEndian) { Data($0) }
-            data.replaceSubrange(index..<index+8, with: count_data)
+            let countData = withUnsafeBytes(of: line.count.bigEndian) { Data($0) }
+            data.replaceSubrange(index..<index+8, with: countData)
             index += 8
         }
 
-        let num_pixels = self.pixels.count
+        let numPixels = self.pixels.count
         
         //Log.d("\(self.name) self.pixels.count \(self.pixels.count)")
 
-        let num_pixels_data = withUnsafeBytes(of: num_pixels.bigEndian) { Data($0) }
-        data.replaceSubrange(index..<index+8, with: num_pixels_data)
+        let numPixelsData = withUnsafeBytes(of: numPixels.bigEndian) { Data($0) }
+        data.replaceSubrange(index..<index+8, with: numPixelsData)
         index += 8
 
-        for i in 0..<num_pixels {
-            let pixel_data = withUnsafeBytes(of: self.pixels[i].bigEndian) { Data($0) }
-            data.replaceSubrange(index..<index+4, with: pixel_data)
+        for i in 0..<numPixels {
+            let pixelData = withUnsafeBytes(of: self.pixels[i].bigEndian) { Data($0) }
+            data.replaceSubrange(index..<index+4, with: pixelData)
             index += 4
         }
 
@@ -1110,26 +1110,26 @@ public class OutlierGroup: CustomStringConvertible,
     }
 
     // the suffix on the custom binary file we save each outlier group into
-    static let data_bin_suffix = "outlier-data.bin"
+    static let dataBinSuffix = "outlier-data.bin"
 
     // the suffix of the paint reason json sidecar file for each outlier group
-    static let paint_json_suffix = "paint.json"
+    static let paintJsonSuffix = "paint.json"
     
     public func writeToFile(in dir: String) async throws {
-        let filename = "\(dir)/\(self.name)-\(OutlierGroup.data_bin_suffix)"
+        let filename = "\(dir)/\(self.name)-\(OutlierGroup.dataBinSuffix)"
 
-        if file_manager.fileExists(atPath: filename) {
+        if fileManager.fileExists(atPath: filename) {
             // we don't modify this outlier data, so not point in persisting it again
             //Log.i("not overwriting already existing filename \(filename)")
         } else {
-            file_manager.createFile(atPath: filename,
+            fileManager.createFile(atPath: filename,
                                     contents: self.persistentData,
                                     attributes: nil)
         }
         if let shouldPaint = self.shouldPaint {
             // also write out a separate json file with paint reason
             // this can be easily changed later if desired without re-writing the whole binary file
-            let filename = "\(dir)/\(self.name)-\(OutlierGroup.paint_json_suffix)"
+            let filename = "\(dir)/\(self.name)-\(OutlierGroup.paintJsonSuffix)"
 
             let encoder = JSONEncoder()
             encoder.outputFormatting = .prettyPrinted
@@ -1138,22 +1138,22 @@ public class OutlierGroup: CustomStringConvertible,
               negativeInfinity: "-inf",
               nan: "nan")
 
-            let json_data = try encoder.encode(shouldPaint)
-            if file_manager.fileExists(atPath: filename) {
+            let jsonData = try encoder.encode(shouldPaint)
+            if fileManager.fileExists(atPath: filename) {
                 //Log.i("removing already existing paint reason \(filename)")
-                try file_manager.removeItem(atPath: filename)
+                try fileManager.removeItem(atPath: filename)
             } 
             //Log.i("creating \(filename)")                      
-            file_manager.createFile(atPath: filename,
-                                    contents: json_data,
-                                    attributes: nil)
+            fileManager.createFile(atPath: filename,
+                                contents: jsonData,
+                                attributes: nil)
         }
     }
 }
 
-public func surface_area_to_size_ratio(of pixels: [UInt32], width: Int, height: Int) -> Double {
+public func ratioOfSurfaceAreaToSize(of pixels: [UInt32], width: Int, height: Int) -> Double {
     var size: Int = 0
-    var surface_area: Int = 0
+    var surfaceArea: Int = 0
     for x in 0 ..< width {
         for y in 0 ..< height {
             let index = y * width + x
@@ -1161,45 +1161,45 @@ public func surface_area_to_size_ratio(of pixels: [UInt32], width: Int, height: 
             if pixels[index] != 0 {
                 size += 1
 
-                var has_top_neighbor = false
-                var has_bottom_neighbor = false
-                var has_left_neighbor = false
-                var has_right_neighbor = false
+                var hasTopNeighbor = false
+                var hasBottomNeighbor = false
+                var hasLeftNeighbor = false
+                var hasRightNeighbor = false
                 
                 if x > 0 {
                     if pixels[y * width + x - 1] != 0 {
-                        has_left_neighbor = true
+                        hasLeftNeighbor = true
                     }
                 }
                 if y > 0 {
                     if pixels[(y - 1) * width + x] != 0 {
-                        has_top_neighbor = true
+                        hasTopNeighbor = true
                     }
                 }
                 if x + 1 < width {
                     if pixels[y * width + x + 1] != 0 {
-                        has_right_neighbor = true
+                        hasRightNeighbor = true
                     }
                 }
                 if y + 1 < height {
                     if pixels[(y + 1) * width + x] != 0 {
-                        has_bottom_neighbor = true
+                        hasBottomNeighbor = true
                     }
                 }
                 
-                if has_top_neighbor,
-                   has_bottom_neighbor,
-                   has_left_neighbor,
-                   has_right_neighbor
+                if hasTopNeighbor,
+                   hasBottomNeighbor,
+                   hasLeftNeighbor,
+                   hasRightNeighbor
                 {
                     
                 } else {
-                    surface_area += 1
+                    surfaceArea += 1
                 }
             }
         }
     }
-    return Double(surface_area)/Double(size)
+    return Double(surfaceArea)/Double(size)
 }
 
-fileprivate let file_manager = FileManager.default
+fileprivate let fileManager = FileManager.default

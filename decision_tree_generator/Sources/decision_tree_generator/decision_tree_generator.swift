@@ -3,10 +3,10 @@ import StarCore
 import ArgumentParser
 import CryptoKit
 
-var start_time: Date = Date()
+var startTime: Date = Date()
 
 // how much do we truncate the sha256 hash when embedding it into code
-let sha_prefix_size = 8
+let shaPrefixSize = 8
 
 func hostCPULoadInfo() -> host_cpu_load_info? {
     let HOST_CPU_LOAD_INFO_COUNT = MemoryLayout<host_cpu_load_info>.stride/MemoryLayout<integer_t>.stride
@@ -71,7 +71,7 @@ struct decision_tree_generator: ParsableCommand {
               1. how well decision tree matches the test data it came from
               2. how well decision tree matches a known group it was not tested on
             """)
-    var verification_mode = false
+    var verificationMode = false
 
     @Option(name: .shortAndLong, help: """
         Max Number of frames to process at once.
@@ -85,7 +85,7 @@ struct decision_tree_generator: ParsableCommand {
             Iterate over all possible combinations of the decision types to generate
             lots of different trees
             """)
-    var produce_all_type_combinations = false
+    var produceAllTypeCombinations = false
 
     @Option(name: [.customShort("f"), .customLong("features")],
           help:"""
@@ -99,7 +99,7 @@ struct decision_tree_generator: ParsableCommand {
           help:"""
             A list of directories containing test data that is not used for training
             """)
-    var test_data_dirnames: [String] = []
+    var testDataDirnames: [String] = []
     
     @Option(name: [.customShort("m"), .customLong("max-depth")],
           help:"""
@@ -127,7 +127,7 @@ struct decision_tree_generator: ParsableCommand {
             A list of files, which can be either a reference to a config.json file,
             or a reference to a directory containing data csv files.
             """)
-    var input_filenames: [String]
+    var inputFilenames: [String]
     
     mutating func run() throws {
         Log.name = "decision_tree_generator-log"
@@ -136,14 +136,14 @@ struct decision_tree_generator: ParsableCommand {
 
         TaskRunner.maxConcurrentTasks = UInt(numConcurrentRenders)
         
-        start_time = Date()
+        startTime = Date()
         
         Log.i("Starting with cpuUsage \(cpuUsage())")
 
-        Log.i("test-data:  \(test_data_dirnames)")
-        Log.i("train-data: \(input_filenames)")
+        Log.i("test-data:  \(testDataDirnames)")
+        Log.i("train-data: \(inputFilenames)")
         Log.d("in debug mode")
-        if verification_mode {
+        if verificationMode {
             run_verification()
         } else {
             if let forestSize = forestSize {
@@ -289,8 +289,8 @@ struct decision_tree_generator: ParsableCommand {
         dispatchGroup.enter()
         Task {
             let classifiedData = ClassifiedData()
-            for input_dirname in input_filenames {
-                if file_manager.fileExists(atPath: input_dirname) {
+            for input_dirname in inputFilenames {
+                if fileManager.fileExists(atPath: input_dirname) {
                     classifiedData += try await loadDataFrom(dirname: input_dirname)
                 }
             }
@@ -452,7 +452,7 @@ struct decision_tree_generator: ParsableCommand {
             let forest =
               try await generator.generateForest(withInputData: loadTrainingData(),
                                                  andTestData: testData,
-                                                 inputFilenames: input_filenames,
+                                                 inputFilenames: inputFilenames,
                                                  treeCount: forestSize,
                                                  baseFilename: base_filename) 
 
@@ -475,8 +475,8 @@ struct decision_tree_generator: ParsableCommand {
         let testData = ClassifiedData()
         
         // load testData 
-        for dirname in test_data_dirnames {
-            if file_manager.fileExists(atPath: dirname) {
+        for dirname in testDataDirnames {
+            if fileManager.fileExists(atPath: dirname) {
                 // load here
                 let result = try await loadDataFrom(dirname: dirname)
                 testData.positiveData += result.positiveData
@@ -489,7 +489,7 @@ struct decision_tree_generator: ParsableCommand {
     func loadTrainingData() async throws -> ClassifiedData {
         let trainingData = ClassifiedData()
 
-        for json_config_file_name in input_filenames {
+        for json_config_file_name in inputFilenames {
             if json_config_file_name.hasSuffix("config.json") {
                 // here we are loading the full outlier groups and analyzing based upon that
                 // comprehensive, but slow
@@ -508,7 +508,7 @@ struct decision_tree_generator: ParsableCommand {
                 }
             } else {
                 // here we are reading pre-computed values for each data point
-                if file_manager.fileExists(atPath: json_config_file_name) {
+                if fileManager.fileExists(atPath: json_config_file_name) {
                     // load here
                     let result = try await loadDataFrom(dirname: json_config_file_name)
                     trainingData.positiveData += result.positiveData
@@ -553,7 +553,7 @@ struct decision_tree_generator: ParsableCommand {
             let testData = try await loadTestData()
             
             do {
-                if produce_all_type_combinations {
+                if produceAllTypeCombinations {
                     let min = OutlierGroup.Feature.allCases.count-1 // XXX make a parameter
                     let max = OutlierGroup.Feature.allCases.count
                     let combinations = decisionTypes.combinations(ofCount: min..<max)
@@ -565,12 +565,12 @@ struct decision_tree_generator: ParsableCommand {
                         Log.i("calculating tree \(index) with \(types)")
                         //let positiveData = trainingData.positiveData.map { $0 } // copy data for each tree generation
                         //let negativeData = trainingData.negativeData.map { $0 }
-                        let _input_filenames = input_filenames
+                        let _inputFilenames = inputFilenames
                         let task = try await runThrowingTask() {
                             _ = try await self.writeTree(withTypes: types,
                                                          withTrainingData: trainingData,
                                                          andTestData: testData,
-                                                         inputFilenames: _input_filenames,
+                                                         inputFilenames: _inputFilenames,
                                                          maxDepth: maxDepth)
                         }
                         tasks.append(task)
@@ -578,10 +578,10 @@ struct decision_tree_generator: ParsableCommand {
                     for task in tasks { try await task.value }
                 } else {
                     _ = try await self.writeTree(withTypes: decisionTypes,
-                                                 withTrainingData: trainingData,
-                                                 andTestData: testData,
-                                                 inputFilenames: input_filenames,
-                                                 maxDepth: maxDepth)
+                                              withTrainingData: trainingData,
+                                              andTestData: testData,
+                                              inputFilenames: inputFilenames,
+                                              maxDepth: maxDepth)
                 }
             } catch {
                 Log.e("\(error)")
@@ -669,31 +669,31 @@ struct decision_tree_generator: ParsableCommand {
                                               pruneTree: prune,
                                               maxDepth: maxDepth)
 
-        let base_filename = "../starDecisionTrees/Sources/starDecisionTrees/OutlierGroupDecisionTree_"
+        let baseFilename = "../starDecisionTrees/Sources/starDecisionTrees/OutlierGroupDecisionTree_"
 
         let treeResponse = 
           try await generator.generateTree(withTrainingData: trainingData,
                                            andTestData: testData,
-                                           inputFilenames: input_filenames,
-                                           baseFilename: base_filename)
+                                           inputFilenames: inputFilenames,
+                                           baseFilename: baseFilename)
         
-        let (tree_swift_code, filename, hash_prefix) = (treeResponse.swiftCode,
-                                                        treeResponse.filename,
-                                                        treeResponse.name)
+        let (treeSwiftCode, filename, hashPrefix) = (treeResponse.swiftCode,
+                                                treeResponse.filename,
+                                                treeResponse.name)
 
         // save this generated swift code to a file
-        if file_manager.fileExists(atPath: filename) {
+        if fileManager.fileExists(atPath: filename) {
             Log.i("overwriting already existing filename \(filename)")
-            try file_manager.removeItem(atPath: filename)
+            try fileManager.removeItem(atPath: filename)
         }
 
         // write to file
-        file_manager.createFile(atPath: filename,
-                                contents: tree_swift_code.data(using: .utf8),
-                                attributes: nil)
+        fileManager.createFile(atPath: filename,
+                            contents: treeSwiftCode.data(using: .utf8),
+                            attributes: nil)
         Log.i("wrote \(filename)")
 
-        return hash_prefix
+        return hashPrefix
     }
     
     func log(valueMaps: [OutlierFeatureData]) async {
@@ -719,4 +719,4 @@ extension OutlierGroup.Feature: ExpressibleByArgument {
     }
 }
 
-fileprivate let file_manager = FileManager.default
+fileprivate let fileManager = FileManager.default

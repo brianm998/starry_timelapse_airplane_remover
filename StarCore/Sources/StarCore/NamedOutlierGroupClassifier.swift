@@ -47,17 +47,8 @@ public struct DecisionTreeParams {
 }
 
 public struct DecisionForestParams {
-    let name: String
-    let treeCount: Int
-    let treeNames: [String]
-
-    public init(name: String,
-                treeCount: Int,
-                treeNames: [String])
-    {
-        self.name = name
-        self.treeCount = treeCount
-        self.treeNames = treeNames
-    }
+    public let name: String
+    public let treeCount: Int
+    public let treeNames: [String]
 }
 
