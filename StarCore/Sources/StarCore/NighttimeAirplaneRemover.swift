@@ -33,12 +33,12 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
     let previewOutputDirname: String
 
     // the name of the directory to create when writing processed frame previews
-    let processed_previewOutputDirname: String
+    let processedPreviewOutputDirname: String
 
     // the name of the directory to create when writing frame thumbnails (small previews)
     let thumbnailOutputDirname: String
 
-    public var final_processor: FinalProcessor?    
+    public var finalProcessor: FinalProcessor?    
 
     // are we running on the gui?
     public let isGUI: Bool
@@ -50,12 +50,12 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
     let publisher = PassthroughSubject<FrameAirplaneRemover, Never>()
 
     public init(with config: Config,
-                callbacks: Callbacks,
-                processExistingFiles: Bool,
-                maxResidentImages: Int? = nil,
-                fullyProcess: Bool = true,
-                isGUI: Bool = false,
-                writeOutputFiles: Bool = true) async throws
+               callbacks: Callbacks,
+               processExistingFiles: Bool,
+               maxResidentImages: Int? = nil,
+               fullyProcess: Bool = true,
+               isGUI: Bool = false,
+               writeOutputFiles: Bool = true) async throws
     {
         self.config = config
         self.callbacks = callbacks
@@ -66,7 +66,7 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
         self.basename = _basename.replacingOccurrences(of: ".", with: "_")
         outlierOutputDirname = "\(config.outputPath)/\(basename)-outliers"
         previewOutputDirname = "\(config.outputPath)/\(basename)-previews"
-        processed_previewOutputDirname = "\(config.outputPath)/\(basename)-processed-previews"
+        processedPreviewOutputDirname = "\(config.outputPath)/\(basename)-processed-previews"
         thumbnailOutputDirname = "\(config.outputPath)/\(basename)-thumbnails"
 
         try super.init(imageSequenceDirname: "\(config.imageSequencePath)/\(config.imageSequenceDirname)",
@@ -78,19 +78,19 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
                        maxImages: maxResidentImages,
                        fullyProcess: fullyProcess);
 
-        let imageSequence_size = /*self.*/imageSequence.filenames.count
+        let imageSequenceSize = /*self.*/imageSequence.filenames.count
 
         if let imageSequenceSizeClosure = callbacks.imageSequenceSizeClosure {
-            imageSequenceSizeClosure(imageSequence_size)
+            imageSequenceSizeClosure(imageSequenceSize)
         }
         
-        self.remainingImagesClosure = { number_of_unprocessed in
+        self.remainingImagesClosure = { numberOfUnprocessed in
             if let updatable = callbacks.updatable {
                 // log number of unprocessed images here
                 Task(priority: .userInitiated) {
-                    let progress = Double(number_of_unprocessed)/Double(imageSequence_size)
+                    let progress = Double(numberOfUnprocessed)/Double(imageSequenceSize)
                     await updatable.log(name: "unprocessed frames",
-                                        message: reverse_progress_bar(length: config.progressBarLength, progress: progress) + " \(number_of_unprocessed) frames waiting to process",
+                                        message: reverse_progress_bar(length: config.progressBarLength, progress: progress) + " \(numberOfUnprocessed) frames waiting to process",
                                          value: -1)
                 }
             }
@@ -103,23 +103,23 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
         }
 
         var shouldProcess = [Bool](repeating: false, count: self.existingOutputFiles.count)
-        for (index, output_file_exists) in self.existingOutputFiles.enumerated() {
-            shouldProcess[index] = !output_file_exists
+        for (index, outputFileExists) in self.existingOutputFiles.enumerated() {
+            shouldProcess[index] = !outputFileExists
         }
         
-        final_processor = await FinalProcessor(with: config,
-                                           callbacks: callbacks,
-                                           publisher: publisher,
-                                           numberOfFrames: imageSequence_size,
-                                           shouldProcess: shouldProcess,
-                                           dispatchGroup: dispatchGroup,
-                                           imageSequence: imageSequence,
-                                           isGUI: isGUI || processExistingFiles)
+        finalProcessor = await FinalProcessor(with: config,
+                                          callbacks: callbacks,
+                                          publisher: publisher,
+                                          numberOfFrames: imageSequenceSize,
+                                          shouldProcess: shouldProcess,
+                                          dispatchGroup: dispatchGroup,
+                                          imageSequence: imageSequence,
+                                          isGUI: isGUI || processExistingFiles)
     }
 
     public override func run() async throws {
 
-        guard let final_processor = final_processor
+        guard let finalProcessor = finalProcessor
         else {
             Log.e("should have a processor")
             fatalError("no processor")
@@ -128,7 +128,7 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
         let finalProcessorTask = Task(priority: .high) {
             // XXX really should have the enter before the task
             // run the final processor as a single separate thread
-            try await final_processor.run()
+            try await finalProcessor.run()
         }
 
         try await super.run()
@@ -140,7 +140,7 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
         Log.d("startup hook starting")
         if imageWidth == nil ||
            imageHeight == nil ||
-           image_bytesPerPixel == nil
+           imageBytesPerPixel == nil
         {
             Log.d("loading first frame to get sizes")
             do {
@@ -152,8 +152,8 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
                 IMAGE_WIDTH = Double(test_image.width)
                 IMAGE_HEIGHT = Double(test_image.height)
 
-                image_bytesPerPixel = test_image.bytesPerPixel
-                Log.d("first frame to get sizes: imageWidth \(String(describing: imageWidth)) imageHeight \(String(describing: imageHeight)) image_bytesPerPixel \(String(describing: image_bytesPerPixel))")
+                imageBytesPerPixel = test_image.bytesPerPixel
+                Log.d("first frame to get sizes: imageWidth \(String(describing: imageWidth)) imageHeight \(String(describing: imageHeight)) imageBytesPerPixel \(String(describing: imageBytesPerPixel))")
             } catch {
                 Log.e("first frame to get size: \(error)")
             }
@@ -167,7 +167,7 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
         }
 
         if config.writeFrameProcessedPreviewFiles {
-            try mkdir(processed_previewOutputDirname)
+            try mkdir(processedPreviewOutputDirname)
         }
 
         if config.writeFrameThumbnailFiles {
@@ -209,14 +209,14 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
                                      baseName: baseName,
                                      imageWidth: imageWidth!,
                                      imageHeight: imageHeight!,
-                                     image_bytesPerPixel: image_bytesPerPixel!)
+                                     imageBytesPerPixel: imageBytesPerPixel!)
 
         return frame_plane_remover
     }
 
     public var imageWidth: Int?
     public var imageHeight: Int?
-    public var image_bytesPerPixel: Int? // XXX bad name
+    public var imageBytesPerPixel: Int? // XXX bad name
 
     override func resultHook(with result: FrameAirplaneRemover) async {
 
@@ -236,7 +236,7 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
                      baseName: String,       // just filename
                      imageWidth: Int,
                      imageHeight: Int,
-                     image_bytesPerPixel: Int) async throws -> FrameAirplaneRemover
+                     imageBytesPerPixel: Int) async throws -> FrameAirplaneRemover
     {
         var outlierGroupsForThisFrame: OutlierGroups?
 
@@ -274,7 +274,7 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
         return try await FrameAirplaneRemover(with: config,
                                           width: imageWidth,
                                           height: imageHeight,
-                                          bytesPerPixel: image_bytesPerPixel,
+                                          bytesPerPixel: imageBytesPerPixel,
                                           callbacks: callbacks,
                                           imageSequence: imageSequence,
                                           atIndex: frameIndex,
@@ -283,7 +283,7 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
                                           baseName: baseName,
                                           outlierOutputDirname: outlierOutputDirname,
                                           previewOutputDirname: previewOutputDirname,
-                                          processedPreviewOutputDirname: processed_previewOutputDirname,
+                                          processedPreviewOutputDirname: processedPreviewOutputDirname,
                                           thumbnailOutputDirname: thumbnailOutputDirname,
                                           outlierGroupLoader: loadOutliersFromFile,
                                           fullyProcess: fullyProcess,

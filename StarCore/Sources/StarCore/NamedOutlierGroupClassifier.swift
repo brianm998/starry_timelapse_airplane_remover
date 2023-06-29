@@ -18,13 +18,13 @@ public enum ClassifierType {
 public struct DecisionTreeParams {
 
     public init(name: String,
-                inputSequences: [String],
-                positiveTrainingSize: Int,
-                negativeTrainingSize: Int,
-                decisionTypes: [OutlierGroup.Feature],
-                decisionSplitTypes: [DecisionSplitType],
-                maxDepth: Int?,
-                pruned: Bool)
+               inputSequences: [String],
+               positiveTrainingSize: Int,
+               negativeTrainingSize: Int,
+               decisionTypes: [OutlierGroup.Feature],
+               decisionSplitTypes: [DecisionSplitType],
+               maxDepth: Int?,
+               pruned: Bool)
     {
         self.name = name
         self.inputSequences = inputSequences

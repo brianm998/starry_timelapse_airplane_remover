@@ -8,7 +8,7 @@ public class TaskRunner {
     // XXX getting this number right is hard
     // too big and the swift runtime barfs underneath
     // too small and the process runs without available cpu resources
-    public static var maxConcurrentTasks: UInt = determine_max() {
+    public static var maxConcurrentTasks: UInt = determineMax() {
         didSet {
             Log.i("using maximum of \(maxConcurrentTasks) concurrent tasks")
         }
@@ -17,11 +17,11 @@ public class TaskRunner {
     public static func endSyncIO() async { await numberRunning.increment() }
 }
 
-fileprivate func determine_max() -> UInt {
-    var num_processors = ProcessInfo.processInfo.activeProcessorCount
-    num_processors -= num_processors/4
-    if num_processors < 2 { num_processors = 2 }
-    return UInt(num_processors)
+fileprivate func determineMax() -> UInt {
+    var numProcessors = ProcessInfo.processInfo.activeProcessorCount
+    numProcessors -= numProcessors/4
+    if numProcessors < 2 { numProcessors = 2 }
+    return UInt(numProcessors)
 }
 
 /**

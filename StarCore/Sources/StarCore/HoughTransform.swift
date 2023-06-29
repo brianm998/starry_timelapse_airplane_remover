@@ -15,46 +15,46 @@ You should have received a copy of the GNU General Public License along with sta
 */
 
 
-// this class does a hough transform on the input_data var into the counts var
-// input_data is rows of a matrix of data_width and data_height
-// users should input their data into input_data before calling the lines method.
+// this class does a hough transform on the inputData var into the counts var
+// inputData is rows of a matrix of dataWidth and dataHeight
+// users should input their data into inputData before calling the lines method.
 public class HoughTransform {
 
-    let data_width: Int
-    let data_height: Int
+    let dataWidth: Int
+    let dataHeight: Int
     let rmax: Double            // maximum rho possible
 
     // y axis is rho, double for negivative values, middle is zero
-    let hough_height: Int       // units are rho (pixels)
+    let houghHeight: Int       // units are rho (pixels)
 
     // x axis is theta, always 0 to 360
-    let hough_width = 360       // units are theta (degrees)
+    let houghWidth = 360       // units are theta (degrees)
 
     let maxPixelDistance: UInt16
     
-    public var input_data: [UInt32]
+    public var inputData: [UInt32]
     var counts: [[Double]]
     
     let dr: Double
     let dth: Double
 
-    public convenience init(data_width: Int, data_height: Int, maxPixelDistance: UInt16) {
-        self.init(data_width: data_width,
-                  data_height: data_height,
-                  input_data: [UInt32](repeating: 0, count: data_width*data_height),
-                  maxPixelDistance: maxPixelDistance)
+    public convenience init(dataWidth: Int, dataHeight: Int, maxPixelDistance: UInt16) {
+        self.init(dataWidth: dataWidth,
+                 dataHeight: dataHeight,
+                 inputData: [UInt32](repeating: 0, count: dataWidth*dataHeight),
+                 maxPixelDistance: maxPixelDistance)
     }
 
-    public init(data_width: Int, data_height: Int, input_data: [UInt32], maxPixelDistance: UInt16) {
-        self.data_width = data_width
-        self.data_height = data_height
-        self.rmax = sqrt(Double(data_width*data_width + data_height*data_height))
-        self.hough_height = Int(rmax*2) // units are rho (pixels)
-        self.dr   = 2 * rmax / Double(hough_height);
-        self.dth  = Double.pi / Double(hough_width);
-        self.counts = [[Double]](repeating: [Double](repeating: 0, count: hough_height),
-                                 count: Int(hough_width))
-        self.input_data = input_data
+    public init(dataWidth: Int, dataHeight: Int, inputData: [UInt32], maxPixelDistance: UInt16) {
+        self.dataWidth = dataWidth
+        self.dataHeight = dataHeight
+        self.rmax = sqrt(Double(dataWidth*dataWidth + dataHeight*dataHeight))
+        self.houghHeight = Int(rmax*2) // units are rho (pixels)
+        self.dr   = 2 * rmax / Double(houghHeight);
+        self.dth  = Double.pi / Double(houghWidth);
+        self.counts = [[Double]](repeating: [Double](repeating: 0, count: houghHeight),
+                                 count: Int(houghWidth))
+        self.inputData = inputData
         self.maxPixelDistance = maxPixelDistance
     }
 
@@ -66,85 +66,80 @@ public class HoughTransform {
         }
     }
     
-    public func lines(min_count: Int = 5, // lines with less counts than this aren't returned
-                      number_of_lines_returned: Int? = nil) -> [Line]
+    public func lines(minCount: Int = 5, // lines with less counts than this aren't returned
+                    numberOfLinesReturned: Int? = nil) -> [Line]
     {
-        //let start_time = NSDate().timeIntervalSince1970
-
         // accumulate the hough transform data in counts from the input data
         // this can take a long time when there are lots of input points
-        for x in 0 ..< self.data_width {
-            for y in 0 ..< self.data_height {
-                let offset = (y * data_width) + x
-                let pixel_value = input_data[offset]
-                if pixel_value > maxPixelDistance {
+        for x in 0 ..< self.dataWidth {
+            for y in 0 ..< self.dataHeight {
+                let offset = (y * dataWidth) + x
+                let pixelValue = inputData[offset]
+                if pixelValue > maxPixelDistance {
                     // record pixel
-                    for k in 0 ..< Int(hough_width) {
+                    for k in 0 ..< Int(houghWidth) {
                         let th = dth * Double(k)
                         let r2 = (Double(x)*cos(th) + Double(y)*sin(th))
                         let iry = Int(rmax + r2/dr)
-                        let new_value = counts[k][iry]+1//Double(pixel_value)
+                        let newValue = counts[k][iry]+1//Double(pixelValue)
                         // XXX in order to use pixel value properly,
                         // all histograms need to be re-done, and likely
                         // re-evalutated because the current outlier group output data is binary
-                        //Log.i("adding pixel value \(pixel_value) to create \(new_value)")
-                        counts[k][iry] = new_value
+                        //Log.i("adding pixel value \(pixelValue) to create \(newValue)")
+                        counts[k][iry] = newValue
                     }
                 }
             }
         }
 
-        //let time_1 = NSDate().timeIntervalSince1970
-        //let interval1 = String(format: "%0.1f", time_1 - start_time)
-        
         var lines: [Line] = []
         
         // grab theta, rho and count values from the transform
         // this is faster than the loop above by about 5x, depending
         // upon number of points processed above 
-        for x in 0 ..< hough_width {
-            for y in 0 ..< hough_height {
+        for x in 0 ..< houghWidth {
+            for y in 0 ..< houghHeight {
                 let count = counts[x][y]
                 if count == 0  { continue }     // ignore cells with no count
 
-                var is_3_x_3_max = true
+                var is3x3max = true
                 
                 // left neighbor
                 if x > 0,
-                   count <= counts[x-1][y]        { is_3_x_3_max = false }
+                   count <= counts[x-1][y]        { is3x3max = false }
                 
                 // left upper neighbor                    
                 else if x > 0, y > 0,
-                        count <= counts[x-1][y-1] { is_3_x_3_max = false }
+                        count <= counts[x-1][y-1] { is3x3max = false }
                 
                 // left lower neighbor                    
                 else if x > 0,
-                        y < hough_height - 1,
-                        count <= counts[x-1][y+1] { is_3_x_3_max = false }
+                        y < houghHeight - 1,
+                        count <= counts[x-1][y+1] { is3x3max = false }
                 
                 // upper neighbor                    
                 else if y > 0,
-                        count <= counts[x][y-1]   { is_3_x_3_max = false }
+                        count <= counts[x][y-1]   { is3x3max = false }
                 
                 // lower neighbor                    
-                else if y < hough_height - 1,
-                        count <= counts[x][y+1]   { is_3_x_3_max = false }
+                else if y < houghHeight - 1,
+                        count <= counts[x][y+1]   { is3x3max = false }
                 
                 // right neighbor
-                else if x < hough_width - 1,
-                        count <= counts[x+1][y]   { is_3_x_3_max = false }
+                else if x < houghWidth - 1,
+                        count <= counts[x+1][y]   { is3x3max = false }
                 
                 // right upper neighbor                    
-                else if x < hough_width - 1,
+                else if x < houghWidth - 1,
                         y > 0,
-                        count <= counts[x+1][y-1] { is_3_x_3_max = false }
+                        count <= counts[x+1][y-1] { is3x3max = false }
                 
                 // right lower neighbor                    
-                else if x < hough_width - 1,
-                        y < hough_height - 1,
-                        count <= counts[x+1][y+1] { is_3_x_3_max = false }
+                else if x < houghWidth - 1,
+                        y < houghHeight - 1,
+                        count <= counts[x+1][y+1] { is3x3max = false }
                 
-                else if is_3_x_3_max {
+                else if is3x3max {
                     var theta = Double(x)/2.0 // why /2 ?
                     var rho = Double(y) - rmax
                     
@@ -160,40 +155,24 @@ public class HoughTransform {
             }
         }
 
-        //let time_2 = NSDate().timeIntervalSince1970
-        //let interval2 = String(format: "%0.1f", time_2 - time_1)
-        
         let sortedLines = lines.sorted() { a, b in
             return a.count > b.count
         }
 
-        var small_set_lines: Array<Line> = []
-        if let number_of_lines_returned = number_of_lines_returned {
-            small_set_lines = Array<Line>(sortedLines.suffix(number_of_lines_returned))
+        var smallSetLines: Array<Line> = []
+        if let numberOfLinesReturned = numberOfLinesReturned {
+            smallSetLines = Array<Line>(sortedLines.suffix(numberOfLinesReturned))
         } else {
-            small_set_lines = Array<Line>(sortedLines)
+            smallSetLines = Array<Line>(sortedLines)
         }
         
-        //let time_3 = NSDate().timeIntervalSince1970
-        //let interval3 = String(format: "%0.1f", time_3 - time_2)
-
-        //Log.d("done with hough transform - \(interval3)s - \(interval2)s - \(interval1)s")
-        
-        //Log.d("lines \(small_set_lines)")
-        /*
-        for line in small_set_lines {
-            let theta = line.theta
-            let rho = line.rho
-            //Log.d("found line with theta \(theta) and dist \(rho) count \(line.count)")
-        }
-        */
-        return small_set_lines
+        return smallSetLines
     }        
 }
 
 // this method returns the polar coords for a line that runs through the two given points
 // not used anymore in the current implementation
-func polar_coords(point1: Coord, point2: Coord) -> (theta: Double, rho: Double) {
+func polarCoords(point1: Coord, point2: Coord) -> (theta: Double, rho: Double) {
     
     let dx1 = Double(point1.x)
     let dy1 = Double(point1.y)
@@ -207,10 +186,10 @@ func polar_coords(point1: Coord, point2: Coord) -> (theta: Double, rho: Double) 
     
     // length of hypotenuse formed by triangle of (0, 0) - (0, n) - (m, 0)
     let hypotenuse = sqrt(n*n + m*m)
-    let theta_radians = acos(n/hypotenuse)     // theta in radians
+    let thetaRadians = acos(n/hypotenuse)     // theta in radians
     
-    var theta = theta_radians * 180/Double.pi  // theta in degrees
-    var rho = cos(theta_radians) * m          // distance from orgin to right angle with line
+    var theta = thetaRadians * 180/Double.pi  // theta in degrees
+    var rho = cos(thetaRadians) * m          // distance from orgin to right angle with line
     
     if(rho < 0) {
         // keep rho positive

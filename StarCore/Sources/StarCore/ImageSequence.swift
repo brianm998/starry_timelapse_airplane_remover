@@ -40,26 +40,26 @@ public actor ImageSequence {
          maxImages: Int? = nil) throws
     {
         self.maxImages = maxImages
-        var image_files: [String] = []
-        if !file_manager.fileExists(atPath: dirname) {
+        var imageFiles: [String] = []
+        if !fileManager.fileExists(atPath: dirname) {
             throw "\(dirname) does not exist"
         }
-        let contents = try file_manager.contentsOfDirectory(atPath: dirname)
+        let contents = try fileManager.contentsOfDirectory(atPath: dirname)
         contents.forEach { file in
             supportedImageFileTypes.forEach { type in
                 if file.hasSuffix(type) {
-                    image_files.append("\(dirname)/\(file)")
+                    imageFiles.append("\(dirname)/\(file)")
                 } 
             }
         }
         
-        image_files.sort { (lhs: String, rhs: String) -> Bool in
-            let lh = removePath_and_suffix(fromString: lhs)
-            let rh = removePath_and_suffix(fromString: rhs)
+        imageFiles.sort { (lhs: String, rhs: String) -> Bool in
+            let lh = removePathAndSuffix(fromString: lhs)
+            let rh = removePathAndSuffix(fromString: rhs)
             return lh < rh
         }
 
-        self.filenames = image_files
+        self.filenames = imageFiles
     }
 
     static var imageWidth: Int = 0
@@ -78,7 +78,7 @@ public actor ImageSequence {
         return images.count
     }
 
-    private var loaded_filenames: [String] = []
+    private var loadedFilenames: [String] = []
 
     private var maxImages: Int? // XXX set this low for gui, eating more ram than necessary
     
@@ -92,27 +92,27 @@ public actor ImageSequence {
         let pixelatedImage = ImageLoader(fromFile: filename) 
         images[filename] = pixelatedImage
 
-        loaded_filenames.insert(filename, at: 0)
+        loadedFilenames.insert(filename, at: 0)
 
         var _maxImages = 0
 
         if let maxImages = maxImages {
             _maxImages = maxImages
         } else if ImageSequence.imageWidth != 0,
-                  ImageSequence.imageHeight != 0
+                 ImageSequence.imageHeight != 0
         {
             // calculate the max number of images to keep in ram at once
             // use the amount of physical ram / size of images
             let memorySizeBytes = ProcessInfo.processInfo.physicalMemory
 
             // this is a rough guess, 16 bits per pixel, 4 components per pixel
-            let bytes_per_image = ImageSequence.imageWidth*ImageSequence.imageHeight*8
+            let bytesPerImage = ImageSequence.imageWidth*ImageSequence.imageHeight*8
 
             // this is a rule of thumb, not exact
-            _maxImages = Int(memorySizeBytes / UInt64(bytes_per_image)) / 5 // XXX hardcoded constant
+            _maxImages = Int(memorySizeBytes / UInt64(bytesPerImage)) / 5 // XXX hardcoded constant
 
-            let never_go_over_max = 100 // XXX hardcoded max
-            if _maxImages > never_go_over_max { _maxImages = never_go_over_max }
+            let neverGoOverMax = 100 // XXX hardcoded max
+            if _maxImages > neverGoOverMax { _maxImages = neverGoOverMax }
             
             maxImages = _maxImages
             Log.i("calculated maxImages \(_maxImages)")
@@ -120,8 +120,8 @@ public actor ImageSequence {
             _maxImages = 10    // initial default
         }
         
-        while loaded_filenames.count > _maxImages { 
-            self.removeValue(forKey: loaded_filenames.removeLast())
+        while loadedFilenames.count > _maxImages { 
+            self.removeValue(forKey: loadedFilenames.removeLast())
         }
         
         Log.d("loaded \(filename)")
@@ -130,11 +130,11 @@ public actor ImageSequence {
 }
 
 // removes path and suffix from filename
-func removePath_and_suffix(fromString string: String) -> String {
+func removePathAndSuffix(fromString string: String) -> String {
     let imageURL = NSURL(fileURLWithPath: string, isDirectory: false) as URL
     let full_path = imageURL.deletingPathExtension().absoluteString
     let components = full_path.components(separatedBy: "/")
     return components[components.count-1]
 }
 
-fileprivate let file_manager = FileManager.default
+fileprivate let fileManager = FileManager.default

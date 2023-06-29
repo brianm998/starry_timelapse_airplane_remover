@@ -79,13 +79,13 @@ public class OutlierGroup: CustomStringConvertible,
                                                                  width: bounds.width,
                                                                  height: bounds.height)
         // do a hough transform on just this outlier group
-        let transform = HoughTransform(data_width: bounds.width,
-                                       data_height: bounds.height,
-                                       input_data: pixels,
+        let transform = HoughTransform(dataWidth: bounds.width,
+                                       dataHeight: bounds.height,
+                                       inputData: pixels,
                                        maxPixelDistance: maxPixelDistance)
 
         // we want all the lines, all of them.
-        self.lines = transform.lines(min_count: 1)
+        self.lines = transform.lines(minCount: 1)
         _ = self.houghLineHistogram
     }
 

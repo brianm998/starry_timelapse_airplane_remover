@@ -34,7 +34,7 @@ actor DecisionTreeGenerator {
         }
     }
 
-    func generateForest(withInputData input_data: ClassifiedData,
+    func generateForest(withInputData inputData: ClassifiedData,
                         andTestData test_data: [ClassifiedData],
                         inputFilenames: [String],
                         treeCount: Int,
@@ -51,22 +51,22 @@ actor DecisionTreeGenerator {
          sum of all of the trees in this forest, a group consensus.
          */
         
-        var input_data_split = input_data.shuffleSplit(into: treeCount)
+        var inputData_split = inputData.shuffleSplit(into: treeCount)
 
         var validationData = ClassifiedData()
 
         let trees = try await withLimitedThrowingTaskGroup(of: TreeForestResult.self) { taskGroup in
             var results: [TreeForestResult] = []
-            for validation_index in 0..<input_data_split.count {
+            for validation_index in 0..<inputData_split.count {
                 try await taskGroup.addTask() { 
                     // generate a tree from this validation data
-                    validationData = input_data_split[validation_index]
+                    validationData = inputData_split[validation_index]
                     
                     // use the remaining data for training
                     let trainingData = ClassifiedData()
-                    for i in 0..<input_data_split.count {
+                    for i in 0..<inputData_split.count {
                         if i != validation_index {
-                            trainingData += input_data_split[i]
+                            trainingData += inputData_split[i]
                         }
                     }
 

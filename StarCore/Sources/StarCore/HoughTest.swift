@@ -18,7 +18,7 @@ You should have received a copy of the GNU General Public License along with sta
 func hough_test(filename: String, outputFilename: String) async {
 
     // the output filename needs to be exactly the right size
-    // specifically hough_height and hough_width
+    // specifically houghHeight and houghWidth
     
     // the hough test
     
@@ -32,15 +32,15 @@ func hough_test(filename: String, outputFilename: String) async {
 
         Log.i("rmax \(rmax)")
             
-        let hough_height = Int(rmax*2) // units are rho (pixels)
-        let hough_width = 360     // units are theta (degrees)
+        let houghHeight = Int(rmax*2) // units are rho (pixels)
+        let houghWidth = 360     // units are theta (degrees)
 
-        if hough_height != output_image.height || hough_width != output_image.width {
-            Log.e("\(hough_height) != \(output_image.height) || \(hough_width) != \(output_image.width)")
+        if houghHeight != output_image.height || houghWidth != output_image.width {
+            Log.e("\(houghHeight) != \(output_image.height) || \(houghWidth) != \(output_image.width)")
             fatalError("image size mismatch")
         }
         
-        Log.e("hough width \(hough_width) height \(hough_height)")
+        Log.e("hough width \(houghWidth) height \(houghHeight)")
         
         guard var output_data = CFDataCreateMutableCopy(kCFAllocatorDefault,
                                                         CFDataGetLength(output_image.rawImageData as CFData),
@@ -48,11 +48,11 @@ func hough_test(filename: String, outputFilename: String) async {
               else { fatalError("fuck") }
 
         try image.read { pixels in 
-            var counts = [[UInt32]](repeating: [UInt32](repeating: 0, count: hough_height),
-                                    count: Int(hough_width))
+            var counts = [[UInt32]](repeating: [UInt32](repeating: 0, count: houghHeight),
+                                    count: Int(houghWidth))
 
-            let dr   = 2 * rmax / Double(hough_height);
-            let dth  = Double.pi / Double(hough_width);
+            let dr   = 2 * rmax / Double(houghHeight);
+            let dth  = Double.pi / Double(houghWidth);
 
             var max_count: UInt32 = 0
             
@@ -66,7 +66,7 @@ func hough_test(filename: String, outputFilename: String) async {
                     if intensity > 0xFF {
                         // record pixel
 
-                        for k in 0 ..< Int(hough_width) {
+                        for k in 0 ..< Int(houghWidth) {
                             let th = dth * Double(k)
                             let r2 = (Double(x)*cos(th) + Double(y)*sin(th))
                             let iry = Int(rmax + r2/dr)
@@ -80,8 +80,8 @@ func hough_test(filename: String, outputFilename: String) async {
                 }
             }
 
-            for x in 0 ..< hough_width {
-                for y in 0 ..< hough_height {
+            for x in 0 ..< houghWidth {
+                for y in 0 ..< houghHeight {
                     let offset = (Int(y) * output_image.width*6) + (Int(x) * 6)
                     //Log.d("offset \(offset) \(CFDataGetLength(output_data as CFData))")
                     var value = UInt32(Double(counts[x][y])/Double(max_count)*Double(0xFFFF))
@@ -112,11 +112,11 @@ func hough_test(filename: String, outputFilename: String) async {
             
             var lines: [Line] = []
 
-            //let min_count = 50  // smaller ones will be ignored
-            let number_of_lines_returned = 20 // limit on sorted list of lines
+            //let minCount = 50  // smaller ones will be ignored
+            let numberOfLinesReturned = 20 // limit on sorted list of lines
             
-            for x in 0 ..< hough_width {
-                for y in 0 ..< hough_height {
+            for x in 0 ..< houghWidth {
+                for y in 0 ..< houghHeight {
                     var theta = Double(x)/2.0
                     var rho = Double(y) - rmax
 
@@ -151,7 +151,7 @@ func hough_test(filename: String, outputFilename: String) async {
 
                     // left lower neighbor                    
                     if x > 0,
-                       y < hough_height - 1,
+                       y < houghHeight - 1,
                        count <= counts[x-1][y+1] {
                         if count > 10 {
                             //Log.d("count <= counts[x-1][y+1] \(count) <= \(counts[x-1][y+1])")
@@ -167,7 +167,7 @@ func hough_test(filename: String, outputFilename: String) async {
                         is_3_x_3_max = false }
 
                     // lower neighbor                    
-                    if y < hough_height - 1,
+                    if y < houghHeight - 1,
                        count <= counts[x][y+1]   {
                         if count > 10 {
                             //Log.d("count <= counts[x-1][y+1] \(count) <= \(counts[x][y+1])")
@@ -175,7 +175,7 @@ func hough_test(filename: String, outputFilename: String) async {
                         is_3_x_3_max = false }
 
                     // right neighbor
-                    if x < hough_width - 1,
+                    if x < houghWidth - 1,
                        count <= counts[x+1][y]   {
                         if count > 10 {
                             //Log.d("count <= counts[x+1][y] \(count) <= \(counts[x+1][y])")
@@ -183,7 +183,7 @@ func hough_test(filename: String, outputFilename: String) async {
                         is_3_x_3_max = false }
 
                     // right upper neighbor                    
-                    if x < hough_width - 1,
+                    if x < houghWidth - 1,
                        y > 0,
                        count <= counts[x+1][y-1] {
                         if count > 10 {
@@ -192,8 +192,8 @@ func hough_test(filename: String, outputFilename: String) async {
                         is_3_x_3_max = false }
 
                     // right lower neighbor                    
-                    if x < hough_width - 1,
-                       y < hough_height - 1,
+                    if x < houghWidth - 1,
+                       y < houghHeight - 1,
                        count <= counts[x+1][y+1] {
                         if count > 10 {
                             //Log.d("count <= counts[x+1][y+1] \(count) <= \(counts[x+1][y+1])")
@@ -223,7 +223,7 @@ func hough_test(filename: String, outputFilename: String) async {
                 return a.count < b.count
             }
                      
-            let small_set_lines = Array<Line>(sortedLines.suffix(number_of_lines_returned).reversed())
+            let small_set_lines = Array<Line>(sortedLines.suffix(numberOfLinesReturned).reversed())
 
             Log.d("lines \(small_set_lines)")
 
