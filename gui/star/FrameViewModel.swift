@@ -7,16 +7,16 @@ import StarCore
 
 // UI view class used for each frame
 public class FrameViewModel: ObservableObject {
-    init(_ frame_index: Int) {
-        self.frame_index = frame_index
+    init(_ frameIndex: Int) {
+        self.frameIndex = frameIndex
     }
 
     var isCurrentFrame: Bool = false
     
-    let frame_index: Int
+    let frameIndex: Int
     var frame: FrameAirplaneRemover? {
         didSet {
-            Log.d("frame \(frame_index) set frame to \(String(describing: frame))")
+            Log.d("frame \(frameIndex) set frame to \(String(describing: frame))")
         }
     }
 

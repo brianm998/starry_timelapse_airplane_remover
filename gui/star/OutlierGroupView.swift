@@ -153,7 +153,7 @@ struct OutlierGroupView: View {
                 // XXX need separate enums for selection does paint and selection does do info
             } else {
                 // make this row the only selected one
-                let frame_view = self.groupViewModel.viewModel.frames[self.groupViewModel.group.frame_index]
+                let frame_view = self.groupViewModel.viewModel.frames[self.groupViewModel.group.frameIndex]
                 if let frame = frame_view.frame,
                    let group = frame.outlierGroup(named: self.groupViewModel.group.name)
                 {

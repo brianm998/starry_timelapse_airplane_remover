@@ -230,7 +230,7 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
     // outlier pixel detection, outlier group detection and analysis
     // after running this method, each frame will have a good idea
     // of what outliers is has, and whether or not should paint over them.
-    func createFrame(atIndex frame_index: Int,
+    func createFrame(atIndex frameIndex: Int,
                      otherFrameIndexes: [Int],
                      output_filename: String, // full path
                      base_name: String,       // just filename
@@ -246,48 +246,48 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
             var end_time_1: Double = 0
             var start_time_1: Double = 0
 
-            let frame_outliers_new_binary_dirname = "\(self.outlier_output_dirname)/\(frame_index)"
+            let frame_outliers_new_binary_dirname = "\(self.outlier_output_dirname)/\(frameIndex)"
             if file_manager.fileExists(atPath: frame_outliers_new_binary_dirname) {
                 do {
                     start_time_1 = Date().timeIntervalSinceReferenceDate
-                    outlier_groups_for_this_frame = try await OutlierGroups(at: frame_index, from: frame_outliers_new_binary_dirname)
+                    outlier_groups_for_this_frame = try await OutlierGroups(at: frameIndex, from: frame_outliers_new_binary_dirname)
                     end_time_1 = Date().timeIntervalSinceReferenceDate
                 } catch {
-                    Log.e("frame \(frame_index) error decoding file \(frame_outliers_new_binary_dirname): \(error)")
+                    Log.e("frame \(frameIndex) error decoding file \(frame_outliers_new_binary_dirname): \(error)")
                 }
-                Log.i("frame \(frame_index) loaded from new binary dir")
+                Log.i("frame \(frameIndex) loaded from new binary dir")
                 
             } 
             let end_time = Date().timeIntervalSinceReferenceDate
-            Log.d("took \(end_time - start_time) seconds to load outlier group data for frame \(frame_index)")
-            Log.i("TIMES \(start_time_1 - start_time) - \(end_time_1 - start_time_1) - \(end_time - end_time_1) reading outlier group data for frame \(frame_index)")
+            Log.d("took \(end_time - start_time) seconds to load outlier group data for frame \(frameIndex)")
+            Log.i("TIMES \(start_time_1 - start_time) - \(end_time_1 - start_time_1) - \(end_time - end_time_1) reading outlier group data for frame \(frameIndex)")
             
             
             if let _ = outlier_groups_for_this_frame  {
-                Log.i("loading frame \(frame_index) with outlier groups from file")
+                Log.i("loading frame \(frameIndex) with outlier groups from file")
             } else {
-                Log.d("loading frame \(frame_index)")
+                Log.d("loading frame \(frameIndex)")
             }
             return outlier_groups_for_this_frame
         }
         
         return try await FrameAirplaneRemover(with: config,
-                                              width: image_width,
-                                              height: image_height,
-                                              bytesPerPixel: image_bytesPerPixel,
-                                              callbacks: callbacks,
-                                              imageSequence: image_sequence,
-                                              atIndex: frame_index,
-                                              otherFrameIndexes: otherFrameIndexes,
-                                              outputFilename: output_filename,
-                                              baseName: base_name,
-                                              outlierOutputDirname: outlier_output_dirname,
-                                              previewOutputDirname: preview_output_dirname,
-                                              processedPreviewOutputDirname: processed_preview_output_dirname,
-                                              thumbnailOutputDirname: thumbnail_output_dirname,
-                                              outlierGroupLoader: loadOutliersFromFile,
-                                              fullyProcess: fully_process,
-                                              writeOutputFiles: writeOutputFiles)
+                                          width: image_width,
+                                          height: image_height,
+                                          bytesPerPixel: image_bytesPerPixel,
+                                          callbacks: callbacks,
+                                          imageSequence: image_sequence,
+                                          atIndex: frameIndex,
+                                          otherFrameIndexes: otherFrameIndexes,
+                                          outputFilename: output_filename,
+                                          baseName: base_name,
+                                          outlierOutputDirname: outlier_output_dirname,
+                                          previewOutputDirname: preview_output_dirname,
+                                          processedPreviewOutputDirname: processed_preview_output_dirname,
+                                          thumbnailOutputDirname: thumbnail_output_dirname,
+                                          outlierGroupLoader: loadOutliersFromFile,
+                                          fullyProcess: fully_process,
+                                          writeOutputFiles: writeOutputFiles)
    }        
 }
               

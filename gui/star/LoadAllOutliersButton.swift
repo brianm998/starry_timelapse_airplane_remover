@@ -17,18 +17,18 @@ struct LoadAllOutliersButton: View {
                         Log.d("foobar starting")
                         viewModel.numberOfFramesWithOutliersLoaded = 0
                         for frameView in viewModel.frames {
-                            Log.d("frame \(frameView.frame_index) attempting to load outliers")
+                            Log.d("frame \(frameView.frameIndex) attempting to load outliers")
                             var did_load = false
                             while(!did_load) {
                                 if current_running < max_concurrent {
-                                    Log.d("frame \(frameView.frame_index) attempting to load outliers")
+                                    Log.d("frame \(frameView.frameIndex) attempting to load outliers")
                                     if let frame = frameView.frame {
-                                        Log.d("frame \(frameView.frame_index) adding task to load outliers")
+                                        Log.d("frame \(frameView.frameIndex) adding task to load outliers")
                                         current_running += 1
                                         did_load = true
                                         try await taskGroup.addTask(/*priority: .userInitiated*/) {
                                             // XXX style the button during this flow?
-                                            Log.d("actually loading outliers for frame \(frame.frame_index)")
+                                            Log.d("actually loading outliers for frame \(frame.frameIndex)")
                                             try await frame.loadOutliers()
                                             // XXX set this in the view model
 
@@ -42,13 +42,13 @@ struct LoadAllOutliersButton: View {
                                             }
                                         }
                                     } else {
-                                        Log.d("frame \(frameView.frame_index) no frame, can't load outliers")
+                                        Log.d("frame \(frameView.frameIndex) no frame, can't load outliers")
                                     }
                                 } else {
-                                    Log.d("frame \(frameView.frame_index) waiting \(current_running)")
+                                    Log.d("frame \(frameView.frameIndex) waiting \(current_running)")
                                     try await taskGroup.next()
                                     current_running -= 1
-                                    Log.d("frame \(frameView.frame_index) done waiting \(current_running)")
+                                    Log.d("frame \(frameView.frameIndex) done waiting \(current_running)")
                                 }
                             }
                         }

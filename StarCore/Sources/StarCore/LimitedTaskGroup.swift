@@ -42,6 +42,19 @@ public actor LimitedTaskGroup<T> {
     }
 }
 
+/* 
+func example() async {
+    await withLimitedTaskGroup(of: Void.self) { taskGroup in
+        for i in (0..<200) {
+            await taskGroup.addTask() {
+                doSomething()
+            }
+        }
+        await taskGroup.waitForAll()
+    }
+}
+ */
+
 
 public func withLimitedTaskGroup<ChildTaskResult, GroupResult>(
   of childTaskResultType: ChildTaskResult.Type,

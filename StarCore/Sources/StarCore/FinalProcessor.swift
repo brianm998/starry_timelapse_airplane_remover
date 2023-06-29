@@ -23,7 +23,7 @@ import Combine
 
 public actor FinalProcessor {
     var frames: [FrameAirplaneRemover?]
-    var current_frame_index = 0
+    var currentFrameIndex = 0
     var max_added_index = 0
     let frame_count: Int
     let dispatch_group: DispatchHandler
@@ -63,7 +63,7 @@ public actor FinalProcessor {
         // this is called when frames are published for us
         publishCancellable = publisher.sink { frame in
 
-            let index = frame.frame_index
+            let index = frame.frameIndex
             if index > self.max_added_index {
                 self.max_added_index = index
             }
@@ -79,7 +79,7 @@ public actor FinalProcessor {
     }
     
     func incrementCurrentFrameIndex() {
-        current_frame_index += 1
+        currentFrameIndex += 1
 
         log()
     }
@@ -95,8 +95,8 @@ public actor FinalProcessor {
                 
                 var message: String = padding + ConsoleColor.blue.rawValue + "["
                 var count = 0
-                let end = current_frame_index + config.numConcurrentRenders
-                for i in current_frame_index ..< end {
+                let end = currentFrameIndex + config.numConcurrentRenders
+                for i in currentFrameIndex ..< end {
                     if i >= self.frames.count {
                         message += ConsoleColor.yellow.rawValue + "-"
                     } else {
@@ -125,7 +125,7 @@ public actor FinalProcessor {
     }
 
     var framesBetween: Int {
-        var ret = max_added_index - current_frame_index
+        var ret = max_added_index - currentFrameIndex
         if ret < 0 { ret = 0 }
 
         return ret
@@ -142,7 +142,7 @@ public actor FinalProcessor {
         try await withLimitedThrowingTaskGroup(of: Void.self) { taskGroup in
             for (_, frame) in frames.enumerated() {
                 if let frame = frame {
-                    Log.d("adding frame \(frame.frame_index) to final queue")
+                    Log.d("adding frame \(frame.frameIndex) to final queue")
                     try await taskGroup.addTask() { 
                         await frame.maybeApplyOutlierGroupClassifier()
                         frame.set(state: .outlierProcessingComplete)
@@ -159,22 +159,22 @@ public actor FinalProcessor {
         // if we have a frame check closure, we allow the user to check the frame here
         // but only if there are some outliers to check, otherwise just finish it.
 
-        Log.d("finish frame \(frame.frame_index)")
+        Log.d("finish frame \(frame.frameIndex)")
         
         if let frameCheckClosure = callbacks.frameCheckClosure
         {
             // gui
-            Log.d("calling frameCheckClosure for frame \(frame.frame_index)")
+            Log.d("calling frameCheckClosure for frame \(frame.frameIndex)")
             await frameCheckClosure(frame)
             return
         }            
 
         // cli and not checked frames go to the finish queue
-        Log.d("adding frame \(frame.frame_index) to the final queue")
+        Log.d("adding frame \(frame.frameIndex) to the final queue")
 
-        Log.d("frame \(frame.frame_index) finishing")
+        Log.d("frame \(frame.frameIndex) finishing")
         try await frame.finish()
-        Log.d("frame \(frame.frame_index) finished")
+        Log.d("frame \(frame.frameIndex) finished")
     }
 
     nonisolated func run() async throws {
@@ -185,15 +185,15 @@ public actor FinalProcessor {
         try await withLimitedThrowingTaskGroup(of: Void.self) { taskGroup in
             while(!done) {
                 Log.v("FINAL THREAD running")
-                let (cfi, frames_count) = await (current_frame_index, frames.count)
+                let (cfi, frames_count) = await (currentFrameIndex, frames.count)
                 done = cfi >= frames_count
-                Log.v("FINAL THREAD done \(done) current_frame_index \(cfi) frames.count \(frames_count)")
+                Log.v("FINAL THREAD done \(done) currentFrameIndex \(cfi) frames.count \(frames_count)")
                 if done {
                     Log.d("we are done")
                     continue
                 }
                 
-                let index_to_process = await current_frame_index
+                let index_to_process = await currentFrameIndex
 
                 Log.d("index_to_process \(index_to_process) shouldProcess[index_to_process] \(shouldProcess[index_to_process])")
 
@@ -203,7 +203,7 @@ public actor FinalProcessor {
                 {
                     if let frameCheckClosure = callbacks.frameCheckClosure {
                         if let frame = await self.frame(at: index_to_process) {
-                            Log.d("calling frameCheckClosure for frame \(frame.frame_index)")
+                            Log.d("calling frameCheckClosure for frame \(frame.frameIndex)")
                             await frameCheckClosure(frame)
                         } else {
                             Log.d("NOT calling frameCheckClosure for frame \(index_to_process)")

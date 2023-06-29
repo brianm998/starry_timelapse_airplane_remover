@@ -335,7 +335,7 @@ struct OutlierGroupTable: View {
                 } .onChange(of: viewModel.selectedOutliers) {newValue in 
                     Log.d("selected outliers \(newValue)")
                     if let frame = viewModel.outlierGroupWindowFrame {
-                        let frameView = viewModel.frames[frame.frame_index]
+                        let frameView = viewModel.frames[frame.frameIndex]
                         if let outlierViews = frameView.outlierViews {
 
                             for outlierView in outlierViews {
@@ -367,7 +367,7 @@ struct OutlierGroupTable: View {
                 } .onDisappear() {
                     // without this selection will persist 
                     if let frame = viewModel.outlierGroupWindowFrame {
-                        let frameView = viewModel.frames[frame.frame_index]
+                        let frameView = viewModel.frames[frame.frameIndex]
                         if let outlierViews = frameView.outlierViews {
                             for outlierView in outlierViews {
                                 outlierView.isSelected = false
@@ -382,7 +382,7 @@ struct OutlierGroupTable: View {
             Spacer()
         }.navigationTitle(viewModel.outlierGroupWindowFrame == nil ?
                                   OTHER_WINDOW_TITLE :
-                                  "\(OUTLIER_WINDOW_PREFIX) for frame \(viewModel.outlierGroupWindowFrame!.frame_index)")
+                                  "\(OUTLIER_WINDOW_PREFIX) for frame \(viewModel.outlierGroupWindowFrame!.frameIndex)")
     }
 }
 

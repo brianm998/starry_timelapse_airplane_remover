@@ -180,7 +180,7 @@ public final class ViewModel: ObservableObject {
         var ret = frameSaveQueue?.purgatory.count ?? 0
         if let current_frame = self.currentFrame,
            current_frame.hasChanges(),
-           !(frameSaveQueue?.frameIsInPurgatory(current_frame.frame_index) ?? false)
+           !(frameSaveQueue?.frameIsInPurgatory(current_frame.frameIndex) ?? false)
         {
             ret += 1            // XXX make sure the current frame isn't in purgatory
         }
@@ -208,7 +208,7 @@ public final class ViewModel: ObservableObject {
     }
 
     func refresh(frame: FrameAirplaneRemover) async {
-        Log.d("refreshing frame \(frame.frame_index)")
+        Log.d("refreshing frame \(frame.frameIndex)")
         let thumbnail_width = config?.thumbnail_width ?? Config.default_thumbnail_width
         let thumbnail_height = config?.thumbnail_height ?? Config.default_thumbnail_height
         let thumbnail_size = NSSize(width: thumbnail_width, height: thumbnail_height)
@@ -223,24 +223,24 @@ public final class ViewModel: ObservableObject {
             if let processed_preview_filename = frame.processedPreviewFilename,
                let processed_preview_image = NSImage(contentsOf: URL(fileURLWithPath: processed_preview_filename))
             {
-                Log.d("loaded processed preview for self.frames[\(frame.frame_index)] from jpeg")
+                Log.d("loaded processed preview for self.frames[\(frame.frameIndex)] from jpeg")
                 let view_image = Image(nsImage: processed_preview_image).resizable()
-                self.frames[frame.frame_index].processed_preview_image = view_image
+                self.frames[frame.frameIndex].processed_preview_image = view_image
             }
             
             if let preview_filename = frame.previewFilename,
                let preview_image = NSImage(contentsOf: URL(fileURLWithPath: preview_filename))
             {
-                Log.d("loaded preview for self.frames[\(frame.frame_index)] from jpeg")
+                Log.d("loaded preview for self.frames[\(frame.frameIndex)] from jpeg")
                 let view_image = Image(nsImage: preview_image).resizable()
-                self.frames[frame.frame_index].preview_image = view_image
+                self.frames[frame.frameIndex].preview_image = view_image
             } 
             
             if let thumbnail_filename = frame.thumbnailFilename,
                let thumbnail_image = NSImage(contentsOf: URL(fileURLWithPath: thumbnail_filename))
             {
-                Log.d("loaded thumbnail for self.frames[\(frame.frame_index)] from jpeg")
-                self.frames[frame.frame_index].thumbnail_image =
+                Log.d("loaded thumbnail for self.frames[\(frame.frameIndex)] from jpeg")
+                self.frames[frame.frameIndex].thumbnail_image =
                   Image(nsImage: thumbnail_image)
             } else {
                 if pixImage == nil { pixImage = try await frame.pixelatedImage() }
@@ -248,14 +248,14 @@ public final class ViewModel: ObservableObject {
                 if let baseImage = baseImage,
                    let thumbnail_base = baseImage.resized(to: thumbnail_size)
                 {
-                    self.frames[frame.frame_index].thumbnail_image =
+                    self.frames[frame.frameIndex].thumbnail_image =
                       Image(nsImage: thumbnail_base)
                 } else {
-                    Log.w("set unable to load thumbnail image for self.frames[\(frame.frame_index)].frame")
+                    Log.w("set unable to load thumbnail image for self.frames[\(frame.frameIndex)].frame")
                 }
             }
 
-            if self.frames[frame.frame_index].outlierViews == nil {
+            if self.frames[frame.frameIndex].outlierViews == nil {
                 await self.setOutlierGroups(forFrame: frame)
 
                 // refresh ui 
@@ -267,16 +267,16 @@ public final class ViewModel: ObservableObject {
     }
 
     func append(frame: FrameAirplaneRemover) async {
-        Log.d("appending frame \(frame.frame_index)")
+        Log.d("appending frame \(frame.frameIndex)")
 
-        guard frame.frame_index >= 0,
-              frame.frame_index < self.frames.count
+        guard frame.frameIndex >= 0,
+              frame.frameIndex < self.frames.count
         else {
-            Log.w("cannot add frame with index \(frame.frame_index) to array with \(self.frames.count) elements")
+            Log.w("cannot add frame with index \(frame.frameIndex) to array with \(self.frames.count) elements")
             return 
         }
         
-        self.frames[frame.frame_index].frame = frame
+        self.frames[frame.frameIndex].frame = frame
 
         numberOfFramesLoaded += 1
         if self.initialLoadInProgress {
@@ -294,7 +294,7 @@ public final class ViewModel: ObservableObject {
                 }
             }
         }
-        Log.d("set self.frames[\(frame.frame_index)].frame")
+        Log.d("set self.frames[\(frame.frameIndex)].frame")
 
         await refresh(frame: frame)
     }
@@ -303,7 +303,7 @@ public final class ViewModel: ObservableObject {
         Task.detached(priority: .userInitiated) {
             let outlierGroups = frame.outlierGroups()
             if let outlierGroups = outlierGroups {
-                Log.d("got \(outlierGroups.count) groups for frame \(frame.frame_index)")
+                Log.d("got \(outlierGroups.count) groups for frame \(frame.frameIndex)")
                 var new_outlier_groups: [OutlierGroupViewModel] = []
                 for group in outlierGroups {
                     if let cgImage = group.testImage() { // XXX heap corruption here :(
@@ -318,10 +318,10 @@ public final class ViewModel: ObservableObject {
                                                                     image: outlierImage)
                         new_outlier_groups.append(groupView)
                     } else {
-                        Log.e("frame \(frame.frame_index) outlier group no image")
+                        Log.e("frame \(frame.frameIndex) outlier group no image")
                     }
                 }
-                await self.frames[frame.frame_index].outlierViews = new_outlier_groups
+                await self.frames[frame.frameIndex].outlierViews = new_outlier_groups
 
                 await MainActor.run { self.objectWillChange.send() }
             }
@@ -340,7 +340,7 @@ public final class ViewModel: ObservableObject {
         }
         Log.d("next frame returning frame from index \(currentIndex)")
         if let frame = frames[currentIndex].frame {
-            Log.d("frame has index \(frame.frame_index)")
+            Log.d("frame has index \(frame.frameIndex)")
         } else {
             Log.d("NO FRAME")
         }
@@ -500,10 +500,10 @@ public final class ViewModel: ObservableObject {
         
         callbacks.frameStateChangeCallback = { frame, state in
             // XXX do something here
-            Log.d("frame \(frame.frame_index) changed to state \(state)")
+            Log.d("frame \(frame.frameIndex) changed to state \(state)")
             Task {
                 await MainActor.run {
-                    //self.frame_states[frame.frame_index] = state
+                    //self.frame_states[frame.frameIndex] = state
                     self.objectWillChange.send()
                 }
             }
@@ -511,7 +511,7 @@ public final class ViewModel: ObservableObject {
 
         // called when we should check a frame
         callbacks.frameCheckClosure = { new_frame in
-            Log.d("frameCheckClosure for frame \(new_frame.frame_index)")
+            Log.d("frameCheckClosure for frame \(new_frame.frameIndex)")
 
             // XXX we may need to introduce some kind of queue here to avoid hitting
             // too many open files on larger sequences :(
@@ -524,7 +524,7 @@ public final class ViewModel: ObservableObject {
     }
 
     @MainActor func addToViewModel(frame new_frame: FrameAirplaneRemover) async {
-        Log.d("addToViewModel(frame: \(new_frame.frame_index))")
+        Log.d("addToViewModel(frame: \(new_frame.frameIndex))")
 
         if self.config == nil {
             // XXX why this doesn't work initially befounds me,
@@ -544,16 +544,16 @@ public final class ViewModel: ObservableObject {
        // Log.d("addToViewModel self.frame \(self.frame)")
 
         // is this the currently selected frame?
-        if self.currentIndex == new_frame.frame_index {
-            self.label_text = "frame \(new_frame.frame_index)"
+        if self.currentIndex == new_frame.frameIndex {
+            self.label_text = "frame \(new_frame.frameIndex)"
 
-            Log.i("got frame index \(new_frame.frame_index)")
+            Log.i("got frame index \(new_frame.frameIndex)")
 
             // XXX not getting preview here
 
             do {
                 if let baseImage = try await new_frame.baseImage() {
-                    if self.currentIndex == new_frame.frame_index {
+                    if self.currentIndex == new_frame.frameIndex {
                         await MainActor.run {
                             Task {
                                 self.currentFrameImage = Image(nsImage: baseImage)
@@ -591,7 +591,7 @@ public extension ViewModel {
                           to shouldPaint: Bool,
                           renderImmediately: Bool = true)
     {
-        Log.d("setAllFrameOutliers in frame \(frame_view.frame_index) to should paint \(shouldPaint)")
+        Log.d("setAllFrameOutliers in frame \(frame_view.frameIndex) to should paint \(shouldPaint)")
         let reason = PaintReason.userSelected(shouldPaint)
         
         // update the view model first
@@ -611,21 +611,21 @@ public extension ViewModel {
                     await render(frame: frame) {
                         Task {
                             await self.refresh(frame: frame)
-                            if frame.frame_index == self.currentIndex {
+                            if frame.frameIndex == self.currentIndex {
                                 self.refreshCurrentFrame() // XXX not always current
                             }
                             self.update()
                         }
                     }
                 } else {
-                    if frame.frame_index == self.currentIndex {
+                    if frame.frameIndex == self.currentIndex {
                         self.refreshCurrentFrame() // XXX not always current
                     }
                     self.update()
                 }
             }
         } else {
-            Log.w("frame \(frame_view.frame_index) has no frame")
+            Log.w("frame \(frame_view.frameIndex) has no frame")
         }
     }
 
@@ -654,8 +654,8 @@ public extension ViewModel {
         {
             self.frames[self.currentIndex].isCurrentFrame = false
         }
-        self.frames[new_frame_view.frame_index].isCurrentFrame = true
-        self.currentIndex = new_frame_view.frame_index
+        self.frames[new_frame_view.frameIndex].isCurrentFrame = true
+        self.currentIndex = new_frame_view.frameIndex
         self.sliderValue = Double(self.currentIndex)
         
         if interactionMode == .edit,
@@ -663,7 +663,7 @@ public extension ViewModel {
         {
             scroller.scrollTo(self.currentIndex, anchor: .center)
 
-            //self.label_text = "frame \(new_frame_view.frame_index)"
+            //self.label_text = "frame \(new_frame_view.frameIndex)"
 
             // only save frame when we are also scrolling (i.e. not scrubbing)
             if let frame_to_save = old_frame {
@@ -674,7 +674,7 @@ public extension ViewModel {
                     // only save changes to frames that have been changed
                     if frame_changed {
                         self.saveToFile(frame: frame_to_save) {
-                            Log.d("completion closure called for frame \(frame_to_save.frame_index)")
+                            Log.d("completion closure called for frame \(frame_to_save.frameIndex)")
                             Task {
                                 await self.refresh(frame: frame_to_save)
                                 self.update()
@@ -692,7 +692,7 @@ public extension ViewModel {
         refreshCurrentFrame()
 
         let end_time = Date().timeIntervalSinceReferenceDate
-        Log.d("transition to frame \(new_frame_view.frame_index) took \(end_time - start_time) seconds")
+        Log.d("transition to frame \(new_frame_view.frameIndex) took \(end_time - start_time) seconds")
     }
 
     func refreshCurrentFrame() {
@@ -705,7 +705,7 @@ public extension ViewModel {
             var show_preview = true
 
             if showFullResolution &&
-               self.currentFrameImageIndex == new_frame_view.frame_index &&
+               self.currentFrameImageIndex == new_frame_view.frameIndex &&
                self.currentFrameImageViewMode == self.frameViewMode &&
                !self.currentFrameImageWasPreview
             {
@@ -714,7 +714,7 @@ public extension ViewModel {
             }
                  
             if show_preview {
-                self.currentFrameImageIndex = new_frame_view.frame_index
+                self.currentFrameImageIndex = new_frame_view.frameIndex
                 self.currentFrameImageWasPreview = true
                 self.currentFrameImageViewMode = self.frameViewMode
 
@@ -726,24 +726,24 @@ public extension ViewModel {
                 }
             }
             if showFullResolution {
-                if next_frame.frame_index == self.currentIndex {
+                if next_frame.frameIndex == self.currentIndex {
                     Task {
                         do {
-                            self.currentFrameImageIndex = new_frame_view.frame_index
+                            self.currentFrameImageIndex = new_frame_view.frameIndex
                             self.currentFrameImageWasPreview = false
                             self.currentFrameImageViewMode = self.frameViewMode
                             
                             switch self.frameViewMode {
                             case .original:
                                 if let baseImage = try await next_frame.baseImage() {
-                                    if next_frame.frame_index == self.currentIndex {
+                                    if next_frame.frameIndex == self.currentIndex {
                                         self.currentFrameImage = Image(nsImage: baseImage)
                                     }
                                 }
                                 
                             case .processed:
                                 if let baseImage = try await next_frame.baseOutputImage() {
-                                    if next_frame.frame_index == self.currentIndex {
+                                    if next_frame.frameIndex == self.currentIndex {
                                         self.currentFrameImage = Image(nsImage: baseImage)
                                     }
                                 }
@@ -757,7 +757,7 @@ public extension ViewModel {
 
             if interactionMode == .edit {
                 // try loading outliers if there aren't any present
-                let frameView = self.frames[next_frame.frame_index]
+                let frameView = self.frames[next_frame.frameIndex]
                 if frameView.outlierViews == nil,
                    !frameView.loadingOutlierViews
                 {
@@ -806,31 +806,31 @@ public extension ViewModel {
                   currentIndex: Int? = nil,
                   withScroll scroller: ScrollViewProxy? = nil)
     {
-        var frame_index: Int = 0
+        var frameIndex: Int = 0
         if let currentIndex = currentIndex {
-            frame_index = currentIndex
+            frameIndex = currentIndex
         } else {
-            frame_index = frame.frame_index
+            frameIndex = frame.frameIndex
         }
         
-        if (!forwards && frame_index == 0) ||  
-           (forwards && frame_index >= self.frames.count - 1)
+        if (!forwards && frameIndex == 0) ||  
+           (forwards && frameIndex >= self.frames.count - 1)
         {
-            if frame_index != frame.frame_index {
-                self.transition(toFrame: self.frames[frame_index],
+            if frameIndex != frame.frameIndex {
+                self.transition(toFrame: self.frames[frameIndex],
                                 from: frame,
                                 withScroll: scroller)
             }
             return
         }
         
-        var next_frame_index = 0
+        var next_frameIndex = 0
         if forwards {
-            next_frame_index = frame_index + 1
+            next_frameIndex = frameIndex + 1
         } else {
-            next_frame_index = frame_index - 1
+            next_frameIndex = frameIndex - 1
         }
-        let next_frame_view = self.frames[next_frame_index]
+        let next_frame_view = self.frames[next_frameIndex]
 
         var skip = false
 
@@ -864,7 +864,7 @@ public extension ViewModel {
             self.transition(until: fastAdvancementType,
                             from: frame,
                             forwards: forwards,
-                            currentIndex: next_frame_index,
+                            currentIndex: next_frameIndex,
                             withScroll: scroller)
         } else {
             self.transition(toFrame: next_frame_view,
@@ -875,7 +875,7 @@ public extension ViewModel {
 
     // used when advancing between frames
     func saveToFile(frame frame_to_save: FrameAirplaneRemover, completionClosure: @escaping () -> Void) {
-        Log.d("saveToFile frame \(frame_to_save.frame_index)")
+        Log.d("saveToFile frame \(frame_to_save.frameIndex)")
         if let frameSaveQueue = self.frameSaveQueue {
             frameSaveQueue.readyToSave(frame: frame_to_save, completionClosure: completionClosure)
         } else {

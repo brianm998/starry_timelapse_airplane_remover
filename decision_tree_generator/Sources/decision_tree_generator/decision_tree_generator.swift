@@ -183,7 +183,7 @@ struct decision_tree_generator: ParsableCommand {
         callbacks.frameCheckClosure = { new_frame in
             frames.append(new_frame)
             endClosure()
-            Log.d("frameCheckClosure for frame \(new_frame.frame_index)")
+            Log.d("frameCheckClosure for frame \(new_frame.frameIndex)")
         }
         
         callbacks.countOfFramesToCheck = { 1 }
@@ -234,7 +234,7 @@ struct decision_tree_generator: ParsableCommand {
                     number_bad[treeKey] = 0
                 }
                 
-                //Log.d("should check frame \(frame.frame_index)")
+                //Log.d("should check frame \(frame.frameIndex)")
                 if let outlier_group_list = frame.outlierGroups() {
                     for outlier_group in outlier_group_list {
                         if let numberGood = outlier_group.shouldPaint {
@@ -343,7 +343,7 @@ struct decision_tree_generator: ParsableCommand {
         
         // called when we should check a frame
         callbacks.frameCheckClosure = { new_frame in
-            Log.d("frameCheckClosure for frame \(new_frame.frame_index)")
+            Log.d("frameCheckClosure for frame \(new_frame.frameIndex)")
             frames.append(new_frame)
             endClosure()
         }
@@ -410,8 +410,8 @@ struct decision_tree_generator: ParsableCommand {
                         }
                     }
                 } else {
-                    Log.e("cannot get outlier groups for frame \(frame.frame_index)")
-                    fatalError("cannot get outlier groups for frame \(frame.frame_index)")
+                    Log.e("cannot get outlier groups for frame \(frame.frameIndex)")
+                    fatalError("cannot get outlier groups for frame \(frame.frameIndex)")
                 }
                 return ClassifiedData(
                   positiveData: local_positive_data,

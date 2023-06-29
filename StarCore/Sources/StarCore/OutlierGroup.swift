@@ -42,7 +42,7 @@ public class OutlierGroup: CustomStringConvertible,
     // after init, shouldPaint is usually set to a base value based upon different statistics 
     public var shouldPaint: PaintReason? // should we paint this group, and why?
 
-    public let frame_index: Int
+    public let frameIndex: Int
 
     // has to be optional so we can read OuterlierGroups as codable
     public var frame: FrameAirplaneRemover?
@@ -71,7 +71,7 @@ public class OutlierGroup: CustomStringConvertible,
         self.size = size
         self.brightness = brightness
         self.bounds = bounds
-        self.frame_index = frame.frame_index
+        self.frameIndex = frame.frameIndex
         self.frame = frame
         self.pixels = pixels
         self.max_pixel_distance = max_pixel_distance
@@ -90,7 +90,7 @@ public class OutlierGroup: CustomStringConvertible,
     }
 
     public static func == (lhs: OutlierGroup, rhs: OutlierGroup) -> Bool {
-        return lhs.name == rhs.name && lhs.frame_index == rhs.frame_index
+        return lhs.name == rhs.name && lhs.frameIndex == rhs.frameIndex
     }
     
     public static func < (lhs: OutlierGroup, rhs: OutlierGroup) -> Bool {
@@ -98,12 +98,12 @@ public class OutlierGroup: CustomStringConvertible,
     }
     
     nonisolated public var description: String {
-        "outlier group \(frame_index).\(name) size \(size) "
+        "outlier group \(frameIndex).\(name) size \(size) "
     }
     
     nonisolated public func hash(into hasher: inout Hasher) {
         hasher.combine(name)
-        hasher.combine(frame_index)
+        hasher.combine(frameIndex)
     }
     
     public func shouldPaint(_ should_paint: PaintReason) async {
@@ -247,7 +247,7 @@ public class OutlierGroup: CustomStringConvertible,
             for type in OutlierGroup.Feature.allCases {
                 let value = await self.decisionTreeValue(for: type)
                 rawValues[type.sortOrder] = value
-                //Log.d("frame \(frame_index) type \(type) value \(value)")
+                //Log.d("frame \(frameIndex) type \(type) value \(value)")
             }
             return OutlierFeatureData(rawValues)
         } 
@@ -469,7 +469,7 @@ public class OutlierGroup: CustomStringConvertible,
         case .maxHoughTheta:
             return self.maxHoughTheta
         default:
-            fatalError("called with bad value \(type) @ index \(frame_index)")
+            fatalError("called with bad value \(type) @ index \(frameIndex)")
         }
     }
 
@@ -478,7 +478,7 @@ public class OutlierGroup: CustomStringConvertible,
     public func clearFeatureValueCache() { featureValueCache = [:] }
     
     public func decisionTreeValue(for type: Feature) async -> Double {
-        Log.d("group \(name) @ frame \(frame_index) decisionTreeValue(for: \(type))")
+        Log.d("group \(name) @ frame \(frameIndex) decisionTreeValue(for: \(type))")
 
         if let value = featureValueCache[type] { return value }
         
@@ -529,7 +529,7 @@ public class OutlierGroup: CustomStringConvertible,
             {
                 return Double(nearby_groups.count)
             } else {
-                fatalError("Died on frame \(frame_index)")
+                fatalError("Died on frame \(frameIndex)")
             }
         }
     }
@@ -612,7 +612,7 @@ public class OutlierGroup: CustomStringConvertible,
                 }
                 return best_score
             } else {
-                fatalError("NO FRAME for histogramStreakDetection @ index \(frame_index)")
+                fatalError("NO FRAME for histogramStreakDetection @ index \(frameIndex)")
             }
         }
     }
@@ -779,7 +779,7 @@ public class OutlierGroup: CustomStringConvertible,
                 
                 return smallest_difference
             } else {
-                fatalError("NO FRAME @ index \(frame_index)")
+                fatalError("NO FRAME @ index \(frameIndex)")
             }
         }
     }
@@ -936,12 +936,12 @@ public class OutlierGroup: CustomStringConvertible,
     }
 
     public init(withName name: String,
-                frameIndex frame_index: Int,
+                frameIndex frameIndex: Int,
                 with persitentData: Data) {
         var index: Int = 0
 
         self.name = name
-        self.frame_index = frame_index
+        self.frameIndex = frameIndex
         
         let size_data = persitentData.subdata(in: index..<index+8)
         self.size = size_data.withUnsafeBytes { $0.load(as: UInt.self).bigEndian }

@@ -18,10 +18,10 @@ struct FilmstripView: View {
             } else {
                 ScrollView(.horizontal) {
                     LazyHStack(spacing: 0) {
-                        ForEach(0..<viewModel.imageSequenceSize, id: \.self) { frame_index in
-                            FilmstripImageView(frame_index: frame_index,
+                        ForEach(0..<viewModel.imageSequenceSize, id: \.self) { frameIndex in
+                            FilmstripImageView(frameIndex: frameIndex,
                                             scroller: scroller)
-                              .help("show frame \(frame_index)")
+                              .help("show frame \(frameIndex)")
                         }
                     }
                 }

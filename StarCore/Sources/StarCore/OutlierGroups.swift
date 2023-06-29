@@ -17,20 +17,20 @@ import Cocoa
 
 public class OutlierGroups {
     
-    public let frame_index: Int
+    public let frameIndex: Int
     public var members: [String: OutlierGroup] // keyed by name
 
-    public init(frame_index: Int,
+    public init(frameIndex: Int,
                 members: [String: OutlierGroup])
     {
-        self.frame_index = frame_index
+        self.frameIndex = frameIndex
         self.members = members
     }
     
     public func write(to dir: String) async throws {
-        Log.d("loaded frame \(self.frame_index) with \(self.members.count) outlier groups from binary file")
+        Log.d("loaded frame \(self.frameIndex) with \(self.members.count) outlier groups from binary file")
 
-        let frame_dir = "\(dir)/\(frame_index)"
+        let frame_dir = "\(dir)/\(frameIndex)"
         
         try mkdir(frame_dir)
 
@@ -39,10 +39,10 @@ public class OutlierGroups {
         }
     }
     
-    public init(at frame_index: Int,
+    public init(at frameIndex: Int,
                 from dir: String) async throws
     {
-        self.frame_index = frame_index
+        self.frameIndex = frameIndex
 
         var data_bin_files: [String] = []
         
@@ -64,7 +64,7 @@ public class OutlierGroups {
                     let fuck = String(fu.dropLast(OutlierGroup.data_bin_suffix.count+1))
                     //Log.d("trying to load group \(fuck)")
                     let group = OutlierGroup(withName: fuck,
-                                             frameIndex: frame_index,
+                                             frameIndex: frameIndex,
                                              with: group_data)
                     
                     let paint_filename = String(file.dropLast(OutlierGroup.data_bin_suffix.count) + OutlierGroup.paint_json_suffix)

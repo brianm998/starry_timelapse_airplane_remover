@@ -19,7 +19,7 @@ struct RenderAllFramesButton: View {
                                 frameSaveQueue.saveNow(frame: frame) {
                                     await viewModel.refresh(frame: frame)
                                     /*
-                                     if frame.frame_index == viewModel.currentIndex {
+                                     if frame.frameIndex == viewModel.currentIndex {
                                      refreshCurrentFrame()
                                      }
                                      */

@@ -50,7 +50,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
     public func processingState() -> FrameProcessingState { return state }
     
     nonisolated public func hash(into hasher: inout Hasher) {
-        hasher.combine(frame_index)
+        hasher.combine(frameIndex)
     }
     
     func set(state: FrameProcessingState) { self.state = state }
@@ -60,7 +60,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
     public let bytesPerPixel: Int
     public let bytesPerRow: Int
     public let otherFrameIndexes: [Int] // used in found outliers and paint only
-    nonisolated public let frame_index: Int
+    nonisolated public let frameIndex: Int
 
     public let outlier_output_dirname: String?
     public let preview_output_dirname: String?
@@ -107,7 +107,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
     }
     
     public func writePreviewFile(_ image: NSImage) {
-        Log.d("frame \(self.frame_index) doing preview")
+        Log.d("frame \(self.frameIndex) doing preview")
         if config.writeFramePreviewFiles,
            let filename = self.previewFilename
         {
@@ -116,7 +116,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                 return
             }
             
-            Log.d("frame \(self.frame_index) doing preview")
+            Log.d("frame \(self.frameIndex) doing preview")
             let preview_size = self.previewSize
             
             if let scaledImage = image.resized(to: preview_size),
@@ -126,17 +126,17 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                 file_manager.createFile(atPath: filename,
                                         contents: imageData,
                                         attributes: nil)
-                Log.i("frame \(self.frame_index) wrote preview to \(filename)")
+                Log.i("frame \(self.frameIndex) wrote preview to \(filename)")
             } else {
-                Log.w("frame \(self.frame_index) WTF")
+                Log.w("frame \(self.frameIndex) WTF")
             }
         } else {
-            Log.d("frame \(self.frame_index) no config")
+            Log.d("frame \(self.frameIndex) no config")
         }
     }
 
     public func writeThumbnailFile(_ image: NSImage) {
-        Log.d("frame \(self.frame_index) doing preview")
+        Log.d("frame \(self.frameIndex) doing preview")
         if config.writeFrameThumbnailFiles,
            let filename = self.thumbnailFilename
         {
@@ -145,7 +145,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                 return
             }
 
-            Log.d("frame \(self.frame_index) doing thumbnail")
+            Log.d("frame \(self.frameIndex) doing thumbnail")
             let thumbnail_width = config.thumbnail_width
             let thumbnail_height = config.thumbnail_height
             let thumbnail_size = NSSize(width: thumbnail_width, height: thumbnail_height)
@@ -157,12 +157,12 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                 file_manager.createFile(atPath: filename,
                                         contents: imageData,
                                         attributes: nil)
-                Log.i("frame \(self.frame_index) wrote thumbnail to \(filename)")
+                Log.i("frame \(self.frameIndex) wrote thumbnail to \(filename)")
             } else {
-                Log.w("frame \(self.frame_index) WTF")
+                Log.w("frame \(self.frameIndex) WTF")
             }
         } else {
-            Log.d("frame \(self.frame_index) no config")
+            Log.d("frame \(self.frameIndex) no config")
         }
     }
 
@@ -182,7 +182,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                 }
             }
 
-            try valueMatrix.writeCSV(to: "\(output_dirname)/\(self.frame_index)")
+            try valueMatrix.writeCSV(to: "\(output_dirname)/\(self.frameIndex)")
         }
     }
 
@@ -249,14 +249,14 @@ public class FrameAirplaneRemover: Equatable, Hashable {
     }
 
     public func applyDecisionTreeToAllOutliers() async {
-        Log.d("frame \(self.frame_index) applyDecisionTreeToAllOutliers")
+        Log.d("frame \(self.frameIndex) applyDecisionTreeToAllOutliers")
         if let classifier = currentClassifier {
             let start_time = NSDate().timeIntervalSince1970
             await withLimitedTaskGroup(of: Void.self) { taskGroup in
                 await foreachOutlierGroup() { group in
                     await taskGroup.addTask() {
                         let score = await classifier.classification(of: group)
-                        //Log.d("frame \(self.frame_index) applying classifier should_paint \(score)")
+                        //Log.d("frame \(self.frameIndex) applying classifier should_paint \(score)")
                         await group.shouldPaint(.fromClassifier(score))
                     }
                     return .continue
@@ -264,11 +264,11 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                 await taskGroup.waitForAll()
             }
             let end_time = NSDate().timeIntervalSince1970
-            Log.i("frame \(self.frame_index) spent \(end_time - start_time) seconds classifing outlier groups");
+            Log.i("frame \(self.frameIndex) spent \(end_time - start_time) seconds classifing outlier groups");
         } else {
             Log.w("no classifier")
         }
-        Log.d("frame \(self.frame_index) DONE applyDecisionTreeToAllOutliers")
+        Log.d("frame \(self.frameIndex) DONE applyDecisionTreeToAllOutliers")
     }
     
     public func userSelectAllOutliers(toShouldPaint should_paint: Bool) async {
@@ -347,7 +347,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
          bytesPerPixel: Int,
          callbacks: Callbacks,
          imageSequence image_sequence: ImageSequence,
-         atIndex frame_index: Int,
+         atIndex frameIndex: Int,
          otherFrameIndexes: [Int],
          outputFilename output_filename: String,
          baseName: String,       // source filename without path
@@ -368,9 +368,9 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         
         // XXX this is now only used here for getting the image width, height and bpp
         // XXX this is a waste time
-        //let image = try await image_sequence.getImage(withName: image_sequence.filenames[frame_index]).image()
+        //let image = try await image_sequence.getImage(withName: image_sequence.filenames[frameIndex]).image()
         self.image_sequence = image_sequence
-        self.frame_index = frame_index // frame index in the image sequence
+        self.frameIndex = frameIndex // frame index in the image sequence
         self.otherFrameIndexes = otherFrameIndexes
         self.output_filename = output_filename
 
@@ -394,18 +394,18 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         // this takes a long time, and the gui does it later
         if fullyProcess {
             try await loadOutliers()
-            Log.d("frame \(frame_index) done detecting outlier groups")
+            Log.d("frame \(frameIndex) done detecting outlier groups")
             await self.writeOutliersBinary()
-            Log.d("frame \(frame_index) done writing outlier binaries")
+            Log.d("frame \(frameIndex) done writing outlier binaries")
         } else {
-            Log.d("frame \(frame_index) loaded without outlier groups")
+            Log.d("frame \(frameIndex) loaded without outlier groups")
         }
 
     }
     
     public func loadOutliers() async throws {
         if self.outlier_groups == nil {
-            Log.d("frame \(frame_index) loading outliers")
+            Log.d("frame \(frameIndex) loading outliers")
             if let outlierGroups = await outlierGroupLoader() {
                 for outlier in outlierGroups.members.values {
                     outlier.setFrame(self) 
@@ -418,12 +418,12 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                 // groups can use these links for decision tree values
                 self.state = .readyForInterFrameProcessing
                 self.outliersLoadedFromFile = true
-                Log.i("loaded \(String(describing: self.outlier_groups?.members.count)) outlier groups for frame \(frame_index)")
+                Log.i("loaded \(String(describing: self.outlier_groups?.members.count)) outlier groups for frame \(frameIndex)")
             } else {
-                self.outlier_groups = OutlierGroups(frame_index: frame_index,
+                self.outlier_groups = OutlierGroups(frameIndex: frameIndex,
                                                     members: [:])
 
-                Log.i("calculating outlier groups for frame \(frame_index)")
+                Log.i("calculating outlier groups for frame \(frameIndex)")
                 // find outlying bright pixels between frames,
                 // and group neighboring outlying pixels into groups
                 // this can take a long time
@@ -482,11 +482,11 @@ public class FrameAirplaneRemover: Equatable, Hashable {
     // this is still a slow part of the process, but is now about 10x faster than before
     func findOutliers() async throws {
 
-        Log.d("frame \(frame_index) finding outliers)")
+        Log.d("frame \(frameIndex) finding outliers)")
         
         self.state = .loadingImages
         
-        let image = try await image_sequence.getImage(withName: image_sequence.filenames[frame_index]).image()
+        let image = try await image_sequence.getImage(withName: image_sequence.filenames[frameIndex]).image()
 
         var otherFrames: [PixelatedImage] = []
 
@@ -503,7 +503,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         // one dimentional array mirroring pixels indexed by y*width + x
         var outlier_group_list = [String?](repeating: nil, count: width*height)
         
-        Log.i("frame \(frame_index) finding outliers")
+        Log.i("frame \(frameIndex) finding outliers")
         var outlier_amount_list = [UInt](repeating: 0, count: width*height)
         // compare pixels at the same image location in adjecent frames
         // detect Outliers which are much more brighter than the adject frames
@@ -533,7 +533,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
 
                     for y in 0 ..< height {
                         if y != 0 && y % 1000 == 0 {
-                            Log.d("frame \(frame_index) detected outliers in \(y) rows")
+                            Log.d("frame \(frameIndex) detected outliers in \(y) rows")
                         }
                         for x in 0 ..< width {
                             let cpp = 3 // number of components per pixel
@@ -601,7 +601,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
 
         // XXX was a boundary
         
-        Log.i("frame \(frame_index) pruning outliers")
+        Log.i("frame \(frameIndex) pruning outliers")
         
         // go through the outliers and link together all the outliers that are adject to eachother,
         // outputting a mapping of group name to size
@@ -615,7 +615,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         let array = [Int](repeating: -1, count: width*height) 
         pending_outliers = array
 
-        Log.d("frame \(frame_index) labeling adjecent outliers")
+        Log.d("frame \(frameIndex) labeling adjecent outliers")
 
         // then label all adject outliers
         for (index, outlier_amount) in outlier_amount_list.enumerated() {
@@ -641,7 +641,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                 //Log.d("pending_outlier_insert_index \(pending_outlier_insert_index) pending_outlier_access_index \(pending_outlier_access_index)")
                 loop_count += 1
                 if loop_count % 1000 == 0 {
-                    Log.v("frame \(frame_index) looping \(loop_count) times group_size \(group_size)")
+                    Log.v("frame \(frameIndex) looping \(loop_count) times group_size \(group_size)")
                 }
                 
                 let next_outlier_index = pending_outliers[pending_outlier_access_index]
@@ -717,7 +717,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
 
         var group_amounts: [String: UInt] = [:] // keyed by group name, average brightness of each group
 
-        Log.i("frame \(frame_index) calculating outlier group bounds")
+        Log.i("frame \(frameIndex) calculating outlier group bounds")
         var group_min_x: [String:Int] = [:]   // keyed by group name, image bounds of each group
         var group_min_y: [String:Int] = [:]
         var group_max_x: [String:Int] = [:]
@@ -799,7 +799,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                         let min_size_for_this_group = config.minGroupSize + Int(Double(config.min_group_size_at_top - config.minGroupSize) * how_close_to_top)
                         Log.v("min_size_for_this_group \(min_size_for_this_group) how_close_to_top \(how_close_to_top) group_center_y \(group_center_y) height \(height)")
                         if group_size < min_size_for_this_group {
-                            Log.v("frame \(frame_index) skipping group of size \(group_size) < \(min_size_for_this_group) @ center_y \(group_center_y)")
+                            Log.v("frame \(frameIndex) skipping group of size \(group_size) < \(min_size_for_this_group) @ center_y \(group_center_y)")
                             continue
                         }
                     }
@@ -833,16 +833,16 @@ public class FrameAirplaneRemover: Equatable, Hashable {
             }
         }
         self.state = .readyForInterFrameProcessing
-        Log.i("frame \(frame_index) has found \(String(describing: outlier_groups?.members.count)) outlier groups to consider")
+        Log.i("frame \(frameIndex) has found \(String(describing: outlier_groups?.members.count)) outlier groups to consider")
     }
 
     public func pixelatedImage() async throws -> PixelatedImage? {
-        let name = image_sequence.filenames[frame_index]
+        let name = image_sequence.filenames[frameIndex]
         return try await image_sequence.getImage(withName: name).image()
     }
 
     public func baseImage() async throws -> NSImage? {
-        let name = image_sequence.filenames[frame_index]
+        let name = image_sequence.filenames[frameIndex]
         return try await image_sequence.getImage(withName: name).image().baseImage
     }
     
@@ -852,12 +852,12 @@ public class FrameAirplaneRemover: Equatable, Hashable {
     }
     
     public func baseImage(ofSize size: NSSize) async throws -> NSImage? {
-        let name = image_sequence.filenames[frame_index]
+        let name = image_sequence.filenames[frameIndex]
         return try await image_sequence.getImage(withName: name).image().baseImage(ofSize: size)
     }
 
     public func purgeCachedOutputFiles() async {
-        Log.d("frame \(frame_index) purging output files")
+        Log.d("frame \(frameIndex) purging output files")
 //        let dispatchGroup = DispatchGroup()
 //        dispatchGroup.enter()
         Task {
@@ -865,16 +865,16 @@ public class FrameAirplaneRemover: Equatable, Hashable {
 //            dispatchGroup.leave()
         }
 //        dispatchGroup.wait()
-        Log.d("frame \(frame_index) purged output files")
+        Log.d("frame \(frameIndex) purged output files")
     }
     
     // actually paint over outlier groups that have been selected as airplane tracks
     private func paintOverAirplanes(toData data: inout Data,
                                     otherFrames: [PixelatedImage]) async throws
     {
-        Log.i("frame \(frame_index) painting airplane outlier groups")
+        Log.i("frame \(frameIndex) painting airplane outlier groups")
 
-        let image = try await image_sequence.getImage(withName: image_sequence.filenames[frame_index]).image()
+        let image = try await image_sequence.getImage(withName: image_sequence.filenames[frameIndex]).image()
 
         // paint over every outlier in the paint list with pixels from the adjecent frames
         guard let outlier_groups = outlier_groups else {
@@ -885,7 +885,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         for (_, group) in outlier_groups.members {
             if let reason = group.shouldPaint {
                 if reason.willPaint {
-                    Log.d("frame \(frame_index) painting over group \(group) for reason \(reason)")
+                    Log.d("frame \(frameIndex) painting over group \(group) for reason \(reason)")
                     //let x = index % width;
                     //let y = index / width;
                     for x in group.bounds.min.x ... group.bounds.max.x {
@@ -916,7 +916,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                         }
                     }
                 } else {
-                    Log.v("frame \(frame_index) NOT painting over group \(group) for reason \(reason)")
+                    Log.v("frame \(frameIndex) NOT painting over group \(group) for reason \(reason)")
                 }
             }
         }
@@ -968,7 +968,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         if config.writeFramePreviewFiles ||
            config.writeFrameThumbnailFiles
         {
-            Log.d("frame \(self.frame_index) doing preview")
+            Log.d("frame \(self.frameIndex) doing preview")
             if let baseImage = image.baseImage {
                 // maybe write previews
                 // these are not overwritten as the original
@@ -976,7 +976,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                 self.writePreviewFile(baseImage)
                 self.writeThumbnailFile(baseImage)
             } else {
-                Log.w("frame \(self.frame_index) NO BASE IMAGE")
+                Log.w("frame \(self.frameIndex) NO BASE IMAGE")
             }
         }
     }
@@ -999,12 +999,12 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                     file_manager.createFile(atPath: filename,
                                             contents: imageData,
                                             attributes: nil)
-                    Log.i("frame \(self.frame_index) wrote preview to \(filename)")
+                    Log.i("frame \(self.frameIndex) wrote preview to \(filename)")
                 } catch {
                     Log.e("\(error)")
                 }
             } else {
-                Log.w("frame \(self.frame_index) WTF")
+                Log.w("frame \(self.frameIndex) WTF")
             }
         }
     }
@@ -1033,8 +1033,8 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         
             self.state = .reloadingImages
         
-            Log.i("frame \(self.frame_index) finishing")
-            let image = try await image_sequence.getImage(withName: image_sequence.filenames[frame_index]).image()
+            Log.i("frame \(self.frameIndex) finishing")
+            let image = try await image_sequence.getImage(withName: image_sequence.filenames[frameIndex]).image()
 
             try await taskGroup.addTask() {
                 self.writeUprocessedPreviews(image)
@@ -1062,12 +1062,12 @@ public class FrameAirplaneRemover: Equatable, Hashable {
 
             self.state = .painting
                   
-            Log.d("frame \(self.frame_index) painting over airplanes")
+            Log.d("frame \(self.frameIndex) painting over airplanes")
                   
             try await self.paintOverAirplanes(toData: &output_data,
                                           otherFrames: otherFrames)
         
-            Log.d("frame \(self.frame_index) writing output files")
+            Log.d("frame \(self.frameIndex) writing output files")
             self.state = .writingOutputFile
 
             try await taskGroup.addTask() {
@@ -1084,12 +1084,12 @@ public class FrameAirplaneRemover: Equatable, Hashable {
 
             try await taskGroup.waitForAll()
 
-            Log.i("frame \(self.frame_index) complete")
+            Log.i("frame \(self.frameIndex) complete")
         }
     }
     
     public static func == (lhs: FrameAirplaneRemover, rhs: FrameAirplaneRemover) -> Bool {
-        return lhs.frame_index == rhs.frame_index
+        return lhs.frameIndex == rhs.frameIndex
     }    
 }
 

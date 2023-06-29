@@ -30,7 +30,7 @@ class OutlierGroupViewModel: ObservableObject {
     func selectArrow(_ selected: Bool) {
         if selected,
            let frame = group.frame,
-           let outlierViewModels = viewModel.frames[frame.frame_index].outlierViews
+           let outlierViewModels = viewModel.frames[frame.frameIndex].outlierViews
         {
             // deselect all others first
             for outlierViewModel in outlierViewModels {
