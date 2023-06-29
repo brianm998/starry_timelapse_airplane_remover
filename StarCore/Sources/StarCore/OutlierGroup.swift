@@ -936,7 +936,7 @@ public class OutlierGroup: CustomStringConvertible,
     }
 
     public init(withName name: String,
-                frameIndex frameIndex: Int,
+                frameIndex: Int,
                 with persitentData: Data) {
         var index: Int = 0
 

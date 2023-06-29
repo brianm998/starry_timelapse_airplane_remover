@@ -212,11 +212,11 @@ struct Star: ParsableCommand {
             // XXX there is a bug w/ saved configs where the 'imageSequencePath' is '.'
             // and the 'imageSequenceDirname' starts with '/', won't start up properly
             
-            var input_imageSequencePath: String = ""
-            var input_image_sequence_name: String = ""
+            var inputImageSequencePath: String = ""
+            var inputImageSequenceName: String = ""
             if input_imageSequenceDirname.hasSuffix("config.json") {
                 // here we are reading a previously saved config
-                input_imageSequencePath = input_imageSequenceDirname
+                inputImageSequencePath = input_imageSequenceDirname
 
                 let fuck = input_imageSequenceDirname
                 
@@ -252,19 +252,19 @@ struct Star: ParsableCommand {
                 var filename_paths = input_imageSequenceDirname.components(separatedBy: "/")
                 if let last_element = filename_paths.last {
                     filename_paths.removeLast()
-                    input_imageSequencePath = filename_paths.joined(separator: "/")
-                    if input_imageSequencePath.count == 0 { input_imageSequencePath = "/" }
-                    input_image_sequence_name = last_element
+                    inputImageSequencePath = filename_paths.joined(separator: "/")
+                    if inputImageSequencePath.count == 0 { inputImageSequencePath = "/" }
+                    inputImageSequenceName = last_element
                 } else {
-                    input_imageSequencePath = "/"
-                    input_image_sequence_name = input_imageSequenceDirname
+                    inputImageSequencePath = "/"
+                    inputImageSequenceName = input_imageSequenceDirname
                 }
 
                 var output_path = ""
                 if let outputPath = outputPath {
                     output_path = outputPath
                 } else {
-                    output_path = input_imageSequencePath
+                    output_path = inputImageSequencePath
                 }
 
                 config = Config(outputPath: output_path,
@@ -272,15 +272,15 @@ struct Star: ParsableCommand {
                                 outlierMinThreshold: outlierMinThreshold,
                                 minGroupSize: minGroupSize,
                                 numConcurrentRenders: numConcurrentRenders,
-                                imageSequenceName: input_image_sequence_name,
-                                imageSequencePath: input_imageSequencePath,
+                                imageSequenceName: inputImageSequenceName,
+                                imageSequencePath: inputImageSequencePath,
                                 writeOutlierGroupFiles: should_write_outlier_group_files,
                                 // maybe make a separate command line parameter for these VVV? 
                                 writeFramePreviewFiles: should_write_outlier_group_files,
                                 writeFrameProcessedPreviewFiles: should_write_outlier_group_files,
                                 writeFrameThumbnailFiles: should_write_outlier_group_files)
 
-                Log.nameSuffix = input_image_sequence_name
+                Log.nameSuffix = inputImageSequenceName
                 // no name suffix on json config path
             }
 
@@ -295,8 +295,8 @@ struct Star: ParsableCommand {
 
                 if let updatable = callbacks.updatable {
                     Log.handlers[.console] = UpdatableLogHandler(updatable)
-                    let name = input_image_sequence_name
-                    let path = input_imageSequencePath
+                    let name = inputImageSequenceName
+                    let path = inputImageSequencePath
                     let message = "star v\(config.starVersion) is processing images from sequence in \(path)/\(name)"
                     Task {
                         await updatable.log(name: "star",
@@ -336,7 +336,7 @@ struct Star: ParsableCommand {
                     if let _ = eraser.callbacks.updatable {
                         // setup sequence monitor
                         let updatableProgressMonitor =
-                          await UpdatableProgressMonitor(frameCount: eraser.image_sequence.filenames.count,
+                          await UpdatableProgressMonitor(frameCount: eraser.imageSequence.filenames.count,
                                                          config: eraser.config,
                                                          callbacks: callbacks)
                         upm = updatableProgressMonitor

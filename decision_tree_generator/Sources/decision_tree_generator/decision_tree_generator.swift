@@ -192,7 +192,7 @@ struct decision_tree_generator: ParsableCommand {
                                                   callbacks: callbacks,
                                                   processExistingFiles: true,
                                                   fullyProcess: false)
-        let sequence_size = await eraser.image_sequence.filenames.count
+        let sequence_size = await eraser.imageSequence.filenames.count
         endClosure = {
             if frames.count == sequence_size {
                 eraser.shouldRun = false
@@ -354,7 +354,7 @@ struct decision_tree_generator: ParsableCommand {
                                                    callbacks: callbacks,
                                                    processExistingFiles: true,
                                                    fullyProcess: false)
-        let sequence_size = await eraser.image_sequence.filenames.count
+        let sequence_size = await eraser.imageSequence.filenames.count
         endClosure = {
             Log.d("end enclosure frames.count \(frames.count) sequence_size \(sequence_size)")
             if frames.count == sequence_size {

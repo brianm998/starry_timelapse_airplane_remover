@@ -440,25 +440,25 @@ public final class ViewModel: ObservableObject {
         }
         
         var filename_paths = input_imageSequenceDirname.components(separatedBy: "/")
-        var input_imageSequencePath: String = ""
-        var input_image_sequence_name: String = ""
+        var inputImageSequencePath: String = ""
+        var inputImageSequenceName: String = ""
         if let last_element = filename_paths.last {
             filename_paths.removeLast()
-            input_imageSequencePath = filename_paths.joined(separator: "/")
-            if input_imageSequencePath.count == 0 { input_imageSequencePath = "/" }
-            input_image_sequence_name = last_element
+            inputImageSequencePath = filename_paths.joined(separator: "/")
+            if inputImageSequencePath.count == 0 { inputImageSequencePath = "/" }
+            inputImageSequenceName = last_element
         } else {
-            input_imageSequencePath = "/"
-            input_image_sequence_name = input_imageSequenceDirname
+            inputImageSequencePath = "/"
+            inputImageSequenceName = input_imageSequenceDirname
         }
 
-        let config = Config(outputPath: input_imageSequencePath,
+        let config = Config(outputPath: inputImageSequencePath,
                           outlierMaxThreshold: Defaults.outlierMaxThreshold,
                           outlierMinThreshold: Defaults.outlierMinThreshold,
                           minGroupSize: Defaults.minGroupSize,
                           numConcurrentRenders: numConcurrentRenders,
-                          imageSequenceName: input_image_sequence_name,
-                          imageSequencePath: input_imageSequencePath,
+                          imageSequenceName: inputImageSequenceName,
+                          imageSequencePath: inputImageSequencePath,
                           writeOutlierGroupFiles: should_write_outlier_group_files,
                           writeFramePreviewFiles: should_write_outlier_group_files,
                           writeFrameProcessedPreviewFiles: should_write_outlier_group_files,

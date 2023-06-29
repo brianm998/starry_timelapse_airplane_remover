@@ -78,17 +78,17 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
                        max_images: maxResidentImages,
                        fullyProcess: fullyProcess);
 
-        let image_sequence_size = /*self.*/image_sequence.filenames.count
+        let imageSequence_size = /*self.*/imageSequence.filenames.count
 
         if let imageSequenceSizeClosure = callbacks.imageSequenceSizeClosure {
-            imageSequenceSizeClosure(image_sequence_size)
+            imageSequenceSizeClosure(imageSequence_size)
         }
         
         self.remaining_images_closure = { number_of_unprocessed in
             if let updatable = callbacks.updatable {
                 // log number of unprocessed images here
                 Task(priority: .userInitiated) {
-                    let progress = Double(number_of_unprocessed)/Double(image_sequence_size)
+                    let progress = Double(number_of_unprocessed)/Double(imageSequence_size)
                     await updatable.log(name: "unprocessed frames",
                                         message: reverse_progress_bar(length: config.progressBarLength, progress: progress) + " \(number_of_unprocessed) frames waiting to process",
                                          value: -1)
@@ -110,10 +110,10 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
         final_processor = await FinalProcessor(with: config,
                                            callbacks: callbacks,
                                            publisher: publisher,
-                                           numberOfFrames: image_sequence_size,
+                                           numberOfFrames: imageSequence_size,
                                            shouldProcess: should_process,
                                            dispatchGroup: dispatchGroup,
-                                           imageSequence: image_sequence,
+                                           imageSequence: imageSequence,
                                            isGUI: is_gui || processExistingFiles)
     }
 
@@ -144,7 +144,7 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
         {
             Log.d("loading first frame to get sizes")
             do {
-                let test_image = try await image_sequence.getImage(withName: image_sequence.filenames[0]).image()
+                let test_image = try await imageSequence.getImage(withName: imageSequence.filenames[0]).image()
                 image_width = test_image.width
                 image_height = test_image.height
 
@@ -186,7 +186,7 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
     // called by the superclass to process each frame
     // called async check access to shared data
     override func processFrame(number index: Int,
-                               output_filename: String,
+                               outputFilename: String,
                                base_name: String) async throws -> FrameAirplaneRemover
     {
         //Log.e("full_image_path \(full_image_path)")
@@ -197,7 +197,7 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
         if index > 0 {
             otherFrameIndexes.append(index-1)
         }
-        if index < image_sequence.filenames.count - 1 {
+        if index < imageSequence.filenames.count - 1 {
             otherFrameIndexes.append(index+1)
         }
         
@@ -205,7 +205,7 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
         let frame_plane_remover =
           try await self.createFrame(atIndex: index,
                                      otherFrameIndexes: otherFrameIndexes,
-                                     output_filename: "\(self.output_dirname)/\(base_name)",
+                                     outputFilename: "\(self.output_dirname)/\(base_name)",
                                      base_name: base_name,
                                      image_width: image_width!,
                                      image_height: image_height!,
@@ -232,7 +232,7 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
     // of what outliers is has, and whether or not should paint over them.
     func createFrame(atIndex frameIndex: Int,
                      otherFrameIndexes: [Int],
-                     output_filename: String, // full path
+                     outputFilename: String, // full path
                      base_name: String,       // just filename
                      image_width: Int,
                      image_height: Int,
@@ -276,10 +276,10 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
                                           height: image_height,
                                           bytesPerPixel: image_bytesPerPixel,
                                           callbacks: callbacks,
-                                          imageSequence: image_sequence,
+                                          imageSequence: imageSequence,
                                           atIndex: frameIndex,
                                           otherFrameIndexes: otherFrameIndexes,
-                                          outputFilename: output_filename,
+                                          outputFilename: outputFilename,
                                           baseName: base_name,
                                           outlierOutputDirname: outlierOutputDirname,
                                           previewOutputDirname: previewOutputDirname,

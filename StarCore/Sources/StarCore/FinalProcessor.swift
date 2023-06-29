@@ -27,7 +27,7 @@ public actor FinalProcessor {
     var max_added_index = 0
     let frame_count: Int
     let dispatch_group: DispatchHandler
-    let image_sequence: ImageSequence
+    let imageSequence: ImageSequence
 
     let config: Config
     let callbacks: Callbacks
@@ -57,7 +57,7 @@ public actor FinalProcessor {
         self.frames = [FrameAirplaneRemover?](repeating: nil, count: frame_count)
         self.frame_count = frame_count
         self.dispatch_group = dispatch_group
-        self.image_sequence = imageSequence
+        self.imageSequence = imageSequence
         self.shouldProcess = shouldProcess
 
         // this is called when frames are published for us

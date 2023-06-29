@@ -31,7 +31,7 @@ public class ImageSequenceProcessor<T> {
     // how many methods are running right now
     let number_running: NumberRunning
     
-    public var image_sequence: ImageSequence    // the sequence of images that we're processing
+    public var imageSequence: ImageSequence    // the sequence of images that we're processing
 
     // concurrent dispatch queue so we can process frames in parallel
     
@@ -48,7 +48,7 @@ public class ImageSequenceProcessor<T> {
     // if false, frames are handed back without outliers detected
     let fully_process: Bool
     
-    init(imageSequenceDirname imageSequenceDirname: String,
+    init(imageSequenceDirname: String,
          outputDirname output_dirname: String,
          maxConcurrent max_concurrent: Int = 5,
          supportedImageFileTypes: [String],
@@ -62,17 +62,17 @@ public class ImageSequenceProcessor<T> {
         self.imageSequenceDirname = imageSequenceDirname
         self.output_dirname = output_dirname
         self.numberFinalProcessingNeighborsNeeded = numberFinalProcessingNeighborsNeeded
-        self.image_sequence = try ImageSequence(dirname: imageSequenceDirname,
+        self.imageSequence = try ImageSequence(dirname: imageSequenceDirname,
                                                 supportedImageFileTypes: supportedImageFileTypes,
                                                 max_images: max_images)
-        self.should_process = [Bool](repeating: processExistingFiles, count: image_sequence.filenames.count)
-        self.existing_output_files = [Bool](repeating: false, count: image_sequence.filenames.count)
+        self.should_process = [Bool](repeating: processExistingFiles, count: imageSequence.filenames.count)
+        self.existing_output_files = [Bool](repeating: false, count: imageSequence.filenames.count)
         self.fully_process = fullyProcess
         self.method_list = try assembleMethodList()
     }
 
     func processFrame(number index: Int,
-                      output_filename: String,
+                      outputFilename: String,
                       base_name: String) async throws -> T? 
     {
         Log.e("should be overridden")
@@ -90,10 +90,10 @@ public class ImageSequenceProcessor<T> {
     
         var _method_list: [Int : () async throws -> T] = [:]
         
-        for (index, image_filename) in image_sequence.filenames.enumerated() {
+        for (index, image_filename) in imageSequence.filenames.enumerated() {
             let basename = remove_path(fromString: image_filename)
-            let output_filename = "\(output_dirname)/\(basename)"
-            if file_manager.fileExists(atPath: output_filename) {
+            let outputFilename = "\(output_dirname)/\(basename)"
+            if file_manager.fileExists(atPath: outputFilename) {
                 existing_output_files[index] = true
             }                                  
         }
@@ -112,17 +112,17 @@ public class ImageSequenceProcessor<T> {
             }
         }
         
-        for (index, image_filename) in self.image_sequence.filenames.enumerated() {
-            let filename = self.image_sequence.filenames[index]
+        for (index, image_filename) in self.imageSequence.filenames.enumerated() {
+            let filename = self.imageSequence.filenames[index]
             let basename = remove_path(fromString: filename)
-            let output_filename = "\(output_dirname)/\(basename)"
+            let outputFilename = "\(output_dirname)/\(basename)"
             if should_process[index] {
                 _method_list[index] = {
                     // this method is run async later                                           
                     Log.i("loading \(image_filename)")
-                    //let image = await self.image_sequence.getImage(withName: image_filename)
+                    //let image = await self.imageSequence.getImage(withName: image_filename)
                     if let result = try await self.processFrame(number: index,
-                                                                output_filename: output_filename,
+                                                                outputFilename: outputFilename,
                                                                 base_name: basename) {
                         await self.number_running.decrement()
                         return result
