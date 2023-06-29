@@ -170,11 +170,6 @@ public final class ViewModel: ObservableObject {
         }
     }
     
-    init() {
-        Log.w("VIEW MODEL INIT")
-      
-    }
-    
     @MainActor func update() {
         self.currentFrameView.update()
         self.objectWillChange.send()

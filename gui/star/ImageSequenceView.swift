@@ -40,6 +40,7 @@ enum InteractionMode: String, Equatable, CaseIterable {
 }
 
 
+
 // the main view of an image sequence 
 // user can scrub, play, edit frames, etc
 
@@ -90,7 +91,8 @@ struct ImageSequenceView: View {
 
                     // scub slider at the bottom
                     if viewModel.image_sequence_size > 0 {
-                        scrubSlider(withScroll: scroller)
+                        ScrubSliderView(viewModel: viewModel,
+                                      scroller: scroller)
                     }
                 }
             }
@@ -108,33 +110,6 @@ struct ImageSequenceView: View {
           }
     }
 
-    // slider at the bottom that scrubs the frame position
-    func scrubSlider(withScroll scroller: ScrollViewProxy) -> some View {
-        if viewModel.interactionMode == .edit {
-            Spacer().frame(maxHeight: 20)
-        }
-        let start = 0.0
-        let end = Double(viewModel.image_sequence_size)
-        return Slider(value: $viewModel.sliderValue, in : start...end)
-          .frame(maxWidth: .infinity, alignment: .bottom)
-          .disabled(viewModel.video_playing)
-          .onChange(of: viewModel.sliderValue) { value in
-              let frame_index = Int(viewModel.sliderValue)
-              Log.i("transition to \(frame_index)")
-              // XXX do more than just this
-              var new_frame_index = Int(value)
-              //viewModel.current_index = Int(value)
-              if new_frame_index < 0 { new_frame_index = 0 }
-              if new_frame_index >= viewModel.frames.count {
-                  new_frame_index = viewModel.frames.count - 1
-              }
-              let new_frame_view = viewModel.frames[new_frame_index]
-              let current_frame = viewModel.currentFrame
-              self.viewModel.transition(toFrame: new_frame_view,
-                                     from: current_frame,
-                                     withScroll: scroller)
-          }
-    }
 
     // controls below the selected frame and above the filmstrip
     // XXX this is a mess, clean it up
