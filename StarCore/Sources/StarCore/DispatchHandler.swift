@@ -8,7 +8,7 @@ public actor DispatchHandler {
     // and making this class an actor causes too many other changes
     var count = 0
     var running: [String:Bool] = [:] // could be a set
-    public let dispatch_group = DispatchGroup()
+    public let dispatchGroup = DispatchGroup()
     
     public init() { }
     
@@ -20,7 +20,7 @@ public actor DispatchHandler {
             return false
         }
         running[name] = true
-        self.dispatch_group.enter()
+        self.dispatchGroup.enter()
         return true
     }
 
@@ -28,6 +28,6 @@ public actor DispatchHandler {
         //Log.d("leave \(name) with \(count)")
         count -= 1
         if running.removeValue(forKey: name) == nil { fatalError("\(name) was not entered, cannot leave") }
-        self.dispatch_group.leave()
+        self.dispatchGroup.leave()
     }
 }

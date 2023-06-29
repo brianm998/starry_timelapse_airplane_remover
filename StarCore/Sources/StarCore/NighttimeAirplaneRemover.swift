@@ -41,7 +41,7 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
     public var final_processor: FinalProcessor?    
 
     // are we running on the gui?
-    public let is_gui: Bool
+    public let isGUI: Bool
 
     public let writeOutputFiles: Bool
     
@@ -59,7 +59,7 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
     {
         self.config = config
         self.callbacks = callbacks
-        self.is_gui = isGUI     // XXX make this better
+        self.isGUI = isGUI     // XXX make this better
         self.writeOutputFiles = writeOutputFiles
 
         let _basename = "\(config.imageSequenceDirname)-star-v-\(config.starVersion)"
@@ -114,7 +114,7 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
                                            shouldProcess: shouldProcess,
                                            dispatchGroup: dispatchGroup,
                                            imageSequence: imageSequence,
-                                           isGUI: is_gui || processExistingFiles)
+                                           isGUI: isGUI || processExistingFiles)
     }
 
     public override func run() async throws {

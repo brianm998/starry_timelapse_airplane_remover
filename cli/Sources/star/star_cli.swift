@@ -220,8 +220,8 @@ struct Star: ParsableCommand {
 
                 let fuck = input_imageSequenceDirname
                 
-                let dispatch_group = DispatchGroup()
-                dispatch_group.enter()
+                let dispatchGroup = DispatchGroup()
+                dispatchGroup.enter()
 
                 Task {
                     do {
@@ -229,10 +229,10 @@ struct Star: ParsableCommand {
                     } catch {
                         print("\(error)")
                     }
-                    dispatch_group.leave()
+                    dispatchGroup.leave()
                 }
                 TaskRunner.maxConcurrentTasks = UInt(config.numConcurrentRenders)
-                dispatch_group.wait()
+                dispatchGroup.wait()
             } else {
                 // here we are processing a new image sequence 
                 while input_imageSequenceDirname.hasSuffix("/") {
@@ -347,7 +347,7 @@ struct Star: ParsableCommand {
                         }
                     }
                     
-                    Log.dispatchGroup = await eraser.dispatchGroup.dispatch_group
+                    Log.dispatchGroup = await eraser.dispatchGroup.dispatchGroup
                     try await eraser.run()
 
                     Log.i("done")

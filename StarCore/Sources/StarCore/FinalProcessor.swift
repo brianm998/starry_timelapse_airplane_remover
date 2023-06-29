@@ -24,39 +24,39 @@ import Combine
 public actor FinalProcessor {
     var frames: [FrameAirplaneRemover?]
     var currentFrameIndex = 0
-    var max_added_index = 0
-    let frame_count: Int
-    let dispatch_group: DispatchHandler
+    var maxAddedIndex = 0
+    let frameCount: Int
+    let dispatchGroup: DispatchHandler
     let imageSequence: ImageSequence
 
     let config: Config
     let callbacks: Callbacks
     let shouldProcess: [Bool]
     
-    var is_asleep = false
+    var isAsleep = false
 
     // this is kept around to keep the subscription active
     // will be canceled upon de-init
     var publishCancellable: AnyCancellable?
     
     // are we running on the gui?
-    public let is_gui: Bool
+    public let isGUI: Bool
 
     init(with config: Config,
         callbacks: Callbacks,
         publisher: PassthroughSubject<FrameAirplaneRemover, Never>,
-        numberOfFrames frame_count: Int,
+        numberOfFrames frameCount: Int,
         shouldProcess: [Bool],
-        dispatchGroup dispatch_group: DispatchHandler,
+        dispatchGroup: DispatchHandler,
         imageSequence: ImageSequence,
         isGUI: Bool) async
     {
-        self.is_gui = isGUI
+        self.isGUI = isGUI
         self.config = config
         self.callbacks = callbacks
-        self.frames = [FrameAirplaneRemover?](repeating: nil, count: frame_count)
-        self.frame_count = frame_count
-        self.dispatch_group = dispatch_group
+        self.frames = [FrameAirplaneRemover?](repeating: nil, count: frameCount)
+        self.frameCount = frameCount
+        self.dispatchGroup = dispatchGroup
         self.imageSequence = imageSequence
         self.shouldProcess = shouldProcess
 
@@ -64,11 +64,11 @@ public actor FinalProcessor {
         publishCancellable = publisher.sink { frame in
 
             let index = frame.frameIndex
-            if index > self.max_added_index {
-                self.max_added_index = index
+            if index > self.maxAddedIndex {
+                self.maxAddedIndex = index
             }
 
-            Log.d("frame \(index) added for final inter-frame analysis \(self.max_added_index)")
+            Log.d("frame \(index) added for final inter-frame analysis \(self.maxAddedIndex)")
             self.frames[index] = frame
             self.log()
         }
@@ -121,11 +121,11 @@ public actor FinalProcessor {
     }
 
     func setAsleep(to value: Bool) {
-        self.is_asleep = value
+        self.isAsleep = value
     }
 
     var framesBetween: Int {
-        var ret = max_added_index - currentFrameIndex
+        var ret = maxAddedIndex - currentFrameIndex
         if ret < 0 { ret = 0 }
 
         return ret
@@ -133,7 +133,7 @@ public actor FinalProcessor {
     
     var isWorking: Bool {
         get {
-            return !is_asleep
+            return !isAsleep
         }
     }
     
@@ -179,101 +179,100 @@ public actor FinalProcessor {
 
     nonisolated func run() async throws {
 
-        let frame_count = await frames.count
+        let frameCount = await frames.count
         
         var done = false
         try await withLimitedThrowingTaskGroup(of: Void.self) { taskGroup in
             while(!done) {
                 Log.v("FINAL THREAD running")
-                let (cfi, frames_count) = await (currentFrameIndex, frames.count)
-                done = cfi >= frames_count
-                Log.v("FINAL THREAD done \(done) currentFrameIndex \(cfi) frames.count \(frames_count)")
+                let (cfi, framesCount) = await (currentFrameIndex, frames.count)
+                done = cfi >= framesCount
+                Log.v("FINAL THREAD done \(done) currentFrameIndex \(cfi) frames.count \(framesCount)")
                 if done {
                     Log.d("we are done")
                     continue
                 }
                 
-                let index_to_process = await currentFrameIndex
+                let indexToProcess = await currentFrameIndex
 
-                Log.d("index_to_process \(index_to_process) shouldProcess[index_to_process] \(shouldProcess[index_to_process])")
+                Log.d("indexToProcess \(indexToProcess) shouldProcess[indexToProcess] \(shouldProcess[indexToProcess])")
 
                 
-                if !is_gui,         // always process on gui so we can see them all
-                   !shouldProcess[index_to_process]
+                if !isGUI,         // always process on gui so we can see them all
+                   !shouldProcess[indexToProcess]
                 {
                     if let frameCheckClosure = callbacks.frameCheckClosure {
-                        if let frame = await self.frame(at: index_to_process) {
+                        if let frame = await self.frame(at: indexToProcess) {
                             Log.d("calling frameCheckClosure for frame \(frame.frameIndex)")
                             await frameCheckClosure(frame)
                         } else {
-                            Log.d("NOT calling frameCheckClosure for frame \(index_to_process)")
+                            Log.d("NOT calling frameCheckClosure for frame \(indexToProcess)")
                         }
                     } else {
-                        Log.d("NOT calling frameCheckClosure for frame \(index_to_process)")
+                        Log.d("NOT calling frameCheckClosure for frame \(indexToProcess)")
                     }
                     
                     // don't process existing files on cli
-                    Log.d("not processing \(index_to_process)")
+                    Log.d("not processing \(indexToProcess)")
                     await self.incrementCurrentFrameIndex()
                     continue
                 }
 
-                var images_to_process: [FrameAirplaneRemover] = []
+                var imagesToProcess: [FrameAirplaneRemover] = []
                 
-                var start_index = index_to_process - config.numberFinalProcessingNeighborsNeeded
-                var end_index = index_to_process + config.numberFinalProcessingNeighborsNeeded
-                if start_index < 0 {
-                    start_index = 0
+                var startIndex = indexToProcess - config.numberFinalProcessingNeighborsNeeded
+                var endIndex = indexToProcess + config.numberFinalProcessingNeighborsNeeded
+                if startIndex < 0 {
+                    startIndex = 0
                 }
-                if end_index >= frame_count {
-                    end_index = frame_count - 1
+                if endIndex >= frameCount {
+                    endIndex = frameCount - 1
                 }
 
-                Log.i("start_index \(start_index) end_index \(end_index)")
+                Log.i("startIndex \(startIndex) endIndex \(endIndex)")
                 
-                var have_enough_frames_to_inter_frame_process = true
-                //var index_in_images_to_process_of_main_frame = 0
-                //var index_in_images_to_process = 0
-                for i in start_index ... end_index {
+                var haveEnoughFramesToInterFrameProcess = true
+
+                for i in startIndex ... endIndex {
                     Log.v("looking for frame at \(i)")
-                    if let next_frame = await self.frame(at: i) {
-                        images_to_process.append(next_frame)
+                    if let nextFrame = await self.frame(at: i) {
+                        imagesToProcess.append(nextFrame)
                     } else {
                         // this means we don't have enough neighboring frames to inter frame process yet
-                        have_enough_frames_to_inter_frame_process = false
+                        haveEnoughFramesToInterFrameProcess = false
                     }
                 }
-                if have_enough_frames_to_inter_frame_process {
-                    Log.i("FINAL THREAD frame \(index_to_process) doing inter-frame analysis with \(images_to_process.count) frames")
+                if haveEnoughFramesToInterFrameProcess {
+                    Log.i("FINAL THREAD frame \(indexToProcess) doing inter-frame analysis with \(imagesToProcess.count) frames")
 
                     // doubly link the outliers so their feature values across frames work
-                    await doublyLink(frames: images_to_process)    
+                    await doublyLink(frames: imagesToProcess)    
 
-                    Log.i("FINAL THREAD frame \(index_to_process) done with inter-frame analysis")
+                    Log.i("FINAL THREAD frame \(indexToProcess) done with inter-frame analysis")
                     await self.incrementCurrentFrameIndex()
                     
-                    if start_index > 0,
-                       index_to_process < frame_count - config.numberFinalProcessingNeighborsNeeded - 1
+                    if startIndex > 0,
+                       indexToProcess < frameCount - config.numberFinalProcessingNeighborsNeeded - 1
                     {
                         // maybe finish a previous frame
                         // leave the ones at the end to finishAll()
-                        let immutable_start = start_index
-                        Log.v("FINAL THREAD frame \(index_to_process) queueing into final queue")
-                        if let frame_to_finish = await self.frame(at: immutable_start - 1) {
-                            await self.clearFrame(at: immutable_start - 1)
+                        let immutableStart = startIndex
+                        Log.v("FINAL THREAD frame \(indexToProcess) queueing into final queue")
+                        if let frameToFinish = await self.frame(at: immutableStart - 1) {
+                            await self.clearFrame(at: immutableStart - 1)
 
                             try await taskGroup.addTask() { 
-                                await frame_to_finish.clearOutlierGroupValueCaches()
-                                await frame_to_finish.maybeApplyOutlierGroupClassifier()
-                                frame_to_finish.set(state: .outlierProcessingComplete)
+                                await frameToFinish.clearOutlierGroupValueCaches()
+                                await frameToFinish.maybeApplyOutlierGroupClassifier()
+                                frameToFinish.set(state: .outlierProcessingComplete)
 
 //                                try await taskGroup.addTask() { 
                                     // XXX VVV this is blocking other tasks
-                                    try await self.finish(frame: frame_to_finish)
+                                    try await self.finish(frame: frameToFinish)
   //                              }
                             }
                         }
-                        Log.v("FINAL THREAD frame \(index_to_process) done queueing into final queue")
+                        Log.v("FINAL THREAD frame \(indexToProcess) done queueing into final queue")
                     }
                 } else {
                     Log.v("FINAL THREAD sleeping")

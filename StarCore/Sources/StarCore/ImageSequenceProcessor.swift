@@ -190,7 +190,7 @@ public class ImageSequenceProcessor<T> {
         Log.d("DONE")
         
         Log.d("DONE WAITING")
-        let rename_me = self.dispatchGroup.dispatch_group
+        let rename_me = self.dispatchGroup.dispatchGroup
         while (shouldRun && rename_me.wait(timeout: DispatchTime.now().advanced(by: .seconds(3))) == .timedOut) {
             Task {
                 let count = await self.dispatchGroup.count

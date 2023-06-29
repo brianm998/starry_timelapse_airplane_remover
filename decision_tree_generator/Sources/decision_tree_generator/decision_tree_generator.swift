@@ -285,8 +285,8 @@ struct decision_tree_generator: ParsableCommand {
     }
 
     func run_verification() {
-        let dispatch_group = DispatchGroup()
-        dispatch_group.enter()
+        let dispatchGroup = DispatchGroup()
+        dispatchGroup.enter()
         Task {
             let classifiedData = ClassifiedData()
             for input_dirname in input_filenames {
@@ -319,9 +319,9 @@ struct decision_tree_generator: ParsableCommand {
                 Log.i(result.message)
             }
             
-            dispatch_group.leave()
+            dispatchGroup.leave()
         }
-        dispatch_group.wait()
+        dispatchGroup.wait()
     }
 
     // read outlier group values from a stored set of files listed by a config.json
@@ -434,8 +434,8 @@ struct decision_tree_generator: ParsableCommand {
 
         Log.d("generate_forest_from_training_data")
         
-        let dispatch_group = DispatchGroup()
-        dispatch_group.enter()
+        let dispatchGroup = DispatchGroup()
+        dispatchGroup.enter()
         Task {
 
             let generator = DecisionTreeGenerator(withTypes: OutlierGroup.Feature.allCases,
@@ -466,9 +466,9 @@ struct decision_tree_generator: ParsableCommand {
             let score = Double(good)/Double(good + bad)
             Log.i("final forest classifier got score \(score) on test data")
 
-            dispatch_group.leave()
+            dispatchGroup.leave()
         }
-        dispatch_group.wait()
+        dispatchGroup.wait()
     }
 
     func loadTestData() async throws -> ClassifiedData {
@@ -522,8 +522,8 @@ struct decision_tree_generator: ParsableCommand {
     // actually generate a decision tree
     func generate_tree_from_training_data() {
         
-        let dispatch_group = DispatchGroup()
-        dispatch_group.enter()
+        let dispatchGroup = DispatchGroup()
+        dispatchGroup.enter()
         Task {
             var decisionTypes: [OutlierGroup.Feature] = []
 
@@ -586,9 +586,9 @@ struct decision_tree_generator: ParsableCommand {
             } catch {
                 Log.e("\(error)")
             }
-            dispatch_group.leave()
+            dispatchGroup.leave()
         }
-        dispatch_group.wait()
+        dispatchGroup.wait()
     }
 
     func loadDataFrom(dirname: String) async throws -> ClassifiedData {
