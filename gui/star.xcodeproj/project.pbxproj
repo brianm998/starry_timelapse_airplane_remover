@@ -18,6 +18,7 @@
 		D32F6DB02A4D2ADA00704870 /* RenderCurrentFrameButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = D32F6DAF2A4D2ADA00704870 /* RenderCurrentFrameButton.swift */; };
 		D32F6DB32A4D2BF800704870 /* ApplyAllDecisionTreeButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = D32F6DB12A4D2BF700704870 /* ApplyAllDecisionTreeButton.swift */; };
 		D32F6DB42A4D2BF800704870 /* ApplyDecisionTreeButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = D32F6DB22A4D2BF700704870 /* ApplyDecisionTreeButton.swift */; };
+		D32F6DB62A4D330C00704870 /* StarApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = D32F6DB52A4D330C00704870 /* StarApp.swift */; };
 		D332F6FF29B63DA2009E2796 /* InitialView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D332F6FE29B63DA2009E2796 /* InitialView.swift */; };
 		D332F70129B63F9D009E2796 /* SettingsSheetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D332F70029B63F9D009E2796 /* SettingsSheetView.swift */; };
 		D332F70329B63FD0009E2796 /* MassivePaintSheetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D332F70229B63FD0009E2796 /* MassivePaintSheetView.swift */; };
@@ -35,7 +36,6 @@
 		D33FFC262A2D4E8600F38194 /* FilmstripImageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D33FFC252A2D4E8600F38194 /* FilmstripImageView.swift */; };
 		D33FFC282A2D4F7E00F38194 /* FilmstripView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D33FFC272A2D4F7E00F38194 /* FilmstripView.swift */; };
 		D33FFC2A2A2E1A8900F38194 /* OutlierGroupViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D33FFC292A2E1A8900F38194 /* OutlierGroupViewModel.swift */; };
-		D386FA11298B617300878B56 /* star_app.swift in Sources */ = {isa = PBXBuildFile; fileRef = D386FA10298B617300878B56 /* star_app.swift */; };
 		D386FA13298B617300878B56 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D386FA12298B617300878B56 /* ContentView.swift */; };
 		D386FA15298B617400878B56 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = D386FA14298B617400878B56 /* Assets.xcassets */; };
 		D386FA18298B617400878B56 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = D386FA17298B617400878B56 /* Preview Assets.xcassets */; };
@@ -80,6 +80,7 @@
 		D32F6DAF2A4D2ADA00704870 /* RenderCurrentFrameButton.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = RenderCurrentFrameButton.swift; sourceTree = "<group>"; };
 		D32F6DB12A4D2BF700704870 /* ApplyAllDecisionTreeButton.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ApplyAllDecisionTreeButton.swift; sourceTree = "<group>"; };
 		D32F6DB22A4D2BF700704870 /* ApplyDecisionTreeButton.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ApplyDecisionTreeButton.swift; sourceTree = "<group>"; };
+		D32F6DB52A4D330C00704870 /* StarApp.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = StarApp.swift; sourceTree = "<group>"; };
 		D332F6FE29B63DA2009E2796 /* InitialView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = InitialView.swift; sourceTree = "<group>"; };
 		D332F70029B63F9D009E2796 /* SettingsSheetView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SettingsSheetView.swift; sourceTree = "<group>"; };
 		D332F70229B63FD0009E2796 /* MassivePaintSheetView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = MassivePaintSheetView.swift; sourceTree = "<group>"; };
@@ -98,7 +99,6 @@
 		D33FFC272A2D4F7E00F38194 /* FilmstripView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = FilmstripView.swift; sourceTree = "<group>"; };
 		D33FFC292A2E1A8900F38194 /* OutlierGroupViewModel.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = OutlierGroupViewModel.swift; sourceTree = "<group>"; };
 		D386FA0D298B617300878B56 /* Star.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Star.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		D386FA10298B617300878B56 /* star_app.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = star_app.swift; sourceTree = "<group>"; };
 		D386FA12298B617300878B56 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		D386FA14298B617400878B56 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		D386FA17298B617400878B56 /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
@@ -184,6 +184,7 @@
 		D386FA0F298B617300878B56 /* star */ = {
 			isa = PBXGroup;
 			children = (
+				D32F6DB52A4D330C00704870 /* StarApp.swift */,
 				D32F6DB12A4D2BF700704870 /* ApplyAllDecisionTreeButton.swift */,
 				D32F6DB22A4D2BF700704870 /* ApplyDecisionTreeButton.swift */,
 				D32F6DAF2A4D2ADA00704870 /* RenderCurrentFrameButton.swift */,
@@ -210,7 +211,6 @@
 				D332F70029B63F9D009E2796 /* SettingsSheetView.swift */,
 				D332F6FE29B63DA2009E2796 /* InitialView.swift */,
 				D3A54A6E29AFAD2C00C50709 /* UserPreferences.swift */,
-				D386FA10298B617300878B56 /* star_app.swift */,
 				D386FA12298B617300878B56 /* ContentView.swift */,
 				D31F9FBD299736730001CD0C /* FrameSaveQueue.swift */,
 				D31F9FBE299736730001CD0C /* OutlierGroupView.swift */,
@@ -432,6 +432,7 @@
 				D33FFC122A2CF92900F38194 /* VideoPlaybackButtons.swift in Sources */,
 				D32F6DAA2A4D17CF00704870 /* ScrubSliderView.swift in Sources */,
 				D386FA13298B617300878B56 /* ContentView.swift in Sources */,
+				D32F6DB62A4D330C00704870 /* StarApp.swift in Sources */,
 				D31F9FC1299736740001CD0C /* OutlierGroupView.swift in Sources */,
 				D32F6DB32A4D2BF800704870 /* ApplyAllDecisionTreeButton.swift in Sources */,
 				D332F70529B64004009E2796 /* ShrinkingButton.swift in Sources */,
@@ -450,7 +451,6 @@
 				D31F9FC0299736740001CD0C /* FrameSaveQueue.swift in Sources */,
 				D33FFC182A2D007800F38194 /* PaintAllButton.swift in Sources */,
 				D33FFC162A2CFF4700F38194 /* LoadAllOutliersButton.swift in Sources */,
-				D386FA11298B617300878B56 /* star_app.swift in Sources */,
 				D3B886AD29B830BE003590A1 /* OutlierGroupTable.swift in Sources */,
 				D32F6DB02A4D2ADA00704870 /* RenderCurrentFrameButton.swift in Sources */,
 			);

@@ -33,16 +33,3 @@ struct ContentView_Previews: PreviewProvider {
         ContentView()
     }
 }
-/*
-extension AnyTransition {
-    static var moveAndFade: AnyTransition {
-//        AnyTransition.move(edge: .trailing)
-//        AnyTransition.slide
-        .asymmetric(
-          insertion: .move(edge: .trailing).combined(with: .opacity),
-          removal: .scale.combined(with: .opacity)
-        )         
-
-    }
-}
-*/

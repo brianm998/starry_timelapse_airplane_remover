@@ -92,7 +92,7 @@ import StarCore
 
 
 @main
-class star_app: App {
+class StarApp: App {
     
     required init() {
         Task {

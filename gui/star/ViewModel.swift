@@ -212,10 +212,6 @@ public final class ViewModel: ObservableObject {
         let thumbnail_width = config?.thumbnail_width ?? Config.default_thumbnail_width
         let thumbnail_height = config?.thumbnail_height ?? Config.default_thumbnail_height
         let thumbnail_size = NSSize(width: thumbnail_width, height: thumbnail_height)
-
-        let preview_width = config?.preview_width ?? Config.default_preview_width
-        let preview_height = config?.preview_height ?? Config.default_preview_height
-        //let preview_size = NSSize(width: preview_width, height: preview_height)
         
         Task {
             var pixImage: PixelatedImage?
