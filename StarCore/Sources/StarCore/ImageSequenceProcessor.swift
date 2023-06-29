@@ -46,7 +46,7 @@ public class ImageSequenceProcessor<T> {
 
     // if this is true, outliers are detected, inter-frame processing is done
     // if false, frames are handed back without outliers detected
-    let fully_process: Bool
+    let fullyProcess: Bool
     
     init(imageSequenceDirname: String,
          outputDirname output_dirname: String,
@@ -67,13 +67,13 @@ public class ImageSequenceProcessor<T> {
                                                 max_images: max_images)
         self.should_process = [Bool](repeating: processExistingFiles, count: imageSequence.filenames.count)
         self.existing_output_files = [Bool](repeating: false, count: imageSequence.filenames.count)
-        self.fully_process = fullyProcess
+        self.fullyProcess = fullyProcess
         self.method_list = try assembleMethodList()
     }
 
     func processFrame(number index: Int,
                       outputFilename: String,
-                      base_name: String) async throws -> T? 
+                      baseName: String) async throws -> T? 
     {
         Log.e("should be overridden")
         fatalError("should be overridden")
@@ -123,7 +123,7 @@ public class ImageSequenceProcessor<T> {
                     //let image = await self.imageSequence.getImage(withName: image_filename)
                     if let result = try await self.processFrame(number: index,
                                                                 outputFilename: outputFilename,
-                                                                base_name: basename) {
+                                                                baseName: basename) {
                         await self.number_running.decrement()
                         return result
                     }

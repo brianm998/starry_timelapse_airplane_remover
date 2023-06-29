@@ -138,22 +138,22 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
     // called by the superclass at startup
     override func startup_hook() async throws {
         Log.d("startup hook starting")
-        if image_width == nil ||
-           image_height == nil ||
+        if imageWidth == nil ||
+           imageHeight == nil ||
            image_bytesPerPixel == nil
         {
             Log.d("loading first frame to get sizes")
             do {
                 let test_image = try await imageSequence.getImage(withName: imageSequence.filenames[0]).image()
-                image_width = test_image.width
-                image_height = test_image.height
+                imageWidth = test_image.width
+                imageHeight = test_image.height
 
                 // in OutlierGroup.swift
                 IMAGE_WIDTH = Double(test_image.width)
                 IMAGE_HEIGHT = Double(test_image.height)
 
                 image_bytesPerPixel = test_image.bytesPerPixel
-                Log.d("first frame to get sizes: image_width \(String(describing: image_width)) image_height \(String(describing: image_height)) image_bytesPerPixel \(String(describing: image_bytesPerPixel))")
+                Log.d("first frame to get sizes: imageWidth \(String(describing: imageWidth)) imageHeight \(String(describing: imageHeight)) image_bytesPerPixel \(String(describing: image_bytesPerPixel))")
             } catch {
                 Log.e("first frame to get size: \(error)")
             }
@@ -187,7 +187,7 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
     // called async check access to shared data
     override func processFrame(number index: Int,
                                outputFilename: String,
-                               base_name: String) async throws -> FrameAirplaneRemover
+                               baseName: String) async throws -> FrameAirplaneRemover
     {
         //Log.e("full_image_path \(full_image_path)")
         // load images outside the main thread
@@ -205,17 +205,17 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
         let frame_plane_remover =
           try await self.createFrame(atIndex: index,
                                      otherFrameIndexes: otherFrameIndexes,
-                                     outputFilename: "\(self.output_dirname)/\(base_name)",
-                                     base_name: base_name,
-                                     image_width: image_width!,
-                                     image_height: image_height!,
+                                     outputFilename: "\(self.output_dirname)/\(baseName)",
+                                     baseName: baseName,
+                                     imageWidth: imageWidth!,
+                                     imageHeight: imageHeight!,
                                      image_bytesPerPixel: image_bytesPerPixel!)
 
         return frame_plane_remover
     }
 
-    public var image_width: Int?
-    public var image_height: Int?
+    public var imageWidth: Int?
+    public var imageHeight: Int?
     public var image_bytesPerPixel: Int? // XXX bad name
 
     override func result_hook(with result: FrameAirplaneRemover) async {
@@ -233,9 +233,9 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
     func createFrame(atIndex frameIndex: Int,
                      otherFrameIndexes: [Int],
                      outputFilename: String, // full path
-                     base_name: String,       // just filename
-                     image_width: Int,
-                     image_height: Int,
+                     baseName: String,       // just filename
+                     imageWidth: Int,
+                     imageHeight: Int,
                      image_bytesPerPixel: Int) async throws -> FrameAirplaneRemover
     {
         var outlierGroupsForThisFrame: OutlierGroups?
@@ -272,21 +272,21 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
         }
         
         return try await FrameAirplaneRemover(with: config,
-                                          width: image_width,
-                                          height: image_height,
+                                          width: imageWidth,
+                                          height: imageHeight,
                                           bytesPerPixel: image_bytesPerPixel,
                                           callbacks: callbacks,
                                           imageSequence: imageSequence,
                                           atIndex: frameIndex,
                                           otherFrameIndexes: otherFrameIndexes,
                                           outputFilename: outputFilename,
-                                          baseName: base_name,
+                                          baseName: baseName,
                                           outlierOutputDirname: outlierOutputDirname,
                                           previewOutputDirname: previewOutputDirname,
                                           processedPreviewOutputDirname: processed_previewOutputDirname,
                                           thumbnailOutputDirname: thumbnailOutputDirname,
                                           outlierGroupLoader: loadOutliersFromFile,
-                                          fullyProcess: fully_process,
+                                          fullyProcess: fullyProcess,
                                           writeOutputFiles: writeOutputFiles)
    }        
 }

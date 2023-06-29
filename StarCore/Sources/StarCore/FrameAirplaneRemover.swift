@@ -111,7 +111,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         if config.writeFramePreviewFiles,
            let filename = self.previewFilename
         {
-            if file_manager.fileExists(atPath: filename) {
+            if fileManager.fileExists(atPath: filename) {
                 Log.i("not overwriting already existing preview \(filename)")
                 return
             }
@@ -122,7 +122,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                let imageData = scaledImage.jpegData
             {
                 // write to file
-                file_manager.createFile(atPath: filename,
+                fileManager.createFile(atPath: filename,
                                      contents: imageData,
                                      attributes: nil)
                 Log.i("frame \(self.frameIndex) wrote preview to \(filename)")
@@ -139,7 +139,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         if config.writeFrameThumbnailFiles,
            let filename = self.thumbnailFilename
         {
-            if file_manager.fileExists(atPath: filename) {
+            if fileManager.fileExists(atPath: filename) {
                 Log.i("not overwriting already existing thumbnail filename \(filename)")
                 return
             }
@@ -153,7 +153,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                let imageData = scaledImage.jpegData
             {
                 // write to file
-                file_manager.createFile(atPath: filename,
+                fileManager.createFile(atPath: filename,
                                      contents: imageData,
                                      attributes: nil)
                 Log.i("frame \(self.frameIndex) wrote thumbnail to \(filename)")
@@ -286,7 +286,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
     public let config: Config
     public let callbacks: Callbacks
 
-    public let base_name: String
+    public let baseName: String
 
     // did we load our outliers from a file?
     private var outliersLoadedFromFile = false
@@ -302,21 +302,21 @@ public class FrameAirplaneRemover: Equatable, Hashable {
     
     nonisolated public var previewFilename: String? {
         if let previewOutputDirname = previewOutputDirname {
-            return "\(previewOutputDirname)/\(base_name).jpg" // XXX this makes it .tif.jpg
+            return "\(previewOutputDirname)/\(baseName).jpg" // XXX this makes it .tif.jpg
         }
         return nil
     }
     
     nonisolated public var processedPreviewFilename: String? {
         if let processedPreviewOutputDirname = processedPreviewOutputDirname {
-            return "\(processedPreviewOutputDirname)/\(base_name).jpg"
+            return "\(processedPreviewOutputDirname)/\(baseName).jpg"
         }
         return nil
     }
     
     nonisolated public var thumbnailFilename: String? {
         if let thumbnailOutputDirname = thumbnailOutputDirname {
-            return "\(thumbnailOutputDirname)/\(base_name).jpg"
+            return "\(thumbnailOutputDirname)/\(baseName).jpg"
         }
         return nil
     }
@@ -335,7 +335,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         nextFrame = frame
     }
     
-    let fully_process: Bool
+    let fullyProcess: Bool
 
     // if this is false, just write out outlier data
     let writeOutputFiles: Bool
@@ -358,10 +358,10 @@ public class FrameAirplaneRemover: Equatable, Hashable {
          fullyProcess: Bool = true,
          writeOutputFiles: Bool = true) async throws
     {
-        self.fully_process = fullyProcess
+        self.fullyProcess = fullyProcess
         self.writeOutputFiles = writeOutputFiles
         self.config = config
-        self.base_name = baseName
+        self.baseName = baseName
         self.callbacks = callbacks
         self.outlierGroupLoader = outlierGroupLoader
         
@@ -380,11 +380,11 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         self.width = width
         self.height = height
 
-        if ImageSequence.image_width == 0 {
-            ImageSequence.image_width = width
+        if ImageSequence.imageWidth == 0 {
+            ImageSequence.imageWidth = width
         }
-        if ImageSequence.image_height == 0 {
-            ImageSequence.image_height = height
+        if ImageSequence.imageHeight == 0 {
+            ImageSequence.imageHeight = height
         }
         
         self.bytesPerPixel = bytesPerPixel
@@ -431,8 +431,8 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         }
     }
 
-    public func outlierGroup(named outlier_name: String) -> OutlierGroup? {
-        return outlierGroups?.members[outlier_name]
+    public func outlierGroup(named outlierName: String) -> OutlierGroup? {
+        return outlierGroups?.members[outlierName]
     }
     
     public func foreachOutlierGroup(between startLocation: CGPoint,
@@ -440,26 +440,26 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                                     _ closure: (OutlierGroup)async->LoopReturn) async
     {
         // first get bounding box from start and end location
-        var min_x: CGFloat = CGFLOAT_MAX
-        var max_x: CGFloat = 0
-        var min_y: CGFloat = CGFLOAT_MAX
-        var max_y: CGFloat = 0
+        var minX: CGFloat = CGFLOAT_MAX
+        var maxX: CGFloat = 0
+        var minY: CGFloat = CGFLOAT_MAX
+        var maxY: CGFloat = 0
 
-        if startLocation.x < min_x { min_x = startLocation.x }
-        if startLocation.x > max_x { max_x = startLocation.x }
-        if startLocation.y < min_y { min_y = startLocation.y }
-        if startLocation.y > max_y { max_y = startLocation.y }
+        if startLocation.x < minX { minX = startLocation.x }
+        if startLocation.x > maxX { maxX = startLocation.x }
+        if startLocation.y < minY { minY = startLocation.y }
+        if startLocation.y > maxY { maxY = startLocation.y }
         
-        if endLocation.x < min_x { min_x = endLocation.x }
-        if endLocation.x > max_x { max_x = endLocation.x }
-        if endLocation.y < min_y { min_y = endLocation.y }
-        if endLocation.y > max_y { max_y = endLocation.y }
+        if endLocation.x < minX { minX = endLocation.x }
+        if endLocation.x > maxX { maxX = endLocation.x }
+        if endLocation.y < minY { minY = endLocation.y }
+        if endLocation.y > maxY { maxY = endLocation.y }
 
-        let gesture_bounds = BoundingBox(min: Coord(x: Int(min_x), y: Int(min_y)),
-                                         max: Coord(x: Int(max_x), y: Int(max_y)))
+        let gestureBounds = BoundingBox(min: Coord(x: Int(minX), y: Int(minY)),
+                                         max: Coord(x: Int(maxX), y: Int(maxY)))
 
         await foreachOutlierGroup() { group in
-            if gesture_bounds.contains(other: group.bounds) {
+            if gestureBounds.contains(other: group.bounds) {
                 // check to make sure this outlier's bounding box is fully contained
                 // otherwise don't change paint status
                 return await closure(group)
@@ -500,13 +500,13 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         // need to have the OutlierGroup class contain a mini version of this for each one
         
         // one dimentional array mirroring pixels indexed by y*width + x
-        var outlier_group_list = [String?](repeating: nil, count: width*height)
+        var outlierGroupList = [String?](repeating: nil, count: width*height)
         
         Log.i("frame \(frameIndex) finding outliers")
-        var outlier_amount_list = [UInt](repeating: 0, count: width*height)
+        var outlierAmountList = [UInt](repeating: 0, count: width*height)
         // compare pixels at the same image location in adjecent frames
         // detect Outliers which are much more brighter than the adject frames
-        let orig_data = image.raw_image_data
+        let origData = image.raw_image_data
 
         let other_data_1 = otherFrames[0].raw_image_data
         var other_data_2 = Data() // dummy backup 
@@ -518,7 +518,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
 
         // most of the time is in this loop, although it's a lot faster now
         // ugly, but a lot faster
-        orig_data.withUnsafeBytes { unsafeRawPointer in 
+        origData.withUnsafeBytes { unsafeRawPointer in 
             let orig_image_pixels: UnsafeBufferPointer<UInt16> =
                 unsafeRawPointer.bindMemory(to: UInt16.self)
 
@@ -590,7 +590,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                             let amount_index = Int(y*width+x)
                             // record the brightness change if it is brighter
                             if total_difference > 0  {
-                                outlier_amount_list[amount_index] = UInt(total_difference)
+                                outlierAmountList[amount_index] = UInt(total_difference)
                             }
                         }
                     }
@@ -617,11 +617,11 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         Log.d("frame \(frameIndex) labeling adjecent outliers")
 
         // then label all adject outliers
-        for (index, outlier_amount) in outlier_amount_list.enumerated() {
+        for (index, outlier_amount) in outlierAmountList.enumerated() {
             
             if outlier_amount <= config.maxPixelDistance { continue }
             
-            let outlier_groupname = outlier_group_list[index]
+            let outlier_groupname = outlierGroupList[index]
             if outlier_groupname != nil { continue }
             
             // not part of a group yet
@@ -630,7 +630,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
             
             let outlier_key = "\(index % width),\(index / width)"; // arbitrary but needs to be unique
             //Log.d("initial index = \(index)")
-            outlier_group_list[index] = outlier_key
+            outlierGroupList[index] = outlier_key
             pending_outliers[pending_outlier_insert_index] = index;
             pending_outlier_insert_index += 1
             
@@ -647,58 +647,58 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                 //Log.d("next_outlier_index \(next_outlier_index)")
                 
                 pending_outlier_access_index += 1
-               if let _ = outlier_group_list[next_outlier_index] {
+               if let _ = outlierGroupList[next_outlier_index] {
                     groupSize += 1
                     
-                    let outlier_x = next_outlier_index % width;
-                    let outlier_y = next_outlier_index / width;
+                    let outlierX = next_outlier_index % width;
+                    let outlierY = next_outlier_index / width;
 
                     //Log.e("minPixelDistance \(minPixelDistance) maxPixelDistance \(maxPixelDistance)")
                     
-                    if outlier_x > 0 { // add left neighbor
-                        let left_neighbor_index = outlier_y * width + outlier_x - 1
-                        let left_neighbor_amount = outlier_amount_list[left_neighbor_index]
+                    if outlierX > 0 { // add left neighbor
+                        let left_neighbor_index = outlierY * width + outlierX - 1
+                        let left_neighbor_amount = outlierAmountList[left_neighbor_index]
                         if left_neighbor_amount > config.minPixelDistance,
-                           outlier_group_list[left_neighbor_index] == nil
+                           outlierGroupList[left_neighbor_index] == nil
                         {
                             pending_outliers[pending_outlier_insert_index] = left_neighbor_index
-                            outlier_group_list[left_neighbor_index] = outlier_key
+                            outlierGroupList[left_neighbor_index] = outlier_key
                             pending_outlier_insert_index += 1
                         }
                     }
                     
-                    if outlier_x < width - 1 { // add right neighbor
-                        let right_neighbor_index = outlier_y * width + outlier_x + 1
-                        let right_neighbor_amount = outlier_amount_list[right_neighbor_index]
+                    if outlierX < width - 1 { // add right neighbor
+                        let right_neighbor_index = outlierY * width + outlierX + 1
+                        let right_neighbor_amount = outlierAmountList[right_neighbor_index]
                         if right_neighbor_amount > config.minPixelDistance,
-                           outlier_group_list[right_neighbor_index] == nil
+                           outlierGroupList[right_neighbor_index] == nil
                         {
                             pending_outliers[pending_outlier_insert_index] = right_neighbor_index
-                            outlier_group_list[right_neighbor_index] = outlier_key
+                            outlierGroupList[right_neighbor_index] = outlier_key
                             pending_outlier_insert_index += 1
                         }
                     }
                     
-                    if outlier_y > 0 { // add top neighbor
-                        let top_neighbor_index = (outlier_y - 1) * width + outlier_x
-                        let top_neighbor_amount = outlier_amount_list[top_neighbor_index]
+                    if outlierY > 0 { // add top neighbor
+                        let top_neighbor_index = (outlierY - 1) * width + outlierX
+                        let top_neighbor_amount = outlierAmountList[top_neighbor_index]
                         if top_neighbor_amount > config.minPixelDistance,
-                           outlier_group_list[top_neighbor_index] == nil
+                           outlierGroupList[top_neighbor_index] == nil
                         {
                             pending_outliers[pending_outlier_insert_index] = top_neighbor_index
-                            outlier_group_list[top_neighbor_index] = outlier_key
+                            outlierGroupList[top_neighbor_index] = outlier_key
                             pending_outlier_insert_index += 1
                         }
                     }
                     
-                    if outlier_y < height - 1 { // add bottom neighbor
-                        let bottom_neighbor_index = (outlier_y + 1) * width + outlier_x
-                        let bottom_neighbor_amount = outlier_amount_list[bottom_neighbor_index]
+                    if outlierY < height - 1 { // add bottom neighbor
+                        let bottom_neighbor_index = (outlierY + 1) * width + outlierX
+                        let bottom_neighbor_amount = outlierAmountList[bottom_neighbor_index]
                         if bottom_neighbor_amount > config.minPixelDistance,
-                           outlier_group_list[bottom_neighbor_index] == nil
+                           outlierGroupList[bottom_neighbor_index] == nil
                         {
                             pending_outliers[pending_outlier_insert_index] = bottom_neighbor_index
-                            outlier_group_list[bottom_neighbor_index] = outlier_key
+                            outlierGroupList[bottom_neighbor_index] = outlier_key
                             pending_outlier_insert_index += 1
                         }
                     }
@@ -726,9 +726,9 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         for x in 0 ..< width {
             for y in 0 ..< height {
                 let index = y*width+x
-                if let group = outlier_group_list[index]
+                if let group = outlierGroupList[index]
                 {
-                    let amount = outlier_amount_list[index]
+                    let amount = outlierAmountList[index]
                     if let group_amount = group_amounts[group] {
                         group_amounts[group] = group_amount + amount
                     } else {
@@ -811,12 +811,12 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                 for x in minX ... maxX {
                     for y in minY ... maxY {
                         let index = y * self.width + x
-                        if let pixelGroupName = outlier_group_list[index],
+                        if let pixelGroupName = outlierGroupList[index],
                            pixelGroupName == groupName
                         {
-                            let pixel_amount = outlier_amount_list[index]
+                            let pixelAmount = outlierAmountList[index]
                             let idx = (y-minY) * boundingBox.width + (x-minX)
-                            outlierAmounts[idx] = UInt32(pixel_amount)
+                            outlierAmounts[idx] = UInt32(pixelAmount)
                         }
                     }
                 }
@@ -889,19 +889,19 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                     //let y = index / width;
                     for x in group.bounds.min.x ... group.bounds.max.x {
                         for y in group.bounds.min.y ... group.bounds.max.y {
-                            let pixel_index = (y - group.bounds.min.y)*group.bounds.width + (x - group.bounds.min.x)
-                            if group.pixels[pixel_index] != 0 {
+                            let pixelIndex = (y - group.bounds.min.y)*group.bounds.width + (x - group.bounds.min.x)
+                            if group.pixels[pixelIndex] != 0 {
                                 
-                                let pixel_amount = group.pixels[pixel_index]
+                                let pixelAmount = group.pixels[pixelIndex]
                                 
                                 var alpha: Double = 0
                                 
-                                if pixel_amount > config.maxPixelDistance {
+                                if pixelAmount > config.maxPixelDistance {
                                     alpha = 1
-                                } else if pixel_amount < config.minPixelDistance {
+                                } else if pixelAmount < config.minPixelDistance {
                                     alpha = 0
                                 } else {
-                                    alpha = Double(UInt16(pixel_amount) - config.minPixelDistance) /
+                                    alpha = Double(UInt16(pixelAmount) - config.minPixelDistance) /
                                       Double(config.maxPixelDistance - config.minPixelDistance)
                                 }
                                 
@@ -929,11 +929,11 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                        image: PixelatedImage,
                        otherFrames: [PixelatedImage])
     {
-        var pixels_to_paint_with: [Pixel] = []
+        var pixelsToPaintWith: [Pixel] = []
         
         // grab the pixels from the same image spot from adject frames
 //        for i in 0 ..< otherFrames.count {
-//            pixels_to_paint_with.append(otherFrames[i].readPixel(atX: x, andY: y))
+//            pixelsToPaintWith.append(otherFrames[i].readPixel(atX: x, andY: y))
 //        }
 
         // XXX blending both adjecent frames can make the painted airlane streak darker
@@ -941,25 +941,25 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         // two frames.  try just using one frame and see how that works.  maybe make it an option?
 
         
-        pixels_to_paint_with.append(otherFrames[0].readPixel(atX: x, andY: y))
+        pixelsToPaintWith.append(otherFrames[0].readPixel(atX: x, andY: y))
         
         // blend the pixels from the adjecent frames
-        var paint_pixel = Pixel(merging: pixels_to_paint_with)
+        var paintPixel = Pixel(merging: pixelsToPaintWith)
 
         if alpha < 1 {
             let op = image.readPixel(atX: x, andY: y)
-            paint_pixel = Pixel(merging: paint_pixel, with: op, atAlpha: alpha)
+            paintPixel = Pixel(merging: paintPixel, with: op, atAlpha: alpha)
         }
 
         // this is the numeric value we need to write out to paint over the airplane
-        var paint_value = paint_pixel.value
+        var paintValue = paintPixel.value
         
         // the is the place in the image data to write to
         let offset = (Int(y) * bytesPerRow) + (Int(x) * bytesPerPixel)
         
         // actually paint over that airplane like thing in the image data
         data.replaceSubrange(offset ..< offset+self.bytesPerPixel,
-                             with: &paint_value, count: self.bytesPerPixel)
+                             with: &paintValue, count: self.bytesPerPixel)
         
     }
 
@@ -983,19 +983,19 @@ public class FrameAirplaneRemover: Equatable, Hashable {
     private func writeProcssedPreview(_ image: PixelatedImage, with output_data: Data) {
         // write out a preview of the processed file
         if config.writeFrameProcessedPreviewFiles {
-            if let processed_preview_image = image.baseImage(ofSize: self.previewSize,
-                                                             fromData: output_data),
-               let imageData = processed_preview_image.jpegData,
+            if let processedPreviewImage = image.baseImage(ofSize: self.previewSize,
+                                                      fromData: output_data),
+               let imageData = processedPreviewImage.jpegData,
                let filename = self.processedPreviewFilename
             {
                 do {
-                    if file_manager.fileExists(atPath: filename) {
+                    if fileManager.fileExists(atPath: filename) {
                         Log.i("overwriting already existing processed preview \(filename)")
-                        try file_manager.removeItem(atPath: filename)
+                        try fileManager.removeItem(atPath: filename)
                     }
 
                     // write to file
-                    file_manager.createFile(atPath: filename,
+                    fileManager.createFile(atPath: filename,
                                             contents: imageData,
                                             attributes: nil)
                     Log.i("frame \(self.frameIndex) wrote preview to \(filename)")
@@ -1057,25 +1057,25 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                 Log.e("couldn't copy image data")
                 fatalError("couldn't copy image data")
             }
-            var output_data = _mut_data
+            var outputData = _mut_data
 
             self.state = .painting
                   
             Log.d("frame \(self.frameIndex) painting over airplanes")
                   
-            try await self.paintOverAirplanes(toData: &output_data,
+            try await self.paintOverAirplanes(toData: &outputData,
                                           otherFrames: otherFrames)
         
             Log.d("frame \(self.frameIndex) writing output files")
             self.state = .writingOutputFile
 
             try await taskGroup.addTask() {
-                self.writeProcssedPreview(image, with: output_data)
+                self.writeProcssedPreview(image, with: outputData)
             }
 
             do {
                 // write frame out as a tiff file after processing it
-                try image.writeTIFFEncoding(ofData: output_data,  toFilename: self.outputFilename)
+                try image.writeTIFFEncoding(ofData: outputData,  toFilename: self.outputFilename)
                 self.state = .complete
             } catch {
                 Log.e("\(error)")
@@ -1093,4 +1093,4 @@ public class FrameAirplaneRemover: Equatable, Hashable {
 }
 
 
-fileprivate let file_manager = FileManager.default
+fileprivate let fileManager = FileManager.default
