@@ -14,11 +14,7 @@ import StarCore
 // the overall view of the app
 @available(macOS 13.0, *) 
 struct ContentView: View {
-    @ObservedObject var viewModel: ViewModel
-    
-    init(viewModel: ViewModel) {
-        self.viewModel = viewModel
-    }
+    @EnvironmentObject var viewModel: ViewModel
     
     var body: some View {
         if viewModel.sequenceLoaded {
@@ -31,8 +27,10 @@ struct ContentView: View {
 
 @available(macOS 13.0, *) 
 struct ContentView_Previews: PreviewProvider {
+    @EnvironmentObject var viewModel: ViewModel
+
     static var previews: some View {
-        ContentView(viewModel: ViewModel())
+        ContentView()
     }
 }
 /*

@@ -111,8 +111,10 @@ class star_app: App {
         let viewModel = ViewModel()
         
         WindowGroup {
-            ContentView(viewModel: viewModel)
-        }.commands {
+            ContentView()
+              .environmentObject(viewModel)
+        }
+          .commands {
             StarCommands(viewModel: viewModel)
         }
         
