@@ -650,7 +650,7 @@ public extension ViewModel {
                             Log.d("completion closure called for frame \(frame_to_save.frame_index)")
                             Task {
                                 await self.refresh(frame: frame_to_save)
-                                self.self.update()
+                                self.update()
                             }
                         }
                     }
@@ -865,7 +865,159 @@ public extension ViewModel {
             fatalError("SETUP WRONG")
         }
     }
+
+    func togglePlay(_ scroller: ScrollViewProxy? = nil) {
+        self.video_playing = !self.video_playing
+        if self.video_playing {
+
+            self.previousInteractionMode = self.interactionMode
+            self.interactionMode = .scrub
+
+            Log.d("playing @ \(self.video_playback_framerate) fps")
+            current_video_frame = self.current_index
+
+            switch self.frameViewMode {
+            case .original:
+                video_play_timer = Timer.scheduledTimer(withTimeInterval: 1/Double(self.video_playback_framerate),
+                                                        repeats: true) { timer in
+                    let current_idx = current_video_frame
+                    // play each frame of the video in sequence
+                    if current_idx >= self.frames.count ||
+                         current_idx < 0
+                    {
+                        self.stopVideo(scroller)
+                    } else {
+
+                        // play each frame of the video in sequence
+                        self.current_frame_image =
+                          self.frames[current_idx].preview_image
+
+                        switch self.videoPlayMode {
+                        case .forward:
+                            current_video_frame = current_idx + 1
+
+                        case .reverse:
+                            current_video_frame = current_idx - 1
+                        }
+                        
+                        if current_video_frame >= self.frames.count {
+                            self.stopVideo(scroller)
+                        } else {
+                            self.sliderValue = Double(current_idx)
+                        }
+                    }
+                }
+            case .processed:
+                video_play_timer = Timer.scheduledTimer(withTimeInterval: 1/Double(self.video_playback_framerate),
+                                                        repeats: true) { timer in
+
+                    let current_idx = current_video_frame
+                    // play each frame of the video in sequence
+                    if current_idx >= self.frames.count ||
+                       current_idx < 0
+                    {
+                        self.stopVideo(scroller)
+                    } else {
+                        self.current_frame_image =
+                          self.frames[current_idx].processed_preview_image
+
+                        switch self.videoPlayMode {
+                        case .forward:
+                            current_video_frame = current_idx + 1
+
+                        case .reverse:
+                            current_video_frame = current_idx - 1
+                        }
+                        
+                        if current_video_frame >= self.frames.count {
+                            self.stopVideo(scroller)
+                        } else {
+                            self.sliderValue = Double(current_idx)
+                        }
+                    }
+                }
+            }
+        } else {
+            stopVideo(scroller)
+        }
+    }
+
+    func stopVideo(_ scroller: ScrollViewProxy? = nil) {
+        video_play_timer?.invalidate()
+
+        self.interactionMode = self.previousInteractionMode
+        
+        if current_video_frame >= 0,
+           current_video_frame < self.frames.count
+        {
+            self.current_index = current_video_frame
+            self.sliderValue = Double(self.current_index)
+        } else {
+            self.current_index = 0
+            self.sliderValue = Double(self.current_index)
+        }
+        
+        self.video_playing = false
+        self.background_color = .gray
+        
+        if let scroller = scroller {
+            // delay the scroller a little bit to allow the view to adjust
+            // otherwise the call to scrollTo() happens when it's not visible
+            // and is ignored, leaving the scroll view unmoved.
+            Task {
+                await MainActor.run {
+                    scroller.scrollTo(self.current_index, anchor: .center)
+                }
+            }
+        }
+    }
+
+    func goToFirstFrameButtonAction(withScroll scroller: ScrollViewProxy? = nil) {
+        self.transition(toFrame: self.frames[0],
+                        from: self.currentFrame,
+                        withScroll: scroller)
+
+    }
+
+    func goToLastFrameButtonAction(withScroll scroller: ScrollViewProxy? = nil) {
+        self.transition(toFrame: self.frames[self.frames.count-1],
+                        from: self.currentFrame,
+                        withScroll: scroller)
+
+    }
+
+    func fastPreviousButtonAction(withScroll scroller: ScrollViewProxy? = nil) {
+        if self.fastAdvancementType == .normal {
+            self.transition(numberOfFrames: -self.fast_skip_amount,
+                            withScroll: scroller)
+        } else if let current_frame = self.currentFrame {
+            self.transition(until: self.fastAdvancementType,
+                            from: current_frame,
+                            forwards: false,
+                            withScroll: scroller)
+        }
+    }
+
+    func fastForwardButtonAction(withScroll scroller: ScrollViewProxy? = nil) {
+
+        if self.fastAdvancementType == .normal {
+            self.transition(numberOfFrames: self.fast_skip_amount,
+                            withScroll: scroller)
+        } else if let current_frame = self.currentFrame {
+            self.transition(until: self.fastAdvancementType,
+                            from: current_frame,
+                            forwards: true,
+                            withScroll: scroller)
+        }
+    }
+
 }
+
+// XXX Fing global :(
+fileprivate var video_play_timer: Timer?
+
+fileprivate var current_video_frame = 0
+
 
 fileprivate let file_manager = FileManager.default
 

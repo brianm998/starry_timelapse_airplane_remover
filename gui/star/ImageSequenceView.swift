@@ -1,11 +1,6 @@
 import SwiftUI
 import StarCore
 
-// XXX Fing global :(
-fileprivate var video_play_timer: Timer?
-
-fileprivate var current_video_frame = 0
-
 enum VideoPlayMode: String, Equatable, CaseIterable {
     case forward
     case reverse
@@ -117,7 +112,6 @@ struct ImageSequenceView: View {
         HStack {
             ZStack {
                 VideoPlaybackButtons(viewModel: viewModel,
-                                     imageSequenceView: self,
                                      scroller: scroller)
                   .frame(maxWidth: .infinity, alignment: .center)
 
@@ -405,151 +399,6 @@ struct ImageSequenceView: View {
           .help("apply the outlier group decision tree to all outlier groups in this frame")
     }
 
-    func goToFirstFrameButtonAction(withScroll scroller: ScrollViewProxy? = nil) {
-        viewModel.transition(toFrame: viewModel.frames[0],
-                        from: viewModel.currentFrame,
-                        withScroll: scroller)
-
-    }
-
-    func goToLastFrameButtonAction(withScroll scroller: ScrollViewProxy? = nil) {
-        viewModel.transition(toFrame: viewModel.frames[viewModel.frames.count-1],
-                        from: viewModel.currentFrame,
-                        withScroll: scroller)
-
-    }
-
-    func fastPreviousButtonAction(withScroll scroller: ScrollViewProxy? = nil) {
-        if viewModel.fastAdvancementType == .normal {
-            viewModel.transition(numberOfFrames: -viewModel.fast_skip_amount,
-                            withScroll: scroller)
-        } else if let current_frame = viewModel.currentFrame {
-            viewModel.transition(until: viewModel.fastAdvancementType,
-                            from: current_frame,
-                            forwards: false,
-                            withScroll: scroller)
-        }
-    }
-
-    func fastForwardButtonAction(withScroll scroller: ScrollViewProxy? = nil) {
-
-        if viewModel.fastAdvancementType == .normal {
-            viewModel.transition(numberOfFrames: viewModel.fast_skip_amount,
-                            withScroll: scroller)
-        } else if let current_frame = viewModel.currentFrame {
-            viewModel.transition(until: viewModel.fastAdvancementType,
-                            from: current_frame,
-                            forwards: true,
-                            withScroll: scroller)
-        }
-    }
-
-    func stopVideo(_ scroller: ScrollViewProxy? = nil) {
-        video_play_timer?.invalidate()
-
-        self.viewModel.interactionMode = self.viewModel.previousInteractionMode
-        
-        if current_video_frame >= 0,
-           current_video_frame < viewModel.frames.count
-        {
-            viewModel.current_index = current_video_frame
-            self.viewModel.sliderValue = Double(viewModel.current_index)
-        } else {
-            viewModel.current_index = 0
-            self.viewModel.sliderValue = Double(viewModel.current_index)
-        }
-        
-        viewModel.video_playing = false
-        self.viewModel.background_color = .gray
-        
-        if let scroller = scroller {
-            // delay the scroller a little bit to allow the view to adjust
-            // otherwise the call to scrollTo() happens when it's not visible
-            // and is ignored, leaving the scroll view unmoved.
-            Task {
-                await MainActor.run {
-                    scroller.scrollTo(viewModel.current_index, anchor: .center)
-                }
-            }
-        }
-    }
-    
-    func togglePlay(_ scroller: ScrollViewProxy? = nil) {
-        viewModel.video_playing = !viewModel.video_playing
-        if viewModel.video_playing {
-
-            self.viewModel.previousInteractionMode = self.viewModel.interactionMode
-            self.viewModel.interactionMode = .scrub
-
-            Log.d("playing @ \(viewModel.video_playback_framerate) fps")
-            current_video_frame = viewModel.current_index
-
-            switch self.viewModel.frameViewMode {
-            case .original:
-                video_play_timer = Timer.scheduledTimer(withTimeInterval: 1/Double(viewModel.video_playback_framerate),
-                                                        repeats: true) { timer in
-                    let current_idx = current_video_frame
-                    // play each frame of the video in sequence
-                    if current_idx >= self.viewModel.frames.count ||
-                         current_idx < 0
-                    {
-                        stopVideo(scroller)
-                    } else {
-
-                        // play each frame of the video in sequence
-                        viewModel.current_frame_image =
-                          self.viewModel.frames[current_idx].preview_image
-
-                        switch self.viewModel.videoPlayMode {
-                        case .forward:
-                            current_video_frame = current_idx + 1
-
-                        case .reverse:
-                            current_video_frame = current_idx - 1
-                        }
-                        
-                        if current_video_frame >= self.viewModel.frames.count {
-                            stopVideo(scroller)
-                        } else {
-                            self.viewModel.sliderValue = Double(current_idx)
-                        }
-                    }
-                }
-            case .processed:
-                video_play_timer = Timer.scheduledTimer(withTimeInterval: 1/Double(viewModel.video_playback_framerate),
-                                                        repeats: true) { timer in
-
-                    let current_idx = current_video_frame
-                    // play each frame of the video in sequence
-                    if current_idx >= self.viewModel.frames.count ||
-                       current_idx < 0
-                    {
-                        stopVideo(scroller)
-                    } else {
-                        viewModel.current_frame_image =
-                          self.viewModel.frames[current_idx].processed_preview_image
-
-                        switch self.viewModel.videoPlayMode {
-                        case .forward:
-                            current_video_frame = current_idx + 1
-
-                        case .reverse:
-                            current_video_frame = current_idx - 1
-                        }
-                        
-                        if current_video_frame >= self.viewModel.frames.count {
-                            stopVideo(scroller)
-                        } else {
-                            self.viewModel.sliderValue = Double(current_idx)
-                        }
-                    }
-                }
-            }
-        } else {
-            stopVideo(scroller)
-        }
-    }
-    
     func toggleViews() -> some View {
         HStack() {
             VStack(alignment: .leading) {

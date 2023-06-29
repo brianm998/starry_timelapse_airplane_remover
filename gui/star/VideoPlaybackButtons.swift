@@ -4,7 +4,6 @@ import SwiftUI
 // an HStack of buttons to advance backwards and fowards through the sequence
 struct VideoPlaybackButtons : View {
     @ObservedObject var viewModel: ViewModel
-    let imageSequenceView: ImageSequenceView
     var scroller: ScrollViewProxy
 
     var body: some View {
@@ -30,7 +29,7 @@ struct VideoPlaybackButtons : View {
                               (keyboard shortcut '\(start_shortcut_key.character)')
                               """)
                 {
-                    imageSequenceView.goToFirstFrameButtonAction(withScroll: scroller)
+                    viewModel.goToFirstFrameButtonAction(withScroll: scroller)
                 }
                 
                 // fast previous button
@@ -42,7 +41,7 @@ struct VideoPlaybackButtons : View {
                               (keyboard shortcut '\(fast_previous_shortcut_key.character)')
                               """)
                 {
-                    imageSequenceView.fastPreviousButtonAction(withScroll: scroller)
+                    viewModel.fastPreviousButtonAction(withScroll: scroller)
                 }
                 
                 // previous button
@@ -68,8 +67,8 @@ struct VideoPlaybackButtons : View {
                               (keyboard shortcut '\(backwards_shortcut_key)')
                               """)
                 {
-                    imageSequenceView.viewModel.videoPlayMode = .reverse
-                    imageSequenceView.togglePlay(scroller)
+                    viewModel.videoPlayMode = .reverse
+                    viewModel.togglePlay(scroller)
                 }
             }
 
@@ -77,7 +76,7 @@ struct VideoPlaybackButtons : View {
                 // backwards button is not shown, so we use this to have shortcut still work
                 if viewModel.video_playing {
                     Button("") {
-                        imageSequenceView.togglePlay(scroller)
+                        viewModel.togglePlay(scroller)
                     }
                       .opacity(0)
                       .keyboardShortcut(backwards_shortcut_key, modifiers: [])
@@ -92,8 +91,8 @@ struct VideoPlaybackButtons : View {
                               Play / Pause
                               """)
                 {
-                    imageSequenceView.viewModel.videoPlayMode = .forward
-                    imageSequenceView.togglePlay(scroller)
+                    viewModel.videoPlayMode = .forward
+                    viewModel.togglePlay(scroller)
                     //Log.w("play button not yet implemented")
                 }
             }
@@ -121,7 +120,7 @@ struct VideoPlaybackButtons : View {
                               (keyboard shortcut '\(fast_next_shortcut_key.character)')
                               """)
                 {
-                    imageSequenceView.fastForwardButtonAction(withScroll: scroller)
+                    viewModel.fastForwardButtonAction(withScroll: scroller)
                 }
                 
                 
@@ -134,7 +133,7 @@ struct VideoPlaybackButtons : View {
                               (keyboard shortcut '\(end_button_shortcut_key.character)')
                               """)
                 {
-                    imageSequenceView.goToLastFrameButtonAction(withScroll: scroller)
+                    viewModel.goToLastFrameButtonAction(withScroll: scroller)
                 }
             }
         }        
