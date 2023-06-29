@@ -88,14 +88,14 @@ struct BottomControls: View {
                     HStack {
                         let frameView = viewModel.currentFrameView
                         VStack {
-                            let num_changed = viewModel.numberOfFramesChanged
-                            if num_changed > 0 {
-                                Text("\(num_changed) frames changed")
+                            let numChanged = viewModel.numberOfFramesChanged
+                            if numChanged > 0 {
+                                Text("\(numChanged) frames changed")
                                   .foregroundColor(.yellow)
                             }
-                            let num_saving = viewModel.frameSaveQueue?.saving.count ?? -1
-                            if num_saving > 0 {
-                                Text("saving \(num_saving) frames")
+                            let numSaving = viewModel.frameSaveQueue?.saving.count ?? -1
+                            if numSaving > 0 {
+                                Text("saving \(numSaving) frames")
                                   .foregroundColor(.green)
                             }
                         }
@@ -103,18 +103,18 @@ struct BottomControls: View {
                         VStack {
                             Text("frame \(viewModel.currentIndex)")
                             if let _ = frameView.outlierViews {
-                                if let num_positive = frameView.numberOfPositiveOutliers {
-                                    Text("\(num_positive) will paint")
-                                      .foregroundColor(num_positive == 0 ? .white : .red)
+                                if let numPositive = frameView.numberOfPositiveOutliers {
+                                    Text("\(numPositive) will paint")
+                                      .foregroundColor(numPositive == 0 ? .white : .red)
                                 }
-                                if let num_negative = frameView.numberOfNegativeOutliers {
-                                    Text("\(num_negative) will not paint")
-                                      .foregroundColor(num_negative == 0 ? .white : .green)
+                                if let numNegative = frameView.numberOfNegativeOutliers {
+                                    Text("\(numNegative) will not paint")
+                                      .foregroundColor(numNegative == 0 ? .white : .green)
                                 }
-                                if let num_undecided = frameView.numberOfUndecidedOutliers,
-                                   num_undecided > 0
+                                if let numUndecided = frameView.numberOfUndecidedOutliers,
+                                   numUndecided > 0
                                 {
-                                    Text("\(num_undecided) undecided")
+                                    Text("\(numUndecided) undecided")
                                       .foregroundColor(.orange)
                                 }
                             }
@@ -123,11 +123,11 @@ struct BottomControls: View {
                           .id(frameView.numberOfNegativeOutliers)
                           //.id(frameView.outlierViews)
 
-                        let paint_action = {
+                        let paintAction = {
                             Log.d("PAINT")
                             viewModel.paintSheetShowing = !viewModel.paintSheetShowing
                         }
-                        Button(action: paint_action) {
+                        Button(action: paintAction) {
                             buttonImage("square.stack.3d.forward.dottedline", size: 44)
                             
                         }
@@ -135,11 +135,11 @@ struct BottomControls: View {
                           .frame(alignment: .trailing)
                           .help("effect multiple frames")
                         
-                        let gear_action = {
+                        let gearAction = {
                             Log.d("GEAR")
                             viewModel.settingsSheetShowing = !viewModel.settingsSheetShowing
                         }
-                        Button(action: gear_action) {
+                        Button(action: gearAction) {
                             buttonImage("gearshape.fill", size: 44)
                             
                         }
@@ -157,17 +157,17 @@ struct BottomControls: View {
                                             fastAdvancementType: $viewModel.fastAdvancementType)
                       }
                       .sheet(isPresented: $viewModel.paintSheetShowing) {
-                          MassivePaintSheetView(isVisible: self.$viewModel.paintSheetShowing) { should_paint, start_index, end_index in
+                          MassivePaintSheetView(isVisible: self.$viewModel.paintSheetShowing) { shouldPaint, startIndex, endIndex in
                               
                               viewModel.updatingFrameBatch = true
                               
-                              for idx in start_index ... end_index {
+                              for idx in startIndex ... endIndex {
                                   // XXX use a task group?
-                                  viewModel.setAllFrameOutliers(in: viewModel.frames[idx], to: should_paint)
+                                  viewModel.setAllFrameOutliers(in: viewModel.frames[idx], to: shouldPaint)
                               }
                               viewModel.updatingFrameBatch = false
                               
-                              Log.d("should_paint \(should_paint), start_index \(start_index), end_index \(end_index)")
+                              Log.d("shouldPaint \(shouldPaint), startIndex \(startIndex), endIndex \(endIndex)")
                           }
                       }
                 }
@@ -194,7 +194,7 @@ struct BottomControls: View {
 
                 HStack {
                     Toggle("full resolution", isOn: $viewModel.showFullResolution)
-                      .onChange(of: viewModel.showFullResolution) { mode_on in
+                      .onChange(of: viewModel.showFullResolution) { modeOn in
                           viewModel.refreshCurrentFrame()
                       }
                     Toggle("show filmstip", isOn: $viewModel.showFilmstrip)
