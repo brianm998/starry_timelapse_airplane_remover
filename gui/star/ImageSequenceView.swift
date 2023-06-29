@@ -6,7 +6,7 @@ import StarCore
 // user can scrub, play, edit frames, etc
 
 struct ImageSequenceView: View {
-    @ObservedObject var viewModel: ViewModel
+    @EnvironmentObject var viewModel: ViewModel
 
     var body: some View {
         GeometryReader { top_geometry in
@@ -32,19 +32,18 @@ struct ImageSequenceView: View {
                           )
 
                         // show progress bars on top of the image at the bottom
-                        ProgressBars(viewModel: viewModel)
+                        ProgressBars()
                     }
                     // buttons below the selected frame 
-                    BottomControls(viewModel: viewModel, scroller: scroller)
+                    BottomControls(scroller: scroller)
                     
                     if viewModel.interactionMode == .edit,
                        viewModel.showFilmstrip
                     {
                         Spacer().frame(maxHeight: 30)
                         // the filmstrip at the bottom
-                        FilmstripView(viewModel: viewModel,
-                                      imageSequenceView: self,
-                                      scroller: scroller)
+                        FilmstripView(imageSequenceView: self,
+                                    scroller: scroller)
                           .frame(maxWidth: .infinity)
                           .transition(.slide)
                         Spacer().frame(minHeight: 15, maxHeight: 25)

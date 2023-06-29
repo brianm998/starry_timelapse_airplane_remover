@@ -18,9 +18,9 @@ struct ContentView: View {
     
     var body: some View {
         if viewModel.sequenceLoaded {
-            ImageSequenceView(viewModel: viewModel)
+            ImageSequenceView()
         } else {
-            InitialView(viewModel: viewModel)
+            InitialView()
         }
     }
 }

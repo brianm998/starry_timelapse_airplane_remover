@@ -4,7 +4,7 @@ import StarCore
 // controls below the selected frame and above the filmstrip
 // XXX this is a mess, clean it up
 struct BottomControls: View {
-    @ObservedObject var viewModel: ViewModel
+    @EnvironmentObject var viewModel: ViewModel
     let scroller: ScrollViewProxy
     
     var body: some View {

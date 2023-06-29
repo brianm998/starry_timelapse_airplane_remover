@@ -2,7 +2,7 @@ import SwiftUI
 import StarCore
 
 struct InitialView: View {
-    @ObservedObject var viewModel: ViewModel
+    @EnvironmentObject var viewModel: ViewModel
 
     @State private var previously_opened_sheet_showing_item: String =
       UserPreferences.shared.sortedSequenceList.count > 0 ?

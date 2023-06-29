@@ -3,22 +3,10 @@ import StarCore
 
 // the view for each frame in the filmstrip at the bottom
 struct FilmstripImageView: View {
-    @ObservedObject var viewModel: ViewModel
-    let imageSequenceView: ImageSequenceView
+    @EnvironmentObject var viewModel: ViewModel
     let frame_index: Int
     let scroller: ScrollViewProxy
 
-    public init(viewModel: ViewModel,
-                imageSequenceView: ImageSequenceView,
-                frame_index: Int,
-                scroller: ScrollViewProxy)
-    {
-        self.viewModel = viewModel
-        self.imageSequenceView = imageSequenceView
-        self.frame_index = frame_index
-        self.scroller = scroller
-    }
-    
     var body: some View {
         return VStack(alignment: .leading) {
             Spacer().frame(maxHeight: 8)
