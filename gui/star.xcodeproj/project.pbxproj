@@ -13,6 +13,7 @@
 		D31F9FC0299736740001CD0C /* FrameSaveQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = D31F9FBD299736730001CD0C /* FrameSaveQueue.swift */; };
 		D31F9FC1299736740001CD0C /* OutlierGroupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D31F9FBE299736730001CD0C /* OutlierGroupView.swift */; };
 		D32F6DAA2A4D17CF00704870 /* ScrubSliderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D32F6DA92A4D17CF00704870 /* ScrubSliderView.swift */; };
+		D32F6DAC2A4D1A6E00704870 /* BottomControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = D32F6DAB2A4D1A6E00704870 /* BottomControls.swift */; };
 		D332F6FF29B63DA2009E2796 /* InitialView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D332F6FE29B63DA2009E2796 /* InitialView.swift */; };
 		D332F70129B63F9D009E2796 /* SettingsSheetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D332F70029B63F9D009E2796 /* SettingsSheetView.swift */; };
 		D332F70329B63FD0009E2796 /* MassivePaintSheetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D332F70229B63FD0009E2796 /* MassivePaintSheetView.swift */; };
@@ -70,6 +71,7 @@
 		D31F9FBD299736730001CD0C /* FrameSaveQueue.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = FrameSaveQueue.swift; sourceTree = "<group>"; };
 		D31F9FBE299736730001CD0C /* OutlierGroupView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = OutlierGroupView.swift; sourceTree = "<group>"; };
 		D32F6DA92A4D17CF00704870 /* ScrubSliderView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ScrubSliderView.swift; sourceTree = "<group>"; };
+		D32F6DAB2A4D1A6E00704870 /* BottomControls.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = BottomControls.swift; sourceTree = "<group>"; };
 		D332F6FE29B63DA2009E2796 /* InitialView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = InitialView.swift; sourceTree = "<group>"; };
 		D332F70029B63F9D009E2796 /* SettingsSheetView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SettingsSheetView.swift; sourceTree = "<group>"; };
 		D332F70229B63FD0009E2796 /* MassivePaintSheetView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = MassivePaintSheetView.swift; sourceTree = "<group>"; };
@@ -174,6 +176,7 @@
 		D386FA0F298B617300878B56 /* star */ = {
 			isa = PBXGroup;
 			children = (
+				D32F6DAB2A4D1A6E00704870 /* BottomControls.swift */,
 				D32F6DA92A4D17CF00704870 /* ScrubSliderView.swift */,
 				D33FFC292A2E1A8900F38194 /* OutlierGroupViewModel.swift */,
 				D33FFC272A2D4F7E00F38194 /* FilmstripView.swift */,
@@ -428,6 +431,7 @@
 				D33FFC1E2A2D39BA00F38194 /* ProgressBars.swift in Sources */,
 				D33FFC202A2D3BCD00F38194 /* FrameViewModel.swift in Sources */,
 				D33FFC242A2D48F300F38194 /* FrameEditView.swift in Sources */,
+				D32F6DAC2A4D1A6E00704870 /* BottomControls.swift in Sources */,
 				D31F9FC0299736740001CD0C /* FrameSaveQueue.swift in Sources */,
 				D33FFC182A2D007800F38194 /* PaintAllButton.swift in Sources */,
 				D33FFC162A2CFF4700F38194 /* LoadAllOutliersButton.swift in Sources */,
