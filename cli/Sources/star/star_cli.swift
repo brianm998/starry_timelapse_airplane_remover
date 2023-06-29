@@ -356,7 +356,7 @@ struct Star: ParsableCommand {
                         await updatableProgressMonitor.dispatchGroup.wait()
                         // simply sleep a small amount? 
                         //try await Task.sleep(nanoseconds: 1_000_000_000)
-                        print("processing complete, output is in \(eraser.output_dirname)")
+                        print("processing complete, output is in \(eraser.outputDirname)")
                     }
                 } catch {
                     Log.e("\(error)")

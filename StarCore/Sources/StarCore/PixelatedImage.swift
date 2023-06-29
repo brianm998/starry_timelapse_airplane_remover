@@ -31,7 +31,7 @@ public class PixelatedImage {
     let height: Int
     //let image: CGImage
     
-    let raw_image_data: Data
+    let rawImageData: Data
     
     let bitsPerPixel: Int
     let bytesPerRow: Int
@@ -63,7 +63,7 @@ public class PixelatedImage {
         self.bitmapInfo = image.bitmapInfo
 
         if let data = image.dataProvider?.data as? Data {
-            self.raw_image_data = data
+            self.rawImageData = data
         } else {
             Log.e("DOH")
             return nil
@@ -71,7 +71,7 @@ public class PixelatedImage {
     }
 
     func read(_ closure: (UnsafeBufferPointer<UInt16>) throws -> Void) throws {
-        try raw_image_data.withUnsafeBytes { unsafeRawPointer in 
+        try rawImageData.withUnsafeBytes { unsafeRawPointer in 
             let typedPointer: UnsafeBufferPointer<UInt16> = unsafeRawPointer.bindMemory(to: UInt16.self)
             try closure(typedPointer)
         }        
@@ -79,7 +79,7 @@ public class PixelatedImage {
     
     func readPixel(atX x: Int, andY y: Int) -> Pixel {
         let offset = (y * width*3) + (x * 3)
-        let pixel = raw_image_data.withUnsafeBytes { unsafeRawPointer -> Pixel in 
+        let pixel = rawImageData.withUnsafeBytes { unsafeRawPointer -> Pixel in 
             let typedPointer: UnsafeBufferPointer<UInt16> = unsafeRawPointer.bindMemory(to: UInt16.self)
             var pixel = Pixel()
             pixel.red = typedPointer[offset]
@@ -96,7 +96,7 @@ public class PixelatedImage {
 
     public var baseImage: NSImage? {
         do {
-            if let base = try image(fromData: raw_image_data) {
+            if let base = try image(fromData: rawImageData) {
                 return NSImage(cgImage: base, size: .zero)
             }
         } catch {
@@ -105,9 +105,9 @@ public class PixelatedImage {
         return nil
     }
     
-    func image(fromData image_data: Data) throws -> CGImage? {
+    func image(fromData imageData: Data) throws -> CGImage? {
         let colorSpace = CGColorSpaceCreateDeviceRGB()
-        if let dataProvider = CGDataProvider(data: image_data as CFData) {
+        if let dataProvider = CGDataProvider(data: imageData as CFData) {
            return CGImage(width: width,
                           height: height,
                           bitsPerComponent: bitsPerComponent,
@@ -124,11 +124,10 @@ public class PixelatedImage {
         }
     }
 
-    func baseImage(ofSize size: NSSize, fromData image_data: Data) -> NSImage? {
+    func baseImage(ofSize size: NSSize, fromData imageData: Data) -> NSImage? {
         do {
-            if let new_image = try image(fromData: image_data) {
-                //                return NSImage(cgImage: new_image, size: <#NSSize#>).resized(to: size)
-                return NSImage(cgImage: new_image, size: size).resized(to: size)
+            if let newImage = try image(fromData: imageData) {
+                return NSImage(cgImage: newImage, size: size).resized(to: size)
             }
         } catch {
             Log.e("\(error)")
@@ -139,31 +138,31 @@ public class PixelatedImage {
     // write out the given image data as a 16 bit tiff file to the given filename
     // used when modifying the invariant original image data, and saying the edits to a file
     // XXX make this async
-    func writeTIFFEncoding(ofData image_data: Data, toFilename image_filename: String) throws {
-        if file_manager.fileExists(atPath: image_filename) {
-            Log.i("overwriting already existing filename \(image_filename)")
-            try file_manager.removeItem(atPath: image_filename)
+    func writeTIFFEncoding(ofData imageData: Data, toFilename imageFilename: String) throws {
+        if fileManager.fileExists(atPath: imageFilename) {
+            Log.i("overwriting already existing filename \(imageFilename)")
+            try fileManager.removeItem(atPath: imageFilename)
         }
         
         // create a CGImage from the data we just changed
-        if let new_image = try image(fromData: image_data) {
+        if let newImage = try image(fromData: imageData) {
             // save it
-            //Log.d("new_image \(new_image)")
+            //Log.d("newImage \(newImage)")
 
             let context = CIContext()
-            let fileURL = NSURL(fileURLWithPath: image_filename, isDirectory: false) as URL
+            let fileURL = NSURL(fileURLWithPath: imageFilename, isDirectory: false) as URL
             let options: [CIImageRepresentationOption: CGFloat] = [:]
             if let colorSpace = CGColorSpace(name: CGColorSpace.sRGB) {
                 let imgFormat = CIFormat.RGBA16
 
                 try context.writeTIFFRepresentation(
-                  of: CIImage(cgImage: new_image),
+                  of: CIImage(cgImage: newImage),
                   to: fileURL,
                   format: imgFormat,
                   colorSpace: colorSpace,
                   options: options
                 )
-                Log.i("image written to \(image_filename)")
+                Log.i("image written to \(imageFilename)")
             } else {
                 Log.d("FUCK")
             }
@@ -210,4 +209,4 @@ public extension NSImage {
     }
 }
 
-fileprivate let file_manager = FileManager.default
+fileprivate let fileManager = FileManager.default

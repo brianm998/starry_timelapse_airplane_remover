@@ -506,29 +506,29 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         var outlierAmountList = [UInt](repeating: 0, count: width*height)
         // compare pixels at the same image location in adjecent frames
         // detect Outliers which are much more brighter than the adject frames
-        let origData = image.raw_image_data
+        let origData = image.rawImageData
 
-        let other_data_1 = otherFrames[0].raw_image_data
-        var other_data_2 = Data() // dummy backup 
-        var have_two_other_frames = false
+        let otherData1 = otherFrames[0].rawImageData
+        var otherData2 = Data() // dummy backup 
+        var haveTwoOtherFrames = false
         if otherFrames.count > 1 {
-            other_data_2 = otherFrames[1].raw_image_data
-            have_two_other_frames = true
+            otherData2 = otherFrames[1].rawImageData
+            haveTwoOtherFrames = true
         }
 
         // most of the time is in this loop, although it's a lot faster now
         // ugly, but a lot faster
         origData.withUnsafeBytes { unsafeRawPointer in 
-            let orig_image_pixels: UnsafeBufferPointer<UInt16> =
+            let origImagePixels: UnsafeBufferPointer<UInt16> =
                 unsafeRawPointer.bindMemory(to: UInt16.self)
 
-            other_data_1.withUnsafeBytes { unsafeRawPointer_1  in 
-                let other_image_1_pixels: UnsafeBufferPointer<UInt16> =
-                    unsafeRawPointer_1.bindMemory(to: UInt16.self)
+            otherData1.withUnsafeBytes { unsafeRawPointer1  in 
+                let otherImage1Pixels: UnsafeBufferPointer<UInt16> =
+                    unsafeRawPointer1.bindMemory(to: UInt16.self)
 
-                other_data_2.withUnsafeBytes { unsafeRawPointer_2 in 
-                    let other_image_2_pixels: UnsafeBufferPointer<UInt16> =
-                        unsafeRawPointer_2.bindMemory(to: UInt16.self)
+                otherData2.withUnsafeBytes { unsafeRawPointer2 in 
+                    let otherImage2Pixels: UnsafeBufferPointer<UInt16> =
+                        unsafeRawPointer2.bindMemory(to: UInt16.self)
 
                     for y in 0 ..< height {
                         if y != 0 && y % 1000 == 0 {
@@ -539,58 +539,58 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                             let offset = (y * width*cpp) + (x * cpp)
 
                             // rgb values of the image we're modifying at this x,y
-                            let orig_red = orig_image_pixels[offset]
-                            let orig_green = orig_image_pixels[offset+1]
-                            let orig_blue = orig_image_pixels[offset+2]
+                            let origRed = origImagePixels[offset]
+                            let origGreen = origImagePixels[offset+1]
+                            let origBlue = origImagePixels[offset+2]
             
                             // rgb values of an adjecent image at this x,y
-                            let other_1_red = other_image_1_pixels[offset]
-                            let other_1_green = other_image_1_pixels[offset+1]
-                            let other_1_blue = other_image_1_pixels[offset+2]
+                            let other1Red = otherImage1Pixels[offset]
+                            let other1Green = otherImage1Pixels[offset+1]
+                            let other1Blue = otherImage1Pixels[offset+2]
 
                             // how much brighter in each channel was the image we're modifying?
-                            let other_1_red_diff = (Int(orig_red) - Int(other_1_red))
-                            let other_1_green_diff = (Int(orig_green) - Int(other_1_green))
-                            let other_1_blue_diff = (Int(orig_blue) - Int(other_1_blue))
+                            let other1RedDiff = (Int(origRed) - Int(other1Red))
+                            let other1GreenDiff = (Int(origGreen) - Int(other1Green))
+                            let other1BlueDiff = (Int(origBlue) - Int(other1Blue))
 
                             // take a max based upon overal brightness, or just one channel
-                            let other_1_max = max(other_1_red_diff +
-                                                    other_1_green_diff +
-                                                    other_1_blue_diff / 3,
-                                                  max(other_1_red_diff,
-                                                      max(other_1_green_diff,
-                                                          other_1_blue_diff)))
+                            let other1Max = max(other1RedDiff +
+                                                    other1GreenDiff +
+                                                    other1BlueDiff / 3,
+                                                  max(other1RedDiff,
+                                                      max(other1GreenDiff,
+                                                          other1BlueDiff)))
                             
-                            var total_difference: Int = Int(other_1_max)
+                            var totalDifference: Int = Int(other1Max)
                             
-                            if have_two_other_frames {
+                            if haveTwoOtherFrames {
                                 // rgb values of another adjecent image at this x,y
-                                let other_2_red = other_image_2_pixels[offset]
-                                let other_2_green = other_image_2_pixels[offset+1]
-                                let other_2_blue = other_image_2_pixels[offset+2]
+                                let other2Red = otherImage2Pixels[offset]
+                                let other2Green = otherImage2Pixels[offset+1]
+                                let other2Blue = otherImage2Pixels[offset+2]
                                 
                                 // how much brighter in each channel was the image we're modifying?
-                                let other_2_red_diff = (Int(orig_red) - Int(other_2_red))
-                                let other_2_green_diff = (Int(orig_green) - Int(other_2_green))
-                                let other_2_blue_diff = (Int(orig_blue) - Int(other_2_blue))
+                                let other2RedDiff = (Int(origRed) - Int(other2Red))
+                                let other2GreenDiff = (Int(origGreen) - Int(other2Green))
+                                let other2BlueDiff = (Int(origBlue) - Int(other2Blue))
             
                                 // take a max based upon overal brightness, or just one channel
-                                let other_2_max = max(other_2_red_diff +
-                                                        other_2_green_diff +
-                                                        other_2_blue_diff / 3,
-                                                      max(other_2_red_diff,
-                                                          max(other_2_green_diff,
-                                                              other_2_blue_diff)))
+                                let other2Max = max(other2RedDiff +
+                                                        other2GreenDiff +
+                                                        other2BlueDiff / 3,
+                                                      max(other2RedDiff,
+                                                          max(other2GreenDiff,
+                                                              other2BlueDiff)))
 
                                 // average the two differences of the two adjecent frames
-                                total_difference += other_2_max
-                                total_difference /= 2
+                                totalDifference += other2Max
+                                totalDifference /= 2
                             }
 
-                            let amount_index = Int(y*width+x)
+                            let amountIndex = Int(y*width+x)
                             // record the brightness change if it is brighter
-                            if total_difference > 0  {
-                                outlierAmountList[amount_index] = UInt(total_difference)
+                            if totalDifference > 0  {
+                                outlierAmountList[amountIndex] = UInt(totalDifference)
                             }
                         }
                     }
@@ -605,101 +605,101 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         // go through the outliers and link together all the outliers that are adject to eachother,
         // outputting a mapping of group name to size
         
-        var individual_group_counts: [String: UInt] = [:]
+        var individualGroupCounts: [String: UInt] = [:]
 
-        var pending_outliers: [Int]
-        var pending_outlier_insert_index = 0;
-        var pending_outlier_access_index = 0;
+        var pendingOutliers: [Int]
+        var pendingOutlierInsertIndex = 0;
+        var pendingOutlierAccessIndex = 0;
        
         let array = [Int](repeating: -1, count: width*height) 
-        pending_outliers = array
+        pendingOutliers = array
 
         Log.d("frame \(frameIndex) labeling adjecent outliers")
 
         // then label all adject outliers
-        for (index, outlier_amount) in outlierAmountList.enumerated() {
+        for (index, outlierAmount) in outlierAmountList.enumerated() {
             
-            if outlier_amount <= config.maxPixelDistance { continue }
+            if outlierAmount <= config.maxPixelDistance { continue }
             
-            let outlier_groupname = outlierGroupList[index]
-            if outlier_groupname != nil { continue }
+            let outlierGroupname = outlierGroupList[index]
+            if outlierGroupname != nil { continue }
             
             // not part of a group yet
             var groupSize: UInt = 0
             // tag this virgin outlier with its own key
             
-            let outlier_key = "\(index % width),\(index / width)"; // arbitrary but needs to be unique
+            let outlierKey = "\(index % width),\(index / width)"; // arbitrary but needs to be unique
             //Log.d("initial index = \(index)")
-            outlierGroupList[index] = outlier_key
-            pending_outliers[pending_outlier_insert_index] = index;
-            pending_outlier_insert_index += 1
+            outlierGroupList[index] = outlierKey
+            pendingOutliers[pendingOutlierInsertIndex] = index;
+            pendingOutlierInsertIndex += 1
             
-            var loop_count: UInt64 = 0
+            var loopCount: UInt64 = 0
                 
-            while pending_outlier_insert_index != pending_outlier_access_index {
-                //Log.d("pending_outlier_insert_index \(pending_outlier_insert_index) pending_outlier_access_index \(pending_outlier_access_index)")
-                loop_count += 1
-                if loop_count % 1000 == 0 {
-                    Log.v("frame \(frameIndex) looping \(loop_count) times groupSize \(groupSize)")
+            while pendingOutlierInsertIndex != pendingOutlierAccessIndex {
+                //Log.d("pendingOutlierInsertIndex \(pendingOutlierInsertIndex) pendingOutlierAccessIndex \(pendingOutlierAccessIndex)")
+                loopCount += 1
+                if loopCount % 1000 == 0 {
+                    Log.v("frame \(frameIndex) looping \(loopCount) times groupSize \(groupSize)")
                 }
                 
-                let next_outlier_index = pending_outliers[pending_outlier_access_index]
-                //Log.d("next_outlier_index \(next_outlier_index)")
+                let nextOutlierIndex = pendingOutliers[pendingOutlierAccessIndex]
+                //Log.d("nextOutlierIndex \(nextOutlierIndex)")
                 
-                pending_outlier_access_index += 1
-               if let _ = outlierGroupList[next_outlier_index] {
+                pendingOutlierAccessIndex += 1
+               if let _ = outlierGroupList[nextOutlierIndex] {
                     groupSize += 1
                     
-                    let outlierX = next_outlier_index % width;
-                    let outlierY = next_outlier_index / width;
+                    let outlierX = nextOutlierIndex % width;
+                    let outlierY = nextOutlierIndex / width;
 
                     //Log.e("minPixelDistance \(minPixelDistance) maxPixelDistance \(maxPixelDistance)")
                     
                     if outlierX > 0 { // add left neighbor
-                        let left_neighbor_index = outlierY * width + outlierX - 1
-                        let left_neighbor_amount = outlierAmountList[left_neighbor_index]
-                        if left_neighbor_amount > config.minPixelDistance,
-                           outlierGroupList[left_neighbor_index] == nil
+                        let leftNeighborIndex = outlierY * width + outlierX - 1
+                        let leftNeighborAmount = outlierAmountList[leftNeighborIndex]
+                        if leftNeighborAmount > config.minPixelDistance,
+                           outlierGroupList[leftNeighborIndex] == nil
                         {
-                            pending_outliers[pending_outlier_insert_index] = left_neighbor_index
-                            outlierGroupList[left_neighbor_index] = outlier_key
-                            pending_outlier_insert_index += 1
+                            pendingOutliers[pendingOutlierInsertIndex] = leftNeighborIndex
+                            outlierGroupList[leftNeighborIndex] = outlierKey
+                            pendingOutlierInsertIndex += 1
                         }
                     }
                     
                     if outlierX < width - 1 { // add right neighbor
-                        let right_neighbor_index = outlierY * width + outlierX + 1
-                        let right_neighbor_amount = outlierAmountList[right_neighbor_index]
-                        if right_neighbor_amount > config.minPixelDistance,
-                           outlierGroupList[right_neighbor_index] == nil
+                        let rightNeighborIndex = outlierY * width + outlierX + 1
+                        let rightNeighborAmount = outlierAmountList[rightNeighborIndex]
+                        if rightNeighborAmount > config.minPixelDistance,
+                           outlierGroupList[rightNeighborIndex] == nil
                         {
-                            pending_outliers[pending_outlier_insert_index] = right_neighbor_index
-                            outlierGroupList[right_neighbor_index] = outlier_key
-                            pending_outlier_insert_index += 1
+                            pendingOutliers[pendingOutlierInsertIndex] = rightNeighborIndex
+                            outlierGroupList[rightNeighborIndex] = outlierKey
+                            pendingOutlierInsertIndex += 1
                         }
                     }
                     
                     if outlierY > 0 { // add top neighbor
-                        let top_neighbor_index = (outlierY - 1) * width + outlierX
-                        let top_neighbor_amount = outlierAmountList[top_neighbor_index]
-                        if top_neighbor_amount > config.minPixelDistance,
-                           outlierGroupList[top_neighbor_index] == nil
+                        let topNeighborIndex = (outlierY - 1) * width + outlierX
+                        let topNeighborAmount = outlierAmountList[topNeighborIndex]
+                        if topNeighborAmount > config.minPixelDistance,
+                           outlierGroupList[topNeighborIndex] == nil
                         {
-                            pending_outliers[pending_outlier_insert_index] = top_neighbor_index
-                            outlierGroupList[top_neighbor_index] = outlier_key
-                            pending_outlier_insert_index += 1
+                            pendingOutliers[pendingOutlierInsertIndex] = topNeighborIndex
+                            outlierGroupList[topNeighborIndex] = outlierKey
+                            pendingOutlierInsertIndex += 1
                         }
                     }
                     
                     if outlierY < height - 1 { // add bottom neighbor
-                        let bottom_neighbor_index = (outlierY + 1) * width + outlierX
-                        let bottom_neighbor_amount = outlierAmountList[bottom_neighbor_index]
-                        if bottom_neighbor_amount > config.minPixelDistance,
-                           outlierGroupList[bottom_neighbor_index] == nil
+                        let bottomNeighborIndex = (outlierY + 1) * width + outlierX
+                        let bottomNeighborAmount = outlierAmountList[bottomNeighborIndex]
+                        if bottomNeighborAmount > config.minPixelDistance,
+                           outlierGroupList[bottomNeighborIndex] == nil
                         {
-                            pending_outliers[pending_outlier_insert_index] = bottom_neighbor_index
-                            outlierGroupList[bottom_neighbor_index] = outlier_key
-                            pending_outlier_insert_index += 1
+                            pendingOutliers[pendingOutlierInsertIndex] = bottomNeighborIndex
+                            outlierGroupList[bottomNeighborIndex] = outlierKey
+                            pendingOutlierInsertIndex += 1
                         }
                     }
                 } else {
@@ -708,13 +708,13 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                     fatalError("FUCK")
                 }
             }
-            //Log.d("group \(outlier_key) has \(groupSize) members")
+            //Log.d("group \(outlierKey) has \(groupSize) members")
             if groupSize > config.minGroupSize { 
-                individual_group_counts[outlier_key] = groupSize
+                individualGroupCounts[outlierKey] = groupSize
             }
         }
 
-        var group_amounts: [String: UInt] = [:] // keyed by group name, average brightness of each group
+        var groupAmounts: [String: UInt] = [:] // keyed by group name, average brightness of each group
 
         Log.i("frame \(frameIndex) calculating outlier group bounds")
         var groupMinX: [String:Int] = [:]   // keyed by group name, image bounds of each group
@@ -729,10 +729,10 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                 if let group = outlierGroupList[index]
                 {
                     let amount = outlierAmountList[index]
-                    if let group_amount = group_amounts[group] {
-                        group_amounts[group] = group_amount + amount
+                    if let groupAmount = groupAmounts[group] {
+                        groupAmounts[group] = groupAmount + amount
                     } else {
-                        group_amounts[group] = amount
+                        groupAmounts[group] = amount
                     }
                     if let minX = groupMinX[group] {
                         if(x < minX) {
@@ -767,16 +767,16 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         }
 
         // populate the outlierGroups
-        for (groupName, groupSize) in individual_group_counts {
+        for (groupName, groupSize) in individualGroupCounts {
             if let minX = groupMinX[groupName],
                let minY = groupMinY[groupName],
                let maxX = groupMaxX[groupName],
                let maxY = groupMaxY[groupName],
-               let group_amount = group_amounts[groupName]
+               let groupAmount = groupAmounts[groupName]
             {
                 let boundingBox = BoundingBox(min: Coord(x: minX, y: minY),
                                                max: Coord(x: maxX, y: maxY))
-                let groupBrightness = UInt(group_amount) / groupSize
+                let groupBrightness = UInt(groupAmount) / groupSize
 
                 // first apply a height based distinction on the group size,
                 // to allow smaller groups lower in the sky, and not higher up.
@@ -788,17 +788,17 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                    maxX < width - 1,
                    maxY < height - 1
                 {
-                    let group_centerY = boundingBox.center.y
+                    let groupCenterY = boundingBox.center.y
 
-                    let upper_area_size = Double(height)*config.upperSkyPercentage/100
+                    let upperAreaSize = Double(height)*config.upperSkyPercentage/100
 
-                    if group_centerY < Int(upper_area_size) {
+                    if groupCenterY < Int(upperAreaSize) {
                         // 1 if at top, 0 if at bottom of the upper area
-                        let how_close_to_top = (upper_area_size - Double(group_centerY)) / upper_area_size
-                        let min_size_for_this_group = config.minGroupSize + Int(Double(config.minGroupSizeAtTop - config.minGroupSize) * how_close_to_top)
-                        Log.v("min_size_for_this_group \(min_size_for_this_group) how_close_to_top \(how_close_to_top) group_centerY \(group_centerY) height \(height)")
-                        if groupSize < min_size_for_this_group {
-                            Log.v("frame \(frameIndex) skipping group of size \(groupSize) < \(min_size_for_this_group) @ centerY \(group_centerY)")
+                        let howCloseToTop = (upperAreaSize - Double(groupCenterY)) / upperAreaSize
+                        let minSizeForThisGroup = config.minGroupSize + Int(Double(config.minGroupSizeAtTop - config.minGroupSize) * howCloseToTop)
+                        Log.v("minSizeForThisGroup \(minSizeForThisGroup) howCloseToTop \(howCloseToTop) groupCenterY \(groupCenterY) height \(height)")
+                        if groupSize < minSizeForThisGroup {
+                            Log.v("frame \(frameIndex) skipping group of size \(groupSize) < \(minSizeForThisGroup) @ centerY \(groupCenterY)")
                             continue
                         }
                     }
@@ -980,11 +980,11 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         }
     }
 
-    private func writeProcssedPreview(_ image: PixelatedImage, with output_data: Data) {
+    private func writeProcssedPreview(_ image: PixelatedImage, with outputData: Data) {
         // write out a preview of the processed file
         if config.writeFrameProcessedPreviewFiles {
             if let processedPreviewImage = image.baseImage(ofSize: self.previewSize,
-                                                      fromData: output_data),
+                                                      fromData: outputData),
                let imageData = processedPreviewImage.jpegData,
                let filename = self.processedPreviewFilename
             {
@@ -1046,7 +1046,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
             let otherFrame = try await imageSequence.getImage(withName: imageSequence.filenames[otherFrameIndex]).image()
             otherFrames.append(otherFrame)
         
-            let _data = image.raw_image_data
+            let _data = image.rawImageData
         
             // copy the original image data as adjecent frames need
             // to access the original unmodified version

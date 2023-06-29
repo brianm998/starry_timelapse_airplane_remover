@@ -2,7 +2,7 @@ import Foundation
 
 // an alternative to task groups, looking for thread stability
 
-fileprivate var number_running = NumberRunning()
+fileprivate var numberRunning = NumberRunning()
 
 public class TaskRunner {
     // XXX getting this number right is hard
@@ -13,8 +13,8 @@ public class TaskRunner {
             Log.i("using maximum of \(maxConcurrentTasks) concurrent tasks")
         }
     }
-    public static func startSyncIO() async { await number_running.decrement() }
-    public static func endSyncIO() async { await number_running.increment() }
+    public static func startSyncIO() async { await numberRunning.decrement() }
+    public static func endSyncIO() async { await numberRunning.increment() }
 }
 
 fileprivate func determine_max() -> UInt {
@@ -38,12 +38,12 @@ fileprivate func determine_max() -> UInt {
  */
 public func runTask<Type>(_ closure: @escaping () async -> Type) async -> Task<Type,Never> {
     //Log.i("runtask with cpuUsage \(cpuUsage())")
-    if await number_running.startOnIncrement(to: TaskRunner.maxConcurrentTasks) {
+    if await numberRunning.startOnIncrement(to: TaskRunner.maxConcurrentTasks) {
         //Log.v("running in new task")
         return Task<Type,Never> {
             let ret = await closure() // run closure in separate task
             //Log.v("new task done")
-            await number_running.decrement()
+            await numberRunning.decrement()
             return ret
         }
     } else {
@@ -66,12 +66,12 @@ public func runTask<Type>(_ closure: @escaping () async -> Type) async -> Task<T
  }
  */
 public func runThrowingTask<Type>(_ closure: @escaping () async throws -> Type) async throws -> Task<Type,Error> {
-    if await number_running.startOnIncrement(to: TaskRunner.maxConcurrentTasks) {
+    if await numberRunning.startOnIncrement(to: TaskRunner.maxConcurrentTasks) {
         //Log.v("running in new task")
         return Task<Type,Error> {
             let ret = try await closure() // run closure in separate task
             //Log.v("new task done")
-            await number_running.decrement()
+            await numberRunning.decrement()
             return ret
         }
     } else {

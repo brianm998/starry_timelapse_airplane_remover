@@ -43,8 +43,8 @@ func hough_test(filename: String, outputFilename: String) async {
         Log.e("hough width \(hough_width) height \(hough_height)")
         
         guard var output_data = CFDataCreateMutableCopy(kCFAllocatorDefault,
-                                                        CFDataGetLength(output_image.raw_image_data as CFData),
-                                                        output_image.raw_image_data as CFData) as? Data
+                                                        CFDataGetLength(output_image.rawImageData as CFData),
+                                                        output_image.rawImageData as CFData) as? Data
               else { fatalError("fuck") }
 
         try image.read { pixels in 

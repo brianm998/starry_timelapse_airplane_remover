@@ -75,7 +75,7 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
                        supportedImageFileTypes: config.supportedImageFileTypes,
                        numberFinalProcessingNeighborsNeeded: config.numberFinalProcessingNeighborsNeeded,
                        processExistingFiles: processExistingFiles,
-                       max_images: maxResidentImages,
+                       maxImages: maxResidentImages,
                        fullyProcess: fullyProcess);
 
         let imageSequence_size = /*self.*/imageSequence.filenames.count
@@ -84,7 +84,7 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
             imageSequenceSizeClosure(imageSequence_size)
         }
         
-        self.remaining_images_closure = { number_of_unprocessed in
+        self.remainingImagesClosure = { number_of_unprocessed in
             if let updatable = callbacks.updatable {
                 // log number of unprocessed images here
                 Task(priority: .userInitiated) {
@@ -95,23 +95,23 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
                 }
             }
         }
-        if let remaining_images_closure = remaining_images_closure {
+        if let remainingImagesClosure = remainingImagesClosure {
             Task(priority: .medium) {
-                await self.method_list.set(removeClosure: remaining_images_closure)
-                remaining_images_closure(await self.method_list.count)
+                await self.methodList.set(removeClosure: remainingImagesClosure)
+                remainingImagesClosure(await self.methodList.count)
             }
         }
 
-        var should_process = [Bool](repeating: false, count: self.existing_output_files.count)
-        for (index, output_file_exists) in self.existing_output_files.enumerated() {
-            should_process[index] = !output_file_exists
+        var shouldProcess = [Bool](repeating: false, count: self.existingOutputFiles.count)
+        for (index, output_file_exists) in self.existingOutputFiles.enumerated() {
+            shouldProcess[index] = !output_file_exists
         }
         
         final_processor = await FinalProcessor(with: config,
                                            callbacks: callbacks,
                                            publisher: publisher,
                                            numberOfFrames: imageSequence_size,
-                                           shouldProcess: should_process,
+                                           shouldProcess: shouldProcess,
                                            dispatchGroup: dispatchGroup,
                                            imageSequence: imageSequence,
                                            isGUI: is_gui || processExistingFiles)
@@ -136,7 +136,7 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
     }
 
     // called by the superclass at startup
-    override func startup_hook() async throws {
+    override func startupHook() async throws {
         Log.d("startup hook starting")
         if imageWidth == nil ||
            imageHeight == nil ||
@@ -205,7 +205,7 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
         let frame_plane_remover =
           try await self.createFrame(atIndex: index,
                                      otherFrameIndexes: otherFrameIndexes,
-                                     outputFilename: "\(self.output_dirname)/\(baseName)",
+                                     outputFilename: "\(self.outputDirname)/\(baseName)",
                                      baseName: baseName,
                                      imageWidth: imageWidth!,
                                      imageHeight: imageHeight!,
@@ -218,7 +218,7 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
     public var imageHeight: Int?
     public var image_bytesPerPixel: Int? // XXX bad name
 
-    override func result_hook(with result: FrameAirplaneRemover) async {
+    override func resultHook(with result: FrameAirplaneRemover) async {
 
         // send this frame to the final processor
         

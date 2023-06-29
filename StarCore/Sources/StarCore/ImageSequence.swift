@@ -37,9 +37,9 @@ public actor ImageSequence {
 
     init(dirname: String,
          supportedImageFileTypes: [String],
-         max_images: Int? = nil) throws
+         maxImages: Int? = nil) throws
     {
-        self.max_images = max_images
+        self.maxImages = maxImages
         var image_files: [String] = []
         if !file_manager.fileExists(atPath: dirname) {
             throw "\(dirname) does not exist"
@@ -54,8 +54,8 @@ public actor ImageSequence {
         }
         
         image_files.sort { (lhs: String, rhs: String) -> Bool in
-            let lh = remove_path_and_suffix(fromString: lhs)
-            let rh = remove_path_and_suffix(fromString: rhs)
+            let lh = removePath_and_suffix(fromString: lhs)
+            let rh = removePath_and_suffix(fromString: rhs)
             return lh < rh
         }
 
@@ -80,7 +80,7 @@ public actor ImageSequence {
 
     private var loaded_filenames: [String] = []
 
-    private var max_images: Int? // XXX set this low for gui, eating more ram than necessary
+    private var maxImages: Int? // XXX set this low for gui, eating more ram than necessary
     
     func getImage(withName filename: String) -> ImageLoader {
         Log.d("getImage(withName: \(filename))")
@@ -94,10 +94,10 @@ public actor ImageSequence {
 
         loaded_filenames.insert(filename, at: 0)
 
-        var _max_images = 0
+        var _maxImages = 0
 
-        if let max_images = max_images {
-            _max_images = max_images
+        if let maxImages = maxImages {
+            _maxImages = maxImages
         } else if ImageSequence.imageWidth != 0,
                   ImageSequence.imageHeight != 0
         {
@@ -109,18 +109,18 @@ public actor ImageSequence {
             let bytes_per_image = ImageSequence.imageWidth*ImageSequence.imageHeight*8
 
             // this is a rule of thumb, not exact
-            _max_images = Int(memorySizeBytes / UInt64(bytes_per_image)) / 5 // XXX hardcoded constant
+            _maxImages = Int(memorySizeBytes / UInt64(bytes_per_image)) / 5 // XXX hardcoded constant
 
             let never_go_over_max = 100 // XXX hardcoded max
-            if _max_images > never_go_over_max { _max_images = never_go_over_max }
+            if _maxImages > never_go_over_max { _maxImages = never_go_over_max }
             
-            max_images = _max_images
-            Log.i("calculated max_images \(_max_images)")
+            maxImages = _maxImages
+            Log.i("calculated maxImages \(_maxImages)")
         } else {
-            _max_images = 10    // initial default
+            _maxImages = 10    // initial default
         }
         
-        while loaded_filenames.count > _max_images { 
+        while loaded_filenames.count > _maxImages { 
             self.removeValue(forKey: loaded_filenames.removeLast())
         }
         
@@ -130,7 +130,7 @@ public actor ImageSequence {
 }
 
 // removes path and suffix from filename
-func remove_path_and_suffix(fromString string: String) -> String {
+func removePath_and_suffix(fromString string: String) -> String {
     let imageURL = NSURL(fileURLWithPath: string, isDirectory: false) as URL
     let full_path = imageURL.deletingPathExtension().absoluteString
     let components = full_path.components(separatedBy: "/")

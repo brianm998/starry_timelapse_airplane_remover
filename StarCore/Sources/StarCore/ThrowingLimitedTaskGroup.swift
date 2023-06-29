@@ -18,12 +18,12 @@ You should have received a copy of the GNU General Public License along with sta
 public class ThrowingLimitedTaskGroup<T, Error> where Error: Swift.Error {
     var taskGroup: ThrowingTaskGroup<T, Error>
     let maxConcurrent: Int
-    let number_running: NumberRunning
+    let numberRunning: NumberRunning
     
     public init(taskGroup: ThrowingTaskGroup<T, Error>, maxConcurrent: Int) {
         self.taskGroup = taskGroup
         self.maxConcurrent = maxConcurrent
-        self.number_running = NumberRunning()
+        self.numberRunning = NumberRunning()
     }
 
     public func next() async throws ->  T? {
@@ -36,21 +36,21 @@ public class ThrowingLimitedTaskGroup<T, Error> where Error: Swift.Error {
     
     public func addTask(closure: @escaping () async throws -> T) async rethrows {
 
-        var current_running = await number_running.currentValue()
+        var current_running = await numberRunning.currentValue()
         while current_running > maxConcurrent {
             do {
                 try await Task.sleep(nanoseconds: 500_000_000) // 500 ms
             } catch {
                 Log.e("\(error)")
             }
-            current_running = await number_running.currentValue()
+            current_running = await numberRunning.currentValue()
             //Log.d("awaking \(current_running) are still running")
         }
-        await number_running.increment()
+        await numberRunning.increment()
         
         taskGroup.addTask() {
             let ret = try await closure()
-            await self.number_running.decrement()
+            await self.numberRunning.decrement()
             return ret
         }
     }
