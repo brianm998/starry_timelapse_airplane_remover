@@ -78,7 +78,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
 
     public func hasChanges() -> Bool { return didChange }
     
-    public func outlierGroups() -> [OutlierGroup]? {
+    public func outlierGroupList() -> [OutlierGroup]? {
         if let outlier_groups = outlier_groups {
             let groups = outlier_groups.members
             return groups.map {$0.value}
@@ -176,7 +176,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
 
             let valueMatrix = OutlierGroupValueMatrix()
 
-            if let outliers = self.outlierGroups() {
+            if let outliers = self.outlierGroupList() {
                 for outlier in outliers {
                     await valueMatrix.append(outlierGroup: outlier)
                 }

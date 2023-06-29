@@ -301,7 +301,7 @@ public final class ViewModel: ObservableObject {
 
     func setOutlierGroups(forFrame frame: FrameAirplaneRemover) async {
         Task.detached(priority: .userInitiated) {
-            let outlierGroups = frame.outlierGroups()
+            let outlierGroups = frame.outlierGroupList()
             if let outlierGroups = outlierGroups {
                 Log.d("got \(outlierGroups.count) groups for frame \(frame.frameIndex)")
                 var newOutlierGroups: [OutlierGroupViewModel] = []
