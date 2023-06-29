@@ -18,8 +18,8 @@ struct StarCommands: Commands {
             contentView.outlierInfoButton()
             contentView.applyAllDecisionTreeButton()
             contentView.applyDecisionTreeButton()
-            contentView.renderCurrentFrameButton()
              */
+            RenderCurrentFrameButton(viewModel: viewModel)
             RenderAllFramesButton(viewModel: viewModel)
             
             LoadAllOutliersButton(viewModel: viewModel)

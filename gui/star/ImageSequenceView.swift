@@ -105,23 +105,6 @@ struct ImageSequenceView: View {
           }
     }
 
-    func renderCurrentFrame(_ closure: (() -> Void)? = nil) async {
-        if let frame = viewModel.currentFrame {
-            await viewModel.render(frame: frame, closure: closure)
-        }
-    }
-    
-    func renderCurrentFrameButton() -> some View {
-        let action: () -> Void = {
-            Task { await self.renderCurrentFrame() }
-        }
-        
-        return Button(action: action) {
-            Text("Render This Frame")
-        }
-          .help("Render the active frame with current settings")
-    }
-    
     func applyDecisionTreeButton() -> some View {
         let action: () -> Void = {
             Task {
