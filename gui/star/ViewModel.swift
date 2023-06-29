@@ -704,15 +704,6 @@ public extension ViewModel {
             // usually stick the preview image in there first if we have it
             var show_preview = true
 
-            /*
-            Log.d("showFullResolution \(showFullResolution)")
-            Log.d("self.current_frame_image_index \(self.current_frame_image_index)")
-            Log.d("new_frame_view.frame_index \(new_frame_view.frame_index)")
-            Log.d("self.current_frame_image_view_mode \(self.current_frame_image_view_mode)")
-            Log.d("self.frameViewMode \(self.frameViewMode)")
-            Log.d("self.current_frame_image_was_preview \(self.current_frame_image_was_preview)")
-             */
-
             if showFullResolution &&
                self.current_frame_image_index == new_frame_view.frame_index &&
                self.current_frame_image_view_mode == self.frameViewMode &&
@@ -893,6 +884,7 @@ public extension ViewModel {
         }
     }
 
+    // starts or stops video from playing
     func togglePlay(_ scroller: ScrollViewProxy? = nil) {
         self.video_playing = !self.video_playing
         if self.video_playing {
