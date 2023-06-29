@@ -5,7 +5,6 @@ struct RenderCurrentFrameButton: View {
     @ObservedObject var viewModel: ViewModel
     
     var body: some View {
-
         let action: () -> Void = {
             Task {
                 if let frame = viewModel.currentFrame {
@@ -18,6 +17,5 @@ struct RenderCurrentFrameButton: View {
             Text("Render This Frame")
         }
           .help("Render the active frame with current settings")
-        }
     }    
 }

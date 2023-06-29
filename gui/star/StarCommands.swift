@@ -13,12 +13,11 @@ struct StarCommands: Commands {
               .keyboardShortcut("p", modifiers: [])
             ClearAllButton(viewModel: viewModel)
               .keyboardShortcut("c", modifiers: [])
-            
             /*
             contentView.outlierInfoButton()
-            contentView.applyAllDecisionTreeButton()
-            contentView.applyDecisionTreeButton()
              */
+            ApplyAllDecisionTreeButton(viewModel: viewModel)
+            ApplyDecisionTreeButton(viewModel: viewModel)
             RenderCurrentFrameButton(viewModel: viewModel)
             RenderAllFramesButton(viewModel: viewModel)
             
