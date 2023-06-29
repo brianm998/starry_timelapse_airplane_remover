@@ -5,18 +5,20 @@ import StarCore
 
 class OutlierGroupViewModel: ObservableObject {
 
-    init (group: OutlierGroup,
-         name: String,
-         bounds: BoundingBox,
-         image: NSImage)
+    init (viewModel: ViewModel,
+          group: OutlierGroup,
+          name: String,
+          bounds: BoundingBox,
+          image: NSImage)
     {
+        self.viewModel = viewModel
         self.group = group
         self.name = name
         self.bounds = bounds
         self.image = image
     }
 
-    @EnvironmentObject var viewModel: ViewModel
+    @ObservedObject var viewModel: ViewModel
     
     @Published var arrowSelected = false // hovered over on frame view
 
@@ -79,6 +81,7 @@ class OutlierGroupViewModel: ObservableObject {
 
     var view: some View {
         return OutlierGroupView(groupViewModel: self)
+          .environmentObject(viewModel)
     }
     
 }

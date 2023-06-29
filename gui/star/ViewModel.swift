@@ -312,10 +312,11 @@ public final class ViewModel: ObservableObject {
                         size.height = CGFloat(cgImage.height)
                         let outlierImage = NSImage(cgImage: cgImage, size: size)
                         
-                        let groupView = await OutlierGroupViewModel(group: group,
-                                                                    name: group.name,
-                                                                    bounds: group.bounds,
-                                                                    image: outlierImage)
+                        let groupView = await OutlierGroupViewModel(viewModel: self,
+                                                               group: group,
+                                                               name: group.name,
+                                                               bounds: group.bounds,
+                                                               image: outlierImage)
                         newOutlierGroups.append(groupView)
                     } else {
                         Log.e("frame \(frame.frameIndex) outlier group no image")

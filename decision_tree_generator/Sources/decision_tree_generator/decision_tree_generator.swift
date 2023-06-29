@@ -188,7 +188,7 @@ struct decision_tree_generator: ParsableCommand {
         
         callbacks.countOfFramesToCheck = { 1 }
 
-        let eraser = try NighttimeAirplaneRemover(with: config,
+        let eraser = try await NighttimeAirplaneRemover(with: config,
                                                   callbacks: callbacks,
                                                   processExistingFiles: true,
                                                   fullyProcess: false)
@@ -235,7 +235,7 @@ struct decision_tree_generator: ParsableCommand {
                 }
                 
                 //Log.d("should check frame \(frame.frameIndex)")
-                if let outlier_group_list = frame.outlierGroups() {
+                if let outlier_group_list = frame.outlierGroupList() {
                     for outlier_group in outlier_group_list {
                         if let numberGood = outlier_group.shouldPaint {
                             await withLimitedTaskGroup(of: (treeKey:String, shouldPaint:Bool).self) { taskGroup in
@@ -350,10 +350,10 @@ struct decision_tree_generator: ParsableCommand {
         
         callbacks.countOfFramesToCheck = { 1 }
 
-        let eraser = try NighttimeAirplaneRemover(with: config,
-                                                  callbacks: callbacks,
-                                                  processExistingFiles: true,
-                                                  fullyProcess: false)
+        let eraser = try await NighttimeAirplaneRemover(with: config,
+                                                   callbacks: callbacks,
+                                                   processExistingFiles: true,
+                                                   fullyProcess: false)
         let sequence_size = await eraser.image_sequence.filenames.count
         endClosure = {
             Log.d("end enclosure frames.count \(frames.count) sequence_size \(sequence_size)")
@@ -391,7 +391,7 @@ struct decision_tree_generator: ParsableCommand {
                 
                 var local_positive_data: [OutlierFeatureData] = []
                 var local_negative_data: [OutlierFeatureData] = []
-                if let outlier_groups = frame.outlierGroups() {
+                if let outlier_groups = frame.outlierGroupList() {
                     for outlier_group in outlier_groups {
                         let name = outlier_group.name
                         if let should_paint = outlier_group.shouldPaint {

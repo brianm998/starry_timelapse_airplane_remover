@@ -68,7 +68,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
     public let thumbnailOutputDirname: String?
 
     // populated by pruning
-    public var outlier_groups: OutlierGroups?
+    public var outlierGroups: OutlierGroups?
 
     private var didChange = false
 
@@ -79,16 +79,16 @@ public class FrameAirplaneRemover: Equatable, Hashable {
     public func hasChanges() -> Bool { return didChange }
     
     public func outlierGroupList() -> [OutlierGroup]? {
-        if let outlier_groups = outlier_groups {
-            let groups = outlier_groups.members
+        if let outlierGroups = outlierGroups {
+            let groups = outlierGroups.members
             return groups.map {$0.value}
         }
         return nil
     }
 
     public func outlierGroups(within distance: Double, of bounding_box: BoundingBox) -> [OutlierGroup]? {
-        if let outlier_groups = outlier_groups {
-            let groups = outlier_groups.members
+        if let outlierGroups = outlierGroups {
+            let groups = outlierGroups.members
             var ret: [OutlierGroup] = []
             for (_, group) in groups {
                 if group.bounds.centerDistance(to: bounding_box) < distance {
@@ -194,7 +194,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
            let output_dirname = self.outlierOutputDirname
         {
             do {
-                try await self.outlier_groups?.write(to: output_dirname)
+                try await self.outlierGroups?.write(to: output_dirname)
             } catch {
                 Log.e("error \(error)")
             }                
@@ -278,7 +278,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         }
     }
     
-    var outlierGroupCount: Int { return outlier_groups?.members.count ?? 0 }
+    var outlierGroupCount: Int { return outlierGroups?.members.count ?? 0 }
     
     public let output_filename: String
 
@@ -404,23 +404,23 @@ public class FrameAirplaneRemover: Equatable, Hashable {
     }
     
     public func loadOutliers() async throws {
-        if self.outlier_groups == nil {
+        if self.outlierGroups == nil {
             Log.d("frame \(frameIndex) loading outliers")
             if let outlierGroups = await outlierGroupLoader() {
                 for outlier in outlierGroups.members.values {
                     outlier.setFrame(self) 
                 }
                                                                   
-                self.outlier_groups = outlierGroups
+                self.outlierGroups = outlierGroups
                 // while these have already decided outlier groups,
                 // we still need to inter frame process them so that
                 // frames are linked with their neighbors and outlier
                 // groups can use these links for decision tree values
                 self.state = .readyForInterFrameProcessing
                 self.outliersLoadedFromFile = true
-                Log.i("loaded \(String(describing: self.outlier_groups?.members.count)) outlier groups for frame \(frameIndex)")
+                Log.i("loaded \(String(describing: self.outlierGroups?.members.count)) outlier groups for frame \(frameIndex)")
             } else {
-                self.outlier_groups = OutlierGroups(frameIndex: frameIndex,
+                self.outlierGroups = OutlierGroups(frameIndex: frameIndex,
                                                     members: [:])
 
                 Log.i("calculating outlier groups for frame \(frameIndex)")
@@ -433,7 +433,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
     }
 
     public func outlierGroup(named outlier_name: String) -> OutlierGroup? {
-        return outlier_groups?.members[outlier_name]
+        return outlierGroups?.members[outlier_name]
     }
     
     public func foreachOutlierGroup(between startLocation: CGPoint,
@@ -471,8 +471,8 @@ public class FrameAirplaneRemover: Equatable, Hashable {
     }
 
     public func foreachOutlierGroup(_ closure: (OutlierGroup)async->LoopReturn) async {
-        if let outlier_groups = self.outlier_groups {
-            for (_, group) in outlier_groups.members {
+        if let outlierGroups = self.outlierGroups {
+            for (_, group) in outlierGroups.members {
                 let result = await closure(group)
                 if result == .break { break }
             }
@@ -767,7 +767,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
             }
         }
 
-        // populate the outlier_groups
+        // populate the outlierGroups
         for (group_name, group_size) in individual_group_counts {
             if let min_x = group_min_x[group_name],
                let min_y = group_min_y[group_name],
@@ -829,11 +829,11 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                                                      frame: self,
                                                      pixels: outlier_amounts,
                                                      max_pixel_distance: config.max_pixel_distance)
-                outlier_groups?.members[group_name] = new_outlier
+                outlierGroups?.members[group_name] = new_outlier
             }
         }
         self.state = .readyForInterFrameProcessing
-        Log.i("frame \(frameIndex) has found \(String(describing: outlier_groups?.members.count)) outlier groups to consider")
+        Log.i("frame \(frameIndex) has found \(String(describing: outlierGroups?.members.count)) outlier groups to consider")
     }
 
     public func pixelatedImage() async throws -> PixelatedImage? {
@@ -877,12 +877,12 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         let image = try await image_sequence.getImage(withName: image_sequence.filenames[frameIndex]).image()
 
         // paint over every outlier in the paint list with pixels from the adjecent frames
-        guard let outlier_groups = outlier_groups else {
+        guard let outlierGroups = outlierGroups else {
             Log.e("cannot paint without outlier groups")
             return
         }
 
-        for (_, group) in outlier_groups.members {
+        for (_, group) in outlierGroups.members {
             if let reason = group.shouldPaint {
                 if reason.willPaint {
                     Log.d("frame \(frameIndex) painting over group \(group) for reason \(reason)")
