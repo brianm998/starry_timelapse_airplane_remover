@@ -5,7 +5,7 @@ import StarCore
 import Zoomable
 
 
-// the overall view model for a particular sequence
+// the overall view model
 @MainActor
 public final class ViewModel: ObservableObject {
     var config: Config?
@@ -93,8 +93,6 @@ public final class ViewModel: ObservableObject {
 
     @Published var previousInteractionMode: InteractionMode = .scrub
 
-
-
     // enum for how we show each frame
     @Published var frameViewMode = FrameViewMode.processed
 
@@ -136,7 +134,6 @@ public final class ViewModel: ObservableObject {
         if current_index >= frames.count { current_index = frames.count - 1 }
         return frames[current_index]
     }
-    /*    @Published*/
     
     var currentFrame: FrameAirplaneRemover? {
         if current_index >= 0,
@@ -163,14 +160,7 @@ public final class ViewModel: ObservableObject {
         return false
     }
     
-    /*
-    var currentThumbnailImage: Image? {
-        return frames[current_index].thumbnail_image
-    }
-*/
-
     var eraserTask: Task<(),Never>?
-
     
     func set(numberOfFrames: Int) {
         Task {
@@ -406,13 +396,8 @@ public final class ViewModel: ObservableObject {
     
     @MainActor func startup(withNewImageSequence image_sequence_dirname: String) async throws {
 
-        let outlierMaxThreshold: Double = 13
-        let outlierMinThreshold: Double = 9
-        let minGroupSize: Int = 80      // groups smaller than this are completely ignored
         let numConcurrentRenders: Int = ProcessInfo.processInfo.activeProcessorCount
         let should_write_outlier_group_files = true // XXX see what happens
-        //let process_outlier_group_images = false
-
         
         // XXX copied from star.swift
         var input_image_sequence_dirname = image_sequence_dirname 
@@ -445,9 +430,9 @@ public final class ViewModel: ObservableObject {
         }
 
         let config = Config(outputPath: input_image_sequence_path,
-                            outlierMaxThreshold: outlierMaxThreshold,
-                            outlierMinThreshold: outlierMinThreshold,
-                            minGroupSize: minGroupSize,
+                            outlierMaxThreshold: Defaults.outlierMaxThreshold,
+                            outlierMinThreshold: Defaults.outlierMinThreshold,
+                            minGroupSize: Defaults.minGroupSize,
                             numConcurrentRenders: numConcurrentRenders,
                             imageSequenceName: input_image_sequence_name,
                             imageSequencePath: input_image_sequence_path,

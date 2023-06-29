@@ -2,6 +2,13 @@ import Foundation
 
 extension String: Error {}
 
+// these values are used for creating an initial config when processing a new sequence
+public struct Defaults {
+    public static let outlierMaxThreshold: Double = 13 // XXX document these
+    public static let outlierMinThreshold: Double = 9
+    public static let minGroupSize: Int = 80      // groups smaller than this are completely ignored
+}
+
 // x, y coordinates
 public struct Coord: Codable {
     public let x: Int

@@ -155,7 +155,7 @@ struct Star: ParsableCommand {
         which may find more airplanes, but also may yield more false positives.
         Outlier Pixels with brightness increases greater than this are fully painted over.
         """)
-    var outlierMaxThreshold: Double = 13
+    var outlierMaxThreshold = Defaults.outlierMaxThreshold
 
     @Option(name: [.customShort("b"), .long], help: """
         The percentage in brightness increase for the lower threshold.
@@ -165,14 +165,14 @@ struct Star: ParsableCommand {
         will be painted over with an alpha level betewen the two values,
         leaving some of the original pixel value present.
         """)
-    var outlierMinThreshold: Double = 9
+    var outlierMinThreshold = Defaults.outlierMinThreshold
 
     @Option(name: .shortAndLong, help: """
         The minimum outlier group size.  Outlier groups smaller than this will be ignored.
         Smaller values produce more groups, which may get more small airplane streaks,
         but also might end with more twinkling stars.
         """)
-    var minGroupSize: Int = 80      // groups smaller than this are completely ignored
+    var minGroupSize = Defaults.minGroupSize // groups smaller than this are completely ignored
     
     @Option(name: .shortAndLong, help: """
         Max Number of frames to process at once.
