@@ -73,14 +73,26 @@ ditto \
 #
 #   --keychain-profile "star" \
 #
+# Sign in to appleid.apple.com.
+# In the Sign-In and Security section, select App-Specific Passwords.
+# Select Generate an app-specific password or select the Add button. 
+# then follow the steps on your screen.
+# afterwards, run this:
+#
 # xcrun notarytool store-credentials --apple-id brian.beholden@gmail.com --team-id G3L75S65V9
+#
+# Be aware that this can fail due to updated developer account legal stuff, try logging into
+# developer.apple.com and clicking around before generating a new app specific password 
+#
 
 xcrun notarytool submit \
       "${BUILD_DIR}/${APP_NAME}-for-notarization.zip" \
-      --keychain-profile "ntar" \
+      --keychain-profile "star" \
       --wait 
 
 WAIT_TIME=20
+
+
 
 # wait for notorization and staple the build
 until xcrun stapler staple "${BUILD_DIR}/AdHoc/${APP_NAME}.app"; do
@@ -103,7 +115,7 @@ pkgbuild --root "${BUILD_DIR}/AdHoc/${APP_NAME}.app" \
 
 # not sure if we need to notarize and staple both the app and the package,
 # seems to work now, adjust as if necessary later
-xcrun notarytool submit $PKG_NAME --keychain-profile ntar --wait
+xcrun notarytool submit $PKG_NAME --keychain-profile star --wait
 xcrun stapler staple $PKG_NAME
 
 # set to build for active arch only for development (as it is in git)
