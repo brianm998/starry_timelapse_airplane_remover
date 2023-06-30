@@ -5,27 +5,27 @@ import StarCore
 // XXX this is a mess, clean it up
 
 enum BottomControlLayout {
-    case hStack
-    case vStack2
-    case vStack3
+    case fullyHorizontal
+    case twoVerticalLayers
+    case threeVerticalLayers
 }
 
 struct BottomControls: View {
     @EnvironmentObject var viewModel: ViewModel
     let scroller: ScrollViewProxy
 
-    @State private var layout: BottomControlLayout = .vStack2//.hStack
+    @State private var layout: BottomControlLayout = .fullyHorizontal
 
     @State private var playbackButtonWidth: CGFloat = 0
     @State private var leftViewWidth: CGFloat = 0
     @State private var rightViewWidth: CGFloat = 0
 
-    @State private var totalSize = CGSize(width: 0, height: 0)
+    @State private var spaceAvailable = CGSize(width: 0, height: 0)
 
     var body: some View {
         HStack {
             switch layout {
-            case .hStack:
+            case .fullyHorizontal:
                 ZStack(alignment: .center) {
                     HStack {
                         self.leftView()
@@ -40,7 +40,7 @@ struct BottomControls: View {
                     }
                 }
 
-            case .vStack2:
+            case .twoVerticalLayers:
                 VStack {
                     HStack {
                         self.leftView()
@@ -50,7 +50,7 @@ struct BottomControls: View {
                     buttonsView()
                 }
                 
-            case .vStack3:
+            case .threeVerticalLayers:
                 VStack {
                     self.leftView()
                     self.rightView()
@@ -60,32 +60,34 @@ struct BottomControls: View {
         }
           .frame(maxWidth: .infinity)
           .readSize {
-              self.totalSize = $0
+              self.spaceAvailable = $0
               handleSizeUpdate()
           }
     }
 
+    // maybe adjust the layout if some of the sizes change
     func handleSizeUpdate() {
-        let totalWidth = totalSize.width
+        let totalWidth = spaceAvailable.width
         if viewModel.interactionMode == .edit {
             if (totalWidth - self.playbackButtonWidth)/2 >= self.rightViewWidth {
-                self.layout = .hStack
+                self.layout = .fullyHorizontal
             } else {
                 if self.rightViewWidth + self.leftViewWidth/* + 300*/ < totalWidth {
-                    self.layout = .vStack2
+                    self.layout = .twoVerticalLayers
                 } else {
-                    self.layout = .vStack3
+                    self.layout = .threeVerticalLayers
                 }
             }
         } else {
             if (totalWidth - self.playbackButtonWidth)/2 >= self.leftViewWidth {
-                self.layout = .hStack
+                self.layout = .fullyHorizontal
             } else {
-                self.layout = .vStack2
+                self.layout = .twoVerticalLayers
             }
         }
     }
-    
+
+    // the video playback buttons in the middle
     func buttonsView() -> some View {
         VideoPlaybackButtons(scroller: scroller)
           .frame(height: 40, alignment: .center)
@@ -95,7 +97,9 @@ struct BottomControls: View {
               handleSizeUpdate()
           }
     }
-    
+
+
+    // whatever is on the right side
     func rightView() -> some View {
         HStack() {
             if viewModel.interactionMode == .edit {
@@ -188,7 +192,8 @@ struct BottomControls: View {
               handleSizeUpdate()
           }
     }
-    
+
+    // whatever is on the left side
     func leftView() -> some View {
         HStack {
             VStack {
