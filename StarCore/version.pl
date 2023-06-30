@@ -5,9 +5,12 @@ use strict;
 open my $fh, "<Sources/StarCore/Config.swift" or die "Cannot open config: $!";
 
 while(<$fh>) {
-    if(/public var star_version = "([^"]+)"/) {
+    if(/public var starVersion = "([^"]+)"/) {
 	print "$1\n";
-	last
+	close $fh;
+	exit;
     }
 }
-close $fh
+
+die "couldn't get starVersion from Sources/StarCore/Config.swift";
+close $fh;
