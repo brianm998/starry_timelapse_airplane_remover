@@ -3,45 +3,118 @@ import StarCore
 
 // controls below the selected frame and above the filmstrip
 // XXX this is a mess, clean it up
+
+enum BottomControlLayout {
+    case hStack
+    case vStack2
+    case vStack3
+}
+
 struct BottomControls: View {
     @EnvironmentObject var viewModel: ViewModel
     let scroller: ScrollViewProxy
 
-    @State private var useHStack = true
+    @State private var layout: BottomControlLayout = .vStack2//.hStack
+
+    @State private var playbackButtonWidth: CGFloat = 900
+    @State private var leftViewWidth: CGFloat = 900
+    @State private var rightViewWidth: CGFloat = 900
+    @State private var totalWidth: CGFloat = 30
     
     var body: some View {
         HStack {
-            if useHStack {
-                HStack {
-                    self.leftView()
-                      .frame(maxWidth: .infinity, alignment: .leading)
+            switch layout {
+            case .hStack:
+                ZStack(alignment: .center) {
+                    HStack {
+                        self.leftView()
+                          .frame(alignment: .leading)
+                          .readSize1 { self.leftViewWidth = $0.width }
+                        Spacer()
+                    }
                     
                     VideoPlaybackButtons(scroller: scroller)
-                    
-                    self.rightView()
-                      .frame(maxWidth: .infinity, alignment: .trailing)
+                      .frame(height: 40, alignment: .center)
+                      .fixedSize()
+                      .readSize2 { self.playbackButtonWidth = $0.width }
+
+                    HStack {
+                        Spacer()
+                        self.rightView()
+                          .frame(alignment: .trailing)
+                          .readSize3 { self.rightViewWidth = $0.width }
+                    }
                 }
-            } else {
+
+            case .vStack2:
+                VStack {
+                    HStack {
+                        self.leftView()
+                          .frame(alignment: .leading)
+                          .readSize1 { self.leftViewWidth = $0.width }
+                        
+                        self.rightView()
+                          .frame(alignment: .trailing)
+                          .readSize3 { self.rightViewWidth = $0.width }
+                    }
+
+                    VideoPlaybackButtons(scroller: scroller)
+                      .frame(height: 40, alignment: .center)
+                      .fixedSize()
+                      .readSize2 { self.playbackButtonWidth = $0.width }
+                    
+                }
+                
+            case .vStack3:
                 VStack {
                     self.leftView()
-                      .frame(maxWidth: .infinity, alignment: .leading)
+                      .frame(alignment: .leading)
+                      .readSize1 { self.leftViewWidth = $0.width }
                     
                     VideoPlaybackButtons(scroller: scroller)
+                      .frame(height: 40, alignment: .center)
+                      .fixedSize()
+                      .readSize2 { self.playbackButtonWidth = $0.width }
                     
                     self.rightView()
-                      .frame(maxWidth: .infinity, alignment: .trailing)
+                      .frame(alignment: .trailing)
+                      .readSize3 { self.rightViewWidth = $0.width }
                 }
             }
         }
-          .readSize { newSize in
-              if viewModel.interactionMode == .edit {
-                  self.useHStack = newSize.width > 1200
-              } else {
-                  self.useHStack = newSize.width > 800
-              }
+          .frame(maxWidth: .infinity)
+          .readSize4 { newSize in
+              handleSize(size: newSize)
           }
     }
 
+    func handleSize(size: CGSize) {
+        totalWidth = size.width
+        if viewModel.interactionMode == .edit {
+            let componentWidth = self.rightViewWidth +
+              self.leftViewWidth + self.playbackButtonWidth
+
+            if (totalWidth - self.playbackButtonWidth)/2 >= self.rightViewWidth {
+                self.layout = .hStack
+            } else {
+                if self.rightViewWidth + self.leftViewWidth + 300 < totalWidth {
+                    self.layout = .vStack2
+                } else {
+                    self.layout = .vStack3
+                }
+            }
+            let _ = Log.w("totalWidth \(totalWidth) self.rightViewWidth \(self.rightViewWidth) self.leftViewWidth \(self.leftViewWidth) self.playbackButtonWidth \(self.playbackButtonWidth) layout \(self.layout) componentWidth \(componentWidth)")
+        } else {
+            if (totalWidth - self.playbackButtonWidth)/2 >= self.leftViewWidth {
+                self.layout = .hStack
+            } else {
+                self.layout = .vStack2
+            }
+            let _ = Log.w("totalWidth \(totalWidth) self.leftViewWidth \(self.leftViewWidth) self.playbackButtonWidth \(self.playbackButtonWidth) layout \(self.layout) (totalWidth - self.playbackButtonWidth)/2 \((totalWidth - self.playbackButtonWidth)/2)")
+        }
+
+    }
+    
     func rightView() -> some View {
         HStack() {
             if viewModel.interactionMode == .edit {
@@ -123,7 +196,9 @@ struct BottomControls: View {
               }
             } else {
                 Spacer()
+                  .border(.purple)
                 Text("")
+                  .border(.yellow)
             }
         }
     }
@@ -230,17 +305,60 @@ struct BottomControls: View {
 
 // XXX move these
 extension View {
-  func readSize(onChange: @escaping (CGSize) -> Void) -> some View {
-    background(
-      GeometryReader { geometryProxy in
-        Color.clear
-          .preference(key: SizePreferenceKey.self, value: geometryProxy.size)
-      }
-    )
-    .onPreferenceChange(SizePreferenceKey.self, perform: onChange)
-  }
+    func readSize1(onChange: @escaping (CGSize) -> Void) -> some View
+    {
+        background(
+          GeometryReader { geometryProxy in
+              Color.clear
+                .preference(key: LeftSideSizePreferenceKey.self, value: geometryProxy.size)
+          }
+        )
+          .onPreferenceChange(LeftSideSizePreferenceKey.self, perform: onChange)
+    }
+    func readSize2(onChange: @escaping (CGSize) -> Void) -> some View
+    {
+        background(
+          GeometryReader { geometryProxy in
+              Color.clear
+                .preference(key: RightSideSizePreferenceKey.self, value: geometryProxy.size)
+          }
+        )
+          .onPreferenceChange(RightSideSizePreferenceKey.self, perform: onChange)
+    }
+    func readSize3(onChange: @escaping (CGSize) -> Void) -> some View
+    {
+        background(
+          GeometryReader { geometryProxy in
+              Color.clear
+                .preference(key: MiddleSizePreferenceKey.self, value: geometryProxy.size)
+          }
+        )
+          .onPreferenceChange(MiddleSizePreferenceKey.self, perform: onChange)
+    }
+    func readSize4(onChange: @escaping (CGSize) -> Void) -> some View
+    {
+        background(
+          GeometryReader { geometryProxy in
+              Color.clear
+                .preference(key: SizePreferenceKey.self, value: geometryProxy.size)
+          }
+        )
+          .onPreferenceChange(SizePreferenceKey.self, perform: onChange)
+    }
 }
-
+// XXX pass these as a parameter to a single readSize() method
+struct LeftSideSizePreferenceKey: PreferenceKey {
+  static var defaultValue: CGSize = .zero
+  static func reduce(value: inout CGSize, nextValue: () -> CGSize) {}
+}
+struct RightSideSizePreferenceKey: PreferenceKey {
+  static var defaultValue: CGSize = .zero
+  static func reduce(value: inout CGSize, nextValue: () -> CGSize) {}
+}
+struct MiddleSizePreferenceKey: PreferenceKey {
+  static var defaultValue: CGSize = .zero
+  static func reduce(value: inout CGSize, nextValue: () -> CGSize) {}
+}
 struct SizePreferenceKey: PreferenceKey {
   static var defaultValue: CGSize = .zero
   static func reduce(value: inout CGSize, nextValue: () -> CGSize) {}

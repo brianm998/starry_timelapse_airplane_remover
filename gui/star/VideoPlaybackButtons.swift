@@ -16,6 +16,8 @@ struct VideoPlaybackButtons : View {
         let end_button_shortcut_key: KeyEquivalent = "f" // make this top arror
 
         let button_color = Color(white: 202/256)
+
+        let buttonSize: CGFloat = 180
         
         return HStack {
             // go to start button
@@ -24,6 +26,7 @@ struct VideoPlaybackButtons : View {
                 SystemButton(named: "backward.end.fill",
                             shortcutKey: start_shortcut_key,
                             color: button_color,
+                            size: buttonSize,
                             toolTip: """
                               go to start of sequence
                               (keyboard shortcut '\(start_shortcut_key.character)')
@@ -36,6 +39,7 @@ struct VideoPlaybackButtons : View {
                 SystemButton(named: "backward.fill",
                             shortcutKey: fast_previous_shortcut_key,
                             color: button_color,
+                            size: buttonSize,
                             toolTip: """
                               back \(viewModel.fastSkipAmount) frames
                               (keyboard shortcut '\(fast_previous_shortcut_key.character)')
@@ -48,6 +52,7 @@ struct VideoPlaybackButtons : View {
                 SystemButton(named: "backward.frame.fill",
                             shortcutKey: previous_shortcut_key,
                             color: button_color,
+                            size: buttonSize,
                             toolTip: """
                               back one frame
                               (keyboard shortcut left arrow)
@@ -61,7 +66,7 @@ struct VideoPlaybackButtons : View {
                 SystemButton(named: "arrowtriangle.backward",
                             shortcutKey: backwards_shortcut_key,
                             color: button_color,
-                            size: 40,
+                            size: buttonSize,
                             toolTip: """
                               play in reverse
                               (keyboard shortcut '\(backwards_shortcut_key)')
@@ -86,7 +91,7 @@ struct VideoPlaybackButtons : View {
                 SystemButton(named: viewModel.videoPlaying ? "pause.fill" : "play.fill", // pause.fill
                             shortcutKey: " ",
                             color: viewModel.videoPlaying ? .blue : button_color,
-                            size: 40,
+                            size: buttonSize,
                             toolTip: """
                               Play / Pause
                               """)
@@ -102,6 +107,7 @@ struct VideoPlaybackButtons : View {
                 SystemButton(named: "forward.frame.fill",
                             shortcutKey: .rightArrow,
                             color: button_color,
+                            size: buttonSize,
                             toolTip: """
                               forward one frame
                               (keyboard shortcut right arrow)
@@ -115,6 +121,7 @@ struct VideoPlaybackButtons : View {
                 SystemButton(named: "forward.fill",
                             shortcutKey: fast_next_shortcut_key,
                             color: button_color,
+                            size: buttonSize,
                             toolTip: """
                               forward \(viewModel.fastSkipAmount) frames
                               (keyboard shortcut '\(fast_next_shortcut_key.character)')
@@ -128,6 +135,7 @@ struct VideoPlaybackButtons : View {
                 SystemButton(named: "forward.end.fill",
                             shortcutKey: end_button_shortcut_key,
                             color: button_color,
+                            size: buttonSize,
                             toolTip: """
                               advance to end of sequence
                               (keyboard shortcut '\(end_button_shortcut_key.character)')
