@@ -7,9 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		D32F6DBC2A4F044300704870 /* StarCli.swift in Sources */ = {isa = PBXBuildFile; fileRef = D32F6DBB2A4F044300704870 /* StarCli.swift */; };
 		D33185A729F1DE10004DBB62 /* ArgumentParser in Frameworks */ = {isa = PBXBuildFile; productRef = D33185A629F1DE10004DBB62 /* ArgumentParser */; };
 		D33185AE29F1E007004DBB62 /* StarCore in Frameworks */ = {isa = PBXBuildFile; productRef = D33185AD29F1E007004DBB62 /* StarCore */; };
-		D33185B029F1E079004DBB62 /* star_cli.swift in Sources */ = {isa = PBXBuildFile; fileRef = D33185AF29F1E079004DBB62 /* star_cli.swift */; };
 		D33185B229F1E2C4004DBB62 /* libStarDecisionTrees.a in Frameworks */ = {isa = PBXBuildFile; fileRef = D33185B129F1E2C4004DBB62 /* libStarDecisionTrees.a */; };
 		D33185B429F1E67A004DBB62 /* libswift_Concurrency.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = D33185B329F1E67A004DBB62 /* libswift_Concurrency.tbd */; };
 /* End PBXBuildFile section */
@@ -27,9 +27,9 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		D32F6DBB2A4F044300704870 /* StarCli.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; name = StarCli.swift; path = Sources/star/StarCli.swift; sourceTree = SOURCE_ROOT; };
 		D331859629F1D685004DBB62 /* star */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = star; sourceTree = BUILT_PRODUCTS_DIR; };
 		D33185AB29F1DF5E004DBB62 /* StarCore */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = StarCore; path = ../StarCore; sourceTree = "<group>"; };
-		D33185AF29F1E079004DBB62 /* star_cli.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; name = star_cli.swift; path = Sources/star/star_cli.swift; sourceTree = SOURCE_ROOT; };
 		D33185B129F1E2C4004DBB62 /* libStarDecisionTrees.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libStarDecisionTrees.a; path = ../StarDecisionTrees/libStarDecisionTrees.a; sourceTree = "<group>"; };
 		D33185B329F1E67A004DBB62 /* libswift_Concurrency.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libswift_Concurrency.tbd; path = usr/lib/swift/libswift_Concurrency.tbd; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
@@ -70,7 +70,7 @@
 		D331859829F1D685004DBB62 /* star */ = {
 			isa = PBXGroup;
 			children = (
-				D33185AF29F1E079004DBB62 /* star_cli.swift */,
+				D32F6DBB2A4F044300704870 /* StarCli.swift */,
 			);
 			path = star;
 			sourceTree = "<group>";
@@ -128,6 +128,7 @@
 				TargetAttributes = {
 					D331859529F1D685004DBB62 = {
 						CreatedOnToolsVersion = 14.3;
+						LastSwiftMigration = 1430;
 					};
 				};
 			};
@@ -157,7 +158,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				D33185B029F1E079004DBB62 /* star_cli.swift in Sources */,
+				D32F6DBC2A4F044300704870 /* StarCli.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -294,6 +295,7 @@
 		D331859E29F1D685004DBB62 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CLANG_ENABLE_MODULES = YES;
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Developer ID Application";
 				CODE_SIGN_STYLE = Manual;
 				DEVELOPMENT_TEAM = "";
@@ -313,6 +315,7 @@
 				);
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
 			};
 			name = Debug;
@@ -320,6 +323,7 @@
 		D331859F29F1D685004DBB62 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CLANG_ENABLE_MODULES = YES;
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Developer ID Application";
 				CODE_SIGN_STYLE = Manual;
 				DEVELOPMENT_TEAM = "";
