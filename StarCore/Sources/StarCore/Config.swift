@@ -181,8 +181,9 @@ public struct Config: Codable {
     // 0.3.1 added release scripts for distribution, plus bug fixes
     // 0.3.2 fixed bugs, speed up tree forest, removes small outlier group dismissal
     // 0.3.3 speed up outlier saving, bug fixes, code improvements, renamed to star
+    // 0.3.4 lots of UI improvements
 
-    public var starVersion = "0.3.3" // XXX move this out
+    public var starVersion = "0.3.4" // XXX move this out
 
     public func writeJson(named filename: String) {
         
