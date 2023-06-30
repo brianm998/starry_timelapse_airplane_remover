@@ -67,17 +67,19 @@ struct BottomControls: View {
     // maybe adjust the layout if some of the sizes change
     func handleSizeUpdate() {
         let totalWidth = spaceAvailable.width
-        if viewModel.interactionMode == .edit {
+        switch viewModel.interactionMode {
+        case .edit:
             if (totalWidth - self.playbackButtonWidth)/2 >= self.rightViewWidth {
                 self.layout = .fullyHorizontal
             } else {
-                if self.rightViewWidth + self.leftViewWidth/* + 300*/ < totalWidth {
+                if self.rightViewWidth + self.leftViewWidth < totalWidth {
                     self.layout = .twoVerticalLayers
                 } else {
                     self.layout = .threeVerticalLayers
                 }
             }
-        } else {
+
+        case .scrub:
             if (totalWidth - self.playbackButtonWidth)/2 >= self.leftViewWidth {
                 self.layout = .fullyHorizontal
             } else {
@@ -131,6 +133,7 @@ extension View {
           .onPreferenceChange(SizePreferenceKey.self, perform: onChange)
     }
 }
+
 struct SizePreferenceKey: PreferenceKey {
   static var defaultValue: CGSize = .zero
   static func reduce(value: inout CGSize, nextValue: () -> CGSize) {}
