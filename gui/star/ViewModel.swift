@@ -30,7 +30,7 @@ public enum SelectionMode: String, Equatable, CaseIterable {
 
 public enum InteractionMode: String, Equatable, CaseIterable {
     case edit
-    case scrub
+    case play
 
     var localizedName: LocalizedStringKey {
         LocalizedStringKey(rawValue)
@@ -121,9 +121,9 @@ public final class ViewModel: ObservableObject {
 
     @Published var sliderValue = 0.0
 
-    @Published var interactionMode: InteractionMode = .scrub
+    @Published var interactionMode: InteractionMode = .play
 
-    @Published var previousInteractionMode: InteractionMode = .scrub
+    @Published var previousInteractionMode: InteractionMode = .play
 
     // enum for how we show each frame
     @Published var frameViewMode = FrameViewMode.processed
@@ -888,7 +888,7 @@ public extension ViewModel {
         if self.videoPlaying {
 
             self.previousInteractionMode = self.interactionMode
-            self.interactionMode = .scrub
+            self.interactionMode = .play
 
             Log.d("playing @ \(self.videoPlaybackFramerate) fps")
             currentVideoFrame = self.currentIndex

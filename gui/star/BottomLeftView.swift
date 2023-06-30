@@ -7,62 +7,79 @@ import StarCore
 struct BottomLeftView: View {
     @EnvironmentObject var viewModel: ViewModel
 
+    let pickerWidth: CGFloat = 160
+    
     var body: some View {
         HStack {
-            VStack {
-                ZStack {
-                    Button("") {
-                        self.viewModel.interactionMode = .edit
-                    }
-                      .opacity(0)
-                      .keyboardShortcut("e", modifiers: [])
+            Grid(horizontalSpacing: 0, verticalSpacing: 0) {
+                GridRow {
+                    Text("I will")
+                      .gridColumnAlignment(.trailing) 
+                    ZStack {
+                        Button("") {
+                            self.viewModel.interactionMode = .edit
+                        }
+                          .opacity(0)
+                          .keyboardShortcut("e", modifiers: [])
+                        
+                        Button("") {
+                            self.viewModel.interactionMode = .play
+                        }
+                          .opacity(0)
+                          .keyboardShortcut("s", modifiers: [])
 
-                    Button("") {
-                        self.viewModel.interactionMode = .scrub
+                        Picker("", selection: $viewModel.interactionMode) {
+                            ForEach(InteractionMode.allCases, id: \.self) { value in
+                                Text(value.localizedName).tag(value)
+                            }
+                        }
+                          .help("""
+                                  Choose between quickly scrubbing around the video
+                                  and editing an individual frame.
+                                  """)
+                          .disabled(viewModel.videoPlaying)
+                          .onChange(of: viewModel.interactionMode) { mode in
+                              Log.d("interactionMode change \(mode)")
+                              switch mode {
+                              case .edit:
+                                  viewModel.refreshCurrentFrame()
+                                  
+                              case .play:
+                                  break
+                              }
+                          }
+                          .frame(width: pickerWidth)
+                          .pickerStyle(.segmented)
                     }
-                      .opacity(0)
-                      .keyboardShortcut("s", modifiers: [])
-                    
-                    Picker("I will", selection: $viewModel.interactionMode) {
-                        ForEach(InteractionMode.allCases, id: \.self) { value in
+                    Spacer().frame(maxWidth: 6, maxHeight: 10)
+                    Text("this video")
+                      .gridColumnAlignment(.leading) 
+                }
+                GridRow {
+                    Text("I will see")
+                      .gridColumnAlignment(.trailing) 
+
+                    Picker("", selection: $viewModel.frameViewMode) {
+                        ForEach(FrameViewMode.allCases, id: \.self) { value in
                             Text(value.localizedName).tag(value)
                         }
                     }
-                      .help("""
-                              Choose between quickly scrubbing around the video
-                              and editing an individual frame.
-                              """)
                       .disabled(viewModel.videoPlaying)
-                      .onChange(of: viewModel.interactionMode) { mode in
-                          Log.d("interactionMode change \(mode)")
-                          switch mode {
-                          case .edit:
-                              viewModel.refreshCurrentFrame()
-                              
-                          case .scrub:
-                              break
-                          }
+                      .help("""
+                              Show each frame as either the original   
+                              or with star processing applied.
+                              """)
+                      .frame(width: pickerWidth)
+                      .help("show original or processed frame")
+                      .onChange(of: viewModel.frameViewMode) { pick in
+                          Log.d("pick \(pick)")
+                          viewModel.refreshCurrentFrame()
                       }
-                      .frame(maxWidth: 220)
                       .pickerStyle(.segmented)
+                    Spacer().frame(maxWidth: 6, maxHeight: 10)
+                    Text("frames")
+                      .gridColumnAlignment(.leading) 
                 }
-                Picker("I will see", selection: $viewModel.frameViewMode) {
-                    ForEach(FrameViewMode.allCases, id: \.self) { value in
-                        Text(value.localizedName).tag(value)
-                    }
-                }
-                  .disabled(viewModel.videoPlaying)
-                  .help("""
-                          Show each frame as either the original   
-                          or with star processing applied.
-                          """)
-                  .frame(maxWidth: 220)
-                  .help("show original or processed frame")
-                  .onChange(of: viewModel.frameViewMode) { pick in
-                      Log.d("pick \(pick)")
-                      viewModel.refreshCurrentFrame()
-                  }
-                  .pickerStyle(.segmented)
             }
             
             // outlier opacity slider

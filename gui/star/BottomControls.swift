@@ -66,10 +66,17 @@ struct BottomControls: View {
 
     // maybe adjust the layout if some of the sizes change
     func handleSizeUpdate() {
+        // how much space we have available to fill
         let totalWidth = spaceAvailable.width
+
+        // how much space is left on the side with the playback buttons in the middle
+        let spaceOnSide = (totalWidth - self.playbackButtonWidth)/2
+        
         switch viewModel.interactionMode {
         case .edit:
-            if (totalWidth - self.playbackButtonWidth)/2 >= self.rightViewWidth {
+            if spaceOnSide >= self.rightViewWidth,
+               spaceOnSide >= self.leftViewWidth
+            {
                 self.layout = .fullyHorizontal
             } else {
                 if self.rightViewWidth + self.leftViewWidth < totalWidth {
@@ -79,7 +86,7 @@ struct BottomControls: View {
                 }
             }
 
-        case .scrub:
+        case .play:
             if (totalWidth - self.playbackButtonWidth)/2 >= self.leftViewWidth {
                 self.layout = .fullyHorizontal
             } else {
