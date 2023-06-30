@@ -19,8 +19,9 @@ struct BottomControls: View {
     @State private var playbackButtonWidth: CGFloat = 0
     @State private var leftViewWidth: CGFloat = 0
     @State private var rightViewWidth: CGFloat = 0
-    @State private var totalWidth: CGFloat = 0
-    
+
+    @State private var totalSize = CGSize(width: 0, height: 0)
+
     var body: some View {
         HStack {
             switch layout {
@@ -43,6 +44,7 @@ struct BottomControls: View {
                 VStack {
                     HStack {
                         self.leftView()
+                        Spacer()
                         self.rightView()
                     }
                     buttonsView()
@@ -57,11 +59,14 @@ struct BottomControls: View {
             }
         }
           .frame(maxWidth: .infinity)
-          .readSize { handleSize(size: $0) }
+          .readSize {
+              self.totalSize = $0
+              handleSizeUpdate()
+          }
     }
 
-    func handleSize(size: CGSize) {
-        totalWidth = size.width
+    func handleSizeUpdate() {
+        let totalWidth = totalSize.width
         if viewModel.interactionMode == .edit {
             if (totalWidth - self.playbackButtonWidth)/2 >= self.rightViewWidth {
                 self.layout = .hStack
@@ -85,7 +90,10 @@ struct BottomControls: View {
         VideoPlaybackButtons(scroller: scroller)
           .frame(height: 40, alignment: .center)
           .fixedSize()
-          .readSize { self.playbackButtonWidth = $0.width }
+          .readSize {
+              self.playbackButtonWidth = $0.width
+              handleSizeUpdate()
+          }
     }
     
     func rightView() -> some View {
@@ -175,7 +183,10 @@ struct BottomControls: View {
             }
         }
           .frame(alignment: .trailing)
-          .readSize { self.rightViewWidth = $0.width }
+          .readSize {
+              self.rightViewWidth = $0.width
+              handleSizeUpdate()
+          }
     }
     
     func leftView() -> some View {
@@ -249,7 +260,10 @@ struct BottomControls: View {
             }
         }
           .frame(alignment: .leading)
-          .readSize { self.leftViewWidth = $0.width }
+          .readSize {
+              self.leftViewWidth = $0.width 
+              handleSizeUpdate()
+          }
     }
 
     func toggleViews() -> some View {
@@ -281,8 +295,7 @@ struct BottomControls: View {
 
 // XXX move these
 extension View {
-    func readSize(onChange: @escaping (CGSize) -> Void) -> some View
-    {
+    func readSize(onChange: @escaping (CGSize) -> Void) -> some View {
         background(
           GeometryReader { geometryProxy in
               Color.clear
