@@ -31,7 +31,7 @@ pkgbuild --root .build/star.xcarchive/Products/usr/local/bin \
 	 $PKG_NAME
 
 # notarize it with apple
-xcrun notarytool submit $PKG_NAME --keychain-profile ntar --wait
+xcrun notarytool submit $PKG_NAME --keychain-profile star --wait
 
 # staple it as notarized
 xcrun stapler staple $PKG_NAME
