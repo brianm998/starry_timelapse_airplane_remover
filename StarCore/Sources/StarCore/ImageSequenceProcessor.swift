@@ -28,9 +28,6 @@ public class ImageSequenceProcessor<T> {
     // actors
     var methodList = MethodList<T>()       // a list of methods to process each frame
 
-    // how many methods are running right now
-    let numberRunning: NumberRunning
-    
     public var imageSequence: ImageSequence    // the sequence of images that we're processing
 
     // concurrent dispatch queue so we can process frames in parallel
@@ -57,7 +54,6 @@ public class ImageSequenceProcessor<T> {
          maxImages: Int? = nil,
          fullyProcess: Bool = true) throws
     {
-        self.numberRunning = NumberRunning()
         self.maxConcurrentRenders = maxConcurrent
         self.imageSequenceDirname = imageSequenceDirname
         self.outputDirname = outputDirname
@@ -124,7 +120,6 @@ public class ImageSequenceProcessor<T> {
                     if let result = try await self.processFrame(number: index,
                                                                 outputFilename: outputFilename,
                                                                 baseName: basename) {
-                        await self.numberRunning.decrement()
                         return result
                     }
                     throw "could't load image for \(imageFilename)"
@@ -171,7 +166,6 @@ public class ImageSequenceProcessor<T> {
                    let nextMethod = await methodList.list[nextMethodKey]
                 {
                     await methodList.removeValue(forKey: nextMethodKey)
-                    await self.numberRunning.increment()
                     try await group.addTask() {
                         let ret = try await nextMethod()
                         await self.resultHook(with: ret)

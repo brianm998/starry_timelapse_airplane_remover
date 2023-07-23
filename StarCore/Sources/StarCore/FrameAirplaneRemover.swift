@@ -253,10 +253,13 @@ public class FrameAirplaneRemover: Equatable, Hashable {
             let startTime = NSDate().timeIntervalSince1970
             await withLimitedTaskGroup(of: Void.self) { taskGroup in
                 await foreachOutlierGroup() { group in
-                    await taskGroup.addTask() {
-                        let score = await classifier.classification(of: group)
-                        //Log.d("frame \(self.frameIndex) applying classifier shouldPaint \(score)")
-                        await group.shouldPaint(.fromClassifier(score))
+                    if group.shouldPaint == nil {
+                        // only apply classifier when no other classification is otherwise present
+                        await taskGroup.addTask() {
+                            let score = await classifier.classification(of: group)
+                            //Log.d("frame \(self.frameIndex) applying classifier shouldPaint \(score)")
+                            await group.shouldPaint(.fromClassifier(score))
+                        }
                     }
                     return .continue
                 }
@@ -292,10 +295,8 @@ public class FrameAirplaneRemover: Equatable, Hashable {
     private var outliersLoadedFromFile = false
 
     public func maybeApplyOutlierGroupClassifier() async {
-        if !self.outliersLoadedFromFile {
-            self.set(state: .interFrameProcessing)
-            await self.applyDecisionTreeToAllOutliers()
-        }
+        self.set(state: .interFrameProcessing)
+        await self.applyDecisionTreeToAllOutliers()
     }
     
     public func didLoadOutliersFromFile() -> Bool { outliersLoadedFromFile }
