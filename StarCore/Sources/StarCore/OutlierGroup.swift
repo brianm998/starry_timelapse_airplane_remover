@@ -241,7 +241,7 @@ public class OutlierGroup: CustomStringConvertible,
         return ret
     }
 
-    public var decisionTreeGroupValues: OutlierFeatureData {
+     public var decisionTreeGroupValues: OutlierFeatureData {
         get async {
             var rawValues = OutlierFeatureData.rawValues()
             for type in OutlierGroup.Feature.allCases {
@@ -478,27 +478,43 @@ public class OutlierGroup: CustomStringConvertible,
     public func clearFeatureValueCache() { featureValueCache = [:] }
     
     public func decisionTreeValue(for type: Feature) async -> Double {
-        Log.d("group \(name) @ frame \(frameIndex) decisionTreeValue(for: \(type))")
+        //Log.d("group \(name) @ frame \(frameIndex) decisionTreeValue(for: \(type))")
 
         if let value = featureValueCache[type] { return value }
         
         switch type {
         case .numberOfNearbyOutliersInSameFrame:
-            return await self.numberOfNearbyOutliersInSameFrame
+            let ret = await self.numberOfNearbyOutliersInSameFrame
+            featureValueCache[type] = ret
+            return ret
         case .adjecentFrameNeighboringOutliersBestTheta:
-            return await self.adjecentFrameNeighboringOutliersBestTheta
+            let ret = await self.adjecentFrameNeighboringOutliersBestTheta
+            featureValueCache[type] = ret
+            return ret
         case .histogramStreakDetection:
-            return await self.histogramStreakDetection
+            let ret = await self.histogramStreakDetection
+            featureValueCache[type] = ret
+            return ret
         case .longerHistogramStreakDetection:
-            return await self.longerHistogramStreakDetection
+            let ret = await self.longerHistogramStreakDetection
+            featureValueCache[type] = ret
+            return ret
         case .neighboringInterFrameOutlierThetaScore:
-            return await self.neighboringInterFrameOutlierThetaScore
+            let ret = await self.neighboringInterFrameOutlierThetaScore
+            featureValueCache[type] = ret
+            return ret
         case .maxOverlap:
-            return await self.maxOverlap
+            let ret = await self.maxOverlap
+            featureValueCache[type] = ret
+            return ret
         case .maxOverlapTimesThetaHisto:
-            return await self.maxOverlapTimesThetaHisto
+            let ret = await self.maxOverlapTimesThetaHisto
+            featureValueCache[type] = ret
+            return ret
         default:
-            return self.nonAsyncDecisionTreeValue(for: type)
+            let ret = self.nonAsyncDecisionTreeValue(for: type)
+            featureValueCache[type] = ret
+            return ret
         }
     }
 
@@ -1114,7 +1130,7 @@ public class OutlierGroup: CustomStringConvertible,
 
     // the suffix of the paint reason json sidecar file for each outlier group
     static let paintJsonSuffix = "paint.json"
-    
+
     public func writeToFile(in dir: String) async throws {
         let filename = "\(dir)/\(self.name)-\(OutlierGroup.dataBinSuffix)"
 
