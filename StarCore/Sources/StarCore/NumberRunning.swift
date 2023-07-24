@@ -12,9 +12,20 @@ You should have received a copy of the GNU General Public License along with sta
 
 */
 public actor NumberRunning {
-    private var count: UInt = 0
+    private var count: UInt = 0 {
+        didSet(newValue) {
+            if let updateCallback = updateCallback {
+                updateCallback(newValue)
+            }
+        }
+    }
+    private var updateCallback: ((UInt)->Void)?
 
     public init() { }
+    
+    public func set(updateCallback: @escaping (UInt)->Void) {
+        self.updateCallback = updateCallback
+    }
     
     public func increment() { count += 1 }
     public func decrement() { if count > 0 {count -= 1} else { Log.e("cannot decrement past zero") } }
