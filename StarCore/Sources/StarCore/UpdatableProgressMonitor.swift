@@ -143,7 +143,33 @@ public actor UpdatableProgressMonitor {
                                     value: 4)
             }
         }
-        
+
+        if let writingBinaryOutliers = frames[.writingBinaryOutliers] {
+            let progress =
+              Double(writingBinaryOutliers.count) /
+              Double(self.config.numConcurrentRenders)      
+            updates.append() {
+                await updatable.log(name: "writingBinaryOutliers",
+                                    message: padding + progressBar(length: self.config.numConcurrentRenders, 
+                                                                    progress: progress) +
+                                      " \(writingBinaryOutliers.count) frames writing raw outlier data",
+                                    value: 5)
+            }
+        }
+
+        if let writingOutlierValues = frames[.writingOutlierValues] {
+            let progress =
+              Double(writingOutlierValues.count) /
+              Double(self.config.numConcurrentRenders)      
+            updates.append() {
+                await updatable.log(name: "writingOutlierValues",
+                                    message: padding + progressBar(length: self.config.numConcurrentRenders, 
+                                                                    progress: progress) +
+                                      " \(writingOutlierValues.count) frames writing outlier classification values",
+                                    value: 5)
+            }
+        }
+
         if let reloadingImages = frames[.reloadingImages] {
             let progress =
               Double(reloadingImages.count) /
