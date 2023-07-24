@@ -31,6 +31,10 @@ public enum FrameProcessingState: Int, CaseIterable, Codable {
     case interFrameProcessing
     case outlierProcessingComplete
     // XXX add gui check step?
+
+    case writingBinaryOutliers
+    case writingOutlierValues
+    
     case reloadingImages
     case painting
     case writingOutputFile
@@ -168,21 +172,39 @@ public class FrameAirplaneRemover: Equatable, Hashable {
     // write out just the OutlierGroupValueMatrix, which just what
     // the decision tree needs, and not very large
     public func writeOutlierValuesCSV() async throws {
+
+        Log.d("frame \(self.frameIndex) writeOutlierValuesCSV")
         if config.writeOutlierGroupFiles,
            let outputDirname = self.outlierOutputDirname
         {
             // write out the decision tree value matrix too
+            Log.d("frame \(self.frameIndex) writeOutlierValuesCSV 1")
 
-            let valueMatrix = OutlierGroupValueMatrix()
+            let frameOutlierDir = "\(outputDirname)/\(self.frameIndex)"
+            let positiveFilename = "\(frameOutlierDir)/\(OutlierGroupValueMatrix.positiveDataFilename)"
+            let negativeFilename = "\(frameOutlierDir)/\(OutlierGroupValueMatrix.negativeDataFilename)"
 
-            if let outliers = self.outlierGroupList() {
-                for outlier in outliers {
-                    await valueMatrix.append(outlierGroup: outlier)
+            // check to see if both of these files exist already
+            if fileManager.fileExists(atPath: positiveFilename),
+               fileManager.fileExists(atPath: negativeFilename) {
+                Log.i("frame \(self.frameIndex) not recalculating outlier values with existing files")
+            } else {
+                let valueMatrix = OutlierGroupValueMatrix()
+                
+                if let outliers = self.outlierGroupList() {
+                    Log.d("frame \(self.frameIndex) writeOutlierValuesCSV 1a \(outliers.count) outliers")
+                    for outlier in outliers {
+                        Log.d("frame \(self.frameIndex) writeOutlierValuesCSV 1b")
+                        await valueMatrix.append(outlierGroup: outlier)
+                    }
                 }
-            }
+                Log.d("frame \(self.frameIndex) writeOutlierValuesCSV 2")
 
-            try valueMatrix.writeCSV(to: "\(outputDirname)/\(self.frameIndex)")
+                try valueMatrix.writeCSV(to: frameOutlierDir)
+                Log.d("frame \(self.frameIndex) writeOutlierValuesCSV 3")
+            }
         }
+        Log.d("frame \(self.frameIndex) DONE writeOutlierValuesCSV")
     }
 
     // write out a directory of individual OutlierGroup binaries
@@ -214,7 +236,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         if let classifier = currentClassifier {
             await withLimitedTaskGroup(of: Void.self) { taskGroup in
                 await foreachOutlierGroup() { group in
-                    await taskGroup.addMinorTask() {
+                    await taskGroup.addTask() {
                         var apply = true
                         if let shouldPaint = group.shouldPaint {
                             switch shouldPaint {
@@ -1012,80 +1034,72 @@ public class FrameAirplaneRemover: Equatable, Hashable {
     // run after shouldPaint has been set for each group, 
     // does the final painting and then writes out the output files
     public func finish() async throws {
+        Log.d("frame \(self.frameIndex) starting to finish")
 
-        try await withLimitedThrowingTaskGroup(of: Void.self) { taskGroup in 
+        self.state = .writingBinaryOutliers
 
-            try await taskGroup.addMinorTask() {
-                // write out the outliers binary if it is not there
-                // only overwrite the paint reason if it is there
-                await self.writeOutliersBinary()
-            }
+        // write out the outliers binary if it is not there
+        // only overwrite the paint reason if it is there
+        await self.writeOutliersBinary()
             
-            try await taskGroup.addMinorTask() {
-                // write out the classifier feature data for this data point
-                try await self.writeOutlierValuesCSV()
-            }
-            
-            if !self.writeOutputFiles {
-                self.state = .complete
-                return
-            }
-            
-            self.state = .reloadingImages
-            
-            Log.i("frame \(self.frameIndex) finishing")
-            let image = try await imageSequence.getImage(withName: imageSequence.filenames[frameIndex]).image()
+        self.state = .writingOutlierValues
 
-            try await taskGroup.addMinorTask() {
-                self.writeUprocessedPreviews(image)
-            }
+        Log.d("frame \(self.frameIndex) finish 1")
+        // write out the classifier feature data for this data point
+        // XXX THIS MOFO IS SLOW
+        try await self.writeOutlierValuesCSV()
+            
+        Log.d("frame \(self.frameIndex) finish 2")
+        if !self.writeOutputFiles {
+            self.state = .complete
+            Log.d("frame \(self.frameIndex) not writing output files")
+            return
+        }
         
-            var otherFrames: [PixelatedImage] = []
-
-            // only load the first other frame for painting
-            let otherFrameIndex = otherFrameIndexes[0]
-            let otherFrame = try await imageSequence.getImage(withName: imageSequence.filenames[otherFrameIndex]).image()
-            otherFrames.append(otherFrame)
+        self.state = .reloadingImages
         
-            let _data = image.rawImageData
+        Log.i("frame \(self.frameIndex) finishing")
+        let image = try await imageSequence.getImage(withName: imageSequence.filenames[frameIndex]).image()
         
-            // copy the original image data as adjecent frames need
-            // to access the original unmodified version
-            guard let _mut_data = CFDataCreateMutableCopy(kCFAllocatorDefault,
+        self.writeUprocessedPreviews(image)
+        
+        var otherFrames: [PixelatedImage] = []
+        
+        // only load the first other frame for painting
+        let otherFrameIndex = otherFrameIndexes[0]
+        let otherFrame = try await imageSequence.getImage(withName: imageSequence.filenames[otherFrameIndex]).image()
+        otherFrames.append(otherFrame)
+        
+        let _data = image.rawImageData
+        
+        // copy the original image data as adjecent frames need
+        // to access the original unmodified version
+        guard let _mut_data = CFDataCreateMutableCopy(kCFAllocatorDefault,
                                                       CFDataGetLength(_data as CFData),
                                                       _data as CFData) as? Data
-            else {
-                Log.e("couldn't copy image data")
-                fatalError("couldn't copy image data")
-            }
-            var outputData = _mut_data
-
-            self.state = .painting
-                  
-            Log.d("frame \(self.frameIndex) painting over airplanes")
-                  
-            try await self.paintOverAirplanes(toData: &outputData,
+        else {
+            Log.e("couldn't copy image data")
+            fatalError("couldn't copy image data")
+        }
+        var outputData = _mut_data
+        
+        self.state = .painting
+        
+        Log.d("frame \(self.frameIndex) painting over airplanes")
+        
+        try await self.paintOverAirplanes(toData: &outputData,
                                           otherFrames: otherFrames)
         
-            Log.d("frame \(self.frameIndex) writing output files")
-            self.state = .writingOutputFile
+        Log.d("frame \(self.frameIndex) writing output files")
+        self.state = .writingOutputFile
+        
+        self.writeProcssedPreview(image, with: outputData)
 
-            try await taskGroup.addMinorTask() {
-                self.writeProcssedPreview(image, with: outputData)
-            }
-
-            do {
-                // write frame out as a tiff file after processing it
-                try image.writeTIFFEncoding(ofData: outputData,  toFilename: self.outputFilename)
-                self.state = .complete
-            } catch {
-                Log.e("\(error)")
-            }
-
-            try await taskGroup.waitForAll()
-
-            Log.i("frame \(self.frameIndex) complete")
-        }
+        // write frame out as a tiff file after processing it
+        try image.writeTIFFEncoding(ofData: outputData,  toFilename: self.outputFilename)
+        self.state = .complete
+        
+        Log.i("frame \(self.frameIndex) complete")
     }
     
     public static func == (lhs: FrameAirplaneRemover, rhs: FrameAirplaneRemover) -> Bool {

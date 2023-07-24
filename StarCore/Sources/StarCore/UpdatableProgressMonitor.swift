@@ -139,7 +139,7 @@ public actor UpdatableProgressMonitor {
                 await updatable.log(name: "outlierProcessingComplete",
                                     message: padding + progressBar(length: self.config.numConcurrentRenders,
                                                                     progress: progress) +
-                                      " \(outlierProcessingComplete.count) frames ready to paint",
+                                      " \(outlierProcessingComplete.count) frames ready to finish",
                                     value: 4)
             }
         }

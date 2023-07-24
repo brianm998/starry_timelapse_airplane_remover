@@ -41,8 +41,8 @@ public actor FinalProcessor {
 
     let numberRunning = NumberRunning()
 
-    let maxConcurrent = 25      // XXX hardcoded
-    
+    let maxConcurrent: Int
+
     // are we running on the gui?
     public let isGUI: Bool
 
@@ -55,6 +55,7 @@ public actor FinalProcessor {
         imageSequence: ImageSequence,
         isGUI: Bool) async
     {
+        self.maxConcurrent = config.numConcurrentRenders
         self.isGUI = isGUI
         self.config = config
         self.callbacks = callbacks
@@ -76,6 +77,18 @@ public actor FinalProcessor {
             self.frames[index] = frame
             self.log()
         }
+
+        await self.numberRunning.updateCallback() { numberOfFinishingFrames in
+            // set the number of processes allowed for non-finishing activities
+            let maxConcurrent = self.maxConcurrent - Int(numberOfFinishingFrames)
+            if maxConcurrent > 0 {
+                TaskRunner.maxConcurrentTasks = UInt(maxConcurrent)
+            } else {
+                TaskRunner.maxConcurrentTasks = 1
+            }
+            Log.d("numberOfFinishingFrames \(numberOfFinishingFrames) set TaskRunner.maxConcurrentTasks = \(TaskRunner.maxConcurrentTasks)")
+        }
+        
     }
 
     func clearFrame(at index: Int) {
@@ -110,6 +123,14 @@ public actor FinalProcessor {
                         } else {
                             message += ConsoleColor.yellow.rawValue + "-"
                         }
+                    }
+                }
+                var lowerBound = currentFrameIndex + end
+                if lowerBound > self.frames.count { lowerBound = self.frames.count }
+                
+                for i in lowerBound ..< self.frames.count {
+                    if let _ = self.frames[i] {
+                        count += 1
                     }
                 }
                 message += ConsoleColor.blue.rawValue+"]"+ConsoleColor.reset.rawValue
@@ -282,9 +303,14 @@ public actor FinalProcessor {
 
 //                                try await taskGroup.addTask() { 
                                     // XXX VVV this is blocking other tasks
-                                
-                                try await self.finish(frame: frameToFinish)
+
+                                do {
+                                    try await self.finish(frame: frameToFinish)
+                                } catch {
+                                    Log.e("FINAL THREAD frame \(indexToProcess) ERROR \(error)")
+                                }
                                 await self.numberRunning.decrement()
+                                Log.v("FINAL THREAD frame \(indexToProcess) DONE")
                                 
   //                              }
                             }

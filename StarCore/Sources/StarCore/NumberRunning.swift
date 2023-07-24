@@ -23,8 +23,9 @@ public actor NumberRunning {
 
     public init() { }
     
-    public func set(updateCallback: @escaping (UInt)->Void) {
+    public func updateCallback(updateCallback: @escaping (UInt)->Void) {
         self.updateCallback = updateCallback
+        updateCallback(count)
     }
     
     public func increment() { count += 1 }

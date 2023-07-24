@@ -28,8 +28,7 @@ public class OutlierGroups {
     }
     
     public func write(to dir: String) async throws {
-        Log.d("loaded frame \(self.frameIndex) with \(self.members.count) outlier groups from binary file")
-
+        Log.d("writing  \(self.members.count) outlier groups for frame \(self.frameIndex) to binary file")
         let frameDir = "\(dir)/\(frameIndex)"
         
         try mkdir(frameDir)
@@ -37,6 +36,7 @@ public class OutlierGroups {
         for group in members.values {
             try await group.writeToFile(in: frameDir)
         }
+        Log.d("wrote  \(self.members.count) outlier groups for frame \(self.frameIndex) to binary file")
     }
     
     public init(at frameIndex: Int,
@@ -56,7 +56,7 @@ public class OutlierGroups {
           var groups: [String: OutlierGroup] = [:]
             for file in dataBinFiles {
                 // load file into data
-                try await taskGroup.addMinorTask() {
+                try await taskGroup.addTask() {
                     let fileurl = NSURL(fileURLWithPath: "\(dir)/\(file)", isDirectory: false)
  
                     let (groupData, _) = try await URLSession.shared.data(for: URLRequest(url: fileurl as URL))
