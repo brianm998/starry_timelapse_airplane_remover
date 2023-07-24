@@ -53,10 +53,10 @@ public class OutlierGroups {
             }
         }
         self.members = try await withLimitedThrowingTaskGroup(of: OutlierGroup.self) { taskGroup in
-            var groups: [String: OutlierGroup] = [:]
+          var groups: [String: OutlierGroup] = [:]
             for file in dataBinFiles {
                 // load file into data
-                try await taskGroup.addTask() {
+                try await taskGroup.addMinorTask() {
                     let fileurl = NSURL(fileURLWithPath: "\(dir)/\(file)", isDirectory: false)
  
                     let (groupData, _) = try await URLSession.shared.data(for: URLRequest(url: fileurl as URL))
@@ -64,8 +64,8 @@ public class OutlierGroups {
                     let fuck = String(fu.dropLast(OutlierGroup.dataBinSuffix.count+1))
                     //Log.d("trying to load group \(fuck)")
                     let group = OutlierGroup(withName: fuck,
-                                          frameIndex: frameIndex,
-                                          with:groupData)
+                                             frameIndex: frameIndex,
+                                             with:groupData)
                     
                     let paintFilename = String(file.dropLast(OutlierGroup.dataBinSuffix.count) + OutlierGroup.paintJsonSuffix)
 
@@ -105,8 +105,9 @@ public class OutlierGroups {
                         }
                     }
                      */
+
                     return group
-                }
+                    }
             }
             try await taskGroup.forEach() { group in
                 groups[group.name] = group

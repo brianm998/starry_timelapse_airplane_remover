@@ -214,7 +214,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         if let classifier = currentClassifier {
             await withLimitedTaskGroup(of: Void.self) { taskGroup in
                 await foreachOutlierGroup() { group in
-                    await taskGroup.addTask() {
+                    await taskGroup.addMinorTask() {
                         var apply = true
                         if let shouldPaint = group.shouldPaint {
                             switch shouldPaint {
@@ -251,20 +251,20 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         Log.d("frame \(self.frameIndex) applyDecisionTreeToAllOutliers")
         if let classifier = currentClassifier {
             let startTime = NSDate().timeIntervalSince1970
-            await withLimitedTaskGroup(of: Void.self) { taskGroup in
+//            await withLimitedTaskGroup(of: Void.self) { taskGroup in
                 await foreachOutlierGroup() { group in
                     if group.shouldPaint == nil {
                         // only apply classifier when no other classification is otherwise present
-                        await taskGroup.addTask() {
+//                        await taskGroup.addTask() {
                             let score = await classifier.classification(of: group)
                             //Log.d("frame \(self.frameIndex) applying classifier shouldPaint \(score)")
                             await group.shouldPaint(.fromClassifier(score))
                         }
-                    }
+  //                  }
                     return .continue
                 }
-                await taskGroup.waitForAll()
-            }
+//                await taskGroup.waitForAll()
+//            }
             let endTime = NSDate().timeIntervalSince1970
             Log.i("frame \(self.frameIndex) spent \(endTime - startTime) seconds classifing outlier groups");
         } else {
@@ -1015,28 +1015,28 @@ public class FrameAirplaneRemover: Equatable, Hashable {
 
         try await withLimitedThrowingTaskGroup(of: Void.self) { taskGroup in 
 
-            try await taskGroup.addTask() {
+            try await taskGroup.addMinorTask() {
                 // write out the outliers binary if it is not there
                 // only overwrite the paint reason if it is there
                 await self.writeOutliersBinary()
             }
-
-            try await taskGroup.addTask() {
+            
+            try await taskGroup.addMinorTask() {
                 // write out the classifier feature data for this data point
                 try await self.writeOutlierValuesCSV()
             }
-
+            
             if !self.writeOutputFiles {
                 self.state = .complete
                 return
             }
-        
+            
             self.state = .reloadingImages
-        
+            
             Log.i("frame \(self.frameIndex) finishing")
             let image = try await imageSequence.getImage(withName: imageSequence.filenames[frameIndex]).image()
 
-            try await taskGroup.addTask() {
+            try await taskGroup.addMinorTask() {
                 self.writeUprocessedPreviews(image)
             }
         
@@ -1070,7 +1070,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
             Log.d("frame \(self.frameIndex) writing output files")
             self.state = .writingOutputFile
 
-            try await taskGroup.addTask() {
+            try await taskGroup.addMinorTask() {
                 self.writeProcssedPreview(image, with: outputData)
             }
 

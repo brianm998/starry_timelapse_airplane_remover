@@ -166,7 +166,7 @@ public class ImageSequenceProcessor<T> {
                    let nextMethod = await methodList.list[nextMethodKey]
                 {
                     await methodList.removeValue(forKey: nextMethodKey)
-                    try await group.addTask() {
+                    try await group.addMinorTask() {
                         let ret = try await nextMethod()
                         await self.resultHook(with: ret)
                         return ret

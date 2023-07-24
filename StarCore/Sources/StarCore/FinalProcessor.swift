@@ -38,6 +38,10 @@ public actor FinalProcessor {
     // this is kept around to keep the subscription active
     // will be canceled upon de-init
     var publishCancellable: AnyCancellable?
+
+    let numberRunning = NumberRunning()
+
+    let maxConcurrent = 25      // XXX hardcoded
     
     // are we running on the gui?
     public let isGUI: Bool
@@ -182,7 +186,7 @@ public actor FinalProcessor {
         let frameCount = await frames.count
         
         var done = false
-        try await withLimitedThrowingTaskGroup(of: Void.self) { taskGroup in
+        try await withThrowingTaskGroup(of: Void.self) { taskGroup in
             while(!done) {
                 Log.v("FINAL THREAD running")
                 let (cfi, framesCount) = await (currentFrameIndex, frames.count)
@@ -260,15 +264,28 @@ public actor FinalProcessor {
                         Log.v("FINAL THREAD frame \(indexToProcess) queueing into final queue")
                         if let frameToFinish = await self.frame(at: immutableStart - 1) {
                             await self.clearFrame(at: immutableStart - 1)
+                            Log.v("FINAL THREAD frame \(indexToProcess) adding task")
 
-                            try await taskGroup.addTask() { 
+
+                            while(await numberRunning.currentValue() > maxConcurrent) {
+                                Log.v("FINAL THREAD sleeping")
+                                try await Task.sleep(nanoseconds: 1_000_000_000)
+                            }
+                            Log.v("FINAL THREAD finishing sleeping")
+                            await numberRunning.increment()
+                            /*try await*/ taskGroup.addTask() { 
+                                Log.v("FINAL THREAD frame \(indexToProcess) task running")
                                 await frameToFinish.clearOutlierGroupValueCaches()
                                 await frameToFinish.maybeApplyOutlierGroupClassifier()
                                 frameToFinish.set(state: .outlierProcessingComplete)
+                                Log.v("FINAL THREAD frame \(indexToProcess) classified")
 
 //                                try await taskGroup.addTask() { 
                                     // XXX VVV this is blocking other tasks
-                                    try await self.finish(frame: frameToFinish)
+                                
+                                try await self.finish(frame: frameToFinish)
+                                await self.numberRunning.decrement()
+                                
   //                              }
                             }
                         }
