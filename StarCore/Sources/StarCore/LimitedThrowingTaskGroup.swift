@@ -35,7 +35,13 @@ public actor LimitedThrowingTaskGroup<T> {
         for task in tasks { _ = try await task.value }
     }
     
-    public func addTask(closure: @escaping () async throws -> T) async throws {
+    public func addMinorTask(closure: @escaping () async throws -> T) async throws {
+        // keeps up to 8 other tasks in reserve for more important work
+        tasks.append(try await runThrowingTask(closure, withReserve: 8))
+    }
+    
+    public func addTask(closure: @escaping () async throws -> T) async throws
+    {
         tasks.append(try await runThrowingTask(closure))
     }
 }

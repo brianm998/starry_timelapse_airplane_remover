@@ -34,6 +34,13 @@ public actor LimitedTaskGroup<T> {
     public func waitForAll() async {
         for task in tasks { _ = await task.value }
     }
+
+    public func addMinorTask(closure: @escaping () async -> T) async {
+        // this may or may not run in the background, depending upon how
+        // many other active Tasks are running
+        // keeps up to 8 other tasks in reserve for more important work
+        tasks.append(await runTask(closure, withReserve: 8))
+    }
     
     public func addTask(closure: @escaping () async -> T) async {
         // this may or may not run in the background, depending upon how
