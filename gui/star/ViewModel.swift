@@ -404,9 +404,9 @@ public final class ViewModel: ObservableObject {
         let callbacks = makeCallbacks()
         
         let eraser = try await NighttimeAirplaneRemover(with: config,
+                                                        numConcurrentRenders: ProcessInfo.processInfo.activeProcessorCount,
                                                         callbacks: callbacks,
-                                                        processExistingFiles: true,/*,
-                                                                                     maxResidentImages: 32*/
+                                                        processExistingFiles: true,
                                                         fullyProcess: false,
                                                         isGUI: true)
         
@@ -456,7 +456,6 @@ public final class ViewModel: ObservableObject {
                             outlierMaxThreshold: Defaults.outlierMaxThreshold,
                             outlierMinThreshold: Defaults.outlierMinThreshold,
                             minGroupSize: Defaults.minGroupSize,
-                            numConcurrentRenders: numConcurrentRenders,
                             imageSequenceName: inputImageSequenceName,
                             imageSequencePath: inputImageSequencePath,
                             writeOutlierGroupFiles: shouldWriteOutlierGroupFiles,
@@ -468,6 +467,7 @@ public final class ViewModel: ObservableObject {
         Log.i("have config")
 
         let eraser = try await NighttimeAirplaneRemover(with: config,
+                                                        numConcurrentRenders: numConcurrentRenders,
                                                         callbacks: callbacks,
                                                         processExistingFiles: true,
                                                         isGUI: true)
@@ -747,7 +747,7 @@ public extension ViewModel {
                                 }
                             }
                         } catch {
-                            Log.e("error")
+                            Log.e("\(error)")
                         }
                     }
                 }

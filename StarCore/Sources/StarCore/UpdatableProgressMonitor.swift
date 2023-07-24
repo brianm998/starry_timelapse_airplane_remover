@@ -51,12 +51,18 @@ public actor UpdatableProgressMonitor {
     let numberOfFrames: Int
     let config: Config
     let callbacks: Callbacks
+    let numConcurrentRenders: Int
     
     public let dispatchGroup = DispatchGroup()
     
     var frames: [FrameProcessingState: Set<FrameAirplaneRemover>] = [:]
-    public init(frameCount: Int, config: Config, callbacks: Callbacks) {
+    public init(frameCount: Int,
+                numConcurrentRenders: Int,
+                config: Config,
+                callbacks: Callbacks)
+    {
         self.numberOfFrames = frameCount
+        self.numConcurrentRenders = numConcurrentRenders
         self.config = config
         self.callbacks = callbacks
     }
@@ -90,17 +96,17 @@ public actor UpdatableProgressMonitor {
         var updates: [() async -> Void] = []
 
         var padding = ""
-        if self.config.numConcurrentRenders < config.progressBarLength {
-            padding = String(repeating: " ", count: (config.progressBarLength - self.config.numConcurrentRenders))
+        if self.numConcurrentRenders < config.progressBarLength {
+            padding = String(repeating: " ", count: (config.progressBarLength - self.numConcurrentRenders))
         }
 
         if let loadingImages = frames[.loadingImages] {
             let progress =
               Double(loadingImages.count) /
-              Double(self.config.numConcurrentRenders)
+              Double(self.numConcurrentRenders)
             updates.append() {
                 await updatable.log(name: "loadingImages",
-                                     message: padding + progressBar(length: self.config.numConcurrentRenders,
+                                     message: padding + progressBar(length: self.numConcurrentRenders,
                                                                      progress: progress) +
                                        " \(loadingImages.count) frames loading images",
                                      value: 0.9)
@@ -109,10 +115,10 @@ public actor UpdatableProgressMonitor {
         if let detectingOutliers = frames[.detectingOutliers] {
             let progress =
               Double(detectingOutliers.count) /
-              Double(self.config.numConcurrentRenders)
+              Double(self.numConcurrentRenders)
             updates.append() {
                 await updatable.log(name: "detectingOutliers",
-                                    message: padding + progressBar(length: self.config.numConcurrentRenders,
+                                    message: padding + progressBar(length: self.numConcurrentRenders,
                                                                     progress: progress) +
                                       " \(detectingOutliers.count) frames detecting outliers",
                                     value: 1)
@@ -121,10 +127,10 @@ public actor UpdatableProgressMonitor {
         if let interFrameProcessing = frames[.interFrameProcessing] {
             let progress =
               Double(interFrameProcessing.count) /
-              Double(self.config.numConcurrentRenders)
+              Double(self.numConcurrentRenders)
             updates.append() {
                 await updatable.log(name: "interFrameProcessing",
-                                    message: padding + progressBar(length: self.config.numConcurrentRenders,
+                                    message: padding + progressBar(length: self.numConcurrentRenders,
                                                                     progress: progress) +
                                       " \(interFrameProcessing.count) frames classifing outlier groups",
                                     value: 3)
@@ -134,10 +140,10 @@ public actor UpdatableProgressMonitor {
         if let outlierProcessingComplete = frames[.outlierProcessingComplete] {
             let progress =
               Double(outlierProcessingComplete.count) /
-              Double(self.config.numConcurrentRenders)       
+              Double(self.numConcurrentRenders)       
             updates.append() {
                 await updatable.log(name: "outlierProcessingComplete",
-                                    message: padding + progressBar(length: self.config.numConcurrentRenders,
+                                    message: padding + progressBar(length: self.numConcurrentRenders,
                                                                     progress: progress) +
                                       " \(outlierProcessingComplete.count) frames ready to finish",
                                     value: 4)
@@ -147,10 +153,10 @@ public actor UpdatableProgressMonitor {
         if let writingBinaryOutliers = frames[.writingBinaryOutliers] {
             let progress =
               Double(writingBinaryOutliers.count) /
-              Double(self.config.numConcurrentRenders)      
+              Double(self.numConcurrentRenders)      
             updates.append() {
                 await updatable.log(name: "writingBinaryOutliers",
-                                    message: padding + progressBar(length: self.config.numConcurrentRenders, 
+                                    message: padding + progressBar(length: self.numConcurrentRenders, 
                                                                     progress: progress) +
                                       " \(writingBinaryOutliers.count) frames writing raw outlier data",
                                     value: 5)
@@ -160,10 +166,10 @@ public actor UpdatableProgressMonitor {
         if let writingOutlierValues = frames[.writingOutlierValues] {
             let progress =
               Double(writingOutlierValues.count) /
-              Double(self.config.numConcurrentRenders)      
+              Double(self.numConcurrentRenders)      
             updates.append() {
                 await updatable.log(name: "writingOutlierValues",
-                                    message: padding + progressBar(length: self.config.numConcurrentRenders, 
+                                    message: padding + progressBar(length: self.numConcurrentRenders, 
                                                                     progress: progress) +
                                       " \(writingOutlierValues.count) frames writing outlier classification values",
                                     value: 5)
@@ -173,10 +179,10 @@ public actor UpdatableProgressMonitor {
         if let reloadingImages = frames[.reloadingImages] {
             let progress =
               Double(reloadingImages.count) /
-              Double(self.config.numConcurrentRenders)      
+              Double(self.numConcurrentRenders)      
             updates.append() {
                 await updatable.log(name: "reloadingImages",
-                                    message: padding + progressBar(length: self.config.numConcurrentRenders, 
+                                    message: padding + progressBar(length: self.numConcurrentRenders, 
                                                                     progress: progress) +
                                       " \(reloadingImages.count) frames reloadingImages",
                                     value: 5)
@@ -185,10 +191,10 @@ public actor UpdatableProgressMonitor {
         if let painting = frames[.painting] {
             let progress =
               Double(painting.count) /
-              Double(self.config.numConcurrentRenders)      
+              Double(self.numConcurrentRenders)      
             updates.append() {
                 await updatable.log(name: "painting",
-                                    message: padding + progressBar(length: self.config.numConcurrentRenders, 
+                                    message: padding + progressBar(length: self.numConcurrentRenders, 
                                                                     progress: progress) +
                                       " \(painting.count) frames painting",
                                     value: 5)
@@ -197,10 +203,10 @@ public actor UpdatableProgressMonitor {
         if let writingOutputFile = frames[.writingOutputFile] {
             let progress =
               Double(writingOutputFile.count) /
-              Double(self.config.numConcurrentRenders)        
+              Double(self.numConcurrentRenders)        
             updates.append() {
                 await updatable.log(name: "writingOutputFile",
-                                    message: padding + progressBar(length: self.config.numConcurrentRenders,
+                                    message: padding + progressBar(length: self.numConcurrentRenders,
                                                                     progress: progress) +
                                       " \(writingOutputFile.count) frames writing to disk",
                                     value: 6)

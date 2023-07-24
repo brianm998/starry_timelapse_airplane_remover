@@ -23,7 +23,7 @@ public struct Config: Codable {
         self.outlierMaxThreshold = 0
         self.outlierMinThreshold = 0
         self.minGroupSize = 0
-        self.numConcurrentRenders = 0
+        //self.numConcurrentRenders = 0
         self.imageSequenceDirname = ""
         self.imageSequencePath = ""
         self.writeOutlierGroupFiles = false
@@ -52,7 +52,6 @@ public struct Config: Codable {
                 outlierMaxThreshold: Double,
                 outlierMinThreshold: Double,
                 minGroupSize: Int,
-                numConcurrentRenders: Int,
                 imageSequenceName: String,
                 imageSequencePath: String,
                 writeOutlierGroupFiles: Bool,
@@ -68,7 +67,6 @@ public struct Config: Codable {
         self.outlierMaxThreshold = outlierMaxThreshold
         self.outlierMinThreshold = outlierMinThreshold
         self.minGroupSize = minGroupSize
-        self.numConcurrentRenders = numConcurrentRenders
         self.imageSequenceDirname = imageSequenceName
         self.imageSequencePath = imageSequencePath
         self.writeOutlierGroupFiles = writeOutlierGroupFiles
@@ -81,7 +79,6 @@ public struct Config: Codable {
 
         // XXX 16 bit hardcode
         self.maxPixelDistance = sixteenBitVersion(ofPercentage: outlierMinThreshold)
-        TaskRunner.maxConcurrentTasks = UInt(numConcurrentRenders)
     }
 
     // the base dir under which to create dir(s) for output sequence(s)
@@ -101,9 +98,6 @@ public struct Config: Codable {
     
     // groups smaller than this are ignored
     public var minGroupSize: Int
-
-    // how many cpu cores should we max out at?
-    public var numConcurrentRenders: Int
 
     // the name of the directory containing the input sequence
     public var imageSequenceDirname: String

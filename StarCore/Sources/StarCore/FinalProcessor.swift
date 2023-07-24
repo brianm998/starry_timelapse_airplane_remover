@@ -41,21 +41,22 @@ public actor FinalProcessor {
 
     let numberRunning = NumberRunning()
 
-    let maxConcurrent: Int
+    let numConcurrentRenders: Int
 
     // are we running on the gui?
     public let isGUI: Bool
 
     init(with config: Config,
-        callbacks: Callbacks,
-        publisher: PassthroughSubject<FrameAirplaneRemover, Never>,
-        numberOfFrames frameCount: Int,
-        shouldProcess: [Bool],
-        dispatchGroup: DispatchHandler,
-        imageSequence: ImageSequence,
-        isGUI: Bool) async
+         numConcurrentRenders: Int,
+         callbacks: Callbacks,
+         publisher: PassthroughSubject<FrameAirplaneRemover, Never>,
+         numberOfFrames frameCount: Int,
+         shouldProcess: [Bool],
+         dispatchGroup: DispatchHandler,
+         imageSequence: ImageSequence,
+         isGUI: Bool) async
     {
-        self.maxConcurrent = config.numConcurrentRenders
+        self.numConcurrentRenders = numConcurrentRenders
         self.isGUI = isGUI
         self.config = config
         self.callbacks = callbacks
@@ -80,13 +81,13 @@ public actor FinalProcessor {
 
         await self.numberRunning.updateCallback() { numberOfFinishingFrames in
             // set the number of processes allowed for non-finishing activities
-            let maxConcurrent = self.maxConcurrent - Int(numberOfFinishingFrames)
-            if maxConcurrent > 0 {
-                TaskRunner.maxConcurrentTasks = UInt(maxConcurrent)
+            let numConcurrentRenders = self.numConcurrentRenders - Int(numberOfFinishingFrames)
+            if numConcurrentRenders > 0 {
+                TaskRunner.maxConcurrentTasks = UInt(numConcurrentRenders)
             } else {
                 TaskRunner.maxConcurrentTasks = 1
             }
-            Log.d("numberOfFinishingFrames \(numberOfFinishingFrames) set TaskRunner.maxConcurrentTasks = \(TaskRunner.maxConcurrentTasks)")
+            Log.d("numberOfFinishingFrames \(numberOfFinishingFrames) set TaskRunner.numConcurrentRendersTasks = \(TaskRunner.maxConcurrentTasks)")
         }
         
     }
@@ -106,13 +107,13 @@ public actor FinalProcessor {
             // show what frames are in place to be processed
             Task(priority: .userInitiated) {
                 var padding = ""
-                if self.config.numConcurrentRenders < config.progressBarLength {
-                    padding = String(repeating: " ", count: (config.progressBarLength - self.config.numConcurrentRenders))
+                if self.numConcurrentRenders < config.progressBarLength {
+                    padding = String(repeating: " ", count: (config.progressBarLength - self.numConcurrentRenders))
                 }
                 
                 var message: String = padding + ConsoleColor.blue.rawValue + "["
                 var count = 0
-                let end = currentFrameIndex + config.numConcurrentRenders
+                let end = currentFrameIndex + self.numConcurrentRenders
                 for i in currentFrameIndex ..< end {
                     if i >= self.frames.count {
                         message += ConsoleColor.yellow.rawValue + "-"
@@ -288,7 +289,7 @@ public actor FinalProcessor {
                             Log.v("FINAL THREAD frame \(indexToProcess) adding task")
 
 
-                            while(await numberRunning.currentValue() > maxConcurrent) {
+                            while(await numberRunning.currentValue() > numConcurrentRenders) {
                                 Log.v("FINAL THREAD sleeping")
                                 try await Task.sleep(nanoseconds: 1_000_000_000)
                             }

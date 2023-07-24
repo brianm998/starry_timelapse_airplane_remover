@@ -47,7 +47,7 @@ public class ImageSequenceProcessor<T> {
     
     init(imageSequenceDirname: String,
          outputDirname: String,
-         maxConcurrent: Int = 5,
+         maxConcurrent: Int,
          supportedImageFileTypes: [String],
          numberFinalProcessingNeighborsNeeded: Int,
          processExistingFiles: Bool,
@@ -65,6 +65,7 @@ public class ImageSequenceProcessor<T> {
         self.existingOutputFiles = [Bool](repeating: false, count: imageSequence.filenames.count)
         self.fullyProcess = fullyProcess
         self.methodList = try assembleMethodList()
+        TaskRunner.maxConcurrentTasks = UInt(maxConcurrent)
     }
 
     func processFrame(number index: Int,

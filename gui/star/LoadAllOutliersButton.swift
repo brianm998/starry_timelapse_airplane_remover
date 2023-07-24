@@ -11,7 +11,7 @@ struct LoadAllOutliersButton: View {
                     var current_running = 0
                     let startTime = Date().timeIntervalSinceReferenceDate
                     try await withLimitedThrowingTaskGroup(of: Void.self) { taskGroup in
-                        let max_concurrent = viewModel.config?.numConcurrentRenders ?? 10
+                        let max_concurrent = ProcessInfo.processInfo.activeProcessorCount
                         // this gets "Too many open files" with more than 2000 images :(
                         viewModel.loadingAllOutliers = true
                         Log.d("foobar starting")

@@ -20,6 +20,15 @@ You should have received a copy of the GNU General Public License along with sta
 /*
 todo:
 
+ - do star alignment with some 3rd party software: 
+   https://www.startools.org/links--tutorials/free-image-stacking-solutions/sequator
+   And then use aligned images to substitute pixels
+
+ - FIX HANGING BUG
+   This happens when all frames have been through detection,
+   and for some yet unknown reason the app hangs forever without finishing
+   stop and re-start works for now, but isn't ideal.
+ 
  - try image blending
  - make it faster (can always be faster) 
  - make crash detection perl script better
@@ -79,7 +88,7 @@ todo:
  
  - figure out how distribution works
    - a .dmg file with a command line installer?  any swift command line installer examples?
-
+   
  - there is a logging bug where both console and file need to be set to debug, otherwise the logfile
     is not accurate (has some debug, but not all) (
     
@@ -231,7 +240,7 @@ struct StarCli: ParsableCommand {
                     }
                     dispatchGroup.leave()
                 }
-                TaskRunner.maxConcurrentTasks = UInt(config.numConcurrentRenders)
+                TaskRunner.maxConcurrentTasks = UInt(numConcurrentRenders)
                 dispatchGroup.wait()
             } else {
                 // here we are processing a new image sequence 
@@ -271,7 +280,6 @@ struct StarCli: ParsableCommand {
                                 outlierMaxThreshold: outlierMaxThreshold,
                                 outlierMinThreshold: outlierMinThreshold,
                                 minGroupSize: minGroupSize,
-                                numConcurrentRenders: numConcurrentRenders,
                                 imageSequenceName: inputImageSequenceName,
                                 imageSequencePath: inputImageSequencePath,
                                 writeOutlierGroupFiles: shouldWriteOutlierGroupFiles,
@@ -323,9 +331,11 @@ struct StarCli: ParsableCommand {
             let localDispatch = DispatchGroup()
             localDispatch.enter()
             let writeOutputFiles = !skipOutputFiles
+            let max = numConcurrentRenders
             Task {
                 do {
                     let eraser = try await NighttimeAirplaneRemover(with: config,
+                                                                    numConcurrentRenders: max,
                                                                     callbacks: callbacks,
                                                                     processExistingFiles: false,
                                                                     maxResidentImages: 40, // XXX
@@ -337,6 +347,7 @@ struct StarCli: ParsableCommand {
                         // setup sequence monitor
                         let updatableProgressMonitor =
                           await UpdatableProgressMonitor(frameCount: eraser.imageSequence.filenames.count,
+                                                         numConcurrentRenders: max,
                                                          config: eraser.config,
                                                          callbacks: callbacks)
                         upm = updatableProgressMonitor

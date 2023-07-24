@@ -50,12 +50,13 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
     let publisher = PassthroughSubject<FrameAirplaneRemover, Never>()
 
     public init(with config: Config,
-               callbacks: Callbacks,
-               processExistingFiles: Bool,
-               maxResidentImages: Int? = nil,
-               fullyProcess: Bool = true,
-               isGUI: Bool = false,
-               writeOutputFiles: Bool = true) async throws
+                numConcurrentRenders: Int,
+                callbacks: Callbacks,
+                processExistingFiles: Bool,
+                maxResidentImages: Int? = nil,
+                fullyProcess: Bool = true,
+                isGUI: Bool = false,
+                writeOutputFiles: Bool = true) async throws
     {
         self.config = config
         self.callbacks = callbacks
@@ -71,7 +72,7 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
 
         try super.init(imageSequenceDirname: "\(config.imageSequencePath)/\(config.imageSequenceDirname)",
                        outputDirname: "\(config.outputPath)/\(basename)",
-                       maxConcurrent: config.numConcurrentRenders,
+                       maxConcurrent: numConcurrentRenders,
                        supportedImageFileTypes: config.supportedImageFileTypes,
                        numberFinalProcessingNeighborsNeeded: config.numberFinalProcessingNeighborsNeeded,
                        processExistingFiles: processExistingFiles,
@@ -108,6 +109,7 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
         }
         
         finalProcessor = await FinalProcessor(with: config,
+                                              numConcurrentRenders: numConcurrentRenders,
                                               callbacks: callbacks,
                                               publisher: publisher,
                                               numberOfFrames: imageSequenceSize,
