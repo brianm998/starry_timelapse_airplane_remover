@@ -36,9 +36,13 @@ fileprivate func determineMax() -> UInt {
     // handle each response
  }
  */
-public func runTask<Type>(_ closure: @escaping () async -> Type) async -> Task<Type,Never> {
+public func runTask<Type>(_ closure: @escaping () async -> Type,
+                          withReserve reserve: UInt = 0) async -> Task<Type,Never>
+{
     //Log.i("runtask with cpuUsage \(cpuUsage())")
-    if await numberRunning.startOnIncrement(to: TaskRunner.maxConcurrentTasks) {
+    let baseMax = TaskRunner.maxConcurrentTasks
+    let max = baseMax > reserve ? baseMax - reserve : baseMax
+    if await numberRunning.startOnIncrement(to: max) {
         //Log.v("running in new task")
         return Task<Type,Never> {
             let ret = await closure() // run closure in separate task
@@ -65,8 +69,12 @@ public func runTask<Type>(_ closure: @escaping () async -> Type) async -> Task<T
     // handle each response
  }
  */
-public func runThrowingTask<Type>(_ closure: @escaping () async throws -> Type) async throws -> Task<Type,Error> {
-    if await numberRunning.startOnIncrement(to: TaskRunner.maxConcurrentTasks) {
+public func runThrowingTask<Type>(_ closure: @escaping () async throws -> Type,
+                                  withReserve reserve: UInt = 0) async throws -> Task<Type,Error>
+{
+    let baseMax = TaskRunner.maxConcurrentTasks
+    let max = baseMax > reserve ? baseMax - reserve : baseMax
+    if await numberRunning.startOnIncrement(to: max) {
         //Log.v("running in new task")
         return Task<Type,Error> {
             let ret = try await closure() // run closure in separate task
