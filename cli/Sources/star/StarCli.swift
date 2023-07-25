@@ -139,7 +139,7 @@ var config: Config = Config()
 var callbacks = Callbacks()
 
 @main
-struct StarCli: ParsableCommand {
+struct StarCli: AsyncParsableCommand {
 
     @Option(name: [.customShort("c"), .customLong("console-log-level")], help:"""
         The logging level that star will output directly to the terminal.
@@ -208,7 +208,7 @@ struct StarCli: ParsableCommand {
     var imageSequenceDirname: String?
 
 
-    mutating func run() throws {
+    mutating func run() async throws {
         if version {
             print("""
                   Nighttime Timelapse Airplane Remover (star) version \(config.starVersion)
@@ -328,11 +328,11 @@ struct StarCli: ParsableCommand {
             }
             
             Log.i("looking for files to processes in \(inputImageSequenceDirname)")
-            let localDispatch = DispatchGroup()
-            localDispatch.enter()
             let writeOutputFiles = !skipOutputFiles
             let max = numConcurrentRenders
-            Task {
+
+            let task = Task {
+                var eraserDispatchGroup: DispatchGroup?
                 do {
                     let eraser = try await NighttimeAirplaneRemover(with: config,
                                                                     numConcurrentRenders: max,
@@ -357,8 +357,7 @@ struct StarCli: ParsableCommand {
                             }
                         }
                     }
-                    
-                    Log.dispatchGroup = await eraser.dispatchGroup.dispatchGroup
+                    eraserDispatchGroup = await eraser.dispatchGroup.dispatchGroup
                     try await eraser.run()
 
                     Log.i("done")
@@ -372,9 +371,10 @@ struct StarCli: ParsableCommand {
                 } catch {
                     Log.e("\(error)")
                 }
-                localDispatch.leave()
+                return eraserDispatchGroup
             }
-            localDispatch.wait()
+            var eraserDispatchGroup = await task.value
+            eraserDispatchGroup?.wait()
         } else {
             throw ValidationError("need to provide input")
         }
