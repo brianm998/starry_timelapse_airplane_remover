@@ -221,23 +221,37 @@ public class OutlierGroup: CustomStringConvertible,
     // decision code moved from extension because of swift bug:
     // https://forums.swift.org/t/actor-isolation-delegates-in-extensions/60571/6
 
+    // cached value
+    private var _decisionTreeValues: [Double]?
+    
     // ordered by the list of features below
     var decisionTreeValues: [Double] {
         get async {
+            if let _decisionTreeValues = _decisionTreeValues {
+                return _decisionTreeValues
+            }
             var ret: [Double] = []
             for type in OutlierGroup.Feature.allCases {
                 ret.append(await self.decisionTreeValue(for: type))
             }
+            _decisionTreeValues = ret
             return ret
         } 
     }
 
+    // cached value
+    private static var _decisionTreeValueTypes: [OutlierGroup.Feature]?
+    
     // the ordering of the list of values above
     static var decisionTreeValueTypes: [OutlierGroup.Feature] {
+        if let _decisionTreeValueTypes = _decisionTreeValueTypes {
+            return _decisionTreeValueTypes
+        }
         var ret: [OutlierGroup.Feature] = []
         for type in OutlierGroup.Feature.allCases {
             ret.append(type)
         }
+        _decisionTreeValueTypes = ret
         return ret
     }
 
@@ -478,44 +492,36 @@ public class OutlierGroup: CustomStringConvertible,
     public func clearFeatureValueCache() { featureValueCache = [:] }
     
     public func decisionTreeValue(for type: Feature) async -> Double {
-        //Log.d("group \(name) @ frame \(frameIndex) decisionTreeValue(for: \(type))")
 
         if let value = featureValueCache[type] { return value }
+
+        let t0 = NSDate().timeIntervalSince1970
+
+        var ret: Double = 0.0
         
         switch type {
         case .numberOfNearbyOutliersInSameFrame:
-            let ret = await self.numberOfNearbyOutliersInSameFrame
-            featureValueCache[type] = ret
-            return ret
+            ret = await self.numberOfNearbyOutliersInSameFrame
         case .adjecentFrameNeighboringOutliersBestTheta:
-            let ret = await self.adjecentFrameNeighboringOutliersBestTheta
-            featureValueCache[type] = ret
-            return ret
+            ret = await self.adjecentFrameNeighboringOutliersBestTheta
         case .histogramStreakDetection:
-            let ret = await self.histogramStreakDetection
-            featureValueCache[type] = ret
-            return ret
+            ret = await self.histogramStreakDetection
         case .longerHistogramStreakDetection:
-            let ret = await self.longerHistogramStreakDetection
-            featureValueCache[type] = ret
-            return ret
+            ret = await self.longerHistogramStreakDetection
         case .neighboringInterFrameOutlierThetaScore:
-            let ret = await self.neighboringInterFrameOutlierThetaScore
-            featureValueCache[type] = ret
-            return ret
+            ret = await self.neighboringInterFrameOutlierThetaScore
         case .maxOverlap:
-            let ret = await self.maxOverlap
-            featureValueCache[type] = ret
-            return ret
+            ret = await self.maxOverlap
         case .maxOverlapTimesThetaHisto:
-            let ret = await self.maxOverlapTimesThetaHisto
-            featureValueCache[type] = ret
-            return ret
+            ret = await self.maxOverlapTimesThetaHisto
         default:
-            let ret = self.nonAsyncDecisionTreeValue(for: type)
-            featureValueCache[type] = ret
-            return ret
+            ret = self.nonAsyncDecisionTreeValue(for: type)
         }
+        let t1 = NSDate().timeIntervalSince1970
+        Log.v("group \(name) @ frame \(frameIndex) decisionTreeValue(for: \(type)) = \(ret) after \(t1-t0)s")
+
+        featureValueCache[type] = ret
+        return ret
     }
 
     fileprivate var maxBrightness: Double {
@@ -650,10 +656,12 @@ public class OutlierGroup: CustomStringConvertible,
     // tries to find a streak with hough line histograms
     // make this recursive to go back 3 frames in each direction
     fileprivate var longerHistogramStreakDetection: Double {
+        // XXX this MOFO is slow :(
         get async {
             let numberOfFrames = 10 // how far in each direction to go
-            let forwardScore = await self.streakScore(in: .forwards, numberOfFramesLeft: numberOfFrames)
-            let backwardScore = await self.streakScore(in: .backwards, numberOfFramesLeft: numberOfFrames)
+            let (forwardScore,
+                 backwardScore) = await (self.streakScore(in: .forwards, numberOfFramesLeft: numberOfFrames),
+                                         self.streakScore(in: .backwards, numberOfFramesLeft: numberOfFrames))
             return forwardScore + backwardScore
         }
     }
@@ -879,11 +887,10 @@ public class OutlierGroup: CustomStringConvertible,
         Log.d(message)
         }*/
 
-    
-
-        fileprivate func streakScore(in direction: StreakDirection,
-                     numberOfFramesLeft: Int,
-                     existingValue: Double = 0) async -> Double
+    // XXX this MOFO is slow :(
+    fileprivate func streakScore(in direction: StreakDirection,
+                                 numberOfFramesLeft: Int,
+                                 existingValue: Double = 0) async -> Double
     {
         let selfHisto = self.houghLineHistogram
         var bestScore = 0.0
