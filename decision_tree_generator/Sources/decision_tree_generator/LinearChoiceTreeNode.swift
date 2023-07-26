@@ -24,8 +24,8 @@ class LinearChoiceTreeNode: SwiftDecisionTree {
     let indent: Int
 
     // runtime execution
-    func classification(of outlierGroup: OutlierGroup) async -> Double {
-        let outlierValue = await outlierGroup.decisionTreeValue(for: type)
+    func classification(of group: ClassifiableOutlierGroup) -> Double {
+        let outlierValue = group.decisionTreeValue(for: type)
 
         return (outlierValue - min) / (max - min)*2 - 1;
     }
@@ -34,7 +34,7 @@ class LinearChoiceTreeNode: SwiftDecisionTree {
       (
         of features: [OutlierGroup.Feature], // parallel
         and values: [Double]                        // arrays
-      ) async -> Double
+      ) -> Double
     {
         for i in 0 ..< features.count {
             if features[i] == type {
@@ -52,7 +52,7 @@ class LinearChoiceTreeNode: SwiftDecisionTree {
         var indentation = ""
         for _ in 0..<indent { indentation += "    " }
         return """
-          \(indentation)return (\(type) - \(min)) / (\(max) - \(min)) * 2 - 1
+          \(indentation)return (group.decisionTreeValue(for: .\(type)) - \(min)) / (\(max) - \(min)) * 2 - 1
           """
     }
 }

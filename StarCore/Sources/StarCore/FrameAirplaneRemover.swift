@@ -90,7 +90,32 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         return nil
     }
 
-    public func outlierGroups(within distance: Double, of boundingBox: BoundingBox) -> [OutlierGroup]? {
+    /*
+     try creating a spatial 2d array of groups
+     inside the OutlierGroups we need spatial arrangement
+
+     */
+    public func outlierGroups(within distance: Double,
+                              of group: OutlierGroup) -> [OutlierGroup]?
+    {
+        if let outlierGroups = outlierGroups {
+            let groups = outlierGroups.groups(nearby: group)
+            var ret: [OutlierGroup] = []
+            for otherGroup in groups {
+                if otherGroup.bounds.centerDistance(to: group.bounds) < distance {
+                    ret.append(otherGroup)
+                }
+            }
+            return ret
+        }
+        return nil
+    }
+
+    // XXX old method
+    // XXX this MOFO is slow :(
+    public func outlierGroups(within distance: Double,
+                              of boundingBox: BoundingBox) -> [OutlierGroup]?
+    {
         if let outlierGroups = outlierGroups {
             let groups = outlierGroups.members
             var ret: [OutlierGroup] = []
@@ -249,7 +274,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                         }
                         if apply {
                             Log.d("applying decision tree")
-                            let score = await classifier.classification(of: group)
+                            let score = classifier.classification(of: group)
                             await group.shouldPaint(.fromClassifier(score))
                         }
                     }
@@ -270,27 +295,30 @@ public class FrameAirplaneRemover: Equatable, Hashable {
     }
 
     public func applyDecisionTreeToAllOutliers() async {
-        Log.d("frame \(self.frameIndex) applyDecisionTreeToAllOutliers")
+        Log.d("frame \(self.frameIndex) applyDecisionTreeToAll \(self.outlierGroups?.members.count ?? 0) Outliers")
         if let classifier = currentClassifier {
             let startTime = NSDate().timeIntervalSince1970
-//            await withLimitedTaskGroup(of: Void.self) { taskGroup in
+            await withLimitedTaskGroup(of: Void.self) { taskGroup in
                 await foreachOutlierGroup() { group in
                     if group.shouldPaint == nil {
                         // only apply classifier when no other classification is otherwise present
-//                        await taskGroup.addTask() {
-                            let score = await classifier.classification(of: group)
-                            //Log.d("frame \(self.frameIndex) applying classifier shouldPaint \(score)")
+                        await taskGroup.addTask() {
+                            let values = await group.decisionTreeValues
+                            let valueTypes = OutlierGroup.decisionTreeValueTypes
+
+                            let score = classifier.classification(of: valueTypes, and: values)
+                            //let score = await classifier.classification(of: group)
                             await group.shouldPaint(.fromClassifier(score))
                         }
-  //                  }
+                    }
                     return .continue
                 }
-//                await taskGroup.waitForAll()
-//            }
+                await taskGroup.waitForAll()
+            }
             let endTime = NSDate().timeIntervalSince1970
             Log.i("frame \(self.frameIndex) spent \(endTime - startTime) seconds classifing outlier groups");
         } else {
-            Log.w("no classifier")
+            Log.i("no classifier")
         }
         Log.d("frame \(self.frameIndex) DONE applyDecisionTreeToAllOutliers")
     }

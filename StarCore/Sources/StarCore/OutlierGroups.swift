@@ -15,16 +15,78 @@ import Cocoa
 
 // this class holds all the outlier groups for a frame
 
+
 public class OutlierGroups {
+
+    let height = IMAGE_HEIGHT!
+    let width = IMAGE_WIDTH!
     
+    // how many spatial groups in the X direction
+    fileprivate var spatialXCount: Int
+
+    // how many spatial groups in the Y direction
+    fileprivate var spatialYCount: Int
+
     public let frameIndex: Int
     public var members: [String: OutlierGroup] // keyed by name
 
+    // this is an x, y index of nearby groups
+    private var spatialArr: [[[OutlierGroup]]]
+
+    private func index(for group: OutlierGroup) -> (Int, Int) {
+        let centerCoord = group.bounds.center
+
+        return (Int(Double(centerCoord.x) / width) % spatialXCount,
+                Int(Double(centerCoord.y) / height) % spatialYCount)
+    }
+
+    public func groups(nearby group: OutlierGroup) -> [OutlierGroup] {
+        var ret: [OutlierGroup] = []
+
+        let (XIndex, YIndex) = self.index(for: group)
+
+        var XStartIndex = XIndex - 1
+        var XEndIndex = XIndex + 1
+        
+        var YStartIndex = YIndex - 1
+        var YEndIndex = YIndex + 1
+
+        if XStartIndex < 0 { XStartIndex = 0 }
+        if YStartIndex < 0 { YStartIndex = 0 }
+
+        if XEndIndex >= self.spatialArr.count { XEndIndex = self.spatialArr.count - 1 }
+        if YEndIndex >= self.spatialArr[0].count { YEndIndex = self.spatialArr[0].count - 1 }
+
+        for x in XStartIndex...XEndIndex {
+            for y in YStartIndex...YEndIndex {
+                ret.append(contentsOf: self.spatialArr[x][y])
+            }
+        }
+
+        return ret
+    }
+    /*
+
+     need spatial 2d array of members
+     function to assign x,y indices to any OutlierGroup
+     function to return only indices within some range
+     
+     */
+    
     public init(frameIndex: Int,
-               members: [String: OutlierGroup])
+                members: [String: OutlierGroup])
     {
         self.frameIndex = frameIndex
         self.members = members
+        self.spatialXCount = Int(width/OutlierGroup.maxNearbyGroupDistance)
+        self.spatialYCount = Int(height/OutlierGroup.maxNearbyGroupDistance)
+        self.spatialArr = [[[OutlierGroup]]](repeating: [[OutlierGroup]](repeating: [], count: spatialYCount), count: spatialXCount)
+        // configure 2d spatial map here
+        for group in members.values {
+            let (XIndex, YIndex) = self.index(for: group)
+            spatialArr[XIndex][YIndex].append(group)
+        }
+        Log.i("spatialXCount \(self.spatialXCount) spatialYCount \(self.spatialYCount)")
     }
     
     public func write(to dir: String) async throws {
@@ -114,6 +176,15 @@ public class OutlierGroups {
             }
             return groups
         }
+        self.spatialXCount = Int(width/OutlierGroup.maxNearbyGroupDistance)
+        self.spatialYCount = Int(height/OutlierGroup.maxNearbyGroupDistance)
+        self.spatialArr = [[[OutlierGroup]]](repeating: [[OutlierGroup]](repeating: [], count: spatialYCount), count: spatialXCount)
+        // configure 2d spatial map here
+        for group in members.values {
+            let (XIndex, YIndex) = self.index(for: group)
+            spatialArr[XIndex][YIndex].append(group)
+        }
+        Log.i("spatialXCount \(self.spatialXCount) spatialYCount \(self.spatialYCount)")
     }
 }
 

@@ -1,3 +1,4 @@
+
 import Foundation
 
 // describes an object able to classify an OutlierGroup
@@ -7,12 +8,12 @@ import Foundation
 public protocol OutlierGroupClassifier {
 
     // returns -1 for negative, +1 for positive
-    func classification(of group: OutlierGroup) async -> Double
+    func classification(of group: ClassifiableOutlierGroup) -> Double
 
     // returns -1 for negative, +1 for positive
     func classification (
       of features: [OutlierGroup.Feature],        // parallel
       and values: [Double]                        // arrays
-    ) async -> Double
+    ) -> Double
 }
 

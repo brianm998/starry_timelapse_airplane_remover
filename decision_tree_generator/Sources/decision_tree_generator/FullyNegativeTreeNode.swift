@@ -10,14 +10,14 @@ struct FullyNegativeTreeNode: SwiftDecisionTree {
         return "\(indentation)return -1"
     }
 
-    func classification(of outlierGroup: OutlierGroup) async -> Double {
+    func classification(of group: ClassifiableOutlierGroup) -> Double {
         return -1
     }
 
     public func classification
       (
         of features: [OutlierGroup.Feature], // parallel
-        and values: [Double]                        // arrays
+        and values: [Double]                 // arrays
       ) -> Double
     {
         return -1

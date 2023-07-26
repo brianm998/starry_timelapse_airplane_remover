@@ -21,7 +21,29 @@ import Combine
 // We need to line up all of the frames in order so that each frame can access
 // some number of neighboring frames in each data when calculating partulcar features.
 
+public actor ClassifierCentral {
+
+    private var frameNumber: Int?
+    
+    public func classify(frame: FrameAirplaneRemover) async -> Bool {
+        while frameNumber != nil {
+            return false
+            //try await Task.sleep(nanoseconds: 1_000_000_000)
+        }
+        if frameNumber != nil { Log.e("FUCKNUTS") }
+        frameNumber = frame.frameIndex
+        //Log.w("frame \(frame.frameIndex) \(frameNumber) BEGIN CENTRAL classify")
+        await frame.maybeApplyOutlierGroupClassifier()
+        //Log.w("frame \(frame.frameIndex) \(frameNumber) END CENTRAL classify")
+        frameNumber = nil
+        return true
+    }
+}
+
 public actor FinalProcessor {
+
+    let centralClassifier = ClassifierCentral()
+    
     var frames: [FrameAirplaneRemover?]
     var currentFrameIndex = 0
     var maxAddedIndex = 0
@@ -165,18 +187,23 @@ public actor FinalProcessor {
     
     func finishAll() async throws {
         Log.d("finishing all")
-        try await withLimitedThrowingTaskGroup(of: Void.self) { taskGroup in
+//        try await withLimitedThrowingTaskGroup(of: Void.self) { taskGroup in
             for (_, frame) in frames.enumerated() {
                 if let frame = frame {
                     Log.d("adding frame \(frame.frameIndex) to final queue")
-                    try await taskGroup.addTask() { 
-                        await frame.maybeApplyOutlierGroupClassifier()
-                        frame.set(state: .outlierProcessingComplete)
-                        try await self.finish(frame: frame)
+                    //try await taskGroup.addTask() {
+
+                    while await self.centralClassifier.classify(frame: frame) == false {
+                        Log.w("WAITING")
+                        try await Task.sleep(nanoseconds: 1_000_000_000)
                     }
+                    
+                    frame.set(state: .outlierProcessingComplete)
+                    try await self.finish(frame: frame)
+                //}
                 }
-            }
-            try await taskGroup.waitForAll()
+  //          }
+//            try await taskGroup.waitForAll()
         }
     }
 
@@ -294,12 +321,16 @@ public actor FinalProcessor {
                                 try await Task.sleep(nanoseconds: 1_000_000_000)
                             }
                             Log.v("FINAL THREAD finishing sleeping")
+                            await frameToFinish.clearOutlierGroupValueCaches()
+                            while await self.centralClassifier.classify(frame: frameToFinish) == false {
+
+                                Log.w("WAITING")
+                                try await Task.sleep(nanoseconds: 1_000_000_000)
+                            }
+                            frameToFinish.set(state: .outlierProcessingComplete)
                             await numberRunning.increment()
                             /*try await*/ taskGroup.addTask() { 
                                 Log.v("FINAL THREAD frame \(indexToProcess) task running")
-                                await frameToFinish.clearOutlierGroupValueCaches()
-                                await frameToFinish.maybeApplyOutlierGroupClassifier()
-                                frameToFinish.set(state: .outlierProcessingComplete)
                                 Log.v("FINAL THREAD frame \(indexToProcess) classified")
 
 //                                try await taskGroup.addTask() { 

@@ -47,8 +47,8 @@ class DecisionTreeNode: SwiftDecisionTree {
     let indent: Int
 
     // runtime execution
-    func classification(of outlierGroup: OutlierGroup) async -> Double {
-        let outlierValue = await outlierGroup.decisionTreeValue(for: type)
+    func classification(of group: ClassifiableOutlierGroup) -> Double {
+        let outlierValue = group.decisionTreeValue(for: type)
         if stump {
             if outlierValue < value {
                 return lessThanStumpValue
@@ -57,9 +57,9 @@ class DecisionTreeNode: SwiftDecisionTree {
             }
         } else {
             if outlierValue < value {
-                return await lessThan.classification(of: outlierGroup)
+                return lessThan.classification(of: group)
             } else {
-                return await greaterThan.classification(of: outlierGroup)
+                return greaterThan.classification(of: group)
             }
         }
     }
@@ -67,8 +67,8 @@ class DecisionTreeNode: SwiftDecisionTree {
     func classification
       (
         of features: [OutlierGroup.Feature], // parallel
-        and values: [Double]                        // arrays
-      ) async -> Double
+        and values: [Double]                 // arrays
+      ) -> Double
     {
         for i in 0 ..< features.count {
             if features[i] == type {
@@ -82,9 +82,9 @@ class DecisionTreeNode: SwiftDecisionTree {
                     }
                 } else {
                     if outlierValue < value {
-                        return await lessThan.classification(of: features, and: values)
+                        return lessThan.classification(of: features, and: values)
                     } else {
-                        return await greaterThan.classification(of: features, and: values)
+                        return greaterThan.classification(of: features, and: values)
                     }
                 }
                 
@@ -99,7 +99,7 @@ class DecisionTreeNode: SwiftDecisionTree {
         for _ in 0..<indent { indentation += "    " }
         if stump {
             return """
-              \(indentation)if \(type) < \(value) {
+              \(indentation)if group.decisionTreeValue(for: .\(type)) < \(value) {
               \(indentation)    return \(lessThanStumpValue)
               \(indentation)} else {
               \(indentation)    return \(greaterThanStumpValue)
@@ -108,7 +108,7 @@ class DecisionTreeNode: SwiftDecisionTree {
         } else {
             // recurse on an if statement
             return """
-              \(indentation)if \(type) < \(value) {
+              \(indentation)if group.decisionTreeValue(for: .\(type)) < \(value) {
               \(lessThan.swiftCode)
               \(indentation)} else {
               \(greaterThan.swiftCode)

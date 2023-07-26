@@ -20,11 +20,17 @@ import Cocoa
 internal var IMAGE_WIDTH: Double?
 internal var IMAGE_HEIGHT: Double?
 
+// used for both outlier groups and raw data
+public protocol ClassifiableOutlierGroup {
+    func decisionTreeValue(for type: OutlierGroup.Feature) -> Double 
+}
+
 // represents a single outler group in a frame
 public class OutlierGroup: CustomStringConvertible,
                            Hashable,
                            Equatable,
-                           Comparable
+                           Comparable,
+                           ClassifiableOutlierGroup
 {
     public let name: String
     public let size: UInt              // number of pixels in this outlier group
@@ -172,7 +178,7 @@ public class OutlierGroup: CustomStringConvertible,
     }
     
     // how many pixels actually overlap between the groups ?  returns 0-1 value of overlap amount
-    func pixelOverlap(with group2: OutlierGroup) async -> Double // 1 means total overlap, 0 means none
+    func pixelOverlap(with group2: OutlierGroup) -> Double // 1 means total overlap, 0 means none
     {
         let group1 = self
         // throw out non-overlapping frames, do any slip through?
@@ -232,7 +238,7 @@ public class OutlierGroup: CustomStringConvertible,
             }
             var ret: [Double] = []
             for type in OutlierGroup.Feature.allCases {
-                ret.append(await self.decisionTreeValue(for: type))
+                ret.append(self.decisionTreeValue(for: type))
             }
             _decisionTreeValues = ret
             return ret
@@ -259,7 +265,7 @@ public class OutlierGroup: CustomStringConvertible,
         get async {
             var rawValues = OutlierFeatureData.rawValues()
             for type in OutlierGroup.Feature.allCases {
-                let value = await self.decisionTreeValue(for: type)
+                let value = self.decisionTreeValue(for: type)
                 rawValues[type.sortOrder] = value
                 //Log.d("frame \(frameIndex) type \(type) value \(value)")
             }
@@ -428,70 +434,13 @@ public class OutlierGroup: CustomStringConvertible,
         }        
     }
 
-    fileprivate func nonAsyncDecisionTreeValue(for type: Feature) -> Double {
-        let height = IMAGE_HEIGHT!
-        let width = IMAGE_WIDTH!
-        switch type {
-            // attempt to normalize all pixel size related values
-            // divide by width and/or hight
-        case .size:
-            return Double(self.size)/(height*width)
-        case .width:
-            return Double(self.bounds.width)/width
-        case .height:
-            return Double(self.bounds.height)/height
-        case .centerX:
-            return Double(self.bounds.center.x)/width
-        case .minX:
-            return Double(self.bounds.min.x)/width
-        case .maxX:
-            return Double(self.bounds.max.x)/width
-        case .minY:
-            return Double(self.bounds.min.y)/height
-        case .maxY:
-            return Double(self.bounds.max.y)/height
-        case .centerY:
-            return Double(self.bounds.center.y)/height
-        case .hypotenuse:
-            return Double(self.bounds.hypotenuse)/(height*width)
-        case .aspectRatio:
-            return Double(self.bounds.width) / Double(self.bounds.height)
-        case .fillAmount:
-            return Double(size)/(Double(self.bounds.width)*Double(self.bounds.height))
-        case .surfaceAreaRatio:
-            return self.surfaceAreaToSizeRatio
-        case .averagebrightness:
-            return Double(self.brightness)
-        case .medianBrightness:            
-            return self.medianBrightness
-        case .maxBrightness:    
-            return self.maxBrightness
-        case .avgCountOfFirst10HoughLines:
-            return self.avgCountOfFirst10HoughLines
-        case .maxThetaDiffOfFirst10HoughLines:
-            return self.maxThetaDiffOfFirst10HoughLines
-        case .maxRhoDiffOfFirst10HoughLines:
-            return self.maxRhoDiffOfFirst10HoughLines
-        case .avgCountOfAllHoughLines:
-            return self.avgCountOfAllHoughLines
-        case .maxThetaDiffOfAllHoughLines:
-            return self.maxThetaDiffOfAllHoughLines
-        case .maxRhoDiffOfAllHoughLines:
-            return self.maxRhoDiffOfAllHoughLines
-        case .maxHoughTransformCount:
-            return self.maxHoughTransformCount
-        case .maxHoughTheta:
-            return self.maxHoughTheta
-        default:
-            fatalError("called with bad value \(type) @ index \(frameIndex)")
-        }
-    }
-
     fileprivate var featureValueCache: [Feature: Double] = [:]
 
     public func clearFeatureValueCache() { featureValueCache = [:] }
     
-    public func decisionTreeValue(for type: Feature) async -> Double {
+    public func decisionTreeValue(for type: Feature) -> Double {
+        let height = IMAGE_HEIGHT!
+        let width = IMAGE_WIDTH!
 
         if let value = featureValueCache[type] { return value }
 
@@ -500,22 +449,68 @@ public class OutlierGroup: CustomStringConvertible,
         var ret: Double = 0.0
         
         switch type {
+        case .size:
+            ret = Double(self.size)/(height*width)
+        case .width:
+            ret = Double(self.bounds.width)/width
+        case .height:
+            ret = Double(self.bounds.height)/height
+        case .centerX:
+            ret = Double(self.bounds.center.x)/width
+        case .minX:
+            ret = Double(self.bounds.min.x)/width
+        case .maxX:
+            ret = Double(self.bounds.max.x)/width
+        case .minY:
+            ret = Double(self.bounds.min.y)/height
+        case .maxY:
+            ret = Double(self.bounds.max.y)/height
+        case .centerY:
+            ret = Double(self.bounds.center.y)/height
+        case .hypotenuse:
+            ret = Double(self.bounds.hypotenuse)/(height*width)
+        case .aspectRatio:
+            ret = Double(self.bounds.width) / Double(self.bounds.height)
+        case .fillAmount:
+            ret = Double(size)/(Double(self.bounds.width)*Double(self.bounds.height))
+        case .surfaceAreaRatio:
+            ret = self.surfaceAreaToSizeRatio
+        case .averagebrightness:
+            ret = Double(self.brightness)
+        case .medianBrightness:            
+            ret = self.medianBrightness
+        case .maxBrightness:    
+            ret = self.maxBrightness
+        case .avgCountOfFirst10HoughLines:
+            ret = self.avgCountOfFirst10HoughLines
+        case .maxThetaDiffOfFirst10HoughLines:
+            ret = self.maxThetaDiffOfFirst10HoughLines
+        case .maxRhoDiffOfFirst10HoughLines:
+            ret = self.maxRhoDiffOfFirst10HoughLines
+        case .avgCountOfAllHoughLines:
+            ret = self.avgCountOfAllHoughLines
+        case .maxThetaDiffOfAllHoughLines:
+            ret = self.maxThetaDiffOfAllHoughLines
+        case .maxRhoDiffOfAllHoughLines:
+            ret = self.maxRhoDiffOfAllHoughLines
+        case .maxHoughTransformCount:
+            ret = self.maxHoughTransformCount
+        case .maxHoughTheta:
+            ret = self.maxHoughTheta
         case .numberOfNearbyOutliersInSameFrame:
-            ret = await self.numberOfNearbyOutliersInSameFrame
+            ret = self.numberOfNearbyOutliersInSameFrame
         case .adjecentFrameNeighboringOutliersBestTheta:
-            ret = await self.adjecentFrameNeighboringOutliersBestTheta
+            ret = self.adjecentFrameNeighboringOutliersBestTheta
         case .histogramStreakDetection:
-            ret = await self.histogramStreakDetection
+            ret = self.histogramStreakDetection
         case .longerHistogramStreakDetection:
-            ret = await self.longerHistogramStreakDetection
+            ret = self.longerHistogramStreakDetection
         case .neighboringInterFrameOutlierThetaScore:
-            ret = await self.neighboringInterFrameOutlierThetaScore
+            ret = self.neighboringInterFrameOutlierThetaScore
         case .maxOverlap:
-            ret = await self.maxOverlap
+            ret = self.maxOverlap
         case .maxOverlapTimesThetaHisto:
-            ret = await self.maxOverlapTimesThetaHisto
-        default:
-            ret = self.nonAsyncDecisionTreeValue(for: type)
+            ret = self.maxOverlapTimesThetaHisto
         }
         let t1 = NSDate().timeIntervalSince1970
         Log.v("group \(name) @ frame \(frameIndex) decisionTreeValue(for: \(type)) = \(ret) after \(t1-t0)s")
@@ -544,10 +539,10 @@ public class OutlierGroup: CustomStringConvertible,
     }
 
     fileprivate var numberOfNearbyOutliersInSameFrame: Double {
-        get async {
+        get {
             if let frame = frame,
-               let nearbyGroups = frame.outlierGroups(within: self.maxNearbyGroupDistance,
-                                                       of: self.bounds)
+               let nearbyGroups = frame.outlierGroups(within: OutlierGroup.maxNearbyGroupDistance,
+                                                       of: self)
             {
                 return Double(nearbyGroups.count)
             } else {
@@ -586,7 +581,7 @@ public class OutlierGroup: CustomStringConvertible,
         return 0
     }
 
-    fileprivate var maxNearbyGroupDistance: Double {
+    public static var maxNearbyGroupDistance: Double {
         800*7000/IMAGE_WIDTH! // XXX hardcoded constant
     }
 
@@ -607,14 +602,14 @@ public class OutlierGroup: CustomStringConvertible,
     
     // tries to find a streak with hough line histograms
     fileprivate var histogramStreakDetection: Double {
-        get async {
+        get {
             if let frame = frame {
                 var bestScore = 0.0
                 let selfHisto = self.houghLineHistogram
 
                 if let previousFrame = frame.previousFrame,
-                   let nearbyGroups = previousFrame.outlierGroups(within: self.maxNearbyGroupDistance,
-                                                                    of: self.bounds)
+                   let nearbyGroups = previousFrame.outlierGroups(within: OutlierGroup.maxNearbyGroupDistance,
+                                                                    of: self)
                 {
                     for group in nearbyGroups {
                         let score = self.thetaHistoCenterLineScore(with: group,
@@ -623,8 +618,8 @@ public class OutlierGroup: CustomStringConvertible,
                     }
                 }
                 if let nextFrame = frame.nextFrame,
-                   let nearbyGroups = nextFrame.outlierGroups(within: self.maxNearbyGroupDistance,
-                                                                of: self.bounds)
+                   let nearbyGroups = nextFrame.outlierGroups(within: OutlierGroup.maxNearbyGroupDistance,
+                                                                of: self)
                 {
                     for group in nearbyGroups {
                         let score = self.thetaHistoCenterLineScore(with: group,
@@ -657,34 +652,34 @@ public class OutlierGroup: CustomStringConvertible,
     // make this recursive to go back 3 frames in each direction
     fileprivate var longerHistogramStreakDetection: Double {
         // XXX this MOFO is slow :(
-        get async {
-            let numberOfFrames = 10 // how far in each direction to go
+        get {
+            let numberOfFrames = 1 // how far in each direction to go
             let (forwardScore,
-                 backwardScore) = await (self.streakScore(in: .forwards, numberOfFramesLeft: numberOfFrames),
-                                         self.streakScore(in: .backwards, numberOfFramesLeft: numberOfFrames))
+                 backwardScore) = (self.streakScore(in: .forwards, numberOfFramesLeft: numberOfFrames),
+                                   self.streakScore(in: .backwards, numberOfFramesLeft: numberOfFrames))
             return forwardScore + backwardScore
         }
     }
 
     fileprivate var maxOverlap: Double {
-        get async {
+        get {
             var maxOverlap = 0.0
             if let frame = frame {
                 if let previousFrame = frame.previousFrame,
-                   let nearbyGroups = previousFrame.outlierGroups(within: self.maxNearbyGroupDistance,
-                                                                          of: self.bounds)
+                   let nearbyGroups = previousFrame.outlierGroups(within: OutlierGroup.maxNearbyGroupDistance,
+                                                                          of: self)
                 {
                     for group in nearbyGroups {
-                        maxOverlap = max(await self.pixelOverlap(with: group), maxOverlap)
+                        maxOverlap = max(self.pixelOverlap(with: group), maxOverlap)
                     }
                 }
                 
                 if let nextFrame = frame.nextFrame,
-                   let nearbyGroups = nextFrame.outlierGroups(within: self.maxNearbyGroupDistance,
-                                                                      of: self.bounds)
+                   let nearbyGroups = nextFrame.outlierGroups(within: OutlierGroup.maxNearbyGroupDistance,
+                                                                      of: self)
                 {
                     for group in nearbyGroups {
-                        maxOverlap = max(await self.pixelOverlap(with: group), maxOverlap)
+                        maxOverlap = max(self.pixelOverlap(with: group), maxOverlap)
                     }
                 }
                 
@@ -694,31 +689,31 @@ public class OutlierGroup: CustomStringConvertible,
     }
 
     fileprivate var maxOverlapTimesThetaHisto: Double {
-        get async {
+        get {
             var maxOverlap = 0.0
             if let frame = frame {
                 let selfHisto = self.houghLineHistogram
 
                 if let previousFrame = frame.previousFrame,
-                   let nearbyGroups = previousFrame.outlierGroups(within: self.maxNearbyGroupDistance,
-                                                                    of: self.bounds)
+                   let nearbyGroups = previousFrame.outlierGroups(within: OutlierGroup.maxNearbyGroupDistance,
+                                                                    of: self)
                 {
                     for group in nearbyGroups {
                         let otherHisto = group.houghLineHistogram
                         let histoScore = otherHisto.matchScore(with: selfHisto)
-                        let overlap = await self.pixelOverlap(with: group)
+                        let overlap = self.pixelOverlap(with: group)
                         maxOverlap = max(overlap * histoScore, maxOverlap)
                     }
                 }
                 
                 if let nextFrame = frame.nextFrame,
-                   let nearbyGroups = nextFrame.outlierGroups(within: self.maxNearbyGroupDistance,
-                                                                of: self.bounds)
+                   let nearbyGroups = nextFrame.outlierGroups(within: OutlierGroup.maxNearbyGroupDistance,
+                                                                of: self)
                 {
                     for group in nearbyGroups {
                         let otherHisto = group.houghLineHistogram
                         let histoScore = otherHisto.matchScore(with: selfHisto)
-                        let overlap = await self.pixelOverlap(with: group)
+                        let overlap = self.pixelOverlap(with: group)
                         maxOverlap = max(overlap * histoScore, maxOverlap)
                     }
                 }
@@ -729,10 +724,10 @@ public class OutlierGroup: CustomStringConvertible,
     
     fileprivate var neighboringInterFrameOutlierThetaScore: Double {
         // XXX doesn't use related frames 
-        get async {
+        get {
             if let frame = frame,
-               let nearbyGroups = frame.outlierGroups(within: self.maxNearbyGroupDistance,
-                                                             of: self.bounds)
+               let nearbyGroups = frame.outlierGroups(within: OutlierGroup.maxNearbyGroupDistance,
+                                                             of: self)
             {
                 let selfHisto = self.houghLineHistogram
                 var ret = 0.0
@@ -767,14 +762,14 @@ public class OutlierGroup: CustomStringConvertible,
          use this across all nearby outlier groups in adjecent frames, and notice if there
          is only one good (or decent) match, or a slew of bad matches
          */
-        get async {
+        get {
             if let frame = frame {
                 let thisTheta = self.firstLine?.theta ?? 180
                 var smallestDifference: Double = 360
                 if let previousFrame = frame.previousFrame,
                    let nearbyGroups =
-                     previousFrame.outlierGroups(within: self.maxNearbyGroupDistance,
-                                                  of: self.bounds)
+                     previousFrame.outlierGroups(within: OutlierGroup.maxNearbyGroupDistance,
+                                                  of: self)
                 {
 
                     for group in nearbyGroups {
@@ -788,8 +783,8 @@ public class OutlierGroup: CustomStringConvertible,
                 }
 
                 if let nextFrame = frame.nextFrame,
-                   let nearbyGroups = nextFrame.outlierGroups(within: self.maxNearbyGroupDistance,
-                                                                of: self.bounds)
+                   let nearbyGroups = nextFrame.outlierGroups(within: OutlierGroup.maxNearbyGroupDistance,
+                                                                of: self)
                 {
                     for group in nearbyGroups {
                         if let firstLine = group.firstLine {
@@ -890,7 +885,7 @@ public class OutlierGroup: CustomStringConvertible,
     // XXX this MOFO is slow :(
     fileprivate func streakScore(in direction: StreakDirection,
                                  numberOfFramesLeft: Int,
-                                 existingValue: Double = 0) async -> Double
+                                 existingValue: Double = 0) -> Double
     {
         let selfHisto = self.houghLineHistogram
         var bestScore = 0.0
@@ -898,8 +893,8 @@ public class OutlierGroup: CustomStringConvertible,
         
         if let frame = self.frame,
            let otherFrame = direction == .forwards ? frame.nextFrame : frame.previousFrame,
-           let nearbyGroups = otherFrame.outlierGroups(within: self.maxNearbyGroupDistance,
-                                                         of: self.bounds)
+           let nearbyGroups = otherFrame.outlierGroups(within: OutlierGroup.maxNearbyGroupDistance,
+                                                         of: self)
         {
             for nearbyGroup in nearbyGroups {
                 let score = self.thetaHistoCenterLineScore(with: nearbyGroup,
@@ -916,9 +911,9 @@ public class OutlierGroup: CustomStringConvertible,
         if numberOfFramesLeft != 0,
            let bestGroup = bestGroup
         {
-            return await bestGroup.streakScore(in: direction,
-                                           numberOfFramesLeft: numberOfFramesLeft - 1,
-                                           existingValue: score)
+            return  bestGroup.streakScore(in: direction,
+                                          numberOfFramesLeft: numberOfFramesLeft - 1,
+                                          existingValue: score)
         } else {
             return score
         }

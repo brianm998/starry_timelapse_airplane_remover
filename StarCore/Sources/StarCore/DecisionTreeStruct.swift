@@ -37,16 +37,16 @@ public struct DecisionTreeStruct: DecisionTree {
         self.type = type
     }
     
-    public func classification(of group: OutlierGroup) async -> Double {
-        return await tree.classification(of: group)
+    public func classification(of group: ClassifiableOutlierGroup) -> Double {
+        return tree.classification(of: group)
     }
 
     // returns -1 for negative, +1 for positive
     public func classification (
       of features: [OutlierGroup.Feature],  // parallel
-      and values: [Double]                        // arrays
-    ) async -> Double
+      and values: [Double]                  // arrays
+    ) -> Double
     {
-        return await tree.classification(of: features, and: values)
+        return tree.classification(of: features, and: values)
     }
 }

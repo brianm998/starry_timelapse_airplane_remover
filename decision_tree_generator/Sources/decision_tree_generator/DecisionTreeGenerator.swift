@@ -112,25 +112,6 @@ actor DecisionTreeGenerator {
         var treesNameListString = "["
         var digest = SHA256()
 
-        var dataDefinition1 = "        let ("
-        var dataDefinition2 = "await ("
-        var classificationMethodCall = ""
-        for type in decisionTypes {
-            dataDefinition1 += "\(type), "
-            dataDefinition2 += "group.decisionTreeValue(for: .\(type)), "
-            classificationMethodCall += "\(type): \(type), "
-        }        
-        classificationMethodCall.removeLast()
-        classificationMethodCall.removeLast()
-
-        dataDefinition1.removeLast()
-        dataDefinition1.removeLast()
-        dataDefinition2.removeLast()
-        dataDefinition2.removeLast()
-
-        dataDefinition1 += ")"
-        dataDefinition2 += ")"
-        
         var treesTypeString = ""
         
         for tree in forest {
@@ -139,8 +120,8 @@ actor DecisionTreeGenerator {
             Log.i("have tree \(name) w/ score \(score)")
 
             treesDeclarationString += "    let tree_\(name) = OutlierGroupDecisionTree_\(name)()\n"
-            treesClassificationString1 += "            await taskGroup.addTask() { self.tree_\(name).classification(\(classificationMethodCall)) * \(score) }\n\n"
-            treesClassificationString2 += "            await taskGroup.addTask() { self.tree_\(name).classification(of: features, and: values) * \(score) }\n\n"
+            treesClassificationString1 += "        total += self.tree_\(name).classification(of: group) * \(score)\n"
+            treesClassificationString2 += "        total += self.tree_\(name).classification(of: features, and: values) * \(score)\n"
             treesNameListString += " \"\(name)\","
 
             treesTypeString += "   \(tree.tree.type)\n\n"
@@ -204,33 +185,23 @@ actor DecisionTreeGenerator {
 
              \(treesDeclarationString)
                  // returns -1 for negative, +1 for positive
-                 public func classification(of group: OutlierGroup) async -> Double {
-             \(dataDefinition1) = \(dataDefinition2)
-
-                     let score = await withLimitedTaskGroup(of: Double.self) { taskGroup in
+                 public func classification(of group: ClassifiableOutlierGroup) -> Double {
+                     var total: Double = 0.0
              
              \(treesClassificationString1)
-                         var total: Double = 0.0
-                         await taskGroup.forEach() { total += $0 }
-                         return total / \(forest.count)
-                     }
-                     return score
+                     return total / \(forest.count)
                  }
 
                  // returns -1 for negative, +1 for positive
                  public func classification (
                     of features: [OutlierGroup.Feature],   // parallel
                     and values: [Double]                   // arrays
-                 ) async -> Double
+                 ) -> Double
                  {
-                     let score = await withLimitedTaskGroup(of: Double.self) { taskGroup in
-
+                     var total: Double = 0.0
+                     
              \(treesClassificationString2)
-                         var total: Double = 0.0
-                         await taskGroup.forEach() { total += $0 }
-                         return total / \(forest.count)
-                     }
-                     return score
+                     return total / \(forest.count)
                  }
              }
              """
@@ -305,22 +276,6 @@ actor DecisionTreeGenerator {
         let treeHashString = treeHash.compactMap { String(format: "%02x", $0) }.joined()
         let generationDateSince1970 = generationDate.timeIntervalSince1970
 
-        var functionSignature = ""
-        var functionParameters = ""
-        var function2Parameters = ""
-        
-        for type in decisionTypes {
-            functionParameters += "            \(type): await group.decisionTreeValue(for: .\(type)),\n"
-            function2Parameters += "         \(type): map[.\(type)]!,\n"
-            functionSignature += "            \(type): Double,\n"
-        }
-        functionSignature.removeLast()        
-        functionSignature.removeLast()
-        functionParameters.removeLast()
-        functionParameters.removeLast()
-        function2Parameters.removeLast()
-        function2Parameters.removeLast()
-
         let hashPrefix = String(treeHashString.prefix(shaPrefixSize))
 
         let filename = "\(baseFilename)\(hashPrefix).swift"
@@ -385,10 +340,10 @@ actor DecisionTreeGenerator {
                                           decisionSplitTypes: decisionSplitTypes,
                                           maxDepth: maxDepth)
 
-        // prune this mother fucker with test data
 
         var generatedSwiftCode: String = ""
         if pruneTree {
+            // prune this mother fucker with test data
             // this can take a long time
             tree = await prune(tree: tree, with: testData)
         }
@@ -463,37 +418,20 @@ actor DecisionTreeGenerator {
               // the list of decision types this tree did not use
           \(skippedDecisionTypeString)
           
-              // decide the paintability of this OutlierGroup with a decision tree
-              // return value is between -1 and 1, 1 is paint
-              public func classification(of group: OutlierGroup) async -> Double {
-                  return self.classification(
-          \(functionParameters)
-                  )
-              }
-
               // a way to call into the decision tree without an OutlierGroup object
               // it's going to blow up unless supplied with the expected set of features
               // return value is between -1 and 1, 1 is paint
               public func classification(
                  of features: [OutlierGroup.Feature], // parallel
-                 and values: [Double]                       // arrays
+                 and values: [Double]                 // arrays
                 ) -> Double
               {
-                var map: [OutlierGroup.Feature:Double] = [:]
-                for (index, type) in features.enumerated() {
-                    let value = values[index]
-                    map[type] = value
-                }
-                return classification(
-          \(function2Parameters)
-                )
+                return classification(of: OutlierGroupFeatureData(features: features, values: values))
               }
 
               // the actual tree resides here
               // return value is between -1 and 1, 1 is paint
-              public func classification(
-          \(functionSignature)
-                    ) -> Double
+              public func classification(of group: ClassifiableOutlierGroup) -> Double 
               {
           \(generatedSwiftCode)
               }
@@ -1279,8 +1217,8 @@ public func runTest(of classifier: OutlierGroupClassifier,
     var numberBad = 0
     
     for positiveData in classifiedData.positiveData {
-        let classification = await classifier.classification(of: features,
-                                                             and: positiveData.values)
+        let classification = classifier.classification(of: features,
+                                                       and: positiveData.values)
         if classification < 0 {
             // wrong
             numberBad += 1
@@ -1291,8 +1229,8 @@ public func runTest(of classifier: OutlierGroupClassifier,
     }
 
     for negativeData in classifiedData.negativeData {
-        let classification = await classifier.classification(of: features,
-                                                             and: negativeData.values)
+        let classification = classifier.classification(of: features,
+                                                       and: negativeData.values)
         if classification < 0 {
             //right
             numberGood += 1

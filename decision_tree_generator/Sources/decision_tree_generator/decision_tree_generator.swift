@@ -189,9 +189,10 @@ struct decision_tree_generator: ParsableCommand {
         callbacks.countOfFramesToCheck = { 1 }
 
         let eraser = try await NighttimeAirplaneRemover(with: config,
-                                                  callbacks: callbacks,
-                                                  processExistingFiles: true,
-                                                  fullyProcess: false)
+                                                        numConcurrentRenders: numConcurrentRenders,
+                                                        callbacks: callbacks,
+                                                        processExistingFiles: true,
+                                                        fullyProcess: false)
         let sequenceSize = await eraser.imageSequence.filenames.count
         endClosure = {
             if frames.count == sequenceSize {
@@ -242,7 +243,7 @@ struct decision_tree_generator: ParsableCommand {
                                 for (treeKey, tree) in decisionTrees {
                                     await taskGroup.addTask() {
                                         let decisionTreeShouldPaint =  
-                                          await tree.classification(of: outlierGroup) > 0
+                                          tree.classification(of: outlierGroup) > 0
                                         
                                         return (treeKey, decisionTreeShouldPaint == numberGoodShouldPaint.willPaint)
                                     }
@@ -351,6 +352,7 @@ struct decision_tree_generator: ParsableCommand {
         callbacks.countOfFramesToCheck = { 1 }
 
         let eraser = try await NighttimeAirplaneRemover(with: config,
+                                                        numConcurrentRenders: numConcurrentRenders,
                                                         callbacks: callbacks,
                                                         processExistingFiles: true,
                                                         fullyProcess: false)
@@ -578,10 +580,10 @@ struct decision_tree_generator: ParsableCommand {
                     for task in tasks { try await task.value }
                 } else {
                     _ = try await self.writeTree(withTypes: decisionTypes,
-                                              withTrainingData: trainingData,
-                                              andTestData: testData,
-                                              inputFilenames: inputFilenames,
-                                              maxDepth: maxDepth)
+                                                 withTrainingData: trainingData,
+                                                 andTestData: testData,
+                                                 inputFilenames: inputFilenames,
+                                                 maxDepth: maxDepth)
                 }
             } catch {
                 Log.e("\(error)")
@@ -604,11 +606,11 @@ struct decision_tree_generator: ParsableCommand {
             for type in OutlierGroup.Feature.allCases {
                 if type.sortOrder < matrix.types.count {
                     if matrix.types[type.sortOrder] != type {
-                        Log.e("@ sort order \(type.sortOrder) \(matrix.types[type.sortOrder]) != \(type), cannot use this data")
+                        Log.e("@ sort order \(type.sortOrder) \(matrix.types[type.sortOrder]) != \(type), cannot use this data from \(dirname)")
                         usable = false
                     }
                 } else {
-                    Log.e("@ sort order \(type.sortOrder) is out of range, cannot use this data")
+                    Log.e("@ sort order \(type.sortOrder) is out of range, cannot use this data from \(dirname)")
                     usable = false
                 }
             }
