@@ -90,11 +90,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         return nil
     }
 
-    /*
-     try creating a spatial 2d array of groups
-     inside the OutlierGroups we need spatial arrangement
-
-     */
+    // uses spatial 2d array for search
     public func outlierGroups(within distance: Double,
                               of group: OutlierGroup) -> [OutlierGroup]?
     {
@@ -307,7 +303,6 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                             let valueTypes = OutlierGroup.decisionTreeValueTypes
 
                             let score = classifier.classification(of: valueTypes, and: values)
-                            //let score = await classifier.classification(of: group)
                             await group.shouldPaint(.fromClassifier(score))
                         }
                     }
@@ -853,9 +848,14 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                             continue
                         }
                     }
-
                 }
 
+                if let ignoreLowerPixels = config.ignoreLowerPixels,
+                   Int(IMAGE_HEIGHT!) - minY <= ignoreLowerPixels
+                {
+                    Log.v("discarding outlier group with minY \(minY)")
+                    continue
+                }
                 // next collect the amounts
                 
                 var outlierAmounts = [UInt32](repeating: 0, count: boundingBox.width*boundingBox.height)
@@ -873,12 +873,12 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                 }
                 
                 let newOutlier = await OutlierGroup(name: groupName,
-                                                size: groupSize,
-                                                brightness: groupBrightness,
-                                                bounds: boundingBox,
-                                                frame: self,
-                                                pixels: outlierAmounts,
-                                                maxPixelDistance: config.maxPixelDistance)
+                                                    size: groupSize,
+                                                    brightness: groupBrightness,
+                                                    bounds: boundingBox,
+                                                    frame: self,
+                                                    pixels: outlierAmounts,
+                                                    maxPixelDistance: config.maxPixelDistance)
                 outlierGroups?.members[groupName] = newOutlier
             }
         }

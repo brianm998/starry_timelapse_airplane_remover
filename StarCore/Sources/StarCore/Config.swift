@@ -145,6 +145,10 @@ public struct Config: Codable {
     public var previewWidth: Int = defaultPreviewWidth
     public var previewHeight: Int = defaultPreviewHeight
 
+    // if set outlier groups that are not further than this from the bottom
+    // of the image will be ingored
+    public var ignoreLowerPixels: Int?
+
     // XXX try making these larger now that video plays better
     public static var defaultPreviewWidth: Int = 1617 // 1080p in 4/3 aspect ratio
     public static var defaultPreviewHeight: Int = 1080

@@ -191,6 +191,13 @@ struct StarCli: AsyncParsableCommand {
     // XXX this isn't respected when loading from a config
     var numConcurrentRenders: Int = ProcessInfo.processInfo.activeProcessorCount
 
+    @Option(name: .shortAndLong, help: """
+        When set, outlier groups closer to the bottom of the screen than this are ignored.
+        This can be helpful to reduce the number of outlier groups on the ground.
+        """)
+    // XXX this isn't respected when loading from a config
+    var ignoreLowerPixels: Int?
+
     @Flag(name: [.customShort("w"), .customLong("write-outlier-group-files")],
           help:"Write individual outlier group image files")
     var shouldWriteOutlierGroupFiles = false
@@ -287,7 +294,7 @@ struct StarCli: AsyncParsableCommand {
                                 writeFramePreviewFiles: shouldWriteOutlierGroupFiles,
                                 writeFrameProcessedPreviewFiles: shouldWriteOutlierGroupFiles,
                                 writeFrameThumbnailFiles: shouldWriteOutlierGroupFiles)
-
+                config.ignoreLowerPixels = ignoreLowerPixels
                 Log.nameSuffix = inputImageSequenceName
                 // no name suffix on json config path
             }
