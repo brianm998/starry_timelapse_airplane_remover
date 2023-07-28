@@ -444,7 +444,7 @@ public class OutlierGroup: CustomStringConvertible,
 
         if let value = featureValueCache[type] { return value }
 
-        let t0 = NSDate().timeIntervalSince1970
+        //let t0 = NSDate().timeIntervalSince1970
 
         var ret: Double = 0.0
         
@@ -512,8 +512,8 @@ public class OutlierGroup: CustomStringConvertible,
         case .maxOverlapTimesThetaHisto:
             ret = self.maxOverlapTimesThetaHisto
         }
-        let t1 = NSDate().timeIntervalSince1970
-        Log.v("group \(name) @ frame \(frameIndex) decisionTreeValue(for: \(type)) = \(ret) after \(t1-t0)s")
+        //let t1 = NSDate().timeIntervalSince1970
+        //Log.v("group \(name) @ frame \(frameIndex) decisionTreeValue(for: \(type)) = \(ret) after \(t1-t0)s")
 
         featureValueCache[type] = ret
         return ret
@@ -582,7 +582,7 @@ public class OutlierGroup: CustomStringConvertible,
     }
 
     public static var maxNearbyGroupDistance: Double {
-        800*7000/IMAGE_WIDTH! // XXX hardcoded constant
+        800*IMAGE_WIDTH!/7000 // XXX hardcoded constant
     }
 
     // returns 1 if they are the same
