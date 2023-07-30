@@ -5,7 +5,8 @@ PODS:
   - SDWebImageSwiftUI (2.2.2):
     - SDWebImage (~> 5.10)
   - ShellOut (2.0.0)
-  - StarCore (0.1.2)
+  - StarCore (0.1.2):
+    - ShellOut (~> 2.0)
   - Zoomable (0.0.1):
     - SDWebImage
     - SDWebImageSwiftUI
@@ -31,7 +32,7 @@ SPEC CHECKSUMS:
   SDWebImage: fd7e1a22f00303e058058278639bf6196ee431fe
   SDWebImageSwiftUI: 54ded4115b4ac6cd60b78f61415f86d070892d98
   ShellOut: 1393eefc56892e80d85339e233d3935e2e1ff6f9
-  StarCore: 58d0bbb4c4ee7c915bde301cad3a8f8d976518e8
+  StarCore: 28482dd203e1e2b64240f58cd7702087407b93fb
   Zoomable: 59bba07c49251a6171fa5ee9674750fb75cc75a3
 
 PODFILE CHECKSUM: 8675e46636e9a4831fa349c0bf6b3cce607b68da

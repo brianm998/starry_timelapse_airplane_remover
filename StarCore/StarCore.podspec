@@ -21,6 +21,8 @@ Pod::Spec.new do |s|
   s.source_files  = "Sources/**/*.{swift}"
   s.exclude_files = "Sources/star/Star.swift"
 
+  s.dependency 'ShellOut', '~> 2.0'
+  
   s.pod_target_xcconfig = { 'SWIFT_VERSION' => 5 }
 
 end
