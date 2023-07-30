@@ -39,6 +39,8 @@ public class PixelatedImage {
     let bytesPerPixel: Int
     let bitmapInfo: CGBitmapInfo
 
+    let pixelOffset: Int
+    
     convenience init?(fromFile filename: String) async throws {
         Log.d("Loading image from \(filename)")
         if let nsImage = try await loadImage(fromFile: filename),
@@ -61,6 +63,7 @@ public class PixelatedImage {
         self.bitsPerComponent = image.bitsPerComponent
         self.bytesPerPixel = self.bitsPerPixel / 8
         self.bitmapInfo = image.bitmapInfo
+        self.pixelOffset = image.bitsPerPixel/image.bitsPerComponent
 
         if let data = image.dataProvider?.data as? Data {
             self.rawImageData = data
@@ -78,7 +81,7 @@ public class PixelatedImage {
     }
     
     func readPixel(atX x: Int, andY y: Int) -> Pixel {
-        let offset = (y * width*3) + (x * 3)
+        let offset = (y * width*self.pixelOffset) + (x * self.pixelOffset)
         let pixel = rawImageData.withUnsafeBytes { unsafeRawPointer -> Pixel in 
             let typedPointer: UnsafeBufferPointer<UInt16> = unsafeRawPointer.bindMemory(to: UInt16.self)
             var pixel = Pixel()

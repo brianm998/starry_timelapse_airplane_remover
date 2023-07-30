@@ -612,53 +612,71 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                             Log.d("frame \(frameIndex) detected outliers in \(y) rows")
                         }
                         for x in 0 ..< width {
-                            let cpp = 3 // number of components per pixel
-                            let offset = (y * width*cpp) + (x * cpp)
-
-                            // rgb values of the image we're modifying at this x,y
-                            let origRed = origImagePixels[offset]
-                            let origGreen = origImagePixels[offset+1]
-                            let origBlue = origImagePixels[offset+2]
-            
-                            // rgb values of an adjecent image at this x,y
-                            let other1Red = otherImage1Pixels[offset]
-                            let other1Green = otherImage1Pixels[offset+1]
-                            let other1Blue = otherImage1Pixels[offset+2]
-
-                            // how much brighter in each channel was the image we're modifying?
-                            let other1RedDiff = (Int(origRed) - Int(other1Red))
-                            let other1GreenDiff = (Int(origGreen) - Int(other1Green))
-                            let other1BlueDiff = (Int(origBlue) - Int(other1Blue))
-
-                            // take a max based upon overal brightness, or just one channel
-                            let other1Max = max(other1RedDiff +
-                                                    other1GreenDiff +
-                                                    other1BlueDiff / 3,
-                                                  max(other1RedDiff,
-                                                      max(other1GreenDiff,
-                                                          other1BlueDiff)))
+                            let origOffset = (y * width*image.pixelOffset) + (x * image.pixelOffset)
                             
+                            // rgb values of the image we're modifying at this x,y
+                            let origRed = origImagePixels[origOffset]
+                            let origGreen = origImagePixels[origOffset+1]
+                            let origBlue = origImagePixels[origOffset+2]
+                            
+                            let other1Offset = (y * width*otherFrames[0].pixelOffset) + (x * otherFrames[0].pixelOffset)
+                            
+                            // rgb values of an adjecent image at this x,y
+                            let other1Red = otherImage1Pixels[other1Offset]
+                            let other1Green = otherImage1Pixels[other1Offset+1]
+                            let other1Blue = otherImage1Pixels[other1Offset+2]
+
+                            var other1Max = 0
+                            
+                            if otherFrames[0].pixelOffset == 4,
+                               otherImage1Pixels[other1Offset+3] != 0xFFFF
+                            {
+                                // ignore any partially or fully transparent pixels
+                            } else {
+                                // how much brighter in each channel was the image we're modifying?
+                                let other1RedDiff = (Int(origRed) - Int(other1Red))
+                                let other1GreenDiff = (Int(origGreen) - Int(other1Green))
+                                let other1BlueDiff = (Int(origBlue) - Int(other1Blue))
+
+                                // take a max based upon overal brightness, or just one channel
+                                other1Max = max(other1RedDiff +
+                                                  other1GreenDiff +
+                                                  other1BlueDiff / 3,
+                                                max(other1RedDiff,
+                                                    max(other1GreenDiff,
+                                                        other1BlueDiff)))
+                            }
                             var totalDifference: Int = Int(other1Max)
                             
                             if haveTwoOtherFrames {
-                                // rgb values of another adjecent image at this x,y
-                                let other2Red = otherImage2Pixels[offset]
-                                let other2Green = otherImage2Pixels[offset+1]
-                                let other2Blue = otherImage2Pixels[offset+2]
-                                
-                                // how much brighter in each channel was the image we're modifying?
-                                let other2RedDiff = (Int(origRed) - Int(other2Red))
-                                let other2GreenDiff = (Int(origGreen) - Int(other2Green))
-                                let other2BlueDiff = (Int(origBlue) - Int(other2Blue))
-            
-                                // take a max based upon overal brightness, or just one channel
-                                let other2Max = max(other2RedDiff +
-                                                        other2GreenDiff +
-                                                        other2BlueDiff / 3,
-                                                      max(other2RedDiff,
-                                                          max(other2GreenDiff,
-                                                              other2BlueDiff)))
 
+                                let other2Offset = (y * width*otherFrames[1].pixelOffset) + (x * otherFrames[0].pixelOffset)
+                                
+                                // rgb values of another adjecent image at this x,y
+                                let other2Red = otherImage2Pixels[other2Offset]
+                                let other2Green = otherImage2Pixels[other2Offset+1]
+                                let other2Blue = otherImage2Pixels[other2Offset+2]
+
+                                var other2Max = 0
+                                
+                                if otherFrames[1].pixelOffset == 4,
+                                   otherImage2Pixels[other2Offset+3] != 0xFFFF
+                                {
+                                    // ignore any partially or fully transparent pixels
+                                } else {
+                                    // how much brighter in each channel was the image we're modifying?
+                                    let other2RedDiff = (Int(origRed) - Int(other2Red))
+                                    let other2GreenDiff = (Int(origGreen) - Int(other2Green))
+                                    let other2BlueDiff = (Int(origBlue) - Int(other2Blue))
+                                    
+                                    // take a max based upon overal brightness, or just one channel
+                                    other2Max = max(other2RedDiff +
+                                                      other2GreenDiff +
+                                                      other2BlueDiff / 3,
+                                                    max(other2RedDiff,
+                                                        max(other2GreenDiff,
+                                                            other2BlueDiff)))
+                                }
                                 // average the two differences of the two adjecent frames
                                 totalDifference += other2Max
                                 totalDifference /= 2
