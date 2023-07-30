@@ -149,9 +149,6 @@ public struct Config: Codable {
     // of the image will be ingored
     public var ignoreLowerPixels: Int?
 
-    // should we star-align the frames for outlier detection and painting?
-    public var doStarAlignment = true
-    
     // XXX try making these larger now that video plays better
     public static var defaultPreviewWidth: Int = 1617 // 1080p in 4/3 aspect ratio
     public static var defaultPreviewHeight: Int = 1080

@@ -14,7 +14,7 @@ You should have received a copy of the GNU General Public License along with sta
 */
 
 public class StarAlignment {
-    public static let pathToBinary =  "/Applications/Hugin/Hugin.app/Contents/MacOS"
+    public static let pathToBinary = "/Applications/Hugin/Hugin.app/Contents/MacOS"
     public static let binaryName = "align_image_stack"
 
     // write an output file with the same name as the baseImage to the outputDirname

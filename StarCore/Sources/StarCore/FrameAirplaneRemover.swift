@@ -64,14 +64,13 @@ public class FrameAirplaneRemover: Equatable, Hashable {
     nonisolated public let height: Int
     public let bytesPerPixel: Int
     public let bytesPerRow: Int
-    public let otherFrameIndexes: [Int] // used in found outliers and paint only
     nonisolated public let frameIndex: Int
 
     public let outlierOutputDirname: String?
     public let previewOutputDirname: String?
     public let processedPreviewOutputDirname: String?
     public let thumbnailOutputDirname: String?
-    public let starAlignedSequenceDirname: String?
+    public let starAlignedSequenceDirname: String
     
     // populated by pruning
     public var outlierGroups: OutlierGroups?
@@ -395,14 +394,13 @@ public class FrameAirplaneRemover: Equatable, Hashable {
          callbacks: Callbacks,
          imageSequence: ImageSequence,
          atIndex frameIndex: Int,
-         otherFrameIndexes: [Int],
          outputFilename: String,
          baseName: String,       // source filename without path
          outlierOutputDirname: String?,
          previewOutputDirname: String?,
          processedPreviewOutputDirname: String?,
          thumbnailOutputDirname: String?,
-         starAlignedSequenceDirname: String?,
+         starAlignedSequenceDirname: String,
          outlierGroupLoader: @escaping () async -> OutlierGroups?,
          fullyProcess: Bool = true,
          writeOutputFiles: Bool = true) async throws
@@ -419,7 +417,6 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         //let image = try await imageSequence.getImage(withName: imageSequence.filenames[frameIndex]).image()
         self.imageSequence = imageSequence
         self.frameIndex = frameIndex // frame index in the image sequence
-        self.otherFrameIndexes = otherFrameIndexes
         self.outputFilename = outputFilename
 
         self.outlierOutputDirname = outlierOutputDirname
@@ -440,24 +437,22 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         self.bytesPerPixel = bytesPerPixel
         self.bytesPerRow = width*bytesPerPixel
 
-        if config.doStarAlignment,
-           let starAlignedSequenceDirname = starAlignedSequenceDirname
-        {
-            self.state = .starAlignment
-            Log.i("frame \(frameIndex) doing star alignment")
-            let baseFilename = imageSequence.filenames[frameIndex]
-            var otherFilename: String = ""
-            if frameIndex == imageSequence.filenames.count-1 {
-                // if we're at the end, take the previous frame
-                otherFilename = imageSequence.filenames[imageSequence.filenames.count-2]
-            } else {
-                // otherwise, take the next frame
-                otherFilename = imageSequence.filenames[frameIndex+1]
-            }
-            _ = StarAlignment.align(baseImageName: baseFilename,
-                                    otherImageName: otherFilename,
-                                    outputDirname: starAlignedSequenceDirname)
+        // align a neighboring frame for detection
+
+        self.state = .starAlignment // XXX this isn't showing up in the UI :(
+        Log.i("frame \(frameIndex) doing star alignment")
+        let baseFilename = imageSequence.filenames[frameIndex]
+        var otherFilename: String = ""
+        if frameIndex == imageSequence.filenames.count-1 {
+            // if we're at the end, take the previous frame
+            otherFilename = imageSequence.filenames[imageSequence.filenames.count-2]
+        } else {
+            // otherwise, take the next frame
+            otherFilename = imageSequence.filenames[frameIndex+1]
         }
+        _ = StarAlignment.align(baseImageName: baseFilename,
+                                otherImageName: otherFilename,
+                                outputDirname: starAlignedSequenceDirname)
         
         // this takes a long time, and the gui does it later
         if fullyProcess {
@@ -556,20 +551,9 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         
         let image = try await imageSequence.getImage(withName: imageSequence.filenames[frameIndex]).image()
 
-        var otherFrames: [PixelatedImage] = []
 
-        if config.doStarAlignment,
-           let starAlignedSequenceDirname = starAlignedSequenceDirname
-        {
-            // use star aligned image
-            let otherFrame = try await imageSequence.getImage(withName: "\(starAlignedSequenceDirname)/\(baseName)").image()
-            otherFrames.append(otherFrame)
-        } else {
-            for otherFrameIndex in otherFrameIndexes {
-                let otherFrame = try await imageSequence.getImage(withName: imageSequence.filenames[otherFrameIndex]).image()
-                otherFrames.append(otherFrame)
-            }
-        }
+        // use star aligned image
+        let otherFrame = try await imageSequence.getImage(withName: "\(starAlignedSequenceDirname)/\(baseName)").image()
 
         self.state = .detectingOutliers
         
@@ -585,13 +569,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         // detect Outliers which are much more brighter than the adject frames
         let origData = image.rawImageData
 
-        let otherData1 = otherFrames[0].rawImageData
-        var otherData2 = Data() // dummy backup 
-        var haveTwoOtherFrames = false
-        if otherFrames.count > 1 {
-            otherData2 = otherFrames[1].rawImageData
-            haveTwoOtherFrames = true
-        }
+        let otherData1 = otherFrame.rawImageData
 
         // most of the time is in this loop, although it's a lot faster now
         // ugly, but a lot faster
@@ -603,90 +581,51 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                 let otherImage1Pixels: UnsafeBufferPointer<UInt16> =
                     unsafeRawPointer1.bindMemory(to: UInt16.self)
 
-                otherData2.withUnsafeBytes { unsafeRawPointer2 in 
-                    let otherImage2Pixels: UnsafeBufferPointer<UInt16> =
-                        unsafeRawPointer2.bindMemory(to: UInt16.self)
-
-                    for y in 0 ..< height {
-                        if y != 0 && y % 1000 == 0 {
-                            Log.d("frame \(frameIndex) detected outliers in \(y) rows")
+                for y in 0 ..< height {
+                    if y != 0 && y % 1000 == 0 {
+                        Log.d("frame \(frameIndex) detected outliers in \(y) rows")
+                    }
+                    for x in 0 ..< width {
+                        let origOffset = (y * width*image.pixelOffset) + (x * image.pixelOffset)
+                        
+                        // rgb values of the image we're modifying at this x,y
+                        let origRed = origImagePixels[origOffset]
+                        let origGreen = origImagePixels[origOffset+1]
+                        let origBlue = origImagePixels[origOffset+2]
+                        
+                        let other1Offset = (y * width*otherFrame.pixelOffset) + (x * otherFrame.pixelOffset)
+                        
+                        // rgb values of an adjecent image at this x,y
+                        let other1Red = otherImage1Pixels[other1Offset]
+                        let other1Green = otherImage1Pixels[other1Offset+1]
+                        let other1Blue = otherImage1Pixels[other1Offset+2]
+                        
+                        var other1Max = 0
+                        
+                        if otherFrame.pixelOffset == 4,
+                           otherImage1Pixels[other1Offset+3] != 0xFFFF
+                        {
+                            // ignore any partially or fully transparent pixels
+                        } else {
+                            // how much brighter in each channel was the image we're modifying?
+                            let other1RedDiff = (Int(origRed) - Int(other1Red))
+                            let other1GreenDiff = (Int(origGreen) - Int(other1Green))
+                            let other1BlueDiff = (Int(origBlue) - Int(other1Blue))
+                            
+                            // take a max based upon overal brightness, or just one channel
+                            other1Max = max(other1RedDiff +
+                                              other1GreenDiff +
+                                              other1BlueDiff / 3,
+                                            max(other1RedDiff,
+                                                max(other1GreenDiff,
+                                                    other1BlueDiff)))
                         }
-                        for x in 0 ..< width {
-                            let origOffset = (y * width*image.pixelOffset) + (x * image.pixelOffset)
-                            
-                            // rgb values of the image we're modifying at this x,y
-                            let origRed = origImagePixels[origOffset]
-                            let origGreen = origImagePixels[origOffset+1]
-                            let origBlue = origImagePixels[origOffset+2]
-                            
-                            let other1Offset = (y * width*otherFrames[0].pixelOffset) + (x * otherFrames[0].pixelOffset)
-                            
-                            // rgb values of an adjecent image at this x,y
-                            let other1Red = otherImage1Pixels[other1Offset]
-                            let other1Green = otherImage1Pixels[other1Offset+1]
-                            let other1Blue = otherImage1Pixels[other1Offset+2]
-
-                            var other1Max = 0
-                            
-                            if otherFrames[0].pixelOffset == 4,
-                               otherImage1Pixels[other1Offset+3] != 0xFFFF
-                            {
-                                // ignore any partially or fully transparent pixels
-                            } else {
-                                // how much brighter in each channel was the image we're modifying?
-                                let other1RedDiff = (Int(origRed) - Int(other1Red))
-                                let other1GreenDiff = (Int(origGreen) - Int(other1Green))
-                                let other1BlueDiff = (Int(origBlue) - Int(other1Blue))
-
-                                // take a max based upon overal brightness, or just one channel
-                                other1Max = max(other1RedDiff +
-                                                  other1GreenDiff +
-                                                  other1BlueDiff / 3,
-                                                max(other1RedDiff,
-                                                    max(other1GreenDiff,
-                                                        other1BlueDiff)))
-                            }
-                            var totalDifference: Int = Int(other1Max)
-                            
-                            if haveTwoOtherFrames {
-
-                                let other2Offset = (y * width*otherFrames[1].pixelOffset) + (x * otherFrames[0].pixelOffset)
-                                
-                                // rgb values of another adjecent image at this x,y
-                                let other2Red = otherImage2Pixels[other2Offset]
-                                let other2Green = otherImage2Pixels[other2Offset+1]
-                                let other2Blue = otherImage2Pixels[other2Offset+2]
-
-                                var other2Max = 0
-                                
-                                if otherFrames[1].pixelOffset == 4,
-                                   otherImage2Pixels[other2Offset+3] != 0xFFFF
-                                {
-                                    // ignore any partially or fully transparent pixels
-                                } else {
-                                    // how much brighter in each channel was the image we're modifying?
-                                    let other2RedDiff = (Int(origRed) - Int(other2Red))
-                                    let other2GreenDiff = (Int(origGreen) - Int(other2Green))
-                                    let other2BlueDiff = (Int(origBlue) - Int(other2Blue))
-                                    
-                                    // take a max based upon overal brightness, or just one channel
-                                    other2Max = max(other2RedDiff +
-                                                      other2GreenDiff +
-                                                      other2BlueDiff / 3,
-                                                    max(other2RedDiff,
-                                                        max(other2GreenDiff,
-                                                            other2BlueDiff)))
-                                }
-                                // average the two differences of the two adjecent frames
-                                totalDifference += other2Max
-                                totalDifference /= 2
-                            }
-
-                            let amountIndex = Int(y*width+x)
-                            // record the brightness change if it is brighter
-                            if totalDifference > 0  {
-                                outlierAmountList[amountIndex] = UInt(totalDifference)
-                            }
+                        let totalDifference: Int = Int(other1Max)
+                        
+                        let amountIndex = Int(y*width+x)
+                        // record the brightness change if it is brighter
+                        if totalDifference > 0  {
+                            outlierAmountList[amountIndex] = UInt(totalDifference)
                         }
                     }
                 }
@@ -969,7 +908,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
     
     // actually paint over outlier groups that have been selected as airplane tracks
     private func paintOverAirplanes(toData data: inout Data,
-                                    otherFrames: [PixelatedImage]) async throws
+                                    otherFrame: PixelatedImage) async throws
     {
         Log.i("frame \(frameIndex) painting airplane outlier groups")
 
@@ -1009,7 +948,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                                     paint(x: x, y: y, why: reason, alpha: alpha,
                                           toData: &data,
                                           image: image,
-                                          otherFrames: otherFrames)
+                                          otherFrame: otherFrame)
                                 }
                             }
                         }
@@ -1027,24 +966,9 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                        alpha: Double,
                        toData data: inout Data,
                        image: PixelatedImage,
-                       otherFrames: [PixelatedImage])
+                       otherFrame: PixelatedImage)
     {
-        var pixelsToPaintWith: [Pixel] = []
-        
-        // grab the pixels from the same image spot from adject frames
-//        for i in 0 ..< otherFrames.count {
-//            pixelsToPaintWith.append(otherFrames[i].readPixel(atX: x, andY: y))
-//        }
-
-        // XXX blending both adjecent frames can make the painted airlane streak darker
-        // then it was before because the bright stars are dimmed 50% due to them moving across
-        // two frames.  try just using one frame and see how that works.  maybe make it an option?
-
-        
-        pixelsToPaintWith.append(otherFrames[0].readPixel(atX: x, andY: y))
-        
-        // blend the pixels from the adjecent frames
-        var paintPixel = Pixel(merging: pixelsToPaintWith)
+        var paintPixel = otherFrame.readPixel(atX: x, andY: y)
 
         if alpha < 1 {
             let op = image.readPixel(atX: x, andY: y)
@@ -1140,20 +1064,10 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         
         self.writeUprocessedPreviews(image)
         
-        var otherFrames: [PixelatedImage] = []
 
-        if config.doStarAlignment,
-           let starAlignedSequenceDirname = starAlignedSequenceDirname
-        {
-            // use star aligned image
-            let otherFrame = try await imageSequence.getImage(withName: "\(starAlignedSequenceDirname)/\(baseName)").image()
-            otherFrames.append(otherFrame)
-        } else {        
-            // only load the first other frame for painting
-            let otherFrameIndex = otherFrameIndexes[0]
-            let otherFrame = try await imageSequence.getImage(withName: imageSequence.filenames[otherFrameIndex]).image()
-            otherFrames.append(otherFrame)
-        }
+        // use star aligned image
+        let otherFrame = try await imageSequence.getImage(withName: "\(starAlignedSequenceDirname)/\(baseName)").image()
+
         let _data = image.rawImageData
         
         // copy the original image data as adjecent frames need
@@ -1172,7 +1086,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         Log.d("frame \(self.frameIndex) painting over airplanes")
         
         try await self.paintOverAirplanes(toData: &outputData,
-                                          otherFrames: otherFrames)
+                                          otherFrame: otherFrame)
         
         Log.d("frame \(self.frameIndex) writing output files")
         self.state = .writingOutputFile

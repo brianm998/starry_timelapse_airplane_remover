@@ -21,10 +21,6 @@ You should have received a copy of the GNU General Public License along with sta
 /*
 todo:
 
- - do star alignment with some 3rd party software: 
-   https://www.startools.org/links--tutorials/free-image-stacking-solutions/sequator
-   And then use aligned images to substitute pixels
-
  - FIX HANGING BUG
    This happens when all frames have been through detection,
    and for some yet unknown reason the app hangs forever without finishing
@@ -222,16 +218,11 @@ struct StarCli: AsyncParsableCommand {
     @Flag(name: .shortAndLong, help:"only write out outlier data, not images")
     var skipOutputFiles = false
 
-    @Flag(name: [.customShort("x"), .customLong("no-star-alignment")],
-          help: "Don't do star alignment before outlier group detection")
-    var avoidStarAlign = false  // XXX put this in config
-
     @Argument(help: """
         Image sequence dirname to process. 
         Should include a sequence of 16 bit tiff files, sortable by name.
         """)
     var imageSequenceDirname: String?
-
 
     mutating func run() async throws {
 
@@ -309,7 +300,6 @@ struct StarCli: AsyncParsableCommand {
                                 writeFrameProcessedPreviewFiles: shouldWriteOutlierGroupFiles,
                                 writeFrameThumbnailFiles: shouldWriteOutlierGroupFiles)
                 config.ignoreLowerPixels = ignoreLowerPixels
-                config.doStarAlignment = !avoidStarAlign
                 Log.nameSuffix = inputImageSequenceName
                 // no name suffix on json config path
             }

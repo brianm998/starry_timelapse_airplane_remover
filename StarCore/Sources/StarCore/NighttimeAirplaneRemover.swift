@@ -164,10 +164,9 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
                 Log.e("first frame to get size: \(error)")
             }
         }
-        if config.doStarAlignment {
-            // where we keep aligned images
-            try mkdir(starAlignedSequenceDirname)
-        }
+        // where we keep aligned images
+        try mkdir(starAlignedSequenceDirname)
+
         if config.writeOutlierGroupFiles {
             // doesn't do mkdir -p, if a base dir is missing it just hangs :(
             try mkdir(outlierOutputDirname) // XXX this can fail silently and pause the whole process :(
@@ -199,19 +198,9 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
                                outputFilename: String,
                                baseName: String) async throws -> FrameAirplaneRemover
     {
-        var otherFrameIndexes: [Int] = []
-        
-        if index > 0 {
-            otherFrameIndexes.append(index-1)
-        }
-        if index < imageSequence.filenames.count - 1 {
-            otherFrameIndexes.append(index+1)
-        }
-
         // the other frames that we use to detect outliers and repaint from
         let framePlaneRemover =
           try await self.createFrame(atIndex: index,
-                                     otherFrameIndexes: otherFrameIndexes,
                                      outputFilename: "\(self.outputDirname)/\(baseName)",
                                      baseName: baseName,
                                      imageWidth: imageWidth!,
@@ -238,7 +227,6 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
     // after running this method, each frame will have a good idea
     // of what outliers is has, and whether or not should paint over them.
     func createFrame(atIndex frameIndex: Int,
-                     otherFrameIndexes: [Int],
                      outputFilename: String, // full path
                      baseName: String,       // just filename
                      imageWidth: Int,
@@ -284,7 +272,6 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
                                               callbacks: callbacks,
                                               imageSequence: imageSequence,
                                               atIndex: frameIndex,
-                                              otherFrameIndexes: otherFrameIndexes,
                                               outputFilename: outputFilename,
                                               baseName: baseName,
                                               outlierOutputDirname: outlierOutputDirname,
