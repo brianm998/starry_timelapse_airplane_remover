@@ -149,6 +149,9 @@ public struct Config: Codable {
     // of the image will be ingored
     public var ignoreLowerPixels: Int?
 
+    // should we star-align the frames for outlier detection and painting?
+    public var doStarAlignment = true
+    
     // XXX try making these larger now that video plays better
     public static var defaultPreviewWidth: Int = 1617 // 1080p in 4/3 aspect ratio
     public static var defaultPreviewHeight: Int = 1080
@@ -180,8 +183,9 @@ public struct Config: Codable {
     // 0.3.2 fixed bugs, speed up tree forest, removes small outlier group dismissal
     // 0.3.3 speed up outlier saving, bug fixes, code improvements, renamed to star
     // 0.3.4 lots of UI improvements
+    // 0.4.0 star alignment
 
-    public var starVersion = "0.3.4" // XXX move this out
+    public var starVersion = "0.4.0" // XXX move this out
 
     public func writeJson(named filename: String) {
         

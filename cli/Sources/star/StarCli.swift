@@ -3,6 +3,7 @@ import ArgumentParser
 import CoreGraphics
 import Cocoa
 import StarCore
+import ShellOut
 
 /*
 
@@ -132,11 +133,6 @@ todo:
 
    STAR ALIGNMENT: 
    
-   https://github.com/BenJuan26/OpenSkyStacker
-   https://siril.org/
-   https://github.com/jia-kai/yasap
-   https://www.msb-astroart.com/ccd_en.htm
-
    USE hugin's align_image_stack (MIT license)
 
    align_image_stack --use-given-order -a name FIRST_IMAGE.TIF COMPARISON_IMATE.TIF
@@ -226,6 +222,10 @@ struct StarCli: AsyncParsableCommand {
     @Flag(name: .shortAndLong, help:"only write out outlier data, not images")
     var skipOutputFiles = false
 
+    @Flag(name: [.customShort("x"), .customLong("no-star-alignment")],
+          help: "Don't do star alignment before outlier group detection")
+    var avoidStarAlign = false  // XXX put this in config
+
     @Argument(help: """
         Image sequence dirname to process. 
         Should include a sequence of 16 bit tiff files, sortable by name.
@@ -234,6 +234,7 @@ struct StarCli: AsyncParsableCommand {
 
 
     mutating func run() async throws {
+
         if version {
             print("""
                   Nighttime Timelapse Airplane Remover (star) version \(config.starVersion)
@@ -308,6 +309,7 @@ struct StarCli: AsyncParsableCommand {
                                 writeFrameProcessedPreviewFiles: shouldWriteOutlierGroupFiles,
                                 writeFrameThumbnailFiles: shouldWriteOutlierGroupFiles)
                 config.ignoreLowerPixels = ignoreLowerPixels
+                config.doStarAlignment = !avoidStarAlign
                 Log.nameSuffix = inputImageSequenceName
                 // no name suffix on json config path
             }

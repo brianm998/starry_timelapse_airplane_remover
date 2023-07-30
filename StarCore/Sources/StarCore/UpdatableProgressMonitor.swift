@@ -108,6 +108,18 @@ public actor UpdatableProgressMonitor {
                                      value: 0.9)
             }
         }
+        if let starAlignment = frames[.starAlignment] {
+            let progress =
+              Double(starAlignment.count) /
+              Double(self.numConcurrentRenders)
+            updates.append() {
+                await updatable.log(name: "starAlignment",
+                                     message: padding + progressBar(length: self.numConcurrentRenders,
+                                                                     progress: progress) +
+                                       " \(starAlignment.count) frames aligning stars",
+                                     value: 0.7)
+            }
+        }
         if let detectingOutliers = frames[.detectingOutliers] {
             let progress =
               Double(detectingOutliers.count) /

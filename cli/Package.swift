@@ -11,6 +11,7 @@ let package = Package(
     dependencies: [
         // Dependencies declare other packages that this package depends on.
         .package(url: "https://github.com/apple/swift-argument-parser", from: "1.0.0"),
+        .package(url: "https://github.com/JohnSundell/ShellOut.git", from: "2.0.0"),
         .package(name: "StarCore", path: "../StarCore"),
     ],
     targets: [
@@ -21,6 +22,7 @@ let package = Package(
             dependencies: [
               .product(name: "ArgumentParser", package: "swift-argument-parser"),
               .product(name: "StarCore", package: "StarCore"),
+              .product(name: "ShellOut", package: "ShellOut"),
             ],
             linkerSettings: [
               .unsafeFlags(["-L../StarDecisionTrees",

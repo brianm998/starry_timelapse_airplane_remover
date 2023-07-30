@@ -25,6 +25,7 @@ public enum LoopReturn {
 
 public enum FrameProcessingState: Int, CaseIterable, Codable {
     case unprocessed
+    case starAlignment    
     case loadingImages    
     case detectingOutliers
     case readyForInterFrameProcessing
@@ -70,7 +71,8 @@ public class FrameAirplaneRemover: Equatable, Hashable {
     public let previewOutputDirname: String?
     public let processedPreviewOutputDirname: String?
     public let thumbnailOutputDirname: String?
-
+    public let starAlignedSequenceDirname: String?
+    
     // populated by pruning
     public var outlierGroups: OutlierGroups?
 
@@ -400,6 +402,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
          previewOutputDirname: String?,
          processedPreviewOutputDirname: String?,
          thumbnailOutputDirname: String?,
+         starAlignedSequenceDirname: String?,
          outlierGroupLoader: @escaping () async -> OutlierGroups?,
          fullyProcess: Bool = true,
          writeOutputFiles: Bool = true) async throws
@@ -423,6 +426,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         self.previewOutputDirname = previewOutputDirname
         self.processedPreviewOutputDirname = processedPreviewOutputDirname
         self.thumbnailOutputDirname = thumbnailOutputDirname
+        self.starAlignedSequenceDirname = starAlignedSequenceDirname
         self.width = width
         self.height = height
 
@@ -436,6 +440,25 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         self.bytesPerPixel = bytesPerPixel
         self.bytesPerRow = width*bytesPerPixel
 
+        if config.doStarAlignment,
+           let starAlignedSequenceDirname = starAlignedSequenceDirname
+        {
+            self.state = .starAlignment
+            Log.i("frame \(frameIndex) doing star alignment")
+            let baseFilename = imageSequence.filenames[frameIndex]
+            var otherFilename: String = ""
+            if frameIndex == imageSequence.filenames.count-1 {
+                // if we're at the end, take the previous frame
+                otherFilename = imageSequence.filenames[imageSequence.filenames.count-2]
+            } else {
+                // otherwise, take the next frame
+                otherFilename = imageSequence.filenames[frameIndex+1]
+            }
+            _ = StarAlignment.align(baseImageName: baseFilename,
+                                    otherImageName: otherFilename,
+                                    outputDirname: starAlignedSequenceDirname)
+        }
+        
         // this takes a long time, and the gui does it later
         if fullyProcess {
             try await loadOutliers()
@@ -535,9 +558,17 @@ public class FrameAirplaneRemover: Equatable, Hashable {
 
         var otherFrames: [PixelatedImage] = []
 
-        for otherFrameIndex in otherFrameIndexes {
-            let otherFrame = try await imageSequence.getImage(withName: imageSequence.filenames[otherFrameIndex]).image()
+        if config.doStarAlignment,
+           let starAlignedSequenceDirname = starAlignedSequenceDirname
+        {
+            // use star aligned image
+            let otherFrame = try await imageSequence.getImage(withName: "\(starAlignedSequenceDirname)/\(baseName)").image()
             otherFrames.append(otherFrame)
+        } else {
+            for otherFrameIndex in otherFrameIndexes {
+                let otherFrame = try await imageSequence.getImage(withName: imageSequence.filenames[otherFrameIndex]).image()
+                otherFrames.append(otherFrame)
+            }
         }
 
         self.state = .detectingOutliers
@@ -1092,12 +1123,19 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         self.writeUprocessedPreviews(image)
         
         var otherFrames: [PixelatedImage] = []
-        
-        // only load the first other frame for painting
-        let otherFrameIndex = otherFrameIndexes[0]
-        let otherFrame = try await imageSequence.getImage(withName: imageSequence.filenames[otherFrameIndex]).image()
-        otherFrames.append(otherFrame)
-        
+
+        if config.doStarAlignment,
+           let starAlignedSequenceDirname = starAlignedSequenceDirname
+        {
+            // use star aligned image
+            let otherFrame = try await imageSequence.getImage(withName: "\(starAlignedSequenceDirname)/\(baseName)").image()
+            otherFrames.append(otherFrame)
+        } else {        
+            // only load the first other frame for painting
+            let otherFrameIndex = otherFrameIndexes[0]
+            let otherFrame = try await imageSequence.getImage(withName: imageSequence.filenames[otherFrameIndex]).image()
+            otherFrames.append(otherFrame)
+        }
         let _data = image.rawImageData
         
         // copy the original image data as adjecent frames need

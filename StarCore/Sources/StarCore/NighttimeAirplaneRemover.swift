@@ -38,6 +38,9 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
     // the name of the directory to create when writing frame thumbnails (small previews)
     let thumbnailOutputDirname: String
 
+    // where the star aligned images live
+    let starAlignedSequenceDirname: String
+    
     public var finalProcessor: FinalProcessor?    
 
     // are we running on the gui?
@@ -69,7 +72,8 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
         previewOutputDirname = "\(config.outputPath)/\(basename)-previews"
         processedPreviewOutputDirname = "\(config.outputPath)/\(basename)-processed-previews"
         thumbnailOutputDirname = "\(config.outputPath)/\(basename)-thumbnails"
-
+        starAlignedSequenceDirname = "\(config.outputPath)/\(basename)-aligned"
+        
         try super.init(imageSequenceDirname: "\(config.imageSequencePath)/\(config.imageSequenceDirname)",
                        outputDirname: "\(config.outputPath)/\(basename)",
                        maxConcurrent: numConcurrentRenders,
@@ -160,6 +164,10 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
                 Log.e("first frame to get size: \(error)")
             }
         }
+        if config.doStarAlignment {
+            // where we keep aligned images
+            try mkdir(starAlignedSequenceDirname)
+        }
         if config.writeOutlierGroupFiles {
             // doesn't do mkdir -p, if a base dir is missing it just hangs :(
             try mkdir(outlierOutputDirname) // XXX this can fail silently and pause the whole process :(
@@ -188,8 +196,8 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
     // called by the superclass to process each frame
     // called async check access to shared data
     override func processFrame(number index: Int,
-                            outputFilename: String,
-                            baseName: String) async throws -> FrameAirplaneRemover
+                               outputFilename: String,
+                               baseName: String) async throws -> FrameAirplaneRemover
     {
         var otherFrameIndexes: [Int] = []
         
@@ -199,16 +207,16 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
         if index < imageSequence.filenames.count - 1 {
             otherFrameIndexes.append(index+1)
         }
-        
+
         // the other frames that we use to detect outliers and repaint from
         let framePlaneRemover =
           try await self.createFrame(atIndex: index,
-                                  otherFrameIndexes: otherFrameIndexes,
-                                  outputFilename: "\(self.outputDirname)/\(baseName)",
-                                  baseName: baseName,
-                                  imageWidth: imageWidth!,
-                                  imageHeight: imageHeight!,
-                                  imageBytesPerPixel: imageBytesPerPixel!)
+                                     otherFrameIndexes: otherFrameIndexes,
+                                     outputFilename: "\(self.outputDirname)/\(baseName)",
+                                     baseName: baseName,
+                                     imageWidth: imageWidth!,
+                                     imageHeight: imageHeight!,
+                                     imageBytesPerPixel: imageBytesPerPixel!)
 
         return framePlaneRemover
     }
@@ -270,23 +278,24 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
         }
         
         return try await FrameAirplaneRemover(with: config,
-                                          width: imageWidth,
-                                          height: imageHeight,
-                                          bytesPerPixel: imageBytesPerPixel,
-                                          callbacks: callbacks,
-                                          imageSequence: imageSequence,
-                                          atIndex: frameIndex,
-                                          otherFrameIndexes: otherFrameIndexes,
-                                          outputFilename: outputFilename,
-                                          baseName: baseName,
-                                          outlierOutputDirname: outlierOutputDirname,
-                                          previewOutputDirname: previewOutputDirname,
-                                          processedPreviewOutputDirname: processedPreviewOutputDirname,
-                                          thumbnailOutputDirname: thumbnailOutputDirname,
-                                          outlierGroupLoader: loadOutliersFromFile,
-                                          fullyProcess: fullyProcess,
-                                          writeOutputFiles: writeOutputFiles)
-   }        
+                                              width: imageWidth,
+                                              height: imageHeight,
+                                              bytesPerPixel: imageBytesPerPixel,
+                                              callbacks: callbacks,
+                                              imageSequence: imageSequence,
+                                              atIndex: frameIndex,
+                                              otherFrameIndexes: otherFrameIndexes,
+                                              outputFilename: outputFilename,
+                                              baseName: baseName,
+                                              outlierOutputDirname: outlierOutputDirname,
+                                              previewOutputDirname: previewOutputDirname,
+                                              processedPreviewOutputDirname: processedPreviewOutputDirname,
+                                              thumbnailOutputDirname: thumbnailOutputDirname,
+                                              starAlignedSequenceDirname: starAlignedSequenceDirname,
+                                              outlierGroupLoader: loadOutliersFromFile,
+                                              fullyProcess: fullyProcess,
+                                              writeOutputFiles: writeOutputFiles)
+    }        
 }
               
               
