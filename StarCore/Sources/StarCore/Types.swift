@@ -10,10 +10,15 @@ public struct Defaults {
      If a pixel is outlierMinThreshold percentage brighter, then it is an outlier.
      If a pixel is brighter than outlierMaxThreshold, then it is painted over fully.
      If a pixel is between these two values, then an alpha between 0-1 is applied.
+
+     A lower outlierMaxThreshold results in detecting more outlier groups.
+     A higher outlierMaxThreshold results in detecting fewer outlier groups.
      */
-    public static let outlierMaxThreshold: Double = 13
-    public static let outlierMinThreshold: Double = 9
-    public static let minGroupSize: Int = 80 // groups smaller than this are completely ignored
+    public static let outlierMaxThreshold: Double = 5
+    public static let outlierMinThreshold: Double = 2.5
+
+    // groups smaller than this are completely ignored
+    public static let minGroupSize: Int = 20
 }
 
 // make any string into an Error, so it can be thrown by itself if desired

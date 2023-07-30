@@ -129,7 +129,7 @@ public struct Config: Codable {
     // above the horizon to not need really small outlier groups
     // between the bottom and the top of this area, the minimum
     // outlier group size increases
-    public var upperSkyPercentage: Double = 66 // top 66% of the screen
+    public var upperSkyPercentage: Double = 90 // top 90% of the screen
 
     public var supportedImageFileTypes = [".tif", ".tiff"] // XXX move this out
 
