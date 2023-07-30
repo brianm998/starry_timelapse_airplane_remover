@@ -128,8 +128,44 @@ public actor UpdatableProgressMonitor {
                 await updatable.log(name: "detectingOutliers",
                                     message: padding + progressBar(length: self.numConcurrentRenders,
                                                                     progress: progress) +
-                                      " \(detectingOutliers.count) frames detecting outliers",
+                                      " \(detectingOutliers.count) frames detecting outlying pixels",
                                     value: 1)
+            }
+        }
+        if let detectingOutliers = frames[.detectingOutliers1] {
+            let progress =
+              Double(detectingOutliers.count) /
+              Double(self.numConcurrentRenders)
+            updates.append() {
+                await updatable.log(name: "detectingOutliers 1",
+                                    message: padding + progressBar(length: self.numConcurrentRenders,
+                                                                    progress: progress) +
+                                      " \(detectingOutliers.count) frames grouping outlying pixels",
+                                    value: 1.1)
+            }
+        }
+        if let detectingOutliers = frames[.detectingOutliers2] {
+            let progress =
+              Double(detectingOutliers.count) /
+              Double(self.numConcurrentRenders)
+            updates.append() {
+                await updatable.log(name: "detectingOutliers 2",
+                                    message: padding + progressBar(length: self.numConcurrentRenders,
+                                                                    progress: progress) +
+                                      " \(detectingOutliers.count) frames calculating outlier group bounds",
+                                    value: 1.2)
+            }
+        }
+        if let detectingOutliers = frames[.detectingOutliers3] {
+            let progress =
+              Double(detectingOutliers.count) /
+              Double(self.numConcurrentRenders)
+            updates.append() {
+                await updatable.log(name: "detectingOutliers 3",
+                                    message: padding + progressBar(length: self.numConcurrentRenders,
+                                                                    progress: progress) +
+                                      " \(detectingOutliers.count) frames populating outlier groups",
+                                    value: 1.3)
             }
         }
         if let interFrameProcessing = frames[.interFrameProcessing] {

@@ -28,6 +28,9 @@ public enum FrameProcessingState: Int, CaseIterable, Codable {
     case starAlignment    
     case loadingImages    
     case detectingOutliers
+    case detectingOutliers1
+    case detectingOutliers2
+    case detectingOutliers3
     case readyForInterFrameProcessing
     case interFrameProcessing
     case outlierProcessingComplete
@@ -562,7 +565,6 @@ public class FrameAirplaneRemover: Equatable, Hashable {
 
         self.state = .detectingOutliers
         
-        
         // need to have the OutlierGroup class contain a mini version of this for each one
         
         // one dimentional array mirroring pixels indexed by y*width + x
@@ -637,6 +639,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
             }
         }
 
+        self.state = .detectingOutliers1
         // XXX was a boundary
         
         Log.i("frame \(frameIndex) pruning outliers")
@@ -753,6 +756,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
             }
         }
 
+        self.state = .detectingOutliers2
         var groupAmounts: [String: UInt] = [:] // keyed by group name, average brightness of each group
 
         Log.i("frame \(frameIndex) calculating outlier group bounds")
@@ -805,6 +809,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
             }
         }
 
+        self.state = .detectingOutliers3
         // populate the outlierGroups
         for (groupName, groupSize) in individualGroupCounts {
             if let minX = groupMinX[groupName],
