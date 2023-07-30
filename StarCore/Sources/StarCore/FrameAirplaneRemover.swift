@@ -439,7 +439,12 @@ public class FrameAirplaneRemover: Equatable, Hashable {
 
         // align a neighboring frame for detection
 
-        self.state = .starAlignment // XXX this isn't showing up in the UI :(
+        self.state = .starAlignment
+        // call directly in init becuase didSet() isn't called from here :P
+        if let frameStateChangeCallback = callbacks.frameStateChangeCallback {
+            frameStateChangeCallback(self, self.state)
+        }
+        
         Log.i("frame \(frameIndex) doing star alignment")
         let baseFilename = imageSequence.filenames[frameIndex]
         var otherFilename: String = ""
