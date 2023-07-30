@@ -127,16 +127,16 @@ public actor FinalProcessor {
     private func log() {
         if let updatable = callbacks.updatable {
             // show what frames are in place to be processed
-            Task(priority: .userInitiated) {
+            TaskWaiter.task(priority: .userInitiated) {
                 var padding = ""
-                if self.numConcurrentRenders < config.progressBarLength {
-                    padding = String(repeating: " ", count: (config.progressBarLength - self.numConcurrentRenders))
+                if self.numConcurrentRenders < self.config.progressBarLength {
+                    padding = String(repeating: " ", count: (self.config.progressBarLength - self.numConcurrentRenders))
                 }
                 
                 var message: String = padding + ConsoleColor.blue.rawValue + "["
                 var count = 0
-                let end = currentFrameIndex + self.numConcurrentRenders
-                for i in currentFrameIndex ..< end {
+                let end = self.currentFrameIndex + self.numConcurrentRenders
+                for i in self.currentFrameIndex ..< end {
                     if i >= self.frames.count {
                         message += ConsoleColor.yellow.rawValue + "-"
                     } else {
@@ -148,7 +148,7 @@ public actor FinalProcessor {
                         }
                     }
                 }
-                var lowerBound = currentFrameIndex + end
+                var lowerBound = self.currentFrameIndex + end
                 if lowerBound > self.frames.count { lowerBound = self.frames.count }
                 
                 for i in lowerBound ..< self.frames.count {

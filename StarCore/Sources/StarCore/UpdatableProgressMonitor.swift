@@ -21,7 +21,7 @@ public class UpdatableLogHandler: LogHandler {
                     with data: LogData?,
                     at logLevel: Log.Level)
     {
-        Task(priority: .userInitiated) {
+        TaskWaiter.task(priority: .userInitiated) {
             var logMessage = ""
             if let data = data {
                 logMessage = "\(logLevel.emo) \(logLevel) | \(fileLocation): \(message) | \(data.description)"
@@ -30,20 +30,18 @@ public class UpdatableLogHandler: LogHandler {
             }        
 
             let now = NSDate().timeIntervalSince1970
-            await updatable.log(name: "\(now)",
-                                message: logMessage,
-                                value: now)
+            await self.updatable.log(name: "\(now)",
+                                     message: logMessage,
+                                     value: now)
         }
     }
     
-    public let dispatchQueue: DispatchQueue
     public var level: Log.Level?
     let updatable: UpdatableLog
     
     public init(_ updatable: UpdatableLog) {
         self.level = .warn
         self.updatable = updatable
-        self.dispatchQueue = DispatchQueue(label: "fileLogging")
     }
 }
 
@@ -52,8 +50,6 @@ public actor UpdatableProgressMonitor {
     let config: Config
     let callbacks: Callbacks
     let numConcurrentRenders: Int
-    
-    public let dispatchGroup = DispatchGroup()
     
     var frames: [FrameProcessingState: Set<FrameAirplaneRemover>] = [:]
     public init(frameCount: Int,
@@ -70,7 +66,7 @@ public actor UpdatableProgressMonitor {
     private var lastUpdateTime: TimeInterval?
     
     public func stateChange(for frame: FrameAirplaneRemover,
-                          to newState: FrameProcessingState)
+                            to newState: FrameProcessingState)
     {
         for state in FrameProcessingState.allCases {
             if state == newState { continue }
@@ -228,10 +224,8 @@ public actor UpdatableProgressMonitor {
 
         let _updates = updates
 
-        dispatchGroup.enter()
-        Task(priority: .userInitiated) {
+        TaskWaiter.task(priority: .userInitiated) {
             for update in _updates { await update() }
-            dispatchGroup.leave()
         }
     }
 }

@@ -941,7 +941,7 @@ fileprivate extension Log {
 // this is helpful when testing logging, to see a few test lines, and then avoid further spew 
 public func LOG_ABORT() {
     Log.dispatchGroup.enter()
-    Task {
+    TaskWaiter.task {
         print("\n\n")
         print("☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️")
         print("☠️☠️☠️ was asked to abort ☠️☠️☠️")

@@ -130,6 +130,24 @@ todo:
    enhance streak detection to make sure the group center line between frames is close to the outlier
    groups hough line
 
+   STAR ALIGNMENT: 
+   
+   https://github.com/BenJuan26/OpenSkyStacker
+   https://siril.org/
+   https://github.com/jia-kai/yasap
+   https://www.msb-astroart.com/ccd_en.htm
+
+   USE hugin's align_image_stack (MIT license)
+
+   align_image_stack --use-given-order -a name FIRST_IMAGE.TIF COMPARISON_IMATE.TIF
+
+   first image is reference frame.
+   seems to  work on beginning (with more light)
+   seems make sure it work w/ clouds
+   need to ignore transparent areas at edges 
+   make new dir of aligned frames
+   if align command fails, just replace the expected result with a hard link to the original
+ 
  */
 
 
@@ -235,20 +253,15 @@ struct StarCli: AsyncParsableCommand {
                 inputImageSequencePath = inputImageSequenceDirname
 
                 let fuck = inputImageSequenceDirname
-                
-                let dispatchGroup = DispatchGroup()
-                dispatchGroup.enter()
 
-                Task {
-                    do {
-                        config = try await Config.read(fromJsonFilename: fuck)
-                    } catch {
-                        print("\(error)")
-                    }
-                    dispatchGroup.leave()
+                do {
+                    config = try await Config.read(fromJsonFilename: fuck)
+                } catch {
+                    print("\(error)")
                 }
+
                 TaskRunner.maxConcurrentTasks = UInt(numConcurrentRenders)
-                dispatchGroup.wait()
+
             } else {
                 // here we are processing a new image sequence 
                 while inputImageSequenceDirname.hasSuffix("/") {
@@ -339,7 +352,6 @@ struct StarCli: AsyncParsableCommand {
             let max = numConcurrentRenders
 
             let task = Task {
-                var eraserDispatchGroup: DispatchGroup?
                 do {
                     let eraser = try await NighttimeAirplaneRemover(with: config,
                                                                     numConcurrentRenders: max,
@@ -348,8 +360,6 @@ struct StarCli: AsyncParsableCommand {
                                                                     maxResidentImages: 40, // XXX
                                                                     writeOutputFiles: writeOutputFiles)
                     
-                    var upm: UpdatableProgressMonitor?
-                    
                     if let _ = eraser.callbacks.updatable {
                         // setup sequence monitor
                         let updatableProgressMonitor =
@@ -357,35 +367,26 @@ struct StarCli: AsyncParsableCommand {
                                                          numConcurrentRenders: max,
                                                          config: eraser.config,
                                                          callbacks: callbacks)
-                        upm = updatableProgressMonitor
                         eraser.callbacks.frameStateChangeCallback = { frame, state in
+                            // XXX make sure to wait for this
                             Task(priority: .userInitiated) {
                                 await updatableProgressMonitor.stateChange(for: frame, to: state)
                             }
                         }
                     }
-                    eraserDispatchGroup = await eraser.dispatchGroup.dispatchGroup
                     try await eraser.run()
 
                     Log.i("done")
 
-                    if let updatableProgressMonitor = upm {
-                        await updatableProgressMonitor.dispatchGroup.wait()
-                        // simply sleep a small amount? 
-                        //try await Task.sleep(nanoseconds: 1_000_000_000)
-                        print("processing complete, output is in \(eraser.outputDirname)")
-                    }
                 } catch {
                     Log.e("\(error)")
                 }
-                return eraserDispatchGroup
             }
-            var eraserDispatchGroup = await task.value
-            eraserDispatchGroup?.wait()
+            _ = await task.value
         } else {
             throw ValidationError("need to provide input")
         }
-        Log.dispatchGroup.wait()
+        await TaskWaiter.finish()
     }
 }
 
