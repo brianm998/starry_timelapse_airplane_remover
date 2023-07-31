@@ -593,8 +593,10 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                         Log.d("frame \(frameIndex) detected outliers in \(y) rows")
                     }
                     for x in 0 ..< width {
-                        let origOffset = (y * width*image.pixelOffset) + (x * image.pixelOffset)
-                        let otherOffset = (y * width*otherFrame.pixelOffset) + (x * otherFrame.pixelOffset)
+                        let origOffset = (y * width*image.pixelOffset) +
+                                         (x * image.pixelOffset)
+                        let otherOffset = (y * width*otherFrame.pixelOffset) +
+                                          (x * otherFrame.pixelOffset)
                         
                         var otherMax = 0
                         
@@ -602,6 +604,8 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                            otherImagePixels[otherOffset+3] != 0xFFFF
                         {
                             // ignore any partially or fully transparent pixels
+                            // these crop up in the star alignment images
+                            // there is nothing to copy from these pixels
                         } else {
 
                             // rgb values of the image we're modifying at this x,y
@@ -621,11 +625,11 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                             
                             // take a max based upon overal brightness, or just one channel
                             otherMax = max(otherRedDiff +
-                                              otherGreenDiff +
-                                              otherBlueDiff / 3,
-                                            max(otherRedDiff,
-                                                max(otherGreenDiff,
-                                                    otherBlueDiff)))
+                                           otherGreenDiff +
+                                           otherBlueDiff / 3,
+                                           max(otherRedDiff,
+                                               max(otherGreenDiff,
+                                                   otherBlueDiff)))
                         }
                         let totalDifference = Int(otherMax)
                         
@@ -819,12 +823,13 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                let groupAmount = groupAmounts[groupName]
             {
                 let boundingBox = BoundingBox(min: Coord(x: minX, y: minY),
-                                               max: Coord(x: maxX, y: maxY))
+                                              max: Coord(x: maxX, y: maxY))
                 let groupBrightness = UInt(groupAmount) / groupSize
 
                 // first apply a height based distinction on the group size,
                 // to allow smaller groups lower in the sky, and not higher up.
                 // can greatly reduce the outlier group count
+                // still helps higher up after star alignment
                 
                 // don't do if this bounding box borders an edge
                 if minY != 0,
