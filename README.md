@@ -46,9 +46,13 @@ At a high level, star operates in a number of steps:
 2. classify these groups into those which should remain and those which should not
 3. paint over the undesirable ones with pixels from an adjecent frame
 
-Detection is not easy, detect too many changes and computational complexity becomes unweildly.  Detect too little changes and some airplanes will manage to sneak through without even being detected, much less classified.  This step is not fast.
+As of star v 0.4.0, detection is done via star-aligned images.  Each frame has a neighboring frame mapped to it via hugin's align_image_stack utility.  This makes the stars show up in close to the same spot in both images, while things like the earth are moved.
 
-The trickiest part however is step #2, trying to decide what outlier groups in the image are airplane streaks.
+Having mapped a comparison image makes detection a lot more capable, i.e. smaller differences between the images can be found, with fewer false positives.
+
+Painting is also now done from the star-aligned images, which means that the pixels painted over are going to be closer to the part of the sky that should be there.
+
+The after detection, classification (step #2) can be tricky, trying to decide what outlier groups in the image are airplane streaks.
 
 #### Original Approach
 
