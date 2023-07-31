@@ -14,6 +14,8 @@ You should have received a copy of the GNU General Public License along with sta
 */
 
 public class StarAlignment {
+    // XXX fix this external dependency by compiling it ourselves and
+    // making it part of the distribution
     public static let pathToBinary = "/Applications/Hugin/Hugin.app/Contents/MacOS"
     public static let binaryName = "align_image_stack"
 
