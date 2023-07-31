@@ -458,9 +458,9 @@ public class FrameAirplaneRemover: Equatable, Hashable {
             // otherwise, take the next frame
             otherFilename = imageSequence.filenames[frameIndex+1]
         }
-        _ = StarAlignment.align(baseImageName: baseFilename,
-                                otherImageName: otherFilename,
-                                outputDirname: starAlignedSequenceDirname)
+        _ = StarAlignment.align(otherFilename,
+                                to: baseFilename,
+                                inDir: starAlignedSequenceDirname)
         
         // this takes a long time, and the gui does it later
         if fullyProcess {
