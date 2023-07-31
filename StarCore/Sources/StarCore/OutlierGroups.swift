@@ -86,7 +86,7 @@ public class OutlierGroups {
             let (XIndex, YIndex) = self.index(for: group)
             spatialArr[XIndex][YIndex].append(group)
         }
-        Log.i("spatialXCount \(self.spatialXCount) spatialYCount \(self.spatialYCount)")
+        Log.i("spatialXCount \(self.spatialXCount) spatialYCount \(self.spatialYCount) width \(width) height \(height) OutlierGroup.maxNearbyGroupDistance \(OutlierGroup.maxNearbyGroupDistance)")
     }
     
     public func write(to dir: String) async throws {
@@ -102,7 +102,7 @@ public class OutlierGroups {
     }
     
     public init(at frameIndex: Int,
-               from dir: String) async throws
+                from dir: String) async throws
     {
         self.frameIndex = frameIndex
 

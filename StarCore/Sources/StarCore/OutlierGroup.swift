@@ -582,7 +582,7 @@ public class OutlierGroup: CustomStringConvertible,
     }
 
     public static var maxNearbyGroupDistance: Double {
-        800*IMAGE_WIDTH!/7000 // XXX hardcoded constant
+        IMAGE_WIDTH!/8 // XXX hardcoded constant
     }
 
     // returns 1 if they are the same
@@ -653,10 +653,9 @@ public class OutlierGroup: CustomStringConvertible,
     fileprivate var longerHistogramStreakDetection: Double {
         // XXX this MOFO is slow :(
         get {
-            let numberOfFrames = 1 // how far in each direction to go
-            let (forwardScore,
-                 backwardScore) = (self.streakScore(in: .forwards, numberOfFramesLeft: numberOfFrames),
-                                   self.streakScore(in: .backwards, numberOfFramesLeft: numberOfFrames))
+            let numberOfFrames = 2 // how far in each direction to go
+            let forwardScore = self.streakScore(going: .forwards, numberOfFramesLeft: numberOfFrames)
+            let backwardScore = self.streakScore(going: .backwards, numberOfFramesLeft: numberOfFrames)
             return forwardScore + backwardScore
         }
     }
@@ -805,26 +804,30 @@ public class OutlierGroup: CustomStringConvertible,
 
     fileprivate var maxThetaDiffOfFirst10HoughLines: Double {
         var maxDiff = 0.0
-        let firstTheta = self.lines[0].theta
-        var max = 10;
-        if self.lines.count < max { max = self.lines.count }
-        for i in 0..<max {
-            let thisTheta = self.lines[i].theta
-            let thisDiff = abs(thisTheta - firstTheta)
-            if thisDiff > maxDiff { maxDiff = thisDiff }
+        if self.lines.count > 0 {
+            let firstTheta = self.lines[0].theta
+            var max = 10;
+            if self.lines.count < max { max = self.lines.count }
+            for i in 0..<max {
+                let thisTheta = self.lines[i].theta
+                let thisDiff = abs(thisTheta - firstTheta)
+                if thisDiff > maxDiff { maxDiff = thisDiff }
+            }
         }
         return maxDiff
     }
     
     fileprivate var maxRhoDiffOfFirst10HoughLines: Double {
         var maxDiff = 0.0
-        let firstRho = self.lines[0].rho
-        var max = 10;
-        if self.lines.count < max { max = self.lines.count }
-        for i in 0..<max {
-            let thisRho = self.lines[i].rho
-            let thisDiff = abs(thisRho - firstRho)
-            if thisDiff > maxDiff { maxDiff = thisDiff }
+        if self.lines.count > 0 {
+            let firstRho = self.lines[0].rho
+            var max = 10;
+            if self.lines.count < max { max = self.lines.count }
+            for i in 0..<max {
+                let thisRho = self.lines[i].rho
+                let thisDiff = abs(thisRho - firstRho)
+                if thisDiff > maxDiff { maxDiff = thisDiff }
+            }
         }
         return maxDiff
     }
@@ -843,22 +846,26 @@ public class OutlierGroup: CustomStringConvertible,
 
     fileprivate var maxThetaDiffOfAllHoughLines: Double {
         var maxDiff = 0.0
-        let firstTheta = self.lines[0].theta
-        for i in 1..<self.lines.count {
-            let thisTheta = self.lines[i].theta
-            let thisDiff = abs(thisTheta - firstTheta)
-            if thisDiff > maxDiff { maxDiff = thisDiff }
+        if self.lines.count > 0 {
+            let firstTheta = self.lines[0].theta
+            for i in 1..<self.lines.count {
+                let thisTheta = self.lines[i].theta
+                let thisDiff = abs(thisTheta - firstTheta)
+                if thisDiff > maxDiff { maxDiff = thisDiff }
+            }
         }
         return maxDiff
     }
     
     fileprivate var maxRhoDiffOfAllHoughLines: Double {
         var maxDiff = 0.0
-        let firstRho = self.lines[0].rho
-        for i in 1..<self.lines.count {
-            let thisRho = self.lines[i].rho
-            let thisDiff = abs(thisRho - firstRho)
-            if thisDiff > maxDiff { maxDiff = thisDiff }
+        if self.lines.count > 0 {
+            let firstRho = self.lines[0].rho
+            for i in 1..<self.lines.count {
+                let thisRho = self.lines[i].rho
+                let thisDiff = abs(thisRho - firstRho)
+                if thisDiff > maxDiff { maxDiff = thisDiff }
+            }
         }
         return maxDiff
     }
@@ -883,7 +890,7 @@ public class OutlierGroup: CustomStringConvertible,
         }*/
 
     // XXX this MOFO is slow :(
-    fileprivate func streakScore(in direction: StreakDirection,
+    fileprivate func streakScore(going direction: StreakDirection,
                                  numberOfFramesLeft: Int,
                                  existingValue: Double = 0) -> Double
     {
@@ -911,7 +918,7 @@ public class OutlierGroup: CustomStringConvertible,
         if numberOfFramesLeft != 0,
            let bestGroup = bestGroup
         {
-            return  bestGroup.streakScore(in: direction,
+            return  bestGroup.streakScore(going: direction,
                                           numberOfFramesLeft: numberOfFramesLeft - 1,
                                           existingValue: score)
         } else {
