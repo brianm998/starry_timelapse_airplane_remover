@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		9C7152C272D88BD358E35CCA /* Pods_Star.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 35B138162EDC828013EC6EE7 /* Pods_Star.framework */; };
+		D3058E1B2AC0745C00C58F1D /* MultiSelectSheetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3058E1A2AC0745C00C58F1D /* MultiSelectSheetView.swift */; };
 		D310C6F429C8D8F40014FBA9 /* libStarDecisionTrees.a in Frameworks */ = {isa = PBXBuildFile; fileRef = D310C6F329C8D8F40014FBA9 /* libStarDecisionTrees.a */; };
 		D31F9FBF299736740001CD0C /* ViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D31F9FBC299736730001CD0C /* ViewModel.swift */; };
 		D31F9FC0299736740001CD0C /* FrameSaveQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = D31F9FBD299736730001CD0C /* FrameSaveQueue.swift */; };
@@ -72,6 +73,7 @@
 		540415BAD54DC7E2F8297DCF /* Pods-star.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-star.release.xcconfig"; path = "Target Support Files/Pods-star/Pods-star.release.xcconfig"; sourceTree = "<group>"; };
 		5F0FA5BFD47E6F6D97B17603 /* Pods-star.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-star.debug.xcconfig"; path = "Target Support Files/Pods-star/Pods-star.debug.xcconfig"; sourceTree = "<group>"; };
 		B8FF875A1AE121BCAAB9AF54 /* Pods-Star.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Star.debug.xcconfig"; path = "Target Support Files/Pods-Star/Pods-Star.debug.xcconfig"; sourceTree = "<group>"; };
+		D3058E1A2AC0745C00C58F1D /* MultiSelectSheetView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = MultiSelectSheetView.swift; sourceTree = "<group>"; };
 		D310C6F329C8D8F40014FBA9 /* libStarDecisionTrees.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libStarDecisionTrees.a; path = ../../StarDecisionTrees/libStarDecisionTrees.a; sourceTree = "<group>"; };
 		D31F9FBC299736730001CD0C /* ViewModel.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ViewModel.swift; sourceTree = "<group>"; };
 		D31F9FBD299736730001CD0C /* FrameSaveQueue.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = FrameSaveQueue.swift; sourceTree = "<group>"; };
@@ -201,6 +203,7 @@
 				D33FFC272A2D4F7E00F38194 /* FilmstripView.swift */,
 				D33FFC252A2D4E8600F38194 /* FilmstripImageView.swift */,
 				D33FFC222A2D48F300F38194 /* FrameEditView.swift */,
+				D3058E1A2AC0745C00C58F1D /* MultiSelectSheetView.swift */,
 				D33FFC212A2D48F300F38194 /* FrameView.swift */,
 				D33FFC1F2A2D3BCD00F38194 /* FrameViewModel.swift */,
 				D33FFC1D2A2D39BA00F38194 /* ProgressBars.swift */,
@@ -434,6 +437,7 @@
 				D33FFC1A2A2D02A300F38194 /* ClearAllButton.swift in Sources */,
 				D33FFC282A2D4F7E00F38194 /* FilmstripView.swift in Sources */,
 				D33FFC262A2D4E8600F38194 /* FilmstripImageView.swift in Sources */,
+				D3058E1B2AC0745C00C58F1D /* MultiSelectSheetView.swift in Sources */,
 				D3A54A6F29AFAD2C00C50709 /* UserPreferences.swift in Sources */,
 				D33FFC122A2CF92900F38194 /* VideoPlaybackButtons.swift in Sources */,
 				D32F6DAA2A4D17CF00704870 /* ScrubSliderView.swift in Sources */,

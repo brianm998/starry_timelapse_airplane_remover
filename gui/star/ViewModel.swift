@@ -21,6 +21,7 @@ public enum FrameViewMode: String, Equatable, CaseIterable {
 public enum SelectionMode: String, Equatable, CaseIterable {
     case paint
     case clear
+    case multi
     case details
     
     var localizedName: LocalizedStringKey {
@@ -80,7 +81,7 @@ public final class ViewModel: ObservableObject {
     @Published var currentFrameImage: Image?
 
     // the frame index of the image that produced the currentFrameImage
-    var currentFrameImageIndex: Int = 0
+    @Published var currentFrameImageIndex: Int = 0
 
     // the frame index of the image that produced the currentFrameImage
     var currentFrameImageWasPreview = false
@@ -112,6 +113,8 @@ public final class ViewModel: ObservableObject {
             return .green
         case .details:
             return .blue
+        case .multi:
+            return .purple      // XXX ???
         }
     }
 
@@ -143,9 +146,23 @@ public final class ViewModel: ObservableObject {
 
     @Published var settingsSheetShowing = false
     @Published var paintSheetShowing = false
+
+    @Published var multiSelectSheetShowing = false {
+        didSet(oldValue) {
+            if !multiSelectSheetShowing {
+                drag_start = nil
+                drag_end = nil
+            }
+        }
+    }
+    @Published var multiSelectionType: MultiSelectionType = .all
+    @Published var multiSelectionPaintType: MultiSelectionPaintType = .clear
+    
+    @Published var drag_start: CGPoint?
+    @Published var drag_end: CGPoint?
     
     // the frame number of the frame we're currently showing
-    var currentIndex = 0
+    @Published var currentIndex = 0
 
     // number of frames in the sequence we're processing
     var imageSequenceSize: Int = 0

@@ -13,8 +13,6 @@ struct FrameEditView: View {
     @Binding private var showFullResolution: Bool
 
     @State private var isDragging = false
-    @State private var drag_start: CGPoint?
-    @State private var drag_end: CGPoint?
 
     public init(image: Image,
                interactionMode: Binding<InteractionMode>,
@@ -86,9 +84,9 @@ struct FrameEditView: View {
 
 
             // this is the selection overlay
-            if isDragging,
-               let drag_start = drag_start,
-               let drag_end = drag_end
+            if isDragging || viewModel.multiSelectSheetShowing,
+               let drag_start = viewModel.drag_start,
+               let drag_end = viewModel.drag_end
             {
                 let width = abs(drag_start.x-drag_end.x)
                 let height = abs(drag_start.y-drag_end.y)
@@ -120,52 +118,31 @@ struct FrameEditView: View {
               let _ = Log.d("isDragging")
               isDragging = true
               let location = gesture.location
-              if drag_start != nil {
+              if viewModel.drag_start != nil {
                   // updating during drag is too slow
-                  drag_end = location
+                  viewModel.drag_end = location
               } else {
-                  drag_start = gesture.startLocation
+                  viewModel.drag_start = gesture.startLocation
               }
               Log.v("location \(location)")
           }
           .onEnded { gesture in
               isDragging = false
               let end_location = gesture.location
-              if let drag_start = drag_start {
+              var clearEnds = true
+              if let drag_start = viewModel.drag_start {
                   Log.v("end location \(end_location) drag start \(drag_start)")
                   
                   let frameView = viewModel.currentFrameView
                   
-                  var shouldPaint = false
-                  var paint_choice = true
-                  
                   switch viewModel.selectionMode {
                   case .paint:
-                      shouldPaint = true
+                      update(frame: frameView, shouldPaint: true,
+                             between: drag_start, and: end_location)
                   case .clear:
-                      shouldPaint = false
+                      update(frame: frameView, shouldPaint: false,
+                             between: drag_start, and: end_location)
                   case .details:
-                      paint_choice = false
-                  }
-                  
-                  if paint_choice {
-                      frameView.userSelectAllOutliers(toShouldPaint: shouldPaint,
-                                                      between: drag_start,
-                                                      and: end_location)
-                      //update the view layer
-                      frameView.update()
-                      if let frame = frameView.frame {
-                          let new_value = shouldPaint
-                          Task.detached(priority: .userInitiated) {
-                              await frame.userSelectAllOutliers(toShouldPaint: new_value,
-                                                                between: drag_start,
-                                                                and: end_location)
-                              await MainActor.run {
-                                  viewModel.update()
-                              }
-                          }
-                      }
-                  } else {
                       let _ = Log.d("DETAILS")
 
                       if let frame = frameView.frame {
@@ -192,12 +169,41 @@ struct FrameEditView: View {
                               }
                           }
                       } 
-                      
-                      // XXX show the details here somehow
+
+                  case .multi:
+                      self.viewModel.multiSelectSheetShowing = true
+                      //self.viewModel.drag_start = $viewModel.drag_start
+                      self.viewModel.drag_end = end_location
+                      end_location
+                      clearEnds = false
                   }
               }
-              drag_start = nil
-              drag_end = nil
+              if clearEnds {
+                  viewModel.drag_start = nil
+                  viewModel.drag_end = nil
+              }
           }
+    }
+
+    private func update(frame frameView: FrameViewModel,
+                        shouldPaint: Bool,
+                        between drag_start: CGPoint,
+                        and end_location: CGPoint)
+    {
+        frameView.userSelectAllOutliers(toShouldPaint: shouldPaint,
+                                        between: drag_start,
+                                        and: end_location)
+        //update the view layer
+        frameView.update()
+        if let frame = frameView.frame {
+            let new_value = shouldPaint
+            Task.detached(priority: .userInitiated) {
+                await frame.userSelectAllOutliers(toShouldPaint: new_value,
+                                                  between: drag_start,
+                                                  and: end_location)
+                await MainActor.run { viewModel.update() }
+            }
+        }
+
     }
 }

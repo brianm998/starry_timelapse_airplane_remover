@@ -72,6 +72,15 @@ struct BottomRightView: View {
                                     videoPlaybackFramerate: self.$viewModel.videoPlaybackFramerate,
                                     fastAdvancementType: $viewModel.fastAdvancementType)
               }
+              .sheet(isPresented: $viewModel.multiSelectSheetShowing) {
+                  MultiSelectSheetView(isVisible: self.$viewModel.multiSelectSheetShowing,
+                                       multiSelectionType: $viewModel.multiSelectionType,
+                                       multiSelectionPaintType: $viewModel.multiSelectionPaintType,
+                                       frames: $viewModel.frames,
+                                       currentIndex: $viewModel.currentIndex,
+                                       drag_start: $viewModel.drag_start,
+                                       drag_end: $viewModel.drag_end)
+              }
               .sheet(isPresented: $viewModel.paintSheetShowing) {
                   MassivePaintSheetView(isVisible: self.$viewModel.paintSheetShowing) { shouldPaint, startIndex, endIndex in
                       
