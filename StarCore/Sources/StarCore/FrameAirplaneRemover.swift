@@ -248,8 +248,8 @@ public class FrameAirplaneRemover: Equatable, Hashable {
     }
     
     public func userSelectAllOutliers(toShouldPaint shouldPaint: Bool,
-                                  between startLocation: CGPoint,
-                                  and endLocation: CGPoint) async
+                                      between startLocation: CGPoint,
+                                      and endLocation: CGPoint) async
     {
         await foreachOutlierGroup(between: startLocation, and: endLocation) { group in
             await group.shouldPaint(.userSelected(shouldPaint))
@@ -622,11 +622,13 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                             let otherRedDiff = (Int(origRed) - Int(otherRed))
                             let otherGreenDiff = (Int(origGreen) - Int(otherGreen))
                             let otherBlueDiff = (Int(origBlue) - Int(otherBlue))
+
+                            let totalDiff = (otherRedDiff +
+                                             otherGreenDiff +
+                                             otherBlueDiff) / 3
                             
                             // take a max based upon overal brightness, or just one channel
-                            otherMax = max(otherRedDiff +
-                                           otherGreenDiff +
-                                           otherBlueDiff / 3,
+                            otherMax = max(totalDiff,
                                            max(otherRedDiff,
                                                max(otherGreenDiff,
                                                    otherBlueDiff)))
@@ -826,33 +828,6 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                                               max: Coord(x: maxX, y: maxY))
                 let groupBrightness = UInt(groupAmount) / groupSize
 
-                // first apply a height based distinction on the group size,
-                // to allow smaller groups lower in the sky, and not higher up.
-                // can greatly reduce the outlier group count
-                // still helps higher up after star alignment
-                
-                // don't do if this bounding box borders an edge
-                if minY != 0,
-                   minX != 0,
-                   maxX < width - 1,
-                   maxY < height - 1
-                {
-                    let groupCenterY = boundingBox.center.y
-
-                    let upperAreaSize = Double(height)*config.upperSkyPercentage/100
-
-                    if groupCenterY < Int(upperAreaSize) {
-                        // 1 if at top, 0 if at bottom of the upper area
-                        let howCloseToTop = (upperAreaSize - Double(groupCenterY)) / upperAreaSize
-                        let minSizeForThisGroup = config.minGroupSize + Int(Double(config.minGroupSizeAtTop - config.minGroupSize) * howCloseToTop)
-                        Log.v("minSizeForThisGroup \(minSizeForThisGroup) howCloseToTop \(howCloseToTop) groupCenterY \(groupCenterY) height \(height)")
-                        if groupSize < minSizeForThisGroup {
-                            Log.v("frame \(frameIndex) skipping group of size \(groupSize) < \(minSizeForThisGroup) @ centerY \(groupCenterY)")
-                            continue
-                        }
-                    }
-                }
-
                 if let ignoreLowerPixels = config.ignoreLowerPixels,
                    Int(IMAGE_HEIGHT!) - minY <= ignoreLowerPixels
                 {
@@ -860,6 +835,8 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                     continue
                 }
                 // next collect the amounts
+
+                var maxDiff: UInt16 = 0
                 
                 var outlierAmounts = [UInt32](repeating: 0, count: boundingBox.width*boundingBox.height)
                 for x in minX ... maxX {
@@ -871,18 +848,23 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                             let pixelAmount = outlierAmountList[index]
                             let idx = (y-minY) * boundingBox.width + (x-minX)
                             outlierAmounts[idx] = UInt32(pixelAmount)
+                            if pixelAmount > maxDiff { maxDiff = UInt16(pixelAmount) }
                         }
                     }
                 }
-                
-                let newOutlier = await OutlierGroup(name: groupName,
-                                                    size: groupSize,
-                                                    brightness: groupBrightness,
-                                                    bounds: boundingBox,
-                                                    frame: self,
-                                                    pixels: outlierAmounts,
-                                                    maxPixelDistance: config.maxPixelDistance)
-                outlierGroups?.members[groupName] = newOutlier
+
+                if maxDiff >= config.maxPixelDistance {
+                    let newOutlier = await OutlierGroup(name: groupName,
+                                                        size: groupSize,
+                                                        brightness: groupBrightness,
+                                                        bounds: boundingBox,
+                                                        frame: self,
+                                                        pixels: outlierAmounts,
+                                                        maxPixelDistance: config.maxPixelDistance)
+                    outlierGroups?.members[groupName] = newOutlier
+                } else {
+                    Log.i("skipping frame with maxDiff \(maxDiff) < max \(config.maxPixelDistance)")
+                }
             }
         }
         self.state = .readyForInterFrameProcessing
