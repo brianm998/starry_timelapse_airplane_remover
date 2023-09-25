@@ -14,8 +14,8 @@ public struct Defaults {
      A lower outlierMaxThreshold results in detecting more outlier groups.
      A higher outlierMaxThreshold results in detecting fewer outlier groups.
      */
-    public static let outlierMaxThreshold: Double = 5
-    public static let outlierMinThreshold: Double = 2.5
+    public static let outlierMaxThreshold: Double = 9
+    public static let outlierMinThreshold: Double = 7
 
     // groups smaller than this are completely ignored
     public static let minGroupSize: Int = 20
