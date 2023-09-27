@@ -18,6 +18,9 @@ public struct Defaults {
     public static let outlierMinThreshold: Double = 7
 
     // groups smaller than this are completely ignored
+    // this is scaled by image size:
+    //   12 megapixels will get this value
+    //   larger ones more, smaller less 
     public static let minGroupSize: Int = 20
 }
 

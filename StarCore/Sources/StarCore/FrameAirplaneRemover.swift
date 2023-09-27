@@ -664,6 +664,26 @@ public class FrameAirplaneRemover: Equatable, Hashable {
 
         Log.d("frame \(frameIndex) labeling adjecent outliers")
 
+        /*
+         make the minimum group size dependent upon the resolution of the sequence
+
+         20 works good for no clouds on 12mp (4240 × 2832)
+         20 with clouds on 33 mp is thousands of extra groups
+
+         compute as:
+
+         let minGoupSize = c*b/a
+
+         where a = 12 megapixels,
+               b = number of pixels in the sequence being processed
+               c = 20, // still a param from outside
+         */
+        let twelveMegapixels: Double = 4240 * 2832
+        let sequenceResolution = Double(width) * Double(height)
+        let minGroupSize = Int(Double(config.minGroupSize)*sequenceResolution/twelveMegapixels)
+
+        Log.d("using minGroupSize \(minGroupSize)")
+        
         // then label all adject outliers
         for (index, outlierAmount) in outlierAmountList.enumerated() {
             
@@ -757,7 +777,10 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                 }
             }
             //Log.d("group \(outlierKey) has \(groupSize) members")
-            if groupSize > config.minGroupSize { 
+
+
+            
+            if groupSize > minGroupSize { 
                 individualGroupCounts[outlierKey] = groupSize
             }
         }
