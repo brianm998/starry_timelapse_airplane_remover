@@ -3,9 +3,11 @@ import StarCore
 
 public enum MultiSelectionType: String, Equatable, CaseIterable {
     case all = "all frames"
-    case allAfter = "from the current frame to the end" 
-    case allBefore = "from the start to the current frame" 
-
+    case allAfter = "from this frame to the end" 
+    case allBefore = "from the start to this frame" 
+    case someAfter = "this frame and some after"
+    case someBefore = "some previous frames ending here"
+    
     var localizedName: LocalizedStringKey {
         LocalizedStringKey(rawValue)
     }
@@ -28,6 +30,7 @@ struct MultiSelectSheetView: View {
     @Binding var currentIndex: Int
     @Binding var drag_start: CGPoint?
     @Binding var drag_end: CGPoint?
+    @Binding var number_of_frames: Int
     var shouldPaint: Bool {
         switch multiSelectionPaintType {
         case .paint:
@@ -86,6 +89,11 @@ struct MultiSelectSheetView: View {
                 case .clear:
                     Text("Clear outliers in this area in \(numFrames) frames from the start ending at frame \(currentIndex)")
                 }
+
+           case .someAfter:
+                Spacer().frame(minHeight: 30)
+           case .someBefore:
+                Spacer().frame(minHeight: 30)
             }
             
             HStack {
@@ -111,6 +119,32 @@ struct MultiSelectSheetView: View {
                                           startIndex: 0,
                                           endIndex: currentIndex)
                         self.isVisible = false
+                    }
+                case .someAfter:
+                    HStack {
+                        Button("Modify") {
+                            self.updateFrames(shouldPaint: self.shouldPaint,
+                                              startIndex: currentIndex,
+                                              endIndex: currentIndex + number_of_frames)
+                            self.isVisible = false
+                        }
+                        Text("the next")
+                        TextField("", value: $number_of_frames, format: .number)
+                          .frame(maxWidth: 40)
+                        Text("frames")
+                    }
+                case .someBefore:
+                    HStack {
+                        Button("Modify") {
+                            self.updateFrames(shouldPaint: self.shouldPaint,
+                                              startIndex: currentIndex - number_of_frames,
+                                              endIndex: currentIndex)
+                            self.isVisible = false
+                        }
+                        Text("the previous")
+                        TextField("", value: $number_of_frames, format: .number)
+                          .frame(maxWidth: 40)
+                        Text("frames")
                     }
                 }
             }

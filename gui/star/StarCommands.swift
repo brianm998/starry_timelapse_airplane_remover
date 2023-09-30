@@ -26,7 +26,9 @@ struct StarCommands: Commands {
               .environmentObject(viewModel)
             RenderAllFramesButton()
               .environmentObject(viewModel)
-            LoadAllOutliersButton()
+            LoadAllOutliersButton(loadingType: .fromCurrentFrame)
+              .environmentObject(viewModel)
+            LoadAllOutliersButton(loadingType: .all)
               .environmentObject(viewModel)
         }
 

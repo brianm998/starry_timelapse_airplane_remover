@@ -160,6 +160,7 @@ public final class ViewModel: ObservableObject {
     
     @Published var drag_start: CGPoint?
     @Published var drag_end: CGPoint?
+    @Published var number_of_frames: Int = 50
     
     // the frame number of the frame we're currently showing
     @Published var currentIndex = 0

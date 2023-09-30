@@ -1,9 +1,15 @@
 import SwiftUI
 import StarCore
 
+enum OutlierLodingType {
+    case all
+    case fromCurrentFrame
+}
+
 struct LoadAllOutliersButton: View {
     @EnvironmentObject var viewModel: ViewModel
-
+    let loadingType: OutlierLodingType
+    
     var body: some View {
         let action: () -> Void = {
             Task {
@@ -15,9 +21,16 @@ struct LoadAllOutliersButton: View {
                         // this gets "Too many open files" with more than 2000 images :(
                         viewModel.loadingAllOutliers = true
                         Log.d("foobar starting")
-                        viewModel.numberOfFramesWithOutliersLoaded = 0
+                        if loadingType == .all {
+                            viewModel.numberOfFramesWithOutliersLoaded = 0
+                        }
                         for frameView in viewModel.frames {
-                            Log.d("frame \(frameView.frameIndex) attempting to load outliers")
+                            if loadingType == .fromCurrentFrame,
+                               frameView.frameIndex < viewModel.currentIndex
+                            {
+                                Log.d("skipping loading outliers for frame \(frameView.frameIndex)")
+                                continue
+                            }
                             var did_load = false
                             while(!did_load) {
                                 if current_running < max_concurrent {
@@ -67,10 +80,18 @@ struct LoadAllOutliersButton: View {
                 }
             }
         }
-        
-        return Button(action: action) {
-            Text("Load All Outliers")
+
+        switch loadingType {
+        case .all:
+            return Button(action: action) {
+                Text("Load All Outliers")
+            }
+              .help("Load all outlier groups for all frames.\nThis can take awhile.")
+        case .fromCurrentFrame:
+            return Button(action: action) {
+                Text("Load Outliers to End")
+            }
+              .help("Load all outlier groups for frames from the current index to the end.\nThis can take awhile.")
         }
-          .help("Load all outlier groups for all frames.\nThis can take awhile.")
     }
 }

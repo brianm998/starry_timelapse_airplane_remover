@@ -79,7 +79,8 @@ struct BottomRightView: View {
                                        frames: $viewModel.frames,
                                        currentIndex: $viewModel.currentIndex,
                                        drag_start: $viewModel.drag_start,
-                                       drag_end: $viewModel.drag_end)
+                                       drag_end: $viewModel.drag_end,
+                                       number_of_frames: $viewModel.number_of_frames)
               }
               .sheet(isPresented: $viewModel.paintSheetShowing) {
                   MassivePaintSheetView(isVisible: self.$viewModel.paintSheetShowing) { shouldPaint, startIndex, endIndex in
