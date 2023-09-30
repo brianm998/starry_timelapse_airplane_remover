@@ -191,21 +191,29 @@ struct OutlierGroupTable: View {
         }
     }
 
+
+    private func unSixteenBitVersion(ofPercentage percentage: Double) -> Double {
+        return (percentage/Double(0xFFFF))*100
+        //return UInt16((percentage/100)*Double(0xFFFF))
+    }
+    
+
+    
     var dtAveragebrightnessColumn: DTColumn {
         self.tableColumn(for: "averagebrightness", value: \.dt_averagebrightness) { row in
-            row.dt_averagebrightness
+            unSixteenBitVersion(ofPercentage: row.dt_averagebrightness)
         }
     }
 
     var dtMedianBrightnessColumn: DTColumn {
         self.tableColumn(for: "medianBrightness", value: \.dt_medianBrightness) { row in
-            row.dt_medianBrightness
+            unSixteenBitVersion(ofPercentage: row.dt_medianBrightness)
         }
     }
 
     var dtMaxBrightnessColumn: DTColumn {
         self.tableColumn(for: "maxBrightness", value: \.dt_maxBrightness) { row in
-            row.dt_maxBrightness
+            unSixteenBitVersion(ofPercentage: row.dt_maxBrightness)
         }
     }
 
@@ -277,7 +285,7 @@ struct OutlierGroupTable: View {
                      closure: @escaping (OutlierGroupTableRow) -> Double) -> DTColumn
     {
         TableColumn(name, value: value) { (row: OutlierGroupTableRow) in
-            Text(String(format: "%.2g", closure(row)))
+            Text(String(format: "%.4g", closure(row)))
         }.width(min: 40, ideal: 60, max: 100)
     }
 
