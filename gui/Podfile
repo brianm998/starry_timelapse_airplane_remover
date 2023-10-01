@@ -16,7 +16,6 @@ target 'Star' do
   pod 'StarCore', :path => "../StarCore"
 #  pod 'Zoomable', { :git => "git@github.com:brianm998/Zoomable", :branch => "main" }
   pod 'Zoomable',  :path => "../../Zoomable"
-  pod 'ShellOut'
   
   # this gets rid of some localizability warnings on the pods xcode project
   post_install do |installer|

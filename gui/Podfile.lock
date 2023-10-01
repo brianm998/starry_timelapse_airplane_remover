@@ -12,7 +12,6 @@ PODS:
     - SDWebImageSwiftUI
 
 DEPENDENCIES:
-  - ShellOut
   - StarCore (from `../StarCore`)
   - Zoomable (from `../../Zoomable`)
 
@@ -35,6 +34,6 @@ SPEC CHECKSUMS:
   StarCore: 28482dd203e1e2b64240f58cd7702087407b93fb
   Zoomable: 59bba07c49251a6171fa5ee9674750fb75cc75a3
 
-PODFILE CHECKSUM: 8675e46636e9a4831fa349c0bf6b3cce607b68da
+PODFILE CHECKSUM: 95e0bee5d18eed8629a36672b21689ad01ad66d0
 
 COCOAPODS: 1.12.0
