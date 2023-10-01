@@ -32,7 +32,7 @@ public class HoughTransform {
 
     let maxPixelDistance: UInt16
     
-    public var inputData: [UInt32]
+    public var inputData: [UInt16]
     var counts: [[Double]]
     
     let dr: Double
@@ -41,11 +41,11 @@ public class HoughTransform {
     public convenience init(dataWidth: Int, dataHeight: Int, maxPixelDistance: UInt16) {
         self.init(dataWidth: dataWidth,
                  dataHeight: dataHeight,
-                 inputData: [UInt32](repeating: 0, count: dataWidth*dataHeight),
+                 inputData: [UInt16](repeating: 0, count: dataWidth*dataHeight),
                  maxPixelDistance: maxPixelDistance)
     }
 
-    public init(dataWidth: Int, dataHeight: Int, inputData: [UInt32], maxPixelDistance: UInt16) {
+    public init(dataWidth: Int, dataHeight: Int, inputData: [UInt16], maxPixelDistance: UInt16) {
         self.dataWidth = dataWidth
         self.dataHeight = dataHeight
         self.rmax = sqrt(Double(dataWidth*dataWidth + dataHeight*dataHeight))

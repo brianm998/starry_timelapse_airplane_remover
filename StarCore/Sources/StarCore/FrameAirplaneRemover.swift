@@ -571,7 +571,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         var outlierGroupList = [String?](repeating: nil, count: width*height)
         
         Log.i("frame \(frameIndex) finding outliers")
-        var outlierAmountList = [UInt](repeating: 0, count: width*height)
+        var outlierAmountList = [UInt16](repeating: 0, count: width*height)
         // compare pixels at the same image location in adjecent frames
         // detect Outliers which are much more brighter than the adject frames
         let origData = image.rawImageData
@@ -598,7 +598,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                         let otherOffset = (y * width*otherFrame.pixelOffset) +
                                           (x * otherFrame.pixelOffset)
                         
-                        var otherMax = 0
+                        var maxBrightness: UInt16 = 0
                         
                         if otherFrame.pixelOffset == 4,
                            otherImagePixels[otherOffset+3] != 0xFFFF
@@ -619,26 +619,23 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                             let otherBlue = otherImagePixels[otherOffset+2]
                             
                             // how much brighter in each channel was the image we're modifying?
-                            let otherRedDiff = (Int(origRed) - Int(otherRed))
-                            let otherGreenDiff = (Int(origGreen) - Int(otherGreen))
-                            let otherBlueDiff = (Int(origBlue) - Int(otherBlue))
-
-                            let totalDiff = (otherRedDiff +
-                                             otherGreenDiff +
-                                             otherBlueDiff) / 3
+                            let otherRedDiff = origRed > otherRed ? origRed - otherRed : 0
+                            let otherGreenDiff = origGreen > otherGreen ? origGreen - otherGreen : 0
+                            let otherBlueDiff = origBlue > otherBlue ? (origBlue - otherBlue) : 0
+                            
+                            let totalDiff = (otherRedDiff/3) +
+                                            (otherGreenDiff/3) +
+                                            (otherBlueDiff/3)
                             
                             // take a max based upon overal brightness, or just one channel
-                            otherMax = max(totalDiff,
-                                           max(otherRedDiff,
-                                               max(otherGreenDiff,
-                                                   otherBlueDiff)))
+                            maxBrightness = max(totalDiff,
+                                                max(otherRedDiff,
+                                                    max(otherGreenDiff,
+                                                        otherBlueDiff)))
                         }
-                        let totalDifference = Int(otherMax)
-                        
-                        let amountIndex = Int(y*width+x)
                         // record the brightness change if it is brighter
-                        if totalDifference > 0  {
-                            outlierAmountList[amountIndex] = UInt(totalDifference)
+                        if maxBrightness > 0  {
+                            outlierAmountList[y*width+x] = maxBrightness
                         }
                     }
                 }
@@ -800,7 +797,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                 let index = y*width+x
                 if let group = outlierGroupList[index]
                 {
-                    let amount = outlierAmountList[index]
+                    let amount = UInt(outlierAmountList[index])
                     if let groupAmount = groupAmounts[group] {
                         groupAmounts[group] = groupAmount + amount
                     } else {
@@ -849,7 +846,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
             {
                 let boundingBox = BoundingBox(min: Coord(x: minX, y: minY),
                                               max: Coord(x: maxX, y: maxY))
-                let groupBrightness = UInt(groupAmount) / groupSize
+                let groupBrightness = groupAmount / groupSize
 
                 if let ignoreLowerPixels = config.ignoreLowerPixels,
                    Int(IMAGE_HEIGHT!) - minY <= ignoreLowerPixels
@@ -861,7 +858,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
 
                 var maxDiff: UInt16 = 0
                 
-                var outlierAmounts = [UInt32](repeating: 0, count: boundingBox.width*boundingBox.height)
+                var outlierAmounts = [UInt16](repeating: 0, count: boundingBox.width*boundingBox.height)
                 for x in minX ... maxX {
                     for y in minY ... maxY {
                         let index = y * self.width + x
@@ -870,8 +867,8 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                         {
                             let pixelAmount = outlierAmountList[index]
                             let idx = (y-minY) * boundingBox.width + (x-minX)
-                            outlierAmounts[idx] = UInt32(pixelAmount)
-                            if pixelAmount > maxDiff { maxDiff = UInt16(pixelAmount) }
+                            outlierAmounts[idx] = pixelAmount
+                            if pixelAmount > maxDiff { maxDiff = pixelAmount }
                         }
                     }
                 }

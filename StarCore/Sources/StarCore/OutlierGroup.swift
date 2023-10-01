@@ -40,7 +40,7 @@ public class OutlierGroup: CustomStringConvertible,
 
     // pixel value is zero if pixel is not part of group,
     // otherwise it's the amount brighter this pixel was than those in the adjecent frames 
-    public let pixels: [UInt32]        // indexed by y * bounds.width + x
+    public let pixels: [UInt16]        // indexed by y * bounds.width + x
 
     public let maxPixelDistance: UInt16
     public let surfaceAreaToSizeRatio: Double
@@ -70,7 +70,7 @@ public class OutlierGroup: CustomStringConvertible,
          brightness: UInt,      // average brightness
          bounds: BoundingBox,
          frame: FrameAirplaneRemover,
-         pixels: [UInt32],
+         pixels: [UInt16],
          maxPixelDistance: UInt16) async
     {
         self.name = name
@@ -315,6 +315,15 @@ public class OutlierGroup: CustomStringConvertible,
         case neighboringInterFrameOutlierThetaScore
         case maxOverlap
         case maxOverlapTimesThetaHisto
+
+        /*
+         XXX add:
+           - config stuff:
+             - outlierMaxThreshold
+             - outlierMinThreshold
+             - minGroupSize
+         
+         */
         
         /*
          add score based upon number of close with hough line histogram values
@@ -520,7 +529,7 @@ public class OutlierGroup: CustomStringConvertible,
     }
 
     fileprivate var maxBrightness: Double {
-        var max: UInt32 = 0
+        var max: UInt16 = 0
         for pixel in pixels {
             if pixel > max { max = pixel }
         }
@@ -528,13 +537,13 @@ public class OutlierGroup: CustomStringConvertible,
     }
     
     fileprivate var medianBrightness: Double {
-        var values: [UInt32] = []
+        var values: [UInt16] = []
         for pixel in pixels {
             if pixel > 0 {
                 values.append(pixel)
             }
         }
-        // XXX all zero pixels :(
+        // XXX all zero pixels :(
         return Double(values.sorted()[values.count/2]) // SIGABRT HERE :(
     }
 
@@ -948,8 +957,8 @@ public class OutlierGroup: CustomStringConvertible,
         //number_pixels        (64 bits)
         size += 8
         
-        //pixels: [UInt32]
-        size += pixels.count * 4
+        //pixels: [UInt16]
+        size += pixels.count * 2
         
         //maxPixelDistance: UInt16
         size += 2
@@ -1026,14 +1035,14 @@ public class OutlierGroup: CustomStringConvertible,
         let pixelsCount = pixelsCountData.withUnsafeBytes { $0.load(as: Int.self).bigEndian }
         index += 8
 
-        var pixels: [UInt32] = []
+        var pixels: [UInt16] = []
 
         //Log.d("pixelsCount \(pixelsCount) index \(index) persitentData.count \(persitentData.count)")
         
         for _ in 0..<pixelsCount {
-            let pixelData = persitentData.subdata(in: index..<index+4)
-            index += 4
-            let pixel = pixelData.withUnsafeBytes { $0.load(as: UInt32.self).bigEndian }
+            let pixelData = persitentData.subdata(in: index..<index+2)
+            index += 2
+            let pixel = pixelData.withUnsafeBytes { $0.load(as: UInt16.self).bigEndian }
             pixels.append(pixel)
         }
         self.pixels = pixels
@@ -1119,8 +1128,8 @@ public class OutlierGroup: CustomStringConvertible,
 
         for i in 0..<numPixels {
             let pixelData = withUnsafeBytes(of: self.pixels[i].bigEndian) { Data($0) }
-            data.replaceSubrange(index..<index+4, with: pixelData)
-            index += 4
+            data.replaceSubrange(index..<index+2, with: pixelData)
+            index += 2
         }
 
         let mpdd = withUnsafeBytes(of: self.maxPixelDistance.bigEndian) { Data($0) }
@@ -1176,7 +1185,7 @@ public class OutlierGroup: CustomStringConvertible,
     }
 }
 
-public func ratioOfSurfaceAreaToSize(of pixels: [UInt32], width: Int, height: Int) -> Double {
+public func ratioOfSurfaceAreaToSize(of pixels: [UInt16], width: Int, height: Int) -> Double {
     var size: Int = 0
     var surfaceArea: Int = 0
     for x in 0 ..< width {

@@ -182,8 +182,9 @@ public struct Config: Codable {
     // 0.3.4 lots of UI improvements
     // 0.4.0 star alignment
     // 0.4.1 fixes after star alignment, better constants
+    // 0.4.2 clean up memory usage during outlier detection, save outlier pixels as 16 bit, not 32
 
-    public var starVersion = "0.4.1" // XXX move this out
+    public var starVersion = "0.4.2" // XXX move this out
 
     public func writeJson(named filename: String) {
         
