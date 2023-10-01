@@ -72,7 +72,9 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
         previewOutputDirname = "\(config.outputPath)/\(basename)-previews"
         processedPreviewOutputDirname = "\(config.outputPath)/\(basename)-processed-previews"
         thumbnailOutputDirname = "\(config.outputPath)/\(basename)-thumbnails"
-        starAlignedSequenceDirname = "\(config.outputPath)/\(basename)-aligned"
+
+        // alignment doesn't change across versions, omit that from the dirname
+        starAlignedSequenceDirname = "\(config.outputPath)/\(config.imageSequenceDirname)-star-aligned"
         
         try super.init(imageSequenceDirname: "\(config.imageSequencePath)/\(config.imageSequenceDirname)",
                        outputDirname: "\(config.outputPath)/\(basename)",
