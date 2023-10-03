@@ -45,6 +45,37 @@ public enum FrameProcessingState: Int, CaseIterable, Codable {
     case complete
 }
 
+fileprivate class OutlierGroupInfo {
+    var amount: UInt = 0 // average brightness of each group
+    var minX: Int?
+    var minY: Int?
+    var maxX: Int?
+    var maxY: Int?
+    func process(x: Int, y: Int, amount: UInt) {
+        self.amount += amount
+        if let minX = minX {
+            if x < minX { self.minX = x }
+        } else {
+            minX = x
+        }
+        if let minY = minY {
+            if y < minY { self.minY = y }
+        } else {
+            minY = y
+        }
+        if let maxX = maxX {
+            if x > maxX { self.maxX = x }
+        } else {
+            maxX = x
+        }
+        if let maxY = maxY {
+            if y > maxY { self.maxY = y }
+        } else {
+            maxY = y
+        }
+    }
+}
+
 public class FrameAirplaneRemover: Equatable, Hashable {
 
     private var state: FrameProcessingState = .unprocessed {
@@ -619,9 +650,9 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                             let otherBlue = otherImagePixels[otherOffset+2]
                             
                             // how much brighter in each channel was the image we're modifying?
-                            let otherRedDiff = origRed > otherRed ? origRed - otherRed : 0
+                            let otherRedDiff   = origRed   > otherRed   ? origRed   - otherRed   : 0
                             let otherGreenDiff = origGreen > otherGreen ? origGreen - otherGreen : 0
-                            let otherBlueDiff = origBlue > otherBlue ? (origBlue - otherBlue) : 0
+                            let otherBlueDiff  = origBlue  > otherBlue  ? origBlue  - otherBlue  : 0
                             
                             let totalDiff = (otherRedDiff/3) +
                                             (otherGreenDiff/3) +
@@ -704,9 +735,9 @@ public class FrameAirplaneRemover: Equatable, Hashable {
             while pendingOutlierInsertIndex != pendingOutlierAccessIndex {
                 //Log.d("pendingOutlierInsertIndex \(pendingOutlierInsertIndex) pendingOutlierAccessIndex \(pendingOutlierAccessIndex)")
                 loopCount += 1
-                if loopCount % 1000 == 0 {
-                    Log.v("frame \(frameIndex) looping \(loopCount) times groupSize \(groupSize)")
-                }
+//                if loopCount % 1000 == 0 {
+//                    Log.v("frame \(frameIndex) looping \(loopCount) times groupSize \(groupSize)")
+//                }
                 
                 let nextOutlierIndex = pendingOutliers[pendingOutlierAccessIndex]
                 //Log.d("nextOutlierIndex \(nextOutlierIndex)")
@@ -783,53 +814,22 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         }
 
         self.state = .detectingOutliers2
-        var groupAmounts: [String: UInt] = [:] // keyed by group name, average brightness of each group
 
         Log.i("frame \(frameIndex) calculating outlier group bounds")
-        var groupMinX: [String:Int] = [:]   // keyed by group name, image bounds of each group
-        var groupMinY: [String:Int] = [:]
-        var groupMaxX: [String:Int] = [:]
-        var groupMaxY: [String:Int] = [:]
+        var groupInfo: [String:OutlierGroupInfo] = [:] // keyed by group name
         
         // calculate the outer bounds of each outlier group
         for x in 0 ..< width {
             for y in 0 ..< height {
                 let index = y*width+x
-                if let group = outlierGroupList[index]
-                {
+                if let group = outlierGroupList[index] {
                     let amount = UInt(outlierAmountList[index])
-                    if let groupAmount = groupAmounts[group] {
-                        groupAmounts[group] = groupAmount + amount
+                    if let info = groupInfo[group] {
+                        info.process(x: x, y: y, amount: amount)
                     } else {
-                        groupAmounts[group] = amount
-                    }
-                    if let minX = groupMinX[group] {
-                        if(x < minX) {
-                            groupMinX[group] = x
-                        }
-                    } else {
-                        groupMinX[group] = x
-                    }
-                    if let minY = groupMinY[group] {
-                        if(y < minY) {
-                            groupMinY[group] = y
-                        }
-                    } else {
-                        groupMinY[group] = y
-                    }
-                    if let maxX = groupMaxX[group] {
-                        if(x > maxX) {
-                            groupMaxX[group] = x
-                        }
-                    } else {
-                        groupMaxX[group] = x
-                    }
-                    if let maxY = groupMaxY[group] {
-                        if(y > maxY) {
-                            groupMaxY[group] = y
-                        }
-                    } else {
-                        groupMaxY[group] = y
+                        let info = OutlierGroupInfo()
+                        groupInfo[group] = info
+                        info.process(x: x, y: y, amount: amount)
                     }
                 }
             }
@@ -838,12 +838,13 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         self.state = .detectingOutliers3
         // populate the outlierGroups
         for (groupName, groupSize) in individualGroupCounts {
-            if let minX = groupMinX[groupName],
-               let minY = groupMinY[groupName],
-               let maxX = groupMaxX[groupName],
-               let maxY = groupMaxY[groupName],
-               let groupAmount = groupAmounts[groupName]
+            if let info = groupInfo[groupName],
+               let minX = info.minX,
+               let minY = info.minY,
+               let maxX = info.maxX,
+               let maxY = info.maxY
             {
+                let groupAmount = info.amount
                 let boundingBox = BoundingBox(min: Coord(x: minX, y: minY),
                                               max: Coord(x: maxX, y: maxY))
                 let groupBrightness = groupAmount / groupSize
