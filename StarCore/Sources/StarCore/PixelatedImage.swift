@@ -17,9 +17,12 @@ import Cocoa
 public func loadImage(fromFile filename: String) async throws -> NSImage? {
     Log.d("Loading image from \(filename)")
     let imageURL = NSURL(fileURLWithPath: filename, isDirectory: false)
+    Log.d("loaded image url \(imageURL)")
 
     let (data, _) = try await URLSession.shared.data(for: URLRequest(url: imageURL as URL))
+    Log.d("got data for url \(imageURL)")
     if let image = NSImage(data: data) {
+        Log.d("got image for url \(imageURL)")
         return image
     } else {
         return nil
@@ -29,7 +32,6 @@ public func loadImage(fromFile filename: String) async throws -> NSImage? {
 public class PixelatedImage {
     let width: Int
     let height: Int
-    //let image: CGImage
     
     let rawImageData: Data
     
@@ -40,19 +42,65 @@ public class PixelatedImage {
     let bitmapInfo: CGBitmapInfo
 
     let pixelOffset: Int
+
+    let colorSpace: CGColorSpace // XXX why both space and name?
+    let colorSpaceName: CFString
+    let ciFormat: CIFormat    
     
     convenience init?(fromFile filename: String) async throws {
-        Log.d("Loading image from \(filename)")
-        if let nsImage = try await loadImage(fromFile: filename),
-           let cgImage = nsImage.cgImage(forProposedRect: nil, context: nil, hints: nil)
-        {
-            self.init(cgImage)
-        } else {
+        do {
+            Log.d("Loading image from \(filename)")
+            if let nsImage = try await loadImage(fromFile: filename) {
+                if let cgImage = nsImage.cgImage(forProposedRect: nil, context: nil, hints: nil) {
+                    Log.d("F-Int init from \(filename) with cgImage \(cgImage)")
+                    self.init(cgImage)
+                    //Log.w("WTF")
+                } else {
+                    //Log.w("SHIT")
+                    return nil
+                }
+            } else {
+                //Log.w("CAKES")
+                return nil
+            }
+        } catch {
+            Log.e("ERROR \(error)")
             return nil
         }
     }
     
+    init(width: Int,
+         height: Int,
+         rawImageData: Data,
+         bitsPerPixel: Int,
+         bytesPerRow: Int,
+         bitsPerComponent: Int,
+         bytesPerPixel: Int,
+         bitmapInfo: CGBitmapInfo,
+         pixelOffset: Int,
+         colorSpace: CGColorSpace,
+         colorSpaceName: CFString,
+         ciFormat: CIFormat)    
+    {
+        self.width = width
+        self.height = height
+        self.rawImageData = rawImageData
+        self.bitsPerPixel = bitsPerPixel
+        self.bytesPerRow = bytesPerRow
+        self.bitsPerComponent = bitsPerComponent
+        self.bytesPerPixel = bytesPerPixel
+        self.bitmapInfo = bitmapInfo
+        self.pixelOffset = pixelOffset
+        self.colorSpace = colorSpace
+        self.colorSpaceName = colorSpaceName
+                        // 
+
+        self.ciFormat = ciFormat
+                // CIFormat.L16 for 16 bit grayscale
+    }
+
     init?(_ image: CGImage) {
+        //Log.w("START")
         assert(image.colorSpace?.model == .rgb)
         //self.image = image // perhaps keeping the image around can help keep the raw data around?
         // doesn't seem so, still crashes :(
@@ -65,12 +113,20 @@ public class PixelatedImage {
         self.bitmapInfo = image.bitmapInfo
         self.pixelOffset = image.bitsPerPixel/image.bitsPerComponent
 
+        // XXX grab these from the image instead
+        self.colorSpace = CGColorSpaceCreateDeviceRGB()
+        self.colorSpaceName = CGColorSpace.sRGB
+        self.ciFormat = CIFormat.RGBA16 // support more later
+
+        //Log.w("MIDDLE?")
+
         if let data = image.dataProvider?.data as? Data {
             self.rawImageData = data
         } else {
             Log.e("DOH")
             return nil
         }
+        //Log.w("END")
     }
 
     func read(_ closure: (UnsafeBufferPointer<UInt16>) throws -> Void) throws {
@@ -99,76 +155,89 @@ public class PixelatedImage {
 
     public var baseImage: NSImage? {
         do {
-            if let base = try image(fromData: rawImageData) {
-                return NSImage(cgImage: base, size: .zero)
-            }
+            let base = try image(fromData: rawImageData) 
+            return NSImage(cgImage: base, size: .zero)
         } catch {
             Log.e("error \(error)")
         }
         return nil
     }
     
-    func image(fromData imageData: Data) throws -> CGImage? {
-        let colorSpace = CGColorSpaceCreateDeviceRGB()
+    func image(fromData imageData: Data) throws -> CGImage {
         if let dataProvider = CGDataProvider(data: imageData as CFData) {
-           return CGImage(width: width,
-                          height: height,
-                          bitsPerComponent: bitsPerComponent,
-                          bitsPerPixel: bytesPerPixel*8,
-                          bytesPerRow: width*bytesPerPixel,
-                          space: colorSpace,
-                          bitmapInfo: bitmapInfo,
-                          provider: dataProvider,
-                          decode: nil,
-                          shouldInterpolate: false,
-                          intent: .defaultIntent)
+            if let image = CGImage(width: width, 
+                                   height: height,
+                                   bitsPerComponent: bitsPerComponent,
+                                   bitsPerPixel: bytesPerPixel*8,
+                                   bytesPerRow: width*bytesPerPixel,
+                                   space: colorSpace,
+                                   bitmapInfo: bitmapInfo,
+                                   provider: dataProvider,
+                                   decode: nil,
+                                   shouldInterpolate: false,
+                                   intent: .defaultIntent)
+            {
+                return image
+            } else {
+                let message = "could not create CGImage from data"
+                Log.e(message)
+                throw message
+            }
         } else {
-            return nil          // doh
+            let message = "could not create CGImage with no data provider"
+            Log.e(message)
+            throw message
         }
     }
 
     func baseImage(ofSize size: NSSize, fromData imageData: Data) -> NSImage? {
         do {
-            if let newImage = try image(fromData: imageData) {
-                return NSImage(cgImage: newImage, size: size).resized(to: size)
-            }
+            let newImage = try image(fromData: imageData) 
+            return NSImage(cgImage: newImage, size: size).resized(to: size)
         } catch {
             Log.e("\(error)")
         }
         return nil
     }
     
+    // write out the base image data
+    func writeTIFFEncoding(toFilename imageFilename: String) throws {
+        try self.writeTIFFEncoding(ofData: self.rawImageData,
+                                   toFilename: imageFilename)
+    }
+
     // write out the given image data as a 16 bit tiff file to the given filename
     // used when modifying the invariant original image data, and saying the edits to a file
     // XXX make this async
-    func writeTIFFEncoding(ofData imageData: Data, toFilename imageFilename: String) throws {
+    func writeTIFFEncoding(ofData imageData: Data,
+                           toFilename imageFilename: String) throws
+    {
         if fileManager.fileExists(atPath: imageFilename) {
             Log.i("overwriting already existing filename \(imageFilename)")
             try fileManager.removeItem(atPath: imageFilename)
         }
         
         // create a CGImage from the data we just changed
-        if let newImage = try image(fromData: imageData) {
-            // save it
-            //Log.d("newImage \(newImage)")
+        let newImage = try image(fromData: imageData) 
+        // save it
+        //Log.d("newImage \(newImage)")
 
-            let context = CIContext()
-            let fileURL = NSURL(fileURLWithPath: imageFilename, isDirectory: false) as URL
-            let options: [CIImageRepresentationOption: CGFloat] = [:]
-            if let colorSpace = CGColorSpace(name: CGColorSpace.sRGB) {
-                let imgFormat = CIFormat.RGBA16
-
-                try context.writeTIFFRepresentation(
-                  of: CIImage(cgImage: newImage),
-                  to: fileURL,
-                  format: imgFormat,
-                  colorSpace: colorSpace,
-                  options: options
-                )
-                Log.i("image written to \(imageFilename)")
-            } else {
-                Log.d("FUCK")
-            }
+        let context = CIContext()
+        let fileURL = NSURL(fileURLWithPath: imageFilename, isDirectory: false) as URL
+        let options: [CIImageRepresentationOption: CGFloat] = [:]
+        if let colorSpace = CGColorSpace(name: colorSpaceName) {
+            try context.writeTIFFRepresentation(
+              of: CIImage(cgImage: newImage),
+              to: fileURL,
+              format: ciFormat,
+              colorSpace: colorSpace,
+              options: options
+            )
+            Log.i("image written to \(imageFilename)")
+        } else {
+            let message = "could not create colos space for image \(imageFilename)"
+            Log.e(message)
+            throw message
         }
     }
 }

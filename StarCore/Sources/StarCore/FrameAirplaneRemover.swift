@@ -523,7 +523,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                 Log.i("loaded \(String(describing: self.outlierGroups?.members.count)) outlier groups for frame \(frameIndex)")
             } else {
                 self.outlierGroups = OutlierGroups(frameIndex: frameIndex,
-                                                    members: [:])
+                                                   members: [:])
 
                 Log.i("calculating outlier groups for frame \(frameIndex)")
                 // find outlying bright pixels between frames,
@@ -602,6 +602,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         var outlierGroupList = [String?](repeating: nil, count: width*height)
         
         Log.i("frame \(frameIndex) finding outliers")
+        // XXX write this out as a 16 bit monochrome image
         var outlierAmountList = [UInt16](repeating: 0, count: width*height)
         // compare pixels at the same image location in adjecent frames
         // detect Outliers which are much more brighter than the adject frames
@@ -665,7 +666,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                                                         otherBlueDiff)))
                         }
                         // record the brightness change if it is brighter
-                        if maxBrightness > 0  {
+                        if maxBrightness > 0 {
                             outlierAmountList[y*width+x] = maxBrightness
                         }
                     }
@@ -888,6 +889,35 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                 }
             }
         }
+
+        // write out image of outlier amounts
+        if config.writeOutlierGroupFiles,
+           let outputDirname = self.outlierOutputDirname
+        {
+            // XXX make new state for this?
+            let imageData = outlierAmountList.withUnsafeBufferPointer { Data(buffer: $0)  }
+            
+            // XXX write out the outlierAmountList here
+            let outlierAmountImage = PixelatedImage(width: width,
+                                                    height: height,
+                                                    rawImageData: imageData,
+                                                    bitsPerPixel: 16,
+                                                    bytesPerRow: 2*width,
+                                                    bitsPerComponent: 16,
+                                                    bytesPerPixel: 2,
+                                                    bitmapInfo: .byteOrderDefault,
+                                                    pixelOffset: 0,
+                                                    colorSpace: CGColorSpaceCreateDeviceGray(),
+                                                    colorSpaceName: CGColorSpace.linearGray,
+                                                    ciFormat: .L16)
+            do {
+                let filename = "\(outputDirname)/\(baseName)"
+                try outlierAmountImage.writeTIFFEncoding(toFilename: filename)
+            } catch {
+                Log.e("can't write image: \(error)")
+            }
+        }
+
         self.state = .readyForInterFrameProcessing
         Log.i("frame \(frameIndex) has found \(String(describing: outlierGroups?.members.count)) outlier groups to consider")
     }
@@ -1026,7 +1056,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         // write out a preview of the processed file
         if config.writeFrameProcessedPreviewFiles {
             if let processedPreviewImage = image.baseImage(ofSize: self.previewSize,
-                                                      fromData: outputData),
+                                                           fromData: outputData),
                let imageData = processedPreviewImage.jpegData,
                let filename = self.processedPreviewFilename
             {
@@ -1109,8 +1139,10 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         Log.d("frame \(self.frameIndex) writing output files")
         self.state = .writingOutputFile
         
+        Log.d("frame \(self.frameIndex) writing processed preview")
         self.writeProcssedPreview(image, with: outputData)
 
+        Log.d("frame \(self.frameIndex) writing full processed frame")
         // write frame out as a tiff file after processing it
         try image.writeTIFFEncoding(ofData: outputData,  toFilename: self.outputFilename)
         self.state = .complete
