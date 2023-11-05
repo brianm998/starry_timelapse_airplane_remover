@@ -729,7 +729,6 @@ public extension ViewModel {
 
             if showFullResolution &&
                self.currentFrameImageIndex == newFrameView.frameIndex &&
-               self.currentFrameImageViewMode == self.frameViewMode &&
                !self.currentFrameImageWasPreview
             {
                 // showing the preview in this case causes flickering
