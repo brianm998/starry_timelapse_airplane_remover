@@ -105,7 +105,13 @@ public class FrameAirplaneRemover: Equatable, Hashable {
     public let processedPreviewOutputDirname: String?
     public let thumbnailOutputDirname: String?
     public let starAlignedSequenceDirname: String
+    public var starAlignedSequenceFilename: String {
+        "\(starAlignedSequenceDirname)/\(baseName)"
+    }
     public let alignedSubtractedDirname: String
+    public var alignedSubtractedFilename: String {
+        "\(alignedSubtractedDirname)/\(baseName)"
+    }
     
     // populated by pruning
     public var outlierGroups: OutlierGroups?
@@ -579,29 +585,22 @@ public class FrameAirplaneRemover: Equatable, Hashable {
             }
         } 
     }
-    
-    // this is still a slow part of the process, but is now about 10x faster than before
-    func findOutliers() async throws {
 
-        Log.d("frame \(frameIndex) finding outliers)")
-        
+    private func subtractAlignedImageFromFrame() async throws -> [UInt16] {
         self.state = .loadingImages
         
         let image = try await imageSequence.getImage(withName: imageSequence.filenames[frameIndex]).image()
 
         // use star aligned image
-        let otherFrame = try await imageSequence.getImage(withName: "\(starAlignedSequenceDirname)/\(baseName)").image()
+        let otherFrame = try await imageSequence.getImage(withName: starAlignedSequenceFilename).image()
 
         self.state = .detectingOutliers
         
         // need to have the OutlierGroup class contain a mini version of this for each one
         
-        // one dimentional array mirroring pixels indexed by y*width + x
-        var outlierGroupList = [String?](repeating: nil, count: width*height)
-        
         Log.i("frame \(frameIndex) finding outliers")
         // XXX write this out as a 16 bit monochrome image
-        var outlierAmountList = [UInt16](repeating: 0, count: width*height)
+        var subtractionArray = [UInt16](repeating: 0, count: width*height)
         // compare pixels at the same image location in adjecent frames
         // detect Outliers which are much more brighter than the adject frames
         let origData = image.rawImageData
@@ -619,9 +618,6 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                   unsafeRawPointer1.bindMemory(to: UInt16.self)
 
                 for y in 0 ..< height {
-                    if y != 0 && y % 1000 == 0 {
-                        Log.d("frame \(frameIndex) detected outliers in \(y) rows")
-                    }
                     for x in 0 ..< width {
                         let origOffset = (y * width*image.pixelOffset) +
                                          (x * image.pixelOffset)
@@ -652,7 +648,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                         }
                         // record the brightness change if it is brighter
                         if maxBrightness > 0 {
-                            outlierAmountList[y*width+x] = UInt16(maxBrightness/3)
+                            subtractionArray[y*width+x] = UInt16(maxBrightness/3)
                         }
                     }
                 }
@@ -661,7 +657,34 @@ public class FrameAirplaneRemover: Equatable, Hashable {
 
         if config.writeOutlierGroupFiles {
             // write out image of outlier amounts
-            saveSubtractionImage(outlierAmountList)
+            do {
+                try saveSubtractionImage(subtractionArray)
+                Log.d("frame \(frameIndex) saved subtraction image")
+            } catch {
+                Log.e("can't write subtraction image: \(error)")
+            }
+        }
+        
+        return subtractionArray
+    }
+    
+    // this is still a slow part of the process, but is now about 10x faster than before
+    func findOutliers() async throws {
+
+        Log.d("frame \(frameIndex) finding outliers)")
+
+        // contains the difference in brightness between the frame being processed
+        // and its aligned neighbor frame.  Indexed by y * width + x
+        var subtractionArray: [UInt16] = []
+        
+        do {
+            // try to load the image subtraction from a pre-processed file
+            subtractionArray = try await PixelatedImage.loadUInt16Array(from: alignedSubtractedFilename)
+            Log.d("frame \(frameIndex) loaded outlier amounts from subtraction image")
+        } catch {
+            Log.i("frame \(frameIndex) couldn't load outlier amounts from subtraction image")
+            // do the image subtraction ourselves as a backup
+            subtractionArray = try await self.subtractAlignedImageFromFrame()
         }
 
         self.state = .detectingOutliers1
@@ -701,10 +724,13 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         let sequenceResolution = Double(width) * Double(height)
         let minGroupSize = Int(Double(config.minGroupSize)*sequenceResolution/twelveMegapixels)
 
+        // one dimentional array mirroring pixels indexed by y*width + x
+        var outlierGroupList = [String?](repeating: nil, count: width*height)
+
         Log.d("using minGroupSize \(minGroupSize)")
         
         // then label all adject outliers
-        for (index, outlierAmount) in outlierAmountList.enumerated() {
+        for (index, outlierAmount) in subtractionArray.enumerated() {
             
             if outlierAmount <= config.maxPixelDistance { continue }
             
@@ -744,7 +770,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                     
                     if outlierX > 0 { // add left neighbor
                         let leftNeighborIndex = outlierY * width + outlierX - 1
-                        let leftNeighborAmount = outlierAmountList[leftNeighborIndex]
+                        let leftNeighborAmount = subtractionArray[leftNeighborIndex]
                         if leftNeighborAmount > config.minPixelDistance,
                            outlierGroupList[leftNeighborIndex] == nil
                         {
@@ -756,7 +782,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                     
                     if outlierX < width - 1 { // add right neighbor
                         let rightNeighborIndex = outlierY * width + outlierX + 1
-                        let rightNeighborAmount = outlierAmountList[rightNeighborIndex]
+                        let rightNeighborAmount = subtractionArray[rightNeighborIndex]
                         if rightNeighborAmount > config.minPixelDistance,
                            outlierGroupList[rightNeighborIndex] == nil
                         {
@@ -768,7 +794,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                     
                     if outlierY > 0 { // add top neighbor
                         let topNeighborIndex = (outlierY - 1) * width + outlierX
-                        let topNeighborAmount = outlierAmountList[topNeighborIndex]
+                        let topNeighborAmount = subtractionArray[topNeighborIndex]
                         if topNeighborAmount > config.minPixelDistance,
                            outlierGroupList[topNeighborIndex] == nil
                         {
@@ -780,7 +806,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                     
                     if outlierY < height - 1 { // add bottom neighbor
                         let bottomNeighborIndex = (outlierY + 1) * width + outlierX
-                        let bottomNeighborAmount = outlierAmountList[bottomNeighborIndex]
+                        let bottomNeighborAmount = subtractionArray[bottomNeighborIndex]
                         if bottomNeighborAmount > config.minPixelDistance,
                            outlierGroupList[bottomNeighborIndex] == nil
                         {
@@ -814,7 +840,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
             for y in 0 ..< height {
                 let index = y*width+x
                 if let group = outlierGroupList[index] {
-                    let amount = UInt(outlierAmountList[index])
+                    let amount = UInt(subtractionArray[index])
                     if let info = groupInfo[group] {
                         info.process(x: x, y: y, amount: amount)
                     } else {
@@ -857,7 +883,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                         if let pixelGroupName = outlierGroupList[index],
                            pixelGroupName == groupName
                         {
-                            let pixelAmount = outlierAmountList[index]
+                            let pixelAmount = subtractionArray[index]
                             let idx = (y-minY) * boundingBox.width + (x-minX)
                             outlierAmounts[idx] = pixelAmount
                             if pixelAmount > maxDiff { maxDiff = pixelAmount }
@@ -884,11 +910,11 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         Log.i("frame \(frameIndex) has found \(String(describing: outlierGroups?.members.count)) outlier groups to consider")
     }
 
-    private func saveSubtractionImage(_ outlierAmountList: [UInt16]) {
+    private func saveSubtractionImage(_ subtractionArray: [UInt16]) throws {
         // XXX make new state for this?
-        let imageData = outlierAmountList.withUnsafeBufferPointer { Data(buffer: $0)  }
-        
-        // write out the outlierAmountList here as an image
+        let imageData = subtractionArray.withUnsafeBufferPointer { Data(buffer: $0)  }
+
+        // write out the subtractionArray here as an image
         let outlierAmountImage = PixelatedImage(width: width,
                                                 height: height,
                                                 rawImageData: imageData,
@@ -896,16 +922,11 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                                                 bytesPerRow: 2*width,
                                                 bitsPerComponent: 16,
                                                 bytesPerPixel: 2,
-                                                bitmapInfo: .byteOrder16Little, // XXX not sure why this has to be little 
+                                                bitmapInfo: .byteOrder16Little, 
                                                 pixelOffset: 0,
                                                 colorSpace: CGColorSpaceCreateDeviceGray(),
                                                 ciFormat: .L16)
-        do {
-            let filename = "\(self.alignedSubtractedDirname)/\(baseName)"
-            try outlierAmountImage.writeTIFFEncoding(toFilename: filename)
-        } catch {
-            Log.e("can't write image: \(error)")
-        }
+        try outlierAmountImage.writeTIFFEncoding(toFilename: alignedSubtractedFilename)
     }
     
     public func pixelatedImage() async throws -> PixelatedImage? {
@@ -1100,7 +1121,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         
 
         // use star aligned image
-        let otherFrame = try await imageSequence.getImage(withName: "\(starAlignedSequenceDirname)/\(baseName)").image()
+        let otherFrame = try await imageSequence.getImage(withName: starAlignedSequenceFilename).image()
 
         let _data = image.rawImageData
         

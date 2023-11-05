@@ -235,6 +235,14 @@ public struct PixelatedImage {
         )
         Log.i("image written to \(imageFilename)")
     }
+
+    static func loadUInt16Array(from imageFilename: String) async throws -> [UInt16] {
+        // for some reason, these values are all one less from what was initially saved
+        if let image = try await PixelatedImage(fromFile: imageFilename) {
+            return image.rawImageData.uInt16Array
+        }
+        throw "could not load image for \(imageFilename)"
+    }
 }
 
 extension NSImage {
@@ -274,6 +282,11 @@ public extension NSImage {
         }
         return nil
     }
+}
+
+extension ContiguousBytes {
+    func objects<T>() -> [T] { withUnsafeBytes { .init($0.bindMemory(to: T.self)) } }
+    var uInt16Array: [UInt16] { objects() }
 }
 
 fileprivate let fileManager = FileManager.default
