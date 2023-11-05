@@ -961,6 +961,11 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         let name = imageSequence.filenames[frameIndex]
         return try await imageSequence.getImage(withName: name).image().baseImage
     }
+
+    public func baseSubtractedImage() async throws -> NSImage? {
+        let name = self.alignedSubtractedFilename
+        return try await imageSequence.getImage(withName: name).image().baseImage
+    }
     
     public func baseOutputImage() async throws -> NSImage? {
         let name = self.outputFilename

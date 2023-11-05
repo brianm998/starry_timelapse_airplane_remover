@@ -11,6 +11,7 @@ public enum VideoPlayMode: String, Equatable, CaseIterable {
 
 public enum FrameViewMode: String, Equatable, CaseIterable {
     case original
+    case subtraction
     case processed
 
     var localizedName: LocalizedStringKey {
@@ -237,7 +238,13 @@ public final class ViewModel: ObservableObject {
             // load the view frames from the main image
             
             // look for saved versions of these
-
+            if let subtractionPreviewImage = NSImage(contentsOf: URL(fileURLWithPath: frame.alignedSubtractedPreviewFilename))
+            {
+                Log.d("loaded subtraction preview for self.frames[\(frame.frameIndex)] from jpeg")
+                let viewImage = Image(nsImage: subtractionPreviewImage).resizable()
+                self.frames[frame.frameIndex].subtractionPreviewImage = viewImage
+            }
+            
             if let processedPreviewFilename = frame.processedPreviewFilename,
                let processedPreviewImage = NSImage(contentsOf: URL(fileURLWithPath: processedPreviewFilename))
             {
@@ -736,9 +743,11 @@ public extension ViewModel {
 
                 switch self.frameViewMode {
                 case .original:
-                    self.currentFrameImage = newFrameView.previewImage//.resizable()
+                    self.currentFrameImage = newFrameView.previewImage
+                case .subtraction:
+                    self.currentFrameImage = newFrameView.subtractionPreviewImage
                 case .processed:
-                    self.currentFrameImage = newFrameView.processedPreviewImage//.resizable()
+                    self.currentFrameImage = newFrameView.processedPreviewImage
                 }
             }
             if showFullResolution {
@@ -752,6 +761,12 @@ public extension ViewModel {
                             switch self.frameViewMode {
                             case .original:
                                 if let baseImage = try await nextFrame.baseImage() {
+                                    if nextFrame.frameIndex == self.currentIndex {
+                                        self.currentFrameImage = Image(nsImage: baseImage)
+                                    }
+                                }
+                            case .subtraction:
+                                if let baseImage = try await nextFrame.baseSubtractedImage() {
                                     if nextFrame.frameIndex == self.currentIndex {
                                         self.currentFrameImage = Image(nsImage: baseImage)
                                     }
@@ -911,64 +926,42 @@ public extension ViewModel {
             Log.d("playing @ \(self.videoPlaybackFramerate) fps")
             currentVideoFrame = self.currentIndex
 
-            switch self.frameViewMode {
-            case .original:
-                videoPlayTimer = Timer.scheduledTimer(withTimeInterval: 1/Double(self.videoPlaybackFramerate),
-                                                        repeats: true) { timer in
-                    let currentIdx = currentVideoFrame
+            videoPlayTimer = Timer.scheduledTimer(withTimeInterval: 1/Double(self.videoPlaybackFramerate),
+                                                  repeats: true) { timer in
+                let currentIdx = currentVideoFrame
+                // play each frame of the video in sequence
+                if currentIdx >= self.frames.count ||
+                     currentIdx < 0
+                {
+                    self.stopVideo(scroller)
+                } else {
                     // play each frame of the video in sequence
-                    if currentIdx >= self.frames.count ||
-                         currentIdx < 0
-                    {
-                        self.stopVideo(scroller)
-                    } else {
-
-                        // play each frame of the video in sequence
+                    switch self.frameViewMode {
+                    case .original:
                         self.currentFrameImage =
                           self.frames[currentIdx].previewImage
-
-                        switch self.videoPlayMode {
-                        case .forward:
-                            currentVideoFrame = currentIdx + 1
-
-                        case .reverse:
-                            currentVideoFrame = currentIdx - 1
-                        }
                         
-                        if currentVideoFrame >= self.frames.count {
-                            self.stopVideo(scroller)
-                        } else {
-                            self.sliderValue = Double(currentIdx)
-                        }
-                    }
-                }
-            case .processed:
-                videoPlayTimer = Timer.scheduledTimer(withTimeInterval: 1/Double(self.videoPlaybackFramerate),
-                                                        repeats: true) { timer in
-
-                    let currentIdx = currentVideoFrame
-                    // play each frame of the video in sequence
-                    if currentIdx >= self.frames.count ||
-                       currentIdx < 0
-                    {
-                        self.stopVideo(scroller)
-                    } else {
+                    case .subtraction:
+                        self.currentFrameImage =
+                          self.frames[currentIdx].subtractionPreviewImage
+                        
+                    case .processed:
                         self.currentFrameImage =
                           self.frames[currentIdx].processedPreviewImage
-
-                        switch self.videoPlayMode {
-                        case .forward:
-                            currentVideoFrame = currentIdx + 1
-
-                        case .reverse:
-                            currentVideoFrame = currentIdx - 1
-                        }
+                    }
+                    
+                    switch self.videoPlayMode {
+                    case .forward:
+                        currentVideoFrame = currentIdx + 1
                         
-                        if currentVideoFrame >= self.frames.count {
-                            self.stopVideo(scroller)
-                        } else {
-                            self.sliderValue = Double(currentIdx)
-                        }
+                    case .reverse:
+                        currentVideoFrame = currentIdx - 1
+                    }
+                    
+                    if currentVideoFrame >= self.frames.count {
+                        self.stopVideo(scroller)
+                    } else {
+                        self.sliderValue = Double(currentIdx)
                     }
                 }
             }

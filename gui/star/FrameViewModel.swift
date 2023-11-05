@@ -78,6 +78,7 @@ public class FrameViewModel: ObservableObject {
     @Published var thumbnailImage: Image = initialImage
     @Published var previewImage: Image = initialImage
     @Published var processedPreviewImage: Image = initialImage
+    @Published var subtractionPreviewImage: Image = initialImage
 
     public func update() {
         self.objectWillChange.send()

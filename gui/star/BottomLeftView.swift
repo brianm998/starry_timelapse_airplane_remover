@@ -58,7 +58,7 @@ struct BottomLeftView: View {
                 GridRow {
                     Text("I will see")
                       .gridColumnAlignment(.trailing) 
-
+                    
                     Picker("", selection: $viewModel.frameViewMode) {
                         ForEach(FrameViewMode.allCases, id: \.self) { value in
                             Text(value.localizedName).tag(value)
@@ -69,7 +69,7 @@ struct BottomLeftView: View {
                               Show each frame as either the original   
                               or with star processing applied.
                               """)
-                      .frame(width: pickerWidth)
+                      .frame(width: 220)
                       .help("show original or processed frame")
                       .onChange(of: viewModel.frameViewMode) { pick in
                           Log.d("pick \(pick)")
