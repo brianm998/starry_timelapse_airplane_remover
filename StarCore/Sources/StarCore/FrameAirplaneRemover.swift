@@ -1003,36 +1003,91 @@ public class FrameAirplaneRemover: Equatable, Hashable {
             return
         }
 
+        // XXX make this a paramater further out
+        // the amount of fuzz we apply around the edges
+        let borderFuzzAmount: Double = 8
+        let borderFuzzInnerStrength: Double = 2 // where the fade of the fuzz begins
+        let maxDistance = Double(width)*Double(height)
+        
         for (_, group) in outlierGroups.members {
             if let reason = group.shouldPaint {
                 if reason.willPaint {
                     Log.d("frame \(frameIndex) painting over group \(group) for reason \(reason)")
                     //let x = index % width;
                     //let y = index / width;
-                    for x in group.bounds.min.x ... group.bounds.max.x {
-                        for y in group.bounds.min.y ... group.bounds.max.y {
+
+                    // XXX somehow figure out how to do a border of X pixels
+                    // this logic has obvious marks on the edges a lot
+                    let intBorderFuzzAmount = Int(borderFuzzAmount)
+                    var searchMinX = group.bounds.min.x - intBorderFuzzAmount 
+                    var searchMaxX = group.bounds.max.x + intBorderFuzzAmount 
+                    var searchMinY = group.bounds.min.y - intBorderFuzzAmount 
+                    var searchMaxY = group.bounds.max.y + intBorderFuzzAmount 
+                    if searchMinX < 0 { searchMinX = 0 }
+                    if searchMaxX > width - 1 { searchMaxX = width - 1 }
+                    if searchMinY < 0 { searchMinY = 0 }
+                    if searchMaxY > height - 1 { searchMaxY = height - 1 }
+                    
+                    for x in searchMinX ... searchMaxX {
+                        for y in searchMinY ... searchMaxY {
                             let pixelIndex = (y - group.bounds.min.y)*group.bounds.width + (x - group.bounds.min.x)
-                            if group.pixels[pixelIndex] != 0 {
-                                
-                                let pixelAmount = group.pixels[pixelIndex]
-                                
-                                var alpha: Double = 0
-                                
-                                if pixelAmount > config.maxPixelDistance {
-                                    alpha = 1
-                                } else if pixelAmount < config.minPixelDistance {
-                                    alpha = 0
-                                } else {
-                                    alpha = Double(UInt16(pixelAmount) - config.minPixelDistance) /
-                                      Double(config.maxPixelDistance - config.minPixelDistance)
+                            if pixelIndex < 0 || pixelIndex >= group.pixels.count { continue }
+                            
+                            let pixelAmount = group.pixels[pixelIndex]
+                            
+                            if pixelAmount == 0 {
+                                // here check distance to a non-zero pixel and maybe paint
+                                var shouldPaint = false
+                                var minDistance: Double = maxDistance
+                                for fuzzX in x - intBorderFuzzAmount ..< x + intBorderFuzzAmount {
+                                    if fuzzX < 0 { continue }
+                                    if fuzzX >= width { continue }
+                                    for fuzzY in y - intBorderFuzzAmount ..< y + intBorderFuzzAmount {
+                                        if fuzzY < 0 { continue }
+                                        if fuzzY >= height { continue }
+
+                                        let fuzzPixelIndex = (fuzzY - group.bounds.min.y)*group.bounds.width + (fuzzX - group.bounds.min.x)
+                                        
+                                        if fuzzPixelIndex < 0 ||
+                                           fuzzPixelIndex >= group.pixels.count { continue }
+                                        
+                                        let fuzzAmount = group.pixels[fuzzPixelIndex]
+
+                                        if fuzzAmount == 0 { continue }
+
+                                        let distX = Double(abs(x - fuzzX))
+                                        let distY = Double(abs(y - fuzzY))
+                                        let hypoDist = sqrt(distX*distX+distY*distY)
+
+                                        if hypoDist < borderFuzzAmount,
+                                           hypoDist < minDistance
+                                        {
+                                            minDistance = hypoDist
+                                            shouldPaint = true
+                                        }
+                                    }
                                 }
-                                
-                                if alpha > 0 {
-                                    paint(x: x, y: y, why: reason, alpha: alpha,
-                                          toData: &data,
-                                          image: image,
-                                          otherFrame: otherFrame)
+                                if shouldPaint {
+                                    var alpha: Double = 0
+                                    if minDistance - borderFuzzAmount <= borderFuzzInnerStrength {
+                                        alpha = 1
+                                    } else {
+                                        alpha = (minDistance - borderFuzzAmount) / (borderFuzzInnerStrength - borderFuzzAmount)
+                                    }
+                                    if alpha > 0 {
+                                        paint(x: x, y: y, why: reason, alpha: alpha,
+                                              toData: &data,
+                                              image: image,
+                                              otherFrame: otherFrame)
+                                    }
+
                                 }
+                            } else {
+                                // paint fully over the marked pixels
+                                paint(x: x, y: y, why: reason, alpha: 1,
+                                      toData: &data,
+                                      image: image,
+                                      otherFrame: otherFrame)
                             }
                         }
                     }
