@@ -40,6 +40,9 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
 
     // where the star aligned images live
     let starAlignedSequenceDirname: String
+
+    // where images recording the difference between each frame and its aligned frame
+    let alignedSubtractedDirname: String
     
     public var finalProcessor: FinalProcessor?    
 
@@ -75,6 +78,8 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
 
         // alignment doesn't change across versions, omit that from the dirname
         starAlignedSequenceDirname = "\(config.outputPath)/\(config.imageSequenceDirname)-star-aligned"
+
+        alignedSubtractedDirname = "\(config.outputPath)/\(config.imageSequenceDirname)-star-aligned-subtracted"
         
         try super.init(imageSequenceDirname: "\(config.imageSequencePath)/\(config.imageSequenceDirname)",
                        outputDirname: "\(config.outputPath)/\(basename)",
@@ -164,11 +169,16 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
                 Log.d("first frame to get sizes: imageWidth \(String(describing: imageWidth)) imageHeight \(String(describing: imageHeight)) imageBytesPerPixel \(String(describing: imageBytesPerPixel))")
             } catch {
                 Log.e("first frame to get size: \(error)")
+                throw("Could not load first image to get sequence resolution")
+                // XXX this should be fatal
             }
         }
         // where we keep aligned images
         try mkdir(starAlignedSequenceDirname)
 
+        // where we keep the diff between each frame and its alignment frame
+        try mkdir(alignedSubtractedDirname)
+        
         if config.writeOutlierGroupFiles {
             // doesn't do mkdir -p, if a base dir is missing it just hangs :(
             try mkdir(outlierOutputDirname) // XXX this can fail silently and pause the whole process :(
@@ -281,6 +291,7 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
                                               processedPreviewOutputDirname: processedPreviewOutputDirname,
                                               thumbnailOutputDirname: thumbnailOutputDirname,
                                               starAlignedSequenceDirname: starAlignedSequenceDirname,
+                                              alignedSubtractedDirname: alignedSubtractedDirname,
                                               outlierGroupLoader: loadOutliersFromFile,
                                               fullyProcess: fullyProcess,
                                               writeOutputFiles: writeOutputFiles)

@@ -105,6 +105,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
     public let processedPreviewOutputDirname: String?
     public let thumbnailOutputDirname: String?
     public let starAlignedSequenceDirname: String
+    public let alignedSubtractedDirname: String
     
     // populated by pruning
     public var outlierGroups: OutlierGroups?
@@ -435,6 +436,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
          processedPreviewOutputDirname: String?,
          thumbnailOutputDirname: String?,
          starAlignedSequenceDirname: String,
+         alignedSubtractedDirname: String,
          outlierGroupLoader: @escaping () async -> OutlierGroups?,
          fullyProcess: Bool = true,
          writeOutputFiles: Bool = true) async throws
@@ -445,10 +447,6 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         self.baseName = baseName
         self.callbacks = callbacks
         self.outlierGroupLoader = outlierGroupLoader
-        
-        // XXX this is now only used here for getting the image width, height and bpp
-        // XXX this is a waste time
-        //let image = try await imageSequence.getImage(withName: imageSequence.filenames[frameIndex]).image()
         self.imageSequence = imageSequence
         self.frameIndex = frameIndex // frame index in the image sequence
         self.outputFilename = outputFilename
@@ -458,6 +456,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         self.processedPreviewOutputDirname = processedPreviewOutputDirname
         self.thumbnailOutputDirname = thumbnailOutputDirname
         self.starAlignedSequenceDirname = starAlignedSequenceDirname
+        self.alignedSubtractedDirname = alignedSubtractedDirname
         self.width = width
         self.height = height
 
@@ -590,7 +589,6 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         
         let image = try await imageSequence.getImage(withName: imageSequence.filenames[frameIndex]).image()
 
-
         // use star aligned image
         let otherFrame = try await imageSequence.getImage(withName: "\(starAlignedSequenceDirname)/\(baseName)").image()
 
@@ -639,7 +637,6 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                             // these crop up in the star alignment images
                             // there is nothing to copy from these pixels
                         } else {
-
                             // rgb values of the image we're modifying at this x,y
                             let origRed = Int32(origImagePixels[origOffset])
                             let origGreen = Int32(origImagePixels[origOffset+1])
@@ -660,6 +657,11 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                     }
                 }
             }
+        }
+
+        if config.writeOutlierGroupFiles {
+            // write out image of outlier amounts
+            saveSubtractionImage(outlierAmountList)
         }
 
         self.state = .detectingOutliers1
@@ -878,38 +880,34 @@ public class FrameAirplaneRemover: Equatable, Hashable {
             }
         }
 
-        // write out image of outlier amounts
-        if config.writeOutlierGroupFiles,
-           let outputDirname = self.outlierOutputDirname
-        {
-            // XXX make new state for this?
-            let imageData = outlierAmountList.withUnsafeBufferPointer { Data(buffer: $0)  }
-            
-            // write out the outlierAmountList here as an image
-            let outlierAmountImage = PixelatedImage(width: width,
-                                                    height: height,
-                                                    rawImageData: imageData,
-                                                    bitsPerPixel: 16,
-                                                    bytesPerRow: 2*width,
-                                                    bitsPerComponent: 16,
-                                                    bytesPerPixel: 2,
-                                                    bitmapInfo: .byteOrder16Little, // XXX not sure why this has to be little 
-                                                    pixelOffset: 0,
-                                                    colorSpace: CGColorSpaceCreateDeviceGray(),
-                                                    colorSpaceName: CGColorSpace.linearGray,
-                                                    ciFormat: .L16)
-            do {
-                let filename = "\(outputDirname)/\(baseName)"
-                try outlierAmountImage.writeTIFFEncoding(toFilename: filename)
-            } catch {
-                Log.e("can't write image: \(error)")
-            }
-        }
-
         self.state = .readyForInterFrameProcessing
         Log.i("frame \(frameIndex) has found \(String(describing: outlierGroups?.members.count)) outlier groups to consider")
     }
 
+    private func saveSubtractionImage(_ outlierAmountList: [UInt16]) {
+        // XXX make new state for this?
+        let imageData = outlierAmountList.withUnsafeBufferPointer { Data(buffer: $0)  }
+        
+        // write out the outlierAmountList here as an image
+        let outlierAmountImage = PixelatedImage(width: width,
+                                                height: height,
+                                                rawImageData: imageData,
+                                                bitsPerPixel: 16,
+                                                bytesPerRow: 2*width,
+                                                bitsPerComponent: 16,
+                                                bytesPerPixel: 2,
+                                                bitmapInfo: .byteOrder16Little, // XXX not sure why this has to be little 
+                                                pixelOffset: 0,
+                                                colorSpace: CGColorSpaceCreateDeviceGray(),
+                                                ciFormat: .L16)
+        do {
+            let filename = "\(self.alignedSubtractedDirname)/\(baseName)"
+            try outlierAmountImage.writeTIFFEncoding(toFilename: filename)
+        } catch {
+            Log.e("can't write image: \(error)")
+        }
+    }
+    
     public func pixelatedImage() async throws -> PixelatedImage? {
         let name = imageSequence.filenames[frameIndex]
         return try await imageSequence.getImage(withName: name).image()

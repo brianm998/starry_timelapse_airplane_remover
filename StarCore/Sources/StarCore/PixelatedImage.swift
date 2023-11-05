@@ -29,7 +29,7 @@ public func loadImage(fromFile filename: String) async throws -> NSImage? {
     }
 }
 
-public class PixelatedImage {
+public struct PixelatedImage {
     let width: Int
     let height: Int
     
@@ -44,27 +44,21 @@ public class PixelatedImage {
     let pixelOffset: Int
 
     let colorSpace: CGColorSpace // XXX why both space and name?
-    let colorSpaceName: CFString
-    let ciFormat: CIFormat    
+    let ciFormat: CIFormat    // used to write tiff formats properly
     
-    convenience init?(fromFile filename: String) async throws {
-        do {
-            Log.d("Loading image from \(filename)")
-            if let nsImage = try await loadImage(fromFile: filename) {
-                if let cgImage = nsImage.cgImage(forProposedRect: nil, context: nil, hints: nil) {
-                    Log.d("F-Int init from \(filename) with cgImage \(cgImage)")
-                    self.init(cgImage)
-                    //Log.w("WTF")
-                } else {
-                    //Log.w("SHIT")
-                    return nil
-                }
+    init?(fromFile filename: String) async throws {
+        Log.d("Loading image from \(filename)")
+        if let nsImage = try await loadImage(fromFile: filename) {
+            if let cgImage = nsImage.cgImage(forProposedRect: nil, context: nil, hints: nil) {
+                Log.d("F-Int init from \(filename) with cgImage \(cgImage)")
+                self.init(cgImage)
+                //Log.w("WTF")
             } else {
-                //Log.w("CAKES")
+                //Log.w("SHIT")
                 return nil
             }
-        } catch {
-            Log.e("ERROR \(error)")
+        } else {
+            //Log.w("CAKES")
             return nil
         }
     }
@@ -79,7 +73,6 @@ public class PixelatedImage {
          bitmapInfo: CGBitmapInfo,
          pixelOffset: Int,
          colorSpace: CGColorSpace,
-         colorSpaceName: CFString,
          ciFormat: CIFormat)    
     {
         self.width = width
@@ -92,18 +85,12 @@ public class PixelatedImage {
         self.bitmapInfo = bitmapInfo
         self.pixelOffset = pixelOffset
         self.colorSpace = colorSpace
-        self.colorSpaceName = colorSpaceName
-                        // 
-
         self.ciFormat = ciFormat
-                // CIFormat.L16 for 16 bit grayscale
     }
 
     init?(_ image: CGImage) {
         //Log.w("START")
-        assert(image.colorSpace?.model == .rgb)
-        //self.image = image // perhaps keeping the image around can help keep the raw data around?
-        // doesn't seem so, still crashes :(
+        // assert(image.colorSpace?.model == .rgb)
         self.width = image.width
         self.height = image.height
         self.bitsPerPixel = image.bitsPerPixel
@@ -112,13 +99,27 @@ public class PixelatedImage {
         self.bytesPerPixel = self.bitsPerPixel / 8
         self.bitmapInfo = image.bitmapInfo
         self.pixelOffset = image.bitsPerPixel/image.bitsPerComponent
-
-        // XXX grab these from the image instead
-        self.colorSpace = CGColorSpaceCreateDeviceRGB()
-        self.colorSpaceName = CGColorSpace.sRGB
-        self.ciFormat = CIFormat.RGBA16 // support more later
-
-        //Log.w("MIDDLE?")
+        self.colorSpace = image.colorSpace ?? CGColorSpaceCreateDeviceRGB()
+        let numComponentsPerPixel = image.bitsPerPixel / image.bitsPerComponent
+        if numComponentsPerPixel == 1 {
+            if bitsPerPixel == 8 {
+                self.ciFormat = CIFormat.L8
+            } else if bitsPerPixel == 16 {
+                self.ciFormat = CIFormat.L16
+            } else {
+                self.ciFormat = CIFormat.RGBA16
+            }
+        } else if numComponentsPerPixel == 4 {
+            if bitsPerPixel == 8 {
+                self.ciFormat = CIFormat.RGBA8
+            } else if bitsPerPixel == 16 {
+                self.ciFormat = CIFormat.RGBA16
+            } else {
+                self.ciFormat = CIFormat.RGBA16
+            }
+        } else {
+            self.ciFormat = CIFormat.RGBA16
+        }
 
         if let data = image.dataProvider?.data as? Data {
             self.rawImageData = data
@@ -126,7 +127,6 @@ public class PixelatedImage {
             Log.e("DOH")
             return nil
         }
-        //Log.w("END")
     }
 
     func read(_ closure: (UnsafeBufferPointer<UInt16>) throws -> Void) throws {
@@ -225,20 +225,15 @@ public class PixelatedImage {
         let context = CIContext()
         let fileURL = NSURL(fileURLWithPath: imageFilename, isDirectory: false) as URL
         let options: [CIImageRepresentationOption: CGFloat] = [:]
-        if let colorSpace = CGColorSpace(name: colorSpaceName) {
-            try context.writeTIFFRepresentation(
-              of: CIImage(cgImage: newImage),
-              to: fileURL,
-              format: ciFormat,
-              colorSpace: colorSpace,
-              options: options
-            )
-            Log.i("image written to \(imageFilename)")
-        } else {
-            let message = "could not create colos space for image \(imageFilename)"
-            Log.e(message)
-            throw message
-        }
+
+        try context.writeTIFFRepresentation(
+          of: CIImage(cgImage: newImage),
+          to: fileURL,
+          format: ciFormat,
+          colorSpace: colorSpace,
+          options: options
+        )
+        Log.i("image written to \(imageFilename)")
     }
 }
 
