@@ -88,17 +88,17 @@ public class FrameAirplaneRemover: Equatable, Hashable {
 
     public func processingState() -> FrameProcessingState { return state }
     
-    nonisolated public func hash(into hasher: inout Hasher) {
+    public func hash(into hasher: inout Hasher) {
         hasher.combine(frameIndex)
     }
     
     func set(state: FrameProcessingState) { self.state = state }
     
-    nonisolated public let width: Int
-    nonisolated public let height: Int
+    public let width: Int
+    public let height: Int
     public let bytesPerPixel: Int
     public let bytesPerRow: Int
-    nonisolated public let frameIndex: Int
+    public let frameIndex: Int
 
     public let outlierOutputDirname: String?
     public let previewOutputDirname: String?
@@ -111,6 +111,11 @@ public class FrameAirplaneRemover: Equatable, Hashable {
     public let alignedSubtractedDirname: String
     public var alignedSubtractedFilename: String {
         "\(alignedSubtractedDirname)/\(baseName)"
+    }
+
+    public let alignedSubtractedPreviewDirname: String
+    public var alignedSubtractedPreviewFilename: String {
+        "\(alignedSubtractedPreviewDirname)/\(baseName).jpg" // XXX tiff.jpg :(
     }
     
     // populated by pruning
@@ -388,21 +393,21 @@ public class FrameAirplaneRemover: Equatable, Hashable {
     
     public func didLoadOutliersFromFile() -> Bool { outliersLoadedFromFile }
     
-    nonisolated public var previewFilename: String? {
+    public var previewFilename: String? {
         if let previewOutputDirname = previewOutputDirname {
             return "\(previewOutputDirname)/\(baseName).jpg" // XXX this makes it .tif.jpg
         }
         return nil
     }
     
-    nonisolated public var processedPreviewFilename: String? {
+    public var processedPreviewFilename: String? {
         if let processedPreviewOutputDirname = processedPreviewOutputDirname {
             return "\(processedPreviewOutputDirname)/\(baseName).jpg"
         }
         return nil
     }
     
-    nonisolated public var thumbnailFilename: String? {
+    public var thumbnailFilename: String? {
         if let thumbnailOutputDirname = thumbnailOutputDirname {
             return "\(thumbnailOutputDirname)/\(baseName).jpg"
         }
@@ -443,6 +448,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
          thumbnailOutputDirname: String?,
          starAlignedSequenceDirname: String,
          alignedSubtractedDirname: String,
+         alignedSubtractedPreviewDirname: String,
          outlierGroupLoader: @escaping () async -> OutlierGroups?,
          fullyProcess: Bool = true,
          writeOutputFiles: Bool = true) async throws
@@ -463,6 +469,8 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         self.thumbnailOutputDirname = thumbnailOutputDirname
         self.starAlignedSequenceDirname = starAlignedSequenceDirname
         self.alignedSubtractedDirname = alignedSubtractedDirname
+        self.alignedSubtractedPreviewDirname = alignedSubtractedPreviewDirname
+
         self.width = width
         self.height = height
 
@@ -586,6 +594,8 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         } 
     }
 
+    // returns a grayscale image pixel value array from subtracting the aligned frame
+    // from the frame being processed.
     private func subtractAlignedImageFromFrame() async throws -> [UInt16] {
         self.state = .loadingImages
         
@@ -599,8 +609,10 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         // need to have the OutlierGroup class contain a mini version of this for each one
         
         Log.i("frame \(frameIndex) finding outliers")
-        // XXX write this out as a 16 bit monochrome image
+
+        // the grayscale image pixel array to return when we've calculated it
         var subtractionArray = [UInt16](repeating: 0, count: width*height)
+
         // compare pixels at the same image location in adjecent frames
         // detect Outliers which are much more brighter than the adject frames
         let origData = image.rawImageData
@@ -658,8 +670,10 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         if config.writeOutlierGroupFiles {
             // write out image of outlier amounts
             do {
-                try saveSubtractionImage(subtractionArray)
+                let subtractionImage = try saveSubtractionImage(subtractionArray)
                 Log.d("frame \(frameIndex) saved subtraction image")
+                try writeSubtractionPreview(subtractionImage)
+                Log.d("frame \(frameIndex) saved subtraction image preview")
             } catch {
                 Log.e("can't write subtraction image: \(error)")
             }
@@ -679,11 +693,18 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         
         do {
             // try to load the image subtraction from a pre-processed file
-            subtractionArray = try await PixelatedImage.loadUInt16Array(from: alignedSubtractedFilename)
+
+            let (image, array) = try await PixelatedImage.loadUInt16Array(from: alignedSubtractedFilename)
+            subtractionArray = array
+            
             Log.d("frame \(frameIndex) loaded outlier amounts from subtraction image")
+
+            if !fileManager.fileExists(atPath: self.alignedSubtractedPreviewFilename) {
+                try writeSubtractionPreview(image)
+            }
         } catch {
             Log.i("frame \(frameIndex) couldn't load outlier amounts from subtraction image")
-            // do the image subtraction ourselves as a backup
+            // do the image subtraction here instead
             subtractionArray = try await self.subtractAlignedImageFromFrame()
         }
 
@@ -910,7 +931,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         Log.i("frame \(frameIndex) has found \(String(describing: outlierGroups?.members.count)) outlier groups to consider")
     }
 
-    private func saveSubtractionImage(_ subtractionArray: [UInt16]) throws {
+    private func saveSubtractionImage(_ subtractionArray: [UInt16]) throws -> PixelatedImage {
         // XXX make new state for this?
         let imageData = subtractionArray.withUnsafeBufferPointer { Data(buffer: $0)  }
 
@@ -927,6 +948,8 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                                                 colorSpace: CGColorSpaceCreateDeviceGray(),
                                                 ciFormat: .L16)
         try outlierAmountImage.writeTIFFEncoding(toFilename: alignedSubtractedFilename)
+
+        return outlierAmountImage
     }
     
     public func pixelatedImage() async throws -> PixelatedImage? {
@@ -1059,6 +1082,26 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         }
     }
 
+    private func writeSubtractionPreview(_ image: PixelatedImage) throws {
+        
+        if let processedPreviewImage = image.baseImage(ofSize: self.previewSize),
+           let imageData = processedPreviewImage.jpegData
+        {
+            let filename = self.alignedSubtractedPreviewFilename
+
+            if fileManager.fileExists(atPath: filename) {
+                Log.i("overwriting already existing processed preview \(filename)")
+                try fileManager.removeItem(atPath: filename)
+            }
+
+            // write to file
+            fileManager.createFile(atPath: filename,
+                                   contents: imageData,
+                                   attributes: nil)
+            Log.i("frame \(self.frameIndex) wrote preview to \(filename)")
+        }
+    }
+    
     private func writeProcssedPreview(_ image: PixelatedImage, with outputData: Data) {
         // write out a preview of the processed file
         if config.writeFrameProcessedPreviewFiles {

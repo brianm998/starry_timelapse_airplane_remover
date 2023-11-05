@@ -43,6 +43,9 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
 
     // where images recording the difference between each frame and its aligned frame
     let alignedSubtractedDirname: String
+
+    // where previews for subtracted frames live
+    let alignedSubtractedPreviewDirname: String
     
     public var finalProcessor: FinalProcessor?    
 
@@ -80,6 +83,8 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
         starAlignedSequenceDirname = "\(config.outputPath)/\(config.imageSequenceDirname)-star-aligned"
 
         alignedSubtractedDirname = "\(config.outputPath)/\(config.imageSequenceDirname)-star-aligned-subtracted"
+
+        alignedSubtractedPreviewDirname = "\(config.outputPath)/\(config.imageSequenceDirname)-star-aligned-subtracted-previews"
         
         try super.init(imageSequenceDirname: "\(config.imageSequencePath)/\(config.imageSequenceDirname)",
                        outputDirname: "\(config.outputPath)/\(basename)",
@@ -178,6 +183,9 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
 
         // where we keep the diff between each frame and its alignment frame
         try mkdir(alignedSubtractedDirname)
+
+        // where we keep previews for the subtraction images 
+        try mkdir(alignedSubtractedPreviewDirname)
         
         if config.writeOutlierGroupFiles {
             // doesn't do mkdir -p, if a base dir is missing it just hangs :(
@@ -201,7 +209,7 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
            config.writeFrameThumbnailFiles
         {
             config.writeJson(named: "\(self.basename)-config.json")
-         }
+        }
     }
     
     // called by the superclass to process each frame
@@ -292,6 +300,7 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
                                               thumbnailOutputDirname: thumbnailOutputDirname,
                                               starAlignedSequenceDirname: starAlignedSequenceDirname,
                                               alignedSubtractedDirname: alignedSubtractedDirname,
+                                              alignedSubtractedPreviewDirname: alignedSubtractedPreviewDirname,
                                               outlierGroupLoader: loadOutliersFromFile,
                                               fullyProcess: fullyProcess,
                                               writeOutputFiles: writeOutputFiles)
