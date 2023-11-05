@@ -630,7 +630,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                         let otherOffset = (y * width*otherFrame.pixelOffset) +
                                           (x * otherFrame.pixelOffset)
                         
-                        var maxBrightness: UInt16 = 0
+                        var maxBrightness: Int32 = 0
                         
                         if otherFrame.pixelOffset == 4,
                            otherImagePixels[otherOffset+3] != 0xFFFF
@@ -641,33 +641,21 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                         } else {
 
                             // rgb values of the image we're modifying at this x,y
-                            let origRed = origImagePixels[origOffset]
-                            let origGreen = origImagePixels[origOffset+1]
-                            let origBlue = origImagePixels[origOffset+2]
+                            let origRed = Int32(origImagePixels[origOffset])
+                            let origGreen = Int32(origImagePixels[origOffset+1])
+                            let origBlue = Int32(origImagePixels[origOffset+2])
                             
                             // rgb values of an adjecent image at this x,y
-                            let otherRed = otherImagePixels[otherOffset]
-                            let otherGreen = otherImagePixels[otherOffset+1]
-                            let otherBlue = otherImagePixels[otherOffset+2]
-                            
-                            // how much brighter in each channel was the image we're modifying?
-                            let otherRedDiff   = origRed   > otherRed   ? origRed   - otherRed   : 0
-                            let otherGreenDiff = origGreen > otherGreen ? origGreen - otherGreen : 0
-                            let otherBlueDiff  = origBlue  > otherBlue  ? origBlue  - otherBlue  : 0
-                            
-                            let totalDiff = (otherRedDiff/3) +
-                                            (otherGreenDiff/3) +
-                                            (otherBlueDiff/3)
-                            
-                            // take a max based upon overal brightness, or just one channel
-                            maxBrightness = max(totalDiff,
-                                                max(otherRedDiff,
-                                                    max(otherGreenDiff,
-                                                        otherBlueDiff)))
+                            let otherRed = Int32(otherImagePixels[otherOffset])
+                            let otherGreen = Int32(otherImagePixels[otherOffset+1])
+                            let otherBlue = Int32(otherImagePixels[otherOffset+2])
+
+                            maxBrightness += origRed + origGreen + origBlue
+                            maxBrightness -= otherRed + otherGreen + otherBlue
                         }
                         // record the brightness change if it is brighter
                         if maxBrightness > 0 {
-                            outlierAmountList[y*width+x] = maxBrightness
+                            outlierAmountList[y*width+x] = UInt16(maxBrightness/3)
                         }
                     }
                 }
@@ -897,7 +885,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
             // XXX make new state for this?
             let imageData = outlierAmountList.withUnsafeBufferPointer { Data(buffer: $0)  }
             
-            // XXX write out the outlierAmountList here
+            // write out the outlierAmountList here as an image
             let outlierAmountImage = PixelatedImage(width: width,
                                                     height: height,
                                                     rawImageData: imageData,
@@ -905,7 +893,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                                                     bytesPerRow: 2*width,
                                                     bitsPerComponent: 16,
                                                     bytesPerPixel: 2,
-                                                    bitmapInfo: .byteOrderDefault,
+                                                    bitmapInfo: .byteOrder16Little, // XXX not sure why this has to be little 
                                                     pixelOffset: 0,
                                                     colorSpace: CGColorSpaceCreateDeviceGray(),
                                                     colorSpaceName: CGColorSpace.linearGray,
