@@ -1003,8 +1003,6 @@ public class FrameAirplaneRemover: Equatable, Hashable {
             return
         }
 
-        let maxDistance = Double(width)*Double(height)
-        
         for (_, group) in outlierGroups.members {
             if let reason = group.shouldPaint {
                 if reason.willPaint {
@@ -1020,28 +1018,50 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                     var searchMinY = group.bounds.min.y - intBorderFuzzAmount 
                     var searchMaxY = group.bounds.max.y + intBorderFuzzAmount 
                     if searchMinX < 0 { searchMinX = 0 }
-                    if searchMaxX > width - 1 { searchMaxX = width - 1 }
                     if searchMinY < 0 { searchMinY = 0 }
-                    if searchMaxY > height - 1 { searchMaxY = height - 1 }
+                    if searchMaxX > width { searchMaxX = width }
+                    if searchMaxY > height { searchMaxY = height }
                     
                     for x in searchMinX ... searchMaxX {
                         for y in searchMinY ... searchMaxY {
-                            let pixelIndex = (y - group.bounds.min.y)*group.bounds.width + (x - group.bounds.min.x)
-                            if pixelIndex < 0 || pixelIndex >= group.pixels.count { continue }
-                            
-                            let pixelAmount = group.pixels[pixelIndex]
+
+                            var pixelAmount: UInt16 = 0
+
+                            if y >= group.bounds.min.y,
+                               y <= group.bounds.max.y,
+                               x >= group.bounds.min.x,
+                               x <= group.bounds.max.x
+                            {
+                                let pixelIndex = (y - group.bounds.min.y)*group.bounds.width + (x - group.bounds.min.x)
+                                pixelAmount = group.pixels[pixelIndex]
+                            }
                             
                             if pixelAmount == 0 {
                                 // here check distance to a non-zero pixel and maybe paint
                                 var shouldPaint = false
-                                var minDistance: Double = maxDistance
-                                for fuzzX in x - intBorderFuzzAmount ..< x + intBorderFuzzAmount {
-                                    if fuzzX < 0 { continue }
-                                    if fuzzX >= width { continue }
-                                    for fuzzY in y - intBorderFuzzAmount ..< y + intBorderFuzzAmount {
-                                        if fuzzY < 0 { continue }
-                                        if fuzzY >= height { continue }
+                                var minDistance: Double = config.outlierGroupPaintBorderPixels
 
+                                var fuzzXstart = x - intBorderFuzzAmount
+                                var fuzzXend = x + intBorderFuzzAmount
+                                if fuzzXstart < group.bounds.min.x {
+                                    fuzzXstart = group.bounds.min.x
+                                }
+                                if fuzzXend > group.bounds.max.x {
+                                    fuzzXend = group.bounds.max.x
+                                }
+                                
+                                for fuzzX in fuzzXstart ... fuzzXend {
+                                    var fuzzYstart = y - intBorderFuzzAmount
+                                    var fuzzYend = y + intBorderFuzzAmount
+
+                                    if fuzzYstart < group.bounds.min.y {
+                                        fuzzYstart = group.bounds.min.y
+                                    }
+                                    if fuzzYend > group.bounds.max.y {
+                                        fuzzYend = group.bounds.max.y
+                                    }
+                                    
+                                    for fuzzY in fuzzYstart ... fuzzYend {
                                         let fuzzPixelIndex = (fuzzY - group.bounds.min.y)*group.bounds.width + (fuzzX - group.bounds.min.x)
                                         
                                         if fuzzPixelIndex < 0 ||
@@ -1055,9 +1075,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                                         let distY = Double(abs(y - fuzzY))
                                         let hypoDist = sqrt(distX*distX+distY*distY)
 
-                                        if hypoDist < config.outlierGroupPaintBorderPixels,
-                                           hypoDist < minDistance
-                                        {
+                                        if hypoDist < minDistance {
                                             minDistance = hypoDist
                                             shouldPaint = true
                                         }
@@ -1065,10 +1083,34 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                                 }
                                 if shouldPaint {
                                     var alpha: Double = 0
-                                    if minDistance - config.outlierGroupPaintBorderPixels <= config.outlierGroupPaintBorderInnerWallPixels {
+                                    if minDistance <= config.outlierGroupPaintBorderInnerWallPixels {
                                         alpha = 1
+
+                                        /*
+                                        var paintPixel = Pixel()
+                                        paintPixel.green = 0xFFFF
+                                        paint(x: x, y: y, why: reason, alpha: 1,
+                                              toData: &data,
+                                              image: image,
+                                              paintPixel: paintPixel)
+                                        */
                                     } else {
-                                        alpha = (minDistance - config.outlierGroupPaintBorderPixels) / (config.outlierGroupPaintBorderInnerWallPixels - config.outlierGroupPaintBorderPixels)
+                                        // how close are we to the inner wall of full opacity?
+                                        let foo = minDistance - config.outlierGroupPaintBorderInnerWallPixels
+                                        // the length in pixels of the fade window
+                                        let bar = config.outlierGroupPaintBorderPixels - config.outlierGroupPaintBorderInnerWallPixels
+                                        alpha = (bar-foo)/bar
+
+                                        /*
+                                        var paintPixel = Pixel()
+                                        paintPixel.blue = 0xFFFF
+                                        paintPixel.green = UInt16(Double(0xFFFF)*alpha)
+                                        paint(x: x, y: y, why: reason, alpha: alpha,
+                                              toData: &data,
+                                              image: image,
+                                              paintPixel: paintPixel)
+                                         */
+                                        
                                     }
                                     if alpha > 0 {
                                         paint(x: x, y: y, why: reason, alpha: alpha,
@@ -1104,6 +1146,33 @@ public class FrameAirplaneRemover: Equatable, Hashable {
     {
         var paintPixel = otherFrame.readPixel(atX: x, andY: y)
 
+        if alpha < 1 {
+            let op = image.readPixel(atX: x, andY: y)
+            paintPixel = Pixel(merging: paintPixel, with: op, atAlpha: alpha)
+        }
+
+        // this is the numeric value we need to write out to paint over the airplane
+        var paintValue = paintPixel.value
+        
+        // the is the place in the image data to write to
+        let offset = (Int(y) * bytesPerRow) + (Int(x) * bytesPerPixel)
+        
+        // actually paint over that airplane like thing in the image data
+        data.replaceSubrange(offset ..< offset+self.bytesPerPixel,
+                             with: &paintValue, count: self.bytesPerPixel)
+        
+    }
+
+
+    // paint over a selected outlier pixel with data from pixels from adjecent frames
+    private func paint(x: Int, y: Int,
+                       why: PaintReason,
+                       alpha: Double,
+                       toData data: inout Data,
+                       image: PixelatedImage,
+                       paintPixel: Pixel)
+    {
+        var paintPixel = paintPixel
         if alpha < 1 {
             let op = image.readPixel(atX: x, andY: y)
             paintPixel = Pixel(merging: paintPixel, with: op, atAlpha: alpha)

@@ -159,14 +159,14 @@ public struct Config: Codable {
     public static var defaultThumbnailWidth: Int = 80
     public static var defaultThumbnailHeight: Int = 60
 
-    public static let defaultOutlierGroupPaintBorderPixels: Double = 8
-    public static let defaultOutlierGroupPaintBorderInnerWallPixels: Double = 2
+    public static let defaultOutlierGroupPaintBorderPixels: Double = 12
+    public static let defaultOutlierGroupPaintBorderInnerWallPixels: Double = 4
 
     // how many pixels out from the edge of an outlier group to paint further
     // pixels less than distance will be painted over with a fade until
     // outlierGroupPaintBorderInnerWallPixels reached.
     public var outlierGroupPaintBorderPixels: Double = defaultOutlierGroupPaintBorderPixels
-s
+
     // where the fade of the alpha on the border begins.
     // pixels closer than this are fully painted over
     public var outlierGroupPaintBorderInnerWallPixels: Double = defaultOutlierGroupPaintBorderInnerWallPixels
