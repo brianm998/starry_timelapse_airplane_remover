@@ -1019,8 +1019,8 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                     var searchMaxY = group.bounds.max.y + intBorderFuzzAmount 
                     if searchMinX < 0 { searchMinX = 0 }
                     if searchMinY < 0 { searchMinY = 0 }
-                    if searchMaxX > width { searchMaxX = width }
-                    if searchMaxY > height { searchMaxY = height }
+                    if searchMaxX >= width { searchMaxX = width - 1 }
+                    if searchMaxY >= height { searchMaxY = height - 1 }
                     
                     for x in searchMinX ... searchMaxX {
                         for y in searchMinY ... searchMaxY {
