@@ -150,14 +150,26 @@ public struct Config: Codable {
     public var ignoreLowerPixels: Int?
 
     // XXX try making these larger now that video plays better
-    public static var defaultPreviewWidth: Int = 1617 // 1080p in 4/3 aspect ratio
-    public static var defaultPreviewHeight: Int = 1080
+    public static let defaultPreviewWidth: Int = 1617 // 1080p in 4/3 aspect ratio
+    public static let defaultPreviewHeight: Int = 1080
     
     public var thumbnailWidth: Int = defaultThumbnailWidth
     public var thumbnailHeight: Int = defaultThumbnailHeight
 
     public static var defaultThumbnailWidth: Int = 80
     public static var defaultThumbnailHeight: Int = 60
+
+    public static let defaultOutlierGroupPaintBorderPixels: Double = 8
+    public static let defaultOutlierGroupPaintBorderInnerWallPixels: Double = 2
+
+    // how many pixels out from the edge of an outlier group to paint further
+    // pixels less than distance will be painted over with a fade until
+    // outlierGroupPaintBorderInnerWallPixels reached.
+    public var outlierGroupPaintBorderPixels: Double = defaultOutlierGroupPaintBorderPixels
+s
+    // where the fade of the alpha on the border begins.
+    // pixels closer than this are fully painted over
+    public var outlierGroupPaintBorderInnerWallPixels: Double = defaultOutlierGroupPaintBorderInnerWallPixels
     
     // 0.0.2 added more detail group hough transormation analysis, based upon a data set
     // 0.0.3 included the data set analysis to include group size and fill, and to use histograms
@@ -183,9 +195,10 @@ public struct Config: Codable {
     // 0.4.0 star alignment
     // 0.4.1 fixes after star alignment, better constants
     // 0.4.2 clean up memory usage during outlier detection, save outlier pixels as 16 bit, not 32
-    // 0.4.3 subtration images saved and re-used when available
+    // 0.4.3 subtraction images saved and re-used when available
+    // 0.4.4 border painting enabled with config options
     
-    public var starVersion = "0.4.3" // XXX move this out
+    public var starVersion = "0.4.4" // XXX move this out
 
     public func writeJson(named filename: String) {
         

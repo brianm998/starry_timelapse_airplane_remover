@@ -1003,10 +1003,6 @@ public class FrameAirplaneRemover: Equatable, Hashable {
             return
         }
 
-        // XXX make this a paramater further out
-        // the amount of fuzz we apply around the edges
-        let borderFuzzAmount: Double = 8
-        let borderFuzzInnerStrength: Double = 2 // where the fade of the fuzz begins
         let maxDistance = Double(width)*Double(height)
         
         for (_, group) in outlierGroups.members {
@@ -1016,9 +1012,9 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                     //let x = index % width;
                     //let y = index / width;
 
-                    // XXX somehow figure out how to do a border of X pixels
-                    // this logic has obvious marks on the edges a lot
-                    let intBorderFuzzAmount = Int(borderFuzzAmount)
+                    //  somehow figure out how to do a border of X pixels
+
+                    let intBorderFuzzAmount = Int(config.outlierGroupPaintBorderPixels)
                     var searchMinX = group.bounds.min.x - intBorderFuzzAmount 
                     var searchMaxX = group.bounds.max.x + intBorderFuzzAmount 
                     var searchMinY = group.bounds.min.y - intBorderFuzzAmount 
@@ -1059,7 +1055,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                                         let distY = Double(abs(y - fuzzY))
                                         let hypoDist = sqrt(distX*distX+distY*distY)
 
-                                        if hypoDist < borderFuzzAmount,
+                                        if hypoDist < config.outlierGroupPaintBorderPixels,
                                            hypoDist < minDistance
                                         {
                                             minDistance = hypoDist
@@ -1069,10 +1065,10 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                                 }
                                 if shouldPaint {
                                     var alpha: Double = 0
-                                    if minDistance - borderFuzzAmount <= borderFuzzInnerStrength {
+                                    if minDistance - config.outlierGroupPaintBorderPixels <= config.outlierGroupPaintBorderInnerWallPixels {
                                         alpha = 1
                                     } else {
-                                        alpha = (minDistance - borderFuzzAmount) / (borderFuzzInnerStrength - borderFuzzAmount)
+                                        alpha = (minDistance - config.outlierGroupPaintBorderPixels) / (config.outlierGroupPaintBorderInnerWallPixels - config.outlierGroupPaintBorderPixels)
                                     }
                                     if alpha > 0 {
                                         paint(x: x, y: y, why: reason, alpha: alpha,
