@@ -30,22 +30,19 @@ public class HoughTransform {
     // x axis is theta, always 0 to 360
     let houghWidth = 360       // units are theta (degrees)
 
-    let maxPixelDistance: UInt16
-    
     public var inputData: [UInt16]
     var counts: [[Double]]
     
     let dr: Double
     let dth: Double
 
-    public convenience init(dataWidth: Int, dataHeight: Int, maxPixelDistance: UInt16) {
+    public convenience init(dataWidth: Int, dataHeight: Int) {
         self.init(dataWidth: dataWidth,
                  dataHeight: dataHeight,
-                 inputData: [UInt16](repeating: 0, count: dataWidth*dataHeight),
-                 maxPixelDistance: maxPixelDistance)
+                 inputData: [UInt16](repeating: 0, count: dataWidth*dataHeight))
     }
 
-    public init(dataWidth: Int, dataHeight: Int, inputData: [UInt16], maxPixelDistance: UInt16) {
+    public init(dataWidth: Int, dataHeight: Int, inputData: [UInt16]) {
         self.dataWidth = dataWidth
         self.dataHeight = dataHeight
         self.rmax = sqrt(Double(dataWidth*dataWidth + dataHeight*dataHeight))
@@ -55,7 +52,6 @@ public class HoughTransform {
         self.counts = [[Double]](repeating: [Double](repeating: 0, count: houghHeight),
                                  count: Int(houghWidth))
         self.inputData = inputData
-        self.maxPixelDistance = maxPixelDistance
     }
 
     func resetCounts() {
@@ -75,19 +71,13 @@ public class HoughTransform {
             for y in 0 ..< self.dataHeight {
                 let offset = (y * dataWidth) + x
                 let pixelValue = inputData[offset]
-                if pixelValue > maxPixelDistance {
                     // record pixel
-                    for k in 0 ..< Int(houghWidth) {
-                        let th = dth * Double(k)
-                        let r2 = (Double(x)*cos(th) + Double(y)*sin(th))
-                        let iry = Int(rmax + r2/dr)
-                        let newValue = counts[k][iry]+1//Double(pixelValue)
-                        // XXX in order to use pixel value properly,
-                        // all histograms need to be re-done, and likely
-                        // re-evalutated because the current outlier group output data is binary
-                        //Log.i("adding pixel value \(pixelValue) to create \(newValue)")
-                        counts[k][iry] = newValue
-                    }
+                for k in 0 ..< Int(houghWidth) {
+                    let th = dth * Double(k)
+                    let r2 = (Double(x)*cos(th) + Double(y)*sin(th))
+                    let iry = Int(rmax + r2/dr)
+                    let newValue = counts[k][iry]+Double(pixelValue)
+                    counts[k][iry] = newValue
                 }
             }
         }

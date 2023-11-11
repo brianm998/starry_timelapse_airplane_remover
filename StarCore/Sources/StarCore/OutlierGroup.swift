@@ -87,8 +87,7 @@ public class OutlierGroup: CustomStringConvertible,
         // do a hough transform on just this outlier group
         let transform = HoughTransform(dataWidth: bounds.width,
                                        dataHeight: bounds.height,
-                                       inputData: pixels,
-                                       maxPixelDistance: maxPixelDistance)
+                                       inputData: pixels)
 
         // we want all the lines, all of them.
         self.lines = transform.lines(minCount: 1)
@@ -1065,7 +1064,7 @@ public class OutlierGroup: CustomStringConvertible,
         let size = self.persistentDataSizeBytes
         var data = Data(repeating: 0, count: size)
 
-        //Log.d("\(self.name) creating persistent data of size \(size)")
+        Log.d("\(self.name) creating persistent data of size \(size)")
 
         var index: Int = 0
 
@@ -1073,7 +1072,7 @@ public class OutlierGroup: CustomStringConvertible,
         data.replaceSubrange(index..<index+8, with: sizeData)
         index += 8
         
-        //Log.d("\(self.name) size \(self.size)")
+        Log.d("\(self.name) size \(self.size)")
 
         let bbMinX = self.bounds.min.x
         let bbMinXData = withUnsafeBytes(of: bbMinX.bigEndian) { Data($0) }
