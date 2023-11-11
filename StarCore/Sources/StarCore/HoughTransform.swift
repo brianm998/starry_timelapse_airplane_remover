@@ -81,8 +81,7 @@ public class HoughTransform {
                 // can be missed, and not returned in the output data
 
                 // how bright is this pixel?
-                let offset = (y * dataWidth) + x
-                let pixelValue = inputData[offset]
+                let pixelValue = inputData[(y * dataWidth) + x]
 
                 if pixelValue > minPixelValue {
                     // record all possible lines that transit this pixel
@@ -90,6 +89,13 @@ public class HoughTransform {
                         let th = dth * Double(k)
                         let r2 = (Double(x)*cos(th) + Double(y)*sin(th))
                         let iry = Int(rmax + r2/dr)
+
+                        // the value recorded is the brightness of the pixel at this value
+
+                        // what about dimmer lines?  i.e. fast moving low orbit satellites?
+                        // may keep two versions of counts, one via pixel value,
+                        // the other by the simple existance of a pixel of this value here
+                        
                         let newValue = counts[k][iry]+Double(pixelValue)
                         counts[k][iry] = newValue
                     }
