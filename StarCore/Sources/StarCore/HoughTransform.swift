@@ -62,18 +62,30 @@ public class HoughTransform {
         }
     }
     
-    public func lines(minCount: Int = 5, // lines with less counts than this aren't returned
-                      numberOfLinesReturned: Int? = nil,
-                      minPixelValue: Int16 = 1000) -> [Line] // XXX magic constant XXX
+    public func lines(maxCount: Int? = nil,                  // max number of lines to return
+                      minPixelValue: Int16 = 1000) -> [Line] // the dimmest pixel we will process
     {
         // accumulate the hough transform data in counts from the input data
         // this can take a long time when there are lots of input points
+
+        // iterate through all pixels of the input image
         for x in 0 ..< self.dataWidth {
             for y in 0 ..< self.dataHeight {
+                // record tracing polar coordinates for all
+                // lines that can go through this pixel
+                
+                // recording dimmer pixels can take a long time,
+                // and not add much signal to the tranform data
+
+                // not recording a pixel means that a faint line
+                // can be missed, and not returned in the output data
+
+                // how bright is this pixel?
                 let offset = (y * dataWidth) + x
                 let pixelValue = inputData[offset]
-                // record pixel
+
                 if pixelValue > minPixelValue {
+                    // record all possible lines that transit this pixel
                     for k in 0 ..< Int(houghWidth) {
                         let th = dth * Double(k)
                         let r2 = (Double(x)*cos(th) + Double(y)*sin(th))
@@ -148,18 +160,20 @@ public class HoughTransform {
             }
         }
 
-        let sortedLines = lines.sorted() { a, b in
-            return a.count > b.count
+        // put higher counts at the front of the list
+        let sortedLines = lines.sorted() { $0.count > $1.count }
+
+        var linesToReturn: Array<Line> = []
+        if let maxCount = maxCount {
+            // return lines with the highest counts at the front of the list
+            linesToReturn = Array<Line>(sortedLines.prefix(maxCount))
+        } else {
+            // return them all
+            // this list can be exhaustive
+            linesToReturn = sortedLines
         }
 
-        var smallSetLines: Array<Line> = []
-        if let numberOfLinesReturned = numberOfLinesReturned {
-            smallSetLines = Array<Line>(sortedLines.prefix(numberOfLinesReturned))
-        } else {
-            smallSetLines = Array<Line>(sortedLines)
-        }
-        
-        return smallSetLines
+        return linesToReturn
     }        
 }
 

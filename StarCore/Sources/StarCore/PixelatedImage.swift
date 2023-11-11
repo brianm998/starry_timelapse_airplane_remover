@@ -30,8 +30,8 @@ public func loadImage(fromFile filename: String) async throws -> NSImage? {
 }
 
 public struct PixelatedImage {
-    let width: Int
-    let height: Int
+    public let width: Int
+    public let height: Int
     
     let rawImageData: Data
     
@@ -236,7 +236,7 @@ public struct PixelatedImage {
         Log.i("image written to \(imageFilename)")
     }
 
-    static func loadUInt16Array(from imageFilename: String) async throws -> (PixelatedImage, [UInt16]) {
+    public static func loadUInt16Array(from imageFilename: String) async throws -> (PixelatedImage, [UInt16]) {
         // for some reason, these values are all one less from what was initially saved
         if let image = try await PixelatedImage(fromFile: imageFilename) {
             return (image, image.rawImageData.uInt16Array)

@@ -89,8 +89,8 @@ public class OutlierGroup: CustomStringConvertible,
                                        dataHeight: bounds.height,
                                        inputData: pixels)
 
-        // we want all the lines, all of them.
-        self.lines = transform.lines(minCount: 1)
+        // try a smaller line count, with fixed trimming code
+        self.lines = transform.lines(maxCount: 60, minPixelValue: 1) 
         _ = self.houghLineHistogram
     }
 
