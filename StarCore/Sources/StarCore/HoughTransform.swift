@@ -63,7 +63,8 @@ public class HoughTransform {
     }
     
     public func lines(minCount: Int = 5, // lines with less counts than this aren't returned
-                    numberOfLinesReturned: Int? = nil) -> [Line]
+                      numberOfLinesReturned: Int? = nil,
+                      minPixelValue: Int16 = 1000) -> [Line] // XXX magic constant XXX
     {
         // accumulate the hough transform data in counts from the input data
         // this can take a long time when there are lots of input points
@@ -71,13 +72,15 @@ public class HoughTransform {
             for y in 0 ..< self.dataHeight {
                 let offset = (y * dataWidth) + x
                 let pixelValue = inputData[offset]
-                    // record pixel
-                for k in 0 ..< Int(houghWidth) {
-                    let th = dth * Double(k)
-                    let r2 = (Double(x)*cos(th) + Double(y)*sin(th))
-                    let iry = Int(rmax + r2/dr)
-                    let newValue = counts[k][iry]+Double(pixelValue)
-                    counts[k][iry] = newValue
+                // record pixel
+                if pixelValue > minPixelValue {
+                    for k in 0 ..< Int(houghWidth) {
+                        let th = dth * Double(k)
+                        let r2 = (Double(x)*cos(th) + Double(y)*sin(th))
+                        let iry = Int(rmax + r2/dr)
+                        let newValue = counts[k][iry]+Double(pixelValue)
+                        counts[k][iry] = newValue
+                    }
                 }
             }
         }
@@ -151,7 +154,7 @@ public class HoughTransform {
 
         var smallSetLines: Array<Line> = []
         if let numberOfLinesReturned = numberOfLinesReturned {
-            smallSetLines = Array<Line>(sortedLines.suffix(numberOfLinesReturned))
+            smallSetLines = Array<Line>(sortedLines.prefix(numberOfLinesReturned))
         } else {
             smallSetLines = Array<Line>(sortedLines)
         }
