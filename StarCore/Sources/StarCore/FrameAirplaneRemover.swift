@@ -715,15 +715,6 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         
         // go through the outliers and link together all the outliers that are adject to eachother,
         // outputting a mapping of group name to size
-        
-        var individualGroupCounts: [String: UInt] = [:]
-
-        var pendingOutliers: [Int]
-        var pendingOutlierInsertIndex = 0;
-        var pendingOutlierAccessIndex = 0;
-       
-        let array = [Int](repeating: -1, count: width*height) 
-        pendingOutliers = array
 
         Log.d("frame \(frameIndex) labeling adjecent outliers")
 
@@ -743,112 +734,25 @@ public class FrameAirplaneRemover: Equatable, Hashable {
          */
         let twelveMegapixels: Double = 4240 * 2832
         let sequenceResolution = Double(width) * Double(height)
+
         let minGroupSize = Int(Double(config.minGroupSize)*sequenceResolution/twelveMegapixels)
-
-        // one dimentional array mirroring pixels indexed by y*width + x
-        var outlierGroupList = [String?](repeating: nil, count: width*height)
-
         Log.d("using minGroupSize \(minGroupSize)")
+
+        let searchBag = OutlierSearchBag(width: width, height: height)
         
         // then label all adject outliers
         for (index, outlierAmount) in subtractionArray.enumerated() {
             
             if outlierAmount <= config.maxPixelDistance { continue }
             
-            let outlierGroupname = outlierGroupList[index]
+            let outlierGroupname = searchBag.outlierGroupList[index]
             if outlierGroupname != nil { continue }
-            
-            // not part of a group yet
-            var groupSize: UInt = 0
-            // tag this virgin outlier with its own key
-            
-            let outlierKey = "\(index % width),\(index / width)"; // arbitrary but needs to be unique
-            //Log.d("initial index = \(index)")
-            outlierGroupList[index] = outlierKey
-            pendingOutliers[pendingOutlierInsertIndex] = index;
-            pendingOutlierInsertIndex += 1
-            
-            var loopCount: UInt64 = 0
-                
-            while pendingOutlierInsertIndex != pendingOutlierAccessIndex {
-                //Log.d("pendingOutlierInsertIndex \(pendingOutlierInsertIndex) pendingOutlierAccessIndex \(pendingOutlierAccessIndex)")
-                loopCount += 1
-//                if loopCount % 1000 == 0 {
-//                    Log.v("frame \(frameIndex) looping \(loopCount) times groupSize \(groupSize)")
-//                }
-                
-                let nextOutlierIndex = pendingOutliers[pendingOutlierAccessIndex]
-                //Log.d("nextOutlierIndex \(nextOutlierIndex)")
-                
-                pendingOutlierAccessIndex += 1
-               if let _ = outlierGroupList[nextOutlierIndex] {
-                    groupSize += 1
-                    
-                    let outlierX = nextOutlierIndex % width;
-                    let outlierY = nextOutlierIndex / width;
 
-                    //Log.e("minPixelDistance \(minPixelDistance) maxPixelDistance \(maxPixelDistance)")
-                    
-                    if outlierX > 0 { // add left neighbor
-                        let leftNeighborIndex = outlierY * width + outlierX - 1
-                        let leftNeighborAmount = subtractionArray[leftNeighborIndex]
-                        if leftNeighborAmount > config.minPixelDistance,
-                           outlierGroupList[leftNeighborIndex] == nil
-                        {
-                            pendingOutliers[pendingOutlierInsertIndex] = leftNeighborIndex
-                            outlierGroupList[leftNeighborIndex] = outlierKey
-                            pendingOutlierInsertIndex += 1
-                        }
-                    }
-                    
-                    if outlierX < width - 1 { // add right neighbor
-                        let rightNeighborIndex = outlierY * width + outlierX + 1
-                        let rightNeighborAmount = subtractionArray[rightNeighborIndex]
-                        if rightNeighborAmount > config.minPixelDistance,
-                           outlierGroupList[rightNeighborIndex] == nil
-                        {
-                            pendingOutliers[pendingOutlierInsertIndex] = rightNeighborIndex
-                            outlierGroupList[rightNeighborIndex] = outlierKey
-                            pendingOutlierInsertIndex += 1
-                        }
-                    }
-                    
-                    if outlierY > 0 { // add top neighbor
-                        let topNeighborIndex = (outlierY - 1) * width + outlierX
-                        let topNeighborAmount = subtractionArray[topNeighborIndex]
-                        if topNeighborAmount > config.minPixelDistance,
-                           outlierGroupList[topNeighborIndex] == nil
-                        {
-                            pendingOutliers[pendingOutlierInsertIndex] = topNeighborIndex
-                            outlierGroupList[topNeighborIndex] = outlierKey
-                            pendingOutlierInsertIndex += 1
-                        }
-                    }
-                    
-                    if outlierY < height - 1 { // add bottom neighbor
-                        let bottomNeighborIndex = (outlierY + 1) * width + outlierX
-                        let bottomNeighborAmount = subtractionArray[bottomNeighborIndex]
-                        if bottomNeighborAmount > config.minPixelDistance,
-                           outlierGroupList[bottomNeighborIndex] == nil
-                        {
-                            pendingOutliers[pendingOutlierInsertIndex] = bottomNeighborIndex
-                            outlierGroupList[bottomNeighborIndex] = outlierKey
-                            pendingOutlierInsertIndex += 1
-                        }
-                    }
-                } else {
-                    //Log.w("next outlier has groupName \(String(describing: next_outlier.groupName))")
-                    // shouldn't end up here with a group named outlier
-                    fatalError("FUCK")
-                }
-            }
-            //Log.d("group \(outlierKey) has \(groupSize) members")
-
-
-            
-            if groupSize > minGroupSize { 
-                individualGroupCounts[outlierKey] = groupSize
-            }
+            renameMe(index: index,
+                     outlierAmount: outlierAmount,
+                     searchBag: searchBag, 
+                     subtractionArray: subtractionArray,
+                     minGroupSize: minGroupSize)
         }
 
         self.state = .detectingOutliers2
@@ -860,7 +764,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         for x in 0 ..< width {
             for y in 0 ..< height {
                 let index = y*width+x
-                if let group = outlierGroupList[index] {
+                if let group = searchBag.outlierGroupList[index] {
                     let amount = UInt(subtractionArray[index])
                     if let info = groupInfo[group] {
                         info.process(x: x, y: y, amount: amount)
@@ -875,7 +779,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
 
         self.state = .detectingOutliers3
         // populate the outlierGroups
-        for (groupName, groupSize) in individualGroupCounts {
+        for (groupName, groupSize) in searchBag.individualGroupCounts {
             if let info = groupInfo[groupName],
                let minX = info.minX,
                let minY = info.minY,
@@ -901,7 +805,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                 for x in minX ... maxX {
                     for y in minY ... maxY {
                         let index = y * self.width + x
-                        if let pixelGroupName = outlierGroupList[index],
+                        if let pixelGroupName = searchBag.outlierGroupList[index],
                            pixelGroupName == groupName
                         {
                             let pixelAmount = subtractionArray[index]
@@ -950,6 +854,107 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         try outlierAmountImage.writeTIFFEncoding(toFilename: alignedSubtractedFilename)
 
         return outlierAmountImage
+    }
+
+    private func renameMe(index: Int,
+                          outlierAmount: UInt16,
+                          searchBag: OutlierSearchBag, 
+                          subtractionArray: [UInt16],
+                          minGroupSize: Int) 
+    {
+        var pendingOutliers = [Int](repeating: -1, count: width*height) 
+        var pendingOutlierInsertIndex = 0;
+        var pendingOutlierAccessIndex = 0;
+       
+        // not part of a group yet
+        var groupSize: UInt = 0
+        // tag this virgin outlier with its own key
+        
+        let outlierKey = "\(index % width),\(index / width)"; // arbitrary but needs to be unique
+        //Log.d("initial index = \(index)")
+        searchBag.outlierGroupList[index] = outlierKey
+        pendingOutliers[pendingOutlierInsertIndex] = index;
+        pendingOutlierInsertIndex += 1
+        
+        var loopCount: UInt64 = 0
+        
+        while pendingOutlierInsertIndex != pendingOutlierAccessIndex {
+            //Log.d("pendingOutlierInsertIndex \(pendingOutlierInsertIndex) pendingOutlierAccessIndex \(pendingOutlierAccessIndex)")
+            loopCount += 1
+            //                if loopCount % 1000 == 0 {
+            //                    Log.v("frame \(frameIndex) looping \(loopCount) times groupSize \(groupSize)")
+            //                }
+            
+            let nextOutlierIndex = pendingOutliers[pendingOutlierAccessIndex]
+            //Log.d("nextOutlierIndex \(nextOutlierIndex)")
+            
+            pendingOutlierAccessIndex += 1
+            if let _ = searchBag.outlierGroupList[nextOutlierIndex] {
+                groupSize += 1
+                
+                let outlierX = nextOutlierIndex % width;
+                let outlierY = nextOutlierIndex / width;
+                
+                //Log.e("minPixelDistance \(minPixelDistance) maxPixelDistance \(maxPixelDistance)")
+                
+                if outlierX > 0 { // add left neighbor
+                    let leftNeighborIndex = outlierY * width + outlierX - 1
+                    let leftNeighborAmount = subtractionArray[leftNeighborIndex]
+                    if leftNeighborAmount > config.minPixelDistance,
+                       searchBag.outlierGroupList[leftNeighborIndex] == nil
+                    {
+                        pendingOutliers[pendingOutlierInsertIndex] = leftNeighborIndex
+                        searchBag.outlierGroupList[leftNeighborIndex] = outlierKey
+                        pendingOutlierInsertIndex += 1
+                    }
+                }
+                
+                if outlierX < width - 1 { // add right neighbor
+                    let rightNeighborIndex = outlierY * width + outlierX + 1
+                    let rightNeighborAmount = subtractionArray[rightNeighborIndex]
+                    if rightNeighborAmount > config.minPixelDistance,
+                       searchBag.outlierGroupList[rightNeighborIndex] == nil
+                    {
+                        pendingOutliers[pendingOutlierInsertIndex] = rightNeighborIndex
+                        searchBag.outlierGroupList[rightNeighborIndex] = outlierKey
+                        pendingOutlierInsertIndex += 1
+                    }
+                }
+                
+                if outlierY > 0 { // add top neighbor
+                    let topNeighborIndex = (outlierY - 1) * width + outlierX
+                    let topNeighborAmount = subtractionArray[topNeighborIndex]
+                    if topNeighborAmount > config.minPixelDistance,
+                       searchBag.outlierGroupList[topNeighborIndex] == nil
+                    {
+                        pendingOutliers[pendingOutlierInsertIndex] = topNeighborIndex
+                        searchBag.outlierGroupList[topNeighborIndex] = outlierKey
+                        pendingOutlierInsertIndex += 1
+                    }
+                }
+                
+                if outlierY < height - 1 { // add bottom neighbor
+                    let bottomNeighborIndex = (outlierY + 1) * width + outlierX
+                    let bottomNeighborAmount = subtractionArray[bottomNeighborIndex]
+                    if bottomNeighborAmount > config.minPixelDistance,
+                       searchBag.outlierGroupList[bottomNeighborIndex] == nil
+                    {
+                        pendingOutliers[pendingOutlierInsertIndex] = bottomNeighborIndex
+                        searchBag.outlierGroupList[bottomNeighborIndex] = outlierKey
+                        pendingOutlierInsertIndex += 1
+                    }
+                }
+            } else {
+                //Log.w("next outlier has groupName \(String(describing: next_outlier.groupName))")
+                // shouldn't end up here with a group named outlier
+                fatalError("FUCK")
+            }
+        }
+        //Log.d("group \(outlierKey) has \(groupSize) members")
+        
+        if groupSize > minGroupSize { 
+            searchBag.individualGroupCounts[outlierKey] = groupSize
+        }
     }
     
     public func pixelatedImage() async throws -> PixelatedImage? {
@@ -1330,5 +1335,18 @@ public class FrameAirplaneRemover: Equatable, Hashable {
     }    
 }
 
+fileprivate class OutlierSearchBag {
+    
+    // mapping of group name to count of group
+    var individualGroupCounts: [String: UInt] = [:]
+
+    // one dimentional array mirroring pixels indexed by y*width + x
+    // to see if we've listed this as an outlier yet, and if so, with what key
+    var outlierGroupList: [String?]
+
+    init(width: Int, height: Int) {
+        self.outlierGroupList = [String?](repeating: nil, count: width*height)
+    }
+}
 
 fileprivate let fileManager = FileManager.default
