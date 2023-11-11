@@ -739,20 +739,59 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         Log.d("using minGroupSize \(minGroupSize)")
 
         let searchBag = OutlierSearchBag(width: width, height: height)
-        
-        // then label all adject outliers
-        for (index, outlierAmount) in subtractionArray.enumerated() {
-            
-            if outlierAmount <= config.maxPixelDistance { continue }
-            
-            let outlierGroupname = searchBag.outlierGroupList[index]
-            if outlierGroupname != nil { continue }
 
-            renameMe(index: index,
-                     outlierAmount: outlierAmount,
-                     searchBag: searchBag, 
-                     subtractionArray: subtractionArray,
-                     minGroupSize: minGroupSize)
+        let labelWithHoughLines = false
+
+        // then label adject outliers
+
+        if labelWithHoughLines {
+            // new approach to iterate through hough lines 
+            let houghTransform = HoughTransform(dataWidth: width,
+                                                dataHeight: height,
+                                                inputData: subtractionArray)
+            
+            let lines = houghTransform.lines(maxCount: 20,         // XXX constants XXX 
+                                             minPixelValue: 10_000/*3276*/)
+            
+            
+            for line in lines {
+                if let cartesianLine = line.cartesianLine {
+                    for x in 0..<width {
+                        let y = cartesianLine.y(for: x) 
+                        if y >= 0, y < height {
+                            let index = y * width + x
+                            let outlierAmount = subtractionArray[index]
+                            if outlierAmount <= config.maxPixelDistance { continue }
+                            
+                            let outlierGroupname = searchBag.outlierGroupList[index]
+                            if outlierGroupname != nil { continue }
+                            
+                            searchForOutliers(at: index,
+                                              outlierAmount: outlierAmount,
+                                              searchBag: searchBag, 
+                                              subtractionArray: subtractionArray,
+                                              minGroupSize: minGroupSize)
+                        }
+                    }
+                } else {
+                    Log.e("UNHANDLED NON CARTESIAN LINE")
+                }
+            }
+        } else {
+            // old approach which scans every pixel in the image
+            for (index, outlierAmount) in subtractionArray.enumerated() {
+                
+                if outlierAmount <= config.maxPixelDistance { continue }
+                
+                let outlierGroupname = searchBag.outlierGroupList[index]
+                if outlierGroupname != nil { continue }
+
+                searchForOutliers(at: index,
+                                  outlierAmount: outlierAmount,
+                                  searchBag: searchBag, 
+                                  subtractionArray: subtractionArray,
+                                  minGroupSize: minGroupSize)
+            }
         }
 
         self.state = .detectingOutliers2
@@ -856,11 +895,11 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         return outlierAmountImage
     }
 
-    private func renameMe(index: Int,
-                          outlierAmount: UInt16,
-                          searchBag: OutlierSearchBag, 
-                          subtractionArray: [UInt16],
-                          minGroupSize: Int) 
+    private func searchForOutliers(at index: Int,
+                                   outlierAmount: UInt16,
+                                   searchBag: OutlierSearchBag, 
+                                   subtractionArray: [UInt16],
+                                   minGroupSize: Int) 
     {
         var pendingOutliers = [Int](repeating: -1, count: width*height) 
         var pendingOutlierInsertIndex = 0;
@@ -1117,7 +1156,8 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                                          */
                                         
                                     }
-                                    if alpha > 0 {
+                                    if //false,
+                                       alpha > 0 {
                                         paint(x: x, y: y, why: reason, alpha: alpha,
                                               toData: &data,
                                               image: image,
@@ -1151,6 +1191,14 @@ public class FrameAirplaneRemover: Equatable, Hashable {
     {
         var paintPixel = otherFrame.readPixel(atX: x, andY: y)
 
+        if otherFrame.pixelOffset == 4,
+           paintPixel.alpha != 0xFFFF
+        {
+            // ignore transparent pixels
+            //Log.w("ignoring transparent pixel")
+            return
+        }
+        
         if alpha < 1 {
             let op = image.readPixel(atX: x, andY: y)
             paintPixel = Pixel(merging: paintPixel, with: op, atAlpha: alpha)
