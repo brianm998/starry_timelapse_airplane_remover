@@ -27,7 +27,8 @@ public enum FrameProcessingState: Int, CaseIterable, Codable {
     case unprocessed
     case starAlignment    
     case loadingImages    
-    case detectingOutliers
+    case subtractingNeighbor
+    case frameHoughTransform
     case detectingOutliers1
     case detectingOutliers2
     case detectingOutliers3
@@ -611,7 +612,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         // use star aligned image
         let otherFrame = try await imageSequence.getImage(withName: starAlignedSequenceFilename).image()
 
-        self.state = .detectingOutliers
+        self.state = .subtractingNeighbor
         
         // need to have the OutlierGroup class contain a mini version of this for each one
         
@@ -716,7 +717,6 @@ public class FrameAirplaneRemover: Equatable, Hashable {
             subtractionArray = try await self.subtractAlignedImageFromFrame()
         }
 
-        self.state = .detectingOutliers1
         // XXX was a boundary
         
         Log.i("frame \(frameIndex) pruning outliers")
@@ -757,32 +757,31 @@ public class FrameAirplaneRemover: Equatable, Hashable {
 
         if labelWithHoughLines {
             // new approach to iterate through hough lines 
+            self.state = .frameHoughTransform
             let houghTransform = HoughTransform(dataWidth: width,
                                                 dataHeight: height,
                                                 inputData: subtractionArray)
-            
-            let lines = houghTransform.lines(maxCount: 200,         // XXX constants XXX 
-                                             minPixelValue: 1500/*3276*/)
 
-            var usedLines: [Line] = []
+            let lines = houghTransform.lines(maxCount: 500,         // XXX constants XXX 
+                                             minPixelValue: 4200/*3276*/,
+                                             minLineCount: 20)
+
+            self.state = .detectingOutliers1
+
+            // indexed first by theta/10 then by rho/5
+            let rhoDivisor: Double = 2
+            let thetaDivisor: Double = 6
+            var usedLineArray: [[Bool]] =
+              [[Bool]](repeating: [Bool](repeating: false,
+                                         count: Int(houghTransform.rmax/rhoDivisor)),
+                       count: Int(360/thetaDivisor))
             
             for line in lines {
-                var useThisLine = true
 
-                for usedLine in usedLines {
-                    let thetaDiff = abs(line.theta - usedLine.theta)
-                    let rhoDiff = abs(line.rho - usedLine.rho)
-                    if thetaDiff < 5, // XXX hardcoded constants
-                       rhoDiff < 5
-                    {
-                        useThisLine = false
-                        continue
-                    }
-                }
-
-                if !useThisLine { continue } 
-                
-                usedLines.append(line)
+                let thetaIndex = Int(line.theta/thetaDivisor)
+                let rhoIndex = Int(line.rho/rhoDivisor)
+                if usedLineArray[thetaIndex][rhoIndex] { continue }
+                usedLineArray[thetaIndex][rhoIndex] = true
                 
                 let cartesianLine = line.cartesianLine 
                 switch cartesianLine {
@@ -819,14 +818,9 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                                                to: houghLineImageFilename)
             
         } else {
+            self.state = .detectingOutliers1
             // old approach which scans every pixel in the image
             for (index, outlierAmount) in subtractionArray.enumerated() {
-                
-                if outlierAmount <= config.maxPixelDistance { continue }
-                
-                let outlierGroupname = searchBag.outlierGroupList[index]
-                if outlierGroupname != nil { continue }
-
                 searchForOutliers(at: index,
                                   searchBag: searchBag, 
                                   subtractionArray: subtractionArray,
@@ -1213,8 +1207,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                                          */
                                         
                                     }
-                                    if //false,
-                                       alpha > 0 {
+                                    if alpha > 0 {
                                         paint(x: x, y: y, why: reason, alpha: alpha,
                                               toData: &data,
                                               image: image,
@@ -1255,7 +1248,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
             // don't paint over with them
             return
         }
-        
+
         if alpha < 1 {
             let op = image.readPixel(atX: x, andY: y)
             paintPixel = Pixel(merging: paintPixel, with: op, atAlpha: alpha)
@@ -1263,14 +1256,13 @@ public class FrameAirplaneRemover: Equatable, Hashable {
 
         // this is the numeric value we need to write out to paint over the airplane
         var paintValue = paintPixel.value
-        
+
         // the is the place in the image data to write to
         let offset = (Int(y) * bytesPerRow) + (Int(x) * bytesPerPixel)
-        
+
         // actually paint over that airplane like thing in the image data
         data.replaceSubrange(offset ..< offset+self.bytesPerPixel,
                              with: &paintValue, count: self.bytesPerPixel)
-        
     }
 
 

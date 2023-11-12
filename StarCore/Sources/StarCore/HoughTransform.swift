@@ -30,6 +30,10 @@ public class HoughTransform {
     // x axis is theta, always 0 to 360
     let houghWidth = 360       // units are theta (degrees)
 
+    // how many pixels in each direction does a line have
+    // to have numerical domanance to be considered a line
+    let maxValueRange: Int
+    
     public var inputData: [UInt16]
     var counts: [[Double]]
     
@@ -42,7 +46,11 @@ public class HoughTransform {
                  inputData: [UInt16](repeating: 0, count: dataWidth*dataHeight))
     }
 
-    public init(dataWidth: Int, dataHeight: Int, inputData: [UInt16]) {
+    public init(dataWidth: Int,
+                dataHeight: Int,
+                inputData: [UInt16],
+                maxValueRange: Int = 5)
+    {
         self.dataWidth = dataWidth
         self.dataHeight = dataHeight
         self.rmax = sqrt(Double(dataWidth*dataWidth + dataHeight*dataHeight))
@@ -52,6 +60,7 @@ public class HoughTransform {
         self.counts = [[Double]](repeating: [Double](repeating: 0, count: houghHeight),
                                  count: Int(houghWidth))
         self.inputData = inputData
+        self.maxValueRange = maxValueRange
     }
 
     func resetCounts() {
@@ -62,8 +71,10 @@ public class HoughTransform {
         }
     }
     
-    public func lines(maxCount: Int? = nil,                  // max number of lines to return
-                      minPixelValue: Int16 = 1000) -> [Line] // the dimmest pixel we will process
+    public func lines(maxCount: Int? = nil, // max number of lines to return
+                      minPixelValue: Int16 = 1000, // the dimmest pixel we will process
+                      minLineCount: Int = 20)      // lines with counts smaller will not be returned
+      -> [Line]
     {
         // accumulate the hough transform data in counts from the input data
         // this can take a long time when there are lots of input points
@@ -96,7 +107,7 @@ public class HoughTransform {
                         // may keep two versions of counts, one via pixel value,
                         // the other by the simple existance of a pixel of this value here
                         
-                        let newValue = counts[k][iry]+Double(pixelValue)
+                        let newValue = counts[k][iry]+1//Double(pixelValue)
                         counts[k][iry] = newValue
                     }
                 }
@@ -113,55 +124,22 @@ public class HoughTransform {
                 let count = counts[x][y]
                 if count == 0  { continue }     // ignore cells with no count
 
-                var is3x3max = true
+                // XXX apply min count?
                 
-                // left neighbor
-                if x > 0,
-                   count <= counts[x-1][y]        { is3x3max = false }
+                if !isMax(x: x, y: y, within: maxValueRange) { continue }
+
+                var theta = Double(x)/2.0 // why /2 ?
+                var rho = Double(y) - rmax
                 
-                // left upper neighbor                    
-                else if x > 0, y > 0,
-                        count <= counts[x-1][y-1] { is3x3max = false }
-                
-                // left lower neighbor                    
-                else if x > 0,
-                        y < houghHeight - 1,
-                        count <= counts[x-1][y+1] { is3x3max = false }
-                
-                // upper neighbor                    
-                else if y > 0,
-                        count <= counts[x][y-1]   { is3x3max = false }
-                
-                // lower neighbor                    
-                else if y < houghHeight - 1,
-                        count <= counts[x][y+1]   { is3x3max = false }
-                
-                // right neighbor
-                else if x < houghWidth - 1,
-                        count <= counts[x+1][y]   { is3x3max = false }
-                
-                // right upper neighbor                    
-                else if x < houghWidth - 1,
-                        y > 0,
-                        count <= counts[x+1][y-1] { is3x3max = false }
-                
-                // right lower neighbor                    
-                else if x < houghWidth - 1,
-                        y < houghHeight - 1,
-                        count <= counts[x+1][y+1] { is3x3max = false }
-                
-                else if is3x3max {
-                    var theta = Double(x)/2.0 // why /2 ?
-                    var rho = Double(y) - rmax
-                    
-                    if(rho < 0) {
-                        // keeping rho positive
-                        //Log.d("reversing orig rho \(rho) theta \(theta)")
-                        rho = -rho
-                        theta = (theta + 180).truncatingRemainder(dividingBy: 360)
-                    }
-                    
-                    lines.append(Line(theta: theta, rho: rho, count: Int(count)))
+                if(rho < 0) {
+                    // keeping rho positive
+                    //Log.d("reversing orig rho \(rho) theta \(theta)")
+                    rho = -rho
+                    theta = (theta + 180).truncatingRemainder(dividingBy: 360)
+                }
+                let countInt = Int(count)
+                if countInt > minLineCount {                                         
+                    lines.append(Line(theta: theta, rho: rho, count: countInt))
                 }
             }
         }
@@ -180,7 +158,28 @@ public class HoughTransform {
         }
 
         return linesToReturn
-    }        
+    }
+
+    func isMax(x: Int, y: Int, within pixels: Int) -> Bool {
+        let count = counts[x][y]
+
+        var leftBorder = x - pixels
+        var rightBorder = x + pixels
+        var topBorder = y - pixels
+        var bottomBorder = y + pixels
+
+        if leftBorder < 0 { leftBorder = 0 }
+        if rightBorder > houghWidth { rightBorder = houghWidth }
+        if topBorder < 0 { topBorder = 0 }
+        if bottomBorder > houghHeight { bottomBorder = houghHeight }
+
+        for y in leftBorder..<rightBorder {
+            for z in topBorder..<bottomBorder {
+                if counts[y][z] > count { return false }
+            }
+        }
+        return true
+    }
 }
 
 // this method returns the polar coords for a line that runs through the two given points
