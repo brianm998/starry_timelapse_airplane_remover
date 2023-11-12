@@ -44,6 +44,45 @@ public enum FrameProcessingState: Int, CaseIterable, Codable {
     case painting
     case writingOutputFile
     case complete
+
+    var message: String {
+        switch self {
+        case .unprocessed:
+            return ""
+        case .starAlignment:
+            return "aligning stars"
+        case .loadingImages:
+            return"loading images"
+        case .subtractingNeighbor:
+            return "subtracting aligned neighbor frame"
+        case .frameHoughTransform:
+            return "applying hough transform"
+        case .detectingOutliers1:
+            return "grouping outlying pixels"
+        case .detectingOutliers2:
+            return "calculating outlier group bounds"
+        case .detectingOutliers3:
+            return "populating outlier groups"
+        case .readyForInterFrameProcessing: // XXX not covered in progress monitor
+            return "ready for inter frame processing"
+        case .interFrameProcessing:
+            return "classifing outlier groups"
+        case .outlierProcessingComplete:
+            return "ready to finish"
+        case .writingBinaryOutliers:
+            return "writing raw outlier data"
+        case .writingOutlierValues:
+            return "writing outlier classification values"
+        case .reloadingImages:
+            return "reloadingImages"
+        case .painting:
+            return "painting"
+        case .writingOutputFile:
+            return "frames writing to disk"
+        case .complete:
+            return "frames complete"
+        }
+    }
 }
 
 fileprivate class OutlierGroupInfo {

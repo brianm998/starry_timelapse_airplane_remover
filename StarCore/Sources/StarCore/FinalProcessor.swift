@@ -160,7 +160,7 @@ public actor FinalProcessor {
                 message += ConsoleColor.blue.rawValue+"]"+ConsoleColor.reset.rawValue
                 let name = "frames awaiting inter frame processing"
                 message += " \(count) \(name)"
-                await updatable.log(name: name, message: message, value: 2)
+                await updatable.log(name: name, message: message, value: 50)
             }
         }
     }
