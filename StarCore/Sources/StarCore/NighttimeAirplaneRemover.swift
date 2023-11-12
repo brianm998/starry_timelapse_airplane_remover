@@ -46,6 +46,9 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
 
     // where previews for subtracted frames live
     let alignedSubtractedPreviewDirname: String
+
+    // place for test images for hough transform lines on each frame
+    let houghLineImageDirname: String
     
     public var finalProcessor: FinalProcessor?    
 
@@ -85,6 +88,8 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
         alignedSubtractedDirname = "\(config.outputPath)/\(config.imageSequenceDirname)-star-aligned-subtracted"
 
         alignedSubtractedPreviewDirname = "\(config.outputPath)/\(config.imageSequenceDirname)-star-aligned-subtracted-previews"
+
+        houghLineImageDirname = "\(config.outputPath)/\(basename)-hough-lines"
         
         try super.init(imageSequenceDirname: "\(config.imageSequencePath)/\(config.imageSequenceDirname)",
                        outputDirname: "\(config.outputPath)/\(basename)",
@@ -186,6 +191,9 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
 
         // where we keep previews for the subtraction images 
         try mkdir(alignedSubtractedPreviewDirname)
+
+        // test images for hough lines for each frame
+        try mkdir(houghLineImageDirname)
         
         if config.writeOutlierGroupFiles {
             // doesn't do mkdir -p, if a base dir is missing it just hangs :(
@@ -301,6 +309,7 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
                                               starAlignedSequenceDirname: starAlignedSequenceDirname,
                                               alignedSubtractedDirname: alignedSubtractedDirname,
                                               alignedSubtractedPreviewDirname: alignedSubtractedPreviewDirname,
+                                              houghLineImageDirname: houghLineImageDirname,
                                               outlierGroupLoader: loadOutliersFromFile,
                                               fullyProcess: fullyProcess,
                                               writeOutputFiles: writeOutputFiles)

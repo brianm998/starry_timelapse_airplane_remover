@@ -113,6 +113,11 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         "\(alignedSubtractedDirname)/\(baseName)"
     }
 
+    public let houghLineImageDirname: String
+    public var houghLineImageFilename: String {
+        "\(houghLineImageDirname)/\(baseName)"
+    }
+
     public let alignedSubtractedPreviewDirname: String
     public var alignedSubtractedPreviewFilename: String {
         "\(alignedSubtractedPreviewDirname)/\(baseName).jpg" // XXX tiff.jpg :(
@@ -449,6 +454,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
          starAlignedSequenceDirname: String,
          alignedSubtractedDirname: String,
          alignedSubtractedPreviewDirname: String,
+         houghLineImageDirname: String, 
          outlierGroupLoader: @escaping () async -> OutlierGroups?,
          fullyProcess: Bool = true,
          writeOutputFiles: Bool = true) async throws
@@ -470,7 +476,8 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         self.starAlignedSequenceDirname = starAlignedSequenceDirname
         self.alignedSubtractedDirname = alignedSubtractedDirname
         self.alignedSubtractedPreviewDirname = alignedSubtractedPreviewDirname
-
+        self.houghLineImageDirname = houghLineImageDirname
+        
         self.width = width
         self.height = height
 
@@ -670,7 +677,8 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         if config.writeOutlierGroupFiles {
             // write out image of outlier amounts
             do {
-                let subtractionImage = try saveSubtractionImage(subtractionArray)
+                let subtractionImage = try save16BitMonoImageData(subtractionArray,
+                                                                  to: alignedSubtractedFilename)
                 Log.d("frame \(frameIndex) saved subtraction image")
                 try writeSubtractionPreview(subtractionImage)
                 Log.d("frame \(frameIndex) saved subtraction image preview")
@@ -735,12 +743,15 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         let twelveMegapixels: Double = 4240 * 2832
         let sequenceResolution = Double(width) * Double(height)
 
-        let minGroupSize = Int(Double(config.minGroupSize)*sequenceResolution/twelveMegapixels)
+        var minGroupSize = Int(Double(config.minGroupSize)*sequenceResolution/twelveMegapixels)
+        if minGroupSize < 10 { minGroupSize = 10 }
+        
         Log.d("using minGroupSize \(minGroupSize)")
 
+        // holds transient data used for finding outliers
         let searchBag = OutlierSearchBag(width: width, height: height)
 
-        let labelWithHoughLines = false
+        let labelWithHoughLines = true
 
         // then label adject outliers
 
@@ -750,33 +761,63 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                                                 dataHeight: height,
                                                 inputData: subtractionArray)
             
-            let lines = houghTransform.lines(maxCount: 20,         // XXX constants XXX 
-                                             minPixelValue: 10_000/*3276*/)
-            
+            let lines = houghTransform.lines(maxCount: 200,         // XXX constants XXX 
+                                             minPixelValue: 1500/*3276*/)
+
+            var usedLines: [Line] = []
             
             for line in lines {
-                if let cartesianLine = line.cartesianLine {
+                var useThisLine = true
+
+                for usedLine in usedLines {
+                    let thetaDiff = abs(line.theta - usedLine.theta)
+                    let rhoDiff = abs(line.rho - usedLine.rho)
+                    if thetaDiff < 5, // XXX hardcoded constants
+                       rhoDiff < 5
+                    {
+                        useThisLine = false
+                        continue
+                    }
+                }
+
+                if !useThisLine { continue } 
+                
+                usedLines.append(line)
+                
+                let cartesianLine = line.cartesianLine 
+                switch cartesianLine {
+                case .horizontal(let horizontalLine):
                     for x in 0..<width {
-                        let y = cartesianLine.y(for: x) 
+                        let y = horizontalLine.y(for: x) 
                         if y >= 0, y < height {
                             let index = y * width + x
-                            let outlierAmount = subtractionArray[index]
-                            if outlierAmount <= config.maxPixelDistance { continue }
-                            
-                            let outlierGroupname = searchBag.outlierGroupList[index]
-                            if outlierGroupname != nil { continue }
-                            
+
                             searchForOutliers(at: index,
-                                              outlierAmount: outlierAmount,
                                               searchBag: searchBag, 
                                               subtractionArray: subtractionArray,
                                               minGroupSize: minGroupSize)
                         }
                     }
-                } else {
-                    Log.e("UNHANDLED NON CARTESIAN LINE")
+                    
+                case .vertical(let verticalLine):
+                    for y in 0..<height {
+                        let x = verticalLine.x(for: y) 
+                        if x >= 0, x < width {
+                            let index = y * width + x
+                            
+                            searchForOutliers(at: index,
+                                              searchBag: searchBag, 
+                                              subtractionArray: subtractionArray,
+                                              minGroupSize: minGroupSize)
+                            
+                        }
+                    }
                 }
             }
+            
+            let _ = try save16BitMonoImageData(searchBag.houghLineImageData,
+                                               to: houghLineImageFilename)
+            
         } else {
             // old approach which scans every pixel in the image
             for (index, outlierAmount) in subtractionArray.enumerated() {
@@ -787,13 +828,14 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                 if outlierGroupname != nil { continue }
 
                 searchForOutliers(at: index,
-                                  outlierAmount: outlierAmount,
                                   searchBag: searchBag, 
                                   subtractionArray: subtractionArray,
                                   minGroupSize: minGroupSize)
             }
         }
 
+        // XXX write out houghLineImageData from the searchBag
+        
         self.state = .detectingOutliers2
 
         Log.i("frame \(frameIndex) calculating outlier group bounds")
@@ -874,7 +916,10 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         Log.i("frame \(frameIndex) has found \(String(describing: outlierGroups?.members.count)) outlier groups to consider")
     }
 
-    private func saveSubtractionImage(_ subtractionArray: [UInt16]) throws -> PixelatedImage {
+    
+    private func save16BitMonoImageData(_ subtractionArray: [UInt16],
+                                        to filename: String) throws -> PixelatedImage
+    {
         // XXX make new state for this?
         let imageData = subtractionArray.withUnsafeBufferPointer { Data(buffer: $0)  }
 
@@ -890,17 +935,29 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                                                 pixelOffset: 0,
                                                 colorSpace: CGColorSpaceCreateDeviceGray(),
                                                 ciFormat: .L16)
-        try outlierAmountImage.writeTIFFEncoding(toFilename: alignedSubtractedFilename)
+        try outlierAmountImage.writeTIFFEncoding(toFilename: filename)
 
         return outlierAmountImage
     }
 
     private func searchForOutliers(at index: Int,
-                                   outlierAmount: UInt16,
                                    searchBag: OutlierSearchBag, 
                                    subtractionArray: [UInt16],
                                    minGroupSize: Int) 
     {
+        // record x, y search point to show to user
+        searchBag.houghLineImageData[index] = 0x4FFF
+        
+        let outlierAmount = subtractionArray[index]
+        if outlierAmount <= config.maxPixelDistance { return }
+        
+        // record x, y search point to show to user
+        searchBag.houghLineImageData[index] = 0xFFFF
+        
+        let outlierGroupname = searchBag.outlierGroupList[index]
+        if outlierGroupname != nil { return }
+
+        
         var pendingOutliers = [Int](repeating: -1, count: width*height) 
         var pendingOutlierInsertIndex = 0;
         var pendingOutlierAccessIndex = 0;
@@ -989,7 +1046,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                 fatalError("FUCK")
             }
         }
-        //Log.d("group \(outlierKey) has \(groupSize) members")
+        Log.d("group \(outlierKey) has \(groupSize) members minGroupSize \(minGroupSize)")
         
         if groupSize > minGroupSize { 
             searchBag.individualGroupCounts[outlierKey] = groupSize
@@ -1191,8 +1248,16 @@ public class FrameAirplaneRemover: Equatable, Hashable {
     {
         var paintPixel = otherFrame.readPixel(atX: x, andY: y)
 
-        if otherFrame.pixelOffset == 4,
-           paintPixel.alpha != 0xFFFF
+        /*
+         XXX with this set to false, painting works better
+         but sometimes on smaller images gets black spots around the edges
+
+         with false commented out, painting sometimes fails works,
+         but no black spots around the edges
+         */
+        if false,
+           otherFrame.pixelOffset == 4, // has alpha channel
+           paintPixel.alpha != 0xFFFF   // alpha is not fully opaque
         {
             // ignore transparent pixels
             //Log.w("ignoring transparent pixel")
@@ -1392,8 +1457,12 @@ fileprivate class OutlierSearchBag {
     // to see if we've listed this as an outlier yet, and if so, with what key
     var outlierGroupList: [String?]
 
+    // test image to show hough lines we checked
+    var houghLineImageData: [UInt16]
+    
     init(width: Int, height: Int) {
         self.outlierGroupList = [String?](repeating: nil, count: width*height)
+        self.houghLineImageData = [UInt16](repeating: 0, count: width*height)
     }
 }
 

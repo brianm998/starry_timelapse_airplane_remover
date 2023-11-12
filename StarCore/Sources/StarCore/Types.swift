@@ -45,7 +45,8 @@ public struct Line: Codable {
     public let count: Int                    // higher count is better fit for line
 
     // convert to rise over run, y intercept if possible
-    public var cartesianLine: CartesianLine? {
+    // also supports run over rise, as well as vertical only lines
+    public var cartesianLine: CartesianLine {
         // the line goes through this point
         let line_intersection_x = self.rho*cos(self.theta*Double.pi/180)
         let line_intersection_y = self.rho*sin(self.theta*Double.pi/180)
@@ -53,14 +54,12 @@ public struct Line: Codable {
         var edge_1_x = 0.0
         var edge_1_y = 0.0
 
-        var y_intercept = 0.0
+        var y_intercept: Double?
         if self.theta == 0 || self.theta == 360 {
             // vertical line
             edge_1_x = self.rho
             edge_1_y = 0
 
-            Log.e("SPECIAL CASE NOT HANDLED")
-            return nil
             // y_intercept not defined
         } else if self.theta < 90 {
             // search for x as hypotenuse 
@@ -82,6 +81,11 @@ public struct Line: Codable {
             edge_1_y = sqrt(opposite*opposite + self.rho*self.rho)
 
             y_intercept = self.rho / cos((self.theta-90)*Double.pi/180)
+        } else if self.theta == 180 {
+            edge_1_x = self.rho
+            edge_1_y = 0
+
+            // y_intercept not defined
         } else if self.theta < 270 {
             Log.e("WTF, theta \(self.theta)?")
 
@@ -89,8 +93,8 @@ public struct Line: Codable {
             // and that is accounted for elsewhere by reversing theta 180,
             // and inverting rho
             
-            Log.e("SPECIAL CASE NOT HANDLED")
-            return nil
+            Log.e("theta \(self.theta) SPECIAL CASE NOT HANDLED")
+
         } else if self.theta < 360 {
             let opposite = tan((360-self.theta)*Double.pi/180)*self.rho
             edge_1_x = sqrt(opposite*opposite + self.rho*self.rho)
@@ -99,15 +103,64 @@ public struct Line: Codable {
             y_intercept = -(self.rho / cos((self.theta-270)*Double.pi/180))
         }
 
-        let rise_over_run = (edge_1_y - line_intersection_y) / (edge_1_x - line_intersection_x)
-
-        //Log.d("for theta \(self.theta) rho \(self.rho) intersection [\(line_intersection_x), \(line_intersection_y)], edge 1 [\(edge_1_x), \(edge_1_y)] rise over run \(rise_over_run) y_intercept \(y_intercept)")
+        let run = edge_1_x - line_intersection_x
+        let rise = edge_1_y - line_intersection_y
         
-        return CartesianLine(m: rise_over_run, c: y_intercept)
+        //Log.d("for theta \(self.theta) rho \(self.rho) intersection [\(line_intersection_x), \(line_intersection_y)], edge 1 [\(edge_1_x), \(edge_1_y)] rise over run \(rise_over_run) y_intercept \(y_intercept)")
+        if let y_intercept = y_intercept {
+            if self.theta < 45 {
+                let run_over_rise = run / rise
+                return .vertical(VerticalCartesianLineImpl(m: run_over_rise, c: y_intercept))
+            } else if self.theta < 135 {
+                let rise_over_run = rise / run
+                return .horizontal(HorizontalCartesianLineImpl(m: rise_over_run, c: y_intercept))
+            } else if self.theta < 225 {
+                let run_over_rise = run / rise
+                return .vertical(VerticalCartesianLineImpl(m: run_over_rise, c: y_intercept))
+            } else if self.theta < 315 {
+                let rise_over_run = rise / run
+                return .horizontal(HorizontalCartesianLineImpl(m: rise_over_run, c: y_intercept))
+            } else {
+                let run_over_rise = run / rise
+                return .vertical(VerticalCartesianLineImpl(m: run_over_rise, c: y_intercept))
+            }
+        } else {
+            return .vertical(StraightVerticalCartesianLine(x: self.rho))
+        }
     }
 }
 
-public struct CartesianLine {
+public enum CartesianLine {
+    case horizontal(HorizontalCartesianLine)
+    case vertical(VerticalCartesianLine)
+}
+
+
+public protocol VerticalCartesianLine {
+    func x(for y: Int) -> Int
+}
+
+public struct StraightVerticalCartesianLine: VerticalCartesianLine {
+    public let x: Double
+    
+    public func x(for y: Int) -> Int { Int(x) }
+}
+
+public struct VerticalCartesianLineImpl: VerticalCartesianLine {
+    public let m: Double                // run over rise
+    public let c: Double                // y intercept
+
+    public func x(for y: Int) -> Int {
+        // x = (y-c)/m
+        return Int((Double(y)-c)*m)
+    }
+}
+
+public protocol HorizontalCartesianLine {
+    func y(for x: Int) -> Int 
+}
+
+public struct HorizontalCartesianLineImpl: HorizontalCartesianLine {
     public let m: Double                // rise over run
     public let c: Double                // y intercept
 
