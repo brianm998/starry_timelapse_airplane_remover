@@ -17,6 +17,10 @@ public class OutlierGroupFeatureData: ClassifiableOutlierGroup {
     }
 
     public func decisionTreeValue(for type: OutlierGroup.Feature) -> Double  {
-        return map[type]!
+        if let ret = map[type] {
+            return ret 
+        } else {
+            fatalError("no decision tree value for type \(type)")
+        }
     }
 }
