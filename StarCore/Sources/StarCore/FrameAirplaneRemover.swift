@@ -1248,19 +1248,11 @@ public class FrameAirplaneRemover: Equatable, Hashable {
     {
         var paintPixel = otherFrame.readPixel(atX: x, andY: y)
 
-        /*
-         XXX with this set to false, painting works better
-         but sometimes on smaller images gets black spots around the edges
-
-         with false commented out, painting sometimes fails works,
-         but no black spots around the edges
-         */
-        if false,
-           otherFrame.pixelOffset == 4, // has alpha channel
+        if otherFrame.pixelOffset == 4, // has alpha channel
            paintPixel.alpha != 0xFFFF   // alpha is not fully opaque
         {
             // ignore transparent pixels
-            //Log.w("ignoring transparent pixel")
+            // don't paint over with them
             return
         }
         

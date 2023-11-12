@@ -144,6 +144,9 @@ public struct PixelatedImage {
             pixel.red = typedPointer[offset]
             pixel.green = typedPointer[offset+1]
             pixel.blue = typedPointer[offset+2]
+            if offset+3 < typedPointer.count {
+                pixel.alpha = typedPointer[offset+3]
+            }
             return pixel
         }
         return pixel
