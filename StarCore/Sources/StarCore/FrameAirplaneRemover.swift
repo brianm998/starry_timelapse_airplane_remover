@@ -785,8 +785,6 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         var minGroupSize = Int(Double(config.minGroupSize)*sequenceResolution/twelveMegapixels)
         if minGroupSize < 10 { minGroupSize = 10 }
         
-        Log.d("using minGroupSize \(minGroupSize)")
-
         // holds transient data used for finding outliers
         let searchBag = OutlierSearchBag(width: width, height: height)
 
@@ -799,7 +797,8 @@ public class FrameAirplaneRemover: Equatable, Hashable {
             self.state = .frameHoughTransform
             let houghTransform = HoughTransform(dataWidth: width,
                                                 dataHeight: height,
-                                                inputData: subtractionArray)
+                                                inputData: subtractionArray,
+                                                maxValueRange: 5)
 
             let lines = houghTransform.lines(maxCount: 500,         // XXX constants XXX 
                                              minPixelValue: 4200/*3276*/,
@@ -814,6 +813,8 @@ public class FrameAirplaneRemover: Equatable, Hashable {
               [[Bool]](repeating: [Bool](repeating: false,
                                          count: Int(houghTransform.rmax/rhoDivisor)),
                        count: Int(360/thetaDivisor))
+
+            Log.d("frame \(frameIndex) processing \(lines.count) lines")
             
             for line in lines {
 
@@ -867,6 +868,8 @@ public class FrameAirplaneRemover: Equatable, Hashable {
             }
         }
 
+        Log.d("frame \(frameIndex) searched \(searchBag.searchCount) times")
+        
         // XXX write out houghLineImageData from the searchBag
         
         self.state = .detectingOutliers2
@@ -978,9 +981,11 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                                    subtractionArray: [UInt16],
                                    minGroupSize: Int) 
     {
+        let startTime = NSDate().timeIntervalSince1970
+        
         // record x, y search point to show to user
         searchBag.houghLineImageData[index] = 0x4FFF
-        
+        searchBag.searchCount += 1
         let outlierAmount = subtractionArray[index]
         if outlierAmount <= config.maxPixelDistance { return }
         
@@ -1079,13 +1084,14 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                 fatalError("FUCK")
             }
         }
-        Log.d("group \(outlierKey) has \(groupSize) members minGroupSize \(minGroupSize)")
-        
         if groupSize > minGroupSize { 
+            //Log.d("frame \(frameIndex) group \(outlierKey) has \(groupSize) members minGroupSize \(minGroupSize) loopCount \(loopCount)")
             searchBag.individualGroupCounts[outlierKey] = groupSize
         }
+        let endTime = NSDate().timeIntervalSince1970
+        //Log.d("search for group \(outlierKey) with \(groupSize) members took \(endTime-startTime) seconds")
     }
-    
+
     public func pixelatedImage() async throws -> PixelatedImage? {
         let name = imageSequence.filenames[frameIndex]
         return try await imageSequence.getImage(withName: name).image()
@@ -1482,6 +1488,8 @@ fileprivate class OutlierSearchBag {
 
     // test image to show hough lines we checked
     var houghLineImageData: [UInt16]
+
+    var searchCount: Int = 0
     
     init(width: Int, height: Int) {
         self.outlierGroupList = [String?](repeating: nil, count: width*height)
