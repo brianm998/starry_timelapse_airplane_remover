@@ -101,6 +101,7 @@ public actor FinalProcessor {
             self.log()
         }
 
+        /*
         await self.numberRunning.updateCallback() { numberOfFinishingFrames in
             // set the number of processes allowed for non-finishing activities
             let numConcurrentRenders = self.numConcurrentRenders - Int(numberOfFinishingFrames)
@@ -111,7 +112,7 @@ public actor FinalProcessor {
             }
             Log.d("numberOfFinishingFrames \(numberOfFinishingFrames) set TaskRunner.numConcurrentRendersTasks = \(TaskRunner.maxConcurrentTasks)")
         }
-        
+        */
     }
 
     func clearFrame(at index: Int) {
@@ -175,7 +176,7 @@ public actor FinalProcessor {
     var framesBetween: Int {
         var ret = maxAddedIndex - currentFrameIndex
         if ret < 0 { ret = 0 }
-
+        
         return ret
     }
     
@@ -187,23 +188,23 @@ public actor FinalProcessor {
     
     func finishAll() async throws {
         Log.d("finishing all")
-//        try await withLimitedThrowingTaskGroup(of: Void.self) { taskGroup in
+        try await withLimitedThrowingTaskGroup(of: Void.self) { taskGroup in
             for (_, frame) in frames.enumerated() {
                 if let frame = frame {
                     Log.d("adding frame \(frame.frameIndex) to final queue")
-                    //try await taskGroup.addTask() {
+                    try await taskGroup.addTask() {
 
-                    while await self.centralClassifier.classify(frame: frame) == false {
-                        Log.w("WAITING")
-                        try await Task.sleep(nanoseconds: 1_000_000_000)
+                        while await self.centralClassifier.classify(frame: frame) == false {
+                            //Log.w("WAITING")
+                            try await Task.sleep(nanoseconds: 1_000_000_000)
+                        }
+                        
+                        frame.set(state: .outlierProcessingComplete)
+                        try await self.finish(frame: frame)
                     }
-                    
-                    frame.set(state: .outlierProcessingComplete)
-                    try await self.finish(frame: frame)
-                //}
                 }
-  //          }
-//            try await taskGroup.waitForAll()
+            }
+            try await taskGroup.waitForAll()
         }
     }
 
