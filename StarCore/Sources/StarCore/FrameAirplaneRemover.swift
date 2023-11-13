@@ -291,7 +291,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
            let outputDirname = self.outlierOutputDirname
         {
             // write out the decision tree value matrix too
-            Log.d("frame \(self.frameIndex) writeOutlierValuesCSV 1")
+            //Log.d("frame \(self.frameIndex) writeOutlierValuesCSV 1")
 
             let frameOutlierDir = "\(outputDirname)/\(self.frameIndex)"
             let positiveFilename = "\(frameOutlierDir)/\(OutlierGroupValueMatrix.positiveDataFilename)"
@@ -305,19 +305,19 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                 let valueMatrix = OutlierGroupValueMatrix()
                 
                 if let outliers = self.outlierGroupList() {
-                    Log.d("frame \(self.frameIndex) writeOutlierValuesCSV 1a \(outliers.count) outliers")
+                    //Log.d("frame \(self.frameIndex) writeOutlierValuesCSV 1a \(outliers.count) outliers")
                     for outlier in outliers {
-                        Log.d("frame \(self.frameIndex) writeOutlierValuesCSV 1b")
+                        //Log.d("frame \(self.frameIndex) writeOutlierValuesCSV 1b")
                         await valueMatrix.append(outlierGroup: outlier)
                     }
                 }
-                Log.d("frame \(self.frameIndex) writeOutlierValuesCSV 2")
+                //Log.d("frame \(self.frameIndex) writeOutlierValuesCSV 2")
 
                 try valueMatrix.writeCSV(to: frameOutlierDir)
-                Log.d("frame \(self.frameIndex) writeOutlierValuesCSV 3")
+                //Log.d("frame \(self.frameIndex) writeOutlierValuesCSV 3")
             }
         }
-        Log.d("frame \(self.frameIndex) DONE writeOutlierValuesCSV")
+        //Log.d("frame \(self.frameIndex) DONE writeOutlierValuesCSV")
     }
 
     // write out a directory of individual OutlierGroup binaries
@@ -821,7 +821,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
             Log.d("frame \(frameIndex) processing \(lines.count) lines")
 
             // how many pixels in each direction does this stamp go?
-            let stampSize = 10 // 3 gives a 5x5 grid centered on this pixel
+            let stampSize = 4 // 3 gives a 5x5 grid centered on this pixel
             
             // iterate over all lines returned from the hough transform
             for line in lines {
@@ -836,7 +836,8 @@ public class FrameAirplaneRemover: Equatable, Hashable {
 
                 // for each line, sample values around a set of pixels
                 // walked either horizontally or vertically along the line,
-                // according to its slope                
+                // according to its slope
+
                 let cartesianLine = line.cartesianLine 
                 switch cartesianLine {
                 case .horizontal(let horizontalLine):
@@ -847,6 +848,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                             
                             outlierStampCheck(at: index,
                                               sampSize: stampSize,
+                                              orientation: cartesianLine,
                                               withName: outlierKey,
                                               searchBag: searchBag, 
                                               subtractionArray: subtractionArray)
@@ -861,6 +863,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                             
                             outlierStampCheck(at: index,
                                               sampSize: stampSize,
+                                              orientation: cartesianLine,
                                               withName: outlierKey,
                                               searchBag: searchBag, 
                                               subtractionArray: subtractionArray)
@@ -891,6 +894,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                 }
             }
             
+            // write out houghLineImageData from the searchBag
             let _ = try save16BitMonoImageData(searchBag.houghLineImageData,
                                                to: houghLineImageFilename)
         } else {
@@ -906,7 +910,6 @@ public class FrameAirplaneRemover: Equatable, Hashable {
 
         Log.d("frame \(frameIndex) searched \(searchBag.searchCount) times")
         
-        // XXX write out houghLineImageData from the searchBag
         
         self.state = .detectingOutliers2
 
@@ -917,7 +920,11 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         for x in 0 ..< width {
             for y in 0 ..< height {
                 let index = y*width+x
-                if let group = searchBag.outlierGroupList[index] {
+                if let group = searchBag.outlierGroupList[index],
+                   // not all pixels tagged with an outlier group end up
+                   // in the individual group counts because of size
+                   let _ = searchBag.individualGroupCounts[group]
+                {
                     let amount = UInt(subtractionArray[index])
                     if let info = groupInfo[group] {
                         info.process(x: x, y: y, amount: amount)
@@ -1015,6 +1022,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
     // newer method for usage w/ hough lines
     private func outlierStampCheck(at index: Int,
                                    sampSize: Int,
+                                   orientation: CartesianLine,
                                    withName outlierKey: String,
                                    searchBag: OutlierSearchBag, 
                                    subtractionArray: [UInt16])
@@ -1037,12 +1045,25 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         let y = index / width
 
         // first figure out our name
+
+        var sampSizeVert = sampSize
+        var sampSizeHori = sampSize
+
+        // adjust the sample size based upon orientation
+        // grab more from the direction we're coming from to bridge gaps
+        // that can be caused by blinking lights of more distant vehicles
+        switch orientation {
+        case .vertical(_):
+            sampSizeVert *= 2
+        case .horizontal(_):
+            sampSizeHori *= 2
+        }
         
         // how may pixels in each direction to look for others  
-        var searchXStart = x - sampSize
-        var searchYStart = y - sampSize
-        var searchXEnd = x + sampSize
-        var searchYEnd = y + sampSize
+        var searchXStart = x - sampSizeHori
+        var searchYStart = y - sampSizeVert
+        var searchXEnd = x + sampSizeHori
+        var searchYEnd = y + sampSizeVert
         if searchXStart < 0 { searchXStart = 0 }
         if searchYStart < 0 { searchYStart = 0 }
         if searchXEnd > width { searchXEnd = width } 
@@ -1081,7 +1102,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                 if searchBag.outlierGroupList[searchIndex] == nil,
                    subtractionArray[searchIndex] > config.maxPixelDistance
                 {
-                    Log.d("frame \(frameIndex) setting [\(searchX), \(searchY))] to outlier group \(nameForThisOutlierGroup)")
+                    //Log.d("frame \(frameIndex) setting [\(searchX), \(searchY))] to outlier group \(nameForThisOutlierGroup)")
                     searchBag.outlierGroupList[searchIndex] = nameForThisOutlierGroup
                 }
             }
