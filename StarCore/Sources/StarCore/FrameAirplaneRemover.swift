@@ -800,29 +800,43 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                                                 inputData: subtractionArray,
                                                 maxValueRange: 5)
 
+            // first run a hough transform to extract information about lines in this frame
             let lines = houghTransform.lines(maxCount: 500,         // XXX constants XXX 
-                                             minPixelValue: 4200/*3276*/,
+                                             minPixelValue: 6200/*3276*/,
                                              minLineCount: 20)
 
             self.state = .detectingOutliers1
 
+            
             // indexed first by theta/10 then by rho/5
             let rhoDivisor: Double = 2
             let thetaDivisor: Double = 6
+
+            // this array is used to avoid similiar lines with less count
             var usedLineArray: [[Bool]] =
               [[Bool]](repeating: [Bool](repeating: false,
                                          count: Int(houghTransform.rmax/rhoDivisor)),
                        count: Int(360/thetaDivisor))
 
             Log.d("frame \(frameIndex) processing \(lines.count) lines")
-            
-            for line in lines {
 
+            // how many pixels in each direction does this stamp go?
+            let stampSize = 10 // 3 gives a 5x5 grid centered on this pixel
+            
+            // iterate over all lines returned from the hough transform
+            for line in lines {
+                Log.d("frame \(frameIndex) processing line \(line)")
+
+                let outlierKey = "\(line)"
+                
                 let thetaIndex = Int(line.theta/thetaDivisor)
                 let rhoIndex = Int(line.rho/rhoDivisor)
                 if usedLineArray[thetaIndex][rhoIndex] { continue }
                 usedLineArray[thetaIndex][rhoIndex] = true
-                
+
+                // for each line, sample values around a set of pixels
+                // walked either horizontally or vertically along the line,
+                // according to its slope                
                 let cartesianLine = line.cartesianLine 
                 switch cartesianLine {
                 case .horizontal(let horizontalLine):
@@ -830,11 +844,12 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                         let y = horizontalLine.y(for: x) 
                         if y >= 0, y < height {
                             let index = y * width + x
-
-                            searchForOutliers(at: index,
+                            
+                            outlierStampCheck(at: index,
+                                              sampSize: stampSize,
+                                              withName: outlierKey,
                                               searchBag: searchBag, 
-                                              subtractionArray: subtractionArray,
-                                              minGroupSize: minGroupSize)
+                                              subtractionArray: subtractionArray)
                         }
                     }
                     
@@ -844,19 +859,40 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                         if x >= 0, x < width {
                             let index = y * width + x
                             
-                            searchForOutliers(at: index,
+                            outlierStampCheck(at: index,
+                                              sampSize: stampSize,
+                                              withName: outlierKey,
                                               searchBag: searchBag, 
-                                              subtractionArray: subtractionArray,
-                                              minGroupSize: minGroupSize)
-                            
+                                              subtractionArray: subtractionArray)
                         }
                     }
+                }
+            }
+
+
+            var groupCounts: [String:UInt] = [:]
+
+            for x in 0..<width {
+                for y in 0..<height {
+                    let index = y * width + x
+                    if let outlierKey = searchBag.outlierGroupList[index] {
+                        if let groupCount = groupCounts[outlierKey] {
+                            groupCounts[outlierKey] = groupCount+1
+                        } else {
+                            groupCounts[outlierKey] = 1
+                        }
+                    }
+                }
+            }
+
+            for (outlierKey, groupCount) in groupCounts {
+                if groupCount > minGroupSize {
+                    searchBag.individualGroupCounts[outlierKey] = groupCount
                 }
             }
             
             let _ = try save16BitMonoImageData(searchBag.houghLineImageData,
                                                to: houghLineImageFilename)
-            
         } else {
             self.state = .detectingOutliers1
             // old approach which scans every pixel in the image
@@ -976,6 +1012,83 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         return outlierAmountImage
     }
 
+    // newer method for usage w/ hough lines
+    private func outlierStampCheck(at index: Int,
+                                   sampSize: Int,
+                                   withName outlierKey: String,
+                                   searchBag: OutlierSearchBag, 
+                                   subtractionArray: [UInt16])
+    {
+        let startTime = NSDate().timeIntervalSince1970
+
+        searchBag.houghLineImageData[index] = 0x4FFF
+        searchBag.searchCount += 1
+
+        let outlierAmount = subtractionArray[index]
+        if outlierAmount <= config.maxPixelDistance { return }
+
+        let outlierGroupname = searchBag.outlierGroupList[index]
+        if outlierGroupname != nil { return }
+        
+        // record x, y search point to show to user
+        searchBag.houghLineImageData[index] = 0xFFFF
+
+        let x = index % width
+        let y = index / width
+
+        // first figure out our name
+        
+        // how may pixels in each direction to look for others  
+        var searchXStart = x - sampSize
+        var searchYStart = y - sampSize
+        var searchXEnd = x + sampSize
+        var searchYEnd = y + sampSize
+        if searchXStart < 0 { searchXStart = 0 }
+        if searchYStart < 0 { searchYStart = 0 }
+        if searchXEnd > width { searchXEnd = width } 
+        if searchYEnd > height { searchYEnd = height } 
+
+        var nameForThisOutlierGroup: String?
+        
+        for searchX in searchXStart..<searchXEnd {
+            for searchY in searchYStart..<searchYEnd {
+                if let otherGroupName = searchBag.outlierGroupList[searchY*width+searchX],
+                   otherGroupName.starts(with: outlierKey)
+                {
+                    Log.d("frame \(frameIndex) found matching outlier name \(otherGroupName)")
+                    nameForThisOutlierGroup = otherGroupName
+                    continue
+                }
+            }
+            if nameForThisOutlierGroup != nil { continue }
+        }
+
+        if nameForThisOutlierGroup == nil {
+            nameForThisOutlierGroup = "\(outlierKey) - \(index)"
+            Log.d("frame \(frameIndex) making new outlier name \(nameForThisOutlierGroup!)")
+        }
+
+        guard nameForThisOutlierGroup != nil else {
+            Log.e("nameForThisOutlierGroup is nil somehow")
+            return
+        }
+        
+        searchBag.outlierGroupList[index] = nameForThisOutlierGroup
+        
+        for searchX in searchXStart..<searchXEnd {
+            for searchY in searchYStart..<searchYEnd {
+                let searchIndex = searchY*width+searchX
+                if searchBag.outlierGroupList[searchIndex] == nil,
+                   subtractionArray[searchIndex] > config.maxPixelDistance
+                {
+                    Log.d("frame \(frameIndex) setting [\(searchX), \(searchY))] to outlier group \(nameForThisOutlierGroup)")
+                    searchBag.outlierGroupList[searchIndex] = nameForThisOutlierGroup
+                }
+            }
+        }
+    }
+
+    // older working, but slow method
     private func searchForOutliers(at index: Int,
                                    searchBag: OutlierSearchBag, 
                                    subtractionArray: [UInt16],
@@ -994,7 +1107,6 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         
         let outlierGroupname = searchBag.outlierGroupList[index]
         if outlierGroupname != nil { return }
-
         
         var pendingOutliers = [Int](repeating: -1, count: width*height) 
         var pendingOutlierInsertIndex = 0;
