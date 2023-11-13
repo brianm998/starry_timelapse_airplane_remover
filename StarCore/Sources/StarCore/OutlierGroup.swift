@@ -314,7 +314,8 @@ public class OutlierGroup: CustomStringConvertible,
         case neighboringInterFrameOutlierThetaScore
         case maxOverlap
         case maxOverlapTimesThetaHisto
-
+        case pixelBorderAmount
+        
         /*
          XXX add:
            - config stuff:
@@ -430,6 +431,8 @@ public class OutlierGroup: CustomStringConvertible,
                 return 29
             case .maxOverlapTimesThetaHisto:
                 return 30
+            case .pixelBorderAmount:
+                return 31
             }
         }
 
@@ -519,6 +522,8 @@ public class OutlierGroup: CustomStringConvertible,
             ret = self.maxOverlap
         case .maxOverlapTimesThetaHisto:
             ret = self.maxOverlapTimesThetaHisto
+        case .pixelBorderAmount:
+            ret = self.pixelBorderAmount
         }
         //let t1 = NSDate().timeIntervalSince1970
         //Log.v("group \(name) @ frame \(frameIndex) decisionTreeValue(for: \(type)) = \(ret) after \(t1-t0)s")
@@ -727,6 +732,44 @@ public class OutlierGroup: CustomStringConvertible,
             }            
             return maxOverlap
         }
+    }
+
+    // how many neighors does each of the pixels in this outlier group have?
+    // higher numbers mean they are packed closer together
+    // lower numbers mean they are more of a disparate cloud
+    fileprivate var pixelBorderAmount: Double {
+        var totalNeighbors: Double = 0.0
+        var totalSize: Int = 0
+        
+        for x in 0 ..< self.bounds.width {
+            for y in 0 ..< self.bounds.height {
+                let pixelIndex = y*self.bounds.width + x
+                if self.pixels[pixelIndex] != 0 {
+                    totalSize += 1
+
+                    var leftIndex = x - 1
+                    var rightIndex = x + 1
+                    var topIndex = y - 1
+                    var bottomIndex = y + 1
+                    if leftIndex < 0 { leftIndex = 0 }
+                    if topIndex < 0 { topIndex = 0 }
+                    if rightIndex >= self.bounds.width { rightIndex = self.bounds.width - 1 }
+                    if bottomIndex >= self.bounds.height { bottomIndex = self.bounds.height - 1 }
+
+                    for neighborX in leftIndex...rightIndex {
+                        for neighborY in topIndex...bottomIndex {
+                            if neighborX != x,
+                               neighborY != y,
+                               self.pixels[neighborY*self.bounds.width + neighborX] != 0
+                            {
+                                totalNeighbors += 1
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return totalNeighbors/Double(totalSize)
     }
     
     fileprivate var neighboringInterFrameOutlierThetaScore: Double {
