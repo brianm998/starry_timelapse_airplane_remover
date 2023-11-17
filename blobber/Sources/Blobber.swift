@@ -25,6 +25,11 @@ struct BlobberCli: AsyncParsableCommand {
         """)
     var inputFile: String?
     
+    @Option(name: [.short, .customLong("output-file")], help:"""
+        Output file to write blobbed tiff image to
+        """)
+    var outputFile: String
+    
     mutating func run() async throws {
 
         Log.handlers[.console] = ConsoleLogHandler(at: .verbose)
@@ -57,10 +62,9 @@ struct BlobberCli: AsyncParsableCommand {
 
         let small_image = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/LRT_00350-severe-noise_crop.tiff"
 
-        //let (image, pixelData) = try await PixelatedImage.loadUInt16Array(from: no_clouds[inputFile]!)
         let blobber = try await Blobber(filename: small_image)
 
-        // XXX do something ?
+        try blobber.outputImage.writeTIFFEncoding(toFilename: outputFile)
     }
 }
 
@@ -74,6 +78,7 @@ class Blobber {
     // sorted by brightness
     var sortedPixels: [SortablePixel] = []
     var blobs: [Blob] = []
+    var outputData: [UInt16]
 
     let neighborType: NeighborType
     let lowIntensityLimit: UInt16 = 800
@@ -124,7 +129,7 @@ class Blobber {
 
         sortedPixels.sort { $0.intensity > $1.intensity }
 
-        let outputData = [UInt16](repeating: 0, count: pixelData.count)
+        self.outputData = [UInt16](repeating: 0, count: pixelData.count)
 
         Log.d("detecting blobs")
         
@@ -145,13 +150,12 @@ class Blobber {
                     pixel.status = .background
                 }                    
             } else {
-                // see if any heigher neihbors are already backgrounded
+                // see if any higher neighbors are already backgrounded
                 var hasHigherBackgroundNeighbor = false
                 for neighbor in higherNeighbors {
                     switch neighbor.status {
                     case .background:
                         hasHigherBackgroundNeighbor = true
-                        break
                     default:
                         break
                     }
@@ -212,6 +216,32 @@ class Blobber {
         self.blobs = self.blobs.filter { $0.pixels.count >= blobMinimumSize }         
 
         Log.d("found \(blobs.count) blobs larger than \(blobMinimumSize) pixels")
+
+        for blob in blobs {
+            for pixel in blob.pixels {
+                // maybe adjust by size?
+                outputData[pixel.y*image.width+pixel.x] = blob.intensity
+            }
+        }
+    }
+
+    var outputImage: PixelatedImage {
+        let imageData = outputData.withUnsafeBufferPointer { Data(buffer: $0)  }
+        
+        // write out the subtractionArray here as an image
+        let outputImage = PixelatedImage(width: image.width,
+                                         height: image.height,
+                                         rawImageData: imageData,
+                                         bitsPerPixel: 16,
+                                         bytesPerRow: 2*image.width,
+                                         bitsPerComponent: 16,
+                                         bytesPerPixel: 2,
+                                         bitmapInfo: .byteOrder16Little, 
+                                         pixelOffset: 0,
+                                         colorSpace: CGColorSpaceCreateDeviceGray(),
+                                         ciFormat: .L16)
+
+        return outputImage
     }
 
     // for the NeighborType of this Blobber
@@ -347,6 +377,15 @@ class Blob {
     let id: String
     var pixels: [SortablePixel]
     var canGrow: Bool = true
+
+    var intensity: UInt16 {
+        var max: UInt32 = 0
+        for pixel in pixels {
+            max += UInt32(pixel.intensity)
+        }
+        max /= UInt32(pixels.count)
+        return UInt16(max)
+    }
     
     init(_ pixel: SortablePixel) {
         self.pixels = [pixel]
