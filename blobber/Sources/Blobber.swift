@@ -81,7 +81,10 @@ class Blobber {
     var outputData: [UInt16]
 
     let neighborType: NeighborType
-    let lowIntensityLimit: UInt16 = 800
+    //let lowIntensityLimit: UInt16 = 2500 // looks good, but noisy still
+    //let lowIntensityLimit: UInt16 = 6500 // nearly F-ing nailed it
+    let lowIntensityLimit: UInt16 = 7200 // 
+    //let lowIntensityLimit: UInt16 = 8500 // still some noise, but airplane streaks too small
     let blobMinimumSize = 20
     
     enum NeighborType {
@@ -176,7 +179,7 @@ class Blobber {
                         }
                     }
 
-                    if nearbyBlobs.count > 1 {
+                    if false && nearbyBlobs.count > 1 {
                         // more than one higher neighbor is part of a blob
                         // and they are in different blobs 
                         // this pixel must be background
@@ -220,7 +223,7 @@ class Blobber {
         for blob in blobs {
             for pixel in blob.pixels {
                 // maybe adjust by size?
-                outputData[pixel.y*image.width+pixel.x] = blob.intensity
+                outputData[pixel.y*image.width+pixel.x] = 0xFFFF/4 + (blob.intensity/4)*3
             }
         }
     }
