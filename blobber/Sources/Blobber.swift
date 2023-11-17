@@ -126,7 +126,10 @@ class Blobber {
 
         for pixel in sortedPixels {
             if !hasHigherNeighbor(pixel) {
-                // no local maximum, blob seed
+                // no local maximum, this pixel is a blob seed
+                let newBlob = Blob()
+                newBlob.pixels.append(pixel)
+                pixel.status = .blobbed(newBlob)
             } else {
                 // check to see if neighbor is background or
             }
@@ -260,19 +263,25 @@ class Blobber {
             return pixels[pixel.x-1][pixel.y-1].intensity
         }
     }
-    
 }
 
 class Blob {
     var pixels: [SortablePixel] = []
-    var isGrowing: Bool = true
+    var canGrow: Bool = true
 }
 
-struct SortablePixel {
+class SortablePixel {
     let x: Int
     let y: Int
     let intensity: UInt16
-
+    var status = Status.unknown
+    
+    enum Status {
+        case unknown
+        case background
+        case blobbed(Blob)
+    }
+    
     init(x: Int = 0,
          y: Int = 0,
          intensity: UInt16 = 0)
