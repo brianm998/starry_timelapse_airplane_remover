@@ -76,6 +76,8 @@ class Blobber {
     var blobs: [Blob] = []
 
     let neighborType: NeighborType
+    let lowIntensityLimit: UInt16 = 800
+    let blobMinimumSize = 20
     
     enum NeighborType {
         case fourCardinal       // up and down, left and right, no corners
@@ -124,86 +126,162 @@ class Blobber {
 
         let outputData = [UInt16](repeating: 0, count: pixelData.count)
 
+        Log.d("detecting blobs")
+        
         for pixel in sortedPixels {
-            if !hasHigherNeighbor(pixel) {
-                // no local maximum, this pixel is a blob seed
-                let newBlob = Blob()
-                newBlob.pixels.append(pixel)
-                pixel.status = .blobbed(newBlob)
+            //Log.d("examining pixel \(pixel.x) \(pixel.y) \(pixel.intensity)")
+            let higherNeighbors = self.higherNeighbors(pixel)
+            //Log.d("found \(higherNeighbors) higherNeighbors")
+            if higherNeighbors.count == 0 {
+                // no higher neighbors
+                // a local maximum, this pixel is a blob seed
+                if pixel.intensity > lowIntensityLimit {
+                    let newBlob = Blob(pixel)
+                    newBlob.pixels.append(pixel)
+                    pixel.status = .blobbed(newBlob)
+                    blobs.append(newBlob)
+                } else {
+                    // but only if it's bright enough
+                    pixel.status = .background
+                }                    
             } else {
-                // check to see if neighbor is background or
+                // see if any heigher neihbors are already backgrounded
+                var hasHigherBackgroundNeighbor = false
+                for neighbor in higherNeighbors {
+                    switch neighbor.status {
+                    case .background:
+                        hasHigherBackgroundNeighbor = true
+                        break
+                    default:
+                        break
+                    }
+                }
+                if hasHigherBackgroundNeighbor {
+                    // if has at least one higher neighbor, which is background,
+                    // then it must be background
+                    pixel.status = .background
+                } else {
+                    // see how many blobs neighbors are already part of
+                    var nearbyBlobs: [String:Blob] = [:]
+                    for neighbor in higherNeighbors {
+                        switch neighbor.status {
+                        case .blobbed(let nearbyBlob):
+                            nearbyBlobs[nearbyBlob.id] = nearbyBlob
+                        default:
+                            break
+                        }
+                    }
+
+                    if nearbyBlobs.count > 1 {
+                        // more than one higher neighbor is part of a blob
+                        // and they are in different blobs 
+                        // this pixel must be background
+                        pixel.status = .background
+
+                        // stopy any groups of higher neighbors from growing further
+
+                        for neighbor in higherNeighbors {
+                            switch neighbor.status {
+                            case .blobbed(let nearbyBlob):
+                                nearbyBlob.canGrow = false
+                            default:
+                                break
+                            }
+                        }
+                        
+                    } else {
+                        // this pixel has one or more higher neighbors, which are all
+                        // parts of the same blob.
+                        if let blob = nearbyBlobs.first?.value,
+                           blob.canGrow
+                        {
+                            // add this pixel to the blob
+                            pixel.status = .blobbed(blob)
+                            blob.pixels.append(pixel)
+                        } else {
+                            // this pixel is background
+                            pixel.status = .background
+                        }
+                    }
+                }
             }
         }
+
+        Log.d("initially found \(blobs.count) blobs")
+
+        self.blobs = self.blobs.filter { $0.pixels.count >= blobMinimumSize }         
+
+        Log.d("found \(blobs.count) blobs larger than \(blobMinimumSize) pixels")
     }
 
     // for the NeighborType of this Blobber
-    func hasHigherNeighbor(_ pixel: SortablePixel) -> Bool {
-        return hasHigherNeighborInt(pixel, neighborType)
+    func higherNeighbors(_ pixel: SortablePixel) -> [SortablePixel] {
+        return higherNeighborsInt(pixel, neighborType)
     }
 
     // for any NeighborType
-    fileprivate func hasHigherNeighborInt(_ pixel: SortablePixel,
-                                          _ type: NeighborType) -> Bool
+    fileprivate func higherNeighborsInt(_ pixel: SortablePixel,
+                                        _ type: NeighborType) -> [SortablePixel]
     {
+        var ret: [SortablePixel] = []
         switch type {
 
             // up and down, left and right, no corners
         case .fourCardinal:
-            if let left = neighborValue(.left, for: pixel),
-               left > pixel.intensity
+            if let left = neighbor(.left, for: pixel),
+               left.intensity > pixel.intensity
             {
-                return true
+                ret.append(left)
             }
-            if let right = neighborValue(.right, for: pixel),
-               right > pixel.intensity
+            if let right = neighbor(.right, for: pixel),
+               right.intensity > pixel.intensity
             {
-                return true
+                ret.append(right)
             }
-            if let up = neighborValue(.up, for: pixel),
-               up > pixel.intensity
+            if let up = neighbor(.up, for: pixel),
+               up.intensity > pixel.intensity
             {
-                return true
+                ret.append(up)
             }
-            if let down = neighborValue(.down, for: pixel),
-               down > pixel.intensity
+            if let down = neighbor(.down, for: pixel),
+               down.intensity > pixel.intensity
             {
-                return true
+                ret.append(down)
             }
-            return false
             
             // diagnals only
         case .fourCorner:
-            if let upperLeft = neighborValue(.upperLeft, for: pixel),
-               upperLeft > pixel.intensity
+            if let upperLeft = neighbor(.upperLeft, for: pixel),
+               upperLeft.intensity > pixel.intensity
             {
-                return true
+                ret.append(upperLeft)
             }
-            if let upperRight = neighborValue(.upperRight, for: pixel),
-               upperRight > pixel.intensity
+            if let upperRight = neighbor(.upperRight, for: pixel),
+               upperRight.intensity > pixel.intensity
             {
-                return true
+                ret.append(upperRight)
             }
-            if let lowerLeft = neighborValue(.lowerLeft, for: pixel),
-               lowerLeft > pixel.intensity
+            if let lowerLeft = neighbor(.lowerLeft, for: pixel),
+               lowerLeft.intensity > pixel.intensity
             {
-                return true
+                ret.append(lowerLeft)
             }
-            if let lowerRight = neighborValue(.lowerRight, for: pixel),
-               lowerRight > pixel.intensity
+            if let lowerRight = neighbor(.lowerRight, for: pixel),
+               lowerRight.intensity > pixel.intensity
             {
-                return true
+                ret.append(lowerRight)
             }
-            return false
 
             // the sum of the other two
         case .eight:        
-            return hasHigherNeighborInt(pixel, .fourCardinal) ||
-                   hasHigherNeighborInt(pixel, .fourCorner)
+            return higherNeighborsInt(pixel, .fourCardinal) + 
+                   higherNeighborsInt(pixel, .fourCorner)
             
         }
+        return ret
     }
 
-    func neighborValue(_ direction: NeighborDirection, for pixel: SortablePixel) -> UInt16? {
+    func neighbor(_ direction: NeighborDirection, for pixel: SortablePixel) -> SortablePixel? {
         if pixel.x == 0 {
             if direction == .left || 
                direction == .lowerLeft ||
@@ -246,28 +324,34 @@ class Blobber {
         }
         switch direction {
         case .up:
-            return pixels[pixel.x][pixel.y-1].intensity
+            return pixels[pixel.x][pixel.y-1]
         case .down:
-            return pixels[pixel.x][pixel.y+1].intensity
+            return pixels[pixel.x][pixel.y+1]
         case .left:
-            return pixels[pixel.x-1][pixel.y].intensity
+            return pixels[pixel.x-1][pixel.y]
         case .right:
-            return pixels[pixel.x+1][pixel.y].intensity
+            return pixels[pixel.x+1][pixel.y]
         case .lowerRight:
-            return pixels[pixel.x+1][pixel.y+1].intensity
+            return pixels[pixel.x+1][pixel.y+1]
         case .upperRight:
-            return pixels[pixel.x+1][pixel.y-1].intensity
+            return pixels[pixel.x+1][pixel.y-1]
         case .lowerLeft:
-            return pixels[pixel.x-1][pixel.y+1].intensity
+            return pixels[pixel.x-1][pixel.y+1]
         case .upperLeft:
-            return pixels[pixel.x-1][pixel.y-1].intensity
+            return pixels[pixel.x-1][pixel.y-1]
         }
     }
 }
 
 class Blob {
-    var pixels: [SortablePixel] = []
+    let id: String
+    var pixels: [SortablePixel]
     var canGrow: Bool = true
+    
+    init(_ pixel: SortablePixel) {
+        self.pixels = [pixel]
+        self.id = "\(pixel.x) x \(pixel.y)"
+    }
 }
 
 class SortablePixel {
