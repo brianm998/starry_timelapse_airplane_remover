@@ -67,21 +67,48 @@ struct BlobberCli: AsyncParsableCommand {
 class Blobber {
     let image: PixelatedImage
     let pixelData: [UInt16]
+
+    // [x][y] accessable array
+    var pixels: [[SortablePixel]]
+
+    // sorted by brightness
+    var sortedPixels: [SortablePixel] = []
+    var blobs: [Blob] = []
+
+    let neighborType: NeighborType
     
-    init(filename: String) async throws {
-        (image, pixelData) = try await PixelatedImage.loadUInt16Array(from: filename)
+    enum NeighborType {
+        case fourCardinal       // up and down, left and right, no corners
+        case fourCorner         // diagnals only
+        case eight              // the sum of the other two
+    }
+
+    enum NeighborDirection {
+        case up
+        case down
+        case left
+        case right
+        case lowerRight
+        case upperRight
+        case lowerLeft
+        case upperLeft
+    }
+    
+    init(filename: String,
+         neighborType: NeighborType = .eight) async throws
+    {
+        (self.image, self.pixelData) = try await PixelatedImage.loadUInt16Array(from: filename)
+        self.neighborType = neighborType
 
         Log.v("loaded image of size (\(image.width), \(image.height))")
 
         Log.v("blobbing image of size (\(image.width), \(image.height))")
 
-        var sortedPixels: [SortablePixel] = []
-
         Log.d("loading pixels")
 
-        var pixels = [[SortablePixel]](repeating: [SortablePixel](repeating: SortablePixel(),
+        pixels = [[SortablePixel]](repeating: [SortablePixel](repeating: SortablePixel(),
                                                               count: image.height),
-                                     count: image.width)
+                                   count: image.width)
         
         for x in 0..<image.width {
             for y in 0..<image.height {
@@ -95,14 +122,145 @@ class Blobber {
 
         sortedPixels.sort { $0.intensity > $1.intensity }
 
-        var blobs: [Blob] = []
-
         let outputData = [UInt16](repeating: 0, count: pixelData.count)
 
         for pixel in sortedPixels {
+            if !hasHigherNeighbor(pixel) {
+                // no local maximum, blob seed
+            } else {
+                // check to see if neighbor is background or
+            }
+        }
+    }
+
+    // for the NeighborType of this Blobber
+    func hasHigherNeighbor(_ pixel: SortablePixel) -> Bool {
+        return hasHigherNeighborInt(pixel, neighborType)
+    }
+
+    // for any NeighborType
+    fileprivate func hasHigherNeighborInt(_ pixel: SortablePixel,
+                                          _ type: NeighborType) -> Bool
+    {
+        switch type {
+
+            // up and down, left and right, no corners
+        case .fourCardinal:
+            if let left = neighborValue(.left, for: pixel),
+               left > pixel.intensity
+            {
+                return true
+            }
+            if let right = neighborValue(.right, for: pixel),
+               right > pixel.intensity
+            {
+                return true
+            }
+            if let up = neighborValue(.up, for: pixel),
+               up > pixel.intensity
+            {
+                return true
+            }
+            if let down = neighborValue(.down, for: pixel),
+               down > pixel.intensity
+            {
+                return true
+            }
+            return false
+            
+            // diagnals only
+        case .fourCorner:
+            if let upperLeft = neighborValue(.upperLeft, for: pixel),
+               upperLeft > pixel.intensity
+            {
+                return true
+            }
+            if let upperRight = neighborValue(.upperRight, for: pixel),
+               upperRight > pixel.intensity
+            {
+                return true
+            }
+            if let lowerLeft = neighborValue(.lowerLeft, for: pixel),
+               lowerLeft > pixel.intensity
+            {
+                return true
+            }
+            if let lowerRight = neighborValue(.lowerRight, for: pixel),
+               lowerRight > pixel.intensity
+            {
+                return true
+            }
+            return false
+
+            // the sum of the other two
+        case .eight:        
+            return hasHigherNeighborInt(pixel, .fourCardinal) ||
+                   hasHigherNeighborInt(pixel, .fourCorner)
             
         }
     }
+
+    func neighborValue(_ direction: NeighborDirection, for pixel: SortablePixel) -> UInt16? {
+        if pixel.x == 0 {
+            if direction == .left || 
+               direction == .lowerLeft ||
+               direction == .upperLeft
+            {
+                return nil
+            }
+        }
+        if pixel.y == 0 {
+            if direction == .up ||
+               direction == .upperRight ||
+               direction == .upperLeft
+            {
+                return nil
+            }
+        }
+        if pixel.x == 0 {
+            if direction == .left ||
+               direction == .lowerLeft ||
+               direction == .upperLeft
+            {
+                return nil
+            }
+        }
+        if pixel.y == image.height - 1 {
+            if direction == .down ||
+               direction == .lowerLeft ||
+               direction == .lowerRight
+            {
+                return nil
+            }
+        }
+        if pixel.x == image.width - 1 {
+            if direction == .right ||
+               direction == .lowerRight ||
+               direction == .upperRight
+            {
+                return nil
+            }
+        }
+        switch direction {
+        case .up:
+            return pixels[pixel.x][pixel.y-1].intensity
+        case .down:
+            return pixels[pixel.x][pixel.y+1].intensity
+        case .left:
+            return pixels[pixel.x-1][pixel.y].intensity
+        case .right:
+            return pixels[pixel.x+1][pixel.y].intensity
+        case .lowerRight:
+            return pixels[pixel.x+1][pixel.y+1].intensity
+        case .upperRight:
+            return pixels[pixel.x+1][pixel.y-1].intensity
+        case .lowerLeft:
+            return pixels[pixel.x-1][pixel.y+1].intensity
+        case .upperLeft:
+            return pixels[pixel.x-1][pixel.y-1].intensity
+        }
+    }
+    
 }
 
 class Blob {
@@ -120,7 +278,7 @@ struct SortablePixel {
          intensity: UInt16 = 0)
     {
         self.x = x
-        self.y = x
+        self.y = y
         self.intensity = intensity
     }
 }
