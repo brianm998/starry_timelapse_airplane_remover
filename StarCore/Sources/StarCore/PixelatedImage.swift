@@ -46,7 +46,7 @@ public struct PixelatedImage {
     let colorSpace: CGColorSpace // XXX why both space and name?
     let ciFormat: CIFormat    // used to write tiff formats properly
     
-    init?(fromFile filename: String) async throws {
+    public init?(fromFile filename: String) async throws {
         Log.d("Loading image from \(filename)")
         if let nsImage = try await loadImage(fromFile: filename) {
             if let cgImage = nsImage.cgImage(forProposedRect: nil, context: nil, hints: nil) {
@@ -63,7 +63,7 @@ public struct PixelatedImage {
         }
     }
     
-    init(width: Int,
+    public init(width: Int,
          height: Int,
          rawImageData: Data,
          bitsPerPixel: Int,
@@ -204,7 +204,7 @@ public struct PixelatedImage {
     }
     
     // write out the base image data
-    func writeTIFFEncoding(toFilename imageFilename: String) throws {
+    public func writeTIFFEncoding(toFilename imageFilename: String) throws {
         try self.writeTIFFEncoding(ofData: self.rawImageData,
                                    toFilename: imageFilename)
     }
