@@ -60,9 +60,22 @@ struct BlobberCli: AsyncParsableCommand {
         ]
 
 
+        let clouds_cropped = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/LRT00161_cropped.tif"
+        let clouds_cropped_3x_blur = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/LRT00161_cropped_3x_blur.tif"
+        let clouds_cropped_2x_blur = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/LRT00161_cropped_2x_blur.tif"
+        let clouds_cropped_1x_blur = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/LRT00161_cropped_1x_blur.tif"
+        
+
+        
         let small_image = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/LRT_00350-severe-noise_crop.tiff"
 
-        let blobber = try await Blobber(filename: small_image)
+        let blobber = try await Blobber(filename:
+//                                          lots_of_clouds["160"]!,
+//                                          clouds_cropped_1x_blur,
+                                          clouds_cropped,
+//                                          small_image,
+                                        neighborType: .eight,
+                                        withBlur: 0)
 
         try blobber.outputImage.writeTIFFEncoding(toFilename: outputFile)
     }
@@ -81,11 +94,26 @@ class Blobber {
     var outputData: [UInt16]
 
     let neighborType: NeighborType
+
+    // no blurring
     //let lowIntensityLimit: UInt16 = 2500 // looks good, but noisy still
     //let lowIntensityLimit: UInt16 = 6500 // nearly F-ing nailed it
-    let lowIntensityLimit: UInt16 = 7200 // 
+    //let lowIntensityLimit: UInt16 = 7000 // a nice spot for unblurred
+    //let lowIntensityLimit: UInt16 = 7200 // pretty good
     //let lowIntensityLimit: UInt16 = 8500 // still some noise, but airplane streaks too small
-    let blobMinimumSize = 20
+
+    // 3x gaussian blur
+    //let lowIntensityLimit: UInt16 = 3000 // caught the planes, and lots of noise, took forever
+    //let lowIntensityLimit: UInt16 = 5000 // got about half of each plane track, still noise
+    //let lowIntensityLimit: UInt16 = 7000 // completely missed the plane tracks, and most else too
+
+    // 2x gaussian blur
+    //let lowIntensityLimit: UInt16 = 5000   // not bad, still some noise and missing some tracks
+    
+    // 1x gaussian blur
+    let lowIntensityLimit: UInt16 = 5000   // 
+    
+    let blobMinimumSize = 30
     
     enum NeighborType {
         case fourCardinal       // up and down, left and right, no corners
@@ -105,17 +133,22 @@ class Blobber {
     }
     
     init(filename: String,
-         neighborType: NeighborType = .eight) async throws
+         neighborType: NeighborType = .eight,
+         withBlur radius: Int = 0) async throws
     {
-        (self.image, self.pixelData) = try await PixelatedImage.loadUInt16Array(from: filename)
+        (self.image, self.pixelData) =
+          try await PixelatedImage.loadUInt16Array(from: filename, withBlur: radius)
         self.neighborType = neighborType
 
+        Log.v("trying to blur image")
+        //try self.image.writeTIFFEncoding(toFilename: "blurred_\(filename)")
+        
         Log.v("loaded image of size (\(image.width), \(image.height))")
 
         Log.v("blobbing image of size (\(image.width), \(image.height))")
-
+        
         Log.d("loading pixels")
-
+        
         pixels = [[SortablePixel]](repeating: [SortablePixel](repeating: SortablePixel(),
                                                               count: image.height),
                                    count: image.width)
@@ -127,9 +160,9 @@ class Blobber {
                 pixels[x][y] = pixel
             }
         }
-
+        
         Log.d("sorting pixel values")
-
+        
         sortedPixels.sort { $0.intensity > $1.intensity }
 
         self.outputData = [UInt16](repeating: 0, count: pixelData.count)
@@ -137,6 +170,9 @@ class Blobber {
         Log.d("detecting blobs")
         
         for pixel in sortedPixels {
+
+            if pixel.status != .unknown { continue }
+            
             //Log.d("examining pixel \(pixel.x) \(pixel.y) \(pixel.intensity)")
             let higherNeighbors = self.higherNeighbors(pixel)
             //Log.d("found \(higherNeighbors) higherNeighbors")
@@ -145,9 +181,12 @@ class Blobber {
                 // a local maximum, this pixel is a blob seed
                 if pixel.intensity > lowIntensityLimit {
                     let newBlob = Blob(pixel)
-                    newBlob.pixels.append(pixel)
-                    pixel.status = .blobbed(newBlob)
                     blobs.append(newBlob)
+
+                    Log.d("expanding from seed pixel.intensity \(pixel.intensity)")
+                    
+                    expand(blob: newBlob, seedPixel: pixel)
+                    
                 } else {
                     // but only if it's bright enough
                     pixel.status = .background
@@ -156,12 +195,7 @@ class Blobber {
                 // see if any higher neighbors are already backgrounded
                 var hasHigherBackgroundNeighbor = false
                 for neighbor in higherNeighbors {
-                    switch neighbor.status {
-                    case .background:
-                        hasHigherBackgroundNeighbor = true
-                    default:
-                        break
-                    }
+                    hasHigherBackgroundNeighbor = (neighbor.status == .background)
                 }
                 if hasHigherBackgroundNeighbor {
                     // if has at least one higher neighbor, which is background,
@@ -195,16 +229,17 @@ class Blobber {
                                 break
                             }
                         }
-                        
                     } else {
                         // this pixel has one or more higher neighbors, which are all
                         // parts of the same blob.
                         if let blob = nearbyBlobs.first?.value,
                            blob.canGrow
                         {
+                            // XXX add contrast threshold
+                            
                             // add this pixel to the blob
-                            pixel.status = .blobbed(blob)
-                            blob.pixels.append(pixel)
+                         //   pixel.status = .blobbed(blob)
+                         //   blob.pixels.append(pixel)
                         } else {
                             // this pixel is background
                             pixel.status = .background
@@ -213,23 +248,61 @@ class Blobber {
                 }
             }
         }
-
+        
         Log.d("initially found \(blobs.count) blobs")
-
+        
         self.blobs = self.blobs.filter { $0.pixels.count >= blobMinimumSize }         
-
+        
         Log.d("found \(blobs.count) blobs larger than \(blobMinimumSize) pixels")
-
+        
         for blob in blobs {
             for pixel in blob.pixels {
                 // maybe adjust by size?
-                outputData[pixel.y*image.width+pixel.x] = 0xFFFF/4 + (blob.intensity/4)*3
+                outputData[pixel.y*image.width+pixel.x] = 0xFFFF / 4 + (blob.intensity/4)*3
             }
         }
     }
 
+    func expand(blob: Blob, seedPixel firstSeed: SortablePixel) {
+        Log.d("expanding initially seed blob")
+        
+        var seedPixels: [SortablePixel] = [firstSeed]
+
+//        let contrastMin: Double = 8000 // XXX hardly shows anything 
+//        let contrastMin: Double = 18000 // shows airplane streaks about half
+//        let contrastMin: Double = 28000 // got almost all of the airplanes, some noise too
+        let contrastMin: Double = 30000 // got almost all of the airplanes, some noise too
+        
+        while let seedPixel = seedPixels.popLast() {
+            // first set this pixel to be part of this blob
+            seedPixel.status = .blobbed(blob)
+            blob.pixels.append(seedPixel)
+
+            // next examine neighboring pixels
+            let neighbors = neighbors(seedPixel)
+            for neighbor in neighbors {
+                if neighbor.status == .unknown {
+                    let contrast = seedPixel.contrast(with: neighbor,
+                                                      maxBright: firstSeed.intensity)
+                    let firstSeedContrast = firstSeed.contrast(with: neighbor,
+                                                               maxBright: firstSeed.intensity)
+                    if contrast < contrastMin,
+                       firstSeedContrast < contrastMin
+                    {
+                        //Log.v("contrast \(contrast) seedPixel.intensity \(seedPixel.intensity) neighbor.intensity \(neighbor.intensity) firstSeed.intensity \(firstSeed.intensity)")
+                        seedPixels.append(neighbor)
+                    } else {
+                        neighbor.status = .background
+                    }
+                }
+            }
+        }
+
+        Log.d("after expansion, blob has \(blob.pixels.count) pixels")
+    }
+    
     var outputImage: PixelatedImage {
-        let imageData = outputData.withUnsafeBufferPointer { Data(buffer: $0)  }
+        let imageData = outputData.withUnsafeBufferPointer { Data(buffer: $0) }
         
         // write out the subtractionArray here as an image
         let outputImage = PixelatedImage(width: image.width,
@@ -309,6 +382,57 @@ class Blobber {
         case .eight:        
             return higherNeighborsInt(pixel, .fourCardinal) + 
                    higherNeighborsInt(pixel, .fourCorner)
+            
+        }
+        return ret
+    }
+
+    // for the NeighborType of this Blobber
+    func neighbors(_ pixel: SortablePixel) -> [SortablePixel] {
+        return neighborsInt(pixel, neighborType)
+    }
+
+    // for any NeighborType
+    fileprivate func neighborsInt(_ pixel: SortablePixel,
+                                  _ type: NeighborType) -> [SortablePixel]
+    {
+        var ret: [SortablePixel] = []
+        switch type {
+
+            // up and down, left and right, no corners
+        case .fourCardinal:
+            if let left = neighbor(.left, for: pixel) {
+                ret.append(left)
+            }
+            if let right = neighbor(.right, for: pixel) {
+                ret.append(right)
+            }
+            if let up = neighbor(.up, for: pixel) {
+                ret.append(up)
+            }
+            if let down = neighbor(.down, for: pixel) {
+                ret.append(down)
+            }
+            
+            // diagnals only
+        case .fourCorner:
+            if let upperLeft = neighbor(.upperLeft, for: pixel) {
+                ret.append(upperLeft)
+            }
+            if let upperRight = neighbor(.upperRight, for: pixel) {
+                ret.append(upperRight)
+            }
+            if let lowerLeft = neighbor(.lowerLeft, for: pixel) {
+                ret.append(lowerLeft)
+            }
+            if let lowerRight = neighbor(.lowerRight, for: pixel) {
+                ret.append(lowerRight)
+            }
+
+            // the sum of the other two
+        case .eight:        
+            return neighborsInt(pixel, .fourCardinal) + 
+                   neighborsInt(pixel, .fourCorner)
             
         }
         return ret
@@ -406,6 +530,36 @@ class SortablePixel {
         case unknown
         case background
         case blobbed(Blob)
+
+        static func != (lhs: SortablePixel.Status, rhs: SortablePixel.Status) -> Bool {
+            !(lhs == rhs)
+        }
+        
+        static func == (lhs: SortablePixel.Status, rhs: SortablePixel.Status) -> Bool {
+            switch lhs {
+            case .unknown:
+                switch rhs {
+                case .unknown:
+                    return true
+                default:
+                    return false
+                }
+            case .background:
+                switch rhs {
+                case .background:
+                    return true
+                default:
+                    return false
+                }
+            case .blobbed(let lhsBlob):
+                switch rhs {
+                case .blobbed(let rhsBlob):
+                    return lhsBlob.id == rhsBlob.id
+                default:
+                    return false
+                }
+            }
+        }
     }
     
     init(x: Int = 0,
@@ -415,6 +569,11 @@ class SortablePixel {
         self.x = x
         self.y = y
         self.intensity = intensity
+    }
+
+    func contrast(with otherPixel: SortablePixel, maxBright: UInt16 = 0xFFFF) -> Double {
+        let diff = abs(Int32(self.intensity) - Int32(otherPixel.intensity))
+        return Double(diff) * Double(0xFFFF) / Double(maxBright)
     }
 }
 
