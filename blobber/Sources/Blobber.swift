@@ -111,9 +111,25 @@ class Blobber {
     //let lowIntensityLimit: UInt16 = 5000   // not bad, still some noise and missing some tracks
     
     // 1x gaussian blur
-    let lowIntensityLimit: UInt16 = 5000   // 
+    //let lowIntensityLimit: UInt16 = 5000   // 
     
-    let blobMinimumSize = 20
+    // new trials
+    //let lowIntensityLimit: UInt16 = 4000   // airplane the same, more noise
+    //let lowIntensityLimit: UInt16 = 5000   // mostly works, skipps some spots, some noise
+    //let lowIntensityLimit: UInt16 = 7000   // airplanes the same, less noise
+    let lowIntensityLimit: UInt16 = 7777 
+    //let lowIntensityLimit: UInt16 = 8500   // less noise, but lost a little bit of airplane
+    
+    let blobMinimumSize = 30
+
+
+//        let contrastMin: Double = 8000 // XXX hardly shows anything 
+//        let contrastMin: Double = 18000 // shows airplane streaks about half
+//        let contrastMin: Double = 28000 // got almost all of the airplanes, some noise too
+//        let contrastMin: Double = 30000 // got almost all of the airplanes, some noise too
+//        let contrastMin: Double = 35000 // looks better
+    let contrastMin: Double = 38000 // looks better
+//        let contrastMin: Double = 40000 // pretty much got the airplanes, but 8 minutes to paint :(
     
     enum NeighborType {
         case fourCardinal       // up and down, left and right, no corners
@@ -244,6 +260,7 @@ class Blobber {
         Log.d("found \(blobs.count) blobs larger than \(blobMinimumSize) pixels")
         
         for blob in blobs {
+            Log.v("writing out \(blob.pixels.count) pixel blob")
             for pixel in blob.pixels {
                 // maybe adjust by size?
                 outputData[pixel.y*image.width+pixel.x] = 0xFFFF / 4 + (blob.intensity/4)*3
@@ -255,11 +272,6 @@ class Blobber {
         Log.d("expanding initially seed blob")
         
         var seedPixels: [SortablePixel] = [firstSeed]
-
-//        let contrastMin: Double = 8000 // XXX hardly shows anything 
-//        let contrastMin: Double = 18000 // shows airplane streaks about half
-//        let contrastMin: Double = 28000 // got almost all of the airplanes, some noise too
-        let contrastMin: Double = 30000 // got almost all of the airplanes, some noise too
         
         while let seedPixel = seedPixels.popLast() {
             // first set this pixel to be part of this blob
@@ -517,11 +529,13 @@ class Blob {
     }
 
     func absorb(_ otherBlob: Blob) {
-        let newPixels = otherBlob.pixels
-        for otherPixel in newPixels {
-            otherPixel.status = .blobbed(self)
-        }
-        self.pixels += newPixels
+        if self.id != otherBlob.id {
+            let newPixels = otherBlob.pixels
+            for otherPixel in newPixels {
+                otherPixel.status = .blobbed(self)
+            }
+            self.pixels += newPixels
+        } 
     }
 }
 
