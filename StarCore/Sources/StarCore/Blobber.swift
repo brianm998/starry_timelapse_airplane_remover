@@ -30,24 +30,6 @@ public class Blobber {
 
     public let minimumBlobSize: Int
 
-    // no blurring
-    //let lowIntensityLimit: UInt16 = 2500 // looks good, but noisy still
-    //let lowIntensityLimit: UInt16 = 6500 // nearly F-ing nailed it
-    //let lowIntensityLimit: UInt16 = 7000 // a nice spot for unblurred
-    //let lowIntensityLimit: UInt16 = 7200 // pretty good
-    //let lowIntensityLimit: UInt16 = 8500 // still some noise, but airplane streaks too small
-
-    // 3x gaussian blur
-    //let lowIntensityLimit: UInt16 = 3000 // caught the planes, and lots of noise, took forever
-    //let lowIntensityLimit: UInt16 = 5000 // got about half of each plane track, still noise
-    //let lowIntensityLimit: UInt16 = 7000 // completely missed the plane tracks, and most else too
-
-    // 2x gaussian blur
-    //let lowIntensityLimit: UInt16 = 5000   // not bad, still some noise and missing some tracks
-    
-    // 1x gaussian blur
-    //let lowIntensityLimit: UInt16 = 5000   // 
-    
     // new trials
     //let lowIntensityLimit: UInt16 = 4000   // airplane the same, more noise
     //let lowIntensityLimit: UInt16 = 5000   // mostly works, skipps some spots, some noise
@@ -181,7 +163,7 @@ public class Blobber {
                         Log.d("nearbyBlobs.count \(nearbyBlobs.count)")
                         
                         if nearbyBlobs.count > 0 {
-                            Log.i("concensing \(nearbyBlobs.count) blobs into blob with \(firstBlob.pixels.count) pixels")
+                            Log.i("concensing \(nearbyBlobs.count) blobs into blob with \(firstBlob.size) pixels")
                             // we have extra blobs, absorb them 
                             for otherBlob in nearbyBlobs.values {
                                 firstBlob.absorb(otherBlob)
@@ -189,12 +171,12 @@ public class Blobber {
                                 // remove otherBlob from blobs
                                 self.blobs = self.blobs.filter() { $0.id != otherBlob.id }
                             }
-                            Log.d("first blob now has \(firstBlob.pixels.count) pixels")
+                            Log.d("first blob now has \(firstBlob.size) pixels")
                         }
                         
                         // add this pixel to the blob
                         pixel.status = .blobbed(firstBlob)
-                        firstBlob.pixels.append(pixel)
+                        firstBlob.add(pixel: pixel)
                     }
                 }
             }
@@ -202,7 +184,7 @@ public class Blobber {
         
         Log.d("initially found \(blobs.count) blobs")
         
-        self.blobs = self.blobs.filter { $0.pixels.count >= minimumBlobSize }         
+        self.blobs = self.blobs.filter { $0.size >= minimumBlobSize }         
 
         Log.d("found \(blobs.count) blobs larger than \(minimumBlobSize) pixels")
     }
@@ -211,7 +193,7 @@ public class Blobber {
         var ret = [UInt16](repeating: 0, count: pixelData.count)
         
         for blob in blobs {
-            Log.v("writing out \(blob.pixels.count) pixel blob")
+            Log.v("writing out \(blob.size) pixel blob")
             for pixel in blob.pixels {
                 // maybe adjust by size?
                 ret[pixel.y*imageWidth+pixel.x] = 0xFFFF / 4 + (blob.intensity/4)*3
@@ -228,7 +210,7 @@ public class Blobber {
         while let seedPixel = seedPixels.popLast() {
             // first set this pixel to be part of this blob
             seedPixel.status = .blobbed(blob)
-            blob.pixels.append(seedPixel)
+            blob.add(pixel: seedPixel)
 
             // next examine neighboring pixels
             let neighbors = neighbors(seedPixel)
@@ -260,7 +242,7 @@ public class Blobber {
             }
         }
 
-        Log.d("after expansion, blob has \(blob.pixels.count) pixels")
+        Log.d("after expansion, blob has \(blob.size) pixels")
     }
     
     public var outputImage: PixelatedImage {

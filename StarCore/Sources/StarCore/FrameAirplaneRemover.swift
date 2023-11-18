@@ -765,12 +765,42 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                               minimumBlobSize: config.minGroupSize)
 
         self.state = .detectingOutliers3
+
+        var minBlobIntensity = UInt16.max
+        var maxBlobIntensity: UInt16 = 0
+
+        var blobIntensities: [UInt16] = []
+
+        var allBlobIntensities: UInt32 = 0
+        
         for blob in blobber.blobs {
+            let blobIntensity = blob.intensity
+
+            blobIntensities.append(blobIntensity)
+            allBlobIntensities += UInt32(blobIntensity)
+            
+            if blobIntensity < minBlobIntensity { minBlobIntensity = blobIntensity }
+            if blobIntensity > maxBlobIntensity { maxBlobIntensity = blobIntensity }
+
+            // check intensity here, discard small low intensity groups
+            //if blobIntensity < 6000, // looks good, just under median
+            if blobIntensity < 6500, // approx mean
+               blob.size < 60
+            {
+                continue
+            }
+            
             let outlierGroup = blob.outlierGroup(at: frameIndex)
             outlierGroup.frame = self
             outlierGroups?.members[outlierGroup.name] = outlierGroup
         }
 
+        blobIntensities.sort { $0 < $1 }
+        let mean = allBlobIntensities / UInt32(blobber.blobs.count)
+        let median = blobIntensities[blobIntensities.count/2]
+        
+        Log.i("frame \(frameIndex) had blob intensity from \(minBlobIntensity) to \(maxBlobIntensity) mean \(mean) median \(median)")
+        
         self.state = .readyForInterFrameProcessing
     }
     

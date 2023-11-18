@@ -3,15 +3,35 @@ import Foundation
 // blobs created by the blobber
 public class Blob {
     public let id: String
-    public var pixels: [SortablePixel]
+    public private(set) var pixels: [SortablePixel]
 
+    public var size: Int { pixels.count }
+    
+    public func add(pixels newPixels: [SortablePixel]) {
+        self.pixels += newPixels
+        _intensity = nil
+        _boundingBox = nil
+    }
+
+    public func add(pixel: SortablePixel) {
+        self.pixels.append(pixel)
+        _intensity = nil
+        _boundingBox = nil
+    }
+
+    private var _intensity: UInt16?
+    private var _boundingBox: BoundingBox?
+    
     public var intensity: UInt16 {
+        if let _intensity = _intensity { return _intensity }
         var max: UInt32 = 0
         for pixel in pixels {
             max += UInt32(pixel.intensity)
         }
         max /= UInt32(pixels.count)
-        return UInt16(max)
+        let ret = UInt16(max)
+        _intensity = ret
+        return ret
     }
     
     public init(_ pixel: SortablePixel) {
@@ -27,11 +47,10 @@ public class Blob {
             }
             self.pixels += newPixels
         }
+        _intensity = nil
         _boundingBox = nil
     }
 
-    private var _boundingBox: BoundingBox?
-    
     public var boundingBox: BoundingBox {
         if let _boundingBox = _boundingBox { return _boundingBox }
         var min_x:Int = Int.max
