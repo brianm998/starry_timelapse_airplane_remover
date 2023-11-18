@@ -74,7 +74,7 @@ struct BlobberCli: AsyncParsableCommand {
 //                                          clouds_cropped_1x_blur,
                                           clouds_cropped,
 //                                          small_image,
-                                        neighborType: .eight,
+                                        neighborType: .fourCardinal,
                                         withBlur: 0)
 
         try blobber.outputImage.writeTIFFEncoding(toFilename: outputFile)
@@ -113,7 +113,7 @@ class Blobber {
     // 1x gaussian blur
     let lowIntensityLimit: UInt16 = 5000   // 
     
-    let blobMinimumSize = 30
+    let blobMinimumSize = 20
     
     enum NeighborType {
         case fourCardinal       // up and down, left and right, no corners
@@ -213,37 +213,25 @@ class Blobber {
                         }
                     }
 
-                    if false && nearbyBlobs.count > 1 {
-                        // more than one higher neighbor is part of a blob
-                        // and they are in different blobs 
-                        // this pixel must be background
-                        pixel.status = .background
-
-                        // stopy any groups of higher neighbors from growing further
-
-                        for neighbor in higherNeighbors {
-                            switch neighbor.status {
-                            case .blobbed(let nearbyBlob):
-                                nearbyBlob.canGrow = false
-                            default:
-                                break
+                    if let (id, firstBlob) = nearbyBlobs.randomElement() {
+                        nearbyBlobs.removeValue(forKey: id)
+                        Log.d("nearbyBlobs.count \(nearbyBlobs.count)")
+                        
+                        if nearbyBlobs.count > 0 {
+                            Log.i("concensing \(nearbyBlobs.count) blobs into blob with \(firstBlob.pixels.count) pixels")
+                            // we have extra blobs, absorb them 
+                            for otherBlob in nearbyBlobs.values {
+                                firstBlob.absorb(otherBlob)
+                                
+                                // remove otherBlob from blobs
+                                self.blobs = self.blobs.filter() { $0.id != otherBlob.id }
                             }
+                            Log.d("first blob now has \(firstBlob.pixels.count) pixels")
                         }
-                    } else {
-                        // this pixel has one or more higher neighbors, which are all
-                        // parts of the same blob.
-                        if let blob = nearbyBlobs.first?.value,
-                           blob.canGrow
-                        {
-                            // XXX add contrast threshold
-                            
-                            // add this pixel to the blob
-                         //   pixel.status = .blobbed(blob)
-                         //   blob.pixels.append(pixel)
-                        } else {
-                            // this pixel is background
-                            pixel.status = .background
-                        }
+                        
+                        // add this pixel to the blob
+                        pixel.status = .blobbed(firstBlob)
+                        firstBlob.pixels.append(pixel)
                     }
                 }
             }
@@ -281,7 +269,8 @@ class Blobber {
             // next examine neighboring pixels
             let neighbors = neighbors(seedPixel)
             for neighbor in neighbors {
-                if neighbor.status == .unknown {
+                switch neighbor.status {
+                case .unknown:
                     let contrast = seedPixel.contrast(with: neighbor,
                                                       maxBright: firstSeed.intensity)
                     let firstSeedContrast = firstSeed.contrast(with: neighbor,
@@ -294,7 +283,16 @@ class Blobber {
                     } else {
                         neighbor.status = .background
                     }
-                }
+
+                case .blobbed(let otherBlob):
+                    if otherBlob.id != blob.id {
+                        blob.absorb(otherBlob)
+                        self.blobs = self.blobs.filter() { $0.id != otherBlob.id }
+                    }
+                    
+                case.background:
+                    break
+                } 
             }
         }
 
@@ -503,7 +501,6 @@ class Blobber {
 class Blob {
     let id: String
     var pixels: [SortablePixel]
-    var canGrow: Bool = true
 
     var intensity: UInt16 {
         var max: UInt32 = 0
@@ -518,7 +515,16 @@ class Blob {
         self.pixels = [pixel]
         self.id = "\(pixel.x) x \(pixel.y)"
     }
+
+    func absorb(_ otherBlob: Blob) {
+        let newPixels = otherBlob.pixels
+        for otherPixel in newPixels {
+            otherPixel.status = .blobbed(self)
+        }
+        self.pixels += newPixels
+    }
 }
+
 
 class SortablePixel {
     let x: Int
