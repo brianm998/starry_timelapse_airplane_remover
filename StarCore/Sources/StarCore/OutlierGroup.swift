@@ -63,7 +63,7 @@ public class OutlierGroup: CustomStringConvertible,
             return lines[0]
         }
         return nil
-    } 
+    }
 
     init(name: String,
          size: UInt,
@@ -71,7 +71,7 @@ public class OutlierGroup: CustomStringConvertible,
          bounds: BoundingBox,
          frame: FrameAirplaneRemover,
          pixels: [UInt16],
-         maxPixelDistance: UInt16) async
+         maxPixelDistance: UInt16) 
     {
         self.name = name
         self.size = size
@@ -79,6 +79,34 @@ public class OutlierGroup: CustomStringConvertible,
         self.bounds = bounds
         self.frameIndex = frame.frameIndex
         self.frame = frame
+        self.pixels = pixels
+        self.maxPixelDistance = maxPixelDistance
+        self.surfaceAreaToSizeRatio = ratioOfSurfaceAreaToSize(of: pixels,
+                                                               width: bounds.width,
+                                                               height: bounds.height)
+        // do a hough transform on just this outlier group
+        let transform = HoughTransform(dataWidth: bounds.width,
+                                       dataHeight: bounds.height,
+                                       inputData: pixels)
+
+        // try a smaller line count, with fixed trimming code
+        self.lines = transform.lines(maxCount: 60, minPixelValue: 1) 
+        _ = self.houghLineHistogram
+    }
+
+    public init(name: String,
+                size: UInt,
+                brightness: UInt,      // average brightness
+                bounds: BoundingBox,
+                frameIndex: Int,
+                pixels: [UInt16],
+                maxPixelDistance: UInt16) 
+    {
+        self.name = name
+        self.size = size
+        self.brightness = brightness
+        self.bounds = bounds
+        self.frameIndex = frameIndex
         self.pixels = pixels
         self.maxPixelDistance = maxPixelDistance
         self.surfaceAreaToSizeRatio = ratioOfSurfaceAreaToSize(of: pixels,
@@ -118,7 +146,7 @@ public class OutlierGroup: CustomStringConvertible,
         // XXX update frame that it's different 
         self.frame?.markAsChanged()
     }
-
+    
     private var cachedTestImage: CGImage? 
     
     // outputs an image the same size as this outlier's bounding box,

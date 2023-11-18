@@ -977,13 +977,13 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                 }
 
                 if maxDiff >= config.maxPixelDistance {
-                    let newOutlier = await OutlierGroup(name: groupName,
-                                                        size: groupSize,
-                                                        brightness: groupBrightness,
-                                                        bounds: boundingBox,
-                                                        frame: self,
-                                                        pixels: outlierAmounts,
-                                                        maxPixelDistance: config.maxPixelDistance)
+                    let newOutlier = OutlierGroup(name: groupName,
+                                                  size: groupSize,
+                                                  brightness: groupBrightness,
+                                                  bounds: boundingBox,
+                                                  frame: self,
+                                                  pixels: outlierAmounts,
+                                                  maxPixelDistance: config.maxPixelDistance)
                     outlierGroups?.members[groupName] = newOutlier
                 } else {
                     Log.i("skipping frame with maxDiff \(maxDiff) < max \(config.maxPixelDistance)")

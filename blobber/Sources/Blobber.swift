@@ -70,12 +70,11 @@ struct BlobberCli: AsyncParsableCommand {
         let small_image = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/LRT_00350-severe-noise_crop.tiff"
 
         let blobber = try await Blobber(filename:
-//                                          lots_of_clouds["160"]!,
+                                          lots_of_clouds["160"]!,
 //                                          clouds_cropped_1x_blur,
-                                          clouds_cropped,
+//                                          clouds_cropped,
 //                                          small_image,
-                                        neighborType: .fourCardinal,
-                                        withBlur: 0)
+                                        neighborType: .fourCardinal)
 
         try blobber.outputImage.writeTIFFEncoding(toFilename: outputFile)
     }
@@ -122,7 +121,6 @@ class Blobber {
     
     let blobMinimumSize = 30
 
-
 //        let contrastMin: Double = 8000 // XXX hardly shows anything 
 //        let contrastMin: Double = 18000 // shows airplane streaks about half
 //        let contrastMin: Double = 28000 // got almost all of the airplanes, some noise too
@@ -148,17 +146,25 @@ class Blobber {
         case upperLeft
     }
     
-    init(filename: String,
-         neighborType: NeighborType = .eight,
-         withBlur radius: Int = 0) async throws
+    convenience init(filename: String,
+                     neighborType: NeighborType = .eight) async throws
     {
-        (self.image, self.pixelData) =
-          try await PixelatedImage.loadUInt16Array(from: filename, withBlur: radius)
+        let (image, pixelData) =
+          try await PixelatedImage.loadUInt16Array(from: filename)
+
+        try await self.init(neighborType: neighborType,
+                            image: image,
+                            pixelData: pixelData)
+    }
+
+    init(neighborType: NeighborType = .eight,
+         image: PixelatedImage,
+         pixelData: [UInt16]) async throws
+    {
+        self.image = image
+        self.pixelData = pixelData
         self.neighborType = neighborType
 
-        Log.v("trying to blur image")
-        //try self.image.writeTIFFEncoding(toFilename: "blurred_\(filename)")
-        
         Log.v("loaded image of size (\(image.width), \(image.height))")
 
         Log.v("blobbing image of size (\(image.width), \(image.height))")
@@ -537,8 +543,44 @@ class Blob {
             self.pixels += newPixels
         } 
     }
-}
 
+    var boundingBox: BoundingBox {
+        var min_x:Int = Int.max
+        var min_y:Int = Int.max
+        var max_x:Int = 0
+        var max_y:Int = 0
+
+        for pixel in pixels {
+            if pixel.x < min_x { min_x = pixel.x }
+            if pixel.y < min_y { min_y = pixel.y }
+            if pixel.x > max_x { max_x = pixel.x }
+            if pixel.y > max_y { max_y = pixel.y }
+        }
+        return BoundingBox(min: Coord(x: min_x, y: min_y),
+                           max: Coord(x: max_x, y: max_y))
+    }
+
+    var pixelValues: [UInt16] {
+        let boundingBox = self.boundingBox
+        var ret = [UInt16](repeating: 0, count: boundingBox.width+boundingBox.height)
+        for pixel in pixels {
+            ret[pixel.y+boundingBox.width+pixel.x] = pixel.intensity
+        }
+        return ret
+    }
+    
+    var outlierGroup: OutlierGroup {
+        OutlierGroup(name: self.id,
+                     size: UInt(self.pixels.count),
+                     brightness: UInt(self.intensity),
+                     bounds: self.boundingBox,
+                     frameIndex: 0, // XXX
+                     pixels: self.pixelValues,
+                     maxPixelDistance: 0xFFFF) // XXX
+                            
+    }
+
+}
 
 class SortablePixel {
     let x: Int
