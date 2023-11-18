@@ -757,11 +757,12 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         }
 
         self.state = .detectingOutliers2
-        // XXX was a boundary
+
         let blobber = Blobber(imageWidth: width,
                               imageHeight: height,
                               pixelData: subtractionArray,
-                              neighborType: .fourCardinal)
+                              neighborType: .fourCardinal,
+                              minimumBlobSize: config.minGroupSize)
 
         self.state = .detectingOutliers3
         for blob in blobber.blobs {

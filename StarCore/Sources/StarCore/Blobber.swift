@@ -28,6 +28,8 @@ public class Blobber {
 
     public let neighborType: NeighborType
 
+    public let minimumBlobSize: Int
+
     // no blurring
     //let lowIntensityLimit: UInt16 = 2500 // looks good, but noisy still
     //let lowIntensityLimit: UInt16 = 6500 // nearly F-ing nailed it
@@ -53,14 +55,13 @@ public class Blobber {
     let lowIntensityLimit: UInt16 = 7777 
     //let lowIntensityLimit: UInt16 = 8500   // less noise, but lost a little bit of airplane
     
-    let blobMinimumSize = 30
-
 //        let contrastMin: Double = 8000 // XXX hardly shows anything 
 //        let contrastMin: Double = 18000 // shows airplane streaks about half
 //        let contrastMin: Double = 28000 // got almost all of the airplanes, some noise too
 //        let contrastMin: Double = 30000 // got almost all of the airplanes, some noise too
 //        let contrastMin: Double = 35000 // looks better
-    let contrastMin: Double = 38000 // looks better
+//    let contrastMin: Double = 38000 // looks better
+    let contrastMin: Double = 40000 // looks better
 //        let contrastMin: Double = 40000 // pretty much got the airplanes, but 8 minutes to paint :(
     
     public enum NeighborType {
@@ -81,7 +82,9 @@ public class Blobber {
     }
     
     public convenience init(filename: String,
-                            neighborType: NeighborType = .eight) async throws
+                            neighborType: NeighborType = .eight,
+                            minimumBlobSize: Int = 20)
+      async throws
     {
         let (image, pixelData) =
           try await PixelatedImage.loadUInt16Array(from: filename)
@@ -89,18 +92,21 @@ public class Blobber {
         self.init(imageWidth: image.width,
                   imageHeight: image.height,
                   pixelData: pixelData,
-                  neighborType: neighborType)
+                  neighborType: neighborType,
+                  minimumBlobSize: minimumBlobSize)
     }
 
     public init(imageWidth: Int,
                 imageHeight: Int,
                 pixelData: [UInt16],
-                neighborType: NeighborType = .eight) 
+                neighborType: NeighborType = .eight,
+                minimumBlobSize: Int = 20) 
     {
         self.imageWidth = imageWidth
         self.imageHeight = imageHeight
         self.pixelData = pixelData
         self.neighborType = neighborType
+        self.minimumBlobSize = minimumBlobSize
 
         Log.v("loaded image of size (\(imageWidth), \(imageHeight))")
 
@@ -196,9 +202,9 @@ public class Blobber {
         
         Log.d("initially found \(blobs.count) blobs")
         
-        self.blobs = self.blobs.filter { $0.pixels.count >= blobMinimumSize }         
+        self.blobs = self.blobs.filter { $0.pixels.count >= minimumBlobSize }         
 
-        Log.d("found \(blobs.count) blobs larger than \(blobMinimumSize) pixels")
+        Log.d("found \(blobs.count) blobs larger than \(minimumBlobSize) pixels")
     }
 
     public var outputData: [UInt16] {
