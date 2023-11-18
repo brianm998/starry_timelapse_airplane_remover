@@ -53,9 +53,9 @@ public class Blob {
 
     public var pixelValues: [UInt16] {
         let boundingBox = self.boundingBox
-        var ret = [UInt16](repeating: 0, count: boundingBox.width+boundingBox.height)
+        var ret = [UInt16](repeating: 0, count: boundingBox.size)
         for pixel in pixels {
-            ret[pixel.y+boundingBox.width+pixel.x] = pixel.intensity
+            ret[(pixel.y-boundingBox.min.y)*boundingBox.width+(pixel.x-boundingBox.min.x)] = pixel.intensity
         }
         return ret
     }

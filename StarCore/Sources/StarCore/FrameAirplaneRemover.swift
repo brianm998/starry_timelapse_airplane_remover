@@ -729,9 +729,52 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         
         return subtractionArray
     }
+
+    func findOutliers() async throws {
+
+        Log.d("frame \(frameIndex) finding outliers)")
+
+        // contains the difference in brightness between the frame being processed
+        // and its aligned neighbor frame.  Indexed by y * width + x
+        var subtractionArray: [UInt16] = []
+        
+        self.state = .detectingOutliers1
+        do {
+            // try to load the image subtraction from a pre-processed file
+
+            let (image, array) = try await PixelatedImage.loadUInt16Array(from: alignedSubtractedFilename)
+            subtractionArray = array
+            
+            Log.d("frame \(frameIndex) loaded outlier amounts from subtraction image")
+
+            if !fileManager.fileExists(atPath: self.alignedSubtractedPreviewFilename) {
+                try writeSubtractionPreview(image)
+            }
+        } catch {
+            Log.i("frame \(frameIndex) couldn't load outlier amounts from subtraction image")
+            // do the image subtraction here instead
+            subtractionArray = try await self.subtractAlignedImageFromFrame()
+        }
+
+        self.state = .detectingOutliers2
+        // XXX was a boundary
+        let blobber = Blobber(imageWidth: width,
+                              imageHeight: height,
+                              pixelData: subtractionArray,
+                              neighborType: .fourCardinal)
+
+        self.state = .detectingOutliers3
+        for blob in blobber.blobs {
+            let outlierGroup = blob.outlierGroup(at: frameIndex)
+            outlierGroup.frame = self
+            outlierGroups?.members[outlierGroup.name] = outlierGroup
+        }
+
+        self.state = .readyForInterFrameProcessing
+    }
     
     // this is still a slow part of the process, but is now about 10x faster than before
-    func findOutliers() async throws {
+    func findOutliers_OLD() async throws {
 
         Log.d("frame \(frameIndex) finding outliers)")
 

@@ -15,7 +15,8 @@ You should have received a copy of the GNU General Public License along with sta
 */
 
 public class Blobber {
-    public let image: PixelatedImage
+    public let imageWidth: Int
+    public let imageHeight: Int
     public let pixelData: [UInt16]
 
     // [x][y] accessable array
@@ -85,32 +86,35 @@ public class Blobber {
         let (image, pixelData) =
           try await PixelatedImage.loadUInt16Array(from: filename)
 
-        try await self.init(image: image,
-                            pixelData: pixelData,
-                            neighborType: neighborType)
+        self.init(imageWidth: image.width,
+                  imageHeight: image.height,
+                  pixelData: pixelData,
+                  neighborType: neighborType)
     }
 
-    public init(image: PixelatedImage,
+    public init(imageWidth: Int,
+                imageHeight: Int,
                 pixelData: [UInt16],
-                neighborType: NeighborType = .eight) async throws
+                neighborType: NeighborType = .eight) 
     {
-        self.image = image
+        self.imageWidth = imageWidth
+        self.imageHeight = imageHeight
         self.pixelData = pixelData
         self.neighborType = neighborType
 
-        Log.v("loaded image of size (\(image.width), \(image.height))")
+        Log.v("loaded image of size (\(imageWidth), \(imageHeight))")
 
-        Log.v("blobbing image of size (\(image.width), \(image.height))")
+        Log.v("blobbing image of size (\(imageWidth), \(imageHeight))")
         
         Log.d("loading pixels")
         
         pixels = [[SortablePixel]](repeating: [SortablePixel](repeating: SortablePixel(),
-                                                              count: image.height),
-                                   count: image.width)
+                                                              count: imageHeight),
+                                   count: imageWidth)
         
-        for x in 0..<image.width {
-            for y in 0..<image.height {
-                let pixel = SortablePixel(x: x, y: y, intensity: pixelData[y*image.width+x])
+        for x in 0..<imageWidth {
+            for y in 0..<imageHeight {
+                let pixel = SortablePixel(x: x, y: y, intensity: pixelData[y*imageWidth+x])
                 sortedPixels.append(pixel)
                 pixels[x][y] = pixel
             }
@@ -204,7 +208,7 @@ public class Blobber {
             Log.v("writing out \(blob.pixels.count) pixel blob")
             for pixel in blob.pixels {
                 // maybe adjust by size?
-                ret[pixel.y*image.width+pixel.x] = 0xFFFF / 4 + (blob.intensity/4)*3
+                ret[pixel.y*imageWidth+pixel.x] = 0xFFFF / 4 + (blob.intensity/4)*3
             }
         }
         return ret
@@ -257,11 +261,11 @@ public class Blobber {
         let imageData = outputData.withUnsafeBufferPointer { Data(buffer: $0) }
         
         // write out the subtractionArray here as an image
-        let outputImage = PixelatedImage(width: image.width,
-                                         height: image.height,
+        let outputImage = PixelatedImage(width: imageWidth,
+                                         height: imageHeight,
                                          rawImageData: imageData,
                                          bitsPerPixel: 16,
-                                         bytesPerRow: 2*image.width,
+                                         bytesPerRow: 2*imageWidth,
                                          bitsPerComponent: 16,
                                          bytesPerPixel: 2,
                                          bitmapInfo: .byteOrder16Little, 
@@ -415,7 +419,7 @@ public class Blobber {
                 return nil
             }
         }
-        if pixel.y == image.height - 1 {
+        if pixel.y == imageHeight - 1 {
             if direction == .down ||
                direction == .lowerLeft ||
                direction == .lowerRight
@@ -423,7 +427,7 @@ public class Blobber {
                 return nil
             }
         }
-        if pixel.x == image.width - 1 {
+        if pixel.x == imageWidth - 1 {
             if direction == .right ||
                direction == .lowerRight ||
                direction == .upperRight
