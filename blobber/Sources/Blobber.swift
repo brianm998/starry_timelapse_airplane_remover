@@ -90,7 +90,6 @@ class Blobber {
     // sorted by brightness
     var sortedPixels: [SortablePixel] = []
     var blobs: [Blob] = []
-    var outputData: [UInt16]
 
     let neighborType: NeighborType
 
@@ -152,14 +151,14 @@ class Blobber {
         let (image, pixelData) =
           try await PixelatedImage.loadUInt16Array(from: filename)
 
-        try await self.init(neighborType: neighborType,
-                            image: image,
-                            pixelData: pixelData)
+        try await self.init(image: image,
+                            pixelData: pixelData,
+                            neighborType: neighborType)
     }
 
-    init(neighborType: NeighborType = .eight,
-         image: PixelatedImage,
-         pixelData: [UInt16]) async throws
+    init(image: PixelatedImage,
+         pixelData: [UInt16],
+         neighborType: NeighborType = .eight) async throws
     {
         self.image = image
         self.pixelData = pixelData
@@ -186,8 +185,6 @@ class Blobber {
         Log.d("sorting pixel values")
         
         sortedPixels.sort { $0.intensity > $1.intensity }
-
-        self.outputData = [UInt16](repeating: 0, count: pixelData.count)
 
         Log.d("detecting blobs")
         
@@ -262,16 +259,21 @@ class Blobber {
         Log.d("initially found \(blobs.count) blobs")
         
         self.blobs = self.blobs.filter { $0.pixels.count >= blobMinimumSize }         
-        
+
         Log.d("found \(blobs.count) blobs larger than \(blobMinimumSize) pixels")
+    }
+
+    var outputData: [UInt16] {
+        var ret = [UInt16](repeating: 0, count: pixelData.count)
         
         for blob in blobs {
             Log.v("writing out \(blob.pixels.count) pixel blob")
             for pixel in blob.pixels {
                 // maybe adjust by size?
-                outputData[pixel.y*image.width+pixel.x] = 0xFFFF / 4 + (blob.intensity/4)*3
+                ret[pixel.y*image.width+pixel.x] = 0xFFFF / 4 + (blob.intensity/4)*3
             }
         }
+        return ret
     }
 
     func expand(blob: Blob, seedPixel firstSeed: SortablePixel) {
@@ -541,10 +543,14 @@ class Blob {
                 otherPixel.status = .blobbed(self)
             }
             self.pixels += newPixels
-        } 
+        }
+        _boundingBox = nil
     }
 
+    private var _boundingBox: BoundingBox?
+    
     var boundingBox: BoundingBox {
+        if let _boundingBox = _boundingBox { return _boundingBox }
         var min_x:Int = Int.max
         var min_y:Int = Int.max
         var max_x:Int = 0
@@ -556,8 +562,10 @@ class Blob {
             if pixel.x > max_x { max_x = pixel.x }
             if pixel.y > max_y { max_y = pixel.y }
         }
-        return BoundingBox(min: Coord(x: min_x, y: min_y),
-                           max: Coord(x: max_x, y: max_y))
+        let ret = BoundingBox(min: Coord(x: min_x, y: min_y),
+                              max: Coord(x: max_x, y: max_y))
+        _boundingBox = ret
+        return ret
     }
 
     var pixelValues: [UInt16] {
@@ -569,14 +577,14 @@ class Blob {
         return ret
     }
     
-    var outlierGroup: OutlierGroup {
+    func outlierGroup(at frameIndex: Int) -> OutlierGroup {
         OutlierGroup(name: self.id,
                      size: UInt(self.pixels.count),
                      brightness: UInt(self.intensity),
                      bounds: self.boundingBox,
-                     frameIndex: 0, // XXX
+                     frameIndex: frameIndex,
                      pixels: self.pixelValues,
-                     maxPixelDistance: 0xFFFF) // XXX
+                     maxPixelDistance: 0xFFFF) // XXX not sure this is used anymore
                             
     }
 
