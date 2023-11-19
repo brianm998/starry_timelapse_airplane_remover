@@ -14,6 +14,24 @@ You should have received a copy of the GNU General Public License along with sta
 
 */
 
+
+/*
+ A bright blob detector.
+
+ Looks at an image and tries to identify separate blobs
+ based upon local maximums of brightness, and changes in contrast from that.
+
+ All pixels are sorted by brightness, and iterated over from the brightest,
+ down to minimumLocalMaximum.  All nearby pixels that fall within the contrastMin threshold
+ will be included in the blob.
+
+ Directly adjcent blobs should be combined.
+
+ All returned blobs will meet minimumBlobSize.
+
+ Blobs dimmer on average than minimumLocalMaximum
+ need to be dimBlobMultiplier times larger than minimumBlobSize.
+ */
 public class Blobber {
     public let imageWidth: Int
     public let imageHeight: Int
@@ -24,13 +42,17 @@ public class Blobber {
 
     // sorted by brightness
     public var sortedPixels: [SortablePixel] = []
+
+    // running blob bucket
     public var blobs: [Blob] = []
 
+    // how we search for neighbors
     public let neighborType: NeighborType
 
+    // blobs smaller than this are not returned
     public let minimumBlobSize: Int
 
-    // pixels that are local maxims, but have a value lower than this are ignored
+    // pixels that are local maximums, but have a value lower than this are ignored
     let minimumLocalMaximum: UInt16
 
     // how close to zero (in percentage) can the intensity of pixels decrease before
@@ -43,13 +65,15 @@ public class Blobber {
     // a constant applied to minimumBlobSize after blob creation to discard any blobs
     // that are dimmer than minimumLocalMaximum and smaller than minimumBlobSize times this value.
     let dimBlobMultiplier: Int
-    
+
+    // neighbor search policies
     public enum NeighborType {
         case fourCardinal       // up and down, left and right, no corners
         case fourCorner         // diagnals only
         case eight              // the sum of the other two
     }
 
+    // different directions from a pixel
     public enum NeighborDirection {
         case up
         case down
@@ -141,7 +165,7 @@ public class Blobber {
                     let newBlob = Blob(pixel)
                     blobs.append(newBlob)
 
-                    Log.d("expanding from seed pixel.intensity \(pixel.intensity)")
+                    //Log.d("expanding from seed pixel.intensity \(pixel.intensity)")
                     
                     expand(blob: newBlob, seedPixel: pixel)
                     
@@ -190,6 +214,8 @@ public class Blobber {
                         // add this pixel to the blob
                         pixel.status = .blobbed(firstBlob)
                         firstBlob.add(pixel: pixel)
+                    } else {
+                        pixel.status = .background
                     }
                 }
             }
@@ -215,19 +241,28 @@ public class Blobber {
     // used for writing out blob data for viewing 
     public var outputData: [UInt16] {
         var ret = [UInt16](repeating: 0, count: pixelData.count)
+
+        let min:  UInt16 = 0x4FFF
+        let max:  UInt16 = 0xFFFF
+        let step: UInt16 = 0x1000
+
+        var value: UInt16 = min
         
         for blob in blobs {
             //Log.v("writing out \(blob.size) pixel blob")
             for pixel in blob.pixels {
                 // maybe adjust by size?
-                ret[pixel.y*imageWidth+pixel.x] = 0xFFFF / 4 + (blob.intensity/4)*3
+                //ret[pixel.y*imageWidth+pixel.x] = 0xFFFF / 4 + (blob.intensity/4)*3
+                ret[pixel.y*imageWidth+pixel.x] = value
             }
+            if value >= max { value = min }
+            value += step
         }
         return ret
     }
 
     public func expand(blob: Blob, seedPixel firstSeed: SortablePixel) {
-        Log.d("expanding initially seed blob")
+        //Log.d("expanding initially seed blob")
         
         var seedPixels: [SortablePixel] = [firstSeed]
         
@@ -241,12 +276,9 @@ public class Blobber {
             for neighbor in neighbors {
                 switch neighbor.status {
                 case .unknown:
-//                    let contrast = seedPixel.contrast(with: neighbor,
-//                                                      maxBright: firstSeed.intensity)
+                    // if unknown status, check contrast with initial seed pixel
                     let firstSeedContrast = firstSeed.contrast(with: neighbor)
-                    if //contrast < contrastMin,
-                       firstSeedContrast < contrastMin
-                    {
+                    if firstSeedContrast < contrastMin {
                         //Log.v("contrast \(firstSeedContrast) seedPixel.intensity neighbor.intensity \(neighbor.intensity) firstSeed.intensity \(firstSeed.intensity)")
                         seedPixels.append(neighbor)
                     } else {
@@ -254,7 +286,9 @@ public class Blobber {
                     }
 
                 case .blobbed(let otherBlob):
+                    // absorb any nearby blobs
                     if otherBlob.id != blob.id {
+                        Log.i("condensing \(blob.size) pixels into blob with \(otherBlob.size) pixels")
                         blob.absorb(otherBlob)
                         self.blobs = self.blobs.filter() { $0.id != otherBlob.id }
                     }
