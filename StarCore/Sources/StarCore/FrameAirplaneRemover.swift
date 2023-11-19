@@ -787,7 +787,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                                         to filename: String) throws -> PixelatedImage
     {
         // XXX make new state for this?
-        let imageData = subtractionArray.withUnsafeBufferPointer { Data(buffer: $0)  }
+        let imageData = subtractionArray.withUnsafeBufferPointer { Data(buffer: $0) }
 
         // write out the subtractionArray here as an image
         let outlierAmountImage = PixelatedImage(width: width,

@@ -14,13 +14,15 @@ public struct Defaults {
      A lower outlierMaxThreshold results in detecting more outlier groups.
      A higher outlierMaxThreshold results in detecting fewer outlier groups.
      */
-    public static let outlierMaxThreshold: Double = 11.86
+//    public static let outlierMaxThreshold: Double = 11.86 // misses some streaks
+//    public static let outlierMaxThreshold: Double = 11.00 // still misses some
+    public static let outlierMaxThreshold: Double = 12.2
 
     // groups smaller than this are completely ignored
     // this is scaled by image size:
     //   12 megapixels will get this value
     //   larger ones more, smaller less 
-    public static let minGroupSize: Int = 20
+    public static let minGroupSize: Int = 30
 }
 
 // make any string into an Error, so it can be thrown by itself if desired

@@ -176,8 +176,22 @@ public class Blobber {
         Log.d("initially found \(blobs.count) blobs")
 
         self.blobs = self.blobs.filter { blob in
-            if blob.size <= minimumBlobSize { return false }
+            if blob.size <= minimumBlobSize,
+               //blob.intensity < 16000 // got all those mofos
+               blob.intensity < 18000 // got all those mofos
+            {
+                return false
+            }
 
+            if blob.size <= minimumBlobSize * 2,
+               blob.intensity < 12000
+            {
+                return false
+            }
+            
+            if blob.size <= minimumBlobSize/2 { return false }
+
+            
             if blob.intensity < minimumLocalMaximum {
                 //Log.v("dumping blob of size \(blob.size) intensity \(blob.intensity)")
                 return false
