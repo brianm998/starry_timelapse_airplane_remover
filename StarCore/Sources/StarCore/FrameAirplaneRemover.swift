@@ -28,9 +28,7 @@ public enum FrameProcessingState: Int, CaseIterable, Codable {
     case starAlignment    
     case loadingImages    
     case subtractingNeighbor
-    case frameHoughTransform
     case detectingOutliers1
-    case detectingOutliers2
     case detectingOutliers3
     case readyForInterFrameProcessing
     case interFrameProcessing
@@ -55,12 +53,8 @@ public enum FrameProcessingState: Int, CaseIterable, Codable {
             return"loading images"
         case .subtractingNeighbor:
             return "subtracting aligned neighbor frame"
-        case .frameHoughTransform:
-            return "applying hough transform"
         case .detectingOutliers1:
-            return "grouping outlying pixels"
-        case .detectingOutliers2:
-            return "calculating outlier group bounds"
+            return "detecting blobs"
         case .detectingOutliers3:
             return "populating outlier groups"
         case .readyForInterFrameProcessing: // XXX not covered in progress monitor
@@ -81,37 +75,6 @@ public enum FrameProcessingState: Int, CaseIterable, Codable {
             return "frames writing to disk"
         case .complete:
             return "frames complete"
-        }
-    }
-}
-
-fileprivate class OutlierGroupInfo {
-    var amount: UInt = 0 // average brightness of each group
-    var minX: Int?
-    var minY: Int?
-    var maxX: Int?
-    var maxY: Int?
-    func process(x: Int, y: Int, amount: UInt) {
-        self.amount += amount
-        if let minX = minX {
-            if x < minX { self.minX = x }
-        } else {
-            minX = x
-        }
-        if let minY = minY {
-            if y < minY { self.minY = y }
-        } else {
-            minY = y
-        }
-        if let maxX = maxX {
-            if x > maxX { self.maxX = x }
-        } else {
-            maxX = x
-        }
-        if let maxY = maxY {
-            if y > maxY { self.maxY = y }
-        } else {
-            maxY = y
         }
     }
 }
@@ -417,7 +380,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         }
     }
     
-    var outlierGroupCount: Int { return outlierGroups?.members.count ?? 0 }
+//    var outlierGroupCount: Int { return outlierGroups?.members.count ?? 0 }
     
     public let outputFilename: String
 
@@ -738,7 +701,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         // and its aligned neighbor frame.  Indexed by y * width + x
         var subtractionArray: [UInt16] = []
         
-        self.state = .detectingOutliers1
+        self.state = .loadingImages
         do {
             // try to load the image subtraction from a pre-processed file
 
@@ -756,13 +719,34 @@ public class FrameAirplaneRemover: Equatable, Hashable {
             subtractionArray = try await self.subtractAlignedImageFromFrame()
         }
 
-        self.state = .detectingOutliers2
+        self.state = .detectingOutliers1
 
+
+        /*
+         make the minimum group size dependent upon the resolution of the sequence
+
+         20 works good for no clouds on 12mp (4240 × 2832)
+         20 with clouds on 33 mp is thousands of extra groups
+
+         compute as:
+
+         let minGoupSize = c*b/a
+
+         where a = 12 megapixels,
+               b = number of pixels in the sequence being processed
+               c = 20, // still a param from outside
+         */
+        let twelveMegapixels: Double = 4240 * 2832
+        let sequenceResolution = Double(width) * Double(height)
+
+        var minGroupSize = Int(Double(config.minGroupSize)*sequenceResolution/twelveMegapixels)
+        if minGroupSize < 10 { minGroupSize = 10 }
+        
         let blobber = Blobber(imageWidth: width,
                               imageHeight: height,
                               pixelData: subtractionArray,
                               neighborType: .fourCardinal,
-                              minimumBlobSize: config.minGroupSize)
+                              minimumBlobSize: minGroupSize)
 
         self.state = .detectingOutliers3
 
@@ -796,279 +780,15 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         }
 
         blobIntensities.sort { $0 < $1 }
-        let mean = allBlobIntensities / UInt32(blobber.blobs.count)
-        let median = blobIntensities[blobIntensities.count/2]
-        
-        Log.i("frame \(frameIndex) had blob intensity from \(minBlobIntensity) to \(maxBlobIntensity) mean \(mean) median \(median)")
+
+        if blobber.blobs.count > 0 {
+            let mean = allBlobIntensities / UInt32(blobber.blobs.count)
+            let median = blobIntensities[blobIntensities.count/2]
+            Log.i("frame \(frameIndex) had blob intensity from \(minBlobIntensity) to \(maxBlobIntensity) mean \(mean) median \(median)")
+        }
         
         self.state = .readyForInterFrameProcessing
     }
-    
-    // this is still a slow part of the process, but is now about 10x faster than before
-    func findOutliers_OLD() async throws {
-
-        Log.d("frame \(frameIndex) finding outliers)")
-
-        // contains the difference in brightness between the frame being processed
-        // and its aligned neighbor frame.  Indexed by y * width + x
-        var subtractionArray: [UInt16] = []
-        
-        do {
-            // try to load the image subtraction from a pre-processed file
-
-            let (image, array) = try await PixelatedImage.loadUInt16Array(from: alignedSubtractedFilename)
-            subtractionArray = array
-            
-            Log.d("frame \(frameIndex) loaded outlier amounts from subtraction image")
-
-            if !fileManager.fileExists(atPath: self.alignedSubtractedPreviewFilename) {
-                try writeSubtractionPreview(image)
-            }
-        } catch {
-            Log.i("frame \(frameIndex) couldn't load outlier amounts from subtraction image")
-            // do the image subtraction here instead
-            subtractionArray = try await self.subtractAlignedImageFromFrame()
-        }
-
-        // XXX was a boundary
-        
-        Log.i("frame \(frameIndex) pruning outliers")
-        
-        // go through the outliers and link together all the outliers that are adject to eachother,
-        // outputting a mapping of group name to size
-
-        Log.d("frame \(frameIndex) labeling adjecent outliers")
-
-        /*
-         make the minimum group size dependent upon the resolution of the sequence
-
-         20 works good for no clouds on 12mp (4240 × 2832)
-         20 with clouds on 33 mp is thousands of extra groups
-
-         compute as:
-
-         let minGoupSize = c*b/a
-
-         where a = 12 megapixels,
-               b = number of pixels in the sequence being processed
-               c = 20, // still a param from outside
-         */
-        let twelveMegapixels: Double = 4240 * 2832
-        let sequenceResolution = Double(width) * Double(height)
-
-        var minGroupSize = Int(Double(config.minGroupSize)*sequenceResolution/twelveMegapixels)
-        if minGroupSize < 10 { minGroupSize = 10 }
-        
-        // holds transient data used for finding outliers
-        let searchBag = OutlierSearchBag(width: width, height: height)
-
-        let labelWithHoughLines = true
-
-        // then label adject outliers
-
-        if labelWithHoughLines {
-            // new approach to iterate through hough lines 
-            self.state = .frameHoughTransform
-            let houghTransform = HoughTransform(dataWidth: width,
-                                                dataHeight: height,
-                                                inputData: subtractionArray,
-                                                maxValueRange: 5)
-
-            // first run a hough transform to extract information about lines in this frame
-            let lines = houghTransform.lines(maxCount: 500,         // XXX constants XXX 
-                                             minPixelValue: 6200/*3276*/,
-                                             minLineCount: 20)
-
-            self.state = .detectingOutliers1
-
-            
-            // indexed first by theta/10 then by rho/5
-            let rhoDivisor: Double = 2
-            let thetaDivisor: Double = 6
-
-            // this array is used to avoid similiar lines with less count
-            var usedLineArray: [[Bool]] =
-              [[Bool]](repeating: [Bool](repeating: false,
-                                         count: Int(houghTransform.rmax/rhoDivisor)),
-                       count: Int(360/thetaDivisor))
-
-            Log.d("frame \(frameIndex) processing \(lines.count) lines")
-
-            // how many pixels in each direction does this stamp go?
-            let stampSize = 4 // 3 gives a 5x5 grid centered on this pixel
-            
-            // iterate over all lines returned from the hough transform
-            for line in lines {
-                Log.d("frame \(frameIndex) processing line \(line)")
-
-                let outlierKey = "\(line)"
-                
-                let thetaIndex = Int(line.theta/thetaDivisor)
-                let rhoIndex = Int(line.rho/rhoDivisor)
-                if usedLineArray[thetaIndex][rhoIndex] { continue }
-                usedLineArray[thetaIndex][rhoIndex] = true
-
-                // for each line, sample values around a set of pixels
-                // walked either horizontally or vertically along the line,
-                // according to its slope
-
-                let cartesianLine = line.cartesianLine 
-                switch cartesianLine {
-                case .horizontal(let horizontalLine):
-                    for x in 0..<width {
-                        let y = horizontalLine.y(for: x) 
-                        if y >= 0, y < height {
-                            let index = y * width + x
-                            
-                            outlierStampCheck(at: index,
-                                              sampSize: stampSize,
-                                              orientation: cartesianLine,
-                                              withName: outlierKey,
-                                              searchBag: searchBag, 
-                                              subtractionArray: subtractionArray)
-                        }
-                    }
-                    
-                case .vertical(let verticalLine):
-                    for y in 0..<height {
-                        let x = verticalLine.x(for: y) 
-                        if x >= 0, x < width {
-                            let index = y * width + x
-                            
-                            outlierStampCheck(at: index,
-                                              sampSize: stampSize,
-                                              orientation: cartesianLine,
-                                              withName: outlierKey,
-                                              searchBag: searchBag, 
-                                              subtractionArray: subtractionArray)
-                        }
-                    }
-                }
-            }
-
-
-            var groupCounts: [String:UInt] = [:]
-
-            for x in 0..<width {
-                for y in 0..<height {
-                    let index = y * width + x
-                    if let outlierKey = searchBag.outlierGroupList[index] {
-                        if let groupCount = groupCounts[outlierKey] {
-                            groupCounts[outlierKey] = groupCount+1
-                        } else {
-                            groupCounts[outlierKey] = 1
-                        }
-                    }
-                }
-            }
-
-            for (outlierKey, groupCount) in groupCounts {
-                if groupCount > minGroupSize {
-                    searchBag.individualGroupCounts[outlierKey] = groupCount
-                }
-            }
-            
-            // write out houghLineImageData from the searchBag
-            let _ = try save16BitMonoImageData(searchBag.houghLineImageData,
-                                               to: houghLineImageFilename)
-        } else {
-            self.state = .detectingOutliers1
-            // old approach which scans every pixel in the image
-            for (index, outlierAmount) in subtractionArray.enumerated() {
-                searchForOutliers(at: index,
-                                  searchBag: searchBag, 
-                                  subtractionArray: subtractionArray,
-                                  minGroupSize: minGroupSize)
-            }
-        }
-
-        Log.d("frame \(frameIndex) searched \(searchBag.searchCount) times")
-        
-        
-        self.state = .detectingOutliers2
-
-        Log.i("frame \(frameIndex) calculating outlier group bounds")
-        var groupInfo: [String:OutlierGroupInfo] = [:] // keyed by group name
-        
-        // calculate the outer bounds of each outlier group
-        for x in 0 ..< width {
-            for y in 0 ..< height {
-                let index = y*width+x
-                if let group = searchBag.outlierGroupList[index],
-                   // not all pixels tagged with an outlier group end up
-                   // in the individual group counts because of size
-                   let _ = searchBag.individualGroupCounts[group]
-                {
-                    let amount = UInt(subtractionArray[index])
-                    if let info = groupInfo[group] {
-                        info.process(x: x, y: y, amount: amount)
-                    } else {
-                        let info = OutlierGroupInfo()
-                        groupInfo[group] = info
-                        info.process(x: x, y: y, amount: amount)
-                    }
-                }
-            }
-        }
-
-        self.state = .detectingOutliers3
-        // populate the outlierGroups
-        for (groupName, groupSize) in searchBag.individualGroupCounts {
-            if let info = groupInfo[groupName],
-               let minX = info.minX,
-               let minY = info.minY,
-               let maxX = info.maxX,
-               let maxY = info.maxY
-            {
-                let groupAmount = info.amount
-                let boundingBox = BoundingBox(min: Coord(x: minX, y: minY),
-                                              max: Coord(x: maxX, y: maxY))
-                let groupBrightness = groupAmount / groupSize
-
-                if let ignoreLowerPixels = config.ignoreLowerPixels,
-                   Int(IMAGE_HEIGHT!) - minY <= ignoreLowerPixels
-                {
-                    Log.v("discarding outlier group with minY \(minY)")
-                    continue
-                }
-                // next collect the amounts
-
-                var maxDiff: UInt16 = 0
-                
-                var outlierAmounts = [UInt16](repeating: 0, count: boundingBox.width*boundingBox.height)
-                for x in minX ... maxX {
-                    for y in minY ... maxY {
-                        let index = y * self.width + x
-                        if let pixelGroupName = searchBag.outlierGroupList[index],
-                           pixelGroupName == groupName
-                        {
-                            let pixelAmount = subtractionArray[index]
-                            let idx = (y-minY) * boundingBox.width + (x-minX)
-                            outlierAmounts[idx] = pixelAmount
-                            if pixelAmount > maxDiff { maxDiff = pixelAmount }
-                        }
-                    }
-                }
-
-                if maxDiff >= config.maxPixelDistance {
-                    let newOutlier = OutlierGroup(name: groupName,
-                                                  size: groupSize,
-                                                  brightness: groupBrightness,
-                                                  bounds: boundingBox,
-                                                  frame: self,
-                                                  pixels: outlierAmounts,
-                                                  maxPixelDistance: config.maxPixelDistance)
-                    outlierGroups?.members[groupName] = newOutlier
-                } else {
-                    Log.i("skipping frame with maxDiff \(maxDiff) < max \(config.maxPixelDistance)")
-                }
-            }
-        }
-
-        self.state = .readyForInterFrameProcessing
-        Log.i("frame \(frameIndex) has found \(String(describing: outlierGroups?.members.count)) outlier groups to consider")
-    }
-
     
     private func save16BitMonoImageData(_ subtractionArray: [UInt16],
                                         to filename: String) throws -> PixelatedImage
@@ -1091,212 +811,6 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         try outlierAmountImage.writeTIFFEncoding(toFilename: filename)
 
         return outlierAmountImage
-    }
-
-    // newer method for usage w/ hough lines
-    private func outlierStampCheck(at index: Int,
-                                   sampSize: Int,
-                                   orientation: CartesianLine,
-                                   withName outlierKey: String,
-                                   searchBag: OutlierSearchBag, 
-                                   subtractionArray: [UInt16])
-    {
-        let startTime = NSDate().timeIntervalSince1970
-
-        searchBag.houghLineImageData[index] = 0x4FFF
-        searchBag.searchCount += 1
-
-        let outlierAmount = subtractionArray[index]
-        if outlierAmount <= config.maxPixelDistance { return }
-
-        let outlierGroupname = searchBag.outlierGroupList[index]
-        if outlierGroupname != nil { return }
-        
-        // record x, y search point to show to user
-        searchBag.houghLineImageData[index] = 0xFFFF
-
-        let x = index % width
-        let y = index / width
-
-        // first figure out our name
-
-        var sampSizeVert = sampSize
-        var sampSizeHori = sampSize
-
-        // adjust the sample size based upon orientation
-        // grab more from the direction we're coming from to bridge gaps
-        // that can be caused by blinking lights of more distant vehicles
-        switch orientation {
-        case .vertical(_):
-            sampSizeVert *= 2
-        case .horizontal(_):
-            sampSizeHori *= 2
-        }
-        
-        // how may pixels in each direction to look for others  
-        var searchXStart = x - sampSizeHori
-        var searchYStart = y - sampSizeVert
-        var searchXEnd = x + sampSizeHori
-        var searchYEnd = y + sampSizeVert
-        if searchXStart < 0 { searchXStart = 0 }
-        if searchYStart < 0 { searchYStart = 0 }
-        if searchXEnd > width { searchXEnd = width } 
-        if searchYEnd > height { searchYEnd = height } 
-
-        var nameForThisOutlierGroup: String?
-        
-        for searchX in searchXStart..<searchXEnd {
-            for searchY in searchYStart..<searchYEnd {
-                if let otherGroupName = searchBag.outlierGroupList[searchY*width+searchX],
-                   otherGroupName.starts(with: outlierKey)
-                {
-                    Log.d("frame \(frameIndex) found matching outlier name \(otherGroupName)")
-                    nameForThisOutlierGroup = otherGroupName
-                    continue
-                }
-            }
-            if nameForThisOutlierGroup != nil { continue }
-        }
-
-        if nameForThisOutlierGroup == nil {
-            nameForThisOutlierGroup = "\(outlierKey) - \(index)"
-            Log.d("frame \(frameIndex) making new outlier name \(nameForThisOutlierGroup!)")
-        }
-
-        guard nameForThisOutlierGroup != nil else {
-            Log.e("nameForThisOutlierGroup is nil somehow")
-            return
-        }
-        
-        searchBag.outlierGroupList[index] = nameForThisOutlierGroup
-        
-        for searchX in searchXStart..<searchXEnd {
-            for searchY in searchYStart..<searchYEnd {
-                let searchIndex = searchY*width+searchX
-                if searchBag.outlierGroupList[searchIndex] == nil,
-                   subtractionArray[searchIndex] > config.maxPixelDistance
-                {
-                    //Log.d("frame \(frameIndex) setting [\(searchX), \(searchY))] to outlier group \(nameForThisOutlierGroup)")
-                    searchBag.outlierGroupList[searchIndex] = nameForThisOutlierGroup
-                }
-            }
-        }
-    }
-
-    // older working, but slow method
-    private func searchForOutliers(at index: Int,
-                                   searchBag: OutlierSearchBag, 
-                                   subtractionArray: [UInt16],
-                                   minGroupSize: Int) 
-    {
-        let startTime = NSDate().timeIntervalSince1970
-        
-        // record x, y search point to show to user
-        searchBag.houghLineImageData[index] = 0x4FFF
-        searchBag.searchCount += 1
-        let outlierAmount = subtractionArray[index]
-        if outlierAmount <= config.maxPixelDistance { return }
-        
-        // record x, y search point to show to user
-        searchBag.houghLineImageData[index] = 0xFFFF
-        
-        let outlierGroupname = searchBag.outlierGroupList[index]
-        if outlierGroupname != nil { return }
-        
-        var pendingOutliers = [Int](repeating: -1, count: width*height) 
-        var pendingOutlierInsertIndex = 0;
-        var pendingOutlierAccessIndex = 0;
-       
-        // not part of a group yet
-        var groupSize: UInt = 0
-        // tag this virgin outlier with its own key
-        
-        let outlierKey = "\(index % width),\(index / width)"; // arbitrary but needs to be unique
-        //Log.d("initial index = \(index)")
-        searchBag.outlierGroupList[index] = outlierKey
-        pendingOutliers[pendingOutlierInsertIndex] = index;
-        pendingOutlierInsertIndex += 1
-        
-        var loopCount: UInt64 = 0
-        
-        while pendingOutlierInsertIndex != pendingOutlierAccessIndex {
-            //Log.d("pendingOutlierInsertIndex \(pendingOutlierInsertIndex) pendingOutlierAccessIndex \(pendingOutlierAccessIndex)")
-            loopCount += 1
-            //                if loopCount % 1000 == 0 {
-            //                    Log.v("frame \(frameIndex) looping \(loopCount) times groupSize \(groupSize)")
-            //                }
-            
-            let nextOutlierIndex = pendingOutliers[pendingOutlierAccessIndex]
-            //Log.d("nextOutlierIndex \(nextOutlierIndex)")
-            
-            pendingOutlierAccessIndex += 1
-            if let _ = searchBag.outlierGroupList[nextOutlierIndex] {
-                groupSize += 1
-                
-                let outlierX = nextOutlierIndex % width;
-                let outlierY = nextOutlierIndex / width;
-                
-                //Log.e("minPixelDistance \(minPixelDistance) maxPixelDistance \(maxPixelDistance)")
-                
-                if outlierX > 0 { // add left neighbor
-                    let leftNeighborIndex = outlierY * width + outlierX - 1
-                    let leftNeighborAmount = subtractionArray[leftNeighborIndex]
-                    if leftNeighborAmount > config.minPixelDistance,
-                       searchBag.outlierGroupList[leftNeighborIndex] == nil
-                    {
-                        pendingOutliers[pendingOutlierInsertIndex] = leftNeighborIndex
-                        searchBag.outlierGroupList[leftNeighborIndex] = outlierKey
-                        pendingOutlierInsertIndex += 1
-                    }
-                }
-                
-                if outlierX < width - 1 { // add right neighbor
-                    let rightNeighborIndex = outlierY * width + outlierX + 1
-                    let rightNeighborAmount = subtractionArray[rightNeighborIndex]
-                    if rightNeighborAmount > config.minPixelDistance,
-                       searchBag.outlierGroupList[rightNeighborIndex] == nil
-                    {
-                        pendingOutliers[pendingOutlierInsertIndex] = rightNeighborIndex
-                        searchBag.outlierGroupList[rightNeighborIndex] = outlierKey
-                        pendingOutlierInsertIndex += 1
-                    }
-                }
-                
-                if outlierY > 0 { // add top neighbor
-                    let topNeighborIndex = (outlierY - 1) * width + outlierX
-                    let topNeighborAmount = subtractionArray[topNeighborIndex]
-                    if topNeighborAmount > config.minPixelDistance,
-                       searchBag.outlierGroupList[topNeighborIndex] == nil
-                    {
-                        pendingOutliers[pendingOutlierInsertIndex] = topNeighborIndex
-                        searchBag.outlierGroupList[topNeighborIndex] = outlierKey
-                        pendingOutlierInsertIndex += 1
-                    }
-                }
-                
-                if outlierY < height - 1 { // add bottom neighbor
-                    let bottomNeighborIndex = (outlierY + 1) * width + outlierX
-                    let bottomNeighborAmount = subtractionArray[bottomNeighborIndex]
-                    if bottomNeighborAmount > config.minPixelDistance,
-                       searchBag.outlierGroupList[bottomNeighborIndex] == nil
-                    {
-                        pendingOutliers[pendingOutlierInsertIndex] = bottomNeighborIndex
-                        searchBag.outlierGroupList[bottomNeighborIndex] = outlierKey
-                        pendingOutlierInsertIndex += 1
-                    }
-                }
-            } else {
-                //Log.w("next outlier has groupName \(String(describing: next_outlier.groupName))")
-                // shouldn't end up here with a group named outlier
-                fatalError("FUCK")
-            }
-        }
-        if groupSize > minGroupSize { 
-            //Log.d("frame \(frameIndex) group \(outlierKey) has \(groupSize) members minGroupSize \(minGroupSize) loopCount \(loopCount)")
-            searchBag.individualGroupCounts[outlierKey] = groupSize
-        }
-        let endTime = NSDate().timeIntervalSince1970
-        //Log.d("search for group \(outlierKey) with \(groupSize) members took \(endTime-startTime) seconds")
     }
 
     public func pixelatedImage() async throws -> PixelatedImage? {

@@ -134,15 +134,7 @@ public actor UpdatableProgressMonitor {
             updates.append(update)
         }
         
-        if let update = progressLine(for: .frameHoughTransform) {
-            updates.append(update)
-        }
-        
         if let update = progressLine(for: .detectingOutliers1) {
-            updates.append(update)
-        }
-        
-        if let update = progressLine(for: .detectingOutliers2) {
             updates.append(update)
         }
         
