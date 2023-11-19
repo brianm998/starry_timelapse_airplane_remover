@@ -59,13 +59,10 @@ struct BlobberCli: AsyncParsableCommand {
           "241": "\(no_cloud_base)/LRT_00242-severe-noise.tiff"
         ]
 
-
         let clouds_cropped = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/LRT00161_cropped.tif"
         let clouds_cropped_3x_blur = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/LRT00161_cropped_3x_blur.tif"
         let clouds_cropped_2x_blur = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/LRT00161_cropped_2x_blur.tif"
         let clouds_cropped_1x_blur = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/LRT00161_cropped_1x_blur.tif"
-        
-
         
         let small_image = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/LRT_00350-severe-noise_crop.tiff"
 
@@ -74,11 +71,10 @@ struct BlobberCli: AsyncParsableCommand {
 //                                          clouds_cropped_1x_blur,
                                           clouds_cropped,
 //                                          small_image,
-                                        neighborType: .fourCardinal,
-                                        minimumBlobSize: 30,
-                                        minimumLocalMaximum: 7777,
-                                        contrastMin: 60,
-                                        dimBlobMultiplier: 8)
+                                        neighborType: .eight,//.fourCardinal,
+                                        minimumBlobSize: 60,
+                                        minimumLocalMaximum: 8000,
+                                        contrastMin: 58)
 
         try blobber.outputImage.writeTIFFEncoding(toFilename: outputFile)
     }

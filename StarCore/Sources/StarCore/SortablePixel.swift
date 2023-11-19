@@ -62,7 +62,7 @@ public class SortablePixel {
          return 100 if one is zero and the other is not
      */
     public func contrast(with otherPixel: SortablePixel) -> Double {
-        let diff = Double(self.intensity - otherPixel.intensity)
+        let diff = Double(abs(Int32(self.intensity) - Int32(otherPixel.intensity)))
         let max = Double(max(self.intensity, otherPixel.intensity))
         
         return diff / max * 100

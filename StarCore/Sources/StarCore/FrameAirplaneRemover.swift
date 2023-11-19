@@ -744,11 +744,10 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         let blobber = Blobber(imageWidth: width,
                               imageHeight: height,
                               pixelData: subtractionArray,
-                              neighborType: .fourCardinal,
+                              neighborType: .eight,//.fourCardinal,
                               minimumBlobSize: minGroupSize,
                               minimumLocalMaximum: config.maxPixelDistance,
-                              contrastMin: 80,      // XXX constant
-                              dimBlobMultiplier: 8) // XXX constant
+                              contrastMin: 58)      // XXX constant
 
         self.state = .detectingOutliers3
 

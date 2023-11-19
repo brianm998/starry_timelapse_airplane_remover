@@ -6,14 +6,18 @@ public class Blob {
     public private(set) var pixels: [SortablePixel]
 
     public var size: Int { pixels.count }
-    
+
     public func add(pixels newPixels: [SortablePixel]) {
+        for pixel in pixels {
+            pixel.status = .blobbed(self)
+        }
         self.pixels += newPixels
         _intensity = nil
         _boundingBox = nil
     }
 
     public func add(pixel: SortablePixel) {
+        pixel.status = .blobbed(self)
         self.pixels.append(pixel)
         _intensity = nil
         _boundingBox = nil
@@ -23,6 +27,7 @@ public class Blob {
     private var _boundingBox: BoundingBox?
     
     public var intensity: UInt16 {
+        if pixels.count == 0 { return 0 }
         if let _intensity = _intensity { return _intensity }
         var max: UInt64 = 0
         for pixel in pixels {
@@ -37,6 +42,15 @@ public class Blob {
     public init(_ pixel: SortablePixel) {
         self.pixels = [pixel]
         self.id = "\(pixel.x) x \(pixel.y)"
+    }
+
+    public func makeBackground() {
+        for pixel in pixels {
+            pixel.status = .background
+        }
+        pixels = []
+        _intensity = nil
+        _boundingBox = nil
     }
 
     public func absorb(_ otherBlob: Blob) {

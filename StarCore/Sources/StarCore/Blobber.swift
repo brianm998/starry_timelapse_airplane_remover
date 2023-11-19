@@ -29,8 +29,7 @@ You should have received a copy of the GNU General Public License along with sta
 
  All returned blobs will meet minimumBlobSize.
 
- Blobs dimmer on average than minimumLocalMaximum
- need to be dimBlobMultiplier times larger than minimumBlobSize.
+ Blobs dimmer on average than minimumLocalMaximum are discarded.
  */
 public class Blobber {
     public let imageWidth: Int
@@ -62,10 +61,6 @@ public class Blobber {
     // 100 means that all pixels will be in a blob
     let contrastMin: Double
 
-    // a constant applied to minimumBlobSize after blob creation to discard any blobs
-    // that are dimmer than minimumLocalMaximum and smaller than minimumBlobSize times this value.
-    let dimBlobMultiplier: Int
-
     // neighbor search policies
     public enum NeighborType {
         case fourCardinal       // up and down, left and right, no corners
@@ -86,11 +81,10 @@ public class Blobber {
     }
     
     public convenience init(filename: String,
-                            neighborType: NeighborType = .eight,
+                            neighborType: NeighborType,
                             minimumBlobSize: Int,
                             minimumLocalMaximum: UInt16,
-                            contrastMin: Double,
-                            dimBlobMultiplier: Int)
+                            contrastMin: Double)
       async throws
     {
         let (image, pixelData) =
@@ -104,18 +98,16 @@ public class Blobber {
                   neighborType: neighborType,
                   minimumBlobSize: minimumBlobSize,
                   minimumLocalMaximum: minimumLocalMaximum,
-                  contrastMin: contrastMin,
-                  dimBlobMultiplier: dimBlobMultiplier)
+                  contrastMin: contrastMin)
     }
 
     public init(imageWidth: Int,
                 imageHeight: Int,
                 pixelData: [UInt16],
-                neighborType: NeighborType = .eight,
+                neighborType: NeighborType,
                 minimumBlobSize: Int,
                 minimumLocalMaximum: UInt16,
-                contrastMin: Double,
-                dimBlobMultiplier: Int) 
+                contrastMin: Double)
     {
         self.imageWidth = imageWidth
         self.imageHeight = imageHeight
@@ -124,7 +116,6 @@ public class Blobber {
         self.minimumBlobSize = minimumBlobSize
         self.minimumLocalMaximum = minimumLocalMaximum
         self.contrastMin = contrastMin
-        self.dimBlobMultiplier = dimBlobMultiplier
         
         Log.v("blobbing image of size (\(imageWidth), \(imageHeight))")
 
@@ -154,18 +145,22 @@ public class Blobber {
 
             if pixel.status != .unknown { continue }
             
-            //Log.d("examining pixel \(pixel.x) \(pixel.y) \(pixel.intensity)")
-            let neighbors = self.neighbors(pixel)
-            let higherNeighbors = neighbors.filter { $0.intensity > pixel.intensity } 
-            //Log.d("found \(higherNeighbors) higherNeighbors")
-            if higherNeighbors.count == 0 {
-                // no higher neighbors
-                // a local maximum, this pixel is a blob seed
-                if pixel.intensity > minimumLocalMaximum {
+            if pixel.intensity > minimumLocalMaximum {
+                
+                //Log.d("examining pixel \(pixel.x) \(pixel.y) \(pixel.intensity)")
+                let allNeighbors = self.neighbors(of: pixel)
+                //let allNeighbors = self.allNeighbors(of: pixel, within: 4)
+                let higherNeighbors = allNeighbors.filter { $0.intensity > pixel.intensity } 
+                //Log.d("found \(higherNeighbors) higherNeighbors")
+                if higherNeighbors.count == 0 {
+                    // no higher neighbors
+                    // a local maximum, this pixel is a blob seed
                     let newBlob = Blob(pixel)
                     blobs.append(newBlob)
-
+                    
                     //Log.d("expanding from seed pixel.intensity \(pixel.intensity)")
+                    
+                    newBlob.add(pixel: pixel)
                     
                     expand(blob: newBlob, seedPixel: pixel)
                     
@@ -174,68 +169,23 @@ public class Blobber {
                     pixel.status = .background
                 }                    
             } else {
-                // see if any higher neighbors are already backgrounded
-                var hasHigherBackgroundNeighbor = false
-                for neighbor in higherNeighbors {
-                    hasHigherBackgroundNeighbor = (neighbor.status == .background)
-                }
-                if hasHigherBackgroundNeighbor {
-                    // if has at least one higher neighbor, which is background,
-                    // then it must be background
-                    pixel.status = .background
-                } else {
-                    // see how many blob neighbors there are
-                    var nearbyBlobs: [String:Blob] = [:]
-                    for neighbor in neighbors {
-                        switch neighbor.status {
-                        case .blobbed(let nearbyBlob):
-                            nearbyBlobs[nearbyBlob.id] = nearbyBlob
-                        default:
-                            break
-                        }
-                    }
-
-                    if let (id, firstBlob) = nearbyBlobs.randomElement() {
-                        nearbyBlobs.removeValue(forKey: id)
-                        Log.d("nearbyBlobs.count \(nearbyBlobs.count)")
-                        
-                        if nearbyBlobs.count > 0 {
-                            Log.i("condensing \(nearbyBlobs.count) blobs into blob with \(firstBlob.size) pixels")
-                            // we have extra blobs, absorb them 
-                            for otherBlob in nearbyBlobs.values {
-                                firstBlob.absorb(otherBlob)
-                                
-                                // remove otherBlob from blobs
-                                self.blobs = self.blobs.filter() { $0.id != otherBlob.id }
-                            }
-                            Log.d("first blob now has \(firstBlob.size) pixels")
-                        }
-                        
-                        // add this pixel to the blob
-                        pixel.status = .blobbed(firstBlob)
-                        firstBlob.add(pixel: pixel)
-                    } else {
-                        pixel.status = .background
-                    }
-                }
+                pixel.status = .background
             }
         }
-        
+
         Log.d("initially found \(blobs.count) blobs")
-        
+
         self.blobs = self.blobs.filter { blob in
             if blob.size <= minimumBlobSize { return false }
 
-            if blob.intensity < minimumLocalMaximum,
-               blob.size < minimumBlobSize*dimBlobMultiplier
-            {
+            if blob.intensity < minimumLocalMaximum {
                 Log.v("dumping blob of size \(blob.size) intensity \(blob.intensity)")
                 return false
             }
             return true
         }         
         
-        Log.d("found \(blobs.count) blobs larger than \(minimumBlobSize) pixels")
+        Log.i("found \(blobs.count) blobs larger than \(minimumBlobSize) pixels")
     }
 
     // used for writing out blob data for viewing 
@@ -263,16 +213,17 @@ public class Blobber {
 
     public func expand(blob: Blob, seedPixel firstSeed: SortablePixel) {
         //Log.d("expanding initially seed blob")
-        
+
         var seedPixels: [SortablePixel] = [firstSeed]
-        
+
         while let seedPixel = seedPixels.popLast() {
             // first set this pixel to be part of this blob
-            seedPixel.status = .blobbed(blob)
             blob.add(pixel: seedPixel)
 
             // next examine neighboring pixels
-            let neighbors = neighbors(seedPixel)
+            let neighbors = neighbors(of: seedPixel)
+            //let neighbors = allNeighbors(of: seedPixel, within: 1)
+            //Log.i("got \(neighbors.count) neighbors")
             for neighbor in neighbors {
                 switch neighbor.status {
                 case .unknown:
@@ -286,14 +237,32 @@ public class Blobber {
                     }
 
                 case .blobbed(let otherBlob):
+                    if otherBlob.id != blob.id {
+                        if otherBlob.intensity < blob.intensity {
+//                            otherBlob.makeBackground()
+//                            self.blobs = self.blobs.filter() { $0.id != otherBlob.id }
+                        } else {
+                            // this blob is less intense 
+//                            blob.makeBackground()
+//                            self.blobs = self.blobs.filter() { $0.id != blob.id }
+//                            return
+                        }
+                        Log.i("blob with intensity \(blob.intensity) next to other blob with intensity \(otherBlob.intensity)")
+                    }
+                    // compare neighboring Blob
+                    
                     // absorb any nearby blobs
+                    /*
                     if otherBlob.id != blob.id {
                         Log.i("condensing \(blob.size) pixels into blob with \(otherBlob.size) pixels")
                         blob.absorb(otherBlob)
                         self.blobs = self.blobs.filter() { $0.id != otherBlob.id }
-                    }
+                     }
+                     */
+                    break
                     
                 case.background:
+                    
                     break
                 } 
             }
@@ -322,17 +291,47 @@ public class Blobber {
     }
 
     // for the NeighborType of this Blobber
-    public func neighbors(_ pixel: SortablePixel) -> [SortablePixel] {
-        return neighborsInt(pixel, neighborType)
+    public func neighbors(of pixel: SortablePixel) -> [SortablePixel] {
+        return neighborsInt(pixel, self.neighborType)
     }
 
+    public func allNeighbors(of pixel: SortablePixel, within distance: Int) -> [SortablePixel] {
+        var minX = pixel.x - distance
+        var minY = pixel.y - distance
+        var maxX = pixel.x + distance
+        var maxY = pixel.y + distance
+        if minX < 0 { minX = 0 }
+        if minY < 0 { minY = 0 }
+        if maxX >= imageWidth { maxX = imageWidth - 1 }
+        if maxY >= imageHeight { maxY = imageHeight - 1 }
+
+        var ret: [SortablePixel] = []
+        
+        //Log.d("for pixel @ [\(pixel.x), \(pixel.y)] minX \(minX) minY \(minY) maxX \(maxX) maxY \(maxY)")
+        
+        for x in minX ... maxX {
+            for y in minY ... maxY {
+                if x == pixel.x && y == pixel.y
+                {
+                    //Log.d("cannot add pixel @ [\(x), \(y)]")
+                    // central pixel is not neighbor
+                } else {
+                    //Log.d("adding pixel @ [\(x), \(y)]")
+                    ret.append(pixels[x][y])
+                }
+            }
+        }
+
+        //Log.d("returning \(ret.count) pixels")
+        return ret
+    }
+    
     // for any NeighborType
     fileprivate func neighborsInt(_ pixel: SortablePixel,
                                   _ type: NeighborType) -> [SortablePixel]
     {
         var ret: [SortablePixel] = []
         switch type {
-
             // up and down, left and right, no corners
         case .fourCardinal:
             if let left = neighbor(.left, for: pixel) {
