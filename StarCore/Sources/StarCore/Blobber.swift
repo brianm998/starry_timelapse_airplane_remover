@@ -87,10 +87,10 @@ public class Blobber {
     
     public convenience init(filename: String,
                             neighborType: NeighborType = .eight,
-                            minimumBlobSize: Int = 20,
-                            minimumLocalMaximum: UInt16 = 7777,
-                            contrastMin: Double = 80,
-                            dimBlobMultiplier: Int = 8)
+                            minimumBlobSize: Int,
+                            minimumLocalMaximum: UInt16,
+                            contrastMin: Double,
+                            dimBlobMultiplier: Int)
       async throws
     {
         let (image, pixelData) =
@@ -112,10 +112,10 @@ public class Blobber {
                 imageHeight: Int,
                 pixelData: [UInt16],
                 neighborType: NeighborType = .eight,
-                minimumBlobSize: Int = 20,
-                minimumLocalMaximum: UInt16 = 7777,
-                contrastMin: Double = 80,
-                dimBlobMultiplier: Int = 8) 
+                minimumBlobSize: Int,
+                minimumLocalMaximum: UInt16,
+                contrastMin: Double,
+                dimBlobMultiplier: Int) 
     {
         self.imageWidth = imageWidth
         self.imageHeight = imageHeight

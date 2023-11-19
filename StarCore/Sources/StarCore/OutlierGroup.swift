@@ -348,7 +348,6 @@ public class OutlierGroup: CustomStringConvertible,
          XXX add:
            - config stuff:
              - outlierMaxThreshold
-             - outlierMinThreshold
              - minGroupSize
          
          */

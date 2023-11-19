@@ -70,11 +70,15 @@ struct BlobberCli: AsyncParsableCommand {
         let small_image = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/LRT_00350-severe-noise_crop.tiff"
 
         let blobber = try await Blobber(filename:
-                                          lots_of_clouds["160"]!,
+//                                          lots_of_clouds["160"]!,
 //                                          clouds_cropped_1x_blur,
-//                                          clouds_cropped,
+                                          clouds_cropped,
 //                                          small_image,
-                                        neighborType: .fourCardinal)
+                                        neighborType: .fourCardinal,
+                                        minimumBlobSize: 20,
+                                        minimumLocalMaximum: 7777,
+                                        contrastMin: 80,
+                                        dimBlobMultiplier: 8)
 
         try blobber.outputImage.writeTIFFEncoding(toFilename: outputFile)
     }

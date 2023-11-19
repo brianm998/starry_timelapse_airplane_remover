@@ -746,7 +746,9 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                               pixelData: subtractionArray,
                               neighborType: .fourCardinal,
                               minimumBlobSize: minGroupSize,
-                              minimumLocalMaximum: config.maxPixelDistance)
+                              minimumLocalMaximum: config.maxPixelDistance,
+                              contrastMin: 80,      // XXX constant
+                              dimBlobMultiplier: 8) // XXX constant
 
         self.state = .detectingOutliers3
 
