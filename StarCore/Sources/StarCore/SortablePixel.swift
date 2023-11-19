@@ -52,9 +52,20 @@ public class SortablePixel {
         self.intensity = intensity
     }
 
-    public func contrast(with otherPixel: SortablePixel, maxBright: UInt16 = 0xFFFF) -> Double {
-        let diff = abs(Int32(self.intensity) - Int32(otherPixel.intensity))
-        return Double(diff) * Double(0xFFFF) / Double(maxBright)
+    /*
+      returns percentage that they are similar
+
+         return 0 if they are the same
+
+         return 50 if one value is twice the other
+         
+         return 100 if one is zero and the other is not
+     */
+    public func contrast(with otherPixel: SortablePixel) -> Double {
+        let diff = Double(self.intensity - otherPixel.intensity)
+        let max = Double(max(self.intensity, otherPixel.intensity))
+        
+        return diff / max * 100
     }
 }
 

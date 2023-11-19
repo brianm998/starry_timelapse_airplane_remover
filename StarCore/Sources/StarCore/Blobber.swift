@@ -30,21 +30,19 @@ public class Blobber {
 
     public let minimumBlobSize: Int
 
-    // new trials
-    //let lowIntensityLimit: UInt16 = 4000   // airplane the same, more noise
-    //let lowIntensityLimit: UInt16 = 5000   // mostly works, skipps some spots, some noise
-    //let lowIntensityLimit: UInt16 = 7000   // airplanes the same, less noise
-    let lowIntensityLimit: UInt16 = 7777 
-    //let lowIntensityLimit: UInt16 = 8500   // less noise, but lost a little bit of airplane
-    
-//        let contrastMin: Double = 8000 // XXX hardly shows anything 
-//        let contrastMin: Double = 18000 // shows airplane streaks about half
-//        let contrastMin: Double = 28000 // got almost all of the airplanes, some noise too
-//        let contrastMin: Double = 30000 // got almost all of the airplanes, some noise too
-//        let contrastMin: Double = 35000 // looks better
-//    let contrastMin: Double = 38000 // looks better
-    let contrastMin: Double = 40000 // looks better
-//        let contrastMin: Double = 40000 // pretty much got the airplanes, but 8 minutes to paint :(
+    // pixels that are local maxims, but have a value lower than this are ignored
+    let minimumLocalMaximum: UInt16
+
+    // how close to zero (in percentage) can the intensity of pixels decrease before
+    // being left out of a blob
+    // zero means that only pixels of minimumLocalMaximum or higher will be in blobs
+    // 50 means that all pixels half as bright or more than the maximum will be in a blob
+    // 100 means that all pixels will be in a blob
+    let contrastMin: Double
+
+    // a constant applied to minimumBlobSize after blob creation to discard any blobs
+    // that are dimmer than minimumLocalMaximum and smaller than minimumBlobSize times this value.
+    let dimBlobMultiplier: Int
     
     public enum NeighborType {
         case fourCardinal       // up and down, left and right, no corners
@@ -65,34 +63,48 @@ public class Blobber {
     
     public convenience init(filename: String,
                             neighborType: NeighborType = .eight,
-                            minimumBlobSize: Int = 20)
+                            minimumBlobSize: Int = 20,
+                            minimumLocalMaximum: UInt16 = 7777,
+                            contrastMin: Double = 80,
+                            dimBlobMultiplier: Int = 8)
       async throws
     {
         let (image, pixelData) =
           try await PixelatedImage.loadUInt16Array(from: filename)
 
+        Log.v("loaded image of size (\(image.width), \(image.height))")
+
         self.init(imageWidth: image.width,
                   imageHeight: image.height,
                   pixelData: pixelData,
                   neighborType: neighborType,
-                  minimumBlobSize: minimumBlobSize)
+                  minimumBlobSize: minimumBlobSize,
+                  minimumLocalMaximum: minimumLocalMaximum,
+                  contrastMin: contrastMin,
+                  dimBlobMultiplier: dimBlobMultiplier)
     }
 
     public init(imageWidth: Int,
                 imageHeight: Int,
                 pixelData: [UInt16],
                 neighborType: NeighborType = .eight,
-                minimumBlobSize: Int = 20) 
+                minimumBlobSize: Int = 20,
+                minimumLocalMaximum: UInt16 = 7777,
+                contrastMin: Double = 80,
+                dimBlobMultiplier: Int = 8) 
     {
         self.imageWidth = imageWidth
         self.imageHeight = imageHeight
         self.pixelData = pixelData
         self.neighborType = neighborType
         self.minimumBlobSize = minimumBlobSize
-
-        Log.v("loaded image of size (\(imageWidth), \(imageHeight))")
-
+        self.minimumLocalMaximum = minimumLocalMaximum
+        self.contrastMin = contrastMin
+        self.dimBlobMultiplier = dimBlobMultiplier
+        
         Log.v("blobbing image of size (\(imageWidth), \(imageHeight))")
+
+        Log.v("minimumLocalMaximum \(minimumLocalMaximum) 0x\(String(format: "%x", minimumLocalMaximum))")
         
         Log.d("loading pixels")
         
@@ -119,12 +131,13 @@ public class Blobber {
             if pixel.status != .unknown { continue }
             
             //Log.d("examining pixel \(pixel.x) \(pixel.y) \(pixel.intensity)")
-            let higherNeighbors = self.higherNeighbors(pixel)
+            let neighbors = self.neighbors(pixel)
+            let higherNeighbors = neighbors.filter { $0.intensity > pixel.intensity } 
             //Log.d("found \(higherNeighbors) higherNeighbors")
             if higherNeighbors.count == 0 {
                 // no higher neighbors
                 // a local maximum, this pixel is a blob seed
-                if pixel.intensity > lowIntensityLimit {
+                if pixel.intensity > minimumLocalMaximum {
                     let newBlob = Blob(pixel)
                     blobs.append(newBlob)
 
@@ -147,9 +160,9 @@ public class Blobber {
                     // then it must be background
                     pixel.status = .background
                 } else {
-                    // see how many blobs neighbors are already part of
+                    // see how many blob neighbors there are
                     var nearbyBlobs: [String:Blob] = [:]
-                    for neighbor in higherNeighbors {
+                    for neighbor in neighbors {
                         switch neighbor.status {
                         case .blobbed(let nearbyBlob):
                             nearbyBlobs[nearbyBlob.id] = nearbyBlob
@@ -163,7 +176,7 @@ public class Blobber {
                         Log.d("nearbyBlobs.count \(nearbyBlobs.count)")
                         
                         if nearbyBlobs.count > 0 {
-                            Log.i("concensing \(nearbyBlobs.count) blobs into blob with \(firstBlob.size) pixels")
+                            Log.i("condensing \(nearbyBlobs.count) blobs into blob with \(firstBlob.size) pixels")
                             // we have extra blobs, absorb them 
                             for otherBlob in nearbyBlobs.values {
                                 firstBlob.absorb(otherBlob)
@@ -184,16 +197,27 @@ public class Blobber {
         
         Log.d("initially found \(blobs.count) blobs")
         
-        self.blobs = self.blobs.filter { $0.size >= minimumBlobSize }         
+        self.blobs = self.blobs.filter { blob in
+            if blob.size <= minimumBlobSize { return false }
 
+            if blob.intensity < minimumLocalMaximum,
+               blob.size < minimumBlobSize*dimBlobMultiplier
+            {
+                Log.v("dumping blob of size \(blob.size) intensity \(blob.intensity)")
+                return false
+            }
+            return true
+        }         
+        
         Log.d("found \(blobs.count) blobs larger than \(minimumBlobSize) pixels")
     }
 
+    // used for writing out blob data for viewing 
     public var outputData: [UInt16] {
         var ret = [UInt16](repeating: 0, count: pixelData.count)
         
         for blob in blobs {
-            Log.v("writing out \(blob.size) pixel blob")
+            //Log.v("writing out \(blob.size) pixel blob")
             for pixel in blob.pixels {
                 // maybe adjust by size?
                 ret[pixel.y*imageWidth+pixel.x] = 0xFFFF / 4 + (blob.intensity/4)*3
@@ -217,14 +241,13 @@ public class Blobber {
             for neighbor in neighbors {
                 switch neighbor.status {
                 case .unknown:
-                    let contrast = seedPixel.contrast(with: neighbor,
-                                                      maxBright: firstSeed.intensity)
-                    let firstSeedContrast = firstSeed.contrast(with: neighbor,
-                                                               maxBright: firstSeed.intensity)
-                    if contrast < contrastMin,
+//                    let contrast = seedPixel.contrast(with: neighbor,
+//                                                      maxBright: firstSeed.intensity)
+                    let firstSeedContrast = firstSeed.contrast(with: neighbor)
+                    if //contrast < contrastMin,
                        firstSeedContrast < contrastMin
                     {
-                        //Log.v("contrast \(contrast) seedPixel.intensity \(seedPixel.intensity) neighbor.intensity \(neighbor.intensity) firstSeed.intensity \(firstSeed.intensity)")
+                        //Log.v("contrast \(firstSeedContrast) seedPixel.intensity neighbor.intensity \(neighbor.intensity) firstSeed.intensity \(firstSeed.intensity)")
                         seedPixels.append(neighbor)
                     } else {
                         neighbor.status = .background
@@ -262,73 +285,6 @@ public class Blobber {
                                          ciFormat: .L16)
 
         return outputImage
-    }
-
-    // for the NeighborType of this Blobber
-    public func higherNeighbors(_ pixel: SortablePixel) -> [SortablePixel] {
-        return higherNeighborsInt(pixel, neighborType)
-    }
-
-    // for any NeighborType
-    fileprivate func higherNeighborsInt(_ pixel: SortablePixel,
-                                        _ type: NeighborType) -> [SortablePixel]
-    {
-        var ret: [SortablePixel] = []
-        switch type {
-
-            // up and down, left and right, no corners
-        case .fourCardinal:
-            if let left = neighbor(.left, for: pixel),
-               left.intensity > pixel.intensity
-            {
-                ret.append(left)
-            }
-            if let right = neighbor(.right, for: pixel),
-               right.intensity > pixel.intensity
-            {
-                ret.append(right)
-            }
-            if let up = neighbor(.up, for: pixel),
-               up.intensity > pixel.intensity
-            {
-                ret.append(up)
-            }
-            if let down = neighbor(.down, for: pixel),
-               down.intensity > pixel.intensity
-            {
-                ret.append(down)
-            }
-            
-            // diagnals only
-        case .fourCorner:
-            if let upperLeft = neighbor(.upperLeft, for: pixel),
-               upperLeft.intensity > pixel.intensity
-            {
-                ret.append(upperLeft)
-            }
-            if let upperRight = neighbor(.upperRight, for: pixel),
-               upperRight.intensity > pixel.intensity
-            {
-                ret.append(upperRight)
-            }
-            if let lowerLeft = neighbor(.lowerLeft, for: pixel),
-               lowerLeft.intensity > pixel.intensity
-            {
-                ret.append(lowerLeft)
-            }
-            if let lowerRight = neighbor(.lowerRight, for: pixel),
-               lowerRight.intensity > pixel.intensity
-            {
-                ret.append(lowerRight)
-            }
-
-            // the sum of the other two
-        case .eight:        
-            return higherNeighborsInt(pixel, .fourCardinal) + 
-                   higherNeighborsInt(pixel, .fourCorner)
-            
-        }
-        return ret
     }
 
     // for the NeighborType of this Blobber
@@ -383,45 +339,40 @@ public class Blobber {
     }
 
     func neighbor(_ direction: NeighborDirection, for pixel: SortablePixel) -> SortablePixel? {
-        if pixel.x == 0 {
-            if direction == .left || 
-               direction == .lowerLeft ||
-               direction == .upperLeft
-            {
-                return nil
-            }
+        if pixel.x == 0,
+           (direction == .left || 
+            direction == .lowerLeft ||
+            direction == .upperLeft)
+        {
+            return nil
         }
-        if pixel.y == 0 {
-            if direction == .up ||
-               direction == .upperRight ||
-               direction == .upperLeft
-            {
-                return nil
-            }
+        if pixel.y == 0,
+           (direction == .up ||
+            direction == .upperRight ||
+            direction == .upperLeft)
+        {
+            return nil
         }
-        if pixel.x == 0 {
-            if direction == .left ||
-               direction == .lowerLeft ||
-               direction == .upperLeft
-            {
-                return nil
-            }
+        if pixel.x == 0,
+           (direction == .left ||
+            direction == .lowerLeft ||
+            direction == .upperLeft)
+        {
+            return nil
         }
-        if pixel.y == imageHeight - 1 {
-            if direction == .down ||
-               direction == .lowerLeft ||
-               direction == .lowerRight
-            {
-                return nil
-            }
+        if pixel.y == imageHeight - 1,
+           (direction == .down ||
+            direction == .lowerLeft ||
+            direction == .lowerRight)
+        {
+            return nil
         }
-        if pixel.x == imageWidth - 1 {
-            if direction == .right ||
-               direction == .lowerRight ||
-               direction == .upperRight
-            {
-                return nil
-            }
+        if pixel.x == imageWidth - 1,
+           (direction == .right ||
+            direction == .lowerRight ||
+            direction == .upperRight)
+        {
+            return nil
         }
         switch direction {
         case .up:

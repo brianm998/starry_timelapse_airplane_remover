@@ -721,7 +721,6 @@ public class FrameAirplaneRemover: Equatable, Hashable {
 
         self.state = .detectingOutliers1
 
-
         /*
          make the minimum group size dependent upon the resolution of the sequence
 
@@ -766,14 +765,6 @@ public class FrameAirplaneRemover: Equatable, Hashable {
             if blobIntensity < minBlobIntensity { minBlobIntensity = blobIntensity }
             if blobIntensity > maxBlobIntensity { maxBlobIntensity = blobIntensity }
 
-            // check intensity here, discard small low intensity groups
-            //if blobIntensity < 6000, // looks good, just under median
-            if blobIntensity < 6500, // approx mean
-               blob.size < 60
-            {
-                continue
-            }
-            
             let outlierGroup = blob.outlierGroup(at: frameIndex)
             outlierGroup.frame = self
             outlierGroups?.members[outlierGroup.name] = outlierGroup
@@ -840,13 +831,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
 
     public func purgeCachedOutputFiles() async {
         Log.d("frame \(frameIndex) purging output files")
-//        let dispatchGroup = DispatchGroup()
-//        dispatchGroup.enter()
-        Task {
-            await imageSequence.removeValue(forKey: self.outputFilename)
-//            dispatchGroup.leave()
-        }
-//        dispatchGroup.wait()
+        await imageSequence.removeValue(forKey: self.outputFilename)
         Log.d("frame \(frameIndex) purged output files")
     }
     
