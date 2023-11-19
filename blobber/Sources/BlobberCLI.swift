@@ -75,9 +75,9 @@ struct BlobberCli: AsyncParsableCommand {
                                           clouds_cropped,
 //                                          small_image,
                                         neighborType: .fourCardinal,
-                                        minimumBlobSize: 20,
+                                        minimumBlobSize: 30,
                                         minimumLocalMaximum: 7777,
-                                        contrastMin: 80,
+                                        contrastMin: 60,
                                         dimBlobMultiplier: 8)
 
         try blobber.outputImage.writeTIFFEncoding(toFilename: outputFile)
