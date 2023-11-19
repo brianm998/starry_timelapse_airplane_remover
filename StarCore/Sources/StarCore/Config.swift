@@ -182,8 +182,9 @@ public struct Config: Codable {
     // 0.4.2 clean up memory usage during outlier detection, save outlier pixels as 16 bit, not 32
     // 0.4.3 subtraction images saved and re-used when available
     // 0.4.4 border painting enabled with config options
+    // 0.5.0 blobber
     
-    public var starVersion = "0.4.4" // XXX move this out
+    public var starVersion = "0.5.0" // XXX move this out
 
     public func writeJson(named filename: String) {
         

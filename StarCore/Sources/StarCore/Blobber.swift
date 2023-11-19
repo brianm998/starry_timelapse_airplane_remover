@@ -179,7 +179,7 @@ public class Blobber {
             if blob.size <= minimumBlobSize { return false }
 
             if blob.intensity < minimumLocalMaximum {
-                Log.v("dumping blob of size \(blob.size) intensity \(blob.intensity)")
+                //Log.v("dumping blob of size \(blob.size) intensity \(blob.intensity)")
                 return false
             }
             return true
@@ -216,15 +216,37 @@ public class Blobber {
 
         var seedPixels: [SortablePixel] = [firstSeed]
 
+        let maxImpacts = 300    // XXX constant
+        
         while let seedPixel = seedPixels.popLast() {
-            // first set this pixel to be part of this blob
+            // check to see if we're within some distance of other blobs
+            for neighbor in self.allNeighbors(of: seedPixel, within: 3) { // XXX constant
+                switch neighbor.status {
+                case .blobbed(let otherBlob):
+                    if otherBlob.id != blob.id {
+                        blob.impactCount += 1
+                        otherBlob.impactCount += 1
+                        if otherBlob.impactCount > maxImpacts {
+                            otherBlob.makeBackground()
+                            self.blobs = self.blobs.filter() { $0.id != otherBlob.id }
+                        }
+                        if blob.impactCount > maxImpacts {
+                            Log.i("making blob of size \(blob.size) background because of too many impacts")
+                            blob.makeBackground()
+                            self.blobs = self.blobs.filter() { $0.id != blob.id }
+                            return
+                        }
+                    }
+                    
+                default:
+                    break
+                }
+            }
+            
+            // set this pixel to be part of this blob
             blob.add(pixel: seedPixel)
-
-            // next examine neighboring pixels
-            let neighbors = neighbors(of: seedPixel)
-            //let neighbors = allNeighbors(of: seedPixel, within: 1)
-            //Log.i("got \(neighbors.count) neighbors")
-            for neighbor in neighbors {
+            
+            for neighbor in self.neighbors(of: seedPixel) {
                 switch neighbor.status {
                 case .unknown:
                     // if unknown status, check contrast with initial seed pixel
@@ -236,39 +258,13 @@ public class Blobber {
                         neighbor.status = .background
                     }
 
-                case .blobbed(let otherBlob):
-                    if otherBlob.id != blob.id {
-                        if otherBlob.intensity < blob.intensity {
-//                            otherBlob.makeBackground()
-//                            self.blobs = self.blobs.filter() { $0.id != otherBlob.id }
-                        } else {
-                            // this blob is less intense 
-//                            blob.makeBackground()
-//                            self.blobs = self.blobs.filter() { $0.id != blob.id }
-//                            return
-                        }
-                        Log.i("blob with intensity \(blob.intensity) next to other blob with intensity \(otherBlob.intensity)")
-                    }
-                    // compare neighboring Blob
-                    
-                    // absorb any nearby blobs
-                    /*
-                    if otherBlob.id != blob.id {
-                        Log.i("condensing \(blob.size) pixels into blob with \(otherBlob.size) pixels")
-                        blob.absorb(otherBlob)
-                        self.blobs = self.blobs.filter() { $0.id != otherBlob.id }
-                     }
-                     */
+                default:
                     break
-                    
-                case.background:
-                    
-                    break
-                } 
+                }
             }
         }
 
-        Log.d("after expansion, blob has \(blob.size) pixels")
+        //Log.d("after expansion, blob has \(blob.size) pixels")
     }
     
     public var outputImage: PixelatedImage {

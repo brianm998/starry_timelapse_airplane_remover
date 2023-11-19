@@ -7,6 +7,8 @@ public class Blob {
 
     public var size: Int { pixels.count }
 
+    public var impactCount: Int = 0
+
     public func add(pixels newPixels: [SortablePixel]) {
         for pixel in pixels {
             pixel.status = .blobbed(self)
