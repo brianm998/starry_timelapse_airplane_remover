@@ -24,11 +24,11 @@ public class Blob {
     
     public var intensity: UInt16 {
         if let _intensity = _intensity { return _intensity }
-        var max: UInt32 = 0
+        var max: UInt64 = 0
         for pixel in pixels {
-            max += UInt32(pixel.intensity)
+            max += UInt64(pixel.intensity)
         }
-        max /= UInt32(pixels.count)
+        max /= UInt64(pixels.count)
         let ret = UInt16(max)
         _intensity = ret
         return ret
@@ -46,9 +46,9 @@ public class Blob {
                 otherPixel.status = .blobbed(self)
             }
             self.pixels += newPixels
+            _intensity = nil
+            _boundingBox = nil
         }
-        _intensity = nil
-        _boundingBox = nil
     }
 
     public var boundingBox: BoundingBox {
