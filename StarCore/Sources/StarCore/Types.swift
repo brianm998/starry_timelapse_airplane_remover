@@ -14,8 +14,7 @@ public struct Defaults {
      A lower outlierMaxThreshold results in detecting more outlier groups.
      A higher outlierMaxThreshold results in detecting fewer outlier groups.
      */
-    public static let outlierMaxThreshold: Double = 9
-    public static let outlierMinThreshold: Double = 7
+    public static let outlierMaxThreshold: Double = 11.86
 
     // groups smaller than this are completely ignored
     // this is scaled by image size:
@@ -93,7 +92,7 @@ public struct Line: Codable {
             // and that is accounted for elsewhere by reversing theta 180,
             // and inverting rho
             
-            Log.e("theta \(self.theta) SPECIAL CASE NOT HANDLED")
+            Log.e("theta \(self.theta) \(self.rho) SPECIAL CASE NOT HANDLED")
 
         } else if self.theta < 360 {
             let opposite = tan((360-self.theta)*Double.pi/180)*self.rho

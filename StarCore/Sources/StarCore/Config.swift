@@ -21,7 +21,6 @@ public struct Config: Codable {
     public init() {
         self.outputPath = "."
         self.outlierMaxThreshold = 0
-        self.outlierMinThreshold = 0
         self.minGroupSize = 0
         //self.numConcurrentRenders = 0
         self.imageSequenceDirname = ""
@@ -32,10 +31,7 @@ public struct Config: Codable {
         self.writeFrameThumbnailFiles = false
 
         // XXX 16 bit hardcode
-        self.minPixelDistance = sixteenBitVersion(ofPercentage: outlierMaxThreshold)
-
-        // XXX 16 bit hardcode
-        self.maxPixelDistance = sixteenBitVersion(ofPercentage: outlierMinThreshold)
+        self.maxPixelDistance = sixteenBitVersion(ofPercentage: outlierMaxThreshold)
     }
 
     // returns a stored json config file
@@ -50,7 +46,6 @@ public struct Config: Codable {
 
     public init(outputPath: String?,
                 outlierMaxThreshold: Double,
-                outlierMinThreshold: Double,
                 minGroupSize: Int,
                 imageSequenceName: String,
                 imageSequencePath: String,
@@ -65,7 +60,6 @@ public struct Config: Codable {
             self.outputPath = "."
         }
         self.outlierMaxThreshold = outlierMaxThreshold
-        self.outlierMinThreshold = outlierMinThreshold
         self.minGroupSize = minGroupSize
         self.imageSequenceDirname = imageSequenceName
         self.imageSequencePath = imageSequencePath
@@ -75,10 +69,7 @@ public struct Config: Codable {
         self.writeFrameThumbnailFiles = writeFrameThumbnailFiles
 
         // XXX 16 bit hardcode
-        self.minPixelDistance = sixteenBitVersion(ofPercentage: outlierMaxThreshold)
-
-        // XXX 16 bit hardcode
-        self.maxPixelDistance = sixteenBitVersion(ofPercentage: outlierMinThreshold)
+        self.maxPixelDistance = sixteenBitVersion(ofPercentage: outlierMaxThreshold)
     }
 
     // the base dir under which to create dir(s) for output sequence(s)
@@ -86,12 +77,6 @@ public struct Config: Codable {
     
     // percentage difference between same pixels on different frames to consider an outlier
     public var outlierMaxThreshold: Double
-
-    // computed over 16 bits per pixel from the value above
-    public var minPixelDistance: UInt16
-
-    // min percentage difference between same pixels on different frames to consider an outlier
-    public var outlierMinThreshold: Double
 
     // computed over 16 bits per pixel from the value above
     public var maxPixelDistance: UInt16

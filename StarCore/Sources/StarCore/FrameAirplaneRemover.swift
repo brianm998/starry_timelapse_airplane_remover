@@ -582,7 +582,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         if endLocation.y > maxY { maxY = endLocation.y }
 
         let gestureBounds = BoundingBox(min: Coord(x: Int(minX), y: Int(minY)),
-                                         max: Coord(x: Int(maxX), y: Int(maxY)))
+                                        max: Coord(x: Int(maxX), y: Int(maxY)))
 
         await foreachOutlierGroup() { group in
             if gestureBounds.contains(other: group.bounds) {
@@ -745,7 +745,8 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                               imageHeight: height,
                               pixelData: subtractionArray,
                               neighborType: .fourCardinal,
-                              minimumBlobSize: minGroupSize)
+                              minimumBlobSize: minGroupSize,
+                              minimumLocalMaximum: config.maxPixelDistance)
 
         self.state = .detectingOutliers3
 

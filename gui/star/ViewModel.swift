@@ -479,7 +479,6 @@ public final class ViewModel: ObservableObject {
 
         let config = Config(outputPath: inputImageSequencePath,
                             outlierMaxThreshold: Defaults.outlierMaxThreshold,
-                            outlierMinThreshold: Defaults.outlierMinThreshold,
                             minGroupSize: Defaults.minGroupSize,
                             imageSequenceName: inputImageSequenceName,
                             imageSequencePath: inputImageSequencePath,

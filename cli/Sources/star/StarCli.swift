@@ -21,6 +21,12 @@ You should have received a copy of the GNU General Public License along with sta
 /*
 todo:
 
+ - investigate Canny edge detection:
+   https://www.section.io/engineering-education/computer-vision-straight-lines/
+   https://en.wikipedia.org/wiki/Canny_edge_detector
+   Perhaps we apply canny edge detection to the subtraction frames before hough transforming them 
+
+   
  - FIX HANGING BUG
    This happens when all frames have been through detection,
    and for some yet unknown reason the app hangs forever without finishing
@@ -167,7 +173,7 @@ struct StarCli: AsyncParsableCommand {
         """)
     var outputPath: String?
     
-    @Option(name: [.customShort("B"), .long], help: """
+    @Option(name: [.customShort("b"), .long], help: """
         The percentage in brightness increase necessary for a single pixel to be considered an outlier.
         Higher values decrease the number and size of found outlier groups.
         Lower values increase the size and number of outlier groups,
@@ -175,16 +181,6 @@ struct StarCli: AsyncParsableCommand {
         Outlier Pixels with brightness increases greater than this are fully painted over.
         """)
     var outlierMaxThreshold = Defaults.outlierMaxThreshold
-
-    @Option(name: [.customShort("b"), .long], help: """
-        The percentage in brightness increase for the lower threshold.
-        This threshold is used to expand the size of outlier groups by neighboring pixels
-        that have brightness changes above this threshold.
-        Any outlier pixel that falls between this lower threshold and --outlier-max-threshold
-        will be painted over with an alpha level betewen the two values,
-        leaving some of the original pixel value present.
-        """)
-    var outlierMinThreshold = Defaults.outlierMinThreshold
 
     @Option(name: .shortAndLong, help: """
         The minimum outlier group size.  Outlier groups smaller than this will be ignored.
@@ -224,8 +220,109 @@ struct StarCli: AsyncParsableCommand {
         """)
     var imageSequenceDirname: String?
 
+    
+    func testCode() async throws {
+
+        Log.handlers[.console] = ConsoleLogHandler(at: .verbose)
+        
+        Log.v("TEST")
+        let cloud_base = "/sp/tmp/LRT_05_20_2023-a9-4-aurora-topaz-star-aligned-subtracted"
+        let lots_of_clouds = [
+          "232": "\(cloud_base)/LRT_00234-severe-noise.tiff",
+          "574": "\(cloud_base)/LRT_00575-severe-noise.tiff",
+          "140": "\(cloud_base)/LRT_00141-severe-noise.tiff",
+          "160": "\(cloud_base)/LRT_00161-severe-noise.tiff",
+          "184": "\(cloud_base)/LRT_00185-severe-noise.tiff",
+          "192": "\(cloud_base)/LRT_00193-severe-noise.tiff",
+          "236": "\(cloud_base)/LRT_00237-severe-noise.tiff",
+          "567": "\(cloud_base)/LRT_00568-severe-noise.tiff",
+          "783": "\(cloud_base)/LRT_00784-severe-noise.tiff",
+          "1155": "\(cloud_base)/LRT_001156-severe-noise.tiff"
+        ]
+
+        let no_cloud_base = "/sp/tmp/LRT_07_15_2023-a7iv-4-aurora-topaz-star-aligned-subtracted"
+        let no_clouds = [
+          "800": "\(no_cloud_base)/LRT_00801-severe-noise.tiff",
+          "654": "\(no_cloud_base)/LRT_00655-severe-noise.tiff",
+          "689": "\(no_cloud_base)/LRT_00690-severe-noise.tiff",
+          "882": "\(no_cloud_base)/LRT_00883-severe-noise.tiff",
+          "349": "\(no_cloud_base)/LRT_00350-severe-noise.tiff",
+          "241": "\(no_cloud_base)/LRT_00242-severe-noise.tiff"
+        ]
+        
+        let small_no_clouds = "/Users/brian/git/nighttime_timelapse_airplane_remover/hough_test_image_0.tif"
+        let smaller_no_clouds = "/Users/brian/git/nighttime_timelapse_airplane_remover/hough_test_image_1.tif"
+        // has a line w/ funky theta (mora than 270)
+        let small_funky = "/Users/brian/git/nighttime_timelapse_airplane_remover/hough_test_image_2.tif"
+
+        Log.d ("no_clouds \(no_clouds)")
+
+        // load image w/ raw pixel data
+        let (image, pixelData) = try await PixelatedImage.loadUInt16Array(from:
+                                                                            small_funky
+                                                                            //lots_of_clouds["160"]!
+
+        )
+        Log.d("image is [\(image.width), \(image.height)]")
+        let houghTransform = HoughTransform(dataWidth: image.width,
+                                            dataHeight: image.height,
+                                            inputData: pixelData)
+        Log.d ("about to get lines")
+        // perform hough tranform on full image
+        let lines = houghTransform.lines(maxCount: 100,
+                                         minPixelValue: 6_000/*3276*/)
+        
+        Log.d("got \(lines.count) lines")
+
+        for line in lines {
+            Log.i("line \(line)")
+            let cartesianLine = line.cartesianLine 
+            switch cartesianLine {
+            case .vertical(let verticalLine):
+                Log.d("DOH")
+                
+            case .horizontal(let horizontalLine):
+                for x in 0..<image.width {
+                    let y = horizontalLine.y(for: x)
+                    if y >= 0, y < image.height {
+                        Log.v("[\(x), \(y)]")
+                    }
+                }
+            }
+            break
+        }
+        fatalError("TEST CODE COMPLETED")
+/*
+         new algorithm:
+          - run hough transform on full aligned subtraction image for each frame
+            (this can take a lot of time, hard to parallize within each frame)
+          - threshold number of lines or use min line count value 
+          - trace through each line on each frame looking for pixels to mark as outliers
+          - mark each pixel on each line that is above a threshold as an outlier
+            look to see if any neighboring pixel is already marked as an outlier group
+          - while walking the line, group together outlying pixels that are close enough
+          - then apply decision tree logic to each outlier group
+            (maybe newly trained tree?) 
+
+         problems:
+          - hough transform on each frame is really slow, even when doing multiple frames at once
+            it's all about the minPixelValue passed
+            full a7iv frames take
+             - 30s with 10,000
+             - 2:30 with  3276
+          - what about outlying pixels that aren't linear enough?
+          - how to deal with grouping together outlying pixels that 
+            are from very similar, but not identical lines?
+            
+              
+         */
+    }
+    
     mutating func run() async throws {
 
+        //try await testCode()
+
+        
         if version {
             print("""
                   Nighttime Timelapse Airplane Remover (star) version \(config.starVersion)
@@ -290,7 +387,6 @@ struct StarCli: AsyncParsableCommand {
 
                 config = Config(outputPath: _outputPath,
                                 outlierMaxThreshold: outlierMaxThreshold,
-                                outlierMinThreshold: outlierMinThreshold,
                                 minGroupSize: minGroupSize,
                                 imageSequenceName: inputImageSequenceName,
                                 imageSequencePath: inputImageSequencePath,
