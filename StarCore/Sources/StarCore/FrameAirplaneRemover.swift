@@ -721,31 +721,11 @@ public class FrameAirplaneRemover: Equatable, Hashable {
 
         self.state = .detectingOutliers1
 
-        /*
-         make the minimum group size dependent upon the resolution of the sequence
-
-         20 works good for no clouds on 12mp (4240 × 2832)
-         20 with clouds on 33 mp is thousands of extra groups
-
-         compute as:
-
-         let minGoupSize = c*b/a
-
-         where a = 12 megapixels,
-               b = number of pixels in the sequence being processed
-               c = 20, // still a param from outside
-         */
-        let twelveMegapixels: Double = 4240 * 2832
-        let sequenceResolution = Double(width) * Double(height)
-
-        var minGroupSize = Int(Double(config.minGroupSize)*sequenceResolution/twelveMegapixels)
-        if minGroupSize < 10 { minGroupSize = 10 }
-        
         let blobber = Blobber(imageWidth: width,
                               imageHeight: height,
                               pixelData: subtractionArray,
                               neighborType: .eight,//.fourCardinal,
-                              minimumBlobSize: minGroupSize,
+                              minimumBlobSize: config.minGroupSize,
                               minimumLocalMaximum: config.maxPixelDistance,
                               contrastMin: 58)      // XXX constant
 
@@ -1141,7 +1121,6 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         let image = try await imageSequence.getImage(withName: imageSequence.filenames[frameIndex]).image()
         
         self.writeUprocessedPreviews(image)
-        
 
         // use star aligned image
         let otherFrame = try await imageSequence.getImage(withName: starAlignedSequenceFilename).image()
@@ -1158,17 +1137,17 @@ public class FrameAirplaneRemover: Equatable, Hashable {
             fatalError("couldn't copy image data")
         }
         var outputData = _mut_data
-        
+
         self.state = .painting
-        
+
         Log.d("frame \(self.frameIndex) painting over airplanes")
-        
+
         try await self.paintOverAirplanes(toData: &outputData,
                                           otherFrame: otherFrame)
-        
+
         Log.d("frame \(self.frameIndex) writing output files")
         self.state = .writingOutputFile
-        
+
         Log.d("frame \(self.frameIndex) writing processed preview")
         self.writeProcssedPreview(image, with: outputData)
 
@@ -1176,33 +1155,13 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         // write frame out as a tiff file after processing it
         try image.writeTIFFEncoding(ofData: outputData,  toFilename: self.outputFilename)
         self.state = .complete
-        
+
         Log.i("frame \(self.frameIndex) complete")
     }
     
     public static func == (lhs: FrameAirplaneRemover, rhs: FrameAirplaneRemover) -> Bool {
         return lhs.frameIndex == rhs.frameIndex
     }    
-}
-
-fileprivate class OutlierSearchBag {
-    
-    // mapping of group name to count of group
-    var individualGroupCounts: [String: UInt] = [:]
-
-    // one dimentional array mirroring pixels indexed by y*width + x
-    // to see if we've listed this as an outlier yet, and if so, with what key
-    var outlierGroupList: [String?]
-
-    // test image to show hough lines we checked
-    var houghLineImageData: [UInt16]
-
-    var searchCount: Int = 0
-    
-    init(width: Int, height: Int) {
-        self.outlierGroupList = [String?](repeating: nil, count: width*height)
-        self.houghLineImageData = [UInt16](repeating: 0, count: width*height)
-    }
 }
 
 fileprivate let fileManager = FileManager.default
