@@ -261,9 +261,8 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
                      imageHeight: Int,
                      imageBytesPerPixel: Int) async throws -> FrameAirplaneRemover
     {
-        var outlierGroupsForThisFrame: OutlierGroups?
-
         let loadOutliersFromFile: () async -> OutlierGroups? = {
+            var outlierGroupsForThisFrame: OutlierGroups?
 
             let startTime = Date().timeIntervalSinceReferenceDate
             var endTime1: Double = 0
