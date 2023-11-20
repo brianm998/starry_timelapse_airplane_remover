@@ -175,26 +175,33 @@ public class Blobber {
 
         Log.d("initially found \(blobs.count) blobs")
 
+        // filter out a lot of the blobs
         self.blobs = self.blobs.filter { blob in
+
+            // too small, too dim
             if blob.size <= minimumBlobSize,
                blob.intensity < 18000 // XXX constant
             {
                 return false
             }
 
+            // allow larger blobs that are a little brighter
             if blob.size <= minimumBlobSize * 2, // XXX constant
                blob.intensity < 12000 // XXX constant
             {
                 return false
             }
-            
+
+            // hard cap at half the minmum size, regardless of intensity
             if blob.size <= minimumBlobSize/2 { return false } // XXX constant
 
-            
+            // overal blob intensity check
             if blob.intensity < minimumLocalMaximum {
                 //Log.v("dumping blob of size \(blob.size) intensity \(blob.intensity)")
                 return false
             }
+
+            // this blob has passed all checks, keep it 
             return true
         }         
         
@@ -242,7 +249,8 @@ public class Blobber {
 
             // other blobs this pixel may have interacted with
             var impacts: Set<String> = []
-            
+
+            // look for other nearby pixels that are a part of other blobs
             for neighbor in self.allNeighbors(of: seedPixel, within: impactRange) { 
                 switch neighbor.status {
                 case .blobbed(let otherBlob):
@@ -271,10 +279,10 @@ public class Blobber {
             
             // set this pixel to be part of this blob
             blob.add(pixel: seedPixel)
-            
+
+            // look at direct neighbors in unknown status
             for neighbor in self.neighbors(of: seedPixel) {
-                switch neighbor.status {
-                case .unknown:
+                if neighbor.status == .unknown {
                     // if unknown status, check contrast with initial seed pixel
                     let firstSeedContrast = firstSeed.contrast(with: neighbor)
                     if firstSeedContrast < contrastMin {
@@ -283,9 +291,6 @@ public class Blobber {
                     } else {
                         neighbor.status = .background
                     }
-
-                default:
-                    break
                 }
             }
         }
