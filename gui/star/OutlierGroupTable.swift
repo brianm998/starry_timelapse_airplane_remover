@@ -58,6 +58,10 @@ struct OutlierGroupTableRow: Identifiable {
     let dt_maxHoughTransformCount: Double
     let dt_maxHoughTheta: Double
     let dt_neighboringInterFrameOutlierThetaScore: Double
+    let dt_maxOverlap: Double
+    let dt_maxOverlapTimesThetaHisto: Double
+    let dt_pixelBorderAmount: Double
+    
 
     init(_ group: OutlierGroup) async {
         name = group.name
@@ -95,6 +99,10 @@ struct OutlierGroupTableRow: Identifiable {
         dt_maxHoughTransformCount = group.decisionTreeValue(for: .maxHoughTransformCount)
         dt_maxHoughTheta = group.decisionTreeValue(for: .maxHoughTheta)
         dt_neighboringInterFrameOutlierThetaScore = group.decisionTreeValue(for: .neighboringInterFrameOutlierThetaScore)
+
+        dt_maxOverlap = group.decisionTreeValue(for: .maxOverlap)
+        dt_maxOverlapTimesThetaHisto = group.decisionTreeValue(for: .maxOverlapTimesThetaHisto)
+        dt_pixelBorderAmount = group.decisionTreeValue(for: .pixelBorderAmount)
     }
 }
 
@@ -192,28 +200,28 @@ struct OutlierGroupTable: View {
     }
 
 
-    private func unSixteenBitVersion(ofPercentage percentage: Double) -> Double {
-        return (percentage/Double(0xFFFF))*100
+//    private func unSixteenBitVersion(ofPercentage percentage: Double) -> Double {
+//        return (percentage/Double(0xFFFF))*100
         //return UInt16((percentage/100)*Double(0xFFFF))
-    }
+//    }
     
 
     
     var dtAveragebrightnessColumn: DTColumn {
         self.tableColumn(for: "averagebrightness", value: \.dt_averagebrightness) { row in
-            unSixteenBitVersion(ofPercentage: row.dt_averagebrightness)
+            row.dt_averagebrightness
         }
     }
 
     var dtMedianBrightnessColumn: DTColumn {
         self.tableColumn(for: "medianBrightness", value: \.dt_medianBrightness) { row in
-            unSixteenBitVersion(ofPercentage: row.dt_medianBrightness)
+            row.dt_medianBrightness
         }
     }
 
     var dtMaxBrightnessColumn: DTColumn {
         self.tableColumn(for: "maxBrightness", value: \.dt_maxBrightness) { row in
-            unSixteenBitVersion(ofPercentage: row.dt_maxBrightness)
+            row.dt_maxBrightness
         }
     }
 
@@ -280,20 +288,45 @@ struct OutlierGroupTable: View {
         }
     }
 
+    var dtMaxOverlap: DTColumn {
+        self.tableColumn(for: "maxOverlap",
+                         value: \.dt_maxOverlap) { row in
+            row.dt_maxOverlap
+        }
+    }
+
+    var dtMaxOverlapTimesThetaHisto: DTColumn {
+        self.tableColumn(for: "maxOverlapTimesThetaHisto",
+                         value: \.dt_maxOverlapTimesThetaHisto) { row in
+            row.dt_maxOverlapTimesThetaHisto
+        }
+    }
+
+    var dtPixelBorderAmount: DTColumn {
+        self.tableColumn(for: "pixelBorderAmount",
+                         value: \.dt_pixelBorderAmount) { row in
+            row.dt_pixelBorderAmount
+        }
+    }
+
     func tableColumn(for name: String,
                      value: KeyPath<OutlierGroupTableRow,Double>,
                      closure: @escaping (OutlierGroupTableRow) -> Double) -> DTColumn
     {
         TableColumn(name, value: value) { (row: OutlierGroupTableRow) in
-            Text(String(format: "%.4g", closure(row)))
+            Text(String(format: "%.5g", closure(row)))
         }.width(min: 40, ideal: 60, max: 100)
     }
 
     @State var sortOrder: [KeyPathComparator<OutlierGroupTableRow>] = [
       .init(\.size, order: SortOrder.forward)
     ]
-    
+
     var body: some View {
+
+//        let displayDtSizeColumn = viewModel.outlierGroupTableDisplayGroups[.size] ?? true
+        let displayDtSizeColumn = true
+        
         HStack {
             Spacer()
             VStack {
@@ -308,9 +341,12 @@ struct OutlierGroupTable: View {
                         nameColumn
                         willPaintColumn
                     }
+
                     Group {
-                        sizeColumn
-                        dtSizeColumn
+                        self.sizeColumn
+//                        if displayDtSizeColumn {
+                            dtSizeColumn
+                        //            }
                         dtWidthColumn
                         dtHeightColumn
                         dtCenterXColumn
@@ -339,7 +375,11 @@ struct OutlierGroupTable: View {
                         dtMaxHoughTransformCountColumn
                         dtMaxHoughThetaColumn
                         dtNeighboringInterFrameOutlierThetaScoreColumn
+                        dtMaxOverlap
+                        dtMaxOverlapTimesThetaHisto
+                        dtPixelBorderAmount
                     }
+
                 } .onChange(of: viewModel.selectedOutliers) {newValue in 
                     Log.d("selected outliers \(newValue)")
                     if let frame = viewModel.outlierGroupWindowFrame {
