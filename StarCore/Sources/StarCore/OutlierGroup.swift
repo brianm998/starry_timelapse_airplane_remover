@@ -17,8 +17,9 @@ import Foundation
 import Cocoa
 
 // these need to be setup at startup so the decision tree values are right
-internal var IMAGE_WIDTH: Double?
-internal var IMAGE_HEIGHT: Double?
+// XXX these suck, find a better way
+public var IMAGE_WIDTH: Double?
+public var IMAGE_HEIGHT: Double?
 
 // used for both outlier groups and raw data
 public protocol ClassifiableOutlierGroup {
@@ -1226,8 +1227,8 @@ public class OutlierGroup: CustomStringConvertible,
             //Log.i("not overwriting already existing filename \(filename)")
         } else {
             fileManager.createFile(atPath: filename,
-                                    contents: self.persistentData,
-                                    attributes: nil)
+                                   contents: self.persistentData,
+                                   attributes: nil)
         }
         if let shouldPaint = self.shouldPaint {
             // also write out a separate json file with paint reason
@@ -1248,8 +1249,8 @@ public class OutlierGroup: CustomStringConvertible,
             } 
             //Log.i("creating \(filename)")                      
             fileManager.createFile(atPath: filename,
-                                contents: jsonData,
-                                attributes: nil)
+                                   contents: jsonData,
+                                   attributes: nil)
         }
     }
 }
