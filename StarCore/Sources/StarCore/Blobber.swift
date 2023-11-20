@@ -177,19 +177,18 @@ public class Blobber {
 
         self.blobs = self.blobs.filter { blob in
             if blob.size <= minimumBlobSize,
-               //blob.intensity < 16000 // got all those mofos
-               blob.intensity < 18000 // got all those mofos
+               blob.intensity < 18000 // XXX constant
             {
                 return false
             }
 
-            if blob.size <= minimumBlobSize * 2,
-               blob.intensity < 12000
+            if blob.size <= minimumBlobSize * 2, // XXX constant
+               blob.intensity < 12000 // XXX constant
             {
                 return false
             }
             
-            if blob.size <= minimumBlobSize/2 { return false }
+            if blob.size <= minimumBlobSize/2 { return false } // XXX constant
 
             
             if blob.intensity < minimumLocalMaximum {
@@ -230,14 +229,27 @@ public class Blobber {
 
         var seedPixels: [SortablePixel] = [firstSeed]
 
-        let maxImpacts = 300    // XXX constant
+        // if a blob is impacted by more pixels than this, it must be background
+        // an impact is showing up within the impactRange
+        let maxImpacts = 123    // XXX constant
+
+        // how far away from a given pixel can a pixel
+        // from another blob be to considered an impact
+        let impactRange = 3     // XXX constant
         
         while let seedPixel = seedPixels.popLast() {
             // check to see if we're within some distance of other blobs
-            for neighbor in self.allNeighbors(of: seedPixel, within: 3) { // XXX constant
+
+            // other blobs this pixel may have interacted with
+            var impacts: Set<String> = []
+            
+            for neighbor in self.allNeighbors(of: seedPixel, within: impactRange) { 
                 switch neighbor.status {
                 case .blobbed(let otherBlob):
-                    if otherBlob.id != blob.id {
+                    if otherBlob.id != blob.id,
+                       !impacts.contains(otherBlob.id)
+                    {
+                        impacts.insert(otherBlob.id)
                         blob.impactCount += 1
                         otherBlob.impactCount += 1
                         if otherBlob.impactCount > maxImpacts {
