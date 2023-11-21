@@ -61,7 +61,7 @@ struct OutlierUpgraderCLI: AsyncParsableCommand {
             Log.d("got frame \(frameIndex) w/ \(outlierGroups.members.count) outliers")
 
             // create base image data array
-            var baseData = [UInt16](repeating: 0, count: Int(IMAGE_WIDTH!*IMAGE_HEIGHT!))
+            var baseData = [UInt8](repeating: 0, count: Int(IMAGE_WIDTH!*IMAGE_HEIGHT!))
 
             // write into this array from the pixels in this group
             for (groupName, group) in outlierGroups.members {
@@ -70,7 +70,7 @@ struct OutlierUpgraderCLI: AsyncParsableCommand {
                         if group.pixels[y*group.bounds.width+x] != 0 {
                             let imageX = x + group.bounds.min.x
                             let imageY = y + group.bounds.min.y
-                            baseData[imageY*Int(IMAGE_WIDTH!)+imageX] = 0xFFFF
+                            baseData[imageY*Int(IMAGE_WIDTH!)+imageX] = 0xFF
                         }
                     }
                 }
@@ -78,10 +78,11 @@ struct OutlierUpgraderCLI: AsyncParsableCommand {
 
             let outputFilename = "\(outputDir)/IMG_\(String(format: "%05d", frameIndex)).tiff"
             do {
-                try save16BitMonoImageData(baseData, to: outputFilename)
+                try save8BitMonoImageData(baseData, to: outputFilename)
                 Log.d("wrote \(outputFilename)")
             } catch {
                 Log.e("could not write \(outputFilename): \(error)")
+                fatalError("FUCK")
             }
         }
     }
@@ -132,22 +133,22 @@ struct OutlierUpgraderCLI: AsyncParsableCommand {
         }
     }
 
-    private func save16BitMonoImageData(_ inputPixels: [UInt16],
-                                        to filename: String) throws -> PixelatedImage
+    private func save8BitMonoImageData(_ inputPixels: [UInt8],
+                                       to filename: String) throws -> PixelatedImage
     {
         let imageData = inputPixels.withUnsafeBufferPointer { Data(buffer: $0) }
 
         let image = PixelatedImage(width: Int(IMAGE_WIDTH!),
                                    height: Int(IMAGE_HEIGHT!),
                                    rawImageData: imageData,
-                                   bitsPerPixel: 16,
-                                   bytesPerRow: 2*Int(IMAGE_WIDTH!),
-                                   bitsPerComponent: 16,
-                                   bytesPerPixel: 2,
-                                   bitmapInfo: .byteOrder16Little, 
+                                   bitsPerPixel: 8,
+                                   bytesPerRow: Int(IMAGE_WIDTH!),
+                                   bitsPerComponent: 8,
+                                   bytesPerPixel: 1,
+                                   bitmapInfo: .byteOrderDefault, 
                                    pixelOffset: 0,
                                    colorSpace: CGColorSpaceCreateDeviceGray(),
-                                   ciFormat: .L16)
+                                   ciFormat: .L8)
         
         try image.writeTIFFEncoding(toFilename: filename)
 
