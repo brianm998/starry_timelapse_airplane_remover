@@ -65,37 +65,48 @@ struct OutlierUpgraderCLI: AsyncParsableCommand {
 
             // write into this array from the pixels in this group
             for (groupName, group) in outlierGroups.members {
-                for x in 0 ..< group.bounds.width {
-                    for y in 0 ..< group.bounds.height {
-                        if group.pixels[y*group.bounds.width+x] != 0 {
-                            let imageX = x + group.bounds.min.x
-                            let imageY = y + group.bounds.min.y
-                            baseData[imageY*Int(IMAGE_WIDTH!)+imageX] = 0xFF
+                if let shouldPaint = group.shouldPaint,
+                   shouldPaint.willPaint
+                {
+                    for x in 0 ..< group.bounds.width {
+                        for y in 0 ..< group.bounds.height {
+                            if group.pixels[y*group.bounds.width+x] != 0 {
+                                let imageX = x + group.bounds.min.x
+                                let imageY = y + group.bounds.min.y
+                                baseData[imageY*Int(IMAGE_WIDTH!)+imageX] = 0xFF
+                            }
                         }
                     }
                 }
             }
 
-            let outputFilename = "\(outputDir)/IMG_\(String(format: "%05d", frameIndex)).tiff"
+            let outputFilename = "\(outputDir)/\(filename_output_prefix)\(String(format: "%05d", frameIndex))\(filename_output_suffix)"
             do {
                 try save8BitMonoImageData(baseData, to: outputFilename)
                 Log.d("wrote \(outputFilename)")
             } catch {
-                Log.e("could not write \(outputFilename): \(error)")
-                fatalError("FUCK")
+                let message = "could not write \(outputFilename): \(error)"
+                Log.e(message)
+                fatalError(message)
             }
         }
     }
 
-    func getImageSize() async throws {
+    var filename_output_prefix: String = "IMG_"
+    var filename_output_suffix: String = ".tif"
+    
+    mutating func getImageSize() async throws {
         if let range: Range<String.Index> = inputSequenceDir.range(of: "-star-v-") {
             let index = inputSequenceDir.distance(from: inputSequenceDir.startIndex,
                                                   to: range.lowerBound)
             let base_dir = String(inputSequenceDir[inputSequenceDir.startIndex..<range.lowerBound])
             
             let base_images = try fileManager.contentsOfDirectory(atPath: base_dir)
+            let filenameRegex = #/^([^\d]+)\d+(.*tiff?)$/#
             for imageName in base_images {
-                if imageName.hasSuffix(".tif") || imageName.hasSuffix(".tiff") {
+                if let match = imageName.wholeMatch(of: filenameRegex) {
+                    filename_output_prefix = String(match.1)
+                    filename_output_suffix = String(match.2)
 
                     if let image = try await PixelatedImage(fromFile: "\(base_dir)/\(imageName)") {
                         IMAGE_WIDTH = Double(image.width)
