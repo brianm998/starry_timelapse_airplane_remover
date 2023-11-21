@@ -766,21 +766,10 @@ public class FrameAirplaneRemover: Equatable, Hashable {
     private func save16BitMonoImageData(_ subtractionArray: [UInt16],
                                         to filename: String) throws -> PixelatedImage
     {
-        // XXX make new state for this?
-        let imageData = subtractionArray.withUnsafeBufferPointer { Data(buffer: $0) }
-
-        // write out the subtractionArray here as an image
         let outlierAmountImage = PixelatedImage(width: width,
                                                 height: height,
-                                                rawImageData: imageData,
-                                                bitsPerPixel: 16,
-                                                bytesPerRow: 2*width,
-                                                bitsPerComponent: 16,
-                                                bytesPerPixel: 2,
-                                                bitmapInfo: .byteOrder16Little, 
-                                                pixelOffset: 0,
-                                                colorSpace: CGColorSpaceCreateDeviceGray(),
-                                                ciFormat: .L16)
+                                                grayscale16BitImageData: subtractionArray)
+        // write out the subtractionArray here as an image
         try outlierAmountImage.writeTIFFEncoding(toFilename: filename)
 
         return outlierAmountImage
@@ -1025,70 +1014,6 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         
     }
 
-    private func writeUprocessedPreviews(_ image: PixelatedImage) {
-        if config.writeFramePreviewFiles ||
-           config.writeFrameThumbnailFiles
-        {
-            Log.d("frame \(self.frameIndex) doing preview")
-            if let baseImage = image.baseImage {
-                // maybe write previews
-                // these are not overwritten as the original
-                // is assumed to be not change
-                self.writePreviewFile(baseImage)
-                self.writeThumbnailFile(baseImage)
-            } else {
-                Log.w("frame \(self.frameIndex) NO BASE IMAGE")
-            }
-        }
-    }
-
-    private func writeSubtractionPreview(_ image: PixelatedImage) throws {
-        
-        if let processedPreviewImage = image.baseImage(ofSize: self.previewSize),
-           let imageData = processedPreviewImage.jpegData
-        {
-            let filename = self.alignedSubtractedPreviewFilename
-
-            if fileManager.fileExists(atPath: filename) {
-                Log.i("overwriting already existing processed preview \(filename)")
-                try fileManager.removeItem(atPath: filename)
-            }
-
-            // write to file
-            fileManager.createFile(atPath: filename,
-                                   contents: imageData,
-                                   attributes: nil)
-            Log.i("frame \(self.frameIndex) wrote preview to \(filename)")
-        }
-    }
-    
-    private func writeProcssedPreview(_ image: PixelatedImage, with outputData: Data) {
-        // write out a preview of the processed file
-        if config.writeFrameProcessedPreviewFiles {
-            if let processedPreviewImage = image.baseImage(ofSize: self.previewSize,
-                                                           fromData: outputData),
-               let imageData = processedPreviewImage.jpegData,
-               let filename = self.processedPreviewFilename
-            {
-                do {
-                    if fileManager.fileExists(atPath: filename) {
-                        Log.i("overwriting already existing processed preview \(filename)")
-                        try fileManager.removeItem(atPath: filename)
-                    }
-
-                    // write to file
-                    fileManager.createFile(atPath: filename,
-                                            contents: imageData,
-                                            attributes: nil)
-                    Log.i("frame \(self.frameIndex) wrote preview to \(filename)")
-                } catch {
-                    Log.e("\(error)")
-                }
-            } else {
-                Log.w("frame \(self.frameIndex) WTF")
-            }
-        }
-    }
 
     // run after shouldPaint has been set for each group, 
     // does the final painting and then writes out the output files
@@ -1162,6 +1087,74 @@ public class FrameAirplaneRemover: Equatable, Hashable {
     public static func == (lhs: FrameAirplaneRemover, rhs: FrameAirplaneRemover) -> Bool {
         return lhs.frameIndex == rhs.frameIndex
     }    
+}
+
+extension FrameAirplaneRemover {
+
+    private func writeUprocessedPreviews(_ image: PixelatedImage) {
+        if config.writeFramePreviewFiles ||
+           config.writeFrameThumbnailFiles
+        {
+            Log.d("frame \(self.frameIndex) doing preview")
+            if let baseImage = image.baseImage {
+                // maybe write previews
+                // these are not overwritten as the original
+                // is assumed to be not change
+                self.writePreviewFile(baseImage)
+                self.writeThumbnailFile(baseImage)
+            } else {
+                Log.w("frame \(self.frameIndex) NO BASE IMAGE")
+            }
+        }
+    }
+
+    private func writeSubtractionPreview(_ image: PixelatedImage) throws {
+        
+        if let processedPreviewImage = image.baseImage(ofSize: self.previewSize),
+           let imageData = processedPreviewImage.jpegData
+        {
+            let filename = self.alignedSubtractedPreviewFilename
+
+            if fileManager.fileExists(atPath: filename) {
+                Log.i("overwriting already existing processed preview \(filename)")
+                try fileManager.removeItem(atPath: filename)
+            }
+
+            // write to file
+            fileManager.createFile(atPath: filename,
+                                   contents: imageData,
+                                   attributes: nil)
+            Log.i("frame \(self.frameIndex) wrote preview to \(filename)")
+        }
+    }
+    
+    private func writeProcssedPreview(_ image: PixelatedImage, with outputData: Data) {
+        // write out a preview of the processed file
+        if config.writeFrameProcessedPreviewFiles {
+            if let processedPreviewImage = image.baseImage(ofSize: self.previewSize,
+                                                           fromData: outputData),
+               let imageData = processedPreviewImage.jpegData,
+               let filename = self.processedPreviewFilename
+            {
+                do {
+                    if fileManager.fileExists(atPath: filename) {
+                        Log.i("overwriting already existing processed preview \(filename)")
+                        try fileManager.removeItem(atPath: filename)
+                    }
+
+                    // write to file
+                    fileManager.createFile(atPath: filename,
+                                            contents: imageData,
+                                            attributes: nil)
+                    Log.i("frame \(self.frameIndex) wrote preview to \(filename)")
+                } catch {
+                    Log.e("\(error)")
+                }
+            } else {
+                Log.w("frame \(self.frameIndex) WTF")
+            }
+        }
+    }
 }
 
 fileprivate let fileManager = FileManager.default

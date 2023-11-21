@@ -58,7 +58,7 @@ struct OutlierUpgraderCLI: AsyncParsableCommand {
 
     func writeOutlierValidationImage() async throws {
         try await loadAllOutliers() { frameIndex, outlierGroups in
-            Log.d("got frame \(frameIndex) w/ \(outlierGroups.members.count) outliers")
+            //Log.d("got frame \(frameIndex) w/ \(outlierGroups.members.count) outliers")
 
             // create base image data array
             var baseData = [UInt8](repeating: 0, count: Int(IMAGE_WIDTH!*IMAGE_HEIGHT!))
@@ -81,7 +81,7 @@ struct OutlierUpgraderCLI: AsyncParsableCommand {
                         baseData[y*Int(IMAGE_WIDTH!)+group.bounds.max.x] = 0x8F
                     }
                     */
-                    Log.d("group \(group.name) has bounds \(group.bounds)")
+                    //Log.d("group \(group.name) has bounds \(group.bounds)")
 
                     for x in 0 ..< group.bounds.width {
                         for y in 0 ..< group.bounds.height {
@@ -93,10 +93,10 @@ struct OutlierUpgraderCLI: AsyncParsableCommand {
                                 // to have one pixel gaps for some unknown reason 
                                 let padding = 1
                                 
-                                for imageX in imageXBase - 1 ... imageXBase + 1 {
+                                for imageX in imageXBase - padding ... imageXBase + padding {
                                     if imageX < 0 { continue }
                                     if imageX >= Int(IMAGE_WIDTH!) { continue }
-                                    for imageY in imageYBase - 1 ... imageYBase + 1 {
+                                    for imageY in imageYBase - padding ... imageYBase + padding {
                                         if imageY < 0 { continue }
                                         if imageY >= Int(IMAGE_HEIGHT!) { continue }
                                         baseData[imageY*Int(IMAGE_WIDTH!)+imageX] = 0xFF
@@ -110,8 +110,12 @@ struct OutlierUpgraderCLI: AsyncParsableCommand {
 
             let outputFilename = "\(outputDir)/\(filename_output_prefix)\(String(format: "%05d", frameIndex+1))\(filename_output_suffix)"
             do {
-                try save8BitMonoImageData(baseData, to: outputFilename)
-                Log.d("wrote \(outputFilename)")
+                let image = PixelatedImage(width: Int(IMAGE_WIDTH!),
+                                           height: Int(IMAGE_HEIGHT!),
+                                           grayscale8BitImageData: baseData)
+                
+                try image.writeTIFFEncoding(toFilename: outputFilename)
+                //Log.d("wrote \(outputFilename)")
             } catch {
                 let message = "could not write \(outputFilename): \(error)"
                 Log.e(message)
@@ -128,8 +132,9 @@ struct OutlierUpgraderCLI: AsyncParsableCommand {
             let index = inputSequenceDir.distance(from: inputSequenceDir.startIndex,
                                                   to: range.lowerBound)
             let base_dir = String(inputSequenceDir[inputSequenceDir.startIndex..<range.lowerBound])
-            
+            Log.d("base_dir '\(base_dir)'")
             let base_images = try fileManager.contentsOfDirectory(atPath: base_dir)
+            Log.d("base_images \(base_images)")
             let filenameRegex = #/^([^\d]+)\d+(.*tiff?)$/#
             for imageName in base_images {
                 if let match = imageName.wholeMatch(of: filenameRegex) {
@@ -162,6 +167,7 @@ struct OutlierUpgraderCLI: AsyncParsableCommand {
         try await withLimitedThrowingTaskGroup(of: Void.self) { taskGroup in
             for item in frame_dirs {
                 try await taskGroup.addTask() {
+                    // every outlier directory is labeled with an integer
                     if let frameIndex = Int(item),
                        let outlierGroups = try await loadOutliers(from: "\(inputSequenceDir)/\(frameIndex)", frameIndex: frameIndex)
                     {
@@ -173,28 +179,6 @@ struct OutlierUpgraderCLI: AsyncParsableCommand {
                 }
             }
         }
-    }
-
-    private func save8BitMonoImageData(_ inputPixels: [UInt8],
-                                       to filename: String) throws -> PixelatedImage
-    {
-        let imageData = inputPixels.withUnsafeBufferPointer { Data(buffer: $0) }
-
-        let image = PixelatedImage(width: Int(IMAGE_WIDTH!),
-                                   height: Int(IMAGE_HEIGHT!),
-                                   rawImageData: imageData,
-                                   bitsPerPixel: 8,
-                                   bytesPerRow: Int(IMAGE_WIDTH!),
-                                   bitsPerComponent: 8,
-                                   bytesPerPixel: 1,
-                                   bitmapInfo: .byteOrderDefault, 
-                                   pixelOffset: 0,
-                                   colorSpace: CGColorSpaceCreateDeviceGray(),
-                                   ciFormat: .L8)
-        
-        try image.writeTIFFEncoding(toFilename: filename)
-
-        return image
     }
 }
 
