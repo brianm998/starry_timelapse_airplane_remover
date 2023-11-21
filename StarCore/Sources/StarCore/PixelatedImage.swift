@@ -64,16 +64,50 @@ public struct PixelatedImage {
     }
     
     public init(width: Int,
-         height: Int,
-         rawImageData: Data,
-         bitsPerPixel: Int,
-         bytesPerRow: Int,
-         bitsPerComponent: Int,
-         bytesPerPixel: Int,
-         bitmapInfo: CGBitmapInfo,
-         pixelOffset: Int,
-         colorSpace: CGColorSpace,
-         ciFormat: CIFormat)    
+                height: Int,
+                grayscale16BitImageData imageData: [UInt16])
+    {
+        self.init(width: width,
+                  height: height,
+                  rawImageData: imageData.withUnsafeBufferPointer { Data(buffer: $0) },
+                  bitsPerPixel: 16,
+                  bytesPerRow: 2*width,
+                  bitsPerComponent: 16,
+                  bytesPerPixel: 2,
+                  bitmapInfo: .byteOrder16Little, 
+                  pixelOffset: 0,
+                  colorSpace: CGColorSpaceCreateDeviceGray(),
+                  ciFormat: .L16)
+    }
+
+    public init(width: Int,
+                height: Int,
+                grayscale8BitImageData imageData: [UInt8])
+    {
+        self.init(width: width,
+                  height: height,
+                  rawImageData: imageData.withUnsafeBufferPointer { Data(buffer: $0) },
+                  bitsPerPixel: 8,
+                  bytesPerRow: width,
+                  bitsPerComponent: 8,
+                  bytesPerPixel: 1,
+                  bitmapInfo: .byteOrderDefault, 
+                  pixelOffset: 0,
+                  colorSpace: CGColorSpaceCreateDeviceGray(),
+                  ciFormat: .L8)
+    }
+    
+    public init(width: Int,
+                height: Int,
+                rawImageData: Data,
+                bitsPerPixel: Int,
+                bytesPerRow: Int,
+                bitsPerComponent: Int,
+                bytesPerPixel: Int,
+                bitmapInfo: CGBitmapInfo,
+                pixelOffset: Int,
+                colorSpace: CGColorSpace,
+                ciFormat: CIFormat)    
     {
         self.width = width
         self.height = height
