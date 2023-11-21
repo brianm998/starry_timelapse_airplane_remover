@@ -1236,7 +1236,7 @@ public class OutlierGroup: CustomStringConvertible,
             let filename = "\(dir)/\(self.name)-\(OutlierGroup.paintJsonSuffix)"
 
             let encoder = JSONEncoder()
-            encoder.outputFormatting = .prettyPrinted
+            encoder.outputFormatting = [.prettyPrinted, .withoutEscapingSlashes]
             encoder.nonConformingFloatEncodingStrategy = .convertToString(
               positiveInfinity: "inf",
               negativeInfinity: "-inf",
