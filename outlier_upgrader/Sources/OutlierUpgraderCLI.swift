@@ -68,19 +68,47 @@ struct OutlierUpgraderCLI: AsyncParsableCommand {
                 if let shouldPaint = group.shouldPaint,
                    shouldPaint.willPaint
                 {
+                    /*
+                     // paint the group bounds for help debugging
+                     
+                    for x in group.bounds.min.x...group.bounds.max.x {
+                        baseData[group.bounds.min.y*Int(IMAGE_WIDTH!)+x] = 0x8F
+                        baseData[group.bounds.max.y*Int(IMAGE_WIDTH!)+x] = 0x8F
+                    }
+
+                    for y in group.bounds.min.y...group.bounds.max.y {
+                        baseData[y*Int(IMAGE_WIDTH!)+group.bounds.min.x] = 0x8F
+                        baseData[y*Int(IMAGE_WIDTH!)+group.bounds.max.x] = 0x8F
+                    }
+                    */
+                    Log.d("group \(group.name) has bounds \(group.bounds)")
+
                     for x in 0 ..< group.bounds.width {
                         for y in 0 ..< group.bounds.height {
                             if group.pixels[y*group.bounds.width+x] != 0 {
-                                let imageX = x + group.bounds.min.x
-                                let imageY = y + group.bounds.min.y
-                                baseData[imageY*Int(IMAGE_WIDTH!)+imageX] = 0xFF
+                                let imageXBase = x + group.bounds.min.x
+                                let imageYBase = y + group.bounds.min.y
+
+                                // add this padding for older data which appears
+                                // to have one pixel gaps for some unknown reason 
+                                let padding = 1
+                                
+                                for imageX in imageXBase - 1 ... imageXBase + 1 {
+                                    if imageX < 0 { continue }
+                                    if imageX >= Int(IMAGE_WIDTH!) { continue }
+                                    for imageY in imageYBase - 1 ... imageYBase + 1 {
+                                        if imageY < 0 { continue }
+                                        if imageY >= Int(IMAGE_HEIGHT!) { continue }
+                                        baseData[imageY*Int(IMAGE_WIDTH!)+imageX] = 0xFF
+                                    }
+                                }
                             }
                         }
                     }
                 }
             }
 
-            let outputFilename = "\(outputDir)/\(filename_output_prefix)\(String(format: "%05d", frameIndex))\(filename_output_suffix)"
+            let outputFilename = "\(outputDir)/\(filename_output_prefix)\(String(format: "%05d", frameIndex+1))\(filename_output_suffix)"
             do {
                 try save8BitMonoImageData(baseData, to: outputFilename)
                 Log.d("wrote \(outputFilename)")
@@ -138,6 +166,9 @@ struct OutlierUpgraderCLI: AsyncParsableCommand {
                        let outlierGroups = try await loadOutliers(from: "\(inputSequenceDir)/\(frameIndex)", frameIndex: frameIndex)
                     {
                         closure(frameIndex, outlierGroups)
+
+                        // break here for only one image processed 
+                        //if outlierGroups.members.count > 0 { break } // XXX XXX XXX
                     }
                 }
             }
