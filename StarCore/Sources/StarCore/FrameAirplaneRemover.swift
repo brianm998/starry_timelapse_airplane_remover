@@ -405,11 +405,68 @@ public class FrameAirplaneRemover: Equatable, Hashable {
     private var outliersLoadedFromFile = false
 
     public func maybeApplyOutlierGroupClassifier() async {
-        self.set(state: .interFrameProcessing)
-        await self.applyDecisionTreeToAllOutliers()
+
+        var shouldUseDecisionTree = true
+        /*
+         add logic here to do validation instead of decision tree
+
+         if:
+           - we calculated the outlier groups here, not loaded from file
+           - and a validation image already exists for this frame
+         then:
+           - load the validation image
+           - don't apply decision tree, use the validation image instead
+         */
+
+        if !outliersLoadedFromFile {
+            do {
+                let (_, validationArr) =
+                  try await PixelatedImage.loadUInt8Array(from: self.validationImageFilename)
+                
+                classifyOutliers(with: validationArr)
+                shouldUseDecisionTree = false
+            } catch {
+                Log.e("can't load validation image: \(error)")
+            }
+        }
+        
+        if shouldUseDecisionTree {
+            Log.d("frame \(frameIndex) classifying outliers with decision tree")
+            self.set(state: .interFrameProcessing)
+            await self.applyDecisionTreeToAllOutliers()
+        }
     }
-    
-    public func didLoadOutliersFromFile() -> Bool { outliersLoadedFromFile }
+
+    private func classifyOutliers(with validationData: [UInt8]) {
+        Log.d("frame \(frameIndex) classifying outliers with validation image data")
+
+        if let outlierGroups = outlierGroups {
+            for group in outlierGroups.members.values {
+                var groupIsValid = false
+                for x in 0 ..< group.bounds.width {
+                    for y in 0 ..< group.bounds.height {
+                        if group.pixels[y*group.bounds.width+x] != 0 {
+                            // test this non zero group pixel against the validation image
+
+                            let validationX = group.bounds.min.x + x
+                            let validationY = group.bounds.min.y + y
+                            let validationIdx = validationY * width + validationX
+
+                            if validationData[validationIdx] != 0 {
+                                Log.d("frame \(frameIndex) group \(group.name) is valid based upon validation image data")
+                                groupIsValid = true
+                                break
+                            }
+                        }
+                    }
+                    if groupIsValid { break }
+                }
+                group.shouldPaint = .userSelected(groupIsValid)
+            }
+        } else {
+            Log.w("cannot classify nil outlier groups")
+        }
+    }
     
     public var previewFilename: String? {
         if let previewOutputDirname = previewOutputDirname {
@@ -567,6 +624,8 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                 // and group neighboring outlying pixels into groups
                 // this can take a long time
                 try await self.findOutliers()
+
+                // perhaps apply validation image to outliers here if possible
             }
         }
     }
@@ -1131,7 +1190,7 @@ extension FrameAirplaneRemover {
                 try image.writeTIFFEncoding(toFilename: self.validationImageFilename)
                 Log.d("wrote \(self.validationImageFilename)")
             } else {
-                Log.w("cannot write validation image to \(self.validationImageFilename), it already exists")
+                Log.i("cannot write validation image to \(self.validationImageFilename), it already exists")
             }
             
             if let previewImage = image.baseImage(ofSize: self.previewSize),
@@ -1145,7 +1204,7 @@ extension FrameAirplaneRemover {
                                            attributes: nil)
                     Log.d("wrote \(self.validationImagePreviewFilename)")
                 } else {
-                    Log.w("cannot write validation image preview to \(self.validationImagePreviewFilename) because it already exists")
+                    Log.i("cannot write validation image preview to \(self.validationImagePreviewFilename) because it already exists")
                 }
             }
             //Log.d("wrote \(outputFilename)")

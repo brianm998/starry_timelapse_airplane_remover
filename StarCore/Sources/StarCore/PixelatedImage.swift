@@ -280,6 +280,14 @@ public struct PixelatedImage {
         }
         throw "could not load image for \(imageFilename)"
     }
+
+    public static func loadUInt8Array(from imageFilename: String) async throws -> (PixelatedImage, [UInt8]) {
+        // for some reason, these values are all one less from what was initially saved
+        if let image = try await PixelatedImage(fromFile: imageFilename) {
+            return (image, image.rawImageData.uInt8Array)
+        }
+        throw "could not load image for \(imageFilename)"
+    }
 }
 
 extension NSImage {
@@ -324,6 +332,7 @@ public extension NSImage {
 extension ContiguousBytes {
     func objects<T>() -> [T] { withUnsafeBytes { .init($0.bindMemory(to: T.self)) } }
     var uInt16Array: [UInt16] { objects() }
+    var uInt8Array: [UInt8] { objects() }
 }
 
 fileprivate let fileManager = FileManager.default
