@@ -187,6 +187,8 @@ public class OutlierGroups {
         //Log.i("spatialXCount \(self.spatialXCount) spatialYCount \(self.spatialYCount)")
     }
 
+    // outputs an 8 bit monochrome image that contains a white
+    // value for every pixel that was determined to be an outlier
     public var validationImage: PixelatedImage {
         PixelatedImage(width: Int(IMAGE_WIDTH!),
                        height: Int(IMAGE_HEIGHT!),

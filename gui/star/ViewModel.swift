@@ -12,6 +12,7 @@ public enum VideoPlayMode: String, Equatable, CaseIterable {
 public enum FrameViewMode: String, Equatable, CaseIterable {
     case original
     case subtraction
+    case validation
     case processed
 
     var localizedName: LocalizedStringKey {
@@ -238,6 +239,13 @@ public final class ViewModel: ObservableObject {
             // load the view frames from the main image
             
             // look for saved versions of these
+            if let validationPreviewImage = NSImage(contentsOf: URL(fileURLWithPath: frame.validationImagePreviewFilename))
+            {
+                Log.d("loaded validation preview for self.frames[\(frame.frameIndex)] from jpeg")
+                let viewImage = Image(nsImage: validationPreviewImage).resizable()
+                self.frames[frame.frameIndex].validationPreviewImage = viewImage
+            }
+            
             if let subtractionPreviewImage = NSImage(contentsOf: URL(fileURLWithPath: frame.alignedSubtractedPreviewFilename))
             {
                 Log.d("loaded subtraction preview for self.frames[\(frame.frameIndex)] from jpeg")
@@ -744,6 +752,8 @@ public extension ViewModel {
                     self.currentFrameImage = newFrameView.previewImage
                 case .subtraction:
                     self.currentFrameImage = newFrameView.subtractionPreviewImage
+                case .validation:
+                    self.currentFrameImage = newFrameView.validationPreviewImage
                 case .processed:
                     self.currentFrameImage = newFrameView.processedPreviewImage
                 }
@@ -765,6 +775,12 @@ public extension ViewModel {
                                 }
                             case .subtraction:
                                 if let baseImage = try await nextFrame.baseSubtractedImage() {
+                                    if nextFrame.frameIndex == self.currentIndex {
+                                        self.currentFrameImage = Image(nsImage: baseImage)
+                                    }
+                                }
+                            case .validation:
+                                if let baseImage = try await nextFrame.baseValidationImage() {
                                     if nextFrame.frameIndex == self.currentIndex {
                                         self.currentFrameImage = Image(nsImage: baseImage)
                                     }
@@ -942,6 +958,10 @@ public extension ViewModel {
                     case .subtraction:
                         self.currentFrameImage =
                           self.frames[currentIdx].subtractionPreviewImage
+                        
+                    case .validation:
+                        self.currentFrameImage =
+                          self.frames[currentIdx].validationPreviewImage
                         
                     case .processed:
                         self.currentFrameImage =
