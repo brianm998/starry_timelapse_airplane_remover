@@ -47,6 +47,12 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
     // where previews for subtracted frames live
     let alignedSubtractedPreviewDirname: String
 
+    // where images recording each marked outlier pixel live
+    let validationImageDirname: String
+
+    // where previews for images recording each marked outlier pixel live
+    let validationImagePreviewDirname: String
+
     // place for test images for hough transform lines on each frame
     let houghLineImageDirname: String
     
@@ -88,6 +94,10 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
         alignedSubtractedDirname = "\(config.outputPath)/\(config.imageSequenceDirname)-star-aligned-subtracted"
 
         alignedSubtractedPreviewDirname = "\(config.outputPath)/\(config.imageSequenceDirname)-star-aligned-subtracted-previews"
+
+        validationImageDirname = "\(config.outputPath)/\(config.imageSequenceDirname)-star-validated-outlier-images"
+
+        validationImagePreviewDirname = "\(config.outputPath)/\(config.imageSequenceDirname)-star-validated-outlier-images-previews"
 
         houghLineImageDirname = "\(config.outputPath)/\(basename)-hough-lines"
         
@@ -191,6 +201,12 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
 
         // where we keep previews for the subtraction images 
         try mkdir(alignedSubtractedPreviewDirname)
+
+        // where we keep the diff between each frame and its alignment frame
+        try mkdir(validationImageDirname)
+
+        // where we keep previews for the subtraction images 
+        try mkdir(validationImagePreviewDirname)
 
         // test images for hough lines for each frame
         try mkdir(houghLineImageDirname)
@@ -308,6 +324,8 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
                                               starAlignedSequenceDirname: starAlignedSequenceDirname,
                                               alignedSubtractedDirname: alignedSubtractedDirname,
                                               alignedSubtractedPreviewDirname: alignedSubtractedPreviewDirname,
+                                              validationImageDirname: validationImageDirname,
+                                              validationImagePreviewDirname: validationImagePreviewDirname,
                                               houghLineImageDirname: houghLineImageDirname,
                                               outlierGroupLoader: loadOutliersFromFile,
                                               fullyProcess: fullyProcess,

@@ -116,6 +116,11 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         "\(alignedSubtractedDirname)/\(baseName)"
     }
 
+    public let validationImageDirname: String
+    public var validationImageFilename: String {
+        "\(validationImageDirname)/\(baseName)"
+    }
+
     public let houghLineImageDirname: String
     public var houghLineImageFilename: String {
         "\(houghLineImageDirname)/\(baseName)"
@@ -124,6 +129,11 @@ public class FrameAirplaneRemover: Equatable, Hashable {
     public let alignedSubtractedPreviewDirname: String
     public var alignedSubtractedPreviewFilename: String {
         "\(alignedSubtractedPreviewDirname)/\(baseName).jpg" // XXX tiff.jpg :(
+    }
+    
+    public let validationImagePreviewDirname: String
+    public var validationImagePreviewFilename: String {
+        "\(validationImagePreviewDirname)/\(baseName).jpg" // XXX tiff.jpg :(
     }
     
     // populated by pruning
@@ -457,6 +467,8 @@ public class FrameAirplaneRemover: Equatable, Hashable {
          starAlignedSequenceDirname: String,
          alignedSubtractedDirname: String,
          alignedSubtractedPreviewDirname: String,
+         validationImageDirname: String,
+         validationImagePreviewDirname: String,
          houghLineImageDirname: String, 
          outlierGroupLoader: @escaping () async -> OutlierGroups?,
          fullyProcess: Bool = true,
@@ -479,6 +491,8 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         self.starAlignedSequenceDirname = starAlignedSequenceDirname
         self.alignedSubtractedDirname = alignedSubtractedDirname
         self.alignedSubtractedPreviewDirname = alignedSubtractedPreviewDirname
+        self.validationImageDirname = validationImageDirname
+        self.validationImagePreviewDirname = validationImagePreviewDirname
         self.houghLineImageDirname = houghLineImageDirname
         
         self.width = width
@@ -1074,7 +1088,9 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         self.state = .writingOutputFile
 
         Log.d("frame \(self.frameIndex) writing processed preview")
-        self.writeProcssedPreview(image, with: outputData)
+        self.writeProcessedPreview(image, with: outputData)
+
+        self.writeValidationImage()
 
         Log.d("frame \(self.frameIndex) writing full processed frame")
         // write frame out as a tiff file after processing it
@@ -1091,6 +1107,49 @@ public class FrameAirplaneRemover: Equatable, Hashable {
 
 extension FrameAirplaneRemover {
 
+    private func writeValidationImage() {
+
+        guard config.writeFramePreviewFiles ||
+              config.writeFrameThumbnailFiles
+        else {
+            return
+        }
+        
+        guard let outlierGroups = outlierGroups else {
+            Log.w("cannot out write nil outlier groups")
+            return
+        }
+        
+        let image = outlierGroups.validationImage
+        do {
+            if !fileManager.fileExists(atPath: self.validationImageFilename) {
+                try image.writeTIFFEncoding(toFilename: self.validationImageFilename)
+                Log.d("wrote \(self.validationImageFilename)")
+            } else {
+                Log.w("cannot write validation image to \(self.validationImageFilename), it already exists")
+            }
+            
+            if let previewImage = image.baseImage(ofSize: self.previewSize),
+               let imageData = previewImage.jpegData
+            {
+                let filename = self.validationImagePreviewFilename
+                
+                if !fileManager.fileExists(atPath: filename) {
+                    fileManager.createFile(atPath: filename,
+                                           contents: imageData,
+                                           attributes: nil)
+                    Log.d("wrote \(self.validationImagePreviewFilename)")
+                } else {
+                    Log.w("cannot write validation image preview to \(self.validationImagePreviewFilename) because it already exists")
+                }
+            }
+            //Log.d("wrote \(outputFilename)")
+        } catch {
+            let message = "could not write \(outputFilename): \(error)"
+            Log.e(message)
+        }
+    }
+    
     private func writeUprocessedPreviews(_ image: PixelatedImage) {
         if config.writeFramePreviewFiles ||
            config.writeFrameThumbnailFiles
@@ -1128,7 +1187,7 @@ extension FrameAirplaneRemover {
         }
     }
     
-    private func writeProcssedPreview(_ image: PixelatedImage, with outputData: Data) {
+    private func writeProcessedPreview(_ image: PixelatedImage, with outputData: Data) {
         // write out a preview of the processed file
         if config.writeFrameProcessedPreviewFiles {
             if let processedPreviewImage = image.baseImage(ofSize: self.previewSize,
