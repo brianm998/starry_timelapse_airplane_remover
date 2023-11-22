@@ -128,7 +128,7 @@ public class OutlierGroups {
                     let group = OutlierGroup(withName: fuck,
                                              frameIndex: frameIndex,
                                              with:groupData)
-                    
+
                     let paintFilename = String(file.dropLast(OutlierGroup.dataBinSuffix.count) + OutlierGroup.paintJsonSuffix)
 
                     if fileManager.fileExists(atPath: "\(dir)/\(paintFilename)") {
@@ -184,7 +184,66 @@ public class OutlierGroups {
             let (XIndex, YIndex) = self.index(for: group)
             spatialArr[XIndex][YIndex].append(group)
         }
-        Log.i("spatialXCount \(self.spatialXCount) spatialYCount \(self.spatialYCount)")
+        //Log.i("spatialXCount \(self.spatialXCount) spatialYCount \(self.spatialYCount)")
+    }
+
+    public var validationImage: PixelatedImage {
+        PixelatedImage(width: Int(IMAGE_WIDTH!),
+                       height: Int(IMAGE_HEIGHT!),
+                       grayscale8BitImageData: self.validationImageData)
+    }
+    
+    // outputs image data for an 8 bit monochrome image that contains a white
+    // value for every pixel that was determined to be an outlier
+    public var validationImageData: [UInt8] {
+        // create base image data array
+        var baseData = [UInt8](repeating: 0, count: Int(IMAGE_WIDTH!*IMAGE_HEIGHT!))
+
+        // write into this array from the pixels in this group
+        for (groupName, group) in self.members {
+            if let shouldPaint = group.shouldPaint,
+               shouldPaint.willPaint
+            {
+                /*
+                 // paint the group bounds for help debugging
+                 
+                 for x in group.bounds.min.x...group.bounds.max.x {
+                 baseData[group.bounds.min.y*Int(IMAGE_WIDTH!)+x] = 0x8F
+                 baseData[group.bounds.max.y*Int(IMAGE_WIDTH!)+x] = 0x8F
+                 }
+
+                 for y in group.bounds.min.y...group.bounds.max.y {
+                 baseData[y*Int(IMAGE_WIDTH!)+group.bounds.min.x] = 0x8F
+                 baseData[y*Int(IMAGE_WIDTH!)+group.bounds.max.x] = 0x8F
+                 }
+                 */
+                //Log.d("group \(group.name) has bounds \(group.bounds)")
+
+                for x in 0 ..< group.bounds.width {
+                    for y in 0 ..< group.bounds.height {
+                        if group.pixels[y*group.bounds.width+x] != 0 {
+                            let imageXBase = x + group.bounds.min.x
+                            let imageYBase = y + group.bounds.min.y
+
+                            // add this padding for older data which appears
+                            // to have one pixel gaps for some unknown reason 
+                            let padding = 1
+                            
+                            for imageX in imageXBase - padding ... imageXBase + padding {
+                                if imageX < 0 { continue }
+                                if imageX >= Int(IMAGE_WIDTH!) { continue }
+                                for imageY in imageYBase - padding ... imageYBase + padding {
+                                    if imageY < 0 { continue }
+                                    if imageY >= Int(IMAGE_HEIGHT!) { continue }
+                                    baseData[imageY*Int(IMAGE_WIDTH!)+imageX] = 0xFF
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return baseData
     }
 }
 
