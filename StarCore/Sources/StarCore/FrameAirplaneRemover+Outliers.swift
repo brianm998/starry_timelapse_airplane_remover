@@ -65,12 +65,17 @@ extension FrameAirplaneRemover {
         do {
             // try to load the image subtraction from a pre-processed file
 
-            let (image, array) = try await PixelatedImage.loadUInt16Array(from: alignedSubtractedFilename)
-            subtractionArray = array
-            
-            Log.d("frame \(frameIndex) loaded outlier amounts from subtraction image")
+            if let image = try await PixelatedImage(fromFile: alignedSubtractedFilename) {
+                switch image.imageData {
+                case .sixteenBitPixels(let array):
+                    subtractionArray = array
+                case .eightBitPixels(_):
+                    Log.e("eight bit images not supported here yet")
+                }
+                Log.d("frame \(frameIndex) loaded outlier amounts from subtraction image")
 
-            try writeSubtractionPreview(image)
+                try writeSubtractionPreview(image)
+            }
         } catch {
             Log.i("frame \(frameIndex) couldn't load outlier amounts from subtraction image")
             // do the image subtraction here instead
@@ -219,11 +224,19 @@ extension FrameAirplaneRemover {
 
         if !outliersLoadedFromFile {
             do {
-                let (_, validationArr) =
-                  try await PixelatedImage.loadUInt8Array(from: self.validationImageFilename)
-                
-                classifyOutliers(with: validationArr)
-                shouldUseDecisionTree = false
+                if let image = try await PixelatedImage(fromFile: self.validationImageFilename) {
+
+                    switch image.imageData {
+                    case .eightBitPixels(let validationArr):
+                        classifyOutliers(with: validationArr)
+                        shouldUseDecisionTree = false
+                        
+                    case .sixteenBitPixels(_):
+                        Log.e("cannot load 16 bit validation image from \(self.validationImageFilename)")
+                    }
+                } else {
+                    Log.w("couldn't load validation image from \(self.validationImageFilename)")
+                }
             } catch {
                 Log.i("can't load validation image: \(error)")
             }

@@ -87,18 +87,25 @@ public class Blobber {
                             contrastMin: Double)
       async throws
     {
-        let (image, pixelData) =
-          try await PixelatedImage.loadUInt16Array(from: filename)
-
-        Log.v("loaded image of size (\(image.width), \(image.height))")
-
-        self.init(imageWidth: image.width,
-                  imageHeight: image.height,
-                  pixelData: pixelData,
-                  neighborType: neighborType,
-                  minimumBlobSize: minimumBlobSize,
-                  minimumLocalMaximum: minimumLocalMaximum,
-                  contrastMin: contrastMin)
+        if let image = try await PixelatedImage(fromFile: filename) {
+            switch image.imageData {
+            case .eightBitPixels(_):
+                throw "eight bit images not supported here now"
+                
+            case .sixteenBitPixels(let pixelData):
+                self.init(imageWidth: image.width,
+                          imageHeight: image.height,
+                          pixelData: pixelData,
+                          neighborType: neighborType,
+                          minimumBlobSize: minimumBlobSize,
+                          minimumLocalMaximum: minimumLocalMaximum,
+                          contrastMin: contrastMin)
+            }
+            
+            Log.v("loaded image of size (\(image.width), \(image.height))")
+        } else {
+            throw "couldn't load image from \(filename)"
+        }
     }
 
     public init(imageWidth: Int,
@@ -259,12 +266,11 @@ public class Blobber {
     }
     
     public var outputImage: PixelatedImage {
-        let imageData = outputData.withUnsafeBufferPointer { Data(buffer: $0) }
-        
+
         // write out the subtractionArray here as an image
         let outputImage = PixelatedImage(width: imageWidth,
                                          height: imageHeight,
-                                         rawImageData: imageData,
+                                         imageData: PixelatedImage.ImageData(from: outputData),
                                          bitsPerPixel: 16,
                                          bytesPerRow: 2*imageWidth,
                                          bitsPerComponent: 16,

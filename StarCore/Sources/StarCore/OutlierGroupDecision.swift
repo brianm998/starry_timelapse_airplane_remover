@@ -5,7 +5,6 @@ import Foundation
 
  Adding a new case to the Feature and giving a value for it in decisionTreeValue
  is all needed to add a new value to the decision tree criteria
- 
  */
 
 // different ways we split up data sets that are still overlapping
@@ -19,8 +18,9 @@ public enum DecisionSplitType: String {
 public var decisionTrees: [String: NamedOutlierGroupClassifier] = loadOutlierGroupClassifiers()
 
 // try to load this classifier at runtime
-public let currentClassifierName = "dd59698e"
-
+//public let currentClassifierName = "dd59698e" // older pre-alignment tree
+//public let currentClassifierName = "1a4a93a6"   // newer smaller after alignment tree REDO
+public let currentClassifierName = "a7624239" // newest, but slight worse than 1a4a93a6?
 public var currentClassifier: NamedOutlierGroupClassifier? = loadCurrentClassifiers()
 
 

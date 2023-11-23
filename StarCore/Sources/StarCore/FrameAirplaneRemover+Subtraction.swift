@@ -20,31 +20,31 @@ You should have received a copy of the GNU General Public License along with sta
  
  */
 
-
+// XXX move to PixelatedImage
 fileprivate func subtract(_ otherFrame: PixelatedImage,
-                          from image: PixelatedImage) -> (PixelatedImage, [UInt16])
+                          from image: PixelatedImage) -> PixelatedImage
 {
     let width = image.width
     let height = image.height
-    
-    // the grayscale image pixel array to return when we've calculated it
-    var subtractionArray = [UInt16](repeating: 0, count: width*height)
 
-    // compare pixels at the same image location in adjecent frames
-    // detect Outliers which are much more brighter than the adject frames
-    let origData = image.rawImageData
-
-    let otherData = otherFrame.rawImageData
-
-    // most of the time is in this loop, although it's a lot faster now
-    // ugly, but a lot faster
-    origData.withUnsafeBytes { unsafeRawPointer in 
-        let origImagePixels: UnsafeBufferPointer<UInt16> =
-          unsafeRawPointer.bindMemory(to: UInt16.self)
-
-        otherData.withUnsafeBytes { unsafeRawPointer1  in 
-            let otherImagePixels: UnsafeBufferPointer<UInt16> =
-              unsafeRawPointer1.bindMemory(to: UInt16.self)
+    switch image.imageData {
+    case .eightBitPixels(let array):
+        fatalError("NOT SUPPORTED YET")
+    case .sixteenBitPixels(let origImagePixels):
+        
+        switch otherFrame.imageData {
+            
+        case .eightBitPixels(let array):
+            fatalError("NOT SUPPORTED YET")
+        case .sixteenBitPixels(let otherImagePixels):
+            // the grayscale image pixel array to return when we've calculated it
+            var subtractionArray = [UInt16](repeating: 0, count: width*height)
+            
+            // compare pixels at the same image location in adjecent frames
+            // detect Outliers which are much more brighter than the adject frames
+            
+            // most of the time is in this loop, although it's a lot faster now
+            // ugly, but a lot faster
 
             for y in 0 ..< height {
                 for x in 0 ..< width {
@@ -81,14 +81,12 @@ fileprivate func subtract(_ otherFrame: PixelatedImage,
                     }
                 }
             }
+            return PixelatedImage(width: width,
+                                  height: height,
+                                  grayscale16BitImageData: subtractionArray)
+            
         }
     }
-
-    return (PixelatedImage(width: width,
-                           height: height,
-                           grayscale16BitImageData: subtractionArray),
-            subtractionArray)
-
 }
 
 extension FrameAirplaneRemover {
@@ -106,8 +104,7 @@ extension FrameAirplaneRemover {
         
         Log.i("frame \(frameIndex) finding outliers")
 
-        let (subtractionImage, subtractionArray) = subtract(otherFrame, from: image)
-        // XXX
+        let subtractionImage = subtract(otherFrame, from: image)
         
         if config.writeOutlierGroupFiles {
             // write out image of outlier amounts
@@ -121,7 +118,13 @@ extension FrameAirplaneRemover {
                 Log.e("can't write subtraction image: \(error)")
             }
         }
-        
-        return subtractionArray
+
+        switch subtractionImage.imageData {
+        case .eightBitPixels(_):
+            fatalError("eight bit images not supported here now")
+        case .sixteenBitPixels(let data):
+            return data 
+
+        }
     }
 }

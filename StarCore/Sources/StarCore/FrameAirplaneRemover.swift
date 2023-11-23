@@ -305,7 +305,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         // use star aligned image
         let otherFrame = try await imageSequence.getImage(withName: starAlignedSequenceFilename).image()
 
-        let _data = image.rawImageData
+        let _data = image.imageData.data
         
         // copy the original image data as adjecent frames need
         // to access the original unmodified version

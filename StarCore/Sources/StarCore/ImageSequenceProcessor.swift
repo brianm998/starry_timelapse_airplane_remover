@@ -108,7 +108,8 @@ public class ImageSequenceProcessor<T> {
                 }
             }
         }
-        
+
+        // XX VVV XX appears to be the root of the frameIndex starting at zero 
         for (index, imageFilename) in self.imageSequence.filenames.enumerated() {
             let filename = self.imageSequence.filenames[index]
             let basename = removePath(fromString: filename)

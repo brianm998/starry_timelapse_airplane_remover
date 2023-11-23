@@ -20,6 +20,8 @@ public class StarAlignment {
     // XXX fix this external dependency by compiling it ourselves and
     // making it part of the distribution
     // https://wiki.panotools.org/Build_a_MacOSX_Universal_Hugin_bundle_with_Xcode
+    // hg clone http://hugin.hg.sourceforge.net:8000/hgroot/hugin/hugin hugin
+    // https://wiki.panotools.org/Hugin_Compiling_OSX
     
     public static let pathToBinary = "/Applications/Hugin/Hugin.app/Contents/MacOS"
     public static let binaryName = "align_image_stack"

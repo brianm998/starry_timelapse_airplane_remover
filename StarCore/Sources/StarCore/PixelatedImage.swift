@@ -33,7 +33,8 @@ public struct PixelatedImage {
     public let width: Int
     public let height: Int
     
-    let rawImageData: Data
+    let imageData: ImageData
+
     
     let bitsPerPixel: Int
     let bytesPerRow: Int
@@ -46,19 +47,63 @@ public struct PixelatedImage {
     let colorSpace: CGColorSpace // XXX why both space and name?
     let ciFormat: CIFormat    // used to write tiff formats properly
     
+    public enum ImageData {
+        // just the number of bits per pixel, not per component
+        public enum PixelFormat {
+            case eightBit
+            case sixteenBit
+        }
+
+        case eightBitPixels([UInt8])
+        case sixteenBitPixels([UInt16])
+
+        init(from array: [UInt8]) {
+            self = .eightBitPixels(array)
+        }
+
+        init(from array: [UInt16]) {
+            self = .sixteenBitPixels(array)
+        }
+        
+        init(from data: Data, format: PixelFormat) {
+            switch format {
+            case .eightBit:
+                self = .eightBitPixels(data.uInt8Array)
+            case .sixteenBit:
+                self = .sixteenBitPixels(data.uInt16Array)
+            }
+        }
+
+        var data: Data {
+            switch self {
+            case .eightBitPixels(let arr):
+                return arr.data
+            case .sixteenBitPixels(let arr):
+                return arr.data
+            }
+        }
+
+        var pixelFormat: PixelFormat {
+            switch self {
+            case .eightBitPixels(_):
+                return .eightBit
+            case .sixteenBitPixels(_):
+                return .sixteenBit
+            }
+        }
+    }
+    
+
     public init?(fromFile filename: String) async throws {
         Log.d("Loading image from \(filename)")
         if let nsImage = try await loadImage(fromFile: filename) {
             if let cgImage = nsImage.cgImage(forProposedRect: nil, context: nil, hints: nil) {
                 Log.d("F-Int init from \(filename) with cgImage \(cgImage)")
                 self.init(cgImage)
-                //Log.w("WTF")
             } else {
-                //Log.w("SHIT")
                 return nil
             }
         } else {
-            //Log.w("CAKES")
             return nil
         }
     }
@@ -69,7 +114,7 @@ public struct PixelatedImage {
     {
         self.init(width: width,
                   height: height,
-                  rawImageData: imageData.withUnsafeBufferPointer { Data(buffer: $0) },
+                  imageData: ImageData(from: imageData),
                   bitsPerPixel: 16,
                   bytesPerRow: 2*width,
                   bitsPerComponent: 16,
@@ -86,7 +131,7 @@ public struct PixelatedImage {
     {
         self.init(width: width,
                   height: height,
-                  rawImageData: imageData.withUnsafeBufferPointer { Data(buffer: $0) },
+                  imageData: ImageData(from: imageData),
                   bitsPerPixel: 8,
                   bytesPerRow: width,
                   bitsPerComponent: 8,
@@ -99,7 +144,7 @@ public struct PixelatedImage {
     
     public init(width: Int,
                 height: Int,
-                rawImageData: Data,
+                imageData: ImageData,
                 bitsPerPixel: Int,
                 bytesPerRow: Int,
                 bitsPerComponent: Int,
@@ -111,7 +156,9 @@ public struct PixelatedImage {
     {
         self.width = width
         self.height = height
-        self.rawImageData = rawImageData
+        self.imageData = imageData
+
+
         self.bitsPerPixel = bitsPerPixel
         self.bytesPerRow = bytesPerRow
         self.bitsPerComponent = bitsPerComponent
@@ -156,34 +203,34 @@ public struct PixelatedImage {
         }
 
         if let data = image.dataProvider?.data as? Data {
-            self.rawImageData = data
+            if bytesPerPixel == 1 {
+                self.imageData = ImageData(from: data, format: .eightBit)
+            } else {
+                self.imageData = ImageData(from: data, format: .sixteenBit)
+            }
         } else {
             Log.e("DOH")
             return nil
         }
     }
 
-    func read(_ closure: (UnsafeBufferPointer<UInt16>) throws -> Void) throws {
-        try rawImageData.withUnsafeBytes { unsafeRawPointer in 
-            let typedPointer: UnsafeBufferPointer<UInt16> = unsafeRawPointer.bindMemory(to: UInt16.self)
-            try closure(typedPointer)
-        }        
-    }
-    
     func readPixel(atX x: Int, andY y: Int) -> Pixel {
-        let offset = (y * width*self.pixelOffset) + (x * self.pixelOffset)
-        let pixel = rawImageData.withUnsafeBytes { unsafeRawPointer -> Pixel in 
-            let typedPointer: UnsafeBufferPointer<UInt16> = unsafeRawPointer.bindMemory(to: UInt16.self)
+        switch imageData {
+        case .sixteenBitPixels(let arr):
+            let offset = (y * width*self.pixelOffset) + (x * self.pixelOffset)
             var pixel = Pixel()
-            pixel.red = typedPointer[offset]
-            pixel.green = typedPointer[offset+1]
-            pixel.blue = typedPointer[offset+2]
+            pixel.red = arr[offset]
+            pixel.green = arr[offset+1]
+            pixel.blue = arr[offset+2]
             if self.pixelOffset == 4 {
-                pixel.alpha = typedPointer[offset+3]
+                pixel.alpha = arr[offset+3]
             }
             return pixel
+
+        case .eightBitPixels(let arr):
+            fatalError("not supported yet")
+            break
         }
-        return pixel
     }
     
     public func baseImage(ofSize size: NSSize) -> NSImage? {
@@ -192,7 +239,7 @@ public struct PixelatedImage {
 
     public var baseImage: NSImage? {
         do {
-            let base = try image(fromData: rawImageData) 
+            let base = try image(fromData: imageData.data) 
             return NSImage(cgImage: base, size: .zero)
         } catch {
             Log.e("error \(error)")
@@ -239,7 +286,7 @@ public struct PixelatedImage {
     
     // write out the base image data
     public func writeTIFFEncoding(toFilename imageFilename: String) throws {
-        try self.writeTIFFEncoding(ofData: self.rawImageData,
+        try self.writeTIFFEncoding(ofData: self.imageData.data,
                                    toFilename: imageFilename)
     }
 
@@ -271,22 +318,6 @@ public struct PixelatedImage {
           options: options
         )
         Log.i("image written to \(imageFilename)")
-    }
-
-    public static func loadUInt16Array(from imageFilename: String) async throws -> (PixelatedImage, [UInt16]) {
-        // for some reason, these values are all one less from what was initially saved
-        if let image = try await PixelatedImage(fromFile: imageFilename) {
-            return (image, image.rawImageData.uInt16Array)
-        }
-        throw "could not load image for \(imageFilename)"
-    }
-
-    public static func loadUInt8Array(from imageFilename: String) async throws -> (PixelatedImage, [UInt8]) {
-        // for some reason, these values are all one less from what was initially saved
-        if let image = try await PixelatedImage(fromFile: imageFilename) {
-            return (image, image.rawImageData.uInt8Array)
-        }
-        throw "could not load image for \(imageFilename)"
     }
 }
 
