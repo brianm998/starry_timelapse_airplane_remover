@@ -121,11 +121,6 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         "\(validationImageDirname)/\(baseName)"
     }
 
-    public let houghLineImageDirname: String
-    public var houghLineImageFilename: String {
-        "\(houghLineImageDirname)/\(baseName)"
-    }
-
     public let alignedSubtractedPreviewDirname: String
     public var alignedSubtractedPreviewFilename: String {
         "\(alignedSubtractedPreviewDirname)/\(baseName).jpg" // XXX tiff.jpg :(
@@ -408,7 +403,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
 
         var shouldUseDecisionTree = true
         /*
-         add logic here to do validation instead of decision tree
+         logic here to do validation instead of decision tree
 
          if:
            - we calculated the outlier groups here, not loaded from file
@@ -426,7 +421,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                 classifyOutliers(with: validationArr)
                 shouldUseDecisionTree = false
             } catch {
-                Log.e("can't load validation image: \(error)")
+                Log.i("can't load validation image: \(error)")
             }
         }
         
@@ -441,6 +436,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         Log.d("frame \(frameIndex) classifying outliers with validation image data")
 
         if let outlierGroups = outlierGroups {
+
             for group in outlierGroups.members.values {
                 var groupIsValid = false
                 for x in 0 ..< group.bounds.width {
@@ -453,7 +449,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                             let validationIdx = validationY * width + validationX
 
                             if validationData[validationIdx] != 0 {
-                                Log.d("frame \(frameIndex) group \(group.name) is valid based upon validation image data")
+                                    //Log.d("frame \(frameIndex) group \(group.name) is valid based upon validation image data")
                                 groupIsValid = true
                                 break
                             }
@@ -526,7 +522,6 @@ public class FrameAirplaneRemover: Equatable, Hashable {
          alignedSubtractedPreviewDirname: String,
          validationImageDirname: String,
          validationImagePreviewDirname: String,
-         houghLineImageDirname: String, 
          outlierGroupLoader: @escaping () async -> OutlierGroups?,
          fullyProcess: Bool = true,
          writeOutputFiles: Bool = true) async throws
@@ -550,7 +545,6 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         self.alignedSubtractedPreviewDirname = alignedSubtractedPreviewDirname
         self.validationImageDirname = validationImageDirname
         self.validationImagePreviewDirname = validationImagePreviewDirname
-        self.houghLineImageDirname = houghLineImageDirname
         
         self.width = width
         self.height = height
@@ -583,7 +577,10 @@ public class FrameAirplaneRemover: Equatable, Hashable {
             // otherwise, take the next frame
             otherFilename = imageSequence.filenames[frameIndex+1]
         }
-        _ = StarAlignment.align(otherFilename,
+
+        let alignmentFilename = otherFilename
+        
+        _ = StarAlignment.align(alignmentFilename,
                                 to: baseFilename,
                                 inDir: starAlignedSequenceDirname)
         
@@ -1192,7 +1189,7 @@ extension FrameAirplaneRemover {
             } else {
                 Log.i("cannot write validation image to \(self.validationImageFilename), it already exists")
             }
-            
+
             if let previewImage = image.baseImage(ofSize: self.previewSize),
                let imageData = previewImage.jpegData
             {
@@ -1207,6 +1204,7 @@ extension FrameAirplaneRemover {
                     Log.i("cannot write validation image preview to \(self.validationImagePreviewFilename) because it already exists")
                 }
             }
+            
             //Log.d("wrote \(outputFilename)")
         } catch {
             let message = "could not write \(outputFilename): \(error)"

@@ -53,9 +53,6 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
     // where previews for images recording each marked outlier pixel live
     let validationImagePreviewDirname: String
 
-    // place for test images for hough transform lines on each frame
-    let houghLineImageDirname: String
-    
     public var finalProcessor: FinalProcessor?    
 
     // are we running on the gui?
@@ -99,8 +96,6 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
 
         validationImagePreviewDirname = "\(config.outputPath)/\(config.imageSequenceDirname)-star-validated-outlier-images-previews"
 
-        houghLineImageDirname = "\(config.outputPath)/\(basename)-hough-lines"
-        
         try super.init(imageSequenceDirname: "\(config.imageSequencePath)/\(config.imageSequenceDirname)",
                        outputDirname: "\(config.outputPath)/\(basename)",
                        maxConcurrent: numConcurrentRenders,
@@ -208,9 +203,6 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
         // where we keep previews for the subtraction images 
         try mkdir(validationImagePreviewDirname)
 
-        // test images for hough lines for each frame
-        try mkdir(houghLineImageDirname)
-        
         if config.writeOutlierGroupFiles {
             // doesn't do mkdir -p, if a base dir is missing it just hangs :(
             try mkdir(outlierOutputDirname) // XXX this can fail silently and pause the whole process :(
@@ -326,7 +318,6 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
                                               alignedSubtractedPreviewDirname: alignedSubtractedPreviewDirname,
                                               validationImageDirname: validationImageDirname,
                                               validationImagePreviewDirname: validationImagePreviewDirname,
-                                              houghLineImageDirname: houghLineImageDirname,
                                               outlierGroupLoader: loadOutliersFromFile,
                                               fullyProcess: fullyProcess,
                                               writeOutputFiles: writeOutputFiles)
