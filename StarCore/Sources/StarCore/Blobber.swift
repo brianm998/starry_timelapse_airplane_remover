@@ -89,10 +89,10 @@ public class Blobber {
     {
         if let image = try await PixelatedImage(fromFile: filename) {
             switch image.imageData {
-            case .eightBitPixels(_):
+            case .eightBit(_):
                 throw "eight bit images not supported here now"
                 
-            case .sixteenBitPixels(let pixelData):
+            case .sixteenBit(let pixelData):
                 self.init(imageWidth: image.width,
                           imageHeight: image.height,
                           pixelData: pixelData,

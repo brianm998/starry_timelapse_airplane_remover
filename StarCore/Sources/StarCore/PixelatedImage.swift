@@ -34,22 +34,22 @@ public struct PixelatedImage {
     public enum DataFormat {
 
         // just the number of bits per pixel, not per component
-        case eightBitPixels([UInt8])
-        case sixteenBitPixels([UInt16])
+        case eightBit([UInt8])
+        case sixteenBit([UInt16])
 
         init(from array: [UInt8]) {
-            self = .eightBitPixels(array)
+            self = .eightBit(array)
         }
 
         init(from array: [UInt16]) {
-            self = .sixteenBitPixels(array)
+            self = .sixteenBit(array)
         }
 
         var data: Data {
             switch self {
-            case .eightBitPixels(let arr):
+            case .eightBit(let arr):
                 return arr.data
-            case .sixteenBitPixels(let arr):
+            case .sixteenBit(let arr):
                 return arr.data
             }
         }
@@ -163,9 +163,9 @@ public struct PixelatedImage {
 
         if let data = image.dataProvider?.data as? Data {
             if bytesPerPixel == 1 {
-                self.imageData = .eightBitPixels(data.uInt8Array)
+                self.imageData = .eightBit(data.uInt8Array)
             } else {
-                self.imageData = .sixteenBitPixels(data.uInt16Array)
+                self.imageData = .sixteenBit(data.uInt16Array)
             }
         } else {
             Log.e("DOH")
@@ -175,7 +175,7 @@ public struct PixelatedImage {
 
     func readPixel(atX x: Int, andY y: Int) -> Pixel {
         switch imageData {
-        case .sixteenBitPixels(let arr):
+        case .sixteenBit(let arr):
             let offset = (y * width*self.pixelOffset) + (x * self.pixelOffset)
             var pixel = Pixel()
             pixel.red = arr[offset]
@@ -186,7 +186,7 @@ public struct PixelatedImage {
             }
             return pixel
 
-        case .eightBitPixels(let arr):
+        case .eightBit(let arr):
             fatalError("not supported yet")
             break
         }
@@ -283,15 +283,15 @@ public struct PixelatedImage {
     // the given frame from this frame
     public func subtract(_ otherFrame: PixelatedImage) -> PixelatedImage {
         switch self.imageData {
-        case .eightBitPixels(let array):
+        case .eightBit(let array):
             fatalError("NOT SUPPORTED YET")
-        case .sixteenBitPixels(let origImagePixels):
+        case .sixteenBit(let origImagePixels):
             
             switch otherFrame.imageData {
                 
-            case .eightBitPixels(let array):
+            case .eightBit(let array):
                 fatalError("NOT SUPPORTED YET")
-            case .sixteenBitPixels(let otherImagePixels):
+            case .sixteenBit(let otherImagePixels):
                 // the grayscale image pixel array to return when we've calculated it
                 var subtractionArray = [UInt16](repeating: 0, count: width*height)
                 

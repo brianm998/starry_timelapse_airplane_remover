@@ -47,9 +47,9 @@ func hough_test(filename: String, outputFilename: String) async {
                                                             output_image.imageData.data as CFData) as? Data else { fatalError("fuck") }
 
             switch image.imageData {
-            case .eightBitPixels(_):
+            case .eightBit(_):
                 Log.w("FUCK")
-            case .sixteenBitPixels(let pixels):
+            case .sixteenBit(let pixels):
                 var counts = [[UInt32]](repeating: [UInt32](repeating: 0, count: houghHeight),
                                         count: Int(houghWidth))
                 

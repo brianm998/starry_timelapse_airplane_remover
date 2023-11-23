@@ -51,9 +51,9 @@ extension FrameAirplaneRemover {
         }
 
         switch subtractionImage.imageData {
-        case .eightBitPixels(_):
+        case .eightBit(_):
             fatalError("eight bit images not supported here now")
-        case .sixteenBitPixels(let data):
+        case .sixteenBit(let data):
             return data 
 
         }
