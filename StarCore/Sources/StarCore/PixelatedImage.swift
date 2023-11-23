@@ -331,8 +331,27 @@ public extension NSImage {
 
 extension ContiguousBytes {
     func objects<T>() -> [T] { withUnsafeBytes { .init($0.bindMemory(to: T.self)) } }
+
+    // convert Data to [UInt16]
     var uInt16Array: [UInt16] { objects() }
+
+    // convert Data to [UInt8]
     var uInt8Array: [UInt8] { objects() }
 }
 
+// convert a [UInt16] array to Data
+extension Array<UInt16> {
+    var data: Data {
+        let data = self.withUnsafeBufferPointer { Data(buffer: $0) }
+        return data
+    }
+}
+
+// convert a [UInt8] array to Data
+extension Array<UInt8> {
+    var data: Data {
+        let data = self.withUnsafeBufferPointer { Data(buffer: $0) }
+        return data
+    }
+}
 fileprivate let fileManager = FileManager.default
