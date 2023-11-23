@@ -236,47 +236,7 @@ public class Blobber {
 
         var seedPixels: [SortablePixel] = [firstSeed]
 
-        // if a blob is impacted by more pixels than this, it must be background
-        // an impact is showing up within the impactRange
-        let maxImpacts = 123    // XXX constant
-
-        // how far away from a given pixel can a pixel
-        // from another blob be to considered an impact
-        let impactRange = 3     // XXX constant
-        
         while let seedPixel = seedPixels.popLast() {
-            // check to see if we're within some distance of other blobs
-
-            // other blobs this pixel may have interacted with
-            var impacts: Set<String> = []
-
-            // look for other nearby pixels that are a part of other blobs
-            for neighbor in self.allNeighbors(of: seedPixel, within: impactRange) { 
-                switch neighbor.status {
-                case .blobbed(let otherBlob):
-                    if otherBlob.id != blob.id,
-                       !impacts.contains(otherBlob.id)
-                    {
-                        impacts.insert(otherBlob.id)
-                        blob.impactCount += 1
-                        otherBlob.impactCount += 1
-                        if otherBlob.impactCount > maxImpacts {
-                            otherBlob.makeBackground()
-                            self.blobs = self.blobs.filter() { $0.id != otherBlob.id }
-                        }
-                        if blob.impactCount > maxImpacts {
-                            Log.i("making blob of size \(blob.size) background because of too many impacts")
-                            blob.makeBackground()
-                            self.blobs = self.blobs.filter() { $0.id != blob.id }
-                            return
-                        }
-                    }
-                    
-                default:
-                    break
-                }
-            }
-            
             // set this pixel to be part of this blob
             blob.add(pixel: seedPixel)
 
