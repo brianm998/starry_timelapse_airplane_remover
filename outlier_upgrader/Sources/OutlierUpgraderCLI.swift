@@ -16,28 +16,13 @@ You should have received a copy of the GNU General Public License along with sta
 
 */
 
+
 /*
- done:
-   - extract existing validated outlier group information into a single binary image
-     where each non-black pixel is one which is part of some outlier group
+ This command line utility is designed to read a directory containing a set of already
+ validated outlier group specifications for an image sequence, and to output a
+ validation image for each frame that contains a non zero pixel for every outlier.
 
- 
- todo:
-   - integrate validated outlier images into main star workflow
-     - generate them like the aligned and subtraction images
-     - get them into the GUI like the subtraction images
-     
-   - if a -validated-outlier-images dir exists during processing of a sequence
-     with no outliers detected already, use the outlier validation image instead
-     of the decision tree to decide paintablility.
-     If any pixel of an outlier is marked as paintable in the validation image, 
-     mark the outlier as paintable.  Otherwise don't paint.
-     
-  This will allow for existing validated sequences to be upgraded to newer versions of star
-  and to only require a small amount of further validation.  Mostly to mark airplanes which
-  were not caught as outlier groups on the previous validation.
-
-  Then we will have a whole lot more validated data with less effort
+ These images can then be used to validate outliers discovered with different means.
  */
 
 @main
@@ -68,7 +53,13 @@ struct OutlierUpgraderCLI: AsyncParsableCommand {
             //Log.d("got frame \(frameIndex) w/ \(outlierGroups.members.count) outliers")
             
             let image = outlierGroups.validationImage
-            
+
+            // this output frame index has to be incremented by one, because
+            // internally the frameIndex is taken from the array index in
+            // the image sequence, not the filename.
+            // Hence the first frameIndex is always zero.
+            // Right now all my image sequences start with 00001
+            // internally the filename is preserved and the frameIndex is not exposed
             let outputFilename = "\(outputDir)/\(filename_output_prefix)\(String(format: "%05d", frameIndex+1))\(filename_output_suffix)"
             do {
                 try image.writeTIFFEncoding(toFilename: outputFilename)
@@ -91,7 +82,7 @@ struct OutlierUpgraderCLI: AsyncParsableCommand {
             let base_dir = String(inputSequenceDir[inputSequenceDir.startIndex..<range.lowerBound])
             Log.d("base_dir '\(base_dir)'")
             let base_images = try fileManager.contentsOfDirectory(atPath: base_dir)
-            Log.d("base_images \(base_images)")
+            //Log.d("base_images \(base_images)")
             let filenameRegex = #/^([^\d]+)\d+(.*tiff?)$/#
             for imageName in base_images {
                 if let match = imageName.wholeMatch(of: filenameRegex) {
@@ -119,21 +110,54 @@ struct OutlierUpgraderCLI: AsyncParsableCommand {
     }
     
     func loadAllOutliers(_ closure: @escaping (Int, OutlierGroups) -> Void) async throws {
-        let frame_dirs = try fileManager.contentsOfDirectory(atPath: inputSequenceDir)
+        var frame_dirs = try fileManager.contentsOfDirectory(atPath: inputSequenceDir)
 
-        try await withLimitedThrowingTaskGroup(of: Void.self) { taskGroup in
-            for item in frame_dirs {
-                try await taskGroup.addTask() {
-                    // every outlier directory is labeled with an integer
-                    if let frameIndex = Int(item),
-                       let outlierGroups = try await loadOutliers(from: "\(inputSequenceDir)/\(frameIndex)", frameIndex: frameIndex)
-                    {
-                        closure(frameIndex, outlierGroups)
+        frame_dirs.sort { (lhs: String, rhs: String) -> Bool in
+            if let int_a = Int(lhs),
+               let int_b = Int(rhs)
+            {
+                let ret = int_a < int_b
+                //Log.d("\(int_a) < \(int_b) = \(ret)")
+                return ret
+            }
+            fatalError("SHIT")
+            return lhs < rhs
+        }
 
-                        // break here for only one image processed 
-                        //if outlierGroups.members.count > 0 { break } // XXX XXX XXX
+        Log.d("have \(frame_dirs.count) frame_dirs")
+        Log.d("frame_dirs \(frame_dirs)")
+        
+        var previousIndex: Int?
+        
+        for item in frame_dirs {
+            // every outlier directory is labeled with an integer
+            do {
+                if let frameIndex = Int(item),
+                   let outlierGroups = try await loadOutliers(from: "\(inputSequenceDir)/\(frameIndex)", frameIndex: frameIndex)
+                {
+                    //Log.d("frame index \(frameIndex)")
+                    if let oldIndex = previousIndex {
+                        let diff = frameIndex - oldIndex
+                        //Log.d("diff \(diff)")
+                        if diff != 1 {
+                            Log.e("transition from frame \(oldIndex) to frame \(frameIndex) skipped \(diff) frames!")
+                            fatalError("FUCK")
+                        }
+                        previousIndex = frameIndex
+                    } else {
+                        previousIndex = frameIndex
+                        Log.i("set previousIndex to \(previousIndex)")
                     }
+                    
+                    closure(frameIndex, outlierGroups)
+
+                    // break here for only one image processed 
+                    //if outlierGroups.members.count > 0 { break } // XXX XXX XXX
+                } else {
+                    Log.w("item \(item) not handled")
                 }
+            } catch {
+                Log.e("error: \(error)")
             }
         }
     }
