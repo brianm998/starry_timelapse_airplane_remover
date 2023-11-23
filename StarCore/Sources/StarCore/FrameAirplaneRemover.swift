@@ -669,9 +669,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
             
             Log.d("frame \(frameIndex) loaded outlier amounts from subtraction image")
 
-            if !fileManager.fileExists(atPath: self.alignedSubtractedPreviewFilename) {
-                try writeSubtractionPreview(image)
-            }
+            try writeSubtractionPreview(image)
         } catch {
             Log.i("frame \(frameIndex) couldn't load outlier amounts from subtraction image")
             // do the image subtraction here instead
@@ -1042,4 +1040,4 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         return lhs.frameIndex == rhs.frameIndex
     }    
 }
-fileprivate let fileManager = FileManager.default
+

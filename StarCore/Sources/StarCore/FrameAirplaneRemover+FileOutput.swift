@@ -85,22 +85,23 @@ extension FrameAirplaneRemover {
     }
 
     internal func writeSubtractionPreview(_ image: PixelatedImage) throws {
-        
-        if let processedPreviewImage = image.baseImage(ofSize: self.previewSize),
-           let imageData = processedPreviewImage.jpegData
-        {
-            let filename = self.alignedSubtractedPreviewFilename
+        if !fileManager.fileExists(atPath: self.alignedSubtractedPreviewFilename) {
+            if let processedPreviewImage = image.baseImage(ofSize: self.previewSize),
+               let imageData = processedPreviewImage.jpegData
+            {
+                let filename = self.alignedSubtractedPreviewFilename
 
-            if fileManager.fileExists(atPath: filename) {
-                Log.i("overwriting already existing processed preview \(filename)")
-                try fileManager.removeItem(atPath: filename)
+                if fileManager.fileExists(atPath: filename) {
+                    Log.i("overwriting already existing processed preview \(filename)")
+                    try fileManager.removeItem(atPath: filename)
+                }
+
+                // write to file
+                fileManager.createFile(atPath: filename,
+                                       contents: imageData,
+                                       attributes: nil)
+                Log.i("frame \(self.frameIndex) wrote preview to \(filename)")
             }
-
-            // write to file
-            fileManager.createFile(atPath: filename,
-                                   contents: imageData,
-                                   attributes: nil)
-            Log.i("frame \(self.frameIndex) wrote preview to \(filename)")
         }
     }
     
