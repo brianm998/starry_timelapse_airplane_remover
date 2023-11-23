@@ -270,7 +270,7 @@ public class Blobber {
         // write out the subtractionArray here as an image
         let outputImage = PixelatedImage(width: imageWidth,
                                          height: imageHeight,
-                                         imageData: PixelatedImage.ImageData(from: outputData),
+                                         imageData: PixelatedImage.DataFormat(from: outputData),
                                          bitsPerPixel: 16,
                                          bytesPerRow: 2*imageWidth,
                                          bitsPerComponent: 16,

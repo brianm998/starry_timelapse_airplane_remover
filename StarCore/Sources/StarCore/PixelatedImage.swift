@@ -33,8 +33,7 @@ public struct PixelatedImage {
     public let width: Int
     public let height: Int
     
-    let imageData: ImageData
-
+    let imageData: DataFormat
     
     let bitsPerPixel: Int
     let bytesPerRow: Int
@@ -47,12 +46,8 @@ public struct PixelatedImage {
     let colorSpace: CGColorSpace // XXX why both space and name?
     let ciFormat: CIFormat    // used to write tiff formats properly
     
-    public enum ImageData {
+    public enum DataFormat {
         // just the number of bits per pixel, not per component
-        public enum PixelFormat {
-            case eightBit
-            case sixteenBit
-        }
 
         case eightBitPixels([UInt8])
         case sixteenBitPixels([UInt16])
@@ -64,15 +59,6 @@ public struct PixelatedImage {
         init(from array: [UInt16]) {
             self = .sixteenBitPixels(array)
         }
-        
-        init(from data: Data, format: PixelFormat) {
-            switch format {
-            case .eightBit:
-                self = .eightBitPixels(data.uInt8Array)
-            case .sixteenBit:
-                self = .sixteenBitPixels(data.uInt16Array)
-            }
-        }
 
         var data: Data {
             switch self {
@@ -80,15 +66,6 @@ public struct PixelatedImage {
                 return arr.data
             case .sixteenBitPixels(let arr):
                 return arr.data
-            }
-        }
-
-        var pixelFormat: PixelFormat {
-            switch self {
-            case .eightBitPixels(_):
-                return .eightBit
-            case .sixteenBitPixels(_):
-                return .sixteenBit
             }
         }
     }
@@ -114,7 +91,7 @@ public struct PixelatedImage {
     {
         self.init(width: width,
                   height: height,
-                  imageData: ImageData(from: imageData),
+                  imageData: DataFormat(from: imageData),
                   bitsPerPixel: 16,
                   bytesPerRow: 2*width,
                   bitsPerComponent: 16,
@@ -131,7 +108,7 @@ public struct PixelatedImage {
     {
         self.init(width: width,
                   height: height,
-                  imageData: ImageData(from: imageData),
+                  imageData: DataFormat(from: imageData),
                   bitsPerPixel: 8,
                   bytesPerRow: width,
                   bitsPerComponent: 8,
@@ -144,7 +121,7 @@ public struct PixelatedImage {
     
     public init(width: Int,
                 height: Int,
-                imageData: ImageData,
+                imageData: DataFormat,
                 bitsPerPixel: Int,
                 bytesPerRow: Int,
                 bitsPerComponent: Int,
@@ -157,8 +134,6 @@ public struct PixelatedImage {
         self.width = width
         self.height = height
         self.imageData = imageData
-
-
         self.bitsPerPixel = bitsPerPixel
         self.bytesPerRow = bytesPerRow
         self.bitsPerComponent = bitsPerComponent
@@ -204,9 +179,9 @@ public struct PixelatedImage {
 
         if let data = image.dataProvider?.data as? Data {
             if bytesPerPixel == 1 {
-                self.imageData = ImageData(from: data, format: .eightBit)
+                self.imageData = .eightBitPixels(data.uInt8Array)
             } else {
-                self.imageData = ImageData(from: data, format: .sixteenBit)
+                self.imageData = .sixteenBitPixels(data.uInt16Array)
             }
         } else {
             Log.e("DOH")
