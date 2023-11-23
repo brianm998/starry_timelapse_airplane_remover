@@ -20,75 +20,6 @@ You should have received a copy of the GNU General Public License along with sta
  
  */
 
-// XXX move to PixelatedImage
-fileprivate func subtract(_ otherFrame: PixelatedImage,
-                          from image: PixelatedImage) -> PixelatedImage
-{
-    let width = image.width
-    let height = image.height
-
-    switch image.imageData {
-    case .eightBitPixels(let array):
-        fatalError("NOT SUPPORTED YET")
-    case .sixteenBitPixels(let origImagePixels):
-        
-        switch otherFrame.imageData {
-            
-        case .eightBitPixels(let array):
-            fatalError("NOT SUPPORTED YET")
-        case .sixteenBitPixels(let otherImagePixels):
-            // the grayscale image pixel array to return when we've calculated it
-            var subtractionArray = [UInt16](repeating: 0, count: width*height)
-            
-            // compare pixels at the same image location in adjecent frames
-            // detect Outliers which are much more brighter than the adject frames
-            
-            // most of the time is in this loop, although it's a lot faster now
-            // ugly, but a lot faster
-
-            for y in 0 ..< height {
-                for x in 0 ..< width {
-                    let origOffset = (y * width*image.pixelOffset) +
-                      (x * image.pixelOffset)
-                    let otherOffset = (y * width*otherFrame.pixelOffset) +
-                      (x * otherFrame.pixelOffset)
-                    
-                    var maxBrightness: Int32 = 0
-                    
-                    if otherFrame.pixelOffset == 4,
-                       otherImagePixels[otherOffset+3] != 0xFFFF
-                    {
-                        // ignore any partially or fully transparent pixels
-                        // these crop up in the star alignment images
-                        // there is nothing to copy from these pixels
-                    } else {
-                        // rgb values of the image we're modifying at this x,y
-                        let origRed = Int32(origImagePixels[origOffset])
-                        let origGreen = Int32(origImagePixels[origOffset+1])
-                        let origBlue = Int32(origImagePixels[origOffset+2])
-                        
-                        // rgb values of an adjecent image at this x,y
-                        let otherRed = Int32(otherImagePixels[otherOffset])
-                        let otherGreen = Int32(otherImagePixels[otherOffset+1])
-                        let otherBlue = Int32(otherImagePixels[otherOffset+2])
-
-                        maxBrightness += origRed + origGreen + origBlue
-                        maxBrightness -= otherRed + otherGreen + otherBlue
-                    }
-                    // record the brightness change if it is brighter
-                    if maxBrightness > 0 {
-                        subtractionArray[y*width+x] = UInt16(maxBrightness/3)
-                    }
-                }
-            }
-            return PixelatedImage(width: width,
-                                  height: height,
-                                  grayscale16BitImageData: subtractionArray)
-            
-        }
-    }
-}
-
 extension FrameAirplaneRemover {
     // returns a grayscale image pixel value array from subtracting the aligned frame
     // from the frame being processed.
@@ -104,7 +35,7 @@ extension FrameAirplaneRemover {
         
         Log.i("frame \(frameIndex) finding outliers")
 
-        let subtractionImage = subtract(otherFrame, from: image)
+        let subtractionImage = image.subtract(otherFrame)
         
         if config.writeOutlierGroupFiles {
             // write out image of outlier amounts
