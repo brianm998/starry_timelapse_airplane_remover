@@ -101,7 +101,6 @@ public actor FinalProcessor {
             self.log()
         }
 
-        /*
         await self.numberRunning.updateCallback() { numberOfFinishingFrames in
             // set the number of processes allowed for non-finishing activities
             let numConcurrentRenders = self.numConcurrentRenders - Int(numberOfFinishingFrames)
@@ -112,7 +111,6 @@ public actor FinalProcessor {
             }
             Log.d("numberOfFinishingFrames \(numberOfFinishingFrames) set TaskRunner.numConcurrentRendersTasks = \(TaskRunner.maxConcurrentTasks)")
         }
-        */
     }
 
     func clearFrame(at index: Int) {
