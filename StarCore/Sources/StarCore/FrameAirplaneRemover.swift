@@ -191,117 +191,6 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         return NSSize(width: previewWidth, height: previewHeight)
     }
     
-    public func writePreviewFile(_ image: NSImage) {
-        Log.d("frame \(self.frameIndex) doing preview")
-        if config.writeFramePreviewFiles,
-           let filename = self.previewFilename
-        {
-            if fileManager.fileExists(atPath: filename) {
-                Log.i("not overwriting already existing preview \(filename)")
-                return
-            }
-            
-            Log.d("frame \(self.frameIndex) doing preview")
-
-            if let scaledImage = image.resized(to: self.previewSize),
-               let imageData = scaledImage.jpegData
-            {
-                // write to file
-                fileManager.createFile(atPath: filename,
-                                     contents: imageData,
-                                     attributes: nil)
-                Log.i("frame \(self.frameIndex) wrote preview to \(filename)")
-            } else {
-                Log.w("frame \(self.frameIndex) WTF")
-            }
-        } else {
-            Log.d("frame \(self.frameIndex) no config")
-        }
-    }
-
-    public func writeThumbnailFile(_ image: NSImage) {
-        Log.d("frame \(self.frameIndex) doing preview")
-        if config.writeFrameThumbnailFiles,
-           let filename = self.thumbnailFilename
-        {
-            if fileManager.fileExists(atPath: filename) {
-                Log.i("not overwriting already existing thumbnail filename \(filename)")
-                return
-            }
-
-            Log.d("frame \(self.frameIndex) doing thumbnail")
-            let thumbnailWidth = config.thumbnailWidth
-            let thumbnailHeight = config.thumbnailHeight
-            let thumbnailSize = NSSize(width: thumbnailWidth, height: thumbnailHeight)
-            
-            if let scaledImage = image.resized(to: thumbnailSize),
-               let imageData = scaledImage.jpegData
-            {
-                // write to file
-                fileManager.createFile(atPath: filename,
-                                     contents: imageData,
-                                     attributes: nil)
-                Log.i("frame \(self.frameIndex) wrote thumbnail to \(filename)")
-            } else {
-                Log.w("frame \(self.frameIndex) WTF")
-            }
-        } else {
-            Log.d("frame \(self.frameIndex) no config")
-        }
-    }
-
-    // write out just the OutlierGroupValueMatrix, which just what
-    // the decision tree needs, and not very large
-    public func writeOutlierValuesCSV() async throws {
-
-        Log.d("frame \(self.frameIndex) writeOutlierValuesCSV")
-        if config.writeOutlierGroupFiles,
-           let outputDirname = self.outlierOutputDirname
-        {
-            // write out the decision tree value matrix too
-            //Log.d("frame \(self.frameIndex) writeOutlierValuesCSV 1")
-
-            let frameOutlierDir = "\(outputDirname)/\(self.frameIndex)"
-            let positiveFilename = "\(frameOutlierDir)/\(OutlierGroupValueMatrix.positiveDataFilename)"
-            let negativeFilename = "\(frameOutlierDir)/\(OutlierGroupValueMatrix.negativeDataFilename)"
-
-            // check to see if both of these files exist already
-            if fileManager.fileExists(atPath: positiveFilename),
-               fileManager.fileExists(atPath: negativeFilename) {
-                Log.i("frame \(self.frameIndex) not recalculating outlier values with existing files")
-            } else {
-                let valueMatrix = OutlierGroupValueMatrix()
-                
-                if let outliers = self.outlierGroupList() {
-                    //Log.d("frame \(self.frameIndex) writeOutlierValuesCSV 1a \(outliers.count) outliers")
-                    for outlier in outliers {
-                        //Log.d("frame \(self.frameIndex) writeOutlierValuesCSV 1b")
-                        await valueMatrix.append(outlierGroup: outlier)
-                    }
-                }
-                //Log.d("frame \(self.frameIndex) writeOutlierValuesCSV 2")
-
-                try valueMatrix.writeCSV(to: frameOutlierDir)
-                //Log.d("frame \(self.frameIndex) writeOutlierValuesCSV 3")
-            }
-        }
-        //Log.d("frame \(self.frameIndex) DONE writeOutlierValuesCSV")
-    }
-
-    // write out a directory of individual OutlierGroup binaries
-    // for each outlier in this frame
-    // large, still not fast, but lots of data
-    public func writeOutliersBinary() async {
-        if config.writeOutlierGroupFiles,
-           let outputDirname = self.outlierOutputDirname
-        {
-            do {
-                try await self.outlierGroups?.write(to: outputDirname)
-            } catch {
-                Log.e("error \(error)")
-            }                
-        }
-    }
     
     public func userSelectAllOutliers(toShouldPaint shouldPaint: Bool,
                                       between startLocation: CGPoint,
@@ -833,18 +722,6 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         self.state = .readyForInterFrameProcessing
     }
     
-    private func save16BitMonoImageData(_ subtractionArray: [UInt16],
-                                        to filename: String) throws -> PixelatedImage
-    {
-        let outlierAmountImage = PixelatedImage(width: width,
-                                                height: height,
-                                                grayscale16BitImageData: subtractionArray)
-        // write out the subtractionArray here as an image
-        try outlierAmountImage.writeTIFFEncoding(toFilename: filename)
-
-        return outlierAmountImage
-    }
-
     public func pixelatedImage() async throws -> PixelatedImage? {
         let name = imageSequence.filenames[frameIndex]
         return try await imageSequence.getImage(withName: name).image()
@@ -1166,6 +1043,8 @@ public class FrameAirplaneRemover: Equatable, Hashable {
     }    
 }
 
+// all methods that write various things to file
+// images, outliers, etc.
 extension FrameAirplaneRemover {
 
     private func writeValidationImage() {
@@ -1276,6 +1155,130 @@ extension FrameAirplaneRemover {
             }
         }
     }
+
+    public func writePreviewFile(_ image: NSImage) {
+        Log.d("frame \(self.frameIndex) doing preview")
+        if config.writeFramePreviewFiles,
+           let filename = self.previewFilename
+        {
+            if fileManager.fileExists(atPath: filename) {
+                Log.i("not overwriting already existing preview \(filename)")
+                return
+            }
+            
+            Log.d("frame \(self.frameIndex) doing preview")
+
+            if let scaledImage = image.resized(to: self.previewSize),
+               let imageData = scaledImage.jpegData
+            {
+                // write to file
+                fileManager.createFile(atPath: filename,
+                                     contents: imageData,
+                                     attributes: nil)
+                Log.i("frame \(self.frameIndex) wrote preview to \(filename)")
+            } else {
+                Log.w("frame \(self.frameIndex) WTF")
+            }
+        } else {
+            Log.d("frame \(self.frameIndex) no config")
+        }
+    }
+
+    public func writeThumbnailFile(_ image: NSImage) {
+        Log.d("frame \(self.frameIndex) doing preview")
+        if config.writeFrameThumbnailFiles,
+           let filename = self.thumbnailFilename
+        {
+            if fileManager.fileExists(atPath: filename) {
+                Log.i("not overwriting already existing thumbnail filename \(filename)")
+                return
+            }
+
+            Log.d("frame \(self.frameIndex) doing thumbnail")
+            let thumbnailWidth = config.thumbnailWidth
+            let thumbnailHeight = config.thumbnailHeight
+            let thumbnailSize = NSSize(width: thumbnailWidth, height: thumbnailHeight)
+            
+            if let scaledImage = image.resized(to: thumbnailSize),
+               let imageData = scaledImage.jpegData
+            {
+                // write to file
+                fileManager.createFile(atPath: filename,
+                                     contents: imageData,
+                                     attributes: nil)
+                Log.i("frame \(self.frameIndex) wrote thumbnail to \(filename)")
+            } else {
+                Log.w("frame \(self.frameIndex) WTF")
+            }
+        } else {
+            Log.d("frame \(self.frameIndex) no config")
+        }
+    }
+
+    // write out just the OutlierGroupValueMatrix, which just what
+    // the decision tree needs, and not very large
+    public func writeOutlierValuesCSV() async throws {
+
+        Log.d("frame \(self.frameIndex) writeOutlierValuesCSV")
+        if config.writeOutlierGroupFiles,
+           let outputDirname = self.outlierOutputDirname
+        {
+            // write out the decision tree value matrix too
+            //Log.d("frame \(self.frameIndex) writeOutlierValuesCSV 1")
+
+            let frameOutlierDir = "\(outputDirname)/\(self.frameIndex)"
+            let positiveFilename = "\(frameOutlierDir)/\(OutlierGroupValueMatrix.positiveDataFilename)"
+            let negativeFilename = "\(frameOutlierDir)/\(OutlierGroupValueMatrix.negativeDataFilename)"
+
+            // check to see if both of these files exist already
+            if fileManager.fileExists(atPath: positiveFilename),
+               fileManager.fileExists(atPath: negativeFilename) {
+                Log.i("frame \(self.frameIndex) not recalculating outlier values with existing files")
+            } else {
+                let valueMatrix = OutlierGroupValueMatrix()
+                
+                if let outliers = self.outlierGroupList() {
+                    //Log.d("frame \(self.frameIndex) writeOutlierValuesCSV 1a \(outliers.count) outliers")
+                    for outlier in outliers {
+                        //Log.d("frame \(self.frameIndex) writeOutlierValuesCSV 1b")
+                        await valueMatrix.append(outlierGroup: outlier)
+                    }
+                }
+                //Log.d("frame \(self.frameIndex) writeOutlierValuesCSV 2")
+
+                try valueMatrix.writeCSV(to: frameOutlierDir)
+                //Log.d("frame \(self.frameIndex) writeOutlierValuesCSV 3")
+            }
+        }
+        //Log.d("frame \(self.frameIndex) DONE writeOutlierValuesCSV")
+    }
+
+    // write out a directory of individual OutlierGroup binaries
+    // for each outlier in this frame
+    // large, still not fast, but lots of data
+    public func writeOutliersBinary() async {
+        if config.writeOutlierGroupFiles,
+           let outputDirname = self.outlierOutputDirname
+        {
+            do {
+                try await self.outlierGroups?.write(to: outputDirname)
+            } catch {
+                Log.e("error \(error)")
+            }                
+        }
+    }
+    private func save16BitMonoImageData(_ subtractionArray: [UInt16],
+                                        to filename: String) throws -> PixelatedImage
+    {
+        let outlierAmountImage = PixelatedImage(width: width,
+                                                height: height,
+                                                grayscale16BitImageData: subtractionArray)
+        // write out the subtractionArray here as an image
+        try outlierAmountImage.writeTIFFEncoding(toFilename: filename)
+
+        return outlierAmountImage
+    }
+
 }
 
 fileprivate let fileManager = FileManager.default
