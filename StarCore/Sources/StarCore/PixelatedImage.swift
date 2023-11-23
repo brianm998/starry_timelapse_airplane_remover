@@ -14,21 +14,6 @@ import Foundation
 import CoreGraphics
 import Cocoa
 
-public func loadImage(fromFile filename: String) async throws -> NSImage? {
-    Log.d("Loading image from \(filename)")
-    let imageURL = NSURL(fileURLWithPath: filename, isDirectory: false)
-    Log.d("loaded image url \(imageURL)")
-
-    let (data, _) = try await URLSession.shared.data(for: URLRequest(url: imageURL as URL))
-    Log.d("got data for url \(imageURL)")
-    if let image = NSImage(data: data) {
-        Log.d("got image for url \(imageURL)")
-        return image
-    } else {
-        return nil
-    }
-}
-
 public struct PixelatedImage {
     public let width: Int
     public let height: Int
@@ -47,8 +32,8 @@ public struct PixelatedImage {
     let ciFormat: CIFormat    // used to write tiff formats properly
     
     public enum DataFormat {
-        // just the number of bits per pixel, not per component
 
+        // just the number of bits per pixel, not per component
         case eightBitPixels([UInt8])
         case sixteenBitPixels([UInt16])
 
@@ -69,7 +54,6 @@ public struct PixelatedImage {
             }
         }
     }
-    
 
     public init?(fromFile filename: String) async throws {
         Log.d("Loading image from \(filename)")
@@ -360,4 +344,21 @@ extension Array<UInt8> {
         return data
     }
 }
+
+fileprivate func loadImage(fromFile filename: String) async throws -> NSImage? {
+    Log.d("Loading image from \(filename)")
+    let imageURL = NSURL(fileURLWithPath: filename, isDirectory: false)
+    Log.d("loaded image url \(imageURL)")
+
+    let (data, _) = try await URLSession.shared.data(for: URLRequest(url: imageURL as URL))
+    Log.d("got data for url \(imageURL)")
+    if let image = NSImage(data: data) {
+        Log.d("got image for url \(imageURL)")
+        return image
+    } else {
+        return nil
+    }
+}
+
 fileprivate let fileManager = FileManager.default
+
