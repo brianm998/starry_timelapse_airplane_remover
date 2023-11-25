@@ -197,8 +197,12 @@ public struct PixelatedImage {
             let offset = (y * width*self.componentsPerPixel) + (x * self.componentsPerPixel)
             var pixel = Pixel()
             pixel.red = arr[offset]
-            pixel.green = arr[offset+1]
-            pixel.blue = arr[offset+2]
+            if self.componentsPerPixel >= 2 {
+                pixel.green = arr[offset+1]
+            }
+            if self.componentsPerPixel >= 3 {
+                pixel.blue = arr[offset+2]
+            }
             if self.componentsPerPixel == 4 {
                 pixel.alpha = arr[offset+3]
             }
@@ -210,14 +214,14 @@ public struct PixelatedImage {
         }
     }
     
-    public func baseImage(ofSize size: NSSize) -> NSImage? {
-        return self.baseImage?.resized(to: size)
+    public func nsImage(ofSize size: NSSize) -> NSImage? {
+        return self.nsImage?.resized(to: size)
     }
 
-    public var baseImage: NSImage? {
+    public var nsImage: NSImage? {
         do {
-            let base = try image(fromData: imageData.data) 
-            return NSImage(cgImage: base, size: .zero)
+            let cgImage = try image(fromData: imageData.data) 
+            return NSImage(cgImage: cgImage, size: .zero)
         } catch {
             Log.e("error \(error)")
         }
@@ -251,7 +255,7 @@ public struct PixelatedImage {
         }
     }
 
-    func baseImage(ofSize size: NSSize, fromData imageData: Data) -> NSImage? {
+    func nsImage(ofSize size: NSSize, fromData imageData: Data) -> NSImage? {
         do {
             let newImage = try image(fromData: imageData) 
             return NSImage(cgImage: newImage, size: size).resized(to: size)
@@ -352,8 +356,8 @@ public struct PixelatedImage {
                     }
                 }
                 return PixelatedImage(width: width,
-                                      height: height,
-                                      grayscale16BitImageData: subtractionArray)
+                                   height: height,
+                                   grayscale16BitImageData: subtractionArray)
                 
             }
         }

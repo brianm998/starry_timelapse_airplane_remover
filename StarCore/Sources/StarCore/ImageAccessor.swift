@@ -52,6 +52,7 @@ public protocol ImageAccess {
     func mkdirs() throws
 }
 
+// read and write access to different image types for a given frame
 struct ImageAccessor: ImageAccess {
     let config: Config
     let baseDirName: String
@@ -95,6 +96,9 @@ struct ImageAccessor: ImageAccess {
         }
 
         try mkdir(ofType: .aligned, andSize: .original)
+        if config.writeFramePreviewFiles {
+            try mkdir(ofType: .aligned, andSize: .preview)
+        }
 
         try mkdir(ofType: .subtracted, andSize: .original)
         if config.writeFramePreviewFiles {
@@ -162,9 +166,9 @@ struct ImageAccessor: ImageAccess {
             case .original:
                 try image.writeTIFFEncoding(toFilename: filename)
             case .preview:
-                dataToSave = image.baseImage(ofSize: previewSize)?.jpegData
+                dataToSave = image.nsImage(ofSize: previewSize)?.jpegData
             case .thumbnail:
-                dataToSave = image.baseImage(ofSize: thumbnailSize)?.jpegData
+                dataToSave = image.nsImage(ofSize: thumbnailSize)?.jpegData
             }
             if let dataToSave = dataToSave {
                 // only used for previews and thumbnails
@@ -202,7 +206,7 @@ struct ImageAccessor: ImageAccess {
                 return "\(config.outputPath)/\(config.imageSequenceDirname)-star-aligned"
 
             case .preview:
-                return nil
+                return "\(config.outputPath)/\(config.imageSequenceDirname)-star-aligned-previews"
             case .thumbnail:
                 return nil
             }
@@ -270,7 +274,7 @@ struct ImageAccessor: ImageAccess {
         if let filename = nameForImage(ofType: type, atSize: size),
            let smallerSize = sizeOf(size),
            let fullResImage = await load(type: type, atSize: size),
-           let scaledImageData = fullResImage.baseImage(ofSize: smallerSize)
+           let scaledImageData = fullResImage.nsImage(ofSize: smallerSize)
         {
             let dataToSave = scaledImageData.jpegData
             
