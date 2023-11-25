@@ -66,23 +66,6 @@ extension FrameAirplaneRemover {
             Log.e(message)
         }
     }
-    
-    internal func writeUprocessedPreviews(_ image: PixelatedImage) {
-        if config.writeFramePreviewFiles ||
-           config.writeFrameThumbnailFiles
-        {
-            Log.d("frame \(self.frameIndex) doing preview")
-            if let baseImage = image.baseImage {
-                // maybe write previews
-                // these are not overwritten as the original
-                // is assumed to be not change
-                self.writePreviewFile(baseImage)
-                self.writeThumbnailFile(baseImage)
-            } else {
-                Log.w("frame \(self.frameIndex) NO BASE IMAGE")
-            }
-        }
-    }
 
     internal func writeSubtractionPreview(_ image: PixelatedImage) throws {
         if !fileManager.fileExists(atPath: self.alignedSubtractedPreviewFilename) {
@@ -102,93 +85,6 @@ extension FrameAirplaneRemover {
                                        attributes: nil)
                 Log.i("frame \(self.frameIndex) wrote preview to \(filename)")
             }
-        }
-    }
-    
-    internal func writeProcessedPreview(_ image: PixelatedImage) {
-        // write out a preview of the processed file
-        if config.writeFrameProcessedPreviewFiles {
-            if let processedPreviewImage = image.baseImage(ofSize: self.previewSize,
-                                                      fromData: image.imageData.data),
-               let imageData = processedPreviewImage.jpegData,
-               let filename = self.processedPreviewFilename
-            {
-                do {
-                    if fileManager.fileExists(atPath: filename) {
-                        Log.i("overwriting already existing processed preview \(filename)")
-                        try fileManager.removeItem(atPath: filename)
-                    }
-
-                    // write to file
-                    fileManager.createFile(atPath: filename,
-                                            contents: imageData,
-                                            attributes: nil)
-                    Log.i("frame \(self.frameIndex) wrote preview to \(filename)")
-                } catch {
-                    Log.e("\(error)")
-                }
-            } else {
-                Log.w("frame \(self.frameIndex) WTF")
-            }
-        }
-    }
-
-    public func writePreviewFile(_ image: NSImage) {
-        Log.d("frame \(self.frameIndex) doing preview")
-        if config.writeFramePreviewFiles,
-           let filename = self.previewFilename
-        {
-            if fileManager.fileExists(atPath: filename) {
-                Log.i("not overwriting already existing preview \(filename)")
-                return
-            }
-            
-            Log.d("frame \(self.frameIndex) doing preview")
-
-            if let scaledImage = image.resized(to: self.previewSize),
-               let imageData = scaledImage.jpegData
-            {
-                // write to file
-                fileManager.createFile(atPath: filename,
-                                     contents: imageData,
-                                     attributes: nil)
-                Log.i("frame \(self.frameIndex) wrote preview to \(filename)")
-            } else {
-                Log.w("frame \(self.frameIndex) WTF")
-            }
-        } else {
-            Log.d("frame \(self.frameIndex) no config")
-        }
-    }
-
-    public func writeThumbnailFile(_ image: NSImage) {
-        Log.d("frame \(self.frameIndex) doing preview")
-        if config.writeFrameThumbnailFiles,
-           let filename = self.thumbnailFilename
-        {
-            if fileManager.fileExists(atPath: filename) {
-                Log.i("not overwriting already existing thumbnail filename \(filename)")
-                return
-            }
-
-            Log.d("frame \(self.frameIndex) doing thumbnail")
-            let thumbnailWidth = config.thumbnailWidth
-            let thumbnailHeight = config.thumbnailHeight
-            let thumbnailSize = NSSize(width: thumbnailWidth, height: thumbnailHeight)
-            
-            if let scaledImage = image.resized(to: thumbnailSize),
-               let imageData = scaledImage.jpegData
-            {
-                // write to file
-                fileManager.createFile(atPath: filename,
-                                     contents: imageData,
-                                     attributes: nil)
-                Log.i("frame \(self.frameIndex) wrote thumbnail to \(filename)")
-            } else {
-                Log.w("frame \(self.frameIndex) WTF")
-            }
-        } else {
-            Log.d("frame \(self.frameIndex) no config")
         }
     }
 

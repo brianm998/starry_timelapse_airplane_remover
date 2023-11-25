@@ -33,12 +33,31 @@ public enum FrameImageType {
     case processed
 }
 
-public struct ImageAccess {
+protocol ImageAccess {
+    // save image, will rescale and jpeg if necessary
+    func save(_ image: PixelatedImage,
+             as type: FrameImageType,
+             atSize size: ImageDisplaySize,
+             overwrite: Bool) async throws
+
+    // load an image of some type and size
+    func load(type imageType: FrameImageType,
+             atSize size: ImageDisplaySize) async throws -> PixelatedImage?
+}
+
+
+public struct ImageAccessor: ImageAccess {
     let config: Config
     let baseDirName: String
     let baseFileName: String
 
-    
+    init(config: Config, baseFileName: String) {
+        // the dirname (not full path) of where the main output files will sit
+        self.config = config
+        self.baseDirName = "\(config.imageSequenceDirname)-star-v-\(config.starVersion)"
+        self.baseFileName = baseFileName
+    }
+
     var previewSize: NSSize {
         let previewWidth = config.previewWidth
         let previewHeight = config.previewHeight
@@ -51,14 +70,62 @@ public struct ImageAccess {
         return NSSize(width: thumbnailWidth, height: thumbnailHeight)
     }
     
-    init(config: Config, baseFileName: String) {
-        // the dirname (not full path) of where the main output files will sit
-        self.config = config
-        self.baseDirName = "\(config.imageSequenceDirname)-star-v-\(config.starVersion)"
-        self.baseFileName = baseFileName
+    func load(type imageType: FrameImageType,
+             atSize size: ImageDisplaySize) async throws -> PixelatedImage?
+    {
+        if let filename = nameForImage(ofType: imageType, atSize: size) {
+            if fileManager.fileExists(atPath: filename) {
+                return try await PixelatedImage(fromFile: filename)
+            } else {
+                // no file
+                // if this is not a request for an original file, then try
+                // to load the original and rescale it 
+                switch size {
+                case .original:
+                    return nil  // original does not exist, nothing to return
+                default:
+                    return try await createMissingImage(ofType: imageType, andSize: size)
+                }
+            }
+        }
+        return nil
     }
 
-    private func dirForImage(ofType type: FrameImageType, at size: ImageDisplaySize) -> String? {
+    func save(_ image: PixelatedImage,
+             as type: FrameImageType,
+             atSize size: ImageDisplaySize,
+             overwrite: Bool) async throws
+    {
+        if let filename = nameForImage(ofType: type, atSize: size) {
+            var dataToSave: Data? = nil
+            switch size {
+            case .original:
+                try image.writeTIFFEncoding(toFilename: filename)
+            case .preview:
+                dataToSave = image.baseImage(ofSize: previewSize)?.jpegData
+            case .thumbnail:
+                dataToSave = image.baseImage(ofSize: thumbnailSize)?.jpegData
+            }
+            if let dataToSave = dataToSave {
+                // only used for previews and thumbnails
+                if fileManager.fileExists(atPath: filename) {
+                    Log.i("overwriting already existing file \(filename)")
+                    try fileManager.removeItem(atPath: filename)
+                }
+
+                // write to file
+                fileManager.createFile(atPath: filename,
+                                    contents: dataToSave,
+                                    attributes: nil)
+            }
+        } else {
+            Log.w("no place to save image of type \(type) at size \(size)")
+        }
+    }
+
+    private func dirForImage(ofType type: FrameImageType,
+                          atSize size: ImageDisplaySize) -> String?
+    {
         switch type {
         case .original:
             switch size {
@@ -109,8 +176,10 @@ public struct ImageAccess {
         }
     }
     
-    private func nameForImage(ofType type: FrameImageType, at size: ImageDisplaySize) -> String? {
-        if let dir = dirForImage(ofType: type, at: size) {
+    private func nameForImage(ofType type: FrameImageType,
+                              atSize size: ImageDisplaySize) -> String?
+    {
+        if let dir = dirForImage(ofType: type, atSize: size) {
             switch size {
             case .original:
                 return "\(dir)/\(baseFileName)"
@@ -134,13 +203,13 @@ public struct ImageAccess {
         }
     }
     
-    func createMissingImage(ofType type: FrameImageType,
+    private func createMissingImage(ofType type: FrameImageType,
                          andSize size: ImageDisplaySize)
       async throws -> PixelatedImage?
     {
-        if let filename = nameForImage(ofType: type, at: size),
+        if let filename = nameForImage(ofType: type, atSize: size),
            let smallerSize = sizeOf(size),
-           let fullResImage = try await load(type: type, at: size),
+           let fullResImage = try await load(type: type, atSize: size),
            let scaledImageData = fullResImage.baseImage(ofSize: smallerSize)
         {
             let dataToSave = scaledImageData.jpegData
@@ -165,57 +234,6 @@ public struct ImageAccess {
         return nil
     }
     
-    func load(type imageType: FrameImageType,
-             at size: ImageDisplaySize) async throws -> PixelatedImage?
-    {
-        if let filename = nameForImage(ofType: imageType, at: size) {
-            if fileManager.fileExists(atPath: filename) {
-                return try await PixelatedImage(fromFile: filename)
-            } else {
-                // no file
-                // if this is not a request for an original file, then try
-                // to load the original and rescale it 
-                switch size {
-                case .original:
-                    return nil  // original does not exist, nothing to return
-                default:
-                    return try await createMissingImage(ofType: imageType, andSize: size)
-                }
-            }
-        }
-        return nil
-    }
-
-    func save(_ image: PixelatedImage,
-             as type: FrameImageType,
-             at size: ImageDisplaySize) async throws
-    {
-        if let filename = nameForImage(ofType: type, at: size) {
-            var dataToSave: Data? = nil
-            switch size {
-            case .original:
-                try image.writeTIFFEncoding(toFilename: filename)
-            case .preview:
-                dataToSave = image.baseImage(ofSize: previewSize)?.jpegData
-            case .thumbnail:
-                dataToSave = image.baseImage(ofSize: thumbnailSize)?.jpegData
-            }
-            if let dataToSave = dataToSave {
-                // only used for previews and thumbnails
-                if fileManager.fileExists(atPath: filename) {
-                    Log.i("overwriting already existing file \(filename)")
-                    try fileManager.removeItem(atPath: filename)
-                }
-
-                // write to file
-                fileManager.createFile(atPath: filename,
-                                    contents: dataToSave,
-                                    attributes: nil)
-            }
-        } else {
-            Log.w("no place to save image of type \(type) at size \(size)")
-        }
-    }
 }
 fileprivate let fileManager = FileManager.default
 
@@ -347,6 +365,8 @@ public class FrameAirplaneRemover: Equatable, Hashable {
 
     // if this is false, just write out outlier data
     let writeOutputFiles: Bool
+
+    let imageAccessor: ImageAccess
     
     init(with config: Config,
          width: Int,
@@ -370,6 +390,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
          fullyProcess: Bool = true,
          writeOutputFiles: Bool = true) async throws
     {
+        self.imageAccessor = ImageAccessor(config: config, baseFileName: baseName)
         self.fullyProcess = fullyProcess
         self.writeOutputFiles = writeOutputFiles
         self.config = config
@@ -507,8 +528,9 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         
         Log.i("frame \(self.frameIndex) finishing")
         let image = try await imageSequence.getImage(withName: imageSequence.filenames[frameIndex]).image()
-        
-        self.writeUprocessedPreviews(image)
+
+        try await imageAccessor.save(image, as: .original, atSize: .preview, overwrite: false)
+        try await imageAccessor.save(image, as: .original, atSize: .thumbnail, overwrite: false)
 
         // use star aligned image
         let otherFrame = try await imageSequence.getImage(withName: starAlignedSequenceFilename).image()
@@ -522,21 +544,24 @@ public class FrameAirplaneRemover: Equatable, Hashable {
 
             Log.d("frame \(self.frameIndex) painting over airplanes")
 
-            try await self.paintOverAirplanes(toData: &outputData,
-                                          otherFrame: otherFrame)
+            try await self.paintOverAirplanes(toData: &outputData, otherFrame: otherFrame)
 
             Log.d("frame \(self.frameIndex) writing output files")
             self.state = .writingOutputFile
 
             Log.d("frame \(self.frameIndex) writing processed preview")
             let processedImage = image.updated(with: outputData)
-            self.writeProcessedPreview(image)
+            // write frame out as processed versions
+            try await imageAccessor.save(image, as: .processed, atSize: .original, overwrite: true)
+            try await imageAccessor.save(image, as: .processed, atSize: .preview, overwrite: true)
 
-            self.writeValidationImage()
-
-            Log.d("frame \(self.frameIndex) writing full processed frame")
-            // write frame out as a tiff file after processing it
-            try image.writeTIFFEncoding(ofData: outputData.data, toFilename: self.outputFilename)
+            if let outlierGroups = outlierGroups {
+                let validationImage = outlierGroups.validationImage
+                try await imageAccessor.save(validationImage, as: .validation,
+                                         atSize: .original, overwrite: false)
+                try await imageAccessor.save(validationImage, as: .validation,
+                                         atSize: .preview, overwrite: false)
+            }
         }
         self.state = .complete
 
