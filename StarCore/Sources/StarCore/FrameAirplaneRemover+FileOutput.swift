@@ -23,71 +23,6 @@ You should have received a copy of the GNU General Public License along with sta
  */
 extension FrameAirplaneRemover {
 
-    internal func writeValidationImage() {
-
-        guard config.writeFramePreviewFiles ||
-              config.writeFrameThumbnailFiles
-        else {
-            return
-        }
-        
-        guard let outlierGroups = outlierGroups else {
-            Log.w("cannot out write nil outlier groups")
-            return
-        }
-        
-        let image = outlierGroups.validationImage
-        do {
-            if !fileManager.fileExists(atPath: self.validationImageFilename) {
-                try image.writeTIFFEncoding(toFilename: self.validationImageFilename)
-                Log.d("wrote \(self.validationImageFilename)")
-            } else {
-                Log.i("cannot write validation image to \(self.validationImageFilename), it already exists")
-            }
-
-            if let previewImage = image.baseImage(ofSize: self.previewSize),
-               let imageData = previewImage.jpegData
-            {
-                let filename = self.validationImagePreviewFilename
-                
-                if !fileManager.fileExists(atPath: filename) {
-                    fileManager.createFile(atPath: filename,
-                                           contents: imageData,
-                                           attributes: nil)
-                    Log.d("wrote \(self.validationImagePreviewFilename)")
-                } else {
-                    Log.i("cannot write validation image preview to \(self.validationImagePreviewFilename) because it already exists")
-                }
-            }
-            
-            //Log.d("wrote \(outputFilename)")
-        } catch {
-            let message = "could not write \(outputFilename): \(error)"
-            Log.e(message)
-        }
-    }
-
-    internal func writeSubtractionPreview(_ image: PixelatedImage) throws {
-        if !fileManager.fileExists(atPath: self.alignedSubtractedPreviewFilename) {
-            if let processedPreviewImage = image.baseImage(ofSize: self.previewSize),
-               let imageData = processedPreviewImage.jpegData
-            {
-                let filename = self.alignedSubtractedPreviewFilename
-
-                if fileManager.fileExists(atPath: filename) {
-                    Log.i("overwriting already existing processed preview \(filename)")
-                    try fileManager.removeItem(atPath: filename)
-                }
-
-                // write to file
-                fileManager.createFile(atPath: filename,
-                                       contents: imageData,
-                                       attributes: nil)
-                Log.i("frame \(self.frameIndex) wrote preview to \(filename)")
-            }
-        }
-    }
-
     // write out just the OutlierGroupValueMatrix, which just what
     // the decision tree needs, and not very large
     public func writeOutlierValuesCSV() async throws {
@@ -140,18 +75,6 @@ extension FrameAirplaneRemover {
             }                
         }
     }
-    internal func save16BitMonoImageData(_ subtractionArray: [UInt16],
-                                        to filename: String) throws -> PixelatedImage
-    {
-        let outlierAmountImage = PixelatedImage(width: width,
-                                                height: height,
-                                                grayscale16BitImageData: subtractionArray)
-        // write out the subtractionArray here as an image
-        try outlierAmountImage.writeTIFFEncoding(toFilename: filename)
-
-        return outlierAmountImage
-    }
-
 }
 
 fileprivate let fileManager = FileManager.default

@@ -74,7 +74,8 @@ extension FrameAirplaneRemover {
                 }
                 Log.d("frame \(frameIndex) loaded outlier amounts from subtraction image")
 
-                try writeSubtractionPreview(image)
+                try await imageAccessor.save(image, as: .subtracted,
+                                          atSize: .preview, overwrite: false)
             }
         } catch {
             Log.i("frame \(frameIndex) couldn't load outlier amounts from subtraction image")

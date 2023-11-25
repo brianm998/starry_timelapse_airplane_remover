@@ -40,11 +40,10 @@ extension FrameAirplaneRemover {
         if config.writeOutlierGroupFiles {
             // write out image of outlier amounts
             do {
-                try subtractionImage.writeTIFFEncoding(toFilename: alignedSubtractedFilename)
-                
-                Log.d("frame \(frameIndex) saved subtraction image")
-                try writeSubtractionPreview(subtractionImage)
-                Log.d("frame \(frameIndex) saved subtraction image preview")
+                try await imageAccessor.save(subtractionImage, as: .subtracted,
+                                          atSize: .original, overwrite: false)
+                try await imageAccessor.save(subtractionImage, as: .subtracted,
+                                          atSize: .preview, overwrite: false)
             } catch {
                 Log.e("can't write subtraction image: \(error)")
             }
