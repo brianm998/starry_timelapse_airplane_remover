@@ -30,12 +30,6 @@ public class ImageSequenceProcessor<T> {
 
     public var imageSequence: ImageSequence    // the sequence of images that we're processing
 
-    // concurrent dispatch queue so we can process frames in parallel
-    
-    public let dispatchGroup = DispatchHandler()
-
-    public var shouldRun = true
-    
     var shouldProcess: [Bool] = []       // indexed by frame number
     var existingOutputFiles: [Bool] = [] // indexed by frame number
 
@@ -182,20 +176,6 @@ public class ImageSequenceProcessor<T> {
             
             Log.d("finished hook")
             self.finishedHook()
-        }
-        Log.d("DONE")
-        
-        Log.d("DONE WAITING")
-        let rename_me = self.dispatchGroup.dispatchGroup
-        while (shouldRun && rename_me.wait(timeout: DispatchTime.now().advanced(by: .seconds(3))) == .timedOut) {
-            Task {
-                let count = await self.dispatchGroup.count
-                if count < 8 {      // XXX hardcoded constant
-                    for (name, _) in await self.dispatchGroup.running {
-                        Log.d("waiting on \(name)")
-                    }
-                }
-            } 
         }
 
         Log.i("done")

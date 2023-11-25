@@ -48,7 +48,6 @@ public actor FinalProcessor {
     var currentFrameIndex = 0
     var maxAddedIndex = 0
     let frameCount: Int
-    let dispatchGroup: DispatchHandler
     let imageSequence: ImageSequence
 
     let config: Config
@@ -74,7 +73,6 @@ public actor FinalProcessor {
          publisher: PassthroughSubject<FrameAirplaneRemover, Never>,
          numberOfFrames frameCount: Int,
          shouldProcess: [Bool],
-         dispatchGroup: DispatchHandler,
          imageSequence: ImageSequence,
          isGUI: Bool) async
     {
@@ -84,7 +82,6 @@ public actor FinalProcessor {
         self.callbacks = callbacks
         self.frames = [FrameAirplaneRemover?](repeating: nil, count: frameCount)
         self.frameCount = frameCount
-        self.dispatchGroup = dispatchGroup
         self.imageSequence = imageSequence
         self.shouldProcess = shouldProcess
 

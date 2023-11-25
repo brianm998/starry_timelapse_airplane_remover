@@ -81,36 +81,29 @@ struct ImageAccessor: ImageAccess {
         return NSSize(width: thumbnailWidth, height: thumbnailHeight)
     }
 
-    func mkdir(ofType type: FrameImageType, andSize size: ImageDisplaySize) throws {
+    func mkdir(ofType type: FrameImageType,
+               andSize size: ImageDisplaySize = .original) throws
+    {
         if let dirname = dirForImage(ofType: type, atSize: size) {
             try StarCore.mkdir(dirname)
         }
     }
     
     func mkdirs() throws {
+        try mkdir(ofType: .aligned)
+        try mkdir(ofType: .subtracted)
+        try mkdir(ofType: .validated)
+        try mkdir(ofType: .processed)
+        
         if config.writeFramePreviewFiles {
             try mkdir(ofType: .original, andSize: .preview)
+            try mkdir(ofType: .aligned, andSize: .preview)
+            try mkdir(ofType: .subtracted, andSize: .preview)
+            try mkdir(ofType: .validated, andSize: .preview)
         }
         if config.writeFrameThumbnailFiles {
             try mkdir(ofType: .original, andSize: .thumbnail)
         }
-
-        try mkdir(ofType: .aligned, andSize: .original)
-        if config.writeFramePreviewFiles {
-            try mkdir(ofType: .aligned, andSize: .preview)
-        }
-
-        try mkdir(ofType: .subtracted, andSize: .original)
-        if config.writeFramePreviewFiles {
-            try mkdir(ofType: .subtracted, andSize: .preview)
-        }
-
-        try mkdir(ofType: .validated, andSize: .original)
-        if config.writeFramePreviewFiles {
-            try mkdir(ofType: .validated, andSize: .preview)
-        }
-
-        try mkdir(ofType: .processed, andSize: .original)
         if config.writeFrameProcessedPreviewFiles {
             try mkdir(ofType: .processed, andSize: .preview)
         }
@@ -172,15 +165,23 @@ struct ImageAccessor: ImageAccess {
             }
             if let dataToSave = dataToSave {
                 // only used for previews and thumbnails
+                var canCreate = true
                 if fileManager.fileExists(atPath: filename) {
-                    Log.i("overwriting already existing file \(filename)")
-                    try fileManager.removeItem(atPath: filename)
+                    if overwrite {
+                        Log.i("overwriting already existing file \(filename)")
+                        try fileManager.removeItem(atPath: filename)
+                    } else {
+                        Log.i("not overwriting already existing file \(filename)")
+                        canCreate = false
+                    }
                 }
 
-                // write to file
-                fileManager.createFile(atPath: filename,
-                                    contents: dataToSave,
-                                    attributes: nil)
+                if canCreate {
+                    // write to file
+                    fileManager.createFile(atPath: filename,
+                                           contents: dataToSave,
+                                           attributes: nil)
+                }
             }
         } else {
             Log.w("no place to save image of type \(type) at size \(size)")
@@ -273,7 +274,7 @@ struct ImageAccessor: ImageAccess {
     {
         if let filename = nameForImage(ofType: type, atSize: size),
            let smallerSize = sizeOf(size),
-           let fullResImage = await load(type: type, atSize: size),
+           let fullResImage = await load(type: type, atSize: .original),
            let scaledImageData = fullResImage.nsImage(ofSize: smallerSize)
         {
             let dataToSave = scaledImageData.jpegData

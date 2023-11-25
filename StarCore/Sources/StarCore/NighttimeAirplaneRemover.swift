@@ -97,14 +97,13 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
         }
         
         finalProcessor = await FinalProcessor(with: config,
-                                              numConcurrentRenders: numConcurrentRenders,
-                                              callbacks: callbacks,
-                                              publisher: publisher,
-                                              numberOfFrames: imageSequenceSize,
-                                              shouldProcess: shouldProcess,
-                                              dispatchGroup: dispatchGroup,
-                                              imageSequence: imageSequence,
-                                              isGUI: isGUI || processExistingFiles)
+                                          numConcurrentRenders: numConcurrentRenders,
+                                          callbacks: callbacks,
+                                          publisher: publisher,
+                                          numberOfFrames: imageSequenceSize,
+                                          shouldProcess: shouldProcess,
+                                          imageSequence: imageSequence,
+                                          isGUI: isGUI || processExistingFiles)
     }
 
     public override func run() async throws {
@@ -174,11 +173,11 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
         // the other frames that we use to detect outliers and repaint from
         let framePlaneRemover =
           try await self.createFrame(atIndex: index,
-                                     outputFilename: "\(self.outputDirname)/\(baseName)",
-                                     baseName: baseName,
-                                     imageWidth: imageWidth!,
-                                     imageHeight: imageHeight!,
-                                     imageBytesPerPixel: imageBytesPerPixel!)
+                                  outputFilename: "\(self.outputDirname)/\(baseName)",
+                                  baseName: baseName,
+                                  imageWidth: imageWidth!,
+                                  imageHeight: imageHeight!,
+                                  imageBytesPerPixel: imageBytesPerPixel!)
 
         return framePlaneRemover
     }
