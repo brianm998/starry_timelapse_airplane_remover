@@ -19,231 +19,6 @@ You should have received a copy of the GNU General Public License along with sta
 // the first pass is done upon init, finding and pruning outlier groups
 
 
-public enum ImageDisplaySize {
-    case original
-    case preview
-    case thumbnail
-}
-
-public enum FrameImageType {
-    case original
-    case aligned
-    case subtracted
-    case validated
-    case processed
-}
-
-protocol ImageAccess {
-    // save image, will rescale and jpeg if necessary
-    func save(_ image: PixelatedImage,
-             as type: FrameImageType,
-             atSize size: ImageDisplaySize,
-             overwrite: Bool) async throws
-
-    // load an image of some type and size
-    func load(type imageType: FrameImageType,
-             atSize size: ImageDisplaySize) async throws -> PixelatedImage?
-
-    // where to load or save this type of image from
-    func dirForImage(ofType type: FrameImageType,
-                   atSize size: ImageDisplaySize) -> String?
-}
-
-public struct ImageAccessor: ImageAccess {
-    let config: Config
-    let baseDirName: String
-    let baseFileName: String
-    let imageSequence: ImageSequence
-
-    init(config: Config, imageSequence: ImageSequence, baseFileName: String) {
-        // the dirname (not full path) of where the main output files will sit
-        self.config = config
-        let _basename = "\(config.imageSequenceDirname)-star-v-\(config.starVersion)"
-        self.baseDirName = _basename.replacingOccurrences(of: ".", with: "_")
-        self.baseFileName = baseFileName
-        self.imageSequence = imageSequence
-    }
-
-    var previewSize: NSSize {
-        let previewWidth = config.previewWidth
-        let previewHeight = config.previewHeight
-        return NSSize(width: previewWidth, height: previewHeight)
-    }
-
-    var thumbnailSize: NSSize {
-        let thumbnailWidth = config.thumbnailWidth
-        let thumbnailHeight = config.thumbnailHeight
-        return NSSize(width: thumbnailWidth, height: thumbnailHeight)
-    }
-    
-    func load(type imageType: FrameImageType,
-             atSize size: ImageDisplaySize) async throws -> PixelatedImage?
-    {
-        if let filename = nameForImage(ofType: imageType, atSize: size) {
-            if fileManager.fileExists(atPath: filename) {
-                return try await imageSequence.getImage(withName: filename).image()
-                //return try await PixelatedImage(fromFile: filename)
-            } else {
-                // no file
-                // if this is not a request for an original file, then try
-                // to load the original and rescale it 
-                switch size {
-                case .original:
-                    return nil  // original does not exist, nothing to return
-                default:
-                    return try await createMissingImage(ofType: imageType, andSize: size)
-                }
-            }
-        }
-        return nil
-    }
-
-    func save(_ image: PixelatedImage,
-             as type: FrameImageType,
-             atSize size: ImageDisplaySize,
-             overwrite: Bool) async throws
-    {
-        if let filename = nameForImage(ofType: type, atSize: size) {
-            var dataToSave: Data? = nil
-            switch size {
-            case .original:
-                try image.writeTIFFEncoding(toFilename: filename)
-            case .preview:
-                dataToSave = image.baseImage(ofSize: previewSize)?.jpegData
-            case .thumbnail:
-                dataToSave = image.baseImage(ofSize: thumbnailSize)?.jpegData
-            }
-            if let dataToSave = dataToSave {
-                // only used for previews and thumbnails
-                if fileManager.fileExists(atPath: filename) {
-                    Log.i("overwriting already existing file \(filename)")
-                    try fileManager.removeItem(atPath: filename)
-                }
-
-                // write to file
-                fileManager.createFile(atPath: filename,
-                                    contents: dataToSave,
-                                    attributes: nil)
-            }
-        } else {
-            Log.w("no place to save image of type \(type) at size \(size)")
-        }
-    }
-
-    public func dirForImage(ofType type: FrameImageType,
-                         atSize size: ImageDisplaySize) -> String?
-    {
-        switch type {
-        case .original:
-            switch size {
-            case .original:
-                return "\(config.imageSequencePath)/\(config.imageSequenceDirname)"
-            case .preview:
-                return "\(config.outputPath)/\(baseDirName)-previews"
-            case .thumbnail:
-                return "\(config.outputPath)/\(baseDirName)-thumbnails"
-            }
-        case .aligned:
-            switch size {
-            case .original:
-                return "\(config.outputPath)/\(config.imageSequenceDirname)-star-aligned"
-
-            case .preview:
-                return nil
-            case .thumbnail:
-                return nil
-            }
-        case .subtracted:
-            switch size {
-            case .original:
-                return "\(config.outputPath)/\(config.imageSequenceDirname)-star-aligned-subtracted"
-            case .preview:
-                return "\(config.outputPath)/\(config.imageSequenceDirname)-star-aligned-subtracted-previews"
-            case .thumbnail:
-                return nil
-            }
-        case .validated:
-            switch size {
-            case .original:
-                return "\(config.outputPath)/\(config.imageSequenceDirname)-star-validated-outlier-images"
-            case .preview:
-                return "\(config.outputPath)/\(config.imageSequenceDirname)-star-validated-outlier-images-previews"
-            case .thumbnail:
-                return nil
-            }
-        case .processed:
-            switch size {
-            case .original:
-                return "\(config.outputPath)/\(baseDirName)"
-            case .preview:
-                return "\(config.outputPath)/\(baseDirName)-processed-previews"
-            case .thumbnail:
-                return nil
-            }
-        }
-    }
-    
-    private func nameForImage(ofType type: FrameImageType,
-                              atSize size: ImageDisplaySize) -> String?
-    {
-        if let dir = dirForImage(ofType: type, atSize: size) {
-            switch size {
-            case .original:
-                return "\(dir)/\(baseFileName)"
-            case .preview:
-                return "\(dir)/\(baseFileName).jpg"
-            case .thumbnail:
-                return "\(dir)/\(baseFileName).jpg"
-            }
-        }
-        return nil
-    }
-
-    private func sizeOf(_ size: ImageDisplaySize) -> NSSize? {
-        switch size {
-        case .original:
-            return nil
-        case .preview:
-            return previewSize
-        case .thumbnail:
-            return thumbnailSize
-        }
-    }
-    
-    private func createMissingImage(ofType type: FrameImageType,
-                         andSize size: ImageDisplaySize)
-      async throws -> PixelatedImage?
-    {
-        if let filename = nameForImage(ofType: type, atSize: size),
-           let smallerSize = sizeOf(size),
-           let fullResImage = try await load(type: type, atSize: size),
-           let scaledImageData = fullResImage.baseImage(ofSize: smallerSize)
-        {
-            let dataToSave = scaledImageData.jpegData
-            
-            if fileManager.fileExists(atPath: filename) {
-                Log.i("overwriting already existing file \(filename)")
-                try fileManager.removeItem(atPath: filename)
-            }
-
-            // write to file
-            fileManager.createFile(atPath: filename,
-                                contents: dataToSave,
-                                attributes: nil)
-
-            if let cgImage = scaledImageData.cgImage(forProposedRect: nil,
-                                                context: nil,
-                                                hints: nil)
-            {
-                return PixelatedImage(cgImage)
-            }
-        }
-        return nil
-    }
-    
-}
-fileprivate let fileManager = FileManager.default
-
 public class FrameAirplaneRemover: Equatable, Hashable {
 
     internal var state: FrameProcessingState = .unprocessed {
@@ -261,20 +36,6 @@ public class FrameAirplaneRemover: Equatable, Hashable {
     }
     
     func set(state: FrameProcessingState) { self.state = state }
-
-    // XXX delete this XXX
-    // XXX delete this XXX
-    // XXX delete this XXX
-    /*
-    var previewSize: NSSize {
-        let previewWidth = config.previewWidth
-        let previewHeight = config.previewHeight
-        return NSSize(width: previewWidth, height: previewHeight)
-    }
-    */
-    // XXX delete this XXX
-    // XXX delete this XXX
-    // XXX delete this XXX
     
     public let width: Int
     public let height: Int
@@ -283,32 +44,6 @@ public class FrameAirplaneRemover: Equatable, Hashable {
     public let frameIndex: Int
 
     public let outlierOutputDirname: String?
-//    public let previewOutputDirname: String?
-//    public let processedPreviewOutputDirname: String?
-//    public let thumbnailOutputDirname: String?
-//    public let starAlignedSequenceDirname: String
-//    public var starAlignedSequenceFilename: String {
-//        "\(starAlignedSequenceDirname)/\(baseName)"
-//    }
-//    public let alignedSubtractedDirname: String
-//    public var alignedSubtractedFilename: String {
-//        "\(alignedSubtractedDirname)/\(baseName)"
-//    }
-
-//    public let validationImageDirname: String
-//    public var validationImageFilename: String {
-//        "\(validationImageDirname)/\(baseName)"
-//    }
-
-//    public let alignedSubtractedPreviewDirname: String
-//    public var alignedSubtractedPreviewFilename: String {
-//        "\(alignedSubtractedPreviewDirname)/\(baseName).jpg" // XXX tiff.jpg :(
-//    }
-    
-//    public let validationImagePreviewDirname: String
-//    public var validationImagePreviewFilename: String {
-//        "\(validationImagePreviewDirname)/\(baseName).jpg" // XXX tiff.jpg :(
-//    }
     
     // populated by pruning
     public var outlierGroups: OutlierGroups?
@@ -321,10 +56,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
 
     public func hasChanges() -> Bool { return didChange }
 
-    
     public let outputFilename: String
-
-//    public let imageSequence: ImageSequence
 
     public let config: Config
     public let callbacks: Callbacks
@@ -333,28 +65,6 @@ public class FrameAirplaneRemover: Equatable, Hashable {
 
     // did we load our outliers from a file?
     internal var outliersLoadedFromFile = false
-    /*
-    public var previewFilename: String? {
-        if let previewOutputDirname = previewOutputDirname {
-            return "\(previewOutputDirname)/\(baseName).jpg" // XXX this makes it .tif.jpg
-        }
-        return nil
-    }
-    
-    public var processedPreviewFilename: String? {
-        if let processedPreviewOutputDirname = processedPreviewOutputDirname {
-            return "\(processedPreviewOutputDirname)/\(baseName).jpg"
-        }
-        return nil
-    }
-    
-    public var thumbnailFilename: String? {
-        if let thumbnailOutputDirname = thumbnailOutputDirname {
-            return "\(thumbnailOutputDirname)/\(baseName).jpg"
-        }
-        return nil
-    }
-     */
 
     let outlierGroupLoader: () async -> OutlierGroups?
 
@@ -387,39 +97,22 @@ public class FrameAirplaneRemover: Equatable, Hashable {
          outputFilename: String,
          baseName: String,       // source filename without path
          outlierOutputDirname: String?,
-//         previewOutputDirname: String?,
-//         processedPreviewOutputDirname: String?,
-//         thumbnailOutputDirname: String?,
-//         starAlignedSequenceDirname: String,
-//         alignedSubtractedDirname: String,
-//         alignedSubtractedPreviewDirname: String,
-//         validationImageDirname: String,
-//         validationImagePreviewDirname: String,
          outlierGroupLoader: @escaping () async -> OutlierGroups?,
          fullyProcess: Bool = true,
          writeOutputFiles: Bool = true) async throws
     {
-        self.imageAccessor = ImageAccessor(config: config,
-                                       imageSequence: imageSequence,
-                                       baseFileName: baseName)
+        self.imageAccessor = try ImageAccessor(config: config,
+                                          imageSequence: imageSequence,
+                                          baseFileName: baseName)
         self.fullyProcess = fullyProcess
         self.writeOutputFiles = writeOutputFiles
         self.config = config
         self.baseName = baseName
         self.callbacks = callbacks
         self.outlierGroupLoader = outlierGroupLoader
-//        self.imageSequence = imageSequence
         self.frameIndex = frameIndex // frame index in the image sequence
         self.outputFilename = outputFilename
         self.outlierOutputDirname = outlierOutputDirname
-//        self.previewOutputDirname = previewOutputDirname
-//        self.processedPreviewOutputDirname = processedPreviewOutputDirname
-//        self.thumbnailOutputDirname = thumbnailOutputDirname
-//        self.starAlignedSequenceDirname = starAlignedSequenceDirname
-//        self.alignedSubtractedDirname = alignedSubtractedDirname
-//        self.alignedSubtractedPreviewDirname = alignedSubtractedPreviewDirname
-//        self.validationImageDirname = validationImageDirname
-//        self.validationImagePreviewDirname = validationImagePreviewDirname
         
         self.width = width
         self.height = height
@@ -472,45 +165,6 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         }
 
     }
-
-/*
-    public func pixelatedImage() async throws -> PixelatedImage? {
-        let name = imageSequence.filenames[frameIndex]
-        return try await imageSequence.getImage(withName: name).image()
-    }
-
-    public func baseImage() async throws -> NSImage? {
-        let name = imageSequence.filenames[frameIndex]
-        return try await imageSequence.getImage(withName: name).image().baseImage
-    }
-    public func baseSubtractedImage() async throws -> NSImage? {
-        let name = self.alignedSubtractedFilename
-        return try await imageSequence.getImage(withName: name).image().baseImage
-    }
-
-    public func baseValidationImage() async throws -> NSImage? {
-        let name = self.validationImageFilename
-        return try await imageSequence.getImage(withName: name).image().baseImage
-    }
-    
-    public func baseOutputImage() async throws -> NSImage? {
-        let name = self.outputFilename
-        return try await imageSequence.getImage(withName: name).image().baseImage
-    }
-    
-    public func baseImage(ofSize size: NSSize) async throws -> NSImage? {
-        let name = imageSequence.filenames[frameIndex]
-        return try await imageSequence.getImage(withName: name).image().baseImage(ofSize: size)
-    }
-
-    public func purgeCachedOutputFiles() async {
-        Log.d("frame \(frameIndex) purging output files")
-        await imageSequence.removeValue(forKey: self.outputFilename)
-        Log.d("frame \(frameIndex) purged output files")
-    }
-    
-*/
-
 
     // run after shouldPaint has been set for each group, 
     // does the final painting and then writes out the output files

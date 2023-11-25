@@ -29,30 +29,6 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
     // the name of the directory to create when writing outlier group files
     let outlierOutputDirname: String
 
-    // the name of the directory to create when writing frame previews
-    let previewOutputDirname: String
-
-    // the name of the directory to create when writing processed frame previews
-    let processedPreviewOutputDirname: String
-
-    // the name of the directory to create when writing frame thumbnails (small previews)
-    let thumbnailOutputDirname: String
-
-    // where the star aligned images live
-    let starAlignedSequenceDirname: String
-
-    // where images recording the difference between each frame and its aligned frame
-    let alignedSubtractedDirname: String
-
-    // where previews for subtracted frames live
-    let alignedSubtractedPreviewDirname: String
-
-    // where images recording each marked outlier pixel live
-    let validationImageDirname: String
-
-    // where previews for images recording each marked outlier pixel live
-    let validationImagePreviewDirname: String
-
     public var finalProcessor: FinalProcessor?    
 
     // are we running on the gui?
@@ -81,20 +57,6 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
         let _basename = "\(config.imageSequenceDirname)-star-v-\(config.starVersion)"
         self.basename = _basename.replacingOccurrences(of: ".", with: "_")
         outlierOutputDirname = "\(config.outputPath)/\(basename)-outliers"
-        previewOutputDirname = "\(config.outputPath)/\(basename)-previews"
-        processedPreviewOutputDirname = "\(config.outputPath)/\(basename)-processed-previews"
-        thumbnailOutputDirname = "\(config.outputPath)/\(basename)-thumbnails"
-
-        // alignment doesn't change across versions, omit that from the dirname
-        starAlignedSequenceDirname = "\(config.outputPath)/\(config.imageSequenceDirname)-star-aligned"
-
-        alignedSubtractedDirname = "\(config.outputPath)/\(config.imageSequenceDirname)-star-aligned-subtracted"
-
-        alignedSubtractedPreviewDirname = "\(config.outputPath)/\(config.imageSequenceDirname)-star-aligned-subtracted-previews"
-
-        validationImageDirname = "\(config.outputPath)/\(config.imageSequenceDirname)-star-validated-outlier-images"
-
-        validationImagePreviewDirname = "\(config.outputPath)/\(config.imageSequenceDirname)-star-validated-outlier-images-previews"
 
         try super.init(imageSequenceDirname: "\(config.imageSequencePath)/\(config.imageSequenceDirname)",
                        outputDirname: "\(config.outputPath)/\(basename)",
@@ -188,35 +150,10 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
                 // XXX this should be fatal
             }
         }
-        // where we keep aligned images
-        try mkdir(starAlignedSequenceDirname)
-
-        // where we keep the diff between each frame and its alignment frame
-        try mkdir(alignedSubtractedDirname)
-
-        // where we keep previews for the subtraction images 
-        try mkdir(alignedSubtractedPreviewDirname)
-
-        // where we keep the diff between each frame and its alignment frame
-        try mkdir(validationImageDirname)
-
-        // where we keep previews for the subtraction images 
-        try mkdir(validationImagePreviewDirname)
 
         if config.writeOutlierGroupFiles {
             // doesn't do mkdir -p, if a base dir is missing it just hangs :(
             try mkdir(outlierOutputDirname) // XXX this can fail silently and pause the whole process :(
-        }
-        if config.writeFramePreviewFiles {
-            try mkdir(previewOutputDirname) 
-        }
-
-        if config.writeFrameProcessedPreviewFiles {
-            try mkdir(processedPreviewOutputDirname)
-        }
-
-        if config.writeFrameThumbnailFiles {
-            try mkdir(thumbnailOutputDirname)
         }
 
         if config.writeOutlierGroupFiles          ||
@@ -310,14 +247,6 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
                                           outputFilename: outputFilename,
                                           baseName: baseName,
                                           outlierOutputDirname: outlierOutputDirname,
-                                          //previewOutputDirname: previewOutputDirname,
-                                          //processedPreviewOutputDirname: processedPreviewOutputDirname,
-                                          //thumbnailOutputDirname: thumbnailOutputDirname,
-                                          //starAlignedSequenceDirname: starAlignedSequenceDirname,
-                                          //alignedSubtractedDirname: alignedSubtractedDirname,
-                                          //alignedSubtractedPreviewDirname: alignedSubtractedPreviewDirname,
-                                          //validationImageDirname: validationImageDirname,
-                                          //validationImagePreviewDirname: validationImagePreviewDirname,
                                           outlierGroupLoader: loadOutliersFromFile,
                                           fullyProcess: fullyProcess,
                                           writeOutputFiles: writeOutputFiles)
