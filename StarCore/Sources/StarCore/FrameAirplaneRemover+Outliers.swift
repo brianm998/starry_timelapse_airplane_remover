@@ -65,7 +65,7 @@ extension FrameAirplaneRemover {
         do {
             // try to load the image subtraction from a pre-processed file
 
-            if let image = try await PixelatedImage(fromFile: alignedSubtractedFilename) {
+            if let image = try await imageAccessor.load(type: .subtracted, atSize: .original) {
                 switch image.imageData {
                 case .sixteenBit(let array):
                     subtractionArray = array
@@ -225,18 +225,17 @@ extension FrameAirplaneRemover {
 
         if !outliersLoadedFromFile {
             do {
-                if let image = try await PixelatedImage(fromFile: self.validationImageFilename) {
-
+                if let image = try await imageAccessor.load(type: .validated, atSize: .original) {
                     switch image.imageData {
                     case .eightBit(let validationArr):
                         classifyOutliers(with: validationArr)
                         shouldUseDecisionTree = false
                         
                     case .sixteenBit(_):
-                        Log.e("cannot load 16 bit validation image from \(self.validationImageFilename)")
+                        Log.e("cannot load 16 bit validation image")
                     }
                 } else {
-                    Log.w("couldn't load validation image from \(self.validationImageFilename)")
+                    Log.w("couldn't load validation image from")
                 }
             } catch {
                 Log.i("can't load validation image: \(error)")

@@ -30,8 +30,6 @@ extension FrameAirplaneRemover {
     {
         Log.i("frame \(frameIndex) painting airplane outlier groups")
 
-        let image = try await imageSequence.getImage(withName: imageSequence.filenames[frameIndex]).image()
-
         // paint over every outlier in the paint list with pixels from the adjecent frames
         guard let outlierGroups = outlierGroups else {
             Log.e("cannot paint without outlier groups")
@@ -42,6 +40,9 @@ extension FrameAirplaneRemover {
             Log.v("no outliers, not painting")
             return
         }
+
+        guard let image = try await imageAccessor.load(type: .original, atSize: .original)
+        else { throw "couldn't load image" }
         
         // the alpha level to apply to each pixel in the image
         // indexed by y*width+x

@@ -29,7 +29,7 @@ public enum FrameImageType {
     case original
     case aligned
     case subtracted
-    case validation
+    case validated
     case processed
 }
 
@@ -43,19 +43,25 @@ protocol ImageAccess {
     // load an image of some type and size
     func load(type imageType: FrameImageType,
              atSize size: ImageDisplaySize) async throws -> PixelatedImage?
-}
 
+    // where to load or save this type of image from
+    func dirForImage(ofType type: FrameImageType,
+                   atSize size: ImageDisplaySize) -> String?
+}
 
 public struct ImageAccessor: ImageAccess {
     let config: Config
     let baseDirName: String
     let baseFileName: String
+    let imageSequence: ImageSequence
 
-    init(config: Config, baseFileName: String) {
+    init(config: Config, imageSequence: ImageSequence, baseFileName: String) {
         // the dirname (not full path) of where the main output files will sit
         self.config = config
-        self.baseDirName = "\(config.imageSequenceDirname)-star-v-\(config.starVersion)"
+        let _basename = "\(config.imageSequenceDirname)-star-v-\(config.starVersion)"
+        self.baseDirName = _basename.replacingOccurrences(of: ".", with: "_")
         self.baseFileName = baseFileName
+        self.imageSequence = imageSequence
     }
 
     var previewSize: NSSize {
@@ -75,7 +81,8 @@ public struct ImageAccessor: ImageAccess {
     {
         if let filename = nameForImage(ofType: imageType, atSize: size) {
             if fileManager.fileExists(atPath: filename) {
-                return try await PixelatedImage(fromFile: filename)
+                return try await imageSequence.getImage(withName: filename).image()
+                //return try await PixelatedImage(fromFile: filename)
             } else {
                 // no file
                 // if this is not a request for an original file, then try
@@ -123,8 +130,8 @@ public struct ImageAccessor: ImageAccess {
         }
     }
 
-    private func dirForImage(ofType type: FrameImageType,
-                          atSize size: ImageDisplaySize) -> String?
+    public func dirForImage(ofType type: FrameImageType,
+                         atSize size: ImageDisplaySize) -> String?
     {
         switch type {
         case .original:
@@ -155,7 +162,7 @@ public struct ImageAccessor: ImageAccess {
             case .thumbnail:
                 return nil
             }
-        case .validation:
+        case .validated:
             switch size {
             case .original:
                 return "\(config.outputPath)/\(config.imageSequenceDirname)-star-validated-outlier-images"
@@ -258,15 +265,16 @@ public class FrameAirplaneRemover: Equatable, Hashable {
     // XXX delete this XXX
     // XXX delete this XXX
     // XXX delete this XXX
+    /*
     var previewSize: NSSize {
         let previewWidth = config.previewWidth
         let previewHeight = config.previewHeight
         return NSSize(width: previewWidth, height: previewHeight)
     }
+    */
     // XXX delete this XXX
     // XXX delete this XXX
     // XXX delete this XXX
-
     
     public let width: Int
     public let height: Int
@@ -275,32 +283,32 @@ public class FrameAirplaneRemover: Equatable, Hashable {
     public let frameIndex: Int
 
     public let outlierOutputDirname: String?
-    public let previewOutputDirname: String?
-    public let processedPreviewOutputDirname: String?
-    public let thumbnailOutputDirname: String?
-    public let starAlignedSequenceDirname: String
-    public var starAlignedSequenceFilename: String {
-        "\(starAlignedSequenceDirname)/\(baseName)"
-    }
-    public let alignedSubtractedDirname: String
-    public var alignedSubtractedFilename: String {
-        "\(alignedSubtractedDirname)/\(baseName)"
-    }
+//    public let previewOutputDirname: String?
+//    public let processedPreviewOutputDirname: String?
+//    public let thumbnailOutputDirname: String?
+//    public let starAlignedSequenceDirname: String
+//    public var starAlignedSequenceFilename: String {
+//        "\(starAlignedSequenceDirname)/\(baseName)"
+//    }
+//    public let alignedSubtractedDirname: String
+//    public var alignedSubtractedFilename: String {
+//        "\(alignedSubtractedDirname)/\(baseName)"
+//    }
 
-    public let validationImageDirname: String
-    public var validationImageFilename: String {
-        "\(validationImageDirname)/\(baseName)"
-    }
+//    public let validationImageDirname: String
+//    public var validationImageFilename: String {
+//        "\(validationImageDirname)/\(baseName)"
+//    }
 
-    public let alignedSubtractedPreviewDirname: String
-    public var alignedSubtractedPreviewFilename: String {
-        "\(alignedSubtractedPreviewDirname)/\(baseName).jpg" // XXX tiff.jpg :(
-    }
+//    public let alignedSubtractedPreviewDirname: String
+//    public var alignedSubtractedPreviewFilename: String {
+//        "\(alignedSubtractedPreviewDirname)/\(baseName).jpg" // XXX tiff.jpg :(
+//    }
     
-    public let validationImagePreviewDirname: String
-    public var validationImagePreviewFilename: String {
-        "\(validationImagePreviewDirname)/\(baseName).jpg" // XXX tiff.jpg :(
-    }
+//    public let validationImagePreviewDirname: String
+//    public var validationImagePreviewFilename: String {
+//        "\(validationImagePreviewDirname)/\(baseName).jpg" // XXX tiff.jpg :(
+//    }
     
     // populated by pruning
     public var outlierGroups: OutlierGroups?
@@ -316,7 +324,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
     
     public let outputFilename: String
 
-    public let imageSequence: ImageSequence
+//    public let imageSequence: ImageSequence
 
     public let config: Config
     public let callbacks: Callbacks
@@ -325,7 +333,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
 
     // did we load our outliers from a file?
     internal var outliersLoadedFromFile = false
-    
+    /*
     public var previewFilename: String? {
         if let previewOutputDirname = previewOutputDirname {
             return "\(previewOutputDirname)/\(baseName).jpg" // XXX this makes it .tif.jpg
@@ -346,6 +354,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         }
         return nil
     }
+     */
 
     let outlierGroupLoader: () async -> OutlierGroups?
 
@@ -378,38 +387,39 @@ public class FrameAirplaneRemover: Equatable, Hashable {
          outputFilename: String,
          baseName: String,       // source filename without path
          outlierOutputDirname: String?,
-         previewOutputDirname: String?,
-         processedPreviewOutputDirname: String?,
-         thumbnailOutputDirname: String?,
-         starAlignedSequenceDirname: String,
-         alignedSubtractedDirname: String,
-         alignedSubtractedPreviewDirname: String,
-         validationImageDirname: String,
-         validationImagePreviewDirname: String,
+//         previewOutputDirname: String?,
+//         processedPreviewOutputDirname: String?,
+//         thumbnailOutputDirname: String?,
+//         starAlignedSequenceDirname: String,
+//         alignedSubtractedDirname: String,
+//         alignedSubtractedPreviewDirname: String,
+//         validationImageDirname: String,
+//         validationImagePreviewDirname: String,
          outlierGroupLoader: @escaping () async -> OutlierGroups?,
          fullyProcess: Bool = true,
          writeOutputFiles: Bool = true) async throws
     {
-        self.imageAccessor = ImageAccessor(config: config, baseFileName: baseName)
+        self.imageAccessor = ImageAccessor(config: config,
+                                       imageSequence: imageSequence,
+                                       baseFileName: baseName)
         self.fullyProcess = fullyProcess
         self.writeOutputFiles = writeOutputFiles
         self.config = config
         self.baseName = baseName
         self.callbacks = callbacks
         self.outlierGroupLoader = outlierGroupLoader
-        self.imageSequence = imageSequence
+//        self.imageSequence = imageSequence
         self.frameIndex = frameIndex // frame index in the image sequence
         self.outputFilename = outputFilename
-
         self.outlierOutputDirname = outlierOutputDirname
-        self.previewOutputDirname = previewOutputDirname
-        self.processedPreviewOutputDirname = processedPreviewOutputDirname
-        self.thumbnailOutputDirname = thumbnailOutputDirname
-        self.starAlignedSequenceDirname = starAlignedSequenceDirname
-        self.alignedSubtractedDirname = alignedSubtractedDirname
-        self.alignedSubtractedPreviewDirname = alignedSubtractedPreviewDirname
-        self.validationImageDirname = validationImageDirname
-        self.validationImagePreviewDirname = validationImagePreviewDirname
+//        self.previewOutputDirname = previewOutputDirname
+//        self.processedPreviewOutputDirname = processedPreviewOutputDirname
+//        self.thumbnailOutputDirname = thumbnailOutputDirname
+//        self.starAlignedSequenceDirname = starAlignedSequenceDirname
+//        self.alignedSubtractedDirname = alignedSubtractedDirname
+//        self.alignedSubtractedPreviewDirname = alignedSubtractedPreviewDirname
+//        self.validationImageDirname = validationImageDirname
+//        self.validationImagePreviewDirname = validationImagePreviewDirname
         
         self.width = width
         self.height = height
@@ -444,10 +454,12 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         }
 
         let alignmentFilename = otherFilename
-        
-        _ = StarAlignment.align(alignmentFilename,
-                             to: baseFilename,
-                             inDir: starAlignedSequenceDirname)
+
+        if let dirname = imageAccessor.dirForImage(ofType: .aligned, atSize: .original) {
+            _ = StarAlignment.align(alignmentFilename,
+                                    to: baseFilename,
+                                    inDir: dirname)
+        }
         
         // this takes a long time, and the gui does it later
         if fullyProcess {
@@ -461,6 +473,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
 
     }
 
+/*
     public func pixelatedImage() async throws -> PixelatedImage? {
         let name = imageSequence.filenames[frameIndex]
         return try await imageSequence.getImage(withName: name).image()
@@ -470,7 +483,6 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         let name = imageSequence.filenames[frameIndex]
         return try await imageSequence.getImage(withName: name).image().baseImage
     }
-
     public func baseSubtractedImage() async throws -> NSImage? {
         let name = self.alignedSubtractedFilename
         return try await imageSequence.getImage(withName: name).image().baseImage
@@ -497,6 +509,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         Log.d("frame \(frameIndex) purged output files")
     }
     
+*/
 
 
     // run after shouldPaint has been set for each group, 
@@ -527,14 +540,16 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         self.state = .reloadingImages
         
         Log.i("frame \(self.frameIndex) finishing")
-        let image = try await imageSequence.getImage(withName: imageSequence.filenames[frameIndex]).image()
 
+        guard let image = try await imageAccessor.load(type: .original, atSize: .original)
+        else { throw "couldn't load original file for finishing" }
+        
         try await imageAccessor.save(image, as: .original, atSize: .preview, overwrite: false)
         try await imageAccessor.save(image, as: .original, atSize: .thumbnail, overwrite: false)
 
-        // use star aligned image
-        let otherFrame = try await imageSequence.getImage(withName: starAlignedSequenceFilename).image()
-
+        guard let otherFrame = try await imageAccessor.load(type: .aligned, atSize: .original)
+        else { throw "couldn't load aligned file for finishing" }
+        
         let format = image.imageData // make a copy
         switch format {
         case .eightBit(let arr):
@@ -552,14 +567,16 @@ public class FrameAirplaneRemover: Equatable, Hashable {
             Log.d("frame \(self.frameIndex) writing processed preview")
             let processedImage = image.updated(with: outputData)
             // write frame out as processed versions
-            try await imageAccessor.save(image, as: .processed, atSize: .original, overwrite: true)
-            try await imageAccessor.save(image, as: .processed, atSize: .preview, overwrite: true)
+            try await imageAccessor.save(processedImage, as: .processed,
+                                      atSize: .original, overwrite: true)
+            try await imageAccessor.save(processedImage, as: .processed,
+                                      atSize: .preview, overwrite: true)
 
             if let outlierGroups = outlierGroups {
                 let validationImage = outlierGroups.validationImage
-                try await imageAccessor.save(validationImage, as: .validation,
+                try await imageAccessor.save(validationImage, as: .validated,
                                          atSize: .original, overwrite: false)
-                try await imageAccessor.save(validationImage, as: .validation,
+                try await imageAccessor.save(validationImage, as: .validated,
                                          atSize: .preview, overwrite: false)
             }
         }

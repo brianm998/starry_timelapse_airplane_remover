@@ -26,35 +26,36 @@ extension FrameAirplaneRemover {
     internal func subtractAlignedImageFromFrame() async throws -> [UInt16] {
         self.state = .loadingImages
         
-        let image = try await imageSequence.getImage(withName: imageSequence.filenames[frameIndex]).image()
+//        let image = try await imageSequence.getImage(withName: imageSequence.filenames[frameIndex]).image()
+        if let image = try await imageAccessor.load(type: .original, atSize: .original),
+           let otherFrame = try await imageAccessor.load(type: .aligned, atSize: .original)
+        {
+            self.state = .subtractingNeighbor
+            
+            Log.i("frame \(frameIndex) finding outliers")
 
-        // use star aligned image
-        let otherFrame = try await imageSequence.getImage(withName: starAlignedSequenceFilename).image()
-
-        self.state = .subtractingNeighbor
-        
-        Log.i("frame \(frameIndex) finding outliers")
-
-        let subtractionImage = image.subtract(otherFrame)
-        
-        if config.writeOutlierGroupFiles {
-            // write out image of outlier amounts
-            do {
-                try await imageAccessor.save(subtractionImage, as: .subtracted,
-                                          atSize: .original, overwrite: false)
-                try await imageAccessor.save(subtractionImage, as: .subtracted,
-                                          atSize: .preview, overwrite: false)
-            } catch {
-                Log.e("can't write subtraction image: \(error)")
+            let subtractionImage = image.subtract(otherFrame)
+            
+            if config.writeOutlierGroupFiles {
+                // write out image of outlier amounts
+                do {
+                    try await imageAccessor.save(subtractionImage, as: .subtracted,
+                                              atSize: .original, overwrite: false)
+                    try await imageAccessor.save(subtractionImage, as: .subtracted,
+                                              atSize: .preview, overwrite: false)
+                } catch {
+                    Log.e("can't write subtraction image: \(error)")
+                }
             }
-        }
 
-        switch subtractionImage.imageData {
-        case .eightBit(_):
-            fatalError("eight bit images not supported here now")
-        case .sixteenBit(let data):
-            return data 
-
+            switch subtractionImage.imageData {
+            case .eightBit(_):
+                fatalError("eight bit images not supported here now")
+            case .sixteenBit(let data):
+                return data 
+            }
+        } else {
+            throw "couldn't load images"
         }
     }
 }

@@ -231,8 +231,8 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
     // called by the superclass to process each frame
     // called async check access to shared data
     override func processFrame(number index: Int,
-                               outputFilename: String,
-                               baseName: String) async throws -> FrameAirplaneRemover
+                            outputFilename: String,
+                            baseName: String) async throws -> FrameAirplaneRemover
     {
         // the other frames that we use to detect outliers and repaint from
         let framePlaneRemover =
@@ -301,26 +301,26 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
         }
         
         return try await FrameAirplaneRemover(with: config,
-                                              width: imageWidth,
-                                              height: imageHeight,
-                                              bytesPerPixel: imageBytesPerPixel,
-                                              callbacks: callbacks,
-                                              imageSequence: imageSequence,
-                                              atIndex: frameIndex,
-                                              outputFilename: outputFilename,
-                                              baseName: baseName,
-                                              outlierOutputDirname: outlierOutputDirname,
-                                              previewOutputDirname: previewOutputDirname,
-                                              processedPreviewOutputDirname: processedPreviewOutputDirname,
-                                              thumbnailOutputDirname: thumbnailOutputDirname,
-                                              starAlignedSequenceDirname: starAlignedSequenceDirname,
-                                              alignedSubtractedDirname: alignedSubtractedDirname,
-                                              alignedSubtractedPreviewDirname: alignedSubtractedPreviewDirname,
-                                              validationImageDirname: validationImageDirname,
-                                              validationImagePreviewDirname: validationImagePreviewDirname,
-                                              outlierGroupLoader: loadOutliersFromFile,
-                                              fullyProcess: fullyProcess,
-                                              writeOutputFiles: writeOutputFiles)
+                                          width: imageWidth,
+                                          height: imageHeight,
+                                          bytesPerPixel: imageBytesPerPixel,
+                                          callbacks: callbacks,
+                                          imageSequence: imageSequence,
+                                          atIndex: frameIndex,
+                                          outputFilename: outputFilename,
+                                          baseName: baseName,
+                                          outlierOutputDirname: outlierOutputDirname,
+                                          //previewOutputDirname: previewOutputDirname,
+                                          //processedPreviewOutputDirname: processedPreviewOutputDirname,
+                                          //thumbnailOutputDirname: thumbnailOutputDirname,
+                                          //starAlignedSequenceDirname: starAlignedSequenceDirname,
+                                          //alignedSubtractedDirname: alignedSubtractedDirname,
+                                          //alignedSubtractedPreviewDirname: alignedSubtractedPreviewDirname,
+                                          //validationImageDirname: validationImageDirname,
+                                          //validationImagePreviewDirname: validationImagePreviewDirname,
+                                          outlierGroupLoader: loadOutliersFromFile,
+                                          fullyProcess: fullyProcess,
+                                          writeOutputFiles: writeOutputFiles)
     }        
 }
               
