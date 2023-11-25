@@ -105,11 +105,11 @@ extension FrameAirplaneRemover {
         }
     }
     
-    internal func writeProcessedPreview(_ image: PixelatedImage, with outputData: Data) {
+    internal func writeProcessedPreview(_ image: PixelatedImage) {
         // write out a preview of the processed file
         if config.writeFrameProcessedPreviewFiles {
             if let processedPreviewImage = image.baseImage(ofSize: self.previewSize,
-                                                           fromData: outputData),
+                                                      fromData: image.imageData.data),
                let imageData = processedPreviewImage.jpegData,
                let filename = self.processedPreviewFilename
             {

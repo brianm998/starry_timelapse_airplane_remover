@@ -25,8 +25,8 @@ You should have received a copy of the GNU General Public License along with sta
 extension FrameAirplaneRemover {
 
     // actually paint over outlier groups that have been selected as airplane tracks
-    internal func paintOverAirplanes(toData data: inout Data,
-                                     otherFrame: PixelatedImage) async throws
+    internal func paintOverAirplanes(toData data: inout [UInt16],
+                                 otherFrame: PixelatedImage) async throws
     {
         Log.i("frame \(frameIndex) painting airplane outlier groups")
 
@@ -191,7 +191,7 @@ extension FrameAirplaneRemover {
     // paint over a selected outlier pixel with data from pixels from adjecent frames
     internal func paint(x: Int, y: Int,
                       alpha: Double,
-                      toData data: inout Data,
+                      toData data: inout [UInt16],
                       image: PixelatedImage,
                       otherFrame: PixelatedImage)
     {
@@ -210,22 +210,30 @@ extension FrameAirplaneRemover {
             paintPixel = Pixel(merging: paintPixel, with: op, atAlpha: alpha)
         }
 
-        // this is the numeric value we need to write out to paint over the airplane
-        var paintValue = paintPixel.value
-
         // the is the place in the image data to write to
-        let offset = (Int(y) * bytesPerRow) + (Int(x) * bytesPerPixel)
+        let offset = (Int(y) * bytesPerRow/2) + (Int(x) * bytesPerPixel/2)
 
         // actually paint over that airplane like thing in the image data
-        data.replaceSubrange(offset ..< offset+self.bytesPerPixel,
-                             with: &paintValue, count: self.bytesPerPixel)
+        if self.bytesPerPixel == 2 {
+            data.replaceSubrange(offset ..< offset+self.bytesPerPixel/2,
+                                 with: [paintPixel.red])
+        } else if self.bytesPerPixel == 6 {
+            data.replaceSubrange(offset ..< offset+self.bytesPerPixel/2,
+                                 with: [paintPixel.red, paintPixel.green, paintPixel.blue])
+        } else if self.bytesPerPixel == 8 {
+            data.replaceSubrange(offset ..< offset+self.bytesPerPixel/2,
+                                 with: [paintPixel.red,
+                                       paintPixel.green,
+                                       paintPixel.blue,
+                                       paintPixel.alpha])
+        }
     }
 
 
     // paint over a selected outlier pixel with data from pixels from adjecent frames
     internal func paint(x: Int, y: Int,
                       alpha: Double,
-                      toData data: inout Data,
+                      toData data: inout [UInt16],
                       image: PixelatedImage,
                       paintPixel: Pixel)
     {
@@ -235,15 +243,22 @@ extension FrameAirplaneRemover {
             paintPixel = Pixel(merging: paintPixel, with: op, atAlpha: alpha)
         }
 
-        // this is the numeric value we need to write out to paint over the airplane
-        var paintValue = paintPixel.value
-        
         // the is the place in the image data to write to
-        let offset = (Int(y) * bytesPerRow) + (Int(x) * bytesPerPixel)
-        
+        let offset = (Int(y) * bytesPerRow/2) + (Int(x) * bytesPerPixel/2)
+
         // actually paint over that airplane like thing in the image data
-        data.replaceSubrange(offset ..< offset+self.bytesPerPixel,
-                             with: &paintValue, count: self.bytesPerPixel)
-        
+        if self.bytesPerPixel == 2 {
+            data.replaceSubrange(offset ..< offset+self.bytesPerPixel/2,
+                                 with: [paintPixel.red])
+        } else if self.bytesPerPixel == 6 {
+            data.replaceSubrange(offset ..< offset+self.bytesPerPixel/2,
+                                 with: [paintPixel.red, paintPixel.green, paintPixel.blue])
+        } else if self.bytesPerPixel == 8 {
+            data.replaceSubrange(offset ..< offset+self.bytesPerPixel/2,
+                                 with: [paintPixel.red,
+                                       paintPixel.green,
+                                       paintPixel.blue,
+                                       paintPixel.alpha])
+        }
     }
 }

@@ -30,7 +30,7 @@ public struct PixelatedImage {
 
     let colorSpace: CGColorSpace // XXX why both space and name?
     let ciFormat: CIFormat    // used to write tiff formats properly
-    
+
     public enum DataFormat {
 
         // just the number of bits per pixel, not per component
@@ -70,25 +70,25 @@ public struct PixelatedImage {
     }
     
     public init(width: Int,
-                height: Int,
-                grayscale16BitImageData imageData: [UInt16])
+               height: Int,
+               grayscale16BitImageData imageData: [UInt16])
     {
         self.init(width: width,
-                  height: height,
-                  imageData: DataFormat(from: imageData),
-                  bitsPerPixel: 16,
-                  bytesPerRow: 2*width,
-                  bitsPerComponent: 16,
-                  bytesPerPixel: 2,
-                  bitmapInfo: .byteOrder16Little, 
-                  pixelOffset: 0,
-                  colorSpace: CGColorSpaceCreateDeviceGray(),
-                  ciFormat: .L16)
+                 height: height,
+                 imageData: DataFormat(from: imageData),
+                 bitsPerPixel: 16,
+                 bytesPerRow: 2*width,
+                 bitsPerComponent: 16,
+                 bytesPerPixel: 2,
+                 bitmapInfo: .byteOrder16Little, 
+                 pixelOffset: 0,
+                 colorSpace: CGColorSpaceCreateDeviceGray(),
+                 ciFormat: .L16)
     }
 
     public init(width: Int,
-                height: Int,
-                grayscale8BitImageData imageData: [UInt8])
+              height: Int,
+              grayscale8BitImageData imageData: [UInt8])
     {
         self.init(width: width,
                   height: height,
@@ -104,16 +104,16 @@ public struct PixelatedImage {
     }
     
     public init(width: Int,
-                height: Int,
-                imageData: DataFormat,
-                bitsPerPixel: Int,
-                bytesPerRow: Int,
-                bitsPerComponent: Int,
-                bytesPerPixel: Int,
-                bitmapInfo: CGBitmapInfo,
-                pixelOffset: Int,
-                colorSpace: CGColorSpace,
-                ciFormat: CIFormat)    
+               height: Int,
+               imageData: DataFormat,
+               bitsPerPixel: Int,
+               bytesPerRow: Int,
+               bitsPerComponent: Int,
+               bytesPerPixel: Int,
+               bitmapInfo: CGBitmapInfo,
+               pixelOffset: Int,
+               colorSpace: CGColorSpace,
+               ciFormat: CIFormat)    
     {
         self.width = width
         self.height = height
@@ -128,6 +128,20 @@ public struct PixelatedImage {
         self.ciFormat = ciFormat
     }
 
+    public func updated(with imageData: [UInt16]) -> PixelatedImage {
+        return PixelatedImage(width: self.width,
+                           height: self.height,
+                           imageData: .sixteenBit(imageData),
+                           bitsPerPixel: self.bitsPerPixel,
+                           bytesPerRow: self.bytesPerRow,
+                           bitsPerComponent: self.bitsPerComponent,
+                           bytesPerPixel: self.bytesPerPixel,
+                           bitmapInfo: self.bitmapInfo,
+                           pixelOffset: self.pixelOffset,
+                           colorSpace: self.colorSpace,
+                           ciFormat: self.ciFormat)
+    }
+    
     init?(_ image: CGImage) {
         //Log.w("START")
         // assert(image.colorSpace?.model == .rgb)
@@ -253,7 +267,7 @@ public struct PixelatedImage {
     // used when modifying the invariant original image data, and saying the edits to a file
     // XXX make this async
     func writeTIFFEncoding(ofData imageData: Data,
-                           toFilename imageFilename: String) throws
+                        toFilename imageFilename: String) throws
     {
         if fileManager.fileExists(atPath: imageFilename) {
             Log.i("overwriting already existing filename \(imageFilename)")
@@ -344,6 +358,7 @@ public struct PixelatedImage {
 }
 
 extension NSImage {
+    
     public func resized(to newSize: NSSize) -> NSImage? {
         if let bitmapRep = NSBitmapImageRep(
              bitmapDataPlanes: nil,
@@ -373,10 +388,11 @@ extension NSImage {
 
 public extension NSImage {
     var jpegData: Data? {
-        let cgImage = self.cgImage(forProposedRect: nil, context: nil, hints: nil)!
-        let bitmapRep = NSBitmapImageRep(cgImage: cgImage)
-        if let data = bitmapRep.representation(using: NSBitmapImageRep.FileType.jpeg, properties: [:]) {
-            return data
+        if let cgImage = self.cgImage(forProposedRect: nil, context: nil, hints: nil) {
+            let bitmapRep = NSBitmapImageRep(cgImage: cgImage)
+            if let data = bitmapRep.representation(using: NSBitmapImageRep.FileType.jpeg, properties: [:]) {
+                return data
+            }
         }
         return nil
     }
