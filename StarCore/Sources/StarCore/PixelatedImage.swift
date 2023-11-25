@@ -17,23 +17,28 @@ import Cocoa
 public struct PixelatedImage {
     public let width: Int
     public let height: Int
-    
+
+    // pixel component level access to image data
     let imageData: DataFormat
-    
+
+    // total number of pixels for each pixel
     let bitsPerPixel: Int
     let bytesPerRow: Int
     let bitsPerComponent: Int
     let bytesPerPixel: Int
     let bitmapInfo: CGBitmapInfo
 
-    let pixelOffset: Int
+    let componentsPerPixel: Int
 
     let colorSpace: CGColorSpace // XXX why both space and name?
     let ciFormat: CIFormat    // used to write tiff formats properly
 
+    // enum to bridge between Data and direct individual component access
+    // do we have 8 bits per component, or 16?
+    // pixels could have multiple components, or just one.
     public enum DataFormat {
 
-        // just the number of bits per pixel, not per component
+        // the number of bits per pixel, not per component
         case eightBit([UInt8])
         case sixteenBit([UInt16])
 
@@ -80,7 +85,7 @@ public struct PixelatedImage {
                  bitsPerComponent: 16,
                  bytesPerPixel: 2,
                  bitmapInfo: .byteOrder16Little, 
-                 pixelOffset: 0,
+                 componentsPerPixel: 1,
                  colorSpace: CGColorSpaceCreateDeviceGray(),
                  ciFormat: .L16)
     }
@@ -90,16 +95,16 @@ public struct PixelatedImage {
               grayscale8BitImageData imageData: [UInt8])
     {
         self.init(width: width,
-                  height: height,
-                  imageData: DataFormat(from: imageData),
-                  bitsPerPixel: 8,
-                  bytesPerRow: width,
-                  bitsPerComponent: 8,
-                  bytesPerPixel: 1,
-                  bitmapInfo: .byteOrderDefault, 
-                  pixelOffset: 0,
-                  colorSpace: CGColorSpaceCreateDeviceGray(),
-                  ciFormat: .L8)
+                 height: height,
+                 imageData: DataFormat(from: imageData),
+                 bitsPerPixel: 8,
+                 bytesPerRow: width,
+                 bitsPerComponent: 8,
+                 bytesPerPixel: 1,
+                 bitmapInfo: .byteOrderDefault, 
+                 componentsPerPixel: 1,
+                 colorSpace: CGColorSpaceCreateDeviceGray(),
+                 ciFormat: .L8)
     }
     
     public init(width: Int,
@@ -110,7 +115,7 @@ public struct PixelatedImage {
                bitsPerComponent: Int,
                bytesPerPixel: Int,
                bitmapInfo: CGBitmapInfo,
-               pixelOffset: Int,
+               componentsPerPixel: Int,
                colorSpace: CGColorSpace,
                ciFormat: CIFormat)    
     {
@@ -122,7 +127,7 @@ public struct PixelatedImage {
         self.bitsPerComponent = bitsPerComponent
         self.bytesPerPixel = bytesPerPixel
         self.bitmapInfo = bitmapInfo
-        self.pixelOffset = pixelOffset
+        self.componentsPerPixel = componentsPerPixel
         self.colorSpace = colorSpace
         self.ciFormat = ciFormat
     }
@@ -136,7 +141,7 @@ public struct PixelatedImage {
                            bitsPerComponent: self.bitsPerComponent,
                            bytesPerPixel: self.bytesPerPixel,
                            bitmapInfo: self.bitmapInfo,
-                           pixelOffset: self.pixelOffset,
+                           componentsPerPixel: self.componentsPerPixel,
                            colorSpace: self.colorSpace,
                            ciFormat: self.ciFormat)
     }
@@ -151,7 +156,7 @@ public struct PixelatedImage {
         self.bitsPerComponent = image.bitsPerComponent
         self.bytesPerPixel = self.bitsPerPixel / 8
         self.bitmapInfo = image.bitmapInfo
-        self.pixelOffset = image.bitsPerPixel/image.bitsPerComponent
+        self.componentsPerPixel = image.bitsPerPixel/image.bitsPerComponent
         self.colorSpace = image.colorSpace ?? CGColorSpaceCreateDeviceRGB()
         let numComponentsPerPixel = image.bitsPerPixel / image.bitsPerComponent
         if numComponentsPerPixel == 1 {
@@ -189,12 +194,12 @@ public struct PixelatedImage {
     func readPixel(atX x: Int, andY y: Int) -> Pixel {
         switch imageData {
         case .sixteenBit(let arr):
-            let offset = (y * width*self.pixelOffset) + (x * self.pixelOffset)
+            let offset = (y * width*self.componentsPerPixel) + (x * self.componentsPerPixel)
             var pixel = Pixel()
             pixel.red = arr[offset]
             pixel.green = arr[offset+1]
             pixel.blue = arr[offset+2]
-            if self.pixelOffset == 4 {
+            if self.componentsPerPixel == 4 {
                 pixel.alpha = arr[offset+3]
             }
             return pixel
@@ -313,14 +318,14 @@ public struct PixelatedImage {
 
                 for y in 0 ..< height {
                     for x in 0 ..< width {
-                        let origOffset = (y * width*self.pixelOffset) +
-                          (x * self.pixelOffset)
-                        let otherOffset = (y * width*otherFrame.pixelOffset) +
-                          (x * otherFrame.pixelOffset)
+                        let origOffset = (y * width*self.componentsPerPixel) +
+                          (x * self.componentsPerPixel)
+                        let otherOffset = (y * width*otherFrame.componentsPerPixel) +
+                          (x * otherFrame.componentsPerPixel)
                         
                         var maxBrightness: Int32 = 0
                         
-                        if otherFrame.pixelOffset == 4,
+                        if otherFrame.componentsPerPixel == 4,
                            otherImagePixels[otherOffset+3] != 0xFFFF
                         {
                             // ignore any partially or fully transparent pixels

@@ -276,7 +276,7 @@ public class Blobber {
                                          bitsPerComponent: 16,
                                          bytesPerPixel: 2,
                                          bitmapInfo: .byteOrder16Little, 
-                                         pixelOffset: 0,
+                                         componentsPerPixel: 1,
                                          colorSpace: CGColorSpaceCreateDeviceGray(),
                                          ciFormat: .L16)
 

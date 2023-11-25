@@ -86,12 +86,12 @@ extension FrameAirplaneRemover {
         self.state = .detectingOutliers1
 
         let blobber = Blobber(imageWidth: width,
-                              imageHeight: height,
-                              pixelData: subtractionArray,
-                              neighborType: .eight,//.fourCardinal,
-                              minimumBlobSize: config.minGroupSize,
-                              minimumLocalMaximum: config.maxPixelDistance,
-                              contrastMin: 58)      // XXX constant
+                            imageHeight: height,
+                            pixelData: subtractionArray,
+                            neighborType: .eight,//.fourCardinal,
+                            minimumBlobSize: config.minGroupSize,
+                            minimumLocalMaximum: config.maxPixelDistance,
+                            contrastMin: 58)      // XXX constant
 
         self.state = .detectingOutliers3
 

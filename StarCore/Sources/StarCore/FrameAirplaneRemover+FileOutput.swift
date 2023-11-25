@@ -16,9 +16,7 @@ You should have received a copy of the GNU General Public License along with sta
 
 /*
 
- Methods used by the FrameAirplaneRemover to save things to file
-
- Images, outlier groups, etc.
+ Methods used by the FrameAirplaneRemover to save outliers file
  
  */
 extension FrameAirplaneRemover {

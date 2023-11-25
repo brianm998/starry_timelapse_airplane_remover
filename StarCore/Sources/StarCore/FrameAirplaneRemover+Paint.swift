@@ -198,7 +198,7 @@ extension FrameAirplaneRemover {
     {
         var paintPixel = otherFrame.readPixel(atX: x, andY: y)
 
-        if otherFrame.pixelOffset == 4, // has alpha channel
+        if otherFrame.componentsPerPixel == 4, // has alpha channel
            paintPixel.alpha != 0xFFFF   // alpha is not fully opaque
         {
             // ignore transparent pixels
@@ -217,16 +217,16 @@ extension FrameAirplaneRemover {
         // actually paint over that airplane like thing in the image data
         if self.bytesPerPixel == 2 {
             data.replaceSubrange(offset ..< offset+self.bytesPerPixel/2,
-                                 with: [paintPixel.red])
+                              with: [paintPixel.red])
         } else if self.bytesPerPixel == 6 {
             data.replaceSubrange(offset ..< offset+self.bytesPerPixel/2,
-                                 with: [paintPixel.red, paintPixel.green, paintPixel.blue])
+                              with: [paintPixel.red, paintPixel.green, paintPixel.blue])
         } else if self.bytesPerPixel == 8 {
             data.replaceSubrange(offset ..< offset+self.bytesPerPixel/2,
-                                 with: [paintPixel.red,
-                                       paintPixel.green,
-                                       paintPixel.blue,
-                                       paintPixel.alpha])
+                               with: [paintPixel.red,
+                                      paintPixel.green,
+                                      paintPixel.blue,
+                                      paintPixel.alpha])
         }
     }
 
