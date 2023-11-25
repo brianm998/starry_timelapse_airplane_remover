@@ -30,7 +30,7 @@ public enum FrameImageType {
     case processed
 }
 
-protocol ImageAccess {
+public protocol ImageAccess {
     // save image, will rescale and jpeg if necessary
     func save(_ image: PixelatedImage,
              as type: FrameImageType,
@@ -39,7 +39,11 @@ protocol ImageAccess {
 
     // load an image of some type and size
     func load(type imageType: FrameImageType,
-             atSize size: ImageDisplaySize) async throws -> PixelatedImage?
+             atSize size: ImageDisplaySize) async -> PixelatedImage?
+
+    // load an image of some type and size
+    func loadNSImage(type imageType: FrameImageType,
+                     atSize size: ImageDisplaySize) async -> NSImage?
 
     // where to load or save this type of image from
     func dirForImage(ofType type: FrameImageType,
@@ -48,7 +52,7 @@ protocol ImageAccess {
     func mkdirs() throws
 }
 
-public struct ImageAccessor: ImageAccess {
+struct ImageAccessor: ImageAccess {
     let config: Config
     let baseDirName: String
     let baseFileName: String
@@ -108,24 +112,41 @@ public struct ImageAccessor: ImageAccess {
         }
     }
 
-    func load(type imageType: FrameImageType,
-             atSize size: ImageDisplaySize) async throws -> PixelatedImage?
+    func loadNSImage(type imageType: FrameImageType,
+                     atSize size: ImageDisplaySize) async -> NSImage?
     {
         if let filename = nameForImage(ofType: imageType, atSize: size) {
-            if fileManager.fileExists(atPath: filename) {
-                return try await imageSequence.getImage(withName: filename).image()
-                //return try await PixelatedImage(fromFile: filename)
-            } else {
-                // no file
-                // if this is not a request for an original file, then try
-                // to load the original and rescale it 
-                switch size {
-                case .original:
-                    return nil  // original does not exist, nothing to return
-                default:
-                    return try await createMissingImage(ofType: imageType, andSize: size)
+            if fileManager.fileExists(atPath: filename),
+               let image = NSImage(contentsOf: URL(fileURLWithPath: filename))
+            {
+                return image
+            }
+        }
+        return nil
+    }
+    
+    func load(type imageType: FrameImageType,
+             atSize size: ImageDisplaySize) async -> PixelatedImage?
+    {
+        do {
+            if let filename = nameForImage(ofType: imageType, atSize: size) {
+                if fileManager.fileExists(atPath: filename) {
+                    return try await imageSequence.getImage(withName: filename).image()
+                    //return try await PixelatedImage(fromFile: filename)
+                } else {
+                    // no file
+                    // if this is not a request for an original file, then try
+                    // to load the original and rescale it 
+                    switch size {
+                    case .original:
+                        return nil  // original does not exist, nothing to return
+                    default:
+                        return try await createMissingImage(ofType: imageType, andSize: size)
+                    }
                 }
             }
+        } catch {
+            Log.e("couldn't load image of type \(imageType) at size \(size): \(error)")
         }
         return nil
     }
@@ -243,12 +264,12 @@ public struct ImageAccessor: ImageAccess {
     }
     
     private func createMissingImage(ofType type: FrameImageType,
-                         andSize size: ImageDisplaySize)
+                                andSize size: ImageDisplaySize)
       async throws -> PixelatedImage?
     {
         if let filename = nameForImage(ofType: type, atSize: size),
            let smallerSize = sizeOf(size),
-           let fullResImage = try await load(type: type, atSize: size),
+           let fullResImage = await load(type: type, atSize: size),
            let scaledImageData = fullResImage.baseImage(ofSize: smallerSize)
         {
             let dataToSave = scaledImageData.jpegData

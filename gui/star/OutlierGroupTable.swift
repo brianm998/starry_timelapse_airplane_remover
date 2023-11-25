@@ -325,7 +325,7 @@ struct OutlierGroupTable: View {
     var body: some View {
 
 //        let displayDtSizeColumn = viewModel.outlierGroupTableDisplayGroups[.size] ?? true
-        let displayDtSizeColumn = true
+        //let displayDtSizeColumn = true
         
         HStack {
             Spacer()

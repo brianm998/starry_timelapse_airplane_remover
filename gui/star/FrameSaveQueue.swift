@@ -58,7 +58,6 @@ class FrameSaveQueue: ObservableObject {
                         // XXX this VVV doesn't always update in the UI without user action
                         self.doneSaving(frame: frame.frameIndex)
                         return Task {
-                            await frame.purgeCachedOutputFiles()
                             await completionClosure()
                         }
                     }

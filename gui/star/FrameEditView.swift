@@ -174,7 +174,6 @@ struct FrameEditView: View {
                       self.viewModel.multiSelectSheetShowing = true
                       //self.viewModel.drag_start = $viewModel.drag_start
                       self.viewModel.drag_end = end_location
-                      end_location
                       clearEnds = false
                   }
               }

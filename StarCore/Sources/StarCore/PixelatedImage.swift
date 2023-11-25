@@ -56,10 +56,9 @@ public struct PixelatedImage {
     }
 
     public init?(fromFile filename: String) async throws {
-        Log.d("Loading image from \(filename)")
+        //Log.d("Loading image from \(filename)")
         if let nsImage = try await loadImage(fromFile: filename) {
             if let cgImage = nsImage.cgImage(forProposedRect: nil, context: nil, hints: nil) {
-                Log.d("F-Int init from \(filename) with cgImage \(cgImage)")
                 self.init(cgImage)
             } else {
                 return nil

@@ -27,8 +27,8 @@ extension FrameAirplaneRemover {
         self.state = .loadingImages
         
 //        let image = try await imageSequence.getImage(withName: imageSequence.filenames[frameIndex]).image()
-        if let image = try await imageAccessor.load(type: .original, atSize: .original),
-           let otherFrame = try await imageAccessor.load(type: .aligned, atSize: .original)
+        if let image = await imageAccessor.load(type: .original, atSize: .original),
+           let otherFrame = await imageAccessor.load(type: .aligned, atSize: .original)
         {
             self.state = .subtractingNeighbor
             

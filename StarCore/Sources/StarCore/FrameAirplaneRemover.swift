@@ -85,7 +85,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
     // if this is false, just write out outlier data
     let writeOutputFiles: Bool
 
-    let imageAccessor: ImageAccess
+    public let imageAccessor: ImageAccess
     
     init(with config: Config,
          width: Int,
@@ -195,13 +195,13 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         
         Log.i("frame \(self.frameIndex) finishing")
 
-        guard let image = try await imageAccessor.load(type: .original, atSize: .original)
+        guard let image = await imageAccessor.load(type: .original, atSize: .original)
         else { throw "couldn't load original file for finishing" }
         
         try await imageAccessor.save(image, as: .original, atSize: .preview, overwrite: false)
         try await imageAccessor.save(image, as: .original, atSize: .thumbnail, overwrite: false)
 
-        guard let otherFrame = try await imageAccessor.load(type: .aligned, atSize: .original)
+        guard let otherFrame = await imageAccessor.load(type: .aligned, atSize: .original)
         else { throw "couldn't load aligned file for finishing" }
         
         let format = image.imageData // make a copy

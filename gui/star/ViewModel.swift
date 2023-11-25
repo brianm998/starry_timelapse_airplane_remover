@@ -229,72 +229,47 @@ public final class ViewModel: ObservableObject {
 
     func refresh(frame: FrameAirplaneRemover) async {
         Log.d("refreshing frame \(frame.frameIndex)")
-        let thumbnailWidth = config?.thumbnailWidth ?? Config.defaultThumbnailWidth
-        let thumbnailHeight = config?.thumbnailHeight ?? Config.defaultThumbnailHeight
-        let thumbnailSize = NSSize(width: thumbnailWidth, height: thumbnailHeight)
         
-        Task {
-            var pixImage: PixelatedImage?
-            var baseImage: NSImage?
-            // load the view frames from the main image
-            
-            // look for saved versions of these
-            if let validationPreviewImage = NSImage(contentsOf: URL(fileURLWithPath: frame.validationImagePreviewFilename))
-            {
-                Log.d("loaded validation preview for self.frames[\(frame.frameIndex)] from jpeg")
-                let viewImage = Image(nsImage: validationPreviewImage).resizable()
-                self.frames[frame.frameIndex].validationPreviewImage = viewImage
-            }
-            
-            if let subtractionPreviewImage = NSImage(contentsOf: URL(fileURLWithPath: frame.alignedSubtractedPreviewFilename))
-            {
-                Log.d("loaded subtraction preview for self.frames[\(frame.frameIndex)] from jpeg")
-                let viewImage = Image(nsImage: subtractionPreviewImage).resizable()
-                self.frames[frame.frameIndex].subtractionPreviewImage = viewImage
-            }
-            
-            if let processedPreviewFilename = frame.processedPreviewFilename,
-               let processedPreviewImage = NSImage(contentsOf: URL(fileURLWithPath: processedPreviewFilename))
-            {
-                Log.d("loaded processed preview for self.frames[\(frame.frameIndex)] from jpeg")
-                let viewImage = Image(nsImage: processedPreviewImage).resizable()
-                self.frames[frame.frameIndex].processedPreviewImage = viewImage
-            }
-            
-            if let previewFilename = frame.previewFilename,
-               let previewImage = NSImage(contentsOf: URL(fileURLWithPath: previewFilename))
-            {
-                Log.d("loaded preview for self.frames[\(frame.frameIndex)] from jpeg")
-                let viewImage = Image(nsImage: previewImage).resizable()
-                self.frames[frame.frameIndex].previewImage = viewImage
-            } 
-            
-            if let thumbnailFilename = frame.thumbnailFilename,
-               let thumbnailImage = NSImage(contentsOf: URL(fileURLWithPath: thumbnailFilename))
-            {
-                Log.d("loaded thumbnail for self.frames[\(frame.frameIndex)] from jpeg")
-                self.frames[frame.frameIndex].thumbnailImage =
-                  Image(nsImage: thumbnailImage)
-            } else {
-                if pixImage == nil { pixImage = try await frame.pixelatedImage() }
-                if baseImage == nil { baseImage = pixImage!.baseImage }
-                if let baseImage = baseImage,
-                   let thumbnailBase = baseImage.resized(to: thumbnailSize)
-                {
-                    self.frames[frame.frameIndex].thumbnailImage =
-                      Image(nsImage: thumbnailBase)
-                } else {
-                    Log.w("set unable to load thumbnail image for self.frames[\(frame.frameIndex)].frame")
-                }
-            }
+        // load the view frames from the main image
+        
+        // look for saved versions of these
+        if let image = await frame.imageAccessor.loadNSImage(type: .validated, atSize: .preview) {
+            Log.d("loaded validation preview for self.frames[\(frame.frameIndex)] from jpeg")
+            let viewImage = Image(nsImage: image).resizable()
+            self.frames[frame.frameIndex].validationPreviewImage = viewImage
+        }
+        
+        if let image = await frame.imageAccessor.loadNSImage(type: .subtracted, atSize: .preview) {
+            Log.d("loaded subtraction preview for self.frames[\(frame.frameIndex)] from jpeg")
+            let viewImage = Image(nsImage: image).resizable()
+            self.frames[frame.frameIndex].subtractionPreviewImage = viewImage
+        }
 
-            if self.frames[frame.frameIndex].outlierViews == nil {
-                await self.setOutlierGroups(forFrame: frame)
+        if let image = await frame.imageAccessor.loadNSImage(type: .processed, atSize: .preview) {
+            
+            Log.d("loaded processed preview for self.frames[\(frame.frameIndex)] from jpeg")
+            let viewImage = Image(nsImage: image).resizable()
+            self.frames[frame.frameIndex].processedPreviewImage = viewImage
+        }
+        
+        if let image = await frame.imageAccessor.loadNSImage(type: .original, atSize: .preview) {
+            Log.d("loaded preview for self.frames[\(frame.frameIndex)] from jpeg")
+            let viewImage = Image(nsImage: image).resizable()
+            self.frames[frame.frameIndex].previewImage = viewImage
+        } 
+        
+        if let image = await frame.imageAccessor.loadNSImage(type: .original, atSize: .thumbnail) {
+            Log.d("loaded thumbnail for self.frames[\(frame.frameIndex)] from jpeg")
+            self.frames[frame.frameIndex].thumbnailImage = Image(nsImage: image)
+        }
 
-                // refresh ui 
-                await MainActor.run {
-                    self.objectWillChange.send()
-                }
+        if self.frames[frame.frameIndex].outlierViews == nil {
+            await self.setOutlierGroups(forFrame: frame)
+
+            // refresh ui 
+            await MainActor.run {
+                self.objectWillChange.send()
+
             }
         }
     }
@@ -582,19 +557,16 @@ public final class ViewModel: ObservableObject {
 
             // XXX not getting preview here
 
-            do {
-                if let baseImage = try await newFrame.baseImage() {
-                    if self.currentIndex == newFrame.frameIndex {
-                        _ = await MainActor.run {
-                            Task {
-                                self.currentFrameImage = Image(nsImage: baseImage)
-                                self.update()
-                            }
+
+            if let baseImage = await newFrame.imageAccessor.loadNSImage(type: .original, atSize: .original) {
+                if self.currentIndex == newFrame.frameIndex {
+                    _ = await MainActor.run {
+                        Task {
+                            self.currentFrameImage = Image(nsImage: baseImage)
+                            self.update()
                         }
                     }
                 }
-            } catch {
-                Log.e("error")
             }
 
             // Perform UI updates
@@ -761,40 +733,37 @@ public extension ViewModel {
             if showFullResolution {
                 if nextFrame.frameIndex == self.currentIndex {
                     Task {
-                        do {
-                            self.currentFrameImageIndex = newFrameView.frameIndex
-                            self.currentFrameImageWasPreview = false
-                            self.currentFrameImageViewMode = self.frameViewMode
-                            
-                            switch self.frameViewMode {
-                            case .original:
-                                if let baseImage = try await nextFrame.baseImage() {
-                                    if nextFrame.frameIndex == self.currentIndex {
-                                        self.currentFrameImage = Image(nsImage: baseImage)
-                                    }
-                                }
-                            case .subtraction:
-                                if let baseImage = try await nextFrame.baseSubtractedImage() {
-                                    if nextFrame.frameIndex == self.currentIndex {
-                                        self.currentFrameImage = Image(nsImage: baseImage)
-                                    }
-                                }
-                            case .validation:
-                                if let baseImage = try await nextFrame.baseValidationImage() {
-                                    if nextFrame.frameIndex == self.currentIndex {
-                                        self.currentFrameImage = Image(nsImage: baseImage)
-                                    }
-                                }
-                                
-                            case .processed:
-                                if let baseImage = try await nextFrame.baseOutputImage() {
-                                    if nextFrame.frameIndex == self.currentIndex {
-                                        self.currentFrameImage = Image(nsImage: baseImage)
-                                    }
+
+                        self.currentFrameImageIndex = newFrameView.frameIndex
+                        self.currentFrameImageWasPreview = false
+                        self.currentFrameImageViewMode = self.frameViewMode
+                        
+                        switch self.frameViewMode {
+                        case .original:
+                            if let baseImage = await nextFrame.imageAccessor.loadNSImage(type: .original, atSize: .original) {
+                                if nextFrame.frameIndex == self.currentIndex {
+                                    self.currentFrameImage = Image(nsImage: baseImage)
                                 }
                             }
-                        } catch {
-                            Log.e("\(error)")
+                        case .subtraction:
+                            if let baseImage = await nextFrame.imageAccessor.loadNSImage(type: .subtracted, atSize: .original) {
+                                if nextFrame.frameIndex == self.currentIndex {
+                                    self.currentFrameImage = Image(nsImage: baseImage)
+                                }
+                            }
+                        case .validation:
+                            if let baseImage = await nextFrame.imageAccessor.loadNSImage(type: .validated, atSize: .original) {
+                                if nextFrame.frameIndex == self.currentIndex {
+                                    self.currentFrameImage = Image(nsImage: baseImage)
+                                }
+                            }
+                            
+                        case .processed:
+                            if let baseImage = await nextFrame.imageAccessor.loadNSImage(type: .processed, atSize: .original) {
+                                if nextFrame.frameIndex == self.currentIndex {
+                                    self.currentFrameImage = Image(nsImage: baseImage)
+                                }
+                            }
                         }
                     }
                 }
