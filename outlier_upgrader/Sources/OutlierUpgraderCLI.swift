@@ -20,7 +20,8 @@ You should have received a copy of the GNU General Public License along with sta
 /*
  This command line utility is designed to read a directory containing a set of already
  validated outlier group specifications for an image sequence, and to output a
- validation image for each frame that contains a non zero pixel for every outlier.
+ validation image for each frame that contains a non zero pixel for every outlier
+ that is considered valid, i.e. a valid subject to paint over.
 
  These images can then be used to validate outliers discovered with different means.
  */
@@ -28,7 +29,7 @@ You should have received a copy of the GNU General Public License along with sta
 @main
 struct OutlierUpgraderCLI: AsyncParsableCommand {
 
-    @Option(name: [.short, .customLong("input-sequence-dir")], help:"""
+    @Option(name: [.short, .customLong("input-outliers-dir")], help:"""
         Input dir for outlier groups for a sequence
         """)
     var inputSequenceDir: String
@@ -37,6 +38,11 @@ struct OutlierUpgraderCLI: AsyncParsableCommand {
         Output dir for written files
         """)
     var outputDir: String
+    
+    @Option(name: .shortAndLong, help:"""
+        Process a specific frame
+        """)
+    var frame: Int?
     
     mutating func run() async throws {
 
@@ -50,6 +56,8 @@ struct OutlierUpgraderCLI: AsyncParsableCommand {
 
     func writeOutlierValidationImage() async throws {
         try await loadAllOutliers() { frameIndex, outlierGroups in
+            if let frame = frame,frame != frameIndex { return }
+
             //Log.d("got frame \(frameIndex) w/ \(outlierGroups.members.count) outliers")
             
             let image = outlierGroups.validationImage
@@ -133,6 +141,7 @@ struct OutlierUpgraderCLI: AsyncParsableCommand {
             // every outlier directory is labeled with an integer
             do {
                 if let frameIndex = Int(item),
+                   (self.frame == nil || self.frame == frameIndex),
                    let outlierGroups = try await loadOutliers(from: "\(inputSequenceDir)/\(frameIndex)", frameIndex: frameIndex)
                 {
                     //Log.d("frame index \(frameIndex)")
@@ -153,8 +162,6 @@ struct OutlierUpgraderCLI: AsyncParsableCommand {
 
                     // break here for only one image processed 
                     //if outlierGroups.members.count > 0 { break } // XXX XXX XXX
-                } else {
-                    Log.w("item \(item) not handled")
                 }
             } catch {
                 Log.e("error: \(error)")
