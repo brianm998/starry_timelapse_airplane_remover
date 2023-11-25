@@ -38,6 +38,20 @@ extension FrameAirplaneRemover {
             return
         }
 
+        guard outlierGroups.members.count > 0 else {
+            Log.v("no outliers, not painting")
+            return
+        }
+        
+        // the alpha level to apply to each pixel in the image
+        // indexed by y*width+x
+        var alphaLevels = [Double](repeating: 0, count: width*height)
+
+        // first go through the outlier groups and determine what alpha
+        // level to apply to each pixel in this frame.
+        // alpha zero means no painting, keep original pixel
+        // alpha one means overwrite original pixel entierly with data from other frame
+        
         for (_, group) in outlierGroups.members {
             if let reason = group.shouldPaint {
                 if reason.willPaint {
@@ -120,47 +134,20 @@ extension FrameAirplaneRemover {
                                     var alpha: Double = 0
                                     if minDistance <= config.outlierGroupPaintBorderInnerWallPixels {
                                         alpha = 1
-
-                                        /*
-                                        var paintPixel = Pixel()
-                                        paintPixel.green = 0xFFFF
-                                        paint(x: x, y: y, why: reason, alpha: 1,
-                                              toData: &data,
-                                              image: image,
-                                              paintPixel: paintPixel)
-                                        */
                                     } else {
                                         // how close are we to the inner wall of full opacity?
                                         let foo = minDistance - config.outlierGroupPaintBorderInnerWallPixels
                                         // the length in pixels of the fade window
                                         let bar = config.outlierGroupPaintBorderPixels - config.outlierGroupPaintBorderInnerWallPixels
                                         alpha = (bar-foo)/bar
-
-                                        /*
-                                        var paintPixel = Pixel()
-                                        paintPixel.blue = 0xFFFF
-                                        paintPixel.green = UInt16(Double(0xFFFF)*alpha)
-                                        paint(x: x, y: y, why: reason, alpha: alpha,
-                                              toData: &data,
-                                              image: image,
-                                              paintPixel: paintPixel)
-                                         */
-                                        
                                     }
                                     if alpha > 0 {
-                                        paint(x: x, y: y, why: reason, alpha: alpha,
-                                              toData: &data,
-                                              image: image,
-                                              otherFrame: otherFrame)
+                                        alphaLevels[y*width+x] += alpha
                                     }
-
                                 }
                             } else {
                                 // paint fully over the marked pixels
-                                paint(x: x, y: y, why: reason, alpha: 1,
-                                      toData: &data,
-                                      image: image,
-                                      otherFrame: otherFrame)
+                                alphaLevels[y*width+x] += 1
                             }
                         }
                     }
@@ -169,15 +156,44 @@ extension FrameAirplaneRemover {
                 }
             }
         }
+
+        // then actually paint each non zero alpha pizel
+        for x in 0 ..< width {
+            for y in 0 ..< height {
+                var alpha = alphaLevels[y*width+x]
+                if alpha > 0 {
+                    if alpha > 1 { alpha = 1 }
+
+                    paint(x: x, y: y,
+                         alpha: alpha,
+                         toData: &data,
+                         image: image,
+                         otherFrame: otherFrame)
+
+                    /*
+
+                     // test paint the expected alpha levels as colors
+                     
+                                        var paintPixel = Pixel()
+                                        paintPixel.blue = 0xFFFF
+                                        paintPixel.green = UInt16(Double(0xFFFF)*alpha)
+                                        paint(x: x, y: y, why: reason, alpha: alpha,
+                                              toData: &data,
+                                              image: image,
+                                              paintPixel: paintPixel)
+                     */
+
+                }
+            }
+        }
     }
 
     // paint over a selected outlier pixel with data from pixels from adjecent frames
     internal func paint(x: Int, y: Int,
-                        why: PaintReason,
-                        alpha: Double,
-                        toData data: inout Data,
-                        image: PixelatedImage,
-                        otherFrame: PixelatedImage)
+                      alpha: Double,
+                      toData data: inout Data,
+                      image: PixelatedImage,
+                      otherFrame: PixelatedImage)
     {
         var paintPixel = otherFrame.readPixel(atX: x, andY: y)
 
@@ -208,11 +224,10 @@ extension FrameAirplaneRemover {
 
     // paint over a selected outlier pixel with data from pixels from adjecent frames
     internal func paint(x: Int, y: Int,
-                        why: PaintReason,
-                        alpha: Double,
-                        toData data: inout Data,
-                        image: PixelatedImage,
-                        paintPixel: Pixel)
+                      alpha: Double,
+                      toData data: inout Data,
+                      image: PixelatedImage,
+                      paintPixel: Pixel)
     {
         var paintPixel = paintPixel
         if alpha < 1 {
