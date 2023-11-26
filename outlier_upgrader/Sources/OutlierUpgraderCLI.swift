@@ -46,7 +46,7 @@ struct OutlierUpgraderCLI: AsyncParsableCommand {
     
     mutating func run() async throws {
 
-        Log.handlers[.console] = ConsoleLogHandler(at: .verbose)
+        Log.add(handler: ConsoleLogHandler(at: .verbose), for: .console)
 
         Log.i("Hello, Cruel World")
 

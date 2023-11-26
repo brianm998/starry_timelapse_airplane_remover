@@ -25,19 +25,16 @@ public class ConsoleLogHandler: LogHandler {
     
     public func log(message: String,
                     at fileLocation: String,
-                    on threadName: String,
                     with data: LogData?,
                     at logLevel: Log.Level)
     {
-//        dispatchQueue.async {
-            let dateString = self.dateFormatter.string(from: Date())
-            
-            if let data = data {
-                print("\(dateString) | \(logLevel.emo) \(logLevel) | \(fileLocation): \(message) | \(data.description)")
-            } else {
-                print("\(dateString) | \(logLevel.emo) \(logLevel) | \(fileLocation): \(message)")
-            }
-//        }
+        let dateString = self.dateFormatter.string(from: Date())
+        
+        if let data = data {
+            print("\(dateString) | \(logLevel.emo) \(logLevel) | \(fileLocation): \(message) | \(data.description)")
+        } else {
+            print("\(dateString) | \(logLevel.emo) \(logLevel) | \(fileLocation): \(message)")
+        }
     }
 }
 

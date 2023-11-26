@@ -303,13 +303,15 @@ struct StarCli: AsyncParsableCommand {
 
             if let terminalLogLevel = terminalLogLevel {
                 // use console logging
-                Log.handlers[.console] = ConsoleLogHandler(at: terminalLogLevel)
+                Log.add(handler: ConsoleLogHandler(at: terminalLogLevel),
+                        for: .console)
             } else {
                 // enable updatable logging when not doing console logging
                 callbacks.updatable = UpdatableLog()
 
                 if let updatable = callbacks.updatable {
-                    Log.handlers[.console] = UpdatableLogHandler(updatable)
+                    Log.add(handler:  UpdatableLogHandler(updatable),
+                            for: .console)
                     let name = inputImageSequenceName
                     let path = inputImageSequencePath
                     let message = "star v\(config.starVersion) is processing images from sequence in \(path)/\(name)"
@@ -324,7 +326,8 @@ struct StarCli: AsyncParsableCommand {
             if let fileLogLevel = fileLogLevel {
                 Log.i("enabling file logging")
                 do {
-                    Log.handlers[.file] = try FileLogHandler(at: fileLogLevel)
+                    Log.add(handler: try FileLogHandler(at: fileLogLevel),
+                            for: .file)
                 } catch {
                     Log.e("\(error)")
                 }

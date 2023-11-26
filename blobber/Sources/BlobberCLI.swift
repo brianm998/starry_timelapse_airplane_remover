@@ -32,7 +32,7 @@ struct BlobberCli: AsyncParsableCommand {
     
     mutating func run() async throws {
 
-        Log.handlers[.console] = ConsoleLogHandler(at: .verbose)
+        Log.add(handler: ConsoleLogHandler(at: .verbose), for: .console)
         
         Log.v("TEST")
         let cloud_base = "/sp/tmp/LRT_05_20_2023-a9-4-aurora-topaz-star-aligned-subtracted"
@@ -43,8 +43,10 @@ struct BlobberCli: AsyncParsableCommand {
           "160": "\(cloud_base)/LRT_00161-severe-noise.tiff",
           "184": "\(cloud_base)/LRT_00185-severe-noise.tiff",
           "192": "\(cloud_base)/LRT_00193-severe-noise.tiff",
+          "229": "\(cloud_base)/LRT_00230-severe-noise.tiff",
           "236": "\(cloud_base)/LRT_00237-severe-noise.tiff",
           "567": "\(cloud_base)/LRT_00568-severe-noise.tiff",
+          "686": "\(cloud_base)/LRT_00687-severe-noise.tiff",
           "783": "\(cloud_base)/LRT_00784-severe-noise.tiff",
           "1155": "\(cloud_base)/LRT_001156-severe-noise.tiff"
         ]
@@ -67,13 +69,15 @@ struct BlobberCli: AsyncParsableCommand {
         let small_image = "/Users/brian/git/nighttime_timelapse_airplane_remover/test/LRT_00350-severe-noise_crop.tiff"
 
         let blobber = try await Blobber(filename:
-//                                          lots_of_clouds["160"]!,
+                                          lots_of_clouds["686"]!,
 //                                          clouds_cropped_1x_blur,
-                                          clouds_cropped,
+//                                          clouds_cropped,
 //                                          small_image,
                                         neighborType: .eight,//.fourCardinal,
-                                        minimumBlobSize: 60,
+                                        minimumBlobSize: 30,
+//                                        minimumLocalMaximum: 9000,
                                         minimumLocalMaximum: 8000,
+//                                        minimumLocalMaximum: 7000,
                                         contrastMin: 58)
 
         try blobber.outputImage.writeTIFFEncoding(toFilename: outputFile)

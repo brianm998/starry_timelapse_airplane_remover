@@ -15,7 +15,6 @@ import Foundation
 public protocol LogHandler {
     func log(message: String,
              at fileLocation: String,
-             on threadName: String,
              with data: LogData?,
              at logLevel: Log.Level)
     

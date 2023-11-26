@@ -103,7 +103,7 @@ class StarApp: App {
             }
         }
         
-        Log.handlers[.console] = ConsoleLogHandler(at: .warn)
+        Log.add(handler: ConsoleLogHandler(at: .debug), for: .console)
         Log.i("Starting Up")
     }
     

@@ -45,20 +45,15 @@ public class FileLogHandler: LogHandler {
     
     public func log(message: String,
                     at fileLocation: String,
-                    on threadName: String,
                     with data: LogData?,
                     at logLevel: Log.Level)
     {
-        Log.dispatchGroup.enter()
-        Task {
-            let dateString = self.dateFormatter.string(from: Date())
-            
-            if let data = data {
-                self.writeToLogFile("\(dateString) | \(logLevel) | \(threadName) | \(fileLocation): \(message) | \(data.description)\n")
-            } else {
-                self.writeToLogFile("\(dateString) | \(logLevel) | \(threadName) | \(fileLocation): \(message)\n")
-            }
-            Log.dispatchGroup.leave()
+        let dateString = self.dateFormatter.string(from: Date())
+        
+        if let data = data {
+            self.writeToLogFile("\(dateString) | \(logLevel) | \(fileLocation): \(message) | \(data.description)\n")
+        } else {
+            self.writeToLogFile("\(dateString) | \(logLevel) | \(fileLocation): \(message)\n")
         }
     }
 

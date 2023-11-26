@@ -131,8 +131,8 @@ struct decision_tree_generator: ParsableCommand {
     
     mutating func run() throws {
         Log.name = "decision_tree_generator-log"
-        Log.handlers[.console] = ConsoleLogHandler(at: .verbose)
-        Log.handlers[.file] = try FileLogHandler(at: .verbose) // XXX make this a command line parameter
+        Log.add(handler: ConsoleLogHandler(at: .verbose), for: .console)
+        Log.add(handler: try FileLogHandler(at: .verbose), for: .file)  // XXX make this a command line parameter
 
         TaskRunner.maxConcurrentTasks = UInt(numConcurrentRenders)
         

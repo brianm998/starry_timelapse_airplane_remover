@@ -127,15 +127,13 @@ public class Log {
     /*
         Handlers can be set during app startup in the app delegate as follows:
 
-        Log.handlers = 
-          [
-            .console: ConsoleLogHandler(at: .info),
-            .file   : FileLogHandler(at: .debug),
-          ]
+        Log.add(handler: ConsoleLogHandler(at: .info), for: .console)
+        Log.add(handler: FileLogHandler(at: .debug), for: .file)
 
-        If handlers are not set elsewhere, the following will then apply:
      */
-    public static var handlers: [Log.Output: LogHandler] = [ : ]
+    public static func add(handler: LogHandler, for outputType: Log.Output) {
+        Task { await gremlin.add(handler: handler, for: outputType) }
+    }
     
     public enum Output {
         case console
@@ -216,9 +214,9 @@ extension Log {
        Log.verbose("something happened")
      */
     public static func verbose(_ message: String? = nil,
-                             file: String = #file,
-                             function: String = #function,
-                             line: Int = #line)
+                               file: String = #file,
+                               function: String = #function,
+                               line: Int = #line)
     {
         logInternal(message, at: Level.verbose, file, function, line)
     }
@@ -842,12 +840,7 @@ extension Log {
 
 // after here are the internal implemenation details
 
-#if !os(macOS)
-fileprivate let backgroundTask = BackgroundTask.start(named: "log")
-#endif        
-
 fileprivate extension Log {
-    
     static func logInternal(_ message: String? = nil,
                             at logLevel: Level,
                             _ file: String,
@@ -856,7 +849,7 @@ fileprivate extension Log {
     {
         logInternal(message, with: Optional<Int>.none, at: logLevel, file, function, line)
     }
-    
+        
     static func logInternal<T>(_ message: String? = nil,
                                with data: T? = Optional<T>.none,
                                at logLevel: Level,
@@ -864,33 +857,17 @@ fileprivate extension Log {
                                _ function: String,
                                _ line: Int)
     {
-//        Log.dispatchGroup.enter()
-        let threadName = Thread.current.threadName
-        
-        // start background task
-#if !os(macOS)
-/*
-        if let backgroundTask = backgroundTask {
-            backgroundTask.end()
-        }
-        
-        backgroundTask = newBackgroundTask
-*/
-#endif
-//        Task {
+        Task {
             var string = ""
-
+            
             if let message = message {
                 string = message
             } else if data != nil {
                 string = logLevel.description
             }
-
-            //            let fileLocation = "\(parseFileName(file)).\(function)@\(line)"
-            let fileLocation = "\(parseFileName(file))@\(line)"
-
+            
             var extraData: LogData?
-
+            
             if let data = data {
                 if let encodableData = data as? Encodable,
                    let encodableLogData = EncodableLogData(with: encodableData)
@@ -906,34 +883,45 @@ fileprivate extension Log {
                 }
             }
 
-            for handler in handlers.values {
-                if let handlerLevel = handler.level,
-                   logLevel <= handlerLevel
-                {
-                    handler.log(message: string,
-                                at: fileLocation,
-                                on: threadName,
-                                with: extraData,
-                                at: logLevel)
-                }
-            }
-  //          Log.dispatchGroup.leave()
-//        }
+            await gremlin.log(string, at: logLevel, extraData: extraData, file, function, line)
+        }
+    }
+
+}
+
+fileprivate let gremlin = LogGremlin()
+
+fileprivate actor LogGremlin {
+
+    private var handlers: [Log.Output : LogHandler] = [:]
+
+    func add(handler: LogHandler, for outputType: Log.Output) {
+        handlers[outputType] = handler
     }
     
-    static func parseFileName(_ file: String) -> String {
+    func log(_ message: String,
+             at logLevel: Log.Level,
+             extraData: LogData? = nil,
+             _ file: String,
+             _ function: String,
+             _ line: Int)
+    {
         let filename = file.components(separatedBy: "/").last ?? file
-        //return filename.components(separatedBy: ".").first ?? filename
-        return filename
+        let fileLocation = "\(filename)@\(line)"
+            
+        for handler in handlers.values {
+            if let handlerLevel = handler.level,
+               logLevel <= handlerLevel
+            {
+                handler.log(message: message,
+                            at: fileLocation,
+                            with: extraData,
+                            at: logLevel)
+            }
+        }
     }
 }
 
-
-
-//fileprivate let logQueue = DispatchQueue(label: "logging")
-#if !os(macOS)
-//fileprivate var backgroundTask: BackgroundTask?
-#endif
 
 // after here is all testing code
 
