@@ -75,23 +75,26 @@ extension FrameAirplaneRemover {
                 Log.d("frame \(frameIndex) loaded outlier amounts from subtraction image")
 
                 try await imageAccessor.save(image, as: .subtracted,
-                                          atSize: .preview, overwrite: false)
+                                             atSize: .preview, overwrite: false)
             }
         } catch {
             Log.i("frame \(frameIndex) couldn't load outlier amounts from subtraction image")
             // do the image subtraction here instead
+        }
+        if subtractionArray.count == 0 {        
             subtractionArray = try await self.subtractAlignedImageFromFrame()
+            Log.d("loaded subtractionArray with \(subtractionArray.count) items")
         }
 
         self.state = .detectingOutliers1
 
         let blobber = Blobber(imageWidth: width,
-                            imageHeight: height,
-                            pixelData: subtractionArray,
-                            neighborType: .eight,//.fourCardinal,
-                            minimumBlobSize: config.minGroupSize,
-                            minimumLocalMaximum: config.maxPixelDistance,
-                            contrastMin: 58)      // XXX constant
+                              imageHeight: height,
+                              pixelData: subtractionArray,
+                              neighborType: .eight,//.fourCardinal,
+                              minimumBlobSize: config.minGroupSize,
+                              minimumLocalMaximum: config.maxPixelDistance,
+                              contrastMin: 58)      // XXX constant
 
         self.state = .detectingOutliers3
 
