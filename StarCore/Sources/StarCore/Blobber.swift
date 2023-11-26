@@ -124,7 +124,7 @@ public class Blobber {
         self.minimumLocalMaximum = minimumLocalMaximum
         self.contrastMin = contrastMin
 
-        guard pixelData.count != imageWidth*imageHeight else {
+        guard pixelData.count == imageWidth*imageHeight else {
             fatalError("pixelData.count \(pixelData.count) is not imageWidth*imageHeight \(imageWidth*imageHeight)")
         }
         
