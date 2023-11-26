@@ -14,7 +14,6 @@ struct LoadAllOutliersButton: View {
         let action: () -> Void = {
             Task {
                 do {
-                    var current_running = 0
                     let startTime = Date().timeIntervalSinceReferenceDate
                     try await withLimitedThrowingTaskGroup(of: Void.self) { taskGroup in
                         let max_concurrent = ProcessInfo.processInfo.activeProcessorCount
@@ -31,38 +30,25 @@ struct LoadAllOutliersButton: View {
                                 Log.d("skipping loading outliers for frame \(frameView.frameIndex)")
                                 continue
                             }
-                            var did_load = false
-                            while(!did_load) {
-                                if current_running < max_concurrent {
-                                    Log.d("frame \(frameView.frameIndex) attempting to load outliers")
-                                    if let frame = frameView.frame {
-                                        Log.d("frame \(frameView.frameIndex) adding task to load outliers")
-                                        current_running += 1
-                                        did_load = true
-                                        try await taskGroup.addTask(/*priority: .userInitiated*/) {
-                                            // XXX style the button during this flow?
-                                            Log.d("actually loading outliers for frame \(frame.frameIndex)")
-                                            try await frame.loadOutliers()
-                                            // XXX set this in the view model
 
-                                            Task {
-                                                await MainActor.run {
-                                                    Task {
-                                                        viewModel.numberOfFramesWithOutliersLoaded += 1
-                                                        await viewModel.setOutlierGroups(forFrame: frame)
-                                                    }
-                                                }
-                                            }
+                            Log.d("frame \(frameView.frameIndex) attempting to load outliers")
+                            if let frame = frameView.frame {
+                                Log.d("frame \(frameView.frameIndex) adding task to load outliers")
+                                try await taskGroup.addTask(/*priority: .userInitiated*/) {
+                                    // XXX style the button during this flow?
+                                    Log.d("actually loading outliers for frame \(frame.frameIndex)")
+                                    try await frame.loadOutliers()
+                                    // XXX set this in the view model
+
+                                    await MainActor.run {
+                                        Task {
+                                            viewModel.numberOfFramesWithOutliersLoaded += 1
+                                            await viewModel.setOutlierGroups(forFrame: frame)
                                         }
-                                    } else {
-                                        Log.d("frame \(frameView.frameIndex) no frame, can't load outliers")
                                     }
-                                } else {
-                                    Log.d("frame \(frameView.frameIndex) waiting \(current_running)")
-                                    try await taskGroup.next()
-                                    current_running -= 1
-                                    Log.d("frame \(frameView.frameIndex) done waiting \(current_running)")
                                 }
+                            } else {
+                                Log.d("frame \(frameView.frameIndex) no frame, can't load outliers")
                             }
                         }
                         do {
