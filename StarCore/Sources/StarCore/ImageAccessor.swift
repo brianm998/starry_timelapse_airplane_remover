@@ -49,6 +49,12 @@ public protocol ImageAccess {
     func dirForImage(ofType type: FrameImageType,
                      atSize size: ImageDisplaySize) -> String?
 
+    func nameForImage(ofType type: FrameImageType,
+                      atSize size: ImageDisplaySize) -> String?
+
+    func imageExists(ofType type: FrameImageType,
+                      atSize size: ImageDisplaySize) -> Bool
+    
     func mkdirs() throws
 }
 
@@ -240,9 +246,19 @@ struct ImageAccessor: ImageAccess {
             }
         }
     }
+
+    public func imageExists(ofType type: FrameImageType,
+                            atSize size: ImageDisplaySize) -> Bool
+    {
+        if let filename = nameForImage(ofType: type, atSize: size) {
+            return fileManager.fileExists(atPath: filename)
+        }
+        return false
+    }
     
-    private func nameForImage(ofType type: FrameImageType,
-                              atSize size: ImageDisplaySize) -> String?
+    
+    public func nameForImage(ofType type: FrameImageType,
+                             atSize size: ImageDisplaySize) -> String?
     {
         if let dir = dirForImage(ofType: type, atSize: size) {
             switch size {
