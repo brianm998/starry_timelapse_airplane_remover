@@ -129,7 +129,6 @@ public class FrameAirplaneRemover: Equatable, Hashable {
 
         // align a neighboring frame for detection
 
-        self.state = .starAlignment
         // call directly in init becuase didSet() isn't called from here :P
         if let frameStateChangeCallback = callbacks.frameStateChangeCallback {
             frameStateChangeCallback(self, self.state)
@@ -148,7 +147,10 @@ public class FrameAirplaneRemover: Equatable, Hashable {
 
         let alignmentFilename = otherFilename
 
-        if let dirname = imageAccessor.dirForImage(ofType: .aligned, atSize: .original) {
+        if !imageAccessor.imageExists(ofType: .aligned, atSize: .original),
+           let dirname = imageAccessor.dirForImage(ofType: .aligned, atSize: .original)
+        {
+            self.state = .starAlignment
             _ = StarAlignment.align(alignmentFilename,
                                     to: baseFilename,
                                     inDir: dirname)
@@ -158,7 +160,9 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         if fullyProcess {
             try await loadOutliers()
             Log.d("frame \(frameIndex) done detecting outlier groups")
-            await self.writeOutliersBinary()
+            if !self.outliersLoadedFromFile {
+                await self.writeOutliersBinary()
+            }
             Log.d("frame \(frameIndex) done writing outlier binaries")
         } else {
             Log.d("frame \(frameIndex) loaded without outlier groups")
@@ -171,11 +175,13 @@ public class FrameAirplaneRemover: Equatable, Hashable {
     public func finish() async throws {
         Log.d("frame \(self.frameIndex) starting to finish")
 
-        self.state = .writingBinaryOutliers
+        if didChange {
+            self.state = .writingBinaryOutliers
 
-        // write out the outliers binary if it is not there
-        // only overwrite the paint reason if it is there
-        await self.writeOutliersBinary()
+            // write out the outliers binary if it is not there
+            // only overwrite the paint reason if it is there
+            await self.writeOutliersBinary()
+        }
             
         self.state = .writingOutlierValues
 
