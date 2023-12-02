@@ -208,7 +208,7 @@ public struct PixelatedImage {
             }
             return pixel
 
-        case .eightBit(let arr):
+        case .eightBit(_):
             fatalError("not supported yet")
             break
         }
@@ -305,13 +305,13 @@ public struct PixelatedImage {
     // the given frame from this frame
     public func subtract(_ otherFrame: PixelatedImage) -> PixelatedImage {
         switch self.imageData {
-        case .eightBit(let array):
+        case .eightBit(_):
             fatalError("NOT SUPPORTED YET")
         case .sixteenBit(let origImagePixels):
             
             switch otherFrame.imageData {
                 
-            case .eightBit(let array):
+            case .eightBit(_):
                 fatalError("NOT SUPPORTED YET")
             case .sixteenBit(let otherImagePixels):
                 // the grayscale image pixel array to return when we've calculated it

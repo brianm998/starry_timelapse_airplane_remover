@@ -202,7 +202,7 @@ public class OutlierGroups {
         var baseData = [UInt8](repeating: 0, count: Int(IMAGE_WIDTH!*IMAGE_HEIGHT!))
 
         // write into this array from the pixels in this group
-        for (groupName, group) in self.members {
+        for (_, group) in self.members {
             if let shouldPaint = group.shouldPaint,
                shouldPaint.willPaint
             {

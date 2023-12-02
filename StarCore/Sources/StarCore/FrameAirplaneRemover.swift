@@ -212,7 +212,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         
         let format = image.imageData // make a copy
         switch format {
-        case .eightBit(let arr):
+        case .eightBit(_):
             Log.e("8 bit not supported here now")
         case .sixteenBit(var outputData):
             self.state = .painting
