@@ -315,54 +315,51 @@ public struct PixelatedImage {
                 fatalError("NOT SUPPORTED YET")
             case .sixteenBit(let otherImagePixels):
                 // the grayscale image pixel array to return when we've calculated it
-                var subtractionArray = [UInt16](repeating: 0, count: width*height)
+                let numPixels = width*height
+                var subtractionArray = [UInt16](repeating: 0, count: numPixels)
                 
                 // compare pixels at the same image location in adjecent frames
                 // detect Outliers which are much more brighter than the adject frames
 
-                for y in 0 ..< height {
-                    for x in 0 ..< width {
-                        let origOffset = (y * width*self.componentsPerPixel) +
-                          (x * self.componentsPerPixel)
-                        let otherOffset = (y * width*otherFrame.componentsPerPixel) +
-                          (x * otherFrame.componentsPerPixel)
-                        
-                        var maxBrightness: Int32 = 0
-                        
-                        if otherFrame.componentsPerPixel == 4,
-                           otherImagePixels[otherOffset+3] != 0xFFFF
-                        {
-                            // ignore any partially or fully transparent pixels
-                            // these crop up in the star alignment images
-                            // there is nothing to copy from these pixels
-                        } else {
-                            // rgb values of the image we're modifying at this x,y
-                            let origRed = Int32(origImagePixels[origOffset])
-                            let origGreen = Int32(origImagePixels[origOffset+1])
-                            let origBlue = Int32(origImagePixels[origOffset+2])
-                            
-                            // rgb values of an adjecent image at this x,y
-                            let otherRed = Int32(otherImagePixels[otherOffset])
-                            let otherGreen = Int32(otherImagePixels[otherOffset+1])
-                            let otherBlue = Int32(otherImagePixels[otherOffset+2])
+                for i in 0 ..< numPixels {
+                    let origOffset = i*self.componentsPerPixel
+                    let otherOffset = i*otherFrame.componentsPerPixel
 
-                            maxBrightness += origRed + origGreen + origBlue
-                            maxBrightness -= otherRed + otherGreen + otherBlue
-                        }
-                        // record the brightness change if it is brighter
-                        if maxBrightness > 0 {
-                            subtractionArray[y*width+x] = UInt16(maxBrightness/3)
-                        }
+                    var maxBrightness: Int32 = 0
+                    
+                    if otherFrame.componentsPerPixel == 4,
+                       otherImagePixels[otherOffset+3] != 0xFFFF
+                    {
+                        // ignore any partially or fully transparent pixels
+                        // these crop up in the star alignment images
+                        // there is nothing to copy from these pixels
+                    } else {
+                        // rgb values of the image we're modifying at this x,y
+                        let origRed = Int32(origImagePixels[origOffset])
+                        let origGreen = Int32(origImagePixels[origOffset+1])
+                        let origBlue = Int32(origImagePixels[origOffset+2])
+                        
+                        // rgb values of an adjecent image at this x,y
+                        let otherRed = Int32(otherImagePixels[otherOffset])
+                        let otherGreen = Int32(otherImagePixels[otherOffset+1])
+                        let otherBlue = Int32(otherImagePixels[otherOffset+2])
+
+                        maxBrightness += origRed + origGreen + origBlue
+                        maxBrightness -= otherRed + otherGreen + otherBlue
+                    }
+                    // record the brightness change if it is brighter
+                    if maxBrightness > 0 {
+                        subtractionArray[i] = UInt16(maxBrightness/3)
                     }
                 }
+                
                 return PixelatedImage(width: width,
-                                   height: height,
-                                   grayscale16BitImageData: subtractionArray)
+                                      height: height,
+                                      grayscale16BitImageData: subtractionArray)
                 
             }
         }
     }
-
 }
 
 extension NSImage {
@@ -433,12 +430,12 @@ extension Array<UInt8> {
 }
 
 fileprivate func loadImage(fromFile filename: String) async throws -> NSImage? {
-    Log.d("Loading image from \(filename)")
+    //Log.d("Loading image from \(filename)")
     let imageURL = NSURL(fileURLWithPath: filename, isDirectory: false)
-    Log.d("loaded image url \(imageURL)")
+    //Log.d("loaded image url \(imageURL)")
 
     let (data, _) = try await URLSession.shared.data(for: URLRequest(url: imageURL as URL))
-    Log.d("got data for url \(imageURL)")
+    //Log.d("got data for url \(imageURL)")
     if let image = NSImage(data: data) {
         Log.d("got image for url \(imageURL)")
         return image
