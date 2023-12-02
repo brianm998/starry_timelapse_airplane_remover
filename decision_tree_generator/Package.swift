@@ -26,7 +26,8 @@ let package = Package(
             linkerSettings: [
               .unsafeFlags([
                              "-L../StarDecisionTrees",
-                             "-Xlinker", "-all_load",
+                             "-Xlinker", "-force_load",
+                             "-Xlinker", "../StarDecisionTrees/libStarDecisionTrees.a"
                            ]),
               .linkedLibrary("StarDecisionTrees")
             ]),

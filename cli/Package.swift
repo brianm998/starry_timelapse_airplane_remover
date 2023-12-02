@@ -10,7 +10,7 @@ let package = Package(
     ],
     dependencies: [
         // Dependencies declare other packages that this package depends on.
-        .package(url: "https://github.com/apple/swift-argument-parser", from: "1.0.0"),
+        .package(url: "https://github.com/apple/swift-argument-parser", from: "1.2.3"),
         .package(name: "StarCore", path: "../StarCore"),
     ],
     targets: [
@@ -24,7 +24,8 @@ let package = Package(
             ],
             linkerSettings: [
               .unsafeFlags(["-L../StarDecisionTrees",
-                            "-Xlinker", "-all_load",
+                             "-Xlinker", "-force_load",
+                             "-Xlinker", "../StarDecisionTrees/libStarDecisionTrees.a"
                            ]),
               .linkedLibrary("StarDecisionTrees")
             ]),
@@ -33,3 +34,5 @@ let package = Package(
             dependencies: ["star"]),
     ]
 )
+
+
