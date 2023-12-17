@@ -4,7 +4,6 @@
 import kht
 
 
-var lineList: kht.ListOfLines = kht.ListOfLines()
 var image: [UInt16] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                        0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                        0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -15,24 +14,35 @@ var image: [UInt16] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                        0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                        0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                        0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-let height = 10
-let width = 10
-let cluster_min_size: Int32 = 10
-let cluster_min_deviation: Double = 2.0
-let delta: Double = 0.5
-let kernel_min_height: Double = 0.002
-let n_sigmas: Double = 2.0
 
-image.withUnsafeMutableBufferPointer() { imagePtr in
-    kht.run_kht(&lineList,
-                imagePtr.baseAddress,
-                height,
-                width,
-                cluster_min_size,
-                cluster_min_deviation,
-                delta,
-                kernel_min_height,
-                n_sigmas)
-    print("lines \(lineList.count)")
+
+let lines = kernelHoughTransform(image: &image,
+                                 width: 10,
+                                 height: 10)
+
+print("lines \(lines.count)")
+
+
+func kernelHoughTransform(image: inout [UInt16],
+                          width: Int,
+                          height: Int, 
+                          clusterMinSize: Int32 = 10,
+                          clusterMinDeviation: Double = 2.0,
+                          delta: Double = 0.5,
+                          kernelMinHeight: Double = 0.002,
+                          nSigmas: Double = 2.0) -> kht.ListOfLines
+{
+    var lineList: kht.ListOfLines = kht.ListOfLines()
+    image.withUnsafeMutableBufferPointer() { imagePtr in
+        kht.run_kht(&lineList,
+                    imagePtr.baseAddress,
+                    height,
+                    width,
+                    clusterMinSize,
+                    clusterMinDeviation,
+                    delta,
+                    kernelMinHeight,
+                    nSigmas)
+    }
+    return lineList
 }
-
