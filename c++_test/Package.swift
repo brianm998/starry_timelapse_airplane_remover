@@ -6,13 +6,13 @@ import PackageDescription
 let package = Package(
     name: "cpp_test",
     dependencies: [
-        .package(name: "kht", path: "../kht")
+        .package(name: "KHTSwift", path: "../kht")
     ],
     targets: [
         .executableTarget(
           name: "cpp_test",
           dependencies: [
-            .product(name: "kht", package: "kht"),
+            .product(name: "KHTSwift", package: "KHTSwift"),
           ],
           swiftSettings: [.interoperabilityMode(.Cxx)]
         )
