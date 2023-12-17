@@ -5,15 +5,14 @@ import PackageDescription
 
 let package = Package(
     name: "cpp_test",
-    products: [
-      .library(name: "kht", targets: ["kht"])
+    dependencies: [
+        .package(name: "kht", path: "../kht")
     ],
     targets: [
-        .target(name: "kht"),
         .executableTarget(
           name: "cpp_test",
           dependencies: [
-            .target(name: "kht"),
+            .product(name: "kht", package: "kht"),
           ],
           swiftSettings: [.interoperabilityMode(.Cxx)]
         )
