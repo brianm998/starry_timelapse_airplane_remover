@@ -32,7 +32,7 @@
  */
 
 #include <limits>
-#include "../include/kht/kht.hpp"
+#include "include/kht.hpp"
 
 namespace kht {
 

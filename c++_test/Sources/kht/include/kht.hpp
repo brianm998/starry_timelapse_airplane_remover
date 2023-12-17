@@ -50,14 +50,16 @@ namespace kht {
     struct Line {
         std::double_t rho;
         std::double_t theta;
+        std::int32_t votes;
 
-        inline Line(std::double_t _rho, std::double_t _theta) :
+        inline Line(std::double_t _rho, std::double_t _theta, std::int32_t _votes) :
             rho(_rho),
-            theta(_theta) {
+            theta(_theta),
+            votes(_votes) {
         }
 
         inline Line() :
-            Line(0.0, 0.0) {
+	    Line(0.0, 0.0, 0) {
         }
 
         inline Line(Line const &) = default;

@@ -31,7 +31,7 @@
  * along with KHT. If not, see <https://www.gnu.org/licenses/>.
  */
 
-#include "../include/kht/kht.hpp"
+#include "include/kht.hpp"
 
 namespace kht {
 

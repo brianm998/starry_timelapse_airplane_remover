@@ -32,7 +32,7 @@
  */
 
 #include <algorithm>
-#include "../include/kht/kht.hpp"
+#include "include/kht.hpp"
 
 namespace kht {
 
@@ -171,8 +171,9 @@ namespace kht {
             lines.reserve(used_bins_count);
 
             for (Bin &bin : used_bins) {
+	      std::size_t fuck = 666;
                 if (!visited.visited_neighbour(bin.rho_index, bin.theta_index)) {
-                    lines.emplace_back(rho[bin.rho_index], theta[bin.theta_index]);
+                    lines.emplace_back(rho[bin.rho_index], theta[bin.theta_index], bin.votes);
                 }
                 visited.set_visited(bin.rho_index, bin.theta_index);
             }
