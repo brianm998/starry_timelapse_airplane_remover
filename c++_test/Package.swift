@@ -16,6 +16,5 @@ let package = Package(
           ],
           swiftSettings: [.interoperabilityMode(.Cxx)]
         )
-    ],
-    cxxLanguageStandard: .cxx11
+    ]
 )
