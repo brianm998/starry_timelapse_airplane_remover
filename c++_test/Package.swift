@@ -5,6 +5,9 @@ import PackageDescription
 
 let package = Package(
     name: "cpp_test",
+    platforms: [
+        .macOS(.v13)
+    ],
     dependencies: [
         .package(name: "KHTSwift", path: "../kht")
     ],
@@ -13,8 +16,7 @@ let package = Package(
           name: "cpp_test",
           dependencies: [
             .product(name: "KHTSwift", package: "KHTSwift"),
-          ],
-          swiftSettings: [.interoperabilityMode(.Cxx)]
+          ]
         )
     ]
 )

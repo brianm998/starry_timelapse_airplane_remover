@@ -5,20 +5,18 @@ import PackageDescription
 
 let package = Package(
     name: "KHTSwift",
+    platforms: [
+        .macOS(.v13)
+    ],
     products: [
-        // Products define the executables and libraries a package produces, making them visible to other packages.
         .library(
             name: "KHTSwift",
-            targets: ["KHTSwift"]),
+            targets: ["KHTSwift"])
     ],
     targets: [
-        // Targets are the basic building blocks of a package, defining a module or a test suite.
-        // Targets can depend on other targets in this package and products from dependencies.
-      .target(name: "kht"),
-      .target(name: "KHTSwift",
-              dependencies: ["kht"],
-              swiftSettings: [.interoperabilityMode(.Cxx)]
-      )
+      .target(name: "kht"),                                   // C++
+      .target(name: "kht_bridge", dependencies: ["kht"]),     // Objective C
+      .target(name: "KHTSwift", dependencies: ["kht_bridge"]) // Swift
     ],
-    cxxLanguageStandard: .cxx11
+    cxxLanguageStandard: .cxx2b
 )
