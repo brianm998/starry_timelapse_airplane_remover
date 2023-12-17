@@ -31,12 +31,12 @@
  * along with KHT. If not, see <https://www.gnu.org/licenses/>.
  */
 
-#include "../include/kht/kht.hpp"
+#include "include/kht.hpp"
 
 namespace kht {
 
     // Kernel-based Hough transform (KHT) for detecting straight lines in images.
-    void run_kht(ListOfLines &result, std::uint8_t *binary_image, std::size_t image_width, std::size_t image_height, std::int32_t cluster_min_size, std::double_t cluster_min_deviation, std::double_t delta, std::double_t kernel_min_height, std::double_t n_sigmas) {
+    void run_kht(ListOfLines &result, std::uint16_t *binary_image, std::size_t image_width, std::size_t image_height, std::int32_t cluster_min_size, std::double_t cluster_min_deviation, std::double_t delta, std::double_t kernel_min_height, std::double_t n_sigmas) {
         using namespace detail;
         
         static ListOfChains chains;
