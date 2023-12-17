@@ -891,6 +891,7 @@ fileprivate extension Log {
 
 fileprivate let gremlin = LogGremlin()
 
+// this little guy just sits around and keeps the logs orderly by handling one log line at at time
 fileprivate actor LogGremlin {
 
     private var handlers: [Log.Output : LogHandler] = [:]

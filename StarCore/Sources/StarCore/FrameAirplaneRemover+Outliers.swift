@@ -226,7 +226,7 @@ extension FrameAirplaneRemover {
            - don't apply decision tree, use the validation image instead
          */
 
-        if !outliersLoadedFromFile {
+        if true { //!outliersLoadedFromFile {
             if let image = await imageAccessor.load(type: .validated, atSize: .original) {
                 switch image.imageData {
                 case .eightBit(let validationArr):

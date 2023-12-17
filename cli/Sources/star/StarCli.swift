@@ -19,7 +19,11 @@ You should have received a copy of the GNU General Public License along with sta
 
 
 /*
-todo:
+ todo:
+
+ - try this for GPU, metal sucks:
+   https://github.com/philipturner/swift-opencl
+ 
  - look into kernel based hough transform:
    https://github.com/laffernandes/kht
    c++ should work in swift now

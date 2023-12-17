@@ -29,7 +29,7 @@ struct ProgressBars: View {
 
             if viewModel.loadingAllOutliers {
                 HStack {
-                    Text("Loading Outlier Groups for all frames")
+                    Text("Loading Outlier Groups")
                     Spacer()
                     ProgressView(value: viewModel.outlierLoadingProgress)
                 }

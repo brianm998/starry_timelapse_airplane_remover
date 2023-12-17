@@ -305,12 +305,12 @@ public class OutlierGroup: CustomStringConvertible,
     // all switches on this enum are in this file
     // add a new case, handle all switches here, and the
     // decision tree generator will use it after recompile
-    // all existing outlier value files will need to be regenerated to include itx
+    // all existing outlier value files will need to be regenerated to include it
     public enum Feature: String,
-                         CaseIterable,
-                         Hashable,
-                         Codable,
-                         Comparable
+                       CaseIterable,
+                       Hashable,
+                       Codable,
+                       Comparable
     {
         case size
         case width
@@ -554,7 +554,7 @@ public class OutlierGroup: CustomStringConvertible,
             ret = self.pixelBorderAmount
         }
         //let t1 = NSDate().timeIntervalSince1970
-        //Log.v("group \(name) @ frame \(frameIndex) decisionTreeValue(for: \(type)) = \(ret) after \(t1-t0)s")
+        //Log.d("group \(name) @ frame \(frameIndex) decisionTreeValue(for: \(type)) = \(ret) after \(t1-t0)s")
 
         featureValueCache[type] = ret
         return ret

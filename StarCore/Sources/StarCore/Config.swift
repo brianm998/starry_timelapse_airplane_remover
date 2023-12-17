@@ -103,7 +103,7 @@ public struct Config: Codable {
     public var writeFrameThumbnailFiles: Bool
 
     // how far in each direction do we go when doing final processing?
-    public var numberFinalProcessingNeighborsNeeded = 5 // in each direction
+    public var numberFinalProcessingNeighborsNeeded = 2 // in each direction
 
     // the minimum outlier group size at the top of the screen
     // smaller outliers at the top are discarded early on

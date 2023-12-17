@@ -30,7 +30,7 @@ extension FrameAirplaneRemover {
            let outputDirname = self.outlierOutputDirname
         {
             // write out the decision tree value matrix too
-            //Log.d("frame \(self.frameIndex) writeOutlierValuesCSV 1")
+            Log.d("frame \(self.frameIndex) writeOutlierValuesCSV 1")
 
             let frameOutlierDir = "\(outputDirname)/\(self.frameIndex)"
             let positiveFilename = "\(frameOutlierDir)/\(OutlierGroupValueMatrix.positiveDataFilename)"
@@ -44,19 +44,25 @@ extension FrameAirplaneRemover {
                 let valueMatrix = OutlierGroupValueMatrix()
                 
                 if let outliers = self.outlierGroupList() {
-                    //Log.d("frame \(self.frameIndex) writeOutlierValuesCSV 1a \(outliers.count) outliers")
-                    for outlier in outliers {
-                        //Log.d("frame \(self.frameIndex) writeOutlierValuesCSV 1b")
+                    Log.d("frame \(self.frameIndex) writeOutlierValuesCSV 1a \(outliers.count) outliers")
+                    let startTime = NSDate().timeIntervalSince1970
+                    // XXX start time
+                    
+                    for (index, outlier) in outliers.enumerated() {
+                        if index % 10 == 0 {
+                            let duration = NSDate().timeIntervalSince1970 - startTime
+                            Log.d("frame \(self.frameIndex) writeOutlierValuesCSV 1b \(index) after \(duration) seconds")
+                        }
                         await valueMatrix.append(outlierGroup: outlier)
                     }
                 }
-                //Log.d("frame \(self.frameIndex) writeOutlierValuesCSV 2")
+                Log.d("frame \(self.frameIndex) writeOutlierValuesCSV 2")
 
                 try valueMatrix.writeCSV(to: frameOutlierDir)
-                //Log.d("frame \(self.frameIndex) writeOutlierValuesCSV 3")
+                Log.d("frame \(self.frameIndex) writeOutlierValuesCSV 3")
             }
         }
-        //Log.d("frame \(self.frameIndex) DONE writeOutlierValuesCSV")
+        Log.d("frame \(self.frameIndex) DONE writeOutlierValuesCSV")
     }
 
     // write out a directory of individual OutlierGroup binaries

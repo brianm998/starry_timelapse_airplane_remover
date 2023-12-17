@@ -58,7 +58,7 @@ public actor ImageSequence {
             let rh = removePathAndSuffix(fromString: rhs)
             return lh < rh
         }
-
+        
         self.filenames = imageFiles
     }
 

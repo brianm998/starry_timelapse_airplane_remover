@@ -196,7 +196,8 @@ struct decision_tree_generator: ParsableCommand {
         let sequenceSize = await eraser.imageSequence.filenames.count
         endClosure = {
             if frames.count == sequenceSize {
-                eraser.shouldRun = false
+                //eraser.shouldRun = false
+                // XXX double check this works still
             }
         }
         
@@ -360,7 +361,8 @@ struct decision_tree_generator: ParsableCommand {
         endClosure = {
             Log.d("end enclosure frames.count \(frames.count) sequenceSize \(sequenceSize)")
             if frames.count == sequenceSize {
-                eraser.shouldRun = false
+                //eraser.shouldRun = false
+                // XXX double check this works still
             }
         }
         

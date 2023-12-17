@@ -334,17 +334,17 @@ public struct PixelatedImage {
                         // these crop up in the star alignment images
                         // there is nothing to copy from these pixels
                     } else {
-                        // rgb values of the image we're modifying at this x,y
-                        let origRed = Int32(origImagePixels[origOffset])
+                        // rgb values of the image we're modifying at this index
+                        let origRed   = Int32(origImagePixels[origOffset])
                         let origGreen = Int32(origImagePixels[origOffset+1])
-                        let origBlue = Int32(origImagePixels[origOffset+2])
+                        let origBlue  = Int32(origImagePixels[origOffset+2])
                         
-                        // rgb values of an adjecent image at this x,y
-                        let otherRed = Int32(otherImagePixels[otherOffset])
+                        // rgb values of an adjecent image at this index
+                        let otherRed   = Int32(otherImagePixels[otherOffset])
                         let otherGreen = Int32(otherImagePixels[otherOffset+1])
-                        let otherBlue = Int32(otherImagePixels[otherOffset+2])
+                        let otherBlue  = Int32(otherImagePixels[otherOffset+2])
 
-                        maxBrightness += origRed + origGreen + origBlue
+                        maxBrightness += origRed  + origGreen  + origBlue
                         maxBrightness -= otherRed + otherGreen + otherBlue
                     }
                     // record the brightness change if it is brighter

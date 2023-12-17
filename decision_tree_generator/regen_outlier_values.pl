@@ -35,18 +35,18 @@ foreach my $basedir (keys %$sequences) {
   }
 }
 
-my $cmd = 'star';
+#my $cmd = 'star';
 
-#my $cmd = "~/git/nighttime_timelapse_airplane_remover/cli/memmory_error.pl ";
+my $cmd = "~/git/nighttime_timelapse_airplane_remover/cli/memmory_error.pl ";
 
 foreach my $basedir (keys %$sequences) {
   foreach my $sequence_dir (@{$sequences->{$basedir}}) {
     my $sequence = "$basedir/$sequence_dir";
     print "re-generating csv files for $sequence\n";
     if (-f "$sequence"."-outliers/config.json") {
-      system "time $cmd -w -s $sequence"."-outliers/config.json";
+      system "time $cmd -n 20 -w -s $sequence"."-outliers/config.json";
     } elsif (-f "$sequence"."-config.json") {
-      system "time $cmd -w -s $sequence"."-config.json";
+      system "time $cmd -n 20 -w -s $sequence"."-config.json";
     } else {
       print("no config.json found for $sequence\n");
     }

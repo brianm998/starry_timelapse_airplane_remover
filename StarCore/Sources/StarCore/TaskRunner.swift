@@ -4,7 +4,35 @@ import Foundation
 
 fileprivate var numberRunning = NumberRunning()
 
-public class TaskRunner {
+public actor AllowedToRun {
+    enum State {
+        case pending
+        case allowed
+        case running
+        case done
+    }
+    
+    var state = State.pending
+
+    var isPending: Bool     { self.state == .pending }
+    var isAllowedToRun: Bool { self.state == .allowed }
+    var isRunning: Bool     { self.state == .running }
+    var isDone: Bool        { self.state == .done }
+
+    func allowExecution() {
+        self.state = .allowed
+    }
+
+    func startRunning() {
+        self.state = .running
+    }
+
+    func copmlete() {
+        self.state = .done
+    }
+}
+
+public actor TaskRunner {
     // XXX getting this number right is hard
     // too big and the swift runtime barfs underneath
     // too small and the process runs without available cpu resources
@@ -13,8 +41,10 @@ public class TaskRunner {
             Log.i("using maximum of \(maxConcurrentTasks) concurrent tasks")
         }
     }
-    public static func startSyncIO() async { await numberRunning.decrement() }
-    public static func endSyncIO() async { await numberRunning.increment() }
+
+    //private var allowedToRun
+    //private var closures: [ClosureType] = []
+    
 }
 
 fileprivate func determineMax() -> UInt {
@@ -37,11 +67,12 @@ fileprivate func determineMax() -> UInt {
  }
  */
 public func runTask<Type>(_ closure: @escaping () async -> Type,
-                          withReserve reserve: UInt = 0) async -> Task<Type,Never>
+                       withCPUCount numCPUs: UInt = 1) async -> Task<Type,Never>
 {
     //Log.i("runtask with cpuUsage \(cpuUsage())")
     let baseMax = TaskRunner.maxConcurrentTasks
-    let max = baseMax > reserve ? baseMax - reserve : baseMax
+    let max = baseMax// > reserve ? baseMax - reserve : baseMax
+//    if true {
     if await numberRunning.startOnIncrement(to: max) {
         //Log.v("running in new task")
         return Task<Type,Never> {
@@ -70,10 +101,11 @@ public func runTask<Type>(_ closure: @escaping () async -> Type,
  }
  */
 public func runThrowingTask<Type>(_ closure: @escaping () async throws -> Type,
-                                  withReserve reserve: UInt = 0) async throws -> Task<Type,Error>
+                              withCPUCount numCPUs: UInt = 1) async throws -> Task<Type,Error>
 {
     let baseMax = TaskRunner.maxConcurrentTasks
-    let max = baseMax > reserve ? baseMax - reserve : baseMax
+    let max = baseMax// > reserve ? baseMax - reserve : baseMax
+//    if true {
     if await numberRunning.startOnIncrement(to: max) {
         //Log.v("running in new task")
         return Task<Type,Error> {

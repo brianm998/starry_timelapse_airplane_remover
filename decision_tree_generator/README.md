@@ -14,7 +14,7 @@ In night time timelapses of the night sky, airplanes and satellites show up as a
 
 The current set of classifiers is based upon a set of clasification features that have been coded manually.  Things like size, screen position, and lots more.
 
-A structured data set is generated via the ntar gui, where the user manually fixes all the false positive and negative results from a previous classifier.   
+A structured data set is generated via the star gui, where the user manually fixes all the false positive and negative results from a previous classifier.   
 
 This data set is digested by this module to generate on or a set (forest) of trees, each one of which can classify an outlier group with a value between -1 and 1, where 1 is something to remove (airplanes, satellites, etc) and -1 is something to leave in place (stars, clouds, etc).
 
