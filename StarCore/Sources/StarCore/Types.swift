@@ -1,4 +1,5 @@
 import Foundation
+import KHTSwift
 
 // these values are used for creating an initial config when processing a new sequence
 public struct Defaults {
@@ -40,11 +41,7 @@ public struct Coord: Codable {
 }
 
 // polar coordinates for right angle intersection with line from origin
-public struct Line: Codable {
-    public let theta: Double                 // angle in degrees
-    public let rho: Double                   // distance in pixels
-    public let count: Int                    // higher count is better fit for line
-
+extension Line {
     // convert to rise over run, y intercept if possible
     // also supports run over rise, as well as vertical only lines
     public var cartesianLine: CartesianLine {

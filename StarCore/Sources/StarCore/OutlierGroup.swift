@@ -14,6 +14,7 @@ You should have received a copy of the GNU General Public License along with sta
 // XXX look into ContiguousBytes
 
 import Foundation
+import KHTSwift
 import Cocoa
 
 // these need to be setup at startup so the decision tree values are right
@@ -86,12 +87,13 @@ public class OutlierGroup: CustomStringConvertible,
                                                                width: bounds.width,
                                                                height: bounds.height)
         // do a hough transform on just this outlier group
-        let transform = HoughTransform(dataWidth: bounds.width,
-                                       dataHeight: bounds.height,
-                                       inputData: pixels)
 
+        self.lines = kernelHoughTransform(image: pixels,
+                                          width: Int32(bounds.width),
+                                          height: Int32(bounds.height))
+        
         // try a smaller line count, with fixed trimming code
-        self.lines = transform.lines(maxCount: 60, minPixelValue: 1) 
+        //self.lines = transform.lines(maxCount: 60, minPixelValue: 1) 
         _ = self.houghLineHistogram
     }
 

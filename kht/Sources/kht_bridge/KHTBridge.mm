@@ -30,8 +30,6 @@
 	       kernelMinHeight,
 	       nSigmas);
 
-  printf("WOOT %zu\n", lineList.size());
-
   NSMutableArray * ret = [[NSMutableArray alloc] init];
   
   for(int i = 0 ; i < lineList.size() ; i++) {
@@ -40,17 +38,20 @@
     double rho = line.rho;
     double theta = line.theta;
 
+    // make all rho positive
     if(rho < 0) {
+      // if negative, flip rho and theta to make it positive
       rho = -rho;
       theta = fmod(theta + 180, 360);
     }
-      
+
+    // these lines are setup with the origin centered on the image
+    
     KHTBridgeLine * bridgeLine = [[KHTBridgeLine alloc] init];
     bridgeLine.rho = rho;
     bridgeLine.theta = theta;
     bridgeLine.count = line.votes;
 
-    printf("line %f %f %u\n", bridgeLine.rho, bridgeLine.theta, bridgeLine.count);
     [ret addObject: bridgeLine];
   }
   return ret;

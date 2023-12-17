@@ -1,4 +1,5 @@
 import Foundation
+import KHTSwift
 
 public struct HoughLineHistogram {
 
