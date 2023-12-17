@@ -29,13 +29,19 @@ public func kernelHoughTransform(image: inout [UInt16],
     }
     var ret: [Line] = []
     for line in lineList {
+        var rho = line.rho
+        var theta = line.theta
 
-        // XXX fix negative rho
+        // invert negative rho, point it in the other direction
+        if rho < 0 {
+            rho = -rho 
+            theta = (line.theta + 180).truncatingRemainder(dividingBy: 360)
+        }
 
-        // XXX adjust for centeral origin
+        // XXX adjust for central origin
         
-        ret.append(Line(rho: line.rho,
-                        theta: line.theta,
+        ret.append(Line(rho: rho,
+                        theta: theta,
                         count: line.votes))
     }
     return ret
