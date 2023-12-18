@@ -84,21 +84,14 @@ xcrun notarytool submit \
 
 WAIT_TIME=20
 
-
-
 # wait for notorization and staple the build
 until xcrun stapler staple "${BUILD_DIR}/AdHoc/${APP_NAME}.app"; do
     echo "wait ${WAIT_TIME} seconds..."
     sleep ${WAIT_TIME}
 done
 
-COMPONENT_PLIST="${BUILD_DIR}/component_list.plist"
-
-pkgbuild --analyze --root "${BUILD_DIR}/AdHoc/${APP_NAME}.app" $COMPONENT_PLIST
-
 # package it up for distribution
 pkgbuild --root "${BUILD_DIR}/AdHoc/${APP_NAME}.app" \
-         --component-plist $COMPONENT_PLIST \
 	 --identifier com.star \
 	 --version "${STAR_VERSION}" \
 	 --install-location /Applications/${APP_NAME}.app \
