@@ -13,14 +13,6 @@ rm -rf ${BUILD_DIR}
 
 mkdir ${BUILD_DIR}
 
-pod install
-
-# FIX annoying cocoapod deployment target issue
-perl -pi -e 's/MACOSX_DEPLOYMENT_TARGET = \d+[.]?\d*/MACOSX_DEPLOYMENT_TARGET = 12.0/'  Pods/Pods.xcodeproj/project.pbxproj
-
-# FIX annother annoying cocoapods problem
-perl -pi -e 's/readlink/readlink -f/' Pods/Target\ Support\ Files/Pods-star/Pods-star-frameworks.sh
-
 # set the app version 
 perl -pi -e "s/MARKETING_VERSION = [^;]*/MARKETING_VERSION = ${STAR_VERSION}/" star.xcodeproj/project.pbxproj
 
@@ -29,7 +21,7 @@ perl -pi -e 's/ONLY_ACTIVE_ARCH = YES/ONLY_ACTIVE_ARCH = NO/'  star.xcodeproj/pr
 
 # build the archive
 xcodebuild \
-    -workspace "star.xcworkspace" \
+    -project "star.xcodeproj" \
     -scheme "star" \
     -configuration "Release" \
     -archivePath "${BUILD_DIR}/star.xcarchive" \
