@@ -3,11 +3,10 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 56;
+	objectVersion = 60;
 	objects = {
 
 /* Begin PBXBuildFile section */
-		9C7152C272D88BD358E35CCA /* Pods_Star.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 35B138162EDC828013EC6EE7 /* Pods_Star.framework */; };
 		D3058E1B2AC0745C00C58F1D /* MultiSelectSheetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3058E1A2AC0745C00C58F1D /* MultiSelectSheetView.swift */; };
 		D310C6F429C8D8F40014FBA9 /* libStarDecisionTrees.a in Frameworks */ = {isa = PBXBuildFile; fileRef = D310C6F329C8D8F40014FBA9 /* libStarDecisionTrees.a */; };
 		D31F9FBF299736740001CD0C /* ViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D31F9FBC299736730001CD0C /* ViewModel.swift */; };
@@ -47,6 +46,10 @@
 		D386FA2D298B617400878B56 /* starUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D386FA2C298B617400878B56 /* starUITests.swift */; };
 		D386FA2F298B617400878B56 /* starUITestsLaunchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D386FA2E298B617400878B56 /* starUITestsLaunchTests.swift */; };
 		D3A54A6F29AFAD2C00C50709 /* UserPreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3A54A6E29AFAD2C00C50709 /* UserPreferences.swift */; };
+		D3B29C9E2B2FE23F00754C10 /* StarCore in Frameworks */ = {isa = PBXBuildFile; productRef = D3B29C9D2B2FE23F00754C10 /* StarCore */; };
+		D3B29CA42B2FE31800754C10 /* KHTSwift in Frameworks */ = {isa = PBXBuildFile; productRef = D3B29CA32B2FE31800754C10 /* KHTSwift */; };
+		D3B29CB12B2FE5BE00754C10 /* StarCore in Frameworks */ = {isa = PBXBuildFile; productRef = D3B29CB02B2FE5BE00754C10 /* StarCore */; };
+		D3B29CB42B2FE5D900754C10 /* Zoomable in Frameworks */ = {isa = PBXBuildFile; productRef = D3B29CB32B2FE5D900754C10 /* Zoomable */; };
 		D3B886AD29B830BE003590A1 /* OutlierGroupTable.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3B886AC29B830BE003590A1 /* OutlierGroupTable.swift */; };
 		D3D7F0FC2A2BE10D00658862 /* StarCommands.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3D7F0FB2A2BE10D00658862 /* StarCommands.swift */; };
 /* End PBXBuildFile section */
@@ -69,11 +72,6 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		35B138162EDC828013EC6EE7 /* Pods_Star.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Star.framework; sourceTree = BUILT_PRODUCTS_DIR; };
-		3DF61CF9A00F9FCD2F67D33A /* Pods-Star.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Star.release.xcconfig"; path = "Target Support Files/Pods-Star/Pods-Star.release.xcconfig"; sourceTree = "<group>"; };
-		540415BAD54DC7E2F8297DCF /* Pods-star.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-star.release.xcconfig"; path = "Target Support Files/Pods-star/Pods-star.release.xcconfig"; sourceTree = "<group>"; };
-		5F0FA5BFD47E6F6D97B17603 /* Pods-star.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-star.debug.xcconfig"; path = "Target Support Files/Pods-star/Pods-star.debug.xcconfig"; sourceTree = "<group>"; };
-		B8FF875A1AE121BCAAB9AF54 /* Pods-Star.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Star.debug.xcconfig"; path = "Target Support Files/Pods-Star/Pods-Star.debug.xcconfig"; sourceTree = "<group>"; };
 		D3058E1A2AC0745C00C58F1D /* MultiSelectSheetView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = MultiSelectSheetView.swift; sourceTree = "<group>"; };
 		D310C6F329C8D8F40014FBA9 /* libStarDecisionTrees.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libStarDecisionTrees.a; path = ../../StarDecisionTrees/libStarDecisionTrees.a; sourceTree = "<group>"; };
 		D31F9FBC299736730001CD0C /* ViewModel.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ViewModel.swift; sourceTree = "<group>"; };
@@ -127,7 +125,10 @@
 			buildActionMask = 2147483647;
 			files = (
 				D310C6F429C8D8F40014FBA9 /* libStarDecisionTrees.a in Frameworks */,
-				9C7152C272D88BD358E35CCA /* Pods_Star.framework in Frameworks */,
+				D3B29C9E2B2FE23F00754C10 /* StarCore in Frameworks */,
+				D3B29CB12B2FE5BE00754C10 /* StarCore in Frameworks */,
+				D3B29CA42B2FE31800754C10 /* KHTSwift in Frameworks */,
+				D3B29CB42B2FE5D900754C10 /* Zoomable in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -151,20 +152,8 @@
 		26FD1C08E241439DFF9D9A38 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
-				35B138162EDC828013EC6EE7 /* Pods_Star.framework */,
 			);
 			name = Frameworks;
-			sourceTree = "<group>";
-		};
-		539A197B9AA999D1261E7269 /* Pods */ = {
-			isa = PBXGroup;
-			children = (
-				5F0FA5BFD47E6F6D97B17603 /* Pods-star.debug.xcconfig */,
-				540415BAD54DC7E2F8297DCF /* Pods-star.release.xcconfig */,
-				B8FF875A1AE121BCAAB9AF54 /* Pods-Star.debug.xcconfig */,
-				3DF61CF9A00F9FCD2F67D33A /* Pods-Star.release.xcconfig */,
-			);
-			path = Pods;
 			sourceTree = "<group>";
 		};
 		D386FA04298B617300878B56 = {
@@ -174,7 +163,6 @@
 				D386FA21298B617400878B56 /* starTests */,
 				D386FA2B298B617400878B56 /* starUITests */,
 				D386FA0E298B617300878B56 /* Products */,
-				539A197B9AA999D1261E7269 /* Pods */,
 				26FD1C08E241439DFF9D9A38 /* Frameworks */,
 			);
 			sourceTree = "<group>";
@@ -267,17 +255,24 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = D386FA32298B617400878B56 /* Build configuration list for PBXNativeTarget "Star" */;
 			buildPhases = (
-				4D98E86BEFEEE42E5AA18E69 /* [CP] Check Pods Manifest.lock */,
 				D386FA09298B617300878B56 /* Sources */,
 				D386FA0A298B617300878B56 /* Frameworks */,
 				D386FA0B298B617300878B56 /* Resources */,
-				26D0FF90821EBF86A8866857 /* [CP] Embed Pods Frameworks */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				D3B29CAC2B2FE47D00754C10 /* PBXTargetDependency */,
+				D3B29CAE2B2FE47D00754C10 /* PBXTargetDependency */,
+				D3B29CAA2B2FE44E00754C10 /* PBXTargetDependency */,
 			);
 			name = Star;
+			packageProductDependencies = (
+				D3B29C9D2B2FE23F00754C10 /* StarCore */,
+				D3B29CA32B2FE31800754C10 /* KHTSwift */,
+				D3B29CB02B2FE5BE00754C10 /* StarCore */,
+				D3B29CB32B2FE5D900754C10 /* Zoomable */,
+			);
 			productName = Star;
 			productReference = D386FA0D298B617300878B56 /* Star.app */;
 			productType = "com.apple.product-type.application";
@@ -350,6 +345,10 @@
 				Base,
 			);
 			mainGroup = D386FA04298B617300878B56;
+			packageReferences = (
+				D3B29CAF2B2FE5BE00754C10 /* XCLocalSwiftPackageReference "../StarCore" */,
+				D3B29CB22B2FE5D900754C10 /* XCRemoteSwiftPackageReference "Zoomable" */,
+			);
 			productRefGroup = D386FA0E298B617300878B56 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -387,48 +386,6 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
-
-/* Begin PBXShellScriptBuildPhase section */
-		26D0FF90821EBF86A8866857 /* [CP] Embed Pods Frameworks */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-Star/Pods-Star-frameworks-${CONFIGURATION}-input-files.xcfilelist",
-			);
-			name = "[CP] Embed Pods Frameworks";
-			outputFileListPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-Star/Pods-Star-frameworks-${CONFIGURATION}-output-files.xcfilelist",
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-Star/Pods-Star-frameworks.sh\"\n";
-			showEnvVarsInLog = 0;
-		};
-		4D98E86BEFEEE42E5AA18E69 /* [CP] Check Pods Manifest.lock */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-			);
-			inputPaths = (
-				"${PODS_PODFILE_DIR_PATH}/Podfile.lock",
-				"${PODS_ROOT}/Manifest.lock",
-			);
-			name = "[CP] Check Pods Manifest.lock";
-			outputFileListPaths = (
-			);
-			outputPaths = (
-				"$(DERIVED_FILE_DIR)/Pods-Star-checkManifestLockResult.txt",
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
-			showEnvVarsInLog = 0;
-		};
-/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		D386FA09298B617300878B56 /* Sources */ = {
@@ -501,6 +458,18 @@
 			isa = PBXTargetDependency;
 			target = D386FA0C298B617300878B56 /* Star */;
 			targetProxy = D386FA29298B617400878B56 /* PBXContainerItemProxy */;
+		};
+		D3B29CAA2B2FE44E00754C10 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			productRef = D3B29CA92B2FE44E00754C10 /* KHTSwift */;
+		};
+		D3B29CAC2B2FE47D00754C10 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			productRef = D3B29CAB2B2FE47D00754C10 /* StarCore */;
+		};
+		D3B29CAE2B2FE47D00754C10 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			productRef = D3B29CAD2B2FE47D00754C10 /* Zoomable */;
 		};
 /* End PBXTargetDependency section */
 
@@ -621,7 +590,6 @@
 		};
 		D386FA33298B617400878B56 /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = B8FF875A1AE121BCAAB9AF54 /* Pods-Star.debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
@@ -663,7 +631,6 @@
 		};
 		D386FA34298B617400878B56 /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 3DF61CF9A00F9FCD2F67D33A /* Pods-Star.release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
@@ -815,6 +782,75 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		D3B29C9C2B2FE23F00754C10 /* XCLocalSwiftPackageReference "../StarCore" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../StarCore;
+		};
+		D3B29CA22B2FE31800754C10 /* XCLocalSwiftPackageReference "../kht" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../kht;
+		};
+		D3B29CAF2B2FE5BE00754C10 /* XCLocalSwiftPackageReference "../StarCore" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../StarCore;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		D3B29C9F2B2FE2C400754C10 /* XCRemoteSwiftPackageReference "Zoomable" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "git@github.com:brianm998/Zoomable";
+			requirement = {
+				branch = main;
+				kind = branch;
+			};
+		};
+		D3B29CB22B2FE5D900754C10 /* XCRemoteSwiftPackageReference "Zoomable" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "git@github.com:brianm998/Zoomable.git";
+			requirement = {
+				branch = main;
+				kind = branch;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		D3B29C9D2B2FE23F00754C10 /* StarCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = StarCore;
+		};
+		D3B29CA32B2FE31800754C10 /* KHTSwift */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = KHTSwift;
+		};
+		D3B29CA92B2FE44E00754C10 /* KHTSwift */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = D3B29CA22B2FE31800754C10 /* XCLocalSwiftPackageReference "../kht" */;
+			productName = KHTSwift;
+		};
+		D3B29CAB2B2FE47D00754C10 /* StarCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = D3B29C9C2B2FE23F00754C10 /* XCLocalSwiftPackageReference "../StarCore" */;
+			productName = StarCore;
+		};
+		D3B29CAD2B2FE47D00754C10 /* Zoomable */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = D3B29C9F2B2FE2C400754C10 /* XCRemoteSwiftPackageReference "Zoomable" */;
+			productName = Zoomable;
+		};
+		D3B29CB02B2FE5BE00754C10 /* StarCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = StarCore;
+		};
+		D3B29CB32B2FE5D900754C10 /* Zoomable */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = D3B29CB22B2FE5D900754C10 /* XCRemoteSwiftPackageReference "Zoomable" */;
+			productName = Zoomable;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = D386FA05298B617300878B56 /* Project object */;
 }
