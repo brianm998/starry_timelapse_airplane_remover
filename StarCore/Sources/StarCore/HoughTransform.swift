@@ -182,34 +182,3 @@ public class HoughTransform {
         return true
     }
 }
-
-// this method returns the polar coords for a line that runs through the two given points
-// not used anymore in the current implementation
-func polarCoords(point1: Coord, point2: Coord) -> (theta: Double, rho: Double) {
-    
-    let dx1 = Double(point1.x)
-    let dy1 = Double(point1.y)
-    let dx2 = Double(point2.x)
-    let dy2 = Double(point2.y)
-
-    let slope = (dy1-dy2)/(dx1-dx2)
-    
-    let n = dy1 - slope * dx1    // y coordinate at zero x
-    let m = -n/slope            // x coordinate at zero y
-    
-    // length of hypotenuse formed by triangle of (0, 0) - (0, n) - (m, 0)
-    let hypotenuse = sqrt(n*n + m*m)
-    let thetaRadians = acos(n/hypotenuse)     // theta in radians
-    
-    var theta = thetaRadians * 180/Double.pi  // theta in degrees
-    var rho = cos(thetaRadians) * m          // distance from orgin to right angle with line
-    
-    if(rho < 0) {
-        // keep rho positive
-        rho = -rho
-        theta = (theta + 180).truncatingRemainder(dividingBy: 360)
-    }
-    return (theta: theta,  // degrees from the X axis, clockwise
-           rho: rho)      // distance to right angle with line from origin in pixels
-}
-
