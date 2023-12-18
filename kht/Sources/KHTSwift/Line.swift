@@ -15,6 +15,29 @@ public struct Line: Codable {
         self.count = count
     }
 
+    public func matches(_ line: Line,
+                        maxThetaDiff: Double = 5,
+                        maxRhoDiff: Double = 5) -> Bool
+    {
+        let rhoDiff = abs(self.rho - line.rho)
+        let thetaDiff = abs(self.theta - line.theta)
+
+        if rhoDiff > maxRhoDiff { return false }
+
+        if thetaDiff > maxThetaDiff {
+            // diff is bigger, check to make sure we're not comparing across the
+            // 360 degree boundary
+            let threeSixtyTheta = abs(thetaDiff - 360)
+            if threeSixtyTheta < maxThetaDiff {
+                // handles the case of comparing 359 and 0
+                return true
+            }
+            return false
+        }
+
+        return true
+    }
+    
     // convert to rise over run, y intercept if possible
     // also supports run over rise, as well as vertical only lines
     public var cartesianLine: CartesianLine {

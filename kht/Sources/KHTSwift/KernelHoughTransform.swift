@@ -34,10 +34,27 @@ public func kernelHoughTransform(image: [UInt16],
 
                     // construct a new theta and rho using upper left polar coords
                     let (new_theta, new_rho) = polarCoords(point1: p1, point2: p2)
-                    
-                    ret.append(Line(theta: new_theta,
-                                    rho: new_rho,
-                                    count: Int(line.count)))
+
+                    let newLine = Line(theta: new_theta,
+                                       rho: new_rho,
+                                       count: Int(line.count))
+
+                    var shouldAppend = true
+
+                    // check lines we are already going to return to see
+                    // if there are any closely matching lines that had a
+                    // higher count.  If so, this line is basically noise,
+                    // don't return it.
+                    for lineToReturn in ret {
+                        if lineToReturn.matches(newLine) {
+                            shouldAppend = false
+                            break
+                        }
+                    }
+
+                    if shouldAppend {
+                        ret.append(newLine)
+                    }
                 }
             }
         }
@@ -77,7 +94,7 @@ extension KHTBridgeLine {
             // vertical
             p1x = rho
 	    p1y = -heightD * 0.5
-s	    
+	    
             p2x = rho
 	    p2y = heightD * 0.5 - 1
         }
