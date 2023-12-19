@@ -1,5 +1,6 @@
 import Foundation
 import CoreGraphics
+import KHTSwift
 import Cocoa
 
 /*

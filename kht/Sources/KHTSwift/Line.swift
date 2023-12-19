@@ -15,6 +15,7 @@ public struct Line: Codable {
         self.count = count
     }
 
+    // constructs a line that passes through the two given points
     init(point1: DoubleCoord,
          point2: DoubleCoord,
          count: Int)
@@ -45,91 +46,6 @@ public struct Line: Codable {
 
         return true
     }
-    
-    // convert to rise over run, y intercept if possible
-    // also supports run over rise, as well as vertical only lines
-    public var cartesianLine: CartesianLine {
-        // the line goes through this point
-        let line_intersection_x = self.rho*cos(self.theta*Double.pi/180)
-        let line_intersection_y = self.rho*sin(self.theta*Double.pi/180)
-
-        var edge_1_x = 0.0
-        var edge_1_y = 0.0
-
-        var y_intercept: Double?
-        if self.theta == 0 || self.theta == 360 {
-            // vertical line
-            edge_1_x = self.rho
-            edge_1_y = 0
-
-            // y_intercept not defined
-        } else if self.theta < 90 {
-            // search for x as hypotenuse 
-            let opposite = tan(self.theta*Double.pi/180)*self.rho
-            edge_1_x = sqrt(opposite*opposite + self.rho*self.rho)
-            edge_1_y = 0
-
-            y_intercept = self.rho / sin(self.theta*Double.pi/180)
-        } else if self.theta == 90 {
-            // flat horizontal line
-            edge_1_x = 0
-            edge_1_y = self.rho
-
-            y_intercept = self.rho
-            
-        } else if self.theta < 180 {
-            let opposite = tan((self.theta-90)*Double.pi/180)*self.rho
-            edge_1_x = 0
-            edge_1_y = sqrt(opposite*opposite + self.rho*self.rho)
-
-            y_intercept = self.rho / cos((self.theta-90)*Double.pi/180)
-        } else if self.theta == 180 {
-            edge_1_x = self.rho
-            edge_1_y = 0
-
-            // y_intercept not defined
-        } else if self.theta < 270 {
-            //Log.e("WTF, theta \(self.theta)?")
-
-            // these lines can't draw into the image unless rho is negative
-            // and that is accounted for elsewhere by reversing theta 180,
-            // and inverting rho
-            
-            //Log.e("theta \(self.theta) \(self.rho) SPECIAL CASE NOT HANDLED")
-
-        } else if self.theta < 360 {
-            let opposite = tan((360-self.theta)*Double.pi/180)*self.rho
-            edge_1_x = sqrt(opposite*opposite + self.rho*self.rho)
-            edge_1_y = 0
-
-            y_intercept = -(self.rho / cos((self.theta-270)*Double.pi/180))
-        }
-
-        let run = edge_1_x - line_intersection_x
-        let rise = edge_1_y - line_intersection_y
-        
-        //Log.d("for theta \(self.theta) rho \(self.rho) intersection [\(line_intersection_x), \(line_intersection_y)], edge 1 [\(edge_1_x), \(edge_1_y)] rise over run \(rise_over_run) y_intercept \(y_intercept)")
-        if let y_intercept = y_intercept {
-            if self.theta < 45 {
-                let run_over_rise = run / rise
-                return .vertical(VerticalCartesianLineImpl(m: run_over_rise, c: y_intercept))
-            } else if self.theta < 135 {
-                let rise_over_run = rise / run
-                return .horizontal(HorizontalCartesianLineImpl(m: rise_over_run, c: y_intercept))
-            } else if self.theta < 225 {
-                let run_over_rise = run / rise
-                return .vertical(VerticalCartesianLineImpl(m: run_over_rise, c: y_intercept))
-            } else if self.theta < 315 {
-                let rise_over_run = rise / run
-                return .horizontal(HorizontalCartesianLineImpl(m: rise_over_run, c: y_intercept))
-            } else {
-                let run_over_rise = run / rise
-                return .vertical(VerticalCartesianLineImpl(m: run_over_rise, c: y_intercept))
-            }
-        } else {
-            return .vertical(StraightVerticalCartesianLine(x: self.rho))
-        }
-    }
 }
 
 
@@ -145,23 +61,21 @@ public func polarCoords(point1: DoubleCoord,
     if dx1 == dx2 {
         // vertical case
 
-        let theta = 0.0
         let rho = Double(dx1)
         if rho > 0 {
-            return (theta, rho)
+            return (0, rho)
         } else {
-            return (180.0, -rho)
+            return (180, -rho)
         }
     } else if dy1 == dy2 {
         // horizontal case
 
-        let theta = 90.0
         let rho = Double(dy1)
 
         if rho > 0 {
-            return (theta, rho)
+            return (90, rho)
         } else {
-            return (270.0, -rho)
+            return (270, -rho)
         }
     } else {
         let x_diff = dx1-dx2
@@ -179,9 +93,10 @@ public func polarCoords(point1: DoubleCoord,
         /*
          after handling directly vertical and horiontal lines as sepecial cases above,
          all lines we are left with fall into one of two categories,
-         sloping up, or down.  If the line slops up, then the theta calculated is
-         what we want.  If the line slops down however, we're going in the other
-         direction, and neeed to account for that.
+         sloping up, or down.  If the line slops up in y,
+         then the theta calculated is what we want.
+         If the line slops down in y however,
+         we're going in the other direction, and neeed to account for that.
          */
         
         var needFlip = false

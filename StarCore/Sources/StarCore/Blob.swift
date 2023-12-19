@@ -1,4 +1,5 @@
 import Foundation
+import KHTSwift
 
 // blobs created by the blobber
 public class Blob {

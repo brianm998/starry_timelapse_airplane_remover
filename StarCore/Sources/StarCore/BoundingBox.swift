@@ -1,4 +1,5 @@
 import Foundation
+import KHTSwift
 
 // the bounding box of an outlier group
 public struct BoundingBox: Codable {
