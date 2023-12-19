@@ -18,6 +18,7 @@ public func kernelHoughTransform(image: [UInt16],
     var mutableImage = image 
     
     mutableImage.withUnsafeMutableBufferPointer() { imagePtr in
+        // first get a list of lines from the kernel based hough transform
         if let lines = KHTBridge.translate(imagePtr.baseAddress,
                                            width: width,
                                            height: width,
@@ -29,24 +30,12 @@ public func kernelHoughTransform(image: [UInt16],
         {
             for line in lines {
                 if let line = line as? KHTBridgeLine {
-                    // convert kht polar central origin polar coords to
-                    // two points that are on the line
-                    //print("kht line.theta \(line.theta) line.rho \(line.rho) line.count \(line.count)")
+                    // change how each line is represented
 
-                    // two points that are on this line
-                    let (p1, p2) = line.coords(width: width, height: height)
-
-                    //print("p1 \(p1) p2 \(p2)")
-
-                    // construct a new theta and rho using upper left polar coords
-                    let (new_theta, new_rho) = polarCoords(point1: p1, point2: p2)
-
-                    //print("new_theta \(new_theta), new_rho \(new_rho)\n")
-
-                    let newLine = Line(theta: new_theta,
-                                       rho: new_rho,
-                                       count: Int(line.count))
-
+                    // convert kht polar central origin polar coord line
+                    // two a line polar coord origin at [0, 0]
+                    let newLine = line.leftCenterOriginLine(width: width, height: height)
+                    
                     var shouldAppend = true
 
                     // check lines we are already going to return to see
@@ -56,7 +45,7 @@ public func kernelHoughTransform(image: [UInt16],
                     for lineToReturn in ret {
                         if lineToReturn.matches(newLine,
                                                 maxThetaDiff: 5,
-                                                maxRhoDiff: 2)
+                                                maxRhoDiff: 4)
                         {
                             shouldAppend = false
                             break
@@ -75,6 +64,33 @@ public func kernelHoughTransform(image: [UInt16],
 
 extension KHTBridgeLine {
 
+    // returns a line with polar coord origin at [0, 0]
+    func leftCenterOriginLine(width: Int32, height: Int32) -> Line {
+
+        // the kht lib uses polar coordinates with
+        // the origin centered on the image
+        
+        // the star app uses polar coordinates with
+        // the origin at pixel [0, 0]
+        
+        // get two points that are on this line
+        let (p1, p2) = self.coords(width: width, height: height)
+
+        // construct a new theta and rho using upper left polar coords
+        var (new_theta, new_rho) = polarCoords(point1: p1, point2: p2)
+        
+        if new_rho < 0 {
+            // make all rho positive by flipping theta when it's negative
+            new_rho = -new_rho
+            new_theta = (new_theta + 180).truncatingRemainder(dividingBy: 360)
+        }
+
+        return Line(theta: new_theta,
+                    rho: new_rho,
+                    count: Int(self.count))
+    }
+
+    
     func coords(width: Int32, height: Int32) -> (DoubleCoord, DoubleCoord) {
         // this logic is copied from main.cpp
         // it converts the central origin polar coords
@@ -131,7 +147,7 @@ public struct Coord: Codable {
     }
 }
 
-// x, y coordinates
+// x, y coordinates as doubles
 public struct DoubleCoord: Codable {
     public let x: Double
     public let y: Double
@@ -162,36 +178,6 @@ public struct DoubleCoord: Codable {
         let c = -(dy2/slope - dx2)
 
         return StandardLine(a: a, b: b, c: c)
-    }
-}
-
-public struct StandardLine {
-    // a*x + b*y + c = 0
-
-    let a: Double
-    let b: Double
-    let c: Double
-
-
-    func intersection(with otherLine: StandardLine) -> DoubleCoord {
-
-        let a1 = self.a
-        let b1 = self.b
-        let c1 = self.c
-
-        let a2 = otherLine.a
-        let b2 = otherLine.b
-        let c2 = otherLine.c
-
-        return DoubleCoord(x: (b1*c2-b2*c1)/(a1*b2-a2*b1),
-                           y: (c1*a2-c2*a1)/(a1*b2-a2*b1))
-    }
-
-    var yAtZeroX: Double {
-        // b*y + c = 0
-        // b*y = -c
-        // y = -c/b
-        return -c/b
     }
 }
 
@@ -232,12 +218,11 @@ public func polarCoords(point1: DoubleCoord,
         var line_theta = line_theta_radians*RADIANS_TO_DEGREES
 
         /*
-
          after handling directly vertical and horiontal lines as sepecial cases above,
          all lines we are left with fall into one of two categories,
          sloping up, or down.  If the line slops up, then the theta calculated is
          what we want.  If the line slops down however, we're going in the other
-         direction, and neeed to account for it.
+         direction, and neeed to account for that.
          */
         
         var needFlip = false
@@ -296,14 +281,13 @@ public func polarCoords(point1: DoubleCoord,
 
         // sometimes rho needs to be negative, 
         // if theta is pointing away from the line
-        // reverse theta and keep rho positive
         
         let yAtZeroX = origStandardLine.yAtZeroX
 
         if (yAtZeroX < 0 && theta < 180) ||
            (yAtZeroX > 0 && theta > 180)
         {
-            theta = (theta + 180).truncatingRemainder(dividingBy: 360)
+            rho = -rho
         }
         
         return (theta, rho)
