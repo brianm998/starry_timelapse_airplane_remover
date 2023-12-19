@@ -3,6 +3,11 @@ import kht_bridge
 let DEGREES_TO_RADIANS = atan(1.0) / 45.0
 let RADIANS_TO_DEGREES = 45 / atan(1.0)
 
+// this swift method wraps an objc method which wraps a c++ implementation
+// of kernel based hough transormation
+// we convert the coordinate system of the returned lines, and filter them a bit
+// these default parameter values need more documentation.  All but the last
+// two were taken from main.cpp from the kht implementation.
 public func kernelHoughTransform(image: [UInt16],
                                  width: Int32,
                                  height: Int32, 
@@ -10,7 +15,9 @@ public func kernelHoughTransform(image: [UInt16],
                                  clusterMinDeviation: Double = 2.0,
                                  delta: Double = 0.5,
                                  kernelMinHeight: Double = 0.002,
-                                 nSigmas: Double = 2.0) -> [Line]
+                                 nSigmas: Double = 2.0,
+                                 maxThetaDiff: Double = 5,
+                                 maxRhoDiff: Double = 4) -> [Line]
 {
     var ret: [Line] = []
 
@@ -44,8 +51,8 @@ public func kernelHoughTransform(image: [UInt16],
                     // don't return it.
                     for lineToReturn in ret {
                         if lineToReturn.matches(newLine,
-                                                maxThetaDiff: 5,
-                                                maxRhoDiff: 4)
+                                                maxThetaDiff: maxThetaDiff,
+                                                maxRhoDiff: maxRhoDiff)
                         {
                             shouldAppend = false
                             break
@@ -76,17 +83,9 @@ extension KHTBridgeLine {
         // get two points that are on this line
         let (p1, p2) = self.coords(width: width, height: height)
 
-        // construct a new theta and rho using upper left polar coords
-        var (new_theta, new_rho) = polarCoords(point1: p1, point2: p2)
-        
-        if new_rho < 0 {
-            // make all rho positive by flipping theta when it's negative
-            new_rho = -new_rho
-            new_theta = (new_theta + 180).truncatingRemainder(dividingBy: 360)
-        }
-
-        return Line(theta: new_theta,
-                    rho: new_rho,
+        // construct a new line based upon these points
+        return Line(point1: p1,
+                    point2: p2,
                     count: Int(self.count))
     }
 
@@ -180,117 +179,3 @@ public struct DoubleCoord: Codable {
         return StandardLine(a: a, b: b, c: c)
     }
 }
-
-// returns polar coords with (0, 0) origin for the given points
-public func polarCoords(point1: DoubleCoord,
-                        point2: DoubleCoord) -> (theta: Double, rho: Double)
-{
-    let dx1 = point1.x
-    let dy1 = point1.y
-    let dx2 = point2.x
-    let dy2 = point2.y
-
-    if dx1 == dx2 {
-        // vertical case
-
-        let theta = 0.0
-        let rho = Double(dx1)
-
-        return (theta, rho)
-    } else if dy1 == dy2 {
-        // horizontal case
-
-        let theta = 90.0
-        let rho = Double(dy1)
-        
-        return (theta, rho)
-    } else {
-        let x_diff = dx1-dx2
-        let y_diff = dy1-dy2
-
-        let distance_between_points = sqrt(x_diff*x_diff + y_diff*y_diff)
-
-        // calculate the angle of the line
-        let line_theta_radians = acos(abs(x_diff/distance_between_points))
-
-        // the angle the line rises from the x axis, regardless of
-        // in which direction
-        var line_theta = line_theta_radians*RADIANS_TO_DEGREES
-
-        /*
-         after handling directly vertical and horiontal lines as sepecial cases above,
-         all lines we are left with fall into one of two categories,
-         sloping up, or down.  If the line slops up, then the theta calculated is
-         what we want.  If the line slops down however, we're going in the other
-         direction, and neeed to account for that.
-         */
-        
-        var needFlip = false
-        if dx1 < dx2 {
-            if dy2 < dy1 {
-                needFlip = true
-            }
-        } else {
-            if dy1 < dy2 {
-                needFlip = true
-            }
-        }
-        
-        // in this orientation, the angle is moving in the reverse direction,
-        // so make it negative, and keep it between 0..<360
-        if needFlip { line_theta = 360 - line_theta }
-        
-        // the theta we want is perpendicular to the angle of this line
-        var theta = line_theta + 90
-
-        // keep theta within 0..<360
-        if theta >= 360 { theta -= 360 }
-
-        // next get rho
-
-        // start with the stardard line definition for the line we were given
-        let origStandardLine = point1.standardLine(with: point2)
-
-        // our intersection line passes through the origin at 0, 0
-        let origin = DoubleCoord(x: 0, y: 0)
-
-        // next find another point at an arbitrary distance from the origin,
-        // on the line with the same theta
-        
-        let hypo = 100.0         // arbitrary distance value
-
-        // find points hypo pixels from the origin on this line
-        let parallel_x = hypo * cos(theta*DEGREES_TO_RADIANS)
-        let parallel_y = hypo * sin(theta*DEGREES_TO_RADIANS)
-
-        // this point is on the line that rho travels on, at
-        // an arbitrary distance from the origin.  
-        let parallelCoord = DoubleCoord(x: parallel_x, y: parallel_y)
-
-        // use the new point to get the standard line definition for
-        // the line between the origin and the right angle intersection with
-        // the passed line
-        let parallelStandardLine = origin.standardLine(with: parallelCoord)
-
-        // get the intersection point between the two lines
-        // rho is between this line and the origin
-        let meetPoint = parallelStandardLine.intersection(with: origStandardLine)
-
-        // rho is the hypotenuse of the meeting point x, y
-        var rho = sqrt(meetPoint.x*meetPoint.x+meetPoint.y*meetPoint.y)
-
-        // sometimes rho needs to be negative, 
-        // if theta is pointing away from the line
-        
-        let yAtZeroX = origStandardLine.yAtZeroX
-
-        if (yAtZeroX < 0 && theta < 180) ||
-           (yAtZeroX > 0 && theta > 180)
-        {
-            rho = -rho
-        }
-        
-        return (theta, rho)
-    }
-}
-
