@@ -3,7 +3,7 @@ import Foundation
 import SwiftUI
 import Cocoa
 import StarCore
-
+import KHTSwift
 
 // UI view class used for each frame
 public class FrameViewModel: ObservableObject {
