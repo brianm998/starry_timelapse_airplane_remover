@@ -18,7 +18,7 @@ public struct Line: Codable {
     // constructs a line that passes through the two given points
     init(point1: DoubleCoord,
          point2: DoubleCoord,
-         count: Int)
+         count: Int = 0)
     {
         (self.theta, self.rho) = polarCoords(point1: point1, point2: point2)
         self.count = count
