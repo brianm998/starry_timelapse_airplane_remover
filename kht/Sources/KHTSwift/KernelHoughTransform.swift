@@ -156,6 +156,10 @@ public struct DoubleCoord: Codable {
         self.y = y
     }
 
+    public var hasNaN: Bool { x.isNaN || y.isNaN }
+
+    public var isFinite: Bool { x.isFinite && y.isFinite }
+    
     public func standardLine(with otherPoint: DoubleCoord) -> StandardLine {
         let dx1 = self.x
         let dy1 = self.y
@@ -165,17 +169,32 @@ public struct DoubleCoord: Codable {
         let x_diff = dx1-dx2
         let y_diff = dy1-dy2
 
-        let slope = y_diff / x_diff
+        if x_diff == 0 {
+            // vertical line
+            // x = c
+            // 1*x + 0*y - c = 0
+            
+            return StandardLine(a: 1, b: 0, c: -dx1)
+        } else if y_diff == 0 {
+            // horizontal line
+            // y = c
+            // 0*x + 1*y - c = 0
+            
+            return StandardLine(a: 0, b: 1, c: -dy1)
+        } else {
+        
+            let slope = y_diff / x_diff
 
-        // y - dy2 = slope*(x - dx2)
-        // y/slope - dy2/slope = x - dx2
-        // -1*x + 1/slope * y = dy2/slope - dx2
-        // -1*x + 1/slope * y - (dy2/slope - dx2) = 0
+            // y - dy2 = slope*(x - dx2)
+            // y/slope - dy2/slope = x - dx2
+            // -1*x + 1/slope * y = dy2/slope - dx2
+            // -1*x + 1/slope * y - (dy2/slope - dx2) = 0
 
-        let a = -1.0
-        let b = 1/slope
-        let c = -(dy2/slope - dx2)
+            let a = -1.0
+            let b = 1/slope
+            let c = -(dy2/slope - dx2)
 
-        return StandardLine(a: a, b: b, c: c)
+            return StandardLine(a: a, b: b, c: c)
+        }
     }
 }
