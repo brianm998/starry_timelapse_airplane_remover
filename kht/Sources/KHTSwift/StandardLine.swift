@@ -17,10 +17,18 @@ public struct StandardLine {
         self.c = c
     }
 
+    // calculate a standard line from two points that are on the line
+    public init(point1: DoubleCoord, point2: DoubleCoord) {
+        //print("standard line with point1 \(point1) point2 \(point2)")
+        self = point1.standardLine(with: point2)
+    }
+
     // gives a line with polar coordinates with origin at [0, 0]
     public var polarLine: Line {
         let x_intercept = DoubleCoord(x: 0, y: self.y(forX: 0))
         let y_intercept = DoubleCoord(x: self.x(forY: 0), y: 0)
+
+        print("x_intercept \(x_intercept) y_intercept \(y_intercept)")
 
         if x_intercept.isFinite {
             if y_intercept.isFinite {
@@ -44,10 +52,6 @@ public struct StandardLine {
         }
     }
     
-    public init(point1: DoubleCoord, point2: DoubleCoord) {
-        self = point1.standardLine(with: point2)
-    }
-
     public func y(forX x: Double) -> Double {
         // a*x + b*y + c = 0
         // a*x + b*y = -c

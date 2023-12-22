@@ -88,10 +88,16 @@ public class OutlierGroup: CustomStringConvertible,
                                                                height: bounds.height)
         // do a hough transform on just this outlier group
 
-        self.lines = kernelHoughTransformArray(image: pixels,
-                                               width: Int32(bounds.width),
-                                               height: Int32(bounds.height))
-
+        let pixelImage = PixelatedImage(width: bounds.width,
+                                        height: bounds.height,
+                                        grayscale16BitImageData: pixels)
+        if let image = pixelImage.nsImage {
+            self.lines = kernelHoughTransform(image: image,
+                                              width: Int32(bounds.width),
+                                              height: Int32(bounds.height))
+        } else {
+            self.lines = []     // XXX
+        }
         _ = self.houghLineHistogram
     }
 

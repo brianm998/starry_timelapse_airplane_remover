@@ -8,7 +8,7 @@
 @end
 
 @interface KHTBridge : NSObject
-+(NSArray *) translate:(uint16*)image
++(NSArray *) translate:(NSImage*)image
 		 width:(int)width
 		height:(int)height
 	clusterMinSize:(int)clusterMinSize

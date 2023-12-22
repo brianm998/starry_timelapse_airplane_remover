@@ -22,13 +22,13 @@ public struct PixelatedImage {
     public let imageData: DataFormat
 
     // total number of pixels for each pixel
-    let bitsPerPixel: Int
-    let bytesPerRow: Int
-    let bitsPerComponent: Int
-    let bytesPerPixel: Int
+    public let bitsPerPixel: Int
+    public let bytesPerRow: Int
+    public let bitsPerComponent: Int
+    public let bytesPerPixel: Int
     let bitmapInfo: CGBitmapInfo
 
-    let componentsPerPixel: Int
+    public let componentsPerPixel: Int
 
     let colorSpace: CGColorSpace // XXX why both space and name?
     let ciFormat: CIFormat    // used to write tiff formats properly
@@ -275,7 +275,7 @@ public struct PixelatedImage {
     // used when modifying the invariant original image data, and saying the edits to a file
     // XXX make this async
     func writeTIFFEncoding(ofData imageData: Data,
-                        toFilename imageFilename: String) throws
+                           toFilename imageFilename: String) throws
     {
         if fileManager.fileExists(atPath: imageFilename) {
             Log.i("overwriting already existing filename \(imageFilename)")

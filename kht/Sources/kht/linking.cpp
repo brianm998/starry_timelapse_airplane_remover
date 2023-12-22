@@ -42,7 +42,7 @@ namespace kht {
         static std::int32_t const Y_OFFSET[8] = {1,  0, -1,  0,  1,  1, -1, -1};
 
         // This function complements the linking procedure.
-        inline bool next(std::int32_t &x_seed, std::int32_t &y_seed, std::uint16_t const *binary_image, std::size_t image_width, std::size_t image_height) {
+        inline bool next(std::int32_t &x_seed, std::int32_t &y_seed, std::uint8_t const *binary_image, std::size_t image_width, std::size_t image_height) {
             /* Leandro A. F. Fernandes, Manuel M. Oliveira
             * Real-time line detection through an improved Hough transform voting scheme
             * Pattern Recognition (PR), Elsevier, 41:1, 2008, pp. 299-314.
@@ -67,7 +67,7 @@ namespace kht {
         }
 
         // Creates a chain of neighboring edge pixels.
-        inline void linking_procedure(ChainOfPixels &chain, std::uint16_t *binary_image, std::size_t image_width, std::size_t image_height, std::int32_t x_ref, std::int32_t y_ref, std::double_t half_width, std::double_t half_height) {
+        inline void linking_procedure(ChainOfPixels &chain, std::uint8_t *binary_image, std::size_t image_width, std::size_t image_height, std::int32_t x_ref, std::int32_t y_ref, std::double_t half_width, std::double_t half_height) {
             /* Leandro A. F. Fernandes, Manuel M. Oliveira
             * Real-time line detection through an improved Hough transform voting scheme
             * Pattern Recognition (PR), Elsevier, 41:1, 2008, pp. 299-314.
@@ -103,7 +103,7 @@ namespace kht {
         }
 
         // Creates a list of chains of neighboring edge pixels.
-        void find_chains(ListOfChains &chains, std::uint16_t *binary_image, std::size_t image_width, std::size_t image_height, std::int32_t min_size) {
+        void find_chains(ListOfChains &chains, std::uint8_t *binary_image, std::size_t image_width, std::size_t image_height, std::int32_t min_size) {
             std::double_t half_width = 0.5 * image_width;
             std::double_t half_height = 0.5 * image_height;
 

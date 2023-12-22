@@ -93,7 +93,7 @@ public struct Line: Codable {
     }
 
     // returns where this line intersects with a frame of the given size
-    public func frameBoundries(width: Int, height: Int) -> (DoubleCoord, DoubleCoord) {
+    public func frameBoundries(width: Int, height: Int) -> [DoubleCoord] {
         let dWidth = Double(width)
         let dHeight = Double(height)
         let upperLeft  = DoubleCoord(x: 0, y: 0)
@@ -111,56 +111,56 @@ public struct Line: Codable {
         var coordsInBound: [DoubleCoord] = []
 
         let leftLineIntersection = leftLine.intersection(with: standardSelf)
-        if leftLineIntersection.x >= 0,
-           leftLineIntersection.x <= dWidth,
-           leftLineIntersection.y >= 0,
-           leftLineIntersection.y <= dHeight
+        if Int(leftLineIntersection.x) >= 0,
+           Int(leftLineIntersection.x) <= width,
+           Int(leftLineIntersection.y) >= 0,
+           Int(leftLineIntersection.y) <= height
         {
             print("appended leftLineIntersection \(leftLineIntersection)")
             coordsInBound.append(leftLineIntersection)
         } else {
-            print("ignored leftLineIntersection \(leftLineIntersection)")
+            print("ignored 1 leftLineIntersection \(leftLineIntersection)")
         }
 
         let rightLineIntersection = rightLine.intersection(with: standardSelf)
-        if rightLineIntersection.x >= 0,
-           rightLineIntersection.x <= dWidth,
-           rightLineIntersection.y >= 0,
-           rightLineIntersection.y <= dHeight
+        if Int(rightLineIntersection.x) >= 0,
+           Int(rightLineIntersection.x) <= width,
+           Int(rightLineIntersection.y) >= 0,
+           Int(rightLineIntersection.y) <= height
         {
             print("appended rightLineIntersection \(rightLineIntersection)")
             coordsInBound.append(rightLineIntersection)
         } else {
-            print("ignored rightLineIntersection \(rightLineIntersection)")
+            print("ignored 2 rightLineIntersection \(rightLineIntersection)")
         }
 
         let upperLineIntersection = upperLine.intersection(with: standardSelf)
-        if upperLineIntersection.x >= 0,
-           upperLineIntersection.x <= dWidth,
-           upperLineIntersection.y >= 0,
-           upperLineIntersection.y <= dHeight
+        if Int(upperLineIntersection.x) >= 0,
+           Int(upperLineIntersection.x) <= width,
+           Int(upperLineIntersection.y) >= 0,
+           Int(upperLineIntersection.y) <= height
         {
             print("appended upperLineIntersection \(upperLineIntersection)")
             coordsInBound.append(upperLineIntersection)
         } else {
-            print("ignored upperLineIntersection \(upperLineIntersection)")
+            print("ignored 3 upperLineIntersection \(upperLineIntersection)")
         }
 
         let lowerLineIntersection = lowerLine.intersection(with: standardSelf)
-        if lowerLineIntersection.x >= 0,
-           lowerLineIntersection.x <= dWidth,
-           lowerLineIntersection.y >= 0,
-           lowerLineIntersection.y <= dHeight
+        if Int(lowerLineIntersection.x) >= 0,
+           Int(lowerLineIntersection.x) <= width,
+           Int(lowerLineIntersection.y) >= 0,
+           Int(lowerLineIntersection.y) <= height
         {
             print("appended lowerLineIntersection \(lowerLineIntersection)")
             coordsInBound.append(lowerLineIntersection)
         } else {
-            print("ignored lowerLineIntersection \(lowerLineIntersection)")
+            print("ignored 4 lowerLineIntersection \(lowerLineIntersection)")
         }
 
-        print("coordsInBound.count \(coordsInBound)")
-        
-        return (coordsInBound[0], coordsInBound[1])
+        print("coordsInBound.count \(coordsInBound.count)")
+
+        return coordsInBound
     }
     
     public func matches(_ line: Line,

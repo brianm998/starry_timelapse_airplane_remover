@@ -47,43 +47,99 @@ let no_clouds = [
   "241": "\(no_cloud_base)/LRT_00242-severe-noise.tiff"
 ]
 
-let filename = "/tmp/LRT_00242-severe-noise_cropped_bigger.tif"
-//let filename = "/tmp/LRT_00242-severe-noise_cropped.tif"//no_clouds["241"],
-if    let image = try await PixelatedImage(fromFile: filename)
-{
-    // XXX segfault because array isn't one big chunk
-    print("got [\(image.width), \(image.height)] image from \(filename)")
+//let filename = "/tmp/LRT_00242-severe-noise_cropped_bigger.tif"
 
+//let filename = "/sp/tmp/really_small_test.tiff"
+//let filename = "/sp/tmp/10_pixels_square.tiff"
+//let filename = "/sp/tmp/20x40_test.tif"
+let filename = "/sp/tmp/foobar3.tif"
+//let filename = "/tmp/LRT_00242-severe-noise_cropped.tif"//no_clouds["241"],
+if let image = try await PixelatedImage(fromFile: filename)
+{
+    print("got [\(image.width), \(image.height)] image from \(filename)")
+    print("bitsPerPixel \(image.bitsPerPixel) bytesPerRow \(image.bytesPerRow) bitsPerComponent \(image.bitsPerComponent) bytesPerPixel \(image.bytesPerPixel) componentsPerPixel \(image.componentsPerPixel)")
+    
     switch image.imageData {
     case .eightBit(let imageArray):
         print("8 bit, fuck")
     case .sixteenBit(let imageArray):
         let numPixels = image.width*image.height
-        
-        let capacity = numPixels + numPixels // works -- XXX WTF is up here??
-        //let capacity = numPixels + numPixels/2 // works -- XXX WTF is up here??
-        //let capacity = numPixels + numPixels/3 // fails
-        //let capacity = numPixels + numPixels/4 // fails
-        
-        var contiguousArray = ContiguousArray<UInt16>(unsafeUninitializedCapacity: capacity) { unsafePtr, initializedCount in
-            for i in 0..<numPixels {
-                unsafePtr[i] = imageArray[i]
-            }
-            initializedCount = numPixels
-        }
 
-        let lineImage = [UInt16](repeating: 0, count: numPixels)
+        for y in 0..<image.height {
+            for x in 0..<image.width {
+                if imageArray[y*image.width+x] > 0x1000 {
+                    print("*", terminator: "")
+                } else {
+                    print(" ", terminator: "")
+                }
+            }
+            print("")
+        }
         
-        contiguousArray.withUnsafeMutableBufferPointer { ptr in
-            let lines = kernelHoughTransform(image: ptr.baseAddress,
+        let nsImage = image.nsImage! // XXX !!!
+        
+        var lineImage = [UInt16](repeating: 0, count: numPixels)
+        
+            let lines = kernelHoughTransform(image: nsImage,
                                              width: Int32(image.width),
                                              height: Int32(image.height))
             print("got \(lines.count) lines")
 
-            for i in 0..<20  {
+            let diff: UInt16 = 0x0200
+            var amount: UInt16 = 0xFFFF 
+
+            var max = 3
+            if max > lines.count {
+                max = lines.count
+            }
+            
+            for i in 0..<max  {
                 print("line[i] \(lines[i])")
 
-                let (b1, b2) = lines[i].frameBoundries(width: image.width, height: image.height)
+                // where does this line intersect with the edges of image frame?
+                let frameEdgeMatches = lines[i].frameBoundries(width: image.width, height: image.height)
+                if frameEdgeMatches.count == 0 {
+                    print("this line is out of frame")
+                } else if frameEdgeMatches.count == 1 {
+                    fatalError("only one edge match")
+                } else if frameEdgeMatches.count == 2 {
+                    // sunny day case
+                    print("frameEdgeMatches \(frameEdgeMatches[0]) \(frameEdgeMatches[1])")
+                    let line = StandardLine(point1: frameEdgeMatches[0],
+                                            point2: frameEdgeMatches[1])
+
+                    let x_diff = abs(frameEdgeMatches[0].x - frameEdgeMatches[1].x)
+                    let y_diff = abs(frameEdgeMatches[0].y - frameEdgeMatches[1].y)
+
+                    let iterateOnXAxis = x_diff > y_diff
+
+                    if iterateOnXAxis {
+                        for x in 0..<image.width {
+                            let y = Int(line.y(forX: Double(x)))
+                            if y > 0,
+                               y < image.height
+                            {
+                                lineImage[y*image.width+x] = amount
+                            }
+                        }
+                    } else {
+                        for y in 0..<image.height {
+                            let x = Int(line.x(forY: Double(y)))
+                            if x > 0,
+                               x < image.width
+                            {
+                                lineImage[y*image.width+x] = amount
+                            }
+                        }
+                    }
+                    if amount > diff {
+                        amount -= diff
+                    }
+                    print("line \(line)\n")
+                    
+                } else {
+                    fatalError("frameEdgeMatches \(frameEdgeMatches) WTF")
+                }
                 
                 /*
                  determine where the line meets the edges of the frame
@@ -92,7 +148,11 @@ if    let image = try await PixelatedImage(fromFile: filename)
                  
                  */
             }
-        }
+
+        let outputImage = PixelatedImage(width: image.width,
+                                         height: image.height,
+                                         grayscale16BitImageData: lineImage)
+        try outputImage.writeTIFFEncoding(toFilename: "/tmp/foobar.tiff")
     }
 }
 

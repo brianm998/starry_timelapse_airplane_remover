@@ -55,11 +55,12 @@ namespace kht {
         inline Line(std::double_t _rho, std::double_t _theta, std::int32_t _votes) :
             rho(_rho),
             theta(_theta),
-            votes(_votes) {
+	    votes(_votes) {
+
         }
 
         inline Line() :
-	    Line(0.0, 0.0, 0) {
+            Line(0.0, 0.0, 0) {
         }
 
         inline Line(Line const &) = default;
@@ -118,7 +119,7 @@ namespace kht {
     * It is important to notice that the linking procedure implemented by the kht()
     * function destroys the original image.
     */
-    void run_kht(ListOfLines &result, std::uint16_t *binary_image, std::size_t image_width, std::size_t image_height, std::int32_t cluster_min_size = 10, std::double_t cluster_min_deviation = 2.0, std::double_t delta = 0.5, std::double_t kernel_min_height = 0.002, std::double_t n_sigmas = 2.0);
+    void run_kht(ListOfLines &result, std::uint8_t *binary_image, std::size_t image_width, std::size_t image_height, std::int32_t cluster_min_size = 10, std::double_t cluster_min_deviation = 2.0, std::double_t delta = 0.5, std::double_t kernel_min_height = 0.002, std::double_t n_sigmas = 2.0);
 
     // The private namespace of the KHT library (don't touch it!).
     namespace detail {
@@ -411,7 +412,7 @@ namespace kht {
         void find_clusters(ListOfClusters &clusters, ListOfChains const &chains, std::double_t min_deviation, std::int32_t min_size);
 
         // Creates a list of chains of neighboring edge pixels.
-        void find_chains(ListOfChains &chains, std::uint16_t *binary_image, std::size_t image_width, std::size_t image_height, std::int32_t min_size);
+        void find_chains(ListOfChains &chains, std::uint8_t *binary_image, std::size_t image_width, std::size_t image_height, std::int32_t min_size);
     
         // Identify the peaks of votes (most significant straight lines) in the accmulator.
         void peak_detection(ListOfLines &lines, Accumulator const &accumulator);

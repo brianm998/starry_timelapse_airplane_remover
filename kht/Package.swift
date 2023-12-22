@@ -8,13 +8,19 @@ let package = Package(
     platforms: [
         .macOS(.v13)
     ],
+
     products: [
         .library(
             name: "KHTSwift",
             targets: ["KHTSwift"])
     ],
+    dependencies: [
+      .package(name: "OpenCV", path: "../../opencv-spm")
+// XXX this ^^^ works, but this VVV doesn't, the opencv-spm name isn't the package name :(
+//      .package(url: "https://github.com/yeatse/opencv-spm.git", from: "4.8.1"),
+    ],
     targets: [
-      .target(name: "kht"),                                   // C++
+      .target(name: "kht", dependencies: ["OpenCV"]),    // C++
       .target(name: "kht_bridge", dependencies: ["kht"]),     // Objective C
       .target(name: "KHTSwift", dependencies: ["kht_bridge"]) // Swift
     ],
