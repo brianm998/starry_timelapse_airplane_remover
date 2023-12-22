@@ -9,13 +9,14 @@ let package = Package(
         .macOS(.v13)
     ],
     dependencies: [
-        .package(name: "KHTSwift", path: "../kht")
+//        .package(name: "KHTSwift", path: "../kht")
+        .package(name: "StarCore", path: "../StarCore")
     ],
     targets: [
         .executableTarget(
           name: "cpp_test",
           dependencies: [
-            .product(name: "KHTSwift", package: "KHTSwift"),
+            .product(name: "StarCore", package: "StarCore"),
           ]
         )
     ]

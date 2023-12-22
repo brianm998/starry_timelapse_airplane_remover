@@ -88,12 +88,10 @@ public class OutlierGroup: CustomStringConvertible,
                                                                height: bounds.height)
         // do a hough transform on just this outlier group
 
-        self.lines = kernelHoughTransform(image: pixels,
-                                          width: Int32(bounds.width),
-                                          height: Int32(bounds.height))
-        
-        // try a smaller line count, with fixed trimming code
-        //self.lines = transform.lines(maxCount: 60, minPixelValue: 1) 
+        self.lines = kernelHoughTransformArray(image: pixels,
+                                               width: Int32(bounds.width),
+                                               height: Int32(bounds.height))
+
         _ = self.houghLineHistogram
     }
 

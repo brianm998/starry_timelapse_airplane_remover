@@ -8,7 +8,35 @@ let RADIANS_TO_DEGREES = 45 / atan(1.0)
 // we convert the coordinate system of the returned lines, and filter them a bit
 // these default parameter values need more documentation.  All but the last
 // two were taken from main.cpp from the kht implementation.
-public func kernelHoughTransform(image: [UInt16],
+public func kernelHoughTransformArray(image: [UInt16],
+                                      width: Int32,
+                                      height: Int32, 
+                                      clusterMinSize: Int32 = 10,
+                                      clusterMinDeviation: Double = 2.0,
+                                      delta: Double = 0.5,
+                                      kernelMinHeight: Double = 0.002,
+                                      nSigmas: Double = 2.0,
+                                      maxThetaDiff: Double = 5,
+                                      maxRhoDiff: Double = 4) -> [Line]
+{
+    // for some reason the KHT code munges the input array, so copy it
+    var mutableImage = image 
+    
+    return mutableImage.withUnsafeMutableBufferPointer() { imagePtr in
+        return kernelHoughTransform(image: imagePtr.baseAddress,
+                                    width: width,
+                                    height: height, 
+                                    clusterMinSize: clusterMinSize,
+                                    clusterMinDeviation: clusterMinDeviation,
+                                    delta: delta,
+                                    kernelMinHeight: kernelMinHeight,
+                                    nSigmas: nSigmas,
+                                    maxThetaDiff: maxThetaDiff,
+                                    maxRhoDiff: maxRhoDiff)
+    }
+}
+
+public func kernelHoughTransform(image: UnsafeMutablePointer<UInt16>?,
                                  width: Int32,
                                  height: Int32, 
                                  clusterMinSize: Int32 = 10,
@@ -21,47 +49,43 @@ public func kernelHoughTransform(image: [UInt16],
 {
     var ret: [Line] = []
 
-    // for some reason the KHT code munges the input array, so copy it
-    var mutableImage = image 
-    
-    mutableImage.withUnsafeMutableBufferPointer() { imagePtr in
-        // first get a list of lines from the kernel based hough transform
-        if let lines = KHTBridge.translate(imagePtr.baseAddress,
-                                           width: width,
-                                           height: width,
-                                           clusterMinSize: clusterMinSize,
-                                           clusterMinDeviation: clusterMinDeviation,
-	                                   delta: delta,
-                                           kernelMinHeight: kernelMinHeight,
-                                           nSigmas: nSigmas)
-        {
-            for line in lines {
-                if let line = line as? KHTBridgeLine {
-                    // change how each line is represented
+    // first get a list of lines from the kernel based hough transform
+    if let lines = KHTBridge.translate(image,
+                                       width: width,
+                                       height: width,
+                                       clusterMinSize: clusterMinSize,
+                                       clusterMinDeviation: clusterMinDeviation,
+	                               delta: delta,
+                                       kernelMinHeight: kernelMinHeight,
+                                       nSigmas: nSigmas)
+    {
+        print("got \(lines.count) lines")
+        for line in lines {
+            if let line = line as? KHTBridgeLine {
+                // change how each line is represented
 
-                    // convert kht polar central origin polar coord line
-                    // two a line polar coord origin at [0, 0]
-                    let newLine = line.leftCenterOriginLine(width: width, height: height)
-                    
-                    var shouldAppend = true
+                // convert kht polar central origin polar coord line
+                // two a line polar coord origin at [0, 0]
+                let newLine = line.leftCenterOriginLine(width: width, height: height)
+                
+                var shouldAppend = true
 
-                    // check lines we are already going to return to see
-                    // if there are any closely matching lines that had a
-                    // higher count.  If so, this line is basically noise,
-                    // don't return it.
-                    for lineToReturn in ret {
-                        if lineToReturn.matches(newLine,
-                                                maxThetaDiff: maxThetaDiff,
-                                                maxRhoDiff: maxRhoDiff)
-                        {
-                            shouldAppend = false
-                            break
-                        }
+                // check lines we are already going to return to see
+                // if there are any closely matching lines that had a
+                // higher count.  If so, this line is basically noise,
+                // don't return it.
+                for lineToReturn in ret {
+                    if lineToReturn.matches(newLine,
+                                            maxThetaDiff: maxThetaDiff,
+                                            maxRhoDiff: maxRhoDiff)
+                    {
+                        shouldAppend = false
+                        break
                     }
+                }
 
-                    if shouldAppend {
-                        ret.append(newLine)
-                    }
+                if shouldAppend {
+                    ret.append(newLine)
                 }
             }
         }

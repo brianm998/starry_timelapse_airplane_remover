@@ -19,7 +19,7 @@ public struct PixelatedImage {
     public let height: Int
 
     // pixel component level access to image data
-    let imageData: DataFormat
+    public let imageData: DataFormat
 
     // total number of pixels for each pixel
     let bitsPerPixel: Int
@@ -91,7 +91,7 @@ public struct PixelatedImage {
     }
 
     public init(width: Int,
-              height: Int,
+                height: Int,
               grayscale8BitImageData imageData: [UInt8])
     {
         self.init(width: width,

@@ -65,7 +65,7 @@ public struct Line: Codable {
             // horizontal line
             return StandardLine(point1: DoubleCoord(x: 10, y: -rho),
                                 point2: DoubleCoord(x: 0, y: -rho))
-        } else if theta == 360 {
+        } else if theta < 360 {
             // theta between 270 and 360
 
             let angle = (theta - 270)*DEGREES_TO_RADIANS
@@ -74,6 +74,10 @@ public struct Line: Codable {
                                 point2: DoubleCoord(x: sin(angle) * rho,
                                                     y: -cos(angle) * rho))
             
+        } else if theta == 360 {
+            // vertical line
+            return StandardLine(point1: DoubleCoord(x: rho, y: 0),
+                                point2: DoubleCoord(x: rho, y: 10))
         } else {
             fatalError("invalid theta \(theta)")
         }
@@ -86,6 +90,77 @@ public struct Line: Codable {
     {
         (self.theta, self.rho) = polarCoords(point1: point1, point2: point2)
         self.count = count
+    }
+
+    // returns where this line intersects with a frame of the given size
+    public func frameBoundries(width: Int, height: Int) -> (DoubleCoord, DoubleCoord) {
+        let dWidth = Double(width)
+        let dHeight = Double(height)
+        let upperLeft  = DoubleCoord(x: 0, y: 0)
+        let upperRight = DoubleCoord(x: 0, y: dHeight)
+        let lowerLeft  = DoubleCoord(x: dWidth, y: 0)
+        let lowerRight = DoubleCoord(x: dWidth, y: dHeight)
+        
+        let leftLine = StandardLine(point1: upperLeft, point2: lowerLeft)
+        let rightLine = StandardLine(point1: upperRight, point2: lowerRight)
+        let upperLine = StandardLine(point1: upperLeft, point2: upperRight)
+        let lowerLine = StandardLine(point1: lowerLeft, point2: lowerRight)
+
+        let standardSelf = self.standardLine
+
+        var coordsInBound: [DoubleCoord] = []
+
+        let leftLineIntersection = leftLine.intersection(with: standardSelf)
+        if leftLineIntersection.x >= 0,
+           leftLineIntersection.x <= dWidth,
+           leftLineIntersection.y >= 0,
+           leftLineIntersection.y <= dHeight
+        {
+            print("appended leftLineIntersection \(leftLineIntersection)")
+            coordsInBound.append(leftLineIntersection)
+        } else {
+            print("ignored leftLineIntersection \(leftLineIntersection)")
+        }
+
+        let rightLineIntersection = rightLine.intersection(with: standardSelf)
+        if rightLineIntersection.x >= 0,
+           rightLineIntersection.x <= dWidth,
+           rightLineIntersection.y >= 0,
+           rightLineIntersection.y <= dHeight
+        {
+            print("appended rightLineIntersection \(rightLineIntersection)")
+            coordsInBound.append(rightLineIntersection)
+        } else {
+            print("ignored rightLineIntersection \(rightLineIntersection)")
+        }
+
+        let upperLineIntersection = upperLine.intersection(with: standardSelf)
+        if upperLineIntersection.x >= 0,
+           upperLineIntersection.x <= dWidth,
+           upperLineIntersection.y >= 0,
+           upperLineIntersection.y <= dHeight
+        {
+            print("appended upperLineIntersection \(upperLineIntersection)")
+            coordsInBound.append(upperLineIntersection)
+        } else {
+            print("ignored upperLineIntersection \(upperLineIntersection)")
+        }
+
+        let lowerLineIntersection = lowerLine.intersection(with: standardSelf)
+        if lowerLineIntersection.x >= 0,
+           lowerLineIntersection.x <= dWidth,
+           lowerLineIntersection.y >= 0,
+           lowerLineIntersection.y <= dHeight
+        {
+            print("appended lowerLineIntersection \(lowerLineIntersection)")
+            coordsInBound.append(lowerLineIntersection)
+        } else {
+            print("ignored lowerLineIntersection \(lowerLineIntersection)")
+        }
+
+        print("coordsInBound.count \(coordsInBound)")
+        
+        return (coordsInBound[0], coordsInBound[1])
     }
     
     public func matches(_ line: Line,
