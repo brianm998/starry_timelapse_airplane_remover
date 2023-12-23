@@ -106,4 +106,7 @@ public class Blob {
                      maxPixelDistance: 0xFFFF) // XXX not sure this is used anymore
     }
 
+    public func distanceTo(line: StandardLine) -> Double {
+        return 0                // XXX implement this somehow
+    }
 }

@@ -116,6 +116,10 @@ extension FrameAirplaneRemover {
             if blobIntensity < minBlobIntensity { minBlobIntensity = blobIntensity }
             if blobIntensity > maxBlobIntensity { maxBlobIntensity = blobIntensity }
 
+
+            // KHT here, kht after blobbing before outlier group creation
+
+            
             let outlierGroup = blob.outlierGroup(at: frameIndex)
             outlierGroup.frame = self
             outlierGroups?.members[outlierGroup.name] = outlierGroup
@@ -130,6 +134,24 @@ extension FrameAirplaneRemover {
         }
         
         self.state = .readyForInterFrameProcessing
+
+
+        // XXX KHT here
+
+
+        /*
+         get the subtraction image for this frame
+
+         matrix it 1024x1024
+
+         kht each matrix element
+
+         iterate over each line for each element and
+         look for any found outlier group that is close to it
+
+         keep a running bag of close outlier groups that are 
+         
+         */
     }
 
     public func foreachOutlierGroup(_ closure: (OutlierGroup)async->LoopReturn) async {
@@ -228,7 +250,7 @@ extension FrameAirplaneRemover {
            - don't apply decision tree, use the validation image instead
          */
 
-        if true { //!outliersLoadedFromFile {
+        if !outliersLoadedFromFile {
             if let image = await imageAccessor.load(type: .validated, atSize: .original) {
                 switch image.imageData {
                 case .eightBit(let validationArr):
@@ -236,10 +258,10 @@ extension FrameAirplaneRemover {
                     shouldUseDecisionTree = false
                     
                 case .sixteenBit(_):
-                    Log.e("cannot load 16 bit validation image")
+                    Log.e("frame \(frameIndex) cannot load 16 bit validation image")
                 }
             } else {
-                Log.w("couldn't load validation image from")
+                Log.i("frame \(frameIndex) couldn't load validation image from")
             }
         }
         

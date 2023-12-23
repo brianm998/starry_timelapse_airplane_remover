@@ -68,7 +68,14 @@ public struct StandardLine {
         // x = (-c - b*y)/a
         return (-c - b*y)/a
     }
-    
+
+    // how var is the given point from this line?
+    public func distanceTo(x: Int, y: Int) -> Double {
+        abs(a*Double(x) + b*Double(y) + c) / sqrt(a*a+b*b)
+    }
+
+    // returns the coordinate of intersection with the other line
+    // if they are parallel, NaN or Infinity may be in the result
     public func intersection(with otherLine: StandardLine) -> DoubleCoord {
 
         let a1 = self.a

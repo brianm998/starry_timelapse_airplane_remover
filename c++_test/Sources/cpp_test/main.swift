@@ -11,20 +11,23 @@ Log.add(handler: ConsoleLogHandler(at: .debug),
 
 /*
 
- Next steps for kernel hough transform:
-
+ Done:
+ 
  add a step after initial outlier group detection that breaks the image up
  into 1024x1024 or smaller chunks, and runs the KHT on it.
+
+ Next steps for kernel hough transform:
 
  Then, iterate through the pixels close to each line, and see if they match up with
  some number of outlier groups.  If so, group them together.
 
- ideally we can get the outlier groups from the KHT directly, and then group them
- in the same way
+ Discard any outlier groups that are not on a line
 
- perhaps try loading full subtraction images here, and running KHT on the full image
+ Group together groups that are on the same line and close together
 
- it's possible that the canny edge detector from main.cpp was messing things up
+ This will reduce the number of outlier groups,
+ and improve the quality of those that remain.
+ 
  */
 
 let cloud_base = "/sp/tmp/LRT_05_20_2023-a9-4-aurora-topaz-star-aligned-subtracted"
@@ -157,15 +160,6 @@ if let image = try await PixelatedImage(fromFile: filename)
                         {
                             var value: UInt16 = 0xFFFF
                             if lines[i].count < 0xFFFF {
-
-                                /*
-                                 base = 10
-                                 count = 0, output = 10
-                                 count = 100, output = 100
-
-                                 (100-10)/100 * count /  + 10
-                                 
-                                 */
                                 let valueD = Double(0xFFFF - base)/0xFFFF * Double(lines[i].count) + Double(base)
                                 if valueD < 0xFFFF {
                                     value = UInt16(valueD)
