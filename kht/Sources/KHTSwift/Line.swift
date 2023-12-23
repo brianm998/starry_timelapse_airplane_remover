@@ -95,6 +95,7 @@ public struct Line: Codable {
 
     // returns where this line intersects with a frame of the given size
     public func frameBoundries(width: Int, height: Int) -> [DoubleCoord] {
+
         let dWidth = Double(width)
         let dHeight = Double(height)
         let upperLeft  = DoubleCoord(x: 0, y: 0)
@@ -112,7 +113,9 @@ public struct Line: Codable {
         var coordsInBound: [DoubleCoord] = []
 
         let leftLineIntersection = leftLine.intersection(with: standardSelf)
-        if Int(leftLineIntersection.x) >= 0,
+        
+        if leftLineIntersection.isRational,
+           Int(leftLineIntersection.x) >= 0,
            Int(leftLineIntersection.x) <= width,
            Int(leftLineIntersection.y) >= 0,
            Int(leftLineIntersection.y) <= height
@@ -124,7 +127,9 @@ public struct Line: Codable {
         }
 
         let rightLineIntersection = rightLine.intersection(with: standardSelf)
-        if Int(rightLineIntersection.x) >= 0,
+        
+        if rightLineIntersection.isRational,
+           Int(rightLineIntersection.x) >= 0,
            Int(rightLineIntersection.x) <= width,
            Int(rightLineIntersection.y) >= 0,
            Int(rightLineIntersection.y) <= height
@@ -136,7 +141,9 @@ public struct Line: Codable {
         }
 
         let upperLineIntersection = upperLine.intersection(with: standardSelf)
-        if Int(upperLineIntersection.x) >= 0,
+        
+        if upperLineIntersection.isRational,
+           Int(upperLineIntersection.x) >= 0,
            Int(upperLineIntersection.x) <= width,
            Int(upperLineIntersection.y) >= 0,
            Int(upperLineIntersection.y) <= height
@@ -148,7 +155,9 @@ public struct Line: Codable {
         }
 
         let lowerLineIntersection = lowerLine.intersection(with: standardSelf)
-        if Int(lowerLineIntersection.x) >= 0,
+        
+        if lowerLineIntersection.isRational,
+           Int(lowerLineIntersection.x) >= 0,
            Int(lowerLineIntersection.x) <= width,
            Int(lowerLineIntersection.y) >= 0,
            Int(lowerLineIntersection.y) <= height

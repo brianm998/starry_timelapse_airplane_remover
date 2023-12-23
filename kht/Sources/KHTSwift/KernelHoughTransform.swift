@@ -167,8 +167,8 @@ public struct DoubleCoord: Codable {
     }
 
     public var hasNaN: Bool { x.isNaN || y.isNaN }
-
     public var isFinite: Bool { x.isFinite && y.isFinite }
+    public var isRational: Bool { !self.hasNaN && self.isFinite }
     
     public func standardLine(with otherPoint: DoubleCoord) -> StandardLine {
         let dx1 = self.x
