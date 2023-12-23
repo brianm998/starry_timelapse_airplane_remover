@@ -4,6 +4,7 @@ import CoreGraphics
 import Cocoa
 import StarCore
 import ShellOut
+import logging
 
 /*
 

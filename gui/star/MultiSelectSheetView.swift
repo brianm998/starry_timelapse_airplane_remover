@@ -1,5 +1,6 @@
 import SwiftUI
 import StarCore
+import logging
 
 public enum MultiSelectionType: String, Equatable, CaseIterable {
     case all = "all frames"

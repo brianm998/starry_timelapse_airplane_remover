@@ -69,3 +69,7 @@ public class FileLogHandler: LogHandler {
         }
     }
 }
+
+// make any string into an Error, so it can be thrown by itself if desired
+extension String: Error {}
+

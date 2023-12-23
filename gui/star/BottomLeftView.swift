@@ -1,5 +1,6 @@
 import SwiftUI
 import StarCore
+import logging
 
 // controls on the bottom left of the screen,
 // below the image frame and above the filmstrip and scrub bar

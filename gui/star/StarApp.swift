@@ -7,6 +7,7 @@
 
 import SwiftUI
 import StarCore
+import logging
 
 /*
 

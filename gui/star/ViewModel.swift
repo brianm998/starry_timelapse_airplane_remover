@@ -3,6 +3,7 @@ import SwiftUI
 import Cocoa
 import StarCore
 import Zoomable
+import logging
 
 public enum VideoPlayMode: String, Equatable, CaseIterable {
     case forward

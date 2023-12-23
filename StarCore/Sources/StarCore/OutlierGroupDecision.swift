@@ -1,4 +1,5 @@
 import Foundation
+import logging
 
 /*
  This OutlierGroup extention contains all of the decision tree specific logic.

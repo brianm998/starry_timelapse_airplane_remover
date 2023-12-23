@@ -1,4 +1,5 @@
 import Foundation
+import logging
 
 // polar coordinates for right angle intersection with line from origin of [0, 0]
 public struct Line: Codable {
@@ -116,10 +117,10 @@ public struct Line: Codable {
            Int(leftLineIntersection.y) >= 0,
            Int(leftLineIntersection.y) <= height
         {
-            print("appended leftLineIntersection \(leftLineIntersection)")
+            Log.d("appended leftLineIntersection \(leftLineIntersection)")
             coordsInBound.append(leftLineIntersection)
         } else {
-            print("ignored 1 leftLineIntersection \(leftLineIntersection)")
+            Log.d("ignored 1 leftLineIntersection \(leftLineIntersection)")
         }
 
         let rightLineIntersection = rightLine.intersection(with: standardSelf)
@@ -128,10 +129,10 @@ public struct Line: Codable {
            Int(rightLineIntersection.y) >= 0,
            Int(rightLineIntersection.y) <= height
         {
-            print("appended rightLineIntersection \(rightLineIntersection)")
+            Log.d("appended rightLineIntersection \(rightLineIntersection)")
             coordsInBound.append(rightLineIntersection)
         } else {
-            print("ignored 2 rightLineIntersection \(rightLineIntersection)")
+            Log.d("ignored 2 rightLineIntersection \(rightLineIntersection)")
         }
 
         let upperLineIntersection = upperLine.intersection(with: standardSelf)
@@ -140,10 +141,10 @@ public struct Line: Codable {
            Int(upperLineIntersection.y) >= 0,
            Int(upperLineIntersection.y) <= height
         {
-            print("appended upperLineIntersection \(upperLineIntersection)")
+            Log.d("appended upperLineIntersection \(upperLineIntersection)")
             coordsInBound.append(upperLineIntersection)
         } else {
-            print("ignored 3 upperLineIntersection \(upperLineIntersection)")
+            Log.d("ignored 3 upperLineIntersection \(upperLineIntersection)")
         }
 
         let lowerLineIntersection = lowerLine.intersection(with: standardSelf)
@@ -152,13 +153,13 @@ public struct Line: Codable {
            Int(lowerLineIntersection.y) >= 0,
            Int(lowerLineIntersection.y) <= height
         {
-            print("appended lowerLineIntersection \(lowerLineIntersection)")
+            Log.d("appended lowerLineIntersection \(lowerLineIntersection)")
             coordsInBound.append(lowerLineIntersection)
         } else {
-            print("ignored 4 lowerLineIntersection \(lowerLineIntersection)")
+            Log.d("ignored 4 lowerLineIntersection \(lowerLineIntersection)")
         }
 
-        print("coordsInBound.count \(coordsInBound.count)")
+        Log.d("coordsInBound.count \(coordsInBound.count)")
 
         return coordsInBound
     }

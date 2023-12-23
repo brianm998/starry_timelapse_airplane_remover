@@ -1,4 +1,5 @@
 import Foundation
+import logging
 
 // this class is to debug issues with not calling DispatchHandler.leave() properly
 

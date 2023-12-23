@@ -1,5 +1,6 @@
 import kht_bridge
 import CoreGraphics
+import logging
 import Cocoa
 
 let DEGREES_TO_RADIANS = atan(1.0) / 45.0
@@ -17,7 +18,7 @@ public func kernelHoughTransform(image: NSImage,
                                  kernelMinHeight: Double = 0.002,
                                  nSigmas: Double = 2.0,
                                  maxThetaDiff: Double = 5,
-                                 maxRhoDiff: Double = 2,
+                                 maxRhoDiff: Double = 4,
                                  minCount: Int = 20) -> [Line]
 {
     var ret: [Line] = []
@@ -30,7 +31,7 @@ public func kernelHoughTransform(image: NSImage,
                                        kernelMinHeight: kernelMinHeight,
                                        nSigmas: nSigmas)
     {
-        print("got \(lines.count) lines")
+        Log.d("got \(lines.count) lines")
 
         var count = 0
         
@@ -67,7 +68,7 @@ public func kernelHoughTransform(image: NSImage,
 
                 if shouldAppend {
                     if count < 4 {
-                        print("KHT line \(count) theta \(line.theta) rho \(line.rho)")
+                        Log.d("KHT line \(count) theta \(line.theta) rho \(line.rho)")
                     }
                     ret.append(newLine)
                     count += 1

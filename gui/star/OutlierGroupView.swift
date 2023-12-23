@@ -2,6 +2,7 @@ import Foundation
 import SwiftUI
 import Cocoa
 import StarCore
+import logging
 
 // the view for a single outlier group on a frame
 

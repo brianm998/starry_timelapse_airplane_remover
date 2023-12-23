@@ -15,6 +15,7 @@ You should have received a copy of the GNU General Public License along with sta
 
 import Foundation
 import KHTSwift
+import logging
 import Cocoa
 
 // these need to be setup at startup so the decision tree values are right

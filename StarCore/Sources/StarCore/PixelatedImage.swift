@@ -12,6 +12,7 @@ You should have received a copy of the GNU General Public License along with sta
 
 import Foundation
 import CoreGraphics
+import logging
 import Cocoa
 
 public struct PixelatedImage {

@@ -1,4 +1,5 @@
 import Foundation
+import logging
 
 // describes a line by the standard formula of a*x + b*y + c = 0
 public struct StandardLine {
@@ -19,7 +20,7 @@ public struct StandardLine {
 
     // calculate a standard line from two points that are on the line
     public init(point1: DoubleCoord, point2: DoubleCoord) {
-        //print("standard line with point1 \(point1) point2 \(point2)")
+        //Log.d("standard line with point1 \(point1) point2 \(point2)")
         self = point1.standardLine(with: point2)
     }
 
@@ -28,7 +29,7 @@ public struct StandardLine {
         let x_intercept = DoubleCoord(x: 0, y: self.y(forX: 0))
         let y_intercept = DoubleCoord(x: self.x(forY: 0), y: 0)
 
-        print("x_intercept \(x_intercept) y_intercept \(y_intercept)")
+        Log.d("x_intercept \(x_intercept) y_intercept \(y_intercept)")
 
         if x_intercept.isFinite {
             if y_intercept.isFinite {

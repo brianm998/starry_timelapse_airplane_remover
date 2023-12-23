@@ -1,5 +1,6 @@
 import SwiftUI
 import StarCore
+import logging
 
 // slider at the bottom that scrubs the frame position
 struct ScrubSliderView: View {

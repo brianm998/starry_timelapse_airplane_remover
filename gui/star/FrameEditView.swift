@@ -1,6 +1,7 @@
 import SwiftUI
 import StarCore
 import Zoomable
+import logging
 
 // the view for when the user wants to edit what outlier groups are painted and not
 

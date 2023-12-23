@@ -1,5 +1,6 @@
 import SwiftUI
 import StarCore
+import logging
 
 struct InitialView: View {
     @EnvironmentObject var viewModel: ViewModel

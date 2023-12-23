@@ -1,5 +1,6 @@
 import Foundation
 import CoreGraphics
+import logging
 import Cocoa
 
 /*
@@ -33,18 +34,18 @@ public enum FrameImageType {
 public protocol ImageAccess {
     // save image, will rescale and jpeg if necessary
     func save(_ image: PixelatedImage,
-             as type: FrameImageType,
-             atSize size: ImageDisplaySize,
-             overwrite: Bool) async throws
+              as type: FrameImageType,
+              atSize size: ImageDisplaySize,
+              overwrite: Bool) async throws
 
     // load an image of some type and size
     func load(type imageType: FrameImageType,
-             atSize size: ImageDisplaySize) async -> PixelatedImage?
+              atSize size: ImageDisplaySize) async -> PixelatedImage?
 
     // load an image of some type and size
     func loadNSImage(type imageType: FrameImageType,
                      atSize size: ImageDisplaySize) async -> NSImage?
-
+    
     // where to load or save this type of image from
     func dirForImage(ofType type: FrameImageType,
                      atSize size: ImageDisplaySize) -> String?
@@ -127,9 +128,9 @@ struct ImageAccessor: ImageAccess {
         }
         return nil
     }
-    
+
     func load(type imageType: FrameImageType,
-             atSize size: ImageDisplaySize) async -> PixelatedImage?
+              atSize size: ImageDisplaySize) async -> PixelatedImage?
     {
         do {
             if let filename = nameForImage(ofType: imageType, atSize: size) {

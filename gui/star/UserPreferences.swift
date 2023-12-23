@@ -1,5 +1,6 @@
 import Foundation
 import StarCore
+import logging
 
 class UserPreferences: Codable {
     static let filename = ".star.userprefs.json"

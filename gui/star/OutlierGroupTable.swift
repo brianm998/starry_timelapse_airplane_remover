@@ -1,5 +1,6 @@
 import SwiftUI
 import StarCore
+import logging
 
 typealias DTColumn = TableColumn<OutlierGroupTableRow,
                                  KeyPathComparator<OutlierGroupTableRow>,

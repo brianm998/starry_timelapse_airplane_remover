@@ -26,9 +26,6 @@ public struct Defaults {
     public static let minGroupSize: Int = 30
 }
 
-// make any string into an Error, so it can be thrown by itself if desired
-extension String: Error {}
-
 public enum Edge {
     case vertical
     case horizontal

@@ -25,8 +25,6 @@
 
   NSImageToMat(image, im);
 
-  //printf("im.elemSize %zu channels %d type %d\n", im.elemSize(), im.channels(), im.type());
-
   // XXX add a check on type to make sure this is necessary
   im.convertTo(eightBit,CV_8U);
 
@@ -52,10 +50,6 @@
     double rho = line.rho;
     double theta = line.theta;
 
-    if (i < 4) {
-      printf("line %d theta %f rho %f\n", i, theta, rho);
-    }
-    
     // make all rho positive
     if(rho < 0) {
       // if negative, flip rho and theta to make it positive

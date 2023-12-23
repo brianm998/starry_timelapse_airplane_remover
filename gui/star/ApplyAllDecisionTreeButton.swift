@@ -1,5 +1,6 @@
 import SwiftUI
 import StarCore
+import logging
 
 struct ApplyAllDecisionTreeButton: View {
     @EnvironmentObject var viewModel: ViewModel

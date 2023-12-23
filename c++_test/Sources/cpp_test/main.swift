@@ -3,6 +3,12 @@
 
 import KHTSwift
 import StarCore
+import logging
+
+
+Log.add(handler: ConsoleLogHandler(at: .debug),
+        for: .console)
+
 /*
 
  Next steps for kernel hough transform:
@@ -52,58 +58,45 @@ let no_clouds = [
 //let filename = "/sp/tmp/really_small_test.tiff"
 //let filename = "/sp/tmp/10_pixels_square.tiff"
 //let filename = "/sp/tmp/20x40_test.tif"
-let filename = "/sp/tmp/foobar3.tif"
+//let filename = "/sp/tmp/foobar3.tif"
+//let filename = "/tmp/LRT_00242-severe-noise_cropped_bigger.tif"
+let filename = "/tmp/LRT_00242-severe-noise_cropped.tif"
 //let filename = "/tmp/LRT_00242-severe-noise_cropped.tif"//no_clouds["241"],
 if let image = try await PixelatedImage(fromFile: filename)
 {
-    print("got [\(image.width), \(image.height)] image from \(filename)")
-    print("bitsPerPixel \(image.bitsPerPixel) bytesPerRow \(image.bytesPerRow) bitsPerComponent \(image.bitsPerComponent) bytesPerPixel \(image.bytesPerPixel) componentsPerPixel \(image.componentsPerPixel)")
+    Log.d("got [\(image.width), \(image.height)] image from \(filename)")
     
     switch image.imageData {
     case .eightBit(let imageArray):
-        print("8 bit, fuck")
+        Log.d("8 bit, fuck")
     case .sixteenBit(let imageArray):
         let numPixels = image.width*image.height
 
-        for y in 0..<image.height {
-            for x in 0..<image.width {
-                if imageArray[y*image.width+x] > 0x1000 {
-                    print("*", terminator: "")
-                } else {
-                    print(" ", terminator: "")
-                }
-            }
-            print("")
-        }
-        
         let nsImage = image.nsImage! // XXX !!!
         
         var lineImage = [UInt16](repeating: 0, count: numPixels)
         
         let lines = kernelHoughTransform(image: nsImage)
 
-        print("got \(lines.count) lines")
+        Log.d("got \(lines.count) lines")
 
         let diff: UInt16 = 0x0200
         var amount: UInt16 = 0xFFFF 
 
-        var max = 3
-        if max > lines.count {
-            max = lines.count
-        }
+        let max = lines.count
         
         for i in 0..<max  {
-            print("line[i] \(lines[i])")
+            Log.d("line[i] \(lines[i])")
 
             // where does this line intersect with the edges of image frame?
             let frameEdgeMatches = lines[i].frameBoundries(width: image.width, height: image.height)
             if frameEdgeMatches.count == 0 {
-                print("this line is out of frame")
+                Log.d("this line is out of frame")
             } else if frameEdgeMatches.count == 1 {
                 fatalError("only one edge match")
             } else if frameEdgeMatches.count == 2 {
                 // sunny day case
-                print("frameEdgeMatches \(frameEdgeMatches[0]) \(frameEdgeMatches[1])")
+                Log.d("frameEdgeMatches \(frameEdgeMatches[0]) \(frameEdgeMatches[1])")
                 let line = StandardLine(point1: frameEdgeMatches[0],
                                         point2: frameEdgeMatches[1])
 
@@ -134,7 +127,7 @@ if let image = try await PixelatedImage(fromFile: filename)
                 if amount > diff {
                     amount -= diff
                 }
-                print("line \(line)\n")
+                Log.d("line \(line)\n")
                 
             } else {
                 fatalError("frameEdgeMatches \(frameEdgeMatches) WTF")
@@ -205,10 +198,10 @@ var image3: [UInt16] = [0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 let lines = kernelHoughTransform(image: image3,
                                  width: 16,
                                  height: 16)
-print("lines \(lines.count)")
+Log.d("lines \(lines.count)")
 
 for line in lines {
-    print("line \(line)")
+    Log.d("line \(line)")
 }*/
 
 /*
@@ -216,7 +209,7 @@ let (theta1, rho1) = polarCoords(point1: DoubleCoord(x: 0, y: -1),
                                  point2: DoubleCoord(x: 8, y: 7))
 let (theta1, rho1) = polarCoords(point1: DoubleCoord(x: 0, y: -2),
                                  point2: DoubleCoord(x: -2, y: 0))
-print("### theta1 \(theta1) rho1 \(rho1)")
+Log.d("### theta1 \(theta1) rho1 \(rho1)")
 */
 
 /*
@@ -226,17 +219,17 @@ let (theta2, rho2) = polarCoords(point1: DoubleCoord(x: 0, y: 8),
                                  point2: DoubleCoord(x: 8, y: 0))
 let (theta2, rho2) = polarCoords(point1: DoubleCoord(x: 2, y: 8),
                                  point2: DoubleCoord(x: 2, y: 0))
-print("### theta1 \(theta1) rho1 \(rho1) theta2 \(theta2) rho2 \(rho2)")
+Log.d("### theta1 \(theta1) rho1 \(rho1) theta2 \(theta2) rho2 \(rho2)")
 
  */
 /*
 let lines2 = kernelHoughTransform(image: image2,
                                   width: 12,
                                   height: 12)
-print("lines2 \(lines2.count)")
+Log.d("lines2 \(lines2.count)")
 
 for line in lines2 {
-    print("line2 \(line)")
+    Log.d("line2 \(line)")
 }
 */
 /*
@@ -244,31 +237,31 @@ for line in lines2 {
 let horizontalLine = StandardLine(point1: DoubleCoord(x: 3, y: 1),
                                   point2: DoubleCoord(x: 8, y: 1))
 
-print("horizontalLine \(horizontalLine) at y = 1")
+Log.d("horizontalLine \(horizontalLine) at y = 1")
 
 let hph = horizontalLine.polarLine
 
-print("hph \(hph)")
+Log.d("hph \(hph)")
 
 
 let verticalLine = StandardLine(point1: DoubleCoord(x: 1, y: 3),
                                   point2: DoubleCoord(x: 1, y: 8))
 
-print("verticalLine \(verticalLine) at x = 1")
+Log.d("verticalLine \(verticalLine) at x = 1")
 
 let vph = verticalLine.polarLine
 
-print("vph \(vph)")
+Log.d("vph \(vph)")
 */
 /*
 let fortyFiveLine = StandardLine(point1: DoubleCoord(x: 0, y: 1),
                                  point2: DoubleCoord(x: 4, y: 1))
 
-print("fortyFiveLine \(fortyFiveLine)")
+Log.d("fortyFiveLine \(fortyFiveLine)")
 
 let polar = fortyFiveLine.polarLine
 
-print("45 polar \(polar)")
+Log.d("45 polar \(polar)")
 
-print("standard again \(polar.standardLine)")
+Log.d("standard again \(polar.standardLine)")
 */
