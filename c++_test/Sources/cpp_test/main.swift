@@ -66,8 +66,8 @@ let no_clouds = [
 //let filename = "/tmp/LRT_00242-severe-noise_cropped.tif"
 
 
-let filename = "/sp/tmp/LRT_05_20_2023-a9-4-aurora-topaz-star-aligned-subtracted/LRT_00234-severe-noise.tiff"
-//let filename = "/sp/tmp/LRT_07_15_2023-a7iv-4-aurora-topaz-star-aligned-subtracted/LRT_00242-severe-noise.tiff"
+//let filename = "/sp/tmp/LRT_05_20_2023-a9-4-aurora-topaz-star-aligned-subtracted/LRT_00234-severe-noise.tiff"
+let filename = "/sp/tmp/LRT_07_15_2023-a7iv-4-aurora-topaz-star-aligned-subtracted/LRT_00242-severe-noise.tiff"
 
 
 //let filename = "/tmp/LRT_00242-severe-noise_cropped.tif"//no_clouds["241"],
@@ -78,10 +78,15 @@ if let image = try await PixelatedImage(fromFile: filename)
     let matrix = image.splitIntoMatrix(maxWidth: 1024, maxHeight: 1024)
 
     for element in matrix {
+
+        Log.d("processing element [\(element.x), \(element.y)]")
         try element.image.writeTIFFEncoding(toFilename: "/tmp/element_base_\(element.x)_\(element.y).tiff")
 
         
-        let lines = element.image.kernelHoughTransform(minCount: 600)
+        let lines = element.image.kernelHoughTransform(maxThetaDiff: 10,
+                                                       maxRhoDiff: 10,
+                                                       minLineCount: 2000,
+                                                       minResults: 6)
         
         let numPixels = element.image.width*element.image.height
 
@@ -92,12 +97,14 @@ if let image = try await PixelatedImage(fromFile: filename)
         let diff: UInt16 = 0x0200
         var amount: UInt16 = 0xFFFF 
         var adjustment: UInt16 = 0xFFFF
+        var base: UInt16 = 0x2000
+        /*
         if lines.count > 0,
-           lines[0].count < 0xFFFF
+           lines[0].count + Int(base) < 0xFFFF
         {
-            adjustment = 0xFFFF/UInt16(lines[0].count)
+            adjustment = 0xFFFF/UInt16(lines[0].count) + base
         }
-        
+        */
         for i in 0..<lines.count  {
             Log.d("line[i] \(lines[i])")
             
@@ -127,9 +134,15 @@ if let image = try await PixelatedImage(fromFile: filename)
                            y < element.image.height
                         {
                             var value: UInt16 = 0xFFFF
-                            if lines[i].count < 0xFFFF {
-                                value = UInt16(lines[i].count)
+
+                            let valueD = Double(0xFFFF - base)/0xFFFF * Double(lines[i].count) + Double(base)
+                            if valueD < 0xFFFF {
+                                value = UInt16(valueD)
+                            } else {
+                                Log.e("fuck \(valueD) > 0xFFFF")
+                                value = 0xFFFF
                             }
+                            
                             let index = y*element.image.width+x
                             if lineImage[index] < value {
                                 lineImage[index] = value
@@ -144,7 +157,22 @@ if let image = try await PixelatedImage(fromFile: filename)
                         {
                             var value: UInt16 = 0xFFFF
                             if lines[i].count < 0xFFFF {
-                                value = UInt16(lines[i].count)
+
+                                /*
+                                 base = 10
+                                 count = 0, output = 10
+                                 count = 100, output = 100
+
+                                 (100-10)/100 * count /  + 10
+                                 
+                                 */
+                                let valueD = Double(0xFFFF - base)/0xFFFF * Double(lines[i].count) + Double(base)
+                                if valueD < 0xFFFF {
+                                    value = UInt16(valueD)
+                                } else {
+                                    Log.e("fuck \(valueD) > 0xFFFF")
+                                    value = 0xFFFF
+                                }
                             }
                             let index = y*element.image.width+x
                             if lineImage[index] < value {

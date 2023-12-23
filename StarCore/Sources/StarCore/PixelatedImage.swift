@@ -339,7 +339,8 @@ public struct PixelatedImage {
                                      nSigmas: Double = 2.0,
                                      maxThetaDiff: Double = 5,
                                      maxRhoDiff: Double = 4,
-                                     minCount: Int = 20) -> [Line]
+                                     minLineCount: Int = 20,
+                                     minResults: Int = 4) -> [Line]
     {
         if let image = self.nsImage {
             return KHTSwift.kernelHoughTransform(image: image,
@@ -350,7 +351,8 @@ public struct PixelatedImage {
                                                  nSigmas: nSigmas,
                                                  maxThetaDiff: maxThetaDiff,
                                                  maxRhoDiff: maxRhoDiff,
-                                                 minCount: minCount)
+                                                 minLineCount: minLineCount,
+                                                 minResults: minResults)
         }
         return []
     }

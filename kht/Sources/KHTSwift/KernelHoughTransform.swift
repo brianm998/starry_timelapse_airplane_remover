@@ -19,7 +19,8 @@ public func kernelHoughTransform(image: NSImage,
                                  nSigmas: Double = 2.0,
                                  maxThetaDiff: Double = 5,
                                  maxRhoDiff: Double = 4,
-                                 minCount: Int = 20) -> [Line]
+                                 minLineCount: Int = 20,
+                                 minResults: Int = 4) -> [Line]
 {
     var ret: [Line] = []
 
@@ -34,7 +35,7 @@ public func kernelHoughTransform(image: NSImage,
         Log.d("got \(lines.count) lines")
 
         var count = 0
-        
+
         for line in lines {
             if let line = line as? KHTBridgeLine {
                 // change how each line is represented
@@ -46,9 +47,11 @@ public func kernelHoughTransform(image: NSImage,
                 
                 var shouldAppend = true
 
-
-                if newLine.count < minCount {
-                    // ignore lines with small counts
+                if newLine.count < minLineCount,
+                   ret.count >= minResults
+                {
+                    // ignore lines with small counts,
+                    // as long as we have more than minResults
                     shouldAppend = false
                 } else {
                     // check lines we are already going to return to see
