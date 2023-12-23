@@ -16,6 +16,12 @@ import KHTSwift
 import logging
 import Cocoa
 
+public struct ImageMatrixElement {
+    public let x: Int                  // offset in original image
+    public let y: Int
+    public let image: PixelatedImage
+}
+
 public struct PixelatedImage {
     public let width: Int
     public let height: Int
@@ -94,7 +100,7 @@ public struct PixelatedImage {
 
     public init(width: Int,
                 height: Int,
-              grayscale8BitImageData imageData: [UInt8])
+                grayscale8BitImageData imageData: [UInt8])
     {
         self.init(width: width,
                  height: height,
@@ -215,7 +221,66 @@ public struct PixelatedImage {
             break
         }
     }
-    
+
+    // splits image into a matrix of chunked elements of a max size
+    public func splitIntoMatrix(maxWidth: Int, maxHeight: Int) -> [ImageMatrixElement] {
+
+        // XXX only works on grayscale
+        // XXX add a check for this
+        
+        let matrixMaxWidth = Int(Double(width)/Double(maxWidth))
+        let matrixMaxHeight = Int(Double(height)/Double(maxHeight))
+
+        var matrix: [ImageMatrixElement] = []
+        for matrixY in 0...matrixMaxHeight {
+            for matrixX in 0...matrixMaxWidth {
+                let xOffset = matrixX*maxWidth
+                let yOffset = matrixY*maxHeight
+                var matrixWidth = maxWidth
+                if xOffset + matrixWidth > width {
+                    matrixWidth = width - xOffset
+                }
+                var matrixHeight = maxHeight
+                if yOffset + matrixHeight > height {
+                    matrixHeight = height - yOffset
+                }
+
+                switch imageData {
+                case .sixteenBit(let arr):
+                    
+                    var matrixImageData = [UInt16](repeating: 0, count: matrixWidth*matrixHeight)
+                    for y in 0..<matrixHeight {
+                        arr.withUnsafeBufferPointer { sourcePtr in
+                            if let baseAddress = sourcePtr.baseAddress {
+                                memmove(&matrixImageData[y*matrixWidth],
+                                        baseAddress + (y+yOffset)*width+xOffset,
+                                        matrixWidth*2)
+                            } else {
+                                Log.w("cannot memmove")
+                            }
+                        }
+                    }
+
+                    let matrixImage = PixelatedImage(width: matrixWidth,
+                                                     height: matrixHeight,
+                                                     grayscale16BitImageData: matrixImageData)
+                    Log.i("matrix width \(matrixWidth) matrix height \(matrixHeight)")
+                    let element = ImageMatrixElement(x: xOffset,
+                                                     y: yOffset,
+                                                     image: matrixImage)
+                    matrix.append(element)
+                    
+                case .eightBit(_):
+                    Log.e("eight bit not yet implemented")
+                    break       // XXX do this too
+                
+                }
+            }
+        }
+        Log.d("matrix  has \(matrix.count) rows")
+        return matrix
+    }
+
     public func nsImage(ofSize size: NSSize) -> NSImage? {
         return self.nsImage?.resized(to: size)
     }
