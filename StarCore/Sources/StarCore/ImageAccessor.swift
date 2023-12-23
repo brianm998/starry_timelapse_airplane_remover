@@ -66,14 +66,14 @@ struct ImageAccessor: ImageAccess {
     let baseFileName: String
     let imageSequence: ImageSequence
 
-    init(config: Config, imageSequence: ImageSequence, baseFileName: String) throws {
+    init(config: Config, imageSequence: ImageSequence, baseFileName: String) {
         // the dirname (not full path) of where the main output files will sit
         self.config = config
         let _basename = "\(config.imageSequenceDirname)-star-v-\(config.starVersion)"
         self.baseDirName = _basename.replacingOccurrences(of: ".", with: "_")
         self.baseFileName = baseFileName
         self.imageSequence = imageSequence
-        try mkdirs()
+        mkdirs()
     }
     
     var previewSize: NSSize {
@@ -89,30 +89,30 @@ struct ImageAccessor: ImageAccess {
     }
 
     func mkdir(ofType type: FrameImageType,
-               andSize size: ImageDisplaySize = .original) throws
+               andSize size: ImageDisplaySize = .original) 
     {
         if let dirname = dirForImage(ofType: type, atSize: size) {
-            try StarCore.mkdir(dirname)
+            StarCore.mkdir(dirname)
         }
     }
     
-    func mkdirs() throws {
-        try mkdir(ofType: .aligned)
-        try mkdir(ofType: .subtracted)
-        try mkdir(ofType: .validated)
-        try mkdir(ofType: .processed)
+    func mkdirs() {
+        mkdir(ofType: .aligned)
+        mkdir(ofType: .subtracted)
+        mkdir(ofType: .validated)
+        mkdir(ofType: .processed)
         
         if config.writeFramePreviewFiles {
-            try mkdir(ofType: .original, andSize: .preview)
-            try mkdir(ofType: .aligned, andSize: .preview)
-            try mkdir(ofType: .subtracted, andSize: .preview)
-            try mkdir(ofType: .validated, andSize: .preview)
+            mkdir(ofType: .original, andSize: .preview)
+            mkdir(ofType: .aligned, andSize: .preview)
+            mkdir(ofType: .subtracted, andSize: .preview)
+            mkdir(ofType: .validated, andSize: .preview)
         }
         if config.writeFrameThumbnailFiles {
-            try mkdir(ofType: .original, andSize: .thumbnail)
+            mkdir(ofType: .original, andSize: .thumbnail)
         }
         if config.writeFrameProcessedPreviewFiles {
-            try mkdir(ofType: .processed, andSize: .preview)
+            mkdir(ofType: .processed, andSize: .preview)
         }
     }
 

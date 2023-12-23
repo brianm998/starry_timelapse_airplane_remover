@@ -94,7 +94,7 @@ public class OutlierGroups {
         Log.d("writing  \(self.members.count) outlier groups for frame \(self.frameIndex) to binary file")
         let frameDir = "\(dir)/\(frameIndex)"
         
-        try mkdir(frameDir)
+        mkdir(frameDir)
 
         for group in members.values {
             try await group.writeToFile(in: frameDir)

@@ -90,7 +90,7 @@ extension FrameAirplaneRemover {
             let endTime = NSDate().timeIntervalSince1970
             Log.i("frame \(self.frameIndex) spent \(endTime - startTime) seconds classifing outlier groups");
         } else {
-            Log.i("no classifier")
+            Log.w("no classifier")
         }
         Log.d("frame \(self.frameIndex) DONE applyDecisionTreeToAllOutliers")
     }

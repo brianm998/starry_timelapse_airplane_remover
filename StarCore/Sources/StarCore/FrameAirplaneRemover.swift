@@ -102,9 +102,9 @@ public class FrameAirplaneRemover: Equatable, Hashable {
          fullyProcess: Bool = true,
          writeOutputFiles: Bool = true) async throws
     {
-        self.imageAccessor = try ImageAccessor(config: config,
-                                          imageSequence: imageSequence,
-                                          baseFileName: baseName)
+        self.imageAccessor = ImageAccessor(config: config,
+                                           imageSequence: imageSequence,
+                                           baseFileName: baseName)
         self.fullyProcess = fullyProcess
         self.writeOutputFiles = writeOutputFiles
         self.config = config

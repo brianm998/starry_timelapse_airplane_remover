@@ -3,9 +3,11 @@ import CoreGraphics
 import logging
 import Cocoa
 
-public func mkdir(_ path: String) throws {
+public func mkdir(_ path: String) {
     if !fileManager.fileExists(atPath: path) {
-        try fileManager.createDirectory(atPath: path,
+        //Log.e("create directory at path \(path)")
+        // XXX this can fail even then the file already exists
+        try? fileManager.createDirectory(atPath: path,
                                          withIntermediateDirectories: false,
                                          attributes: nil)
     }
@@ -148,7 +150,7 @@ public class ImageSequenceProcessor<T> {
 
         Log.d("done with startup hook")
         
-        try mkdir(outputDirname)
+        mkdir(outputDirname)
 
         // each of these methods removes the airplanes from a particular frame
         Log.i("processing a total of \(await methodList.list.count) frames")

@@ -153,7 +153,7 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
 
         if config.writeOutlierGroupFiles {
             // doesn't do mkdir -p, if a base dir is missing it just hangs :(
-            try mkdir(outlierOutputDirname) // XXX this can fail silently and pause the whole process :(
+            mkdir(outlierOutputDirname) // XXX this can fail silently and pause the whole process :(
         }
 
         if config.writeOutlierGroupFiles          ||
