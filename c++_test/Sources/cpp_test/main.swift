@@ -80,74 +80,73 @@ if let image = try await PixelatedImage(fromFile: filename)
         
         var lineImage = [UInt16](repeating: 0, count: numPixels)
         
-            let lines = kernelHoughTransform(image: nsImage,
-                                             width: Int32(image.width),
-                                             height: Int32(image.height))
-            print("got \(lines.count) lines")
+        let lines = kernelHoughTransform(image: nsImage)
 
-            let diff: UInt16 = 0x0200
-            var amount: UInt16 = 0xFFFF 
+        print("got \(lines.count) lines")
 
-            var max = 3
-            if max > lines.count {
-                max = lines.count
+        let diff: UInt16 = 0x0200
+        var amount: UInt16 = 0xFFFF 
+
+        var max = 3
+        if max > lines.count {
+            max = lines.count
+        }
+        
+        for i in 0..<max  {
+            print("line[i] \(lines[i])")
+
+            // where does this line intersect with the edges of image frame?
+            let frameEdgeMatches = lines[i].frameBoundries(width: image.width, height: image.height)
+            if frameEdgeMatches.count == 0 {
+                print("this line is out of frame")
+            } else if frameEdgeMatches.count == 1 {
+                fatalError("only one edge match")
+            } else if frameEdgeMatches.count == 2 {
+                // sunny day case
+                print("frameEdgeMatches \(frameEdgeMatches[0]) \(frameEdgeMatches[1])")
+                let line = StandardLine(point1: frameEdgeMatches[0],
+                                        point2: frameEdgeMatches[1])
+
+                let x_diff = abs(frameEdgeMatches[0].x - frameEdgeMatches[1].x)
+                let y_diff = abs(frameEdgeMatches[0].y - frameEdgeMatches[1].y)
+
+                let iterateOnXAxis = x_diff > y_diff
+
+                if iterateOnXAxis {
+                    for x in 0..<image.width {
+                        let y = Int(line.y(forX: Double(x)))
+                        if y > 0,
+                           y < image.height
+                        {
+                            lineImage[y*image.width+x] = amount
+                        }
+                    }
+                } else {
+                    for y in 0..<image.height {
+                        let x = Int(line.x(forY: Double(y)))
+                        if x > 0,
+                           x < image.width
+                        {
+                            lineImage[y*image.width+x] = amount
+                        }
+                    }
+                }
+                if amount > diff {
+                    amount -= diff
+                }
+                print("line \(line)\n")
+                
+            } else {
+                fatalError("frameEdgeMatches \(frameEdgeMatches) WTF")
             }
             
-            for i in 0..<max  {
-                print("line[i] \(lines[i])")
+            /*
+             determine where the line meets the edges of the frame
 
-                // where does this line intersect with the edges of image frame?
-                let frameEdgeMatches = lines[i].frameBoundries(width: image.width, height: image.height)
-                if frameEdgeMatches.count == 0 {
-                    print("this line is out of frame")
-                } else if frameEdgeMatches.count == 1 {
-                    fatalError("only one edge match")
-                } else if frameEdgeMatches.count == 2 {
-                    // sunny day case
-                    print("frameEdgeMatches \(frameEdgeMatches[0]) \(frameEdgeMatches[1])")
-                    let line = StandardLine(point1: frameEdgeMatches[0],
-                                            point2: frameEdgeMatches[1])
-
-                    let x_diff = abs(frameEdgeMatches[0].x - frameEdgeMatches[1].x)
-                    let y_diff = abs(frameEdgeMatches[0].y - frameEdgeMatches[1].y)
-
-                    let iterateOnXAxis = x_diff > y_diff
-
-                    if iterateOnXAxis {
-                        for x in 0..<image.width {
-                            let y = Int(line.y(forX: Double(x)))
-                            if y > 0,
-                               y < image.height
-                            {
-                                lineImage[y*image.width+x] = amount
-                            }
-                        }
-                    } else {
-                        for y in 0..<image.height {
-                            let x = Int(line.x(forY: Double(y)))
-                            if x > 0,
-                               x < image.width
-                            {
-                                lineImage[y*image.width+x] = amount
-                            }
-                        }
-                    }
-                    if amount > diff {
-                        amount -= diff
-                    }
-                    print("line \(line)\n")
-                    
-                } else {
-                    fatalError("frameEdgeMatches \(frameEdgeMatches) WTF")
-                }
-                
-                /*
-                 determine where the line meets the edges of the frame
-
-                 iterate over each pixel and paint it on the line image
-                 
-                 */
-            }
+             iterate over each pixel and paint it on the line image
+             
+             */
+        }
 
         let outputImage = PixelatedImage(width: image.width,
                                          height: image.height,

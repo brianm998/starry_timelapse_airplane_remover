@@ -92,9 +92,7 @@ public class OutlierGroup: CustomStringConvertible,
                                         height: bounds.height,
                                         grayscale16BitImageData: pixels)
         if let image = pixelImage.nsImage {
-            self.lines = kernelHoughTransform(image: image,
-                                              width: Int32(bounds.width),
-                                              height: Int32(bounds.height))
+            self.lines = kernelHoughTransform(image: image)
         } else {
             self.lines = []     // XXX
         }

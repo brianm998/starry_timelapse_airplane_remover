@@ -9,8 +9,6 @@
 
 @interface KHTBridge : NSObject
 +(NSArray *) translate:(NSImage*)image
-		 width:(int)width
-		height:(int)height
 	clusterMinSize:(int)clusterMinSize
    clusterMinDeviation:(double)clusterMinDeviation
 		 delta:(double)delta

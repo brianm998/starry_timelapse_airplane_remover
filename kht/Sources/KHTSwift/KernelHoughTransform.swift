@@ -11,22 +11,19 @@ let RADIANS_TO_DEGREES = 45 / atan(1.0)
 // these default parameter values need more documentation.  All but the last
 // two were taken from main.cpp from the kht implementation.
 public func kernelHoughTransform(image: NSImage,
-                                 width: Int32,
-                                 height: Int32, 
                                  clusterMinSize: Int32 = 10,
                                  clusterMinDeviation: Double = 2.0,
                                  delta: Double = 0.5,
                                  kernelMinHeight: Double = 0.002,
                                  nSigmas: Double = 2.0,
                                  maxThetaDiff: Double = 5,
-                                 maxRhoDiff: Double = 4) -> [Line]
+                                 maxRhoDiff: Double = 2,
+                                 minCount: Int = 20) -> [Line]
 {
     var ret: [Line] = []
 
     // first get a list of lines from the kernel based hough transform
     if let lines = KHTBridge.translate(image,
-                                       width: width,
-                                       height: height,
                                        clusterMinSize: clusterMinSize,
                                        clusterMinDeviation: clusterMinDeviation,
 	                               delta: delta,
@@ -43,21 +40,28 @@ public func kernelHoughTransform(image: NSImage,
 
                 // convert kht polar central origin polar coord line
                 // two a line polar coord origin at [0, 0]
-                let newLine = line.leftCenterOriginLine(width: width, height: height)
+                let newLine = line.leftCenterOriginLine(width: Int32(image.size.width),
+                                                        height: Int32(image.size.height))
                 
                 var shouldAppend = true
 
-                // check lines we are already going to return to see
-                // if there are any closely matching lines that had a
-                // higher count.  If so, this line is basically noise,
-                // don't return it.
-                for lineToReturn in ret {
-                    if lineToReturn.matches(newLine,
-                                            maxThetaDiff: maxThetaDiff,
-                                            maxRhoDiff: maxRhoDiff)
-                    {
-                        shouldAppend = false
-                        break
+
+                if newLine.count < minCount {
+                    // ignore lines with small counts
+                    shouldAppend = false
+                } else {
+                    // check lines we are already going to return to see
+                    // if there are any closely matching lines that had a
+                    // higher count.  If so, this line is basically noise,
+                    // don't return it.
+                    for lineToReturn in ret {
+                        if lineToReturn.matches(newLine,
+                                                maxThetaDiff: maxThetaDiff,
+                                                maxRhoDiff: maxRhoDiff)
+                        {
+                            shouldAppend = false
+                            break
+                        }
                     }
                 }
 

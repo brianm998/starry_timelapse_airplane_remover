@@ -13,8 +13,6 @@
 @implementation KHTBridge
 
 +(NSArray *) translate:(NSImage*)image
-		 width:(int)width
-		height:(int)height
 	clusterMinSize:(int)clusterMinSize
    clusterMinDeviation:(double)clusterMinDeviation
 		 delta:(double)delta
@@ -27,30 +25,25 @@
 
   NSImageToMat(image, im);
 
-  printf("im.elemSize %zu channels %d type %d\n", im.elemSize(), im.channels(), im.type());
-  
+  //printf("im.elemSize %zu channels %d type %d\n", im.elemSize(), im.channels(), im.type());
+
+  // XXX add a check on type to make sure this is necessary
   im.convertTo(eightBit,CV_8U);
-  
-  std::int32_t _height = im.rows;
-  std::int32_t _width = im.cols;
+
+  // canny edge detection
   cv::Canny(eightBit, bw, 80, 200);
-  
-  
-  //cv::Canny(eightBit, bw, 80, 200);
   
   // run the c++ Kernel Hough Transform code, results in lineList
   kht::run_kht(lineList,
 	       bw.ptr(),
-	       width,
-	       height,
+	       image.size.width,
+	       image.size.height,
 	       clusterMinSize,
 	       clusterMinDeviation,
 	       delta, 
 	       kernelMinHeight,
 	       nSigmas);
 
-  printf("width %d height %d\n", width, height);
-  
   NSMutableArray * ret = [[NSMutableArray alloc] init];
   
   for(int i = 0 ; i < lineList.size() ; i++) {
