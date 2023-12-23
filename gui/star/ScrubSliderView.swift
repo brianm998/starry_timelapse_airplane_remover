@@ -29,8 +29,8 @@ struct ScrubSliderView: View {
               let newFrameView = viewModel.frames[newFrameIndex]
               let currentFrame = viewModel.currentFrame
               self.viewModel.transition(toFrame: newFrameView,
-                                     from: currentFrame,
-                                     withScroll: scroller)
+                                        from: currentFrame,
+                                        withScroll: scroller)
           }
     }
 }

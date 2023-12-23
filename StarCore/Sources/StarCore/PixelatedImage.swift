@@ -12,6 +12,7 @@ You should have received a copy of the GNU General Public License along with sta
 
 import Foundation
 import CoreGraphics
+import KHTSwift
 import logging
 import Cocoa
 
@@ -266,6 +267,29 @@ public struct PixelatedImage {
         return nil
     }
     
+    public func kernelHoughTransform(clusterMinSize: Int32 = 10,
+                                     clusterMinDeviation: Double = 2.0,
+                                     delta: Double = 0.5,
+                                     kernelMinHeight: Double = 0.002,
+                                     nSigmas: Double = 2.0,
+                                     maxThetaDiff: Double = 5,
+                                     maxRhoDiff: Double = 4,
+                                     minCount: Int = 20) -> [Line]
+    {
+        if let image = self.nsImage {
+            return KHTSwift.kernelHoughTransform(image: image,
+                                                 clusterMinSize: clusterMinSize,
+                                                 clusterMinDeviation: clusterMinDeviation,
+	                                         delta: delta,
+                                                 kernelMinHeight: kernelMinHeight,
+                                                 nSigmas: nSigmas,
+                                                 maxThetaDiff: maxThetaDiff,
+                                                 maxRhoDiff: maxRhoDiff,
+                                                 minCount: minCount)
+        }
+        return []
+    }
+
     // write out the base image data
     public func writeTIFFEncoding(toFilename imageFilename: String) throws {
         try self.writeTIFFEncoding(ofData: self.imageData.data,
