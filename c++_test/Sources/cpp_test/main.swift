@@ -58,87 +58,125 @@ let no_clouds = [
 //let filename = "/sp/tmp/really_small_test.tiff"
 //let filename = "/sp/tmp/10_pixels_square.tiff"
 //let filename = "/sp/tmp/20x40_test.tif"
+
 //let filename = "/sp/tmp/foobar3.tif"
+
 //let filename = "/tmp/LRT_00242-severe-noise_cropped_bigger.tif"
-let filename = "/tmp/LRT_00242-severe-noise_cropped.tif"
+//let filename = "/tmp/LRT_00242-severe-noise_cropped.tif"
+//let filename = "/tmp/LRT_00242-severe-noise_cropped.tif"
+
+
+let filename = "/sp/tmp/LRT_05_20_2023-a9-4-aurora-topaz-star-aligned-subtracted/LRT_00234-severe-noise.tiff"
+//let filename = "/sp/tmp/LRT_07_15_2023-a7iv-4-aurora-topaz-star-aligned-subtracted/LRT_00242-severe-noise.tiff"
+
+
 //let filename = "/tmp/LRT_00242-severe-noise_cropped.tif"//no_clouds["241"],
 if let image = try await PixelatedImage(fromFile: filename)
 {
     Log.d("got [\(image.width), \(image.height)] image from \(filename)")
 
-    let lines = image.kernelHoughTransform(minCount: 100)
-    
-    let numPixels = image.width*image.height
+    let matrix = image.splitIntoMatrix(maxWidth: 1024, maxHeight: 1024)
 
-    var lineImage = [UInt16](repeating: 0, count: numPixels)
-        
-    Log.d("got \(lines.count) lines")
+    for element in matrix {
+        try element.image.writeTIFFEncoding(toFilename: "/tmp/element_base_\(element.x)_\(element.y).tiff")
 
-    let diff: UInt16 = 0x0200
-    var amount: UInt16 = 0xFFFF 
-    
-    let max = lines.count
-    
-    for i in 0..<max  {
-        Log.d("line[i] \(lines[i])")
         
-        // where does this line intersect with the edges of image frame?
-        let frameEdgeMatches = lines[i].frameBoundries(width: image.width, height: image.height)
-        if frameEdgeMatches.count == 0 {
-            Log.d("this line is out of frame")
-        } else if frameEdgeMatches.count == 1 {
-            fatalError("only one edge match")
-        } else if frameEdgeMatches.count == 2 {
-            // sunny day case
-            Log.d("frameEdgeMatches \(frameEdgeMatches[0]) \(frameEdgeMatches[1])")
-            let line = StandardLine(point1: frameEdgeMatches[0],
-                                    point2: frameEdgeMatches[1])
-            
-            let x_diff = abs(frameEdgeMatches[0].x - frameEdgeMatches[1].x)
-            let y_diff = abs(frameEdgeMatches[0].y - frameEdgeMatches[1].y)
-            
-            let iterateOnXAxis = x_diff > y_diff
-            
-            if iterateOnXAxis {
-                for x in 0..<image.width {
-                    let y = Int(line.y(forX: Double(x)))
-                    if y > 0,
-                       y < image.height
-                    {
-                        lineImage[y*image.width+x] = amount
-                    }
-                }
-            } else {
-                for y in 0..<image.height {
-                    let x = Int(line.x(forY: Double(y)))
-                    if x > 0,
-                       x < image.width
-                    {
-                        lineImage[y*image.width+x] = amount
-                    }
-                }
-            }
-            if amount > diff {
-                amount -= diff
-            }
-            Log.d("line \(line)\n")
-            
-        } else {
-            fatalError("frameEdgeMatches \(frameEdgeMatches) WTF")
+        let lines = element.image.kernelHoughTransform(minCount: 600)
+        
+        let numPixels = element.image.width*element.image.height
+
+        var lineImage = [UInt16](repeating: 0, count: numPixels)
+        
+        Log.d("got \(lines.count) lines")
+
+        let diff: UInt16 = 0x0200
+        var amount: UInt16 = 0xFFFF 
+        var adjustment: UInt16 = 0xFFFF
+        if lines.count > 0,
+           lines[0].count < 0xFFFF
+        {
+            adjustment = 0xFFFF/UInt16(lines[0].count)
         }
         
-        /*
-         determine where the line meets the edges of the frame
+        for i in 0..<lines.count  {
+            Log.d("line[i] \(lines[i])")
+            
+            // where does this line intersect with the edges of image frame?
+            let frameEdgeMatches = lines[i].frameBoundries(width: element.image.width,
+                                                           height: element.image.height)
 
-         iterate over each pixel and paint it on the line image
-         
-         */
+            if frameEdgeMatches.count == 0 {
+                Log.d("this line is out of frame")
+            } else if frameEdgeMatches.count == 1 {
+                Log.w("only one edge match")
+            } else if frameEdgeMatches.count == 2 {
+                // sunny day case
+                //Log.d("frameEdgeMatches \(frameEdgeMatches[0]) \(frameEdgeMatches[1])")
+                let line = StandardLine(point1: frameEdgeMatches[0],
+                                        point2: frameEdgeMatches[1])
+                
+                let x_diff = abs(frameEdgeMatches[0].x - frameEdgeMatches[1].x)
+                let y_diff = abs(frameEdgeMatches[0].y - frameEdgeMatches[1].y)
+                
+                let iterateOnXAxis = x_diff > y_diff
+
+                if iterateOnXAxis {
+                    for x in 0..<element.image.width {
+                        let y = Int(line.y(forX: Double(x)))
+                        if y > 0,
+                           y < element.image.height
+                        {
+                            var value: UInt16 = 0xFFFF
+                            if lines[i].count < 0xFFFF {
+                                value = UInt16(lines[i].count)
+                            }
+                            let index = y*element.image.width+x
+                            if lineImage[index] < value {
+                                lineImage[index] = value
+                            }
+                        }
+                    }
+                } else {
+                    for y in 0..<element.image.height {
+                        let x = Int(line.x(forY: Double(y)))
+                        if x > 0,
+                           x < element.image.width
+                        {
+                            var value: UInt16 = 0xFFFF
+                            if lines[i].count < 0xFFFF {
+                                value = UInt16(lines[i].count)
+                            }
+                            let index = y*element.image.width+x
+                            if lineImage[index] < value {
+                                lineImage[index] = value
+                            }
+                        }
+                    }
+                }
+                if amount > diff {
+                    amount -= diff
+                }
+                
+            } else {
+                Log.w("frameEdgeMatches \(frameEdgeMatches) WTF")
+            }
+            
+            /*
+             determine where the line meets the edges of the frame
+
+             iterate over each pixel and paint it on the line image
+             
+             */
+        }
+
+        let outputImage = PixelatedImage(width: element.image.width,
+                                         height: element.image.height,
+                                         grayscale16BitImageData: lineImage)
+
+        
+        try outputImage.writeTIFFEncoding(toFilename: "/tmp/element_lines_\(element.x)_\(element.y).tiff")
     }
 
-    let outputImage = PixelatedImage(width: image.width,
-                                     height: image.height,
-                                     grayscale16BitImageData: lineImage)
-    try outputImage.writeTIFFEncoding(toFilename: "/tmp/foobar.tiff")
 }
 
 
