@@ -6,6 +6,8 @@ import StarCore
 import ShellOut
 import logging
 
+import StarDecisionTrees
+
 /*
 
 This file is part of the Starry Timelapse Airplane Remover (star).
@@ -226,6 +228,8 @@ struct StarCli: AsyncParsableCommand {
 
         //try await testCode()
 
+
+        StarCore.currentClassifier = OutlierGroupClassifierForest_a7624239()
         
         if version {
             print("""
