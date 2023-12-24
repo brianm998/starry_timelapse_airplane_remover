@@ -12,17 +12,29 @@ let RADIANS_TO_DEGREES = 45 / atan(1.0)
 // we convert the coordinate system of the returned lines, and filter them a bit
 // these default parameter values need more documentation.  All but the last
 // four were taken from main.cpp from the kht implementation.
-// This is async because the underlying c++ code is not thread safe.
+// This needs to be async because the underlying c++ code is not thread safe.
 public func kernelHoughTransform(image: NSImage,
                                  clusterMinSize: Int32 = 10,
                                  clusterMinDeviation: Double = 2.0,
                                  delta: Double = 0.5,
                                  kernelMinHeight: Double = 0.002,
                                  nSigmas: Double = 2.0,
+                                 
+                                 // how rotated from a less voted line needs
+                                 // to be from a higher voted one
                                  maxThetaDiff: Double = 5,
+
+                                 // how far away a less voted line needs
+                                 // to be from a higher voted line
                                  maxRhoDiff: Double = 4,
-                                 minLineCount: Int = 20,
-                                 minResults: Int = 4) async -> [Line]
+
+                                 // discard lines with fewer votes than this
+                                 minVotes: Int = 20,
+
+                                 // always return at least this many lines,
+                                 // even if they are below the minVotes 
+                                 minResults: Int = 4) 
+  async -> [Line]
 {
     await transformer.kernelHoughTransform(image: image,
                                            clusterMinSize: clusterMinSize,
@@ -32,7 +44,7 @@ public func kernelHoughTransform(image: NSImage,
                                            nSigmas: nSigmas,
                                            maxThetaDiff: maxThetaDiff,
                                            maxRhoDiff: maxRhoDiff,
-                                           minLineCount: minLineCount,
+                                           minVotes: minVotes,
                                            minResults: minResults)
 }
 
@@ -54,7 +66,7 @@ fileprivate actor HoughTransformer {
                                      nSigmas: Double,
                                      maxThetaDiff: Double,
                                      maxRhoDiff: Double,
-                                     minLineCount: Int,
+                                     minVotes: Int,
                                      minResults: Int) -> [Line]
     {
         var ret: [Line] = []
@@ -82,7 +94,7 @@ fileprivate actor HoughTransformer {
                     
                     var shouldAppend = true
 
-                    if newLine.count < minLineCount,
+                    if newLine.count < minVotes,
                        ret.count >= minResults
                     {
                         // ignore lines with small counts,
