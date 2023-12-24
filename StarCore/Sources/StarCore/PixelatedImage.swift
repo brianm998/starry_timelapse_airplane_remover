@@ -223,19 +223,23 @@ public struct PixelatedImage {
     }
 
     // splits image into a matrix of chunked elements of a max size
-    public func splitIntoMatrix(maxWidth: Int, maxHeight: Int) -> [ImageMatrixElement] {
-
+    public func splitIntoMatrix(maxWidth: Int,
+                                maxHeight: Int,
+                                overlapAmount: Int = 0) -> [ImageMatrixElement]
+    {
         // XXX only works on grayscale
         // XXX add a check for this
         
-        let matrixMaxWidth = Int(Double(width)/Double(maxWidth))
-        let matrixMaxHeight = Int(Double(height)/Double(maxHeight))
+        let matrixMaxWidth = Int(Double(width)/Double(maxWidth - overlapAmount*2))
+        let matrixMaxHeight = Int(Double(height)/Double(maxHeight - overlapAmount*2))
 
+        
+        
         var matrix: [ImageMatrixElement] = []
         for matrixY in 0...matrixMaxHeight {
             for matrixX in 0...matrixMaxWidth {
-                let xOffset = matrixX*maxWidth
-                let yOffset = matrixY*maxHeight
+                var xOffset = matrixX*(maxWidth - overlapAmount)
+                var yOffset = matrixY*(maxHeight - overlapAmount)
                 var matrixWidth = maxWidth
                 if xOffset + matrixWidth > width {
                     matrixWidth = width - xOffset
@@ -244,36 +248,38 @@ public struct PixelatedImage {
                 if yOffset + matrixHeight > height {
                     matrixHeight = height - yOffset
                 }
-
-                switch imageData {
-                case .sixteenBit(let arr):
-                    
-                    var matrixImageData = [UInt16](repeating: 0, count: matrixWidth*matrixHeight)
-                    for y in 0..<matrixHeight {
-                        arr.withUnsafeBufferPointer { sourcePtr in
-                            if let baseAddress = sourcePtr.baseAddress {
-                                memmove(&matrixImageData[y*matrixWidth],
-                                        baseAddress + (y+yOffset)*width+xOffset,
-                                        matrixWidth*2)
-                            } else {
-                                Log.w("cannot memmove")
+                if matrixWidth > 0,
+                   matrixHeight > 0
+                {
+                    switch imageData {
+                    case .sixteenBit(let arr):
+                        var matrixImageData = [UInt16](repeating: 0, count: matrixWidth*matrixHeight)
+                        for y in 0..<matrixHeight {
+                            arr.withUnsafeBufferPointer { sourcePtr in
+                                if let baseAddress = sourcePtr.baseAddress {
+                                    memmove(&matrixImageData[y*matrixWidth],
+                                            baseAddress + (y+yOffset)*width+xOffset,
+                                            matrixWidth*2)
+                                } else {
+                                    Log.w("cannot memmove")
+                                }
                             }
                         }
-                    }
 
-                    let matrixImage = PixelatedImage(width: matrixWidth,
-                                                     height: matrixHeight,
-                                                     grayscale16BitImageData: matrixImageData)
-                    Log.i("matrix width \(matrixWidth) matrix height \(matrixHeight)")
-                    let element = ImageMatrixElement(x: xOffset,
-                                                     y: yOffset,
-                                                     image: matrixImage)
-                    matrix.append(element)
-                    
-                case .eightBit(_):
-                    Log.e("eight bit not yet implemented")
-                    break       // XXX do this too
-                
+                        let matrixImage = PixelatedImage(width: matrixWidth,
+                                                         height: matrixHeight,
+                                                         grayscale16BitImageData: matrixImageData)
+                        Log.i("matrix width \(matrixWidth) matrix height \(matrixHeight)")
+                        let element = ImageMatrixElement(x: xOffset,
+                                                         y: yOffset,
+                                                         image: matrixImage)
+                        matrix.append(element)
+                        
+                    case .eightBit(_):
+                        Log.e("eight bit not yet implemented")
+                        break       // XXX do this too
+                        
+                    }
                 }
             }
         }

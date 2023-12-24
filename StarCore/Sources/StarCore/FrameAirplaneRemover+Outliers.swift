@@ -143,7 +143,9 @@ extension FrameAirplaneRemover {
             Log.i("frame \(frameIndex) loaded subtraction image")
 
             // XXX A whole forest of magic numbers here :(
-            let matrix = subtractionImage.splitIntoMatrix(maxWidth: 1024, maxHeight: 1024)
+            let matrix = subtractionImage.splitIntoMatrix(maxWidth: 512,
+                                                          maxHeight: 512,
+                                                          overlapAmount: 128)
             Log.i("frame \(frameIndex) has matrix with \(matrix.count) elements")
             for element in matrix {
                 Log.i("frame \(frameIndex) matrix element [\(element.x), \(element.y)]")
