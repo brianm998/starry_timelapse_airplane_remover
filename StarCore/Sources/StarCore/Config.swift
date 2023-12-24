@@ -185,8 +185,9 @@ public struct Config: Codable {
     // 0.4.4 border painting enabled with config options
     // 0.5.0 blobber
     // 0.5.1 write validation images and use them for new outliers if present
+    // 0.6.0 kernel hough transform and new blob to outlier group logic
     
-    public var starVersion = "0.5.1" // XXX move this out
+    public var starVersion = "0.6.0" // XXX move this out
 
     public func writeJson(named filename: String) {
         
