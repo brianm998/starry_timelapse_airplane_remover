@@ -7,12 +7,12 @@ let DEGREES_TO_RADIANS = atan(1.0) / 45.0
 let RADIANS_TO_DEGREES = 45 / atan(1.0)
 
 
-
 // this swift method wraps an objc method which wraps a c++ implementation
-// of kernel based hough transormation
+// of kernel based hough transformation
 // we convert the coordinate system of the returned lines, and filter them a bit
 // these default parameter values need more documentation.  All but the last
-// two were taken from main.cpp from the kht implementation.
+// four were taken from main.cpp from the kht implementation.
+// This is async because the underlying c++ code is not thread safe.
 public func kernelHoughTransform(image: NSImage,
                                  clusterMinSize: Int32 = 10,
                                  clusterMinDeviation: Double = 2.0,
@@ -40,22 +40,22 @@ public func kernelHoughTransform(image: NSImage,
 
  Isolate the c++ code within an actor as it is not thread safe.
 
- Thankfully this kernel hough transform is fast, so this isolation doesn't slow us down much
+ Thankfully this kernel hough transform is fast, so isolating it doesn't slow us down much
  
  */
 fileprivate let transformer = HoughTransformer()
 
 fileprivate actor HoughTransformer {
     public func kernelHoughTransform(image: NSImage,
-                                     clusterMinSize: Int32 = 10,
-                                     clusterMinDeviation: Double = 2.0,
-                                     delta: Double = 0.5,
-                                     kernelMinHeight: Double = 0.002,
-                                     nSigmas: Double = 2.0,
-                                     maxThetaDiff: Double = 5,
-                                     maxRhoDiff: Double = 4,
-                                     minLineCount: Int = 20,
-                                     minResults: Int = 4) -> [Line]
+                                     clusterMinSize: Int32,
+                                     clusterMinDeviation: Double,
+                                     delta: Double,
+                                     kernelMinHeight: Double,
+                                     nSigmas: Double,
+                                     maxThetaDiff: Double,
+                                     maxRhoDiff: Double,
+                                     minLineCount: Int,
+                                     minResults: Int) -> [Line]
     {
         var ret: [Line] = []
 
