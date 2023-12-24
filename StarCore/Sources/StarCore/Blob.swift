@@ -69,9 +69,8 @@ public class Blob {
     }
 
     public func isIn(matrixElement: ImageMatrixElement) -> Bool{
-        self.boundingBox.contains(other: matrixElement.boundingBox)
+        self.boundingBox.overlap(with: matrixElement.boundingBox) != nil
     }
-
     
     public var boundingBox: BoundingBox {
         if let _boundingBox = _boundingBox { return _boundingBox }
