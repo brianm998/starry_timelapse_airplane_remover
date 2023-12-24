@@ -27,6 +27,8 @@ public enum FrameImageType {
     case original
     case aligned
     case subtracted
+    case blobs
+    case houghLines
     case validated
     case processed
 }
@@ -99,6 +101,8 @@ struct ImageAccessor: ImageAccess {
     func mkdirs() {
         mkdir(ofType: .aligned)
         mkdir(ofType: .subtracted)
+        mkdir(ofType: .blobs)
+        mkdir(ofType: .houghLines)
         mkdir(ofType: .validated)
         mkdir(ofType: .processed)
         
@@ -107,6 +111,8 @@ struct ImageAccessor: ImageAccess {
             mkdir(ofType: .aligned, andSize: .preview)
             mkdir(ofType: .subtracted, andSize: .preview)
             mkdir(ofType: .validated, andSize: .preview)
+            mkdir(ofType: .blobs, andSize: .preview)
+            mkdir(ofType: .houghLines, andSize: .preview)
         }
         if config.writeFrameThumbnailFiles {
             mkdir(ofType: .original, andSize: .thumbnail)
@@ -224,6 +230,24 @@ struct ImageAccessor: ImageAccess {
                 return "\(config.outputPath)/\(config.imageSequenceDirname)-star-aligned-subtracted"
             case .preview:
                 return "\(config.outputPath)/\(config.imageSequenceDirname)-star-aligned-subtracted-previews"
+            case .thumbnail:
+                return nil
+            }
+        case .blobs:
+            switch size {
+            case .original:
+                return "\(config.outputPath)/\(baseDirName)-blobs"
+            case .preview:
+                return "\(config.outputPath)/\(baseDirName)-blobs-preview"
+            case .thumbnail:
+                return nil
+            }
+        case .houghLines:
+            switch size {
+            case .original:
+                return "\(config.outputPath)/\(baseDirName)-kht"
+            case .preview:
+                return "\(config.outputPath)/\(baseDirName)-kht-preview"
             case .thumbnail:
                 return nil
             }
