@@ -339,7 +339,7 @@ public struct PixelatedImage {
                                      nSigmas: Double = 2.0,
                                      maxThetaDiff: Double = 5,
                                      maxRhoDiff: Double = 4,
-                                     minLineCount: Int = 20,
+                                     minVotes: Int = 20,
                                      minResults: Int = 4) async -> [Line]
     {
         if let image = self.nsImage {
@@ -351,7 +351,7 @@ public struct PixelatedImage {
                                                        nSigmas: nSigmas,
                                                        maxThetaDiff: maxThetaDiff,
                                                        maxRhoDiff: maxRhoDiff,
-                                                       minLineCount: minLineCount,
+                                                       minVotes: minVotes,
                                                        minResults: minResults)
         }
         return []

@@ -106,48 +106,42 @@ extension FrameAirplaneRemover {
                               minimumLocalMaximum: config.maxPixelDistance,
                               contrastMin: 58)      // XXX constant
 
-        self.state = .detectingOutliers3
-
-        var minBlobIntensity = UInt16.max
-        var maxBlobIntensity: UInt16 = 0
-
-        var blobIntensities: [UInt16] = []
-
-        var allBlobIntensities: UInt32 = 0
-        
-        for blob in blobber.blobs {
-            let blobIntensity = blob.intensity
-
-            blobIntensities.append(blobIntensity)
-            allBlobIntensities += UInt32(blobIntensity)
-            
-            if blobIntensity < minBlobIntensity { minBlobIntensity = blobIntensity }
-            if blobIntensity > maxBlobIntensity { maxBlobIntensity = blobIntensity }
-        }
+        self.state = .detectingOutliers2
 
         var blobsToPromote: [Blob] = []
         var lastBlob: Blob?
-        
+
+        /*
+         Now that we have detected blobs in this frame, the next step is to
+         identify lines in the frame and collate blobs that are close to the lines
+         and close to eachother into a single larger blob.
+         */
         if let subtractionImage = subtractionImage {
+
+            Log.i("frame \(frameIndex) loaded subtraction image")
 
             // XXX A whole forest of magic numbers here :(
             let matrix = subtractionImage.splitIntoMatrix(maxWidth: 1024, maxHeight: 1024)
+            Log.i("frame \(frameIndex) has matrix with \(matrix.count) elements")
             for element in matrix {
-                // XXX dying here :(
+                Log.i("frame \(frameIndex) matrix element [\(element.x), \(element.y)]")
+
                 let lines = await element.image.kernelHoughTransform(maxThetaDiff: 10,
                                                                      maxRhoDiff: 10,
-                                                                     minLineCount: 2000,
+                                                                     minVotes: 2000,
                                                                      minResults: 6)
 
                 // get list of blobs in this element 
                 var blobsToProcess = blobber.blobs.filter { $0.isIn(matrixElement: element) }
                 
+                Log.i("frame \(frameIndex) \(blobsToProcess.count) blobs blobber.blobs \(blobber.blobs) and \(lines.count) lines")
+
                 for line in lines {
                     let frameEdgeMatches = line.frameBoundries(width: element.image.width,
                                                                height: element.image.height)
                     if frameEdgeMatches.count == 2 {
                         // sunny day case
-                        //Log.d("frameEdgeMatches \(frameEdgeMatches[0]) \(frameEdgeMatches[1])")
+                        Log.d("frame \(frameIndex) frameEdgeMatches \(frameEdgeMatches[0]) \(frameEdgeMatches[1])")
                         let line = StandardLine(point1: frameEdgeMatches[0],
                                                 point2: frameEdgeMatches[1])
                         
@@ -163,11 +157,11 @@ extension FrameAirplaneRemover {
                                    y < element.image.height
                                 {
                                     let (foo, bar) =
-                                      doSomeShit(x: x+element.x,
-                                                 y: y+element.y,
-                                                 blobsToProcess: blobsToProcess,
-                                                 blobsToPromote: &blobsToPromote,
-                                                 lastBlob: lastBlob)
+                                      processBlobsAt(x: x+element.x,
+                                                     y: y+element.y,
+                                                     blobsToProcess: blobsToProcess,
+                                                     blobsToPromote: &blobsToPromote,
+                                                     lastBlob: lastBlob)
 
                                     blobsToProcess = foo
                                     lastBlob = bar
@@ -181,104 +175,70 @@ extension FrameAirplaneRemover {
                                    x < element.image.width
                                 {
                                     let (foo, bar) =
-                                      doSomeShit(x: x+element.x,
-                                                 y: y+element.y,
-                                                 blobsToProcess: blobsToProcess,
-                                                 blobsToPromote: &blobsToPromote,
-                                                 lastBlob: lastBlob)
+                                      processBlobsAt(x: x+element.x,
+                                                     y: y+element.y,
+                                                     blobsToProcess: blobsToProcess,
+                                                     blobsToPromote: &blobsToPromote,
+                                                     lastBlob: lastBlob)
 
                                     blobsToProcess = foo
                                     lastBlob = bar
                                 }
                             }
                         }
-                    // XXX need to iterate over this line on this matrix element
-                    // check the distance to each blob in this element
+                    } else {
+                        Log.e("frame \(frameIndex) frameEdgeMatches.count \(frameEdgeMatches.count) != 2")
                     }
                 }
             }
-            // KHT here, kht after blobbing before outlier group creation
-        /*
-
-         create a new bucket of blobs to keep
-
-         iterate over a matrix of hough lines for this frame
-
-         for each line in each matrix element,
-           for each blob
-             - disregard blob if it's not in this element
-             - calculate the closest distance from this blob to this line
-             - if blob is close enough:
-               - add to list of blobs to turn into outlier groups
-               - keep track of last blob on this line
-             - if next blob that fits is close to last blob, add to last blob
-             - if next blob is too far, clear last blob
-         */
-
         } else {
             Log.e("no subtraction image")
         }
-            
+
+        Log.d("frame \(frameIndex) has \(blobsToPromote) blobsToPromote")
+        self.state = .detectingOutliers3
+
+        // promote found blobs to outlier groups for further processing
         for blob in blobsToPromote {
+            // make outlier group from this blob
             let outlierGroup = blob.outlierGroup(at: frameIndex)
             outlierGroup.frame = self
             outlierGroups?.members[outlierGroup.name] = outlierGroup
         }
-
-        blobIntensities.sort { $0 < $1 }
-
-        if blobber.blobs.count > 0 {
-            let mean = allBlobIntensities / UInt32(blobber.blobs.count)
-            let median = blobIntensities[blobIntensities.count/2]
-            Log.i("frame \(frameIndex) had blob intensity from \(minBlobIntensity) to \(maxBlobIntensity) mean \(mean) median \(median)")
-        }
         
         self.state = .readyForInterFrameProcessing
-
-
-        // XXX KHT here
-
-
-        /*
-         get the subtraction image for this frame
-
-         matrix it 1024x1024
-
-         kht each matrix element
-
-         iterate over each line for each element and
-         look for any found outlier group that is close to it
-
-         keep a running bag of close outlier groups that are 
-         
-         */
     }
         
-    private func doSomeShit(x: Int, // XXX rename this
-                            y: Int,
-                            blobsToProcess: [Blob],
-                            blobsToPromote: inout [Blob],
-                            lastBlob: Blob?) -> ([Blob], Blob?)
+    private func processBlobsAt(x: Int,
+                                y: Int,
+                                blobsToProcess: [Blob],
+                                blobsToPromote: inout [Blob],
+                                lastBlob: Blob?) -> ([Blob], Blob?)
     {
         var blobsNotProcessed: [Blob] = []
         var lastBlob_ = lastBlob
         for blob in blobsToProcess {
             let blobDistance = blob.distanceTo(x: x, y: y)
+            //Log.d("frame \(frameIndex) blobDistance \(blobDistance)")
             if blobDistance < 10 { // XXX magic number XXX
                 if let _lastBlob = lastBlob {
                     if _lastBlob.boundingBox.edgeDistance(to: blob.boundingBox) < 20 { // XXX constant XXX
                         // if they are close enough, simply combine them
                         _lastBlob.absorb(blob)
+                        Log.d("frame \(frameIndex) absorbing blob")
                     } else {
                         // if they are far, then overwrite the lastBlob var
                         blobsToPromote.append(blob)
                         lastBlob_ = blob
+                        //Log.d("frame \(frameIndex) blobDistance \(blobDistance) too far")
                     }
                 } else {
+                    Log.d("frame \(frameIndex) no last blob")
                     blobsToPromote.append(blob)
                     lastBlob_ = blob
                 }
             } else {
+                //Log.d("frame \(frameIndex) distance too far, not processing blob")
                 blobsNotProcessed.append(blob)
             }
         }
