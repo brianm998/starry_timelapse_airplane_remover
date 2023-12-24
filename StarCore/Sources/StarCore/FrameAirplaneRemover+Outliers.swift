@@ -122,9 +122,17 @@ extension FrameAirplaneRemover {
         
         self.state = .detectingOutliers2
 
+        // XXX maybe method boundary point
+        
         var blobsToPromote: [Blob] = []
         var lastBlob: Blob?
 
+        let khtImageBase = 0x10
+        var khtImage: [UInt8] = []
+        if config.writeOutlierGroupFiles {
+            khtImage = [UInt8](repeating: 0, count: width*height)
+        }
+        
         /*
          Now that we have detected blobs in this frame, the next step is to
          identify lines in the frame and collate blobs that are close to the lines
@@ -153,6 +161,15 @@ extension FrameAirplaneRemover {
                 for line in lines {
                     let frameEdgeMatches = line.frameBoundries(width: element.image.width,
                                                                height: element.image.height)
+                    
+                    let valueD = Double(0xFF - khtImageBase)/0xFF * Double(line.count) + Double(khtImageBase)
+                    var value: UInt8 = 0
+                    if valueD < 0xFF {
+                        value = UInt8(valueD)
+                    } else {
+                        value = 0xFF
+                    }
+                    
                     if frameEdgeMatches.count == 2 {
                         // sunny day case
                         //Log.d("frame \(frameIndex) frameEdgeMatches \(frameEdgeMatches[0]) \(frameEdgeMatches[1])")
@@ -170,7 +187,12 @@ extension FrameAirplaneRemover {
                                 if y > 0,
                                    y < element.image.height
                                 {
-                                    // XXX maybe write to kht image here
+                                    if config.writeOutlierGroupFiles {
+                                        let index = (y+element.y)*width+(x+element.x)
+                                        if khtImage[index] < value {
+                                            khtImage[index] = value
+                                        }
+                                    }
                                     let (foo, bar) =
                                       processBlobsAt(x: x+element.x,
                                                      y: y+element.y,
@@ -189,7 +211,12 @@ extension FrameAirplaneRemover {
                                 if x > 0,
                                    x < element.image.width
                                 {
-                                    // XXX maybe write to kht image here
+                                    if config.writeOutlierGroupFiles {
+                                        let index = (y+element.y)*width+(x+element.x)
+                                        if khtImage[index] < value {
+                                            khtImage[index] = value
+                                        }
+                                    }
                                     let (foo, bar) =
                                       processBlobsAt(x: x+element.x,
                                                      y: y+element.y,
@@ -206,6 +233,16 @@ extension FrameAirplaneRemover {
                         Log.i("frame \(frameIndex) frameEdgeMatches.count \(frameEdgeMatches.count) != 2")
                     }
                 }
+            }
+
+            if config.writeOutlierGroupFiles {
+                // save image of kht lines
+                let image = PixelatedImage(width: width, height: height,
+                                           grayscale8BitImageData: khtImage)
+                try await imageAccessor.save(image, as: .houghLines,
+                                             atSize: .original, overwrite: true)
+                try await imageAccessor.save(image, as: .houghLines,
+                                             atSize: .preview, overwrite: true)
             }
         } else {
             Log.e("no subtraction image")
