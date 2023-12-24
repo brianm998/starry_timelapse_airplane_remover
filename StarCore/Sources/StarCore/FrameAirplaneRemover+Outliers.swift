@@ -106,6 +106,20 @@ extension FrameAirplaneRemover {
                               minimumLocalMaximum: config.maxPixelDistance,
                               contrastMin: 50)      // XXX constant
 
+        if config.writeOutlierGroupFiles {
+            // save blobs image here
+            var blobImageData = [UInt8](repeating: 0, count: width*height)
+            for blob in blobber.blobs {
+                for pixel in blob.pixels {
+                    blobImageData[pixel.y*width+pixel.x] = 0xFF // make different per blob?
+                }
+            }
+            let blobImage = PixelatedImage(width: width, height: height,
+                                           grayscale8BitImageData: blobImageData)
+            try await imageAccessor.save(blobImage, as: .blobs, atSize: .original, overwrite: true)
+            try await imageAccessor.save(blobImage, as: .blobs, atSize: .preview, overwrite: true)
+        }
+        
         self.state = .detectingOutliers2
 
         var blobsToPromote: [Blob] = []
@@ -156,6 +170,7 @@ extension FrameAirplaneRemover {
                                 if y > 0,
                                    y < element.image.height
                                 {
+                                    // XXX maybe write to kht image here
                                     let (foo, bar) =
                                       processBlobsAt(x: x+element.x,
                                                      y: y+element.y,
@@ -174,6 +189,7 @@ extension FrameAirplaneRemover {
                                 if x > 0,
                                    x < element.image.width
                                 {
+                                    // XXX maybe write to kht image here
                                     let (foo, bar) =
                                       processBlobsAt(x: x+element.x,
                                                      y: y+element.y,
