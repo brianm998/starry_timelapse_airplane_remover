@@ -102,9 +102,9 @@ extension FrameAirplaneRemover {
                               imageHeight: height,
                               pixelData: subtractionArray,
                               neighborType: .eight,//.fourCardinal,
-                              minimumBlobSize: config.minGroupSize,
+                              minimumBlobSize: config.minGroupSize/2,
                               minimumLocalMaximum: config.maxPixelDistance,
-                              contrastMin: 58)      // XXX constant
+                              contrastMin: 50)      // XXX constant
 
         self.state = .detectingOutliers2
 
@@ -134,14 +134,14 @@ extension FrameAirplaneRemover {
                 // get list of blobs in this element 
                 var blobsToProcess = blobber.blobs.filter { $0.isIn(matrixElement: element) }
                 
-                Log.i("frame \(frameIndex) \(blobsToProcess.count) blobs blobber.blobs \(blobber.blobs) and \(lines.count) lines")
+                //Log.i("frame \(frameIndex) \(blobsToProcess.count) blobs blobber.blobs \(blobber.blobs) and \(lines.count) lines")
 
                 for line in lines {
                     let frameEdgeMatches = line.frameBoundries(width: element.image.width,
                                                                height: element.image.height)
                     if frameEdgeMatches.count == 2 {
                         // sunny day case
-                        Log.d("frame \(frameIndex) frameEdgeMatches \(frameEdgeMatches[0]) \(frameEdgeMatches[1])")
+                        //Log.d("frame \(frameIndex) frameEdgeMatches \(frameEdgeMatches[0]) \(frameEdgeMatches[1])")
                         let line = StandardLine(point1: frameEdgeMatches[0],
                                                 point2: frameEdgeMatches[1])
                         
@@ -187,7 +187,7 @@ extension FrameAirplaneRemover {
                             }
                         }
                     } else {
-                        Log.e("frame \(frameIndex) frameEdgeMatches.count \(frameEdgeMatches.count) != 2")
+                        Log.i("frame \(frameIndex) frameEdgeMatches.count \(frameEdgeMatches.count) != 2")
                     }
                 }
             }
@@ -200,10 +200,12 @@ extension FrameAirplaneRemover {
 
         // promote found blobs to outlier groups for further processing
         for blob in blobsToPromote {
-            // make outlier group from this blob
-            let outlierGroup = blob.outlierGroup(at: frameIndex)
-            outlierGroup.frame = self
-            outlierGroups?.members[outlierGroup.name] = outlierGroup
+            if blob.size >= config.minGroupSize {
+                // make outlier group from this blob
+                let outlierGroup = blob.outlierGroup(at: frameIndex)
+                outlierGroup.frame = self
+                outlierGroups?.members[outlierGroup.name] = outlierGroup
+            }
         }
         
         self.state = .readyForInterFrameProcessing
@@ -222,7 +224,7 @@ extension FrameAirplaneRemover {
             //Log.d("frame \(frameIndex) blobDistance \(blobDistance)")
             if blobDistance < 10 { // XXX magic number XXX
                 if let _lastBlob = lastBlob {
-                    if _lastBlob.boundingBox.edgeDistance(to: blob.boundingBox) < 20 { // XXX constant XXX
+                    if _lastBlob.boundingBox.edgeDistance(to: blob.boundingBox) < 40 { // XXX constant XXX
                         // if they are close enough, simply combine them
                         _lastBlob.absorb(blob)
                         Log.d("frame \(frameIndex) absorbing blob")
