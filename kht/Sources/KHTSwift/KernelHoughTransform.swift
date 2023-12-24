@@ -6,6 +6,8 @@ import Cocoa
 let DEGREES_TO_RADIANS = atan(1.0) / 45.0
 let RADIANS_TO_DEGREES = 45 / atan(1.0)
 
+
+
 // this swift method wraps an objc method which wraps a c++ implementation
 // of kernel based hough transormation
 // we convert the coordinate system of the returned lines, and filter them a bit
@@ -20,66 +22,101 @@ public func kernelHoughTransform(image: NSImage,
                                  maxThetaDiff: Double = 5,
                                  maxRhoDiff: Double = 4,
                                  minLineCount: Int = 20,
-                                 minResults: Int = 4) -> [Line]
+                                 minResults: Int = 4) async -> [Line]
 {
-    var ret: [Line] = []
+    await transformer.kernelHoughTransform(image: image,
+                                           clusterMinSize: clusterMinSize,
+                                           clusterMinDeviation: clusterMinDeviation,
+                                           delta: delta,
+                                           kernelMinHeight: kernelMinHeight,
+                                           nSigmas: nSigmas,
+                                           maxThetaDiff: maxThetaDiff,
+                                           maxRhoDiff: maxRhoDiff,
+                                           minLineCount: minLineCount,
+                                           minResults: minResults)
+}
 
-    // first get a list of lines from the kernel based hough transform
-    if let lines = KHTBridge.translate(image,
-                                       clusterMinSize: clusterMinSize,
-                                       clusterMinDeviation: clusterMinDeviation,
-	                               delta: delta,
-                                       kernelMinHeight: kernelMinHeight,
-                                       nSigmas: nSigmas)
+/*
+
+ Isolate the c++ code within an actor as it is not thread safe.
+
+ Thankfully this kernel hough transform is fast, so this isolation doesn't slow us down much
+ 
+ */
+fileprivate let transformer = HoughTransformer()
+
+fileprivate actor HoughTransformer {
+    public func kernelHoughTransform(image: NSImage,
+                                     clusterMinSize: Int32 = 10,
+                                     clusterMinDeviation: Double = 2.0,
+                                     delta: Double = 0.5,
+                                     kernelMinHeight: Double = 0.002,
+                                     nSigmas: Double = 2.0,
+                                     maxThetaDiff: Double = 5,
+                                     maxRhoDiff: Double = 4,
+                                     minLineCount: Int = 20,
+                                     minResults: Int = 4) -> [Line]
     {
-        Log.d("got \(lines.count) lines")
+        var ret: [Line] = []
 
-        var count = 0
+        // first get a list of lines from the kernel based hough transform
+        if let lines = KHTBridge.translate(image,
+                                           clusterMinSize: clusterMinSize,
+                                           clusterMinDeviation: clusterMinDeviation,
+	                                   delta: delta,
+                                           kernelMinHeight: kernelMinHeight,
+                                           nSigmas: nSigmas)
+        {
+            Log.d("got \(lines.count) lines")
 
-        for line in lines {
-            if let line = line as? KHTBridgeLine {
-                // change how each line is represented
+            var count = 0
 
-                // convert kht polar central origin polar coord line
-                // two a line polar coord origin at [0, 0]
-                let newLine = line.leftCenterOriginLine(width: Int32(image.size.width),
-                                                        height: Int32(image.size.height))
-                
-                var shouldAppend = true
+            for line in lines {
+                if let line = line as? KHTBridgeLine {
+                    // change how each line is represented
 
-                if newLine.count < minLineCount,
-                   ret.count >= minResults
-                {
-                    // ignore lines with small counts,
-                    // as long as we have more than minResults
-                    shouldAppend = false
-                } else {
-                    // check lines we are already going to return to see
-                    // if there are any closely matching lines that had a
-                    // higher count.  If so, this line is basically noise,
-                    // don't return it.
-                    for lineToReturn in ret {
-                        if lineToReturn.matches(newLine,
-                                                maxThetaDiff: maxThetaDiff,
-                                                maxRhoDiff: maxRhoDiff)
-                        {
-                            shouldAppend = false
-                            break
+                    // convert kht polar central origin polar coord line
+                    // two a line polar coord origin at [0, 0]
+                    let newLine = line.leftCenterOriginLine(width: Int32(image.size.width),
+                                                            height: Int32(image.size.height))
+                    
+                    var shouldAppend = true
+
+                    if newLine.count < minLineCount,
+                       ret.count >= minResults
+                    {
+                        // ignore lines with small counts,
+                        // as long as we have more than minResults
+                        shouldAppend = false
+                    } else {
+                        // check lines we are already going to return to see
+                        // if there are any closely matching lines that had a
+                        // higher count.  If so, this line is basically noise,
+                        // don't return it.
+                        for lineToReturn in ret {
+                            if lineToReturn.matches(newLine,
+                                                    maxThetaDiff: maxThetaDiff,
+                                                    maxRhoDiff: maxRhoDiff)
+                            {
+                                shouldAppend = false
+                                break
+                            }
                         }
                     }
-                }
 
-                if shouldAppend {
-                    if count < 4 {
-                        Log.d("KHT line \(count) theta \(line.theta) rho \(line.rho)")
+                    if shouldAppend {
+                        if count < 4 {
+                            Log.d("KHT line \(count) theta \(line.theta) rho \(line.rho)")
+                        }
+                        ret.append(newLine)
+                        count += 1
                     }
-                    ret.append(newLine)
-                    count += 1
                 }
             }
         }
+        return ret
+
     }
-    return ret
 }
 
 extension KHTBridgeLine {

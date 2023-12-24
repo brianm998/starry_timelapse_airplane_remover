@@ -68,6 +68,11 @@ public class Blob {
         }
     }
 
+    public func isIn(matrixElement: ImageMatrixElement) -> Bool{
+        self.boundingBox.contains(other: matrixElement.boundingBox)
+    }
+
+    
     public var boundingBox: BoundingBox {
         if let _boundingBox = _boundingBox { return _boundingBox }
         var min_x:Int = Int.max
@@ -106,7 +111,24 @@ public class Blob {
                      maxPixelDistance: 0xFFFF) // XXX not sure this is used anymore
     }
 
+    // returns minimum distance found 
     public func distanceTo(line: StandardLine) -> Double {
-        return 0                // XXX implement this somehow
+        var min: Double = 1_000_000_000_000
+        for pixel in pixels {
+            let distance = line.distanceTo(x: pixel.x, y: pixel.y)
+            if distance < min { min = distance }
+        }
+        return min
+    }
+
+    public func distanceTo(x: Int, y: Int) -> Double {
+        var min: Double = 1_000_000_000_000
+        for pixel in pixels {
+            let x_diff = Double(x - pixel.x)
+            let y_diff = Double(y - pixel.y)
+            let distance = sqrt(x_diff*x_diff+y_diff*y_diff)
+            if distance < min { min = distance }
+        }
+        return min
     }
 }

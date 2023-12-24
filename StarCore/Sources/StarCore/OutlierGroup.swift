@@ -74,7 +74,7 @@ public class OutlierGroup: CustomStringConvertible,
          bounds: BoundingBox,
          frame: FrameAirplaneRemover,
          pixels: [UInt16],
-         maxPixelDistance: UInt16) 
+         maxPixelDistance: UInt16) async
     {
         self.name = name
         self.size = size
@@ -93,7 +93,7 @@ public class OutlierGroup: CustomStringConvertible,
                                         height: bounds.height,
                                         grayscale16BitImageData: pixels)
         if let image = pixelImage.nsImage {
-            self.lines = kernelHoughTransform(image: image)
+            self.lines = await kernelHoughTransform(image: image)
         } else {
             self.lines = []     // XXX
         }

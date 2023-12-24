@@ -1,6 +1,14 @@
 import Foundation
 import KHTSwift
 
+extension ImageMatrixElement {
+    var boundingBox: BoundingBox {
+        BoundingBox(min: Coord(x: self.x, y: self.y),
+                    max: Coord(x: self.x + image.width,
+                               y: self.y + image.height))
+    }
+}
+
 // the bounding box of an outlier group
 public struct BoundingBox: Codable {
     public let min: Coord

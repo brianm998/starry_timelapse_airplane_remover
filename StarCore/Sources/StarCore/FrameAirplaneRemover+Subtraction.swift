@@ -24,7 +24,7 @@ You should have received a copy of the GNU General Public License along with sta
 extension FrameAirplaneRemover {
     // returns a grayscale image pixel value array from subtracting the aligned frame
     // from the frame being processed.
-    internal func subtractAlignedImageFromFrame() async throws -> [UInt16] {
+    internal func subtractAlignedImageFromFrame() async throws -> PixelatedImage {
         self.state = .loadingImages
         
 //        let image = try await imageSequence.getImage(withName: imageSequence.filenames[frameIndex]).image()
@@ -49,12 +49,8 @@ extension FrameAirplaneRemover {
                 }
             }
 
-            switch subtractionImage.imageData {
-            case .eightBit(_):
-                fatalError("eight bit images not supported here now")
-            case .sixteenBit(let data):
-                return data 
-            }
+            return subtractionImage
+            
         } else {
             throw "couldn't load images"
         }

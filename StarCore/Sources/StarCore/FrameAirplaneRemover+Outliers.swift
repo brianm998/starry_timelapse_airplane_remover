@@ -62,12 +62,13 @@ extension FrameAirplaneRemover {
         // contains the difference in brightness between the frame being processed
         // and its aligned neighbor frame.  Indexed by y * width + x
         var subtractionArray: [UInt16] = []
-        
+        var subtractionImage: PixelatedImage?
         self.state = .loadingImages
         do {
             // try to load the image subtraction from a pre-processed file
 
             if let image = await imageAccessor.load(type: .subtracted, atSize: .original) {
+                subtractionImage = image
                 switch image.imageData {
                 case .sixteenBit(let array):
                     subtractionArray = array
@@ -83,8 +84,15 @@ extension FrameAirplaneRemover {
             Log.i("frame \(frameIndex) couldn't load outlier amounts from subtraction image")
             // do the image subtraction here instead
         }
-        if subtractionArray.count == 0 {        
-            subtractionArray = try await self.subtractAlignedImageFromFrame()
+        if subtractionImage == nil {        
+            let image = try await self.subtractAlignedImageFromFrame()
+            subtractionImage = image
+            switch image.imageData {
+            case .eightBit(_):
+                fatalError("NOT SUPPORTED YET")
+            case .sixteenBit(let origImagePixels):
+                subtractionArray = origImagePixels
+            }
             Log.d("loaded subtractionArray with \(subtractionArray.count) items")
         }
 
@@ -115,11 +123,103 @@ extension FrameAirplaneRemover {
             
             if blobIntensity < minBlobIntensity { minBlobIntensity = blobIntensity }
             if blobIntensity > maxBlobIntensity { maxBlobIntensity = blobIntensity }
+        }
 
+        var blobsToPromote: [Blob] = []
+        var lastBlob: Blob?
+        
+        if let subtractionImage = subtractionImage {
 
+            // XXX A whole forest of magic numbers here :(
+            let matrix = subtractionImage.splitIntoMatrix(maxWidth: 1024, maxHeight: 1024)
+            for element in matrix {
+                // XXX dying here :(
+                let lines = await element.image.kernelHoughTransform(maxThetaDiff: 10,
+                                                                     maxRhoDiff: 10,
+                                                                     minLineCount: 2000,
+                                                                     minResults: 6)
+
+                // get list of blobs in this element 
+                var blobsToProcess = blobber.blobs.filter { $0.isIn(matrixElement: element) }
+                
+                for line in lines {
+                    let frameEdgeMatches = line.frameBoundries(width: element.image.width,
+                                                               height: element.image.height)
+                    if frameEdgeMatches.count == 2 {
+                        // sunny day case
+                        //Log.d("frameEdgeMatches \(frameEdgeMatches[0]) \(frameEdgeMatches[1])")
+                        let line = StandardLine(point1: frameEdgeMatches[0],
+                                                point2: frameEdgeMatches[1])
+                        
+                        let x_diff = abs(frameEdgeMatches[0].x - frameEdgeMatches[1].x)
+                        let y_diff = abs(frameEdgeMatches[0].y - frameEdgeMatches[1].y)
+                        
+                        let iterateOnXAxis = x_diff > y_diff
+                        
+                        if iterateOnXAxis {
+                            for x in 0..<element.image.width {
+                                let y = Int(line.y(forX: Double(x)))
+                                if y > 0,
+                                   y < element.image.height
+                                {
+                                    let (foo, bar) =
+                                      doSomeShit(x: x+element.x,
+                                                 y: y+element.y,
+                                                 blobsToProcess: blobsToProcess,
+                                                 blobsToPromote: &blobsToPromote,
+                                                 lastBlob: lastBlob)
+
+                                    blobsToProcess = foo
+                                    lastBlob = bar
+                                }
+                            }
+                        } else {
+                            // iterate on y axis
+                            for y in 0..<element.image.height {
+                                let x = Int(line.x(forY: Double(y)))
+                                if x > 0,
+                                   x < element.image.width
+                                {
+                                    let (foo, bar) =
+                                      doSomeShit(x: x+element.x,
+                                                 y: y+element.y,
+                                                 blobsToProcess: blobsToProcess,
+                                                 blobsToPromote: &blobsToPromote,
+                                                 lastBlob: lastBlob)
+
+                                    blobsToProcess = foo
+                                    lastBlob = bar
+                                }
+                            }
+                        }
+                    // XXX need to iterate over this line on this matrix element
+                    // check the distance to each blob in this element
+                    }
+                }
+            }
             // KHT here, kht after blobbing before outlier group creation
+        /*
 
+         create a new bucket of blobs to keep
+
+         iterate over a matrix of hough lines for this frame
+
+         for each line in each matrix element,
+           for each blob
+             - disregard blob if it's not in this element
+             - calculate the closest distance from this blob to this line
+             - if blob is close enough:
+               - add to list of blobs to turn into outlier groups
+               - keep track of last blob on this line
+             - if next blob that fits is close to last blob, add to last blob
+             - if next blob is too far, clear last blob
+         */
+
+        } else {
+            Log.e("no subtraction image")
+        }
             
+        for blob in blobsToPromote {
             let outlierGroup = blob.outlierGroup(at: frameIndex)
             outlierGroup.frame = self
             outlierGroups?.members[outlierGroup.name] = outlierGroup
@@ -153,7 +253,38 @@ extension FrameAirplaneRemover {
          
          */
     }
-
+        
+    private func doSomeShit(x: Int, // XXX rename this
+                            y: Int,
+                            blobsToProcess: [Blob],
+                            blobsToPromote: inout [Blob],
+                            lastBlob: Blob?) -> ([Blob], Blob?)
+    {
+        var blobsNotProcessed: [Blob] = []
+        var lastBlob_ = lastBlob
+        for blob in blobsToProcess {
+            let blobDistance = blob.distanceTo(x: x, y: y)
+            if blobDistance < 10 { // XXX magic number XXX
+                if let _lastBlob = lastBlob {
+                    if _lastBlob.boundingBox.edgeDistance(to: blob.boundingBox) < 20 { // XXX constant XXX
+                        // if they are close enough, simply combine them
+                        _lastBlob.absorb(blob)
+                    } else {
+                        // if they are far, then overwrite the lastBlob var
+                        blobsToPromote.append(blob)
+                        lastBlob_ = blob
+                    }
+                } else {
+                    blobsToPromote.append(blob)
+                    lastBlob_ = blob
+                }
+            } else {
+                blobsNotProcessed.append(blob)
+            }
+        }
+        return (blobsNotProcessed, lastBlob_)
+    }
+            
     public func foreachOutlierGroup(_ closure: (OutlierGroup)async->LoopReturn) async {
         if let outlierGroups = self.outlierGroups {
             for (_, group) in outlierGroups.members {
