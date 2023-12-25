@@ -225,21 +225,30 @@ public struct PixelatedImage {
     // splits image into a matrix of chunked elements of a max size
     public func splitIntoMatrix(maxWidth: Int,
                                 maxHeight: Int,
-                                overlapAmount: Int = 0) -> [ImageMatrixElement]
+                                overlapPercent: Double = 0) -> [ImageMatrixElement]
     {
         // XXX only works on grayscale
         // XXX add a check for this
-        
-        let matrixMaxWidth = Int(Double(width)/Double(maxWidth - overlapAmount*2))
-        let matrixMaxHeight = Int(Double(height)/Double(maxHeight - overlapAmount*2))
 
-        
+        // move x and y by overlapPercent of maxWidth and maxHeight every time
+
+        // keep the overlap between 0...90 percent
+        var realOverlap = overlapPercent
+        if overlapPercent < 0 { realOverlap = 0 } 
+        if overlapPercent >= 90 { realOverlap = 90 } // at least 10 percent move
+
+        // how far apart the starting point for each matrix element is from neighbors
+        let xAdjust = Int(Double(maxWidth)*(100-overlapPercent)/100)
+        let yAdjust = Int(Double(maxHeight)*(100-overlapPercent)/100)
+
+        // starting point for each matrix element
+        var xOffset = 0
+        var yOffset = 0
         
         var matrix: [ImageMatrixElement] = []
-        for matrixY in 0...matrixMaxHeight {
-            for matrixX in 0...matrixMaxWidth {
-                var xOffset = matrixX*(maxWidth - overlapAmount)
-                var yOffset = matrixY*(maxHeight - overlapAmount)
+        while xOffset < width {
+            yOffset = 0
+            while yOffset < height {
                 var matrixWidth = maxWidth
                 if xOffset + matrixWidth > width {
                     matrixWidth = width - xOffset
@@ -281,7 +290,9 @@ public struct PixelatedImage {
                         
                     }
                 }
+                yOffset += yAdjust
             }
+            xOffset += xAdjust
         }
         Log.d("matrix  has \(matrix.count) rows")
         return matrix

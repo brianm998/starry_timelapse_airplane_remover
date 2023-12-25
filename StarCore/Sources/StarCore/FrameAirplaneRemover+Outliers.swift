@@ -102,7 +102,7 @@ extension FrameAirplaneRemover {
                               imageHeight: height,
                               pixelData: subtractionArray,
                               neighborType: .eight,//.fourCardinal,
-                              minimumBlobSize: config.minGroupSize/2,
+                              minimumBlobSize: config.minGroupSize/4, // XXX constant XXX
                               minimumLocalMaximum: config.maxPixelDistance,
                               contrastMin: 50)      // XXX constant
 
@@ -122,11 +122,38 @@ extension FrameAirplaneRemover {
         
         self.state = .detectingOutliers2
 
-        // XXX maybe method boundary point
-        
+        if let subtractionImage = subtractionImage {
+            let blobsToPromote = try await blobKHTAnalysis(subtractionImage: subtractionImage,
+                                                           blobMap: blobber.blobMap)
+            
+            Log.d("frame \(frameIndex) has \(blobsToPromote) blobsToPromote")
+            self.state = .detectingOutliers3
+
+            // promote found blobs to outlier groups for further processing
+            for blob in blobsToPromote {
+                if blob.size >= config.minGroupSize {
+                    // make outlier group from this blob
+                    let outlierGroup = blob.outlierGroup(at: frameIndex)
+                    outlierGroup.frame = self
+                    outlierGroups?.members[outlierGroup.name] = outlierGroup
+                }
+            }
+        } else {
+            Log.e("frame \(frameIndex) has no subtraction image, no outliers produced")
+        }
+        self.state = .readyForInterFrameProcessing
+    }
+
+    // analyze the blobs with kernel hough transform data from the subtraction image
+    // filters the blob map, and combines nearby blobs on the same line
+    private func blobKHTAnalysis(subtractionImage: PixelatedImage,
+                                 blobMap: [String: Blob]) async throws -> [Blob]
+    {
         var blobsToPromote: [Blob] = []
         var lastBlob: Blob?
 
+        var _blobMap = blobMap
+        
         let khtImageBase = 0x10
         var khtImage: [UInt8] = []
         if config.writeOutlierGroupFiles {
@@ -138,138 +165,141 @@ extension FrameAirplaneRemover {
          identify lines in the frame and collate blobs that are close to the lines
          and close to eachother into a single larger blob.
          */
-        if let subtractionImage = subtractionImage {
 
-            Log.i("frame \(frameIndex) loaded subtraction image")
+        Log.i("frame \(frameIndex) loaded subtraction image")
 
-            // XXX A whole forest of magic numbers here :(
-            let matrix = subtractionImage.splitIntoMatrix(maxWidth: 512,
-                                                          maxHeight: 512,
-                                                          overlapAmount: 128)
-            Log.i("frame \(frameIndex) has matrix with \(matrix.count) elements")
-            for element in matrix {
-                Log.i("frame \(frameIndex) matrix element [\(element.x), \(element.y)]")
+        // XXX A whole forest of magic numbers here :(
 
-                let lines = await element.image.kernelHoughTransform(maxThetaDiff: 10,
-                                                                     maxRhoDiff: 10,
-                                                                     minVotes: 2000,
-                                                                     minResults: 6)
+        // split the subtraction image into a bunch of small images with some overlap
+        let matrix = subtractionImage.splitIntoMatrix(maxWidth: 1024,
+                                                      maxHeight: 1024,
+                                                      overlapPercent: 50)
 
-                // get list of blobs in this element 
-                var blobsToProcess = blobber.blobs.filter { $0.isIn(matrixElement: element) }
-                
-                //Log.i("frame \(frameIndex) \(blobsToProcess.count) blobs blobber.blobs \(blobber.blobs) and \(lines.count) lines")
+        Log.i("frame \(frameIndex) has matrix with \(matrix.count) elements")
+        for element in matrix {
+            Log.i("frame \(frameIndex) matrix element [\(element.x), \(element.y)]")
 
-                for line in lines {
-                    let frameEdgeMatches = line.frameBoundries(width: element.image.width,
-                                                               height: element.image.height)
+            // first run a kernel based hough transform on this matrix element,
+            // returning some set of detected lines 
+            let lines = await element.image.kernelHoughTransform(maxThetaDiff: 10,
+                                                                 maxRhoDiff: 10,
+                                                                 minVotes: 1000,
+                                                                 minResults: 6)
+
+            // list of blobs to process for this element
+            var blobsToProcess = _blobMap.values.filter { $0.isIn(matrixElement: element) }
+            
+            //Log.i("frame \(frameIndex) \(blobsToProcess.count) blobs blobber.blobs \(blobber.blobs) and \(lines.count) lines")
+
+            
+            for line in lines {
+                // calculate brightness to display line on kht image
+                let valueD = Double(0xFF - khtImageBase)/0xFF * Double(line.count) + Double(khtImageBase)
+                var value: UInt8 = 0
+                if valueD < 0xFF {
+                    value = UInt8(valueD)
+                } else {
+                    value = 0xFF
+                }
+
+                // where does this line intersect the edges of this element?
+                let frameEdgeMatches = line.frameBoundries(width: element.image.width,
+                                                           height: element.image.height)
+
+                if frameEdgeMatches.count == 2 {
+                    // sunny day case
+
+                    // calculate a standard line from the edge matches
+                    let standardLine = StandardLine(point1: frameEdgeMatches[0],
+                                                    point2: frameEdgeMatches[1])
+
+                    // calculate line orientation
+                    let x_diff = abs(frameEdgeMatches[0].x - frameEdgeMatches[1].x)
+                    let y_diff = abs(frameEdgeMatches[0].y - frameEdgeMatches[1].y)
                     
-                    let valueD = Double(0xFF - khtImageBase)/0xFF * Double(line.count) + Double(khtImageBase)
-                    var value: UInt8 = 0
-                    if valueD < 0xFF {
-                        value = UInt8(valueD)
-                    } else {
-                        value = 0xFF
-                    }
-                    
-                    if frameEdgeMatches.count == 2 {
-                        // sunny day case
-                        //Log.d("frame \(frameIndex) frameEdgeMatches \(frameEdgeMatches[0]) \(frameEdgeMatches[1])")
-                        let line = StandardLine(point1: frameEdgeMatches[0],
-                                                point2: frameEdgeMatches[1])
-                        
-                        let x_diff = abs(frameEdgeMatches[0].x - frameEdgeMatches[1].x)
-                        let y_diff = abs(frameEdgeMatches[0].y - frameEdgeMatches[1].y)
-                        
-                        let iterateOnXAxis = x_diff > y_diff
-                        
-                        if iterateOnXAxis {
-                            for x in 0..<element.image.width {
-                                let y = Int(line.y(forX: Double(x)))
-                                if y > 0,
-                                   y < element.image.height
-                                {
-                                    if config.writeOutlierGroupFiles {
-                                        let index = (y+element.y)*width+(x+element.x)
-                                        if khtImage[index] < value {
-                                            khtImage[index] = value
-                                        }
-                                    }
-                                    let (foo, bar) =
-                                      processBlobsAt(x: x+element.x,
-                                                     y: y+element.y,
-                                                     blobsToProcess: blobsToProcess,
-                                                     blobsToPromote: &blobsToPromote,
-                                                     lastBlob: lastBlob)
+                    // iterate on the longest axis
+                    let iterateOnXAxis = x_diff > y_diff
 
-                                    blobsToProcess = foo
-                                    lastBlob = bar
-                                }
-                            }
-                        } else {
-                            // iterate on y axis
-                            for y in 0..<element.image.height {
-                                let x = Int(line.x(forY: Double(y)))
-                                if x > 0,
-                                   x < element.image.width
-                                {
-                                    if config.writeOutlierGroupFiles {
-                                        let index = (y+element.y)*width+(x+element.x)
-                                        if khtImage[index] < value {
-                                            khtImage[index] = value
-                                        }
+                    if iterateOnXAxis {
+                        for x in 0..<element.image.width {
+                            let y = Int(standardLine.y(forX: Double(x)))
+                            if y > 0,
+                               y < element.image.height
+                            {
+                                if config.writeOutlierGroupFiles {
+                                    // write kht image data
+                                    let index = (y+element.y)*width+(x+element.x)
+                                    if khtImage[index] < value {
+                                        khtImage[index] = value
                                     }
-                                    let (foo, bar) =
-                                      processBlobsAt(x: x+element.x,
-                                                     y: y+element.y,
-                                                     blobsToProcess: blobsToProcess,
-                                                     blobsToPromote: &blobsToPromote,
-                                                     lastBlob: lastBlob)
-
-                                    blobsToProcess = foo
-                                    lastBlob = bar
                                 }
+
+                                // do blob processing at this location
+                                let (foo, bar) =
+                                  processBlobsAt(x: x+element.x,
+                                                 y: y+element.y,
+                                                 blobsToProcess: blobsToProcess,
+                                                 blobsToPromote: &blobsToPromote,
+                                                 blobMap: &_blobMap,
+                                                 lastBlob: lastBlob)
+
+                                blobsToProcess = foo
+                                lastBlob = bar
                             }
                         }
                     } else {
-                        Log.i("frame \(frameIndex) frameEdgeMatches.count \(frameEdgeMatches.count) != 2")
+                        // iterate on y axis
+                        for y in 0..<element.image.height {
+                            let x = Int(standardLine.x(forY: Double(y)))
+                            if x > 0,
+                               x < element.image.width
+                            {
+                                if config.writeOutlierGroupFiles {
+                                    // write kht image data
+                                    let index = (y+element.y)*width+(x+element.x)
+                                    if khtImage[index] < value {
+                                        khtImage[index] = value
+                                    }
+                                }
+
+                                // do blob processing at this location
+                                let (foo, bar) =
+                                  processBlobsAt(x: x+element.x,
+                                                 y: y+element.y,
+                                                 blobsToProcess: blobsToProcess,
+                                                 blobsToPromote: &blobsToPromote,
+                                                 blobMap: &_blobMap,
+                                                 lastBlob: lastBlob)
+
+                                blobsToProcess = foo
+                                lastBlob = bar
+                            }
+                        }
                     }
+                } else {
+                    Log.i("frame \(frameIndex) frameEdgeMatches.count \(frameEdgeMatches.count) != 2")
                 }
             }
-
-            if config.writeOutlierGroupFiles {
-                // save image of kht lines
-                let image = PixelatedImage(width: width, height: height,
-                                           grayscale8BitImageData: khtImage)
-                try await imageAccessor.save(image, as: .houghLines,
-                                             atSize: .original, overwrite: true)
-                try await imageAccessor.save(image, as: .houghLines,
-                                             atSize: .preview, overwrite: true)
-            }
-        } else {
-            Log.e("no subtraction image")
         }
 
-        Log.d("frame \(frameIndex) has \(blobsToPromote) blobsToPromote")
-        self.state = .detectingOutliers3
-
-        // promote found blobs to outlier groups for further processing
-        for blob in blobsToPromote {
-            if blob.size >= config.minGroupSize {
-                // make outlier group from this blob
-                let outlierGroup = blob.outlierGroup(at: frameIndex)
-                outlierGroup.frame = self
-                outlierGroups?.members[outlierGroup.name] = outlierGroup
-            }
+        if config.writeOutlierGroupFiles {
+            // save image of kht lines
+            let image = PixelatedImage(width: width, height: height,
+                                       grayscale8BitImageData: khtImage)
+            try await imageAccessor.save(image, as: .houghLines,
+                                         atSize: .original, overwrite: true)
+            try await imageAccessor.save(image, as: .houghLines,
+                                         atSize: .preview, overwrite: true)
         }
-        
-        self.state = .readyForInterFrameProcessing
+
+        return blobsToPromote
     }
-        
+    
     private func processBlobsAt(x: Int,
                                 y: Int,
                                 blobsToProcess: [Blob],
                                 blobsToPromote: inout [Blob],
+                                blobMap: inout [String:Blob],
                                 lastBlob: Blob?) -> ([Blob], Blob?)
     {
         var blobsNotProcessed: [Blob] = []
@@ -282,6 +312,7 @@ extension FrameAirplaneRemover {
                     if _lastBlob.boundingBox.edgeDistance(to: blob.boundingBox) < 40 { // XXX constant XXX
                         // if they are close enough, simply combine them
                         _lastBlob.absorb(blob)
+                        blobMap.removeValue(forKey: blob.id)
                         Log.d("frame \(frameIndex) absorbing blob")
                     } else {
                         // if they are far, then overwrite the lastBlob var
@@ -398,7 +429,8 @@ extension FrameAirplaneRemover {
            - don't apply decision tree, use the validation image instead
          */
 
-        if !outliersLoadedFromFile {
+        // XXX the validation images seem to be broken
+        if false && !outliersLoadedFromFile { 
             if let image = await imageAccessor.load(type: .validated, atSize: .original) {
                 switch image.imageData {
                 case .eightBit(let validationArr):
