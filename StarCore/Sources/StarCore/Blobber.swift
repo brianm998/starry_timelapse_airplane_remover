@@ -220,6 +220,12 @@ public class Blobber {
         Log.i("found \(blobs.count) blobs larger than \(minimumBlobSize) pixels")
     }
 
+    var blobMap: [String: Blob] {
+        var ret: [String: Blob] = [:]
+        for blob in self.blobs { ret[blob.id] = blob }
+        return ret
+    }
+    
     // used for writing out blob data for viewing 
     public var outputData: [UInt16] {
         var ret = [UInt16](repeating: 0, count: pixelData.count)
