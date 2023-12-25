@@ -80,6 +80,8 @@ public class FrameViewModel: ObservableObject {
     @Published var previewImage: Image = initialImage
     @Published var processedPreviewImage: Image = initialImage
     @Published var subtractionPreviewImage: Image = initialImage
+    @Published var blobsPreviewImage: Image = initialImage
+    @Published var houghLinesPreviewImage: Image = initialImage
     @Published var validationPreviewImage: Image = initialImage
 
     public func update() {

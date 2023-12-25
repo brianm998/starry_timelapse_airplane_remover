@@ -62,7 +62,10 @@ struct BottomLeftView: View {
                     
                     Picker("", selection: $viewModel.frameViewMode) {
                         ForEach(FrameViewMode.allCases, id: \.self) { value in
-                            Text(value.localizedName).tag(value)
+                            Text(value.shortName)
+                              .help(value.localizedName)
+                              .font(.system(size: 8))
+                              .tag(value)
                         }
                     }
                       .disabled(viewModel.videoPlaying)
@@ -70,7 +73,7 @@ struct BottomLeftView: View {
                               Show each frame as either the original   
                               or with star processing applied.
                               """)
-                      .frame(width: 300)
+                      .frame(width: 250)
                       .help("show original or processed frame")
                       .onChange(of: viewModel.frameViewMode) { pick in
                           Log.d("pick \(pick)")

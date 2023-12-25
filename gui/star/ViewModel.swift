@@ -13,11 +13,30 @@ public enum VideoPlayMode: String, Equatable, CaseIterable {
 public enum FrameViewMode: String, Equatable, CaseIterable {
     case original
     case subtraction
+    case blobs
+    case houghLines
     case validation
     case processed
 
     var localizedName: LocalizedStringKey {
         LocalizedStringKey(rawValue)
+    }
+
+    var shortName: String {
+        switch self {
+        case .original:
+            return "orig"
+        case .subtraction:
+            return "subt"
+        case .blobs:
+            return "blob"
+        case .houghLines:
+            return "kht"
+        case .validation:
+            return "valid"
+        case .processed:
+            return "proc"
+        }
     }
 }
 
@@ -244,6 +263,18 @@ public final class ViewModel: ObservableObject {
             Log.d("loaded subtraction preview for self.frames[\(frame.frameIndex)] from jpeg")
             let viewImage = Image(nsImage: image).resizable()
             self.frames[frame.frameIndex].subtractionPreviewImage = viewImage
+        }
+
+        if let image = await frame.imageAccessor.loadNSImage(type: .blobs, atSize: .preview) {
+            Log.d("loaded blobs preview for self.frames[\(frame.frameIndex)] from jpeg")
+            let viewImage = Image(nsImage: image).resizable()
+            self.frames[frame.frameIndex].blobsPreviewImage = viewImage
+        }
+
+        if let image = await frame.imageAccessor.loadNSImage(type: .houghLines, atSize: .preview) {
+            Log.d("loaded houghLines preview for self.frames[\(frame.frameIndex)] from jpeg")
+            let viewImage = Image(nsImage: image).resizable()
+            self.frames[frame.frameIndex].houghLinesPreviewImage = viewImage
         }
 
         if let image = await frame.imageAccessor.loadNSImage(type: .processed, atSize: .preview) {
@@ -725,6 +756,10 @@ public extension ViewModel {
                     self.currentFrameImage = newFrameView.previewImage
                 case .subtraction:
                     self.currentFrameImage = newFrameView.subtractionPreviewImage
+                case .blobs:
+                    self.currentFrameImage = newFrameView.blobsPreviewImage
+                case .houghLines:
+                    self.currentFrameImage = newFrameView.houghLinesPreviewImage
                 case .validation:
                     self.currentFrameImage = newFrameView.validationPreviewImage
                 case .processed:
@@ -752,6 +787,20 @@ public extension ViewModel {
                                     self.currentFrameImage = Image(nsImage: baseImage)
                                 }
                             }
+
+                        case .blobs:
+                            if let baseImage = await nextFrame.imageAccessor.loadNSImage(type: .blobs, atSize: .original) {
+                                if nextFrame.frameIndex == self.currentIndex {
+                                    self.currentFrameImage = Image(nsImage: baseImage)
+                                }
+                            }
+                        case .houghLines:
+                            if let baseImage = await nextFrame.imageAccessor.loadNSImage(type: .houghLines, atSize: .original) {
+                                if nextFrame.frameIndex == self.currentIndex {
+                                    self.currentFrameImage = Image(nsImage: baseImage)
+                                }
+                            }
+                            
                         case .validation:
                             if let baseImage = await nextFrame.imageAccessor.loadNSImage(type: .validated, atSize: .original) {
                                 if nextFrame.frameIndex == self.currentIndex {
@@ -928,6 +977,14 @@ public extension ViewModel {
                     case .subtraction:
                         self.currentFrameImage =
                           self.frames[currentIdx].subtractionPreviewImage
+
+                    case .blobs: 
+                        self.currentFrameImage =
+                          self.frames[currentIdx].blobsPreviewImage
+                        
+                    case .houghLines: 
+                        self.currentFrameImage =
+                          self.frames[currentIdx].houghLinesPreviewImage
                         
                     case .validation:
                         self.currentFrameImage =
