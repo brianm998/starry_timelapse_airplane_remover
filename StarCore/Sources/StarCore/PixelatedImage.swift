@@ -238,8 +238,8 @@ public struct PixelatedImage {
         if overlapPercent >= 90 { realOverlap = 90 } // at least 10 percent move
 
         // how far apart the starting point for each matrix element is from neighbors
-        let xAdjust = Int(Double(maxWidth)*(100-overlapPercent)/100)
-        let yAdjust = Int(Double(maxHeight)*(100-overlapPercent)/100)
+        let xAdjust = Int(Double(maxWidth)*(100-realOverlap)/100)
+        let yAdjust = Int(Double(maxHeight)*(100-realOverlap)/100)
 
         // starting point for each matrix element
         var xOffset = 0
