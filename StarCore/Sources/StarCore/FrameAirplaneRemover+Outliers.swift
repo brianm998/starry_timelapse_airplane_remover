@@ -255,6 +255,7 @@ extension FrameAirplaneRemover {
                                 let (foo, bar) =
                                   processBlobsAt(x: x+element.x,
                                                  y: y+element.y,
+                                                 on: line,
                                                  blobsToProcess: blobsToProcess,
                                                  blobsToPromote: &blobsToPromote,
                                                  blobMap: &_blobMap,
@@ -283,6 +284,7 @@ extension FrameAirplaneRemover {
                                 let (foo, bar) =
                                   processBlobsAt(x: x+element.x,
                                                  y: y+element.y,
+                                                 on: line,
                                                  blobsToProcess: blobsToProcess,
                                                  blobsToPromote: &blobsToPromote,
                                                  blobMap: &_blobMap,
@@ -315,6 +317,7 @@ extension FrameAirplaneRemover {
     
     private func processBlobsAt(x: Int,
                                 y: Int,
+                                on line: Line,
                                 blobsToProcess: [Blob],
                                 blobsToPromote: inout [Blob],
                                 blobMap: inout [String:Blob],
@@ -325,8 +328,18 @@ extension FrameAirplaneRemover {
         for blob in blobsToProcess {
             let blobDistance = blob.distanceTo(x: x, y: y)
 
+            // lines are invalid for this blob
+            // if there is already a line on the blob and it doesn't match
+            var lineIsValid = true
+
+            if let blobLine = blob.line {
+                lineIsValid = blobLine.matches(line)
+            }
+            
             // how far is the closest pixel of this blob from (x, y)?
-            if blobDistance < 4 { // XXX magic number XXX
+            if lineIsValid,
+               blobDistance < 4 // XXX magic number XXX
+            { 
                 if let _lastBlob = lastBlob {
                     if _lastBlob.boundingBox.edgeDistance(to: blob.boundingBox) < 40 { // XXX constant XXX
                         // if they are close enough, simply combine them
@@ -335,12 +348,14 @@ extension FrameAirplaneRemover {
                         Log.d("frame \(frameIndex) absorbing blob")
                     } else {
                         // if they are far, then overwrite the lastBlob var
+                        blob.line = line
                         blobsToPromote.append(blob)
                         lastBlob_ = blob
                         //Log.d("frame \(frameIndex) blobDistance \(blobDistance) too far")
                     }
                 } else {
                     Log.d("frame \(frameIndex) no last blob")
+                    blob.line = line
                     blobsToPromote.append(blob)
                     lastBlob_ = blob
                 }

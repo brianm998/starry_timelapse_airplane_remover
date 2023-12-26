@@ -6,6 +6,8 @@ public class Blob {
     public let id: String
     public private(set) var pixels: [SortablePixel]
 
+    public var line: Line?
+    
     public var size: Int { pixels.count }
 
     public var impactCount: Int = 0
@@ -101,6 +103,7 @@ public class Blob {
     }
     
     public func outlierGroup(at frameIndex: Int) -> OutlierGroup {
+        // XXX make this pass on the line, if there is one
         OutlierGroup(name: self.id,
                      size: UInt(self.pixels.count),
                      brightness: UInt(self.intensity),
