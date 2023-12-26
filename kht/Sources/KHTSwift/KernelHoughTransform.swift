@@ -81,8 +81,8 @@ fileprivate actor HoughTransformer {
         {
             Log.d("got \(lines.count) lines")
 
-            var count = 0
-
+            var lastVotes: Int = 0
+            
             for line in lines {
                 if let line = line as? KHTBridgeLine {
                     // change how each line is represented
@@ -116,12 +116,14 @@ fileprivate actor HoughTransformer {
                         }
                     }
 
+                    // if there is a sharp decrease in the quality of line votes, don't add more
+                    if newLine.votes < lastVotes/4 {
+                        shouldAppend = false
+                    }
+
                     if shouldAppend {
-                        if count < 4 {
-                            Log.d("KHT line \(count) theta \(line.theta) rho \(line.rho)")
-                        }
                         ret.append(newLine)
-                        count += 1
+                        lastVotes = newLine.votes
                     }
                 }
             }
