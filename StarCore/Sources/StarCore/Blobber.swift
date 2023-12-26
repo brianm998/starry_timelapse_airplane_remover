@@ -191,14 +191,14 @@ public class Blobber {
         self.blobs = self.blobs.filter { blob in
             // too small, too dim
             if blob.size <= minimumBlobSize,
-               blob.intensity < 12000 // XXX constant
+               blob.intensity < 15000 // XXX constant
             {
                 return false
             }
 
             // allow larger blobs that are a little dimmer
             if blob.size <= minimumBlobSize * 2, // XXX constant
-               blob.intensity < 8000 // XXX constant
+               blob.intensity < 10000 // XXX constant
             {
                 return false
             }
