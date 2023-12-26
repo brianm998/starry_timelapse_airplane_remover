@@ -212,7 +212,7 @@ func hough_test(filename: String, outputFilename: String) async {
                             lines.append(Line( 
                                            theta: theta, // XXX small data loss in conversion
                                            rho: rho,
-                                           count: Int(counts[x][y])
+                                           votes: Int(counts[x][y])
                                          ))
                         } else {
                             if count > 10 {
@@ -225,7 +225,7 @@ func hough_test(filename: String, outputFilename: String) async {
 
                 // XXX improvement - calculate maxes based upon a 3x3 mask 
                 let sortedLines = lines.sorted() { a, b in
-                    return a.count < b.count
+                    return a.votes < b.votes
                 }
                 
                 let small_set_lines = Array<Line>(sortedLines.suffix(numberOfLinesReturned).reversed())
@@ -236,7 +236,7 @@ func hough_test(filename: String, outputFilename: String) async {
                     
                     let theta = line.theta
                     let rho = line.rho
-                    Log.d("found line with theta \(theta) and dist \(rho) count \(line.count)")
+                    Log.d("found line with theta \(theta) and dist \(rho) votes \(line.votes)")
                 }
                 
                 // next step is to find the highest counts, and extraplate lines from them

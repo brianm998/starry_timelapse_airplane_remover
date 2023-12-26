@@ -5,15 +5,15 @@ import logging
 public struct Line: Codable {
     public let theta: Double           // angle in degrees
     public let rho: Double             // distance in pixels
-    public let count: Int
+    public let votes: Int
 
     public init(theta: Double,
                 rho: Double,
-                count: Int)
+                votes: Int)
     {
         self.theta = theta
         self.rho = rho
-        self.count = count
+        self.votes = votes
     }
 
     // returns a line in standard form a*x + b*y + c = 0 
@@ -87,10 +87,10 @@ public struct Line: Codable {
     // constructs a line that passes through the two given points
     public init(point1: DoubleCoord,
                 point2: DoubleCoord,
-                count: Int = 0)
+                votes: Int = 0)
     {
         (self.theta, self.rho) = polarCoords(point1: point1, point2: point2)
-        self.count = count
+        self.votes = votes
     }
 
     // returns where this line intersects with a frame of the given size

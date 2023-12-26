@@ -4,7 +4,7 @@
 @interface KHTBridgeLine : NSObject
 @property (nonatomic) double theta;
 @property (nonatomic) double rho;
-@property (nonatomic) int count;
+@property (nonatomic) int votes;
 @end
 
 @interface KHTBridge : NSObject

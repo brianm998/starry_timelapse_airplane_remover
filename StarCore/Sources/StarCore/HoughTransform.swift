@@ -140,13 +140,13 @@ public class HoughTransform {
                 }
                 let countInt = Int(count)
                 if countInt > minLineCount {                                         
-                    lines.append(Line(theta: theta, rho: rho, count: countInt))
+                    lines.append(Line(theta: theta, rho: rho, votes: countInt))
                 }
             }
         }
 
         // put higher counts at the front of the list
-        let sortedLines = lines.sorted() { $0.count > $1.count }
+        let sortedLines = lines.sorted() { $0.votes > $1.votes }
 
         var linesToReturn: Array<Line> = []
         if let maxCount = maxCount {

@@ -209,8 +209,8 @@ extension FrameAirplaneRemover {
                 var brightnessValue: UInt8 = 0xFF
 
                 // calculate brightness to display line on kht image
-                if line.count < maxVotes {
-                    brightnessValue = UInt8(Double(line.count)/Double(maxVotes) *
+                if line.votes < maxVotes {
+                    brightnessValue = UInt8(Double(line.votes)/Double(maxVotes) *
                                               Double(0xFF - khtImageBase) +
                                               Double(khtImageBase))
                 }
@@ -222,7 +222,7 @@ extension FrameAirplaneRemover {
                 if frameEdgeMatches.count == 2 {
                     // sunny day case
 
-                    Log.d("frame \(frameIndex) matrix element [\(element.x), \(element.y)] has line theta \(line.theta) rho \(line.rho) votes \(line.count) brightnessValue \(brightnessValue)")
+                    Log.d("frame \(frameIndex) matrix element [\(element.x), \(element.y)] has line theta \(line.theta) rho \(line.rho) votes \(line.votes) brightnessValue \(brightnessValue)")
                     
                     // calculate a standard line from the edge matches
                     let standardLine = StandardLine(point1: frameEdgeMatches[0],

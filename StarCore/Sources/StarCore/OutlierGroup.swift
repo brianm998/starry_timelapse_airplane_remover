@@ -622,7 +622,7 @@ public class OutlierGroup: CustomStringConvertible,
         
     fileprivate var maxHoughTransformCount: Double {
         if let firstLine = self.firstLine {
-            return Double(firstLine.count)/Double(self.size)
+            return Double(firstLine.votes)/Double(self.size)
         }
         return 0
     }
@@ -655,7 +655,7 @@ public class OutlierGroup: CustomStringConvertible,
 
                 if let previousFrame = frame.previousFrame,
                    let nearbyGroups = previousFrame.outlierGroups(within: OutlierGroup.maxNearbyGroupDistance,
-                                                                    of: self)
+                                                                  of: self)
                 {
                     for group in nearbyGroups {
                         let score = self.thetaHistoCenterLineScore(with: group,
@@ -665,7 +665,7 @@ public class OutlierGroup: CustomStringConvertible,
                 }
                 if let nextFrame = frame.nextFrame,
                    let nearbyGroups = nextFrame.outlierGroups(within: OutlierGroup.maxNearbyGroupDistance,
-                                                                of: self)
+                                                              of: self)
                 {
                     for group in nearbyGroups {
                         let score = self.thetaHistoCenterLineScore(with: group,
@@ -712,7 +712,7 @@ public class OutlierGroup: CustomStringConvertible,
             if let frame = frame {
                 if let previousFrame = frame.previousFrame,
                    let nearbyGroups = previousFrame.outlierGroups(within: OutlierGroup.maxNearbyGroupDistance,
-                                                                          of: self)
+                                                                  of: self)
                 {
                     for group in nearbyGroups {
                         maxOverlap = max(self.pixelOverlap(with: group), maxOverlap)
@@ -721,7 +721,7 @@ public class OutlierGroup: CustomStringConvertible,
                 
                 if let nextFrame = frame.nextFrame,
                    let nearbyGroups = nextFrame.outlierGroups(within: OutlierGroup.maxNearbyGroupDistance,
-                                                                      of: self)
+                                                              of: self)
                 {
                     for group in nearbyGroups {
                         maxOverlap = max(self.pixelOverlap(with: group), maxOverlap)
@@ -741,7 +741,7 @@ public class OutlierGroup: CustomStringConvertible,
 
                 if let previousFrame = frame.previousFrame,
                    let nearbyGroups = previousFrame.outlierGroups(within: OutlierGroup.maxNearbyGroupDistance,
-                                                                    of: self)
+                                                                  of: self)
                 {
                     for group in nearbyGroups {
                         let otherHisto = group.houghLineHistogram
@@ -753,7 +753,7 @@ public class OutlierGroup: CustomStringConvertible,
                 
                 if let nextFrame = frame.nextFrame,
                    let nearbyGroups = nextFrame.outlierGroups(within: OutlierGroup.maxNearbyGroupDistance,
-                                                                of: self)
+                                                              of: self)
                 {
                     for group in nearbyGroups {
                         let otherHisto = group.houghLineHistogram
@@ -810,7 +810,7 @@ public class OutlierGroup: CustomStringConvertible,
         get {
             if let frame = frame,
                let nearbyGroups = frame.outlierGroups(within: OutlierGroup.maxNearbyGroupDistance,
-                                                             of: self)
+                                                      of: self)
             {
                 let selfHisto = self.houghLineHistogram
                 var ret = 0.0
@@ -852,7 +852,7 @@ public class OutlierGroup: CustomStringConvertible,
                 if let previousFrame = frame.previousFrame,
                    let nearbyGroups =
                      previousFrame.outlierGroups(within: OutlierGroup.maxNearbyGroupDistance,
-                                                  of: self)
+                                                 of: self)
                 {
 
                     for group in nearbyGroups {
@@ -867,7 +867,7 @@ public class OutlierGroup: CustomStringConvertible,
 
                 if let nextFrame = frame.nextFrame,
                    let nearbyGroups = nextFrame.outlierGroups(within: OutlierGroup.maxNearbyGroupDistance,
-                                                                of: self)
+                                                              of: self)
                 {
                     for group in nearbyGroups {
                         if let firstLine = group.firstLine {
@@ -922,7 +922,7 @@ public class OutlierGroup: CustomStringConvertible,
         var max = 10;
         if self.lines.count < max { max = self.lines.count }
         for i in 0..<max {
-            sum += Double(self.lines[i].count)/Double(self.size)
+            sum += Double(self.lines[i].votes)/Double(self.size)
             divisor += 1
         }
         return sum/divisor
@@ -958,20 +958,20 @@ public class OutlierGroup: CustomStringConvertible,
         var sum = 0.0
         var divisor = 0.0
         for i in 0..<self.lines.count {
-            sum += Double(self.lines[i].count)/Double(self.size)
+            sum += Double(self.lines[i].votes)/Double(self.size)
             divisor += 1
         }
         return sum/divisor
     }
 
     /*
-    func logDecisionTreeValues() {
-        var message = "decision tree values for \(self.name): "
-        for type in /*OutlierGroup.*/Feature.allCases {
-            message += "\(type) = \(self.decisionTreeValue(for: type)) " 
-        }
-        Log.d(message)
-        }*/
+     func logDecisionTreeValues() {
+     var message = "decision tree values for \(self.name): "
+     for type in /*OutlierGroup.*/Feature.allCases {
+     message += "\(type) = \(self.decisionTreeValue(for: type)) " 
+     }
+     Log.d(message)
+     }*/
 
     // XXX this MOFO is slow :(
     fileprivate func streakScore(going direction: StreakDirection,
@@ -985,7 +985,7 @@ public class OutlierGroup: CustomStringConvertible,
         if let frame = self.frame,
            let otherFrame = direction == .forwards ? frame.nextFrame : frame.previousFrame,
            let nearbyGroups = otherFrame.outlierGroups(within: OutlierGroup.maxNearbyGroupDistance,
-                                                         of: self)
+                                                       of: self)
         {
             for nearbyGroup in nearbyGroups {
                 let score = self.thetaHistoCenterLineScore(with: nearbyGroup,
@@ -1075,7 +1075,7 @@ public class OutlierGroup: CustomStringConvertible,
         index += 8
 
         self.bounds = BoundingBox(min: Coord(x: bbMinX, y: bbMinY),
-                               max: Coord(x: bbMaxX, y: bbMaxY))
+                                  max: Coord(x: bbMaxX, y: bbMaxY))
 
         let brightnessData = persitentData.subdata(in: index..<index+8)
         self.brightness = brightnessData.withUnsafeBytes { $0.load(as: UInt.self).bigEndian }
@@ -1102,7 +1102,7 @@ public class OutlierGroup: CustomStringConvertible,
             let count = countData.withUnsafeBytes { $0.load(as: Int.self) }
             index += 8
             
-            _lines.append(Line(theta: theta, rho: rho, count: count))
+            _lines.append(Line(theta: theta, rho: rho, votes: count))
         }
         self.lines = _lines
 
@@ -1188,8 +1188,8 @@ public class OutlierGroup: CustomStringConvertible,
             let rhoData = withUnsafeBytes(of: line.rho) { Data($0) }
             data.replaceSubrange(index..<index+8, with: rhoData)
             index += 8
-            let countData = withUnsafeBytes(of: line.count.bigEndian) { Data($0) }
-            data.replaceSubrange(index..<index+8, with: countData)
+            let votesData = withUnsafeBytes(of: line.votes.bigEndian) { Data($0) }
+            data.replaceSubrange(index..<index+8, with: votesData)
             index += 8
         }
 

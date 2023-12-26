@@ -62,7 +62,7 @@
     KHTBridgeLine * bridgeLine = [[KHTBridgeLine alloc] init];
     bridgeLine.rho = rho;
     bridgeLine.theta = theta;
-    bridgeLine.count = line.votes;
+    bridgeLine.votes = line.votes;
 
     [ret addObject: bridgeLine];
   }

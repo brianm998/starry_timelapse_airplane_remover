@@ -15,7 +15,7 @@ public struct HoughLineHistogram {
 
         for line in lines {
             let index = Int(line.theta/Double(increment))
-            values[index] += Double(line.count)/Double(groupSize)
+            values[index] += Double(line.votes)/Double(groupSize)
         }
 
         self.values = values

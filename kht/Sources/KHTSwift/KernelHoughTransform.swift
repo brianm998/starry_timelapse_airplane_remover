@@ -94,7 +94,7 @@ fileprivate actor HoughTransformer {
                     
                     var shouldAppend = true
 
-                    if newLine.count < minVotes,
+                    if newLine.votes < minVotes,
                        ret.count >= minResults
                     {
                         // ignore lines with small counts,
@@ -148,7 +148,7 @@ extension KHTBridgeLine {
         // construct a new line based upon these points
         return Line(point1: p1,
                     point2: p2,
-                    count: Int(self.count))
+                    votes: Int(self.votes))
     }
 
     
