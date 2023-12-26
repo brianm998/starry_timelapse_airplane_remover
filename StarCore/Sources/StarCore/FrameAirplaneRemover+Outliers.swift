@@ -133,7 +133,7 @@ extension FrameAirplaneRemover {
             let blobsToPromote = try await blobKHTAnalysis(subtractionImage: subtractionImage,
                                                            blobMap: blobber.blobMap)
             
-            Log.d("frame \(frameIndex) has \(blobsToPromote) blobsToPromote")
+            Log.d("frame \(frameIndex) has \(blobsToPromote.count) blobsToPromote")
             self.state = .detectingOutliers3
 
             // promote found blobs to outlier groups for further processing
@@ -156,12 +156,12 @@ extension FrameAirplaneRemover {
     private func blobKHTAnalysis(subtractionImage: PixelatedImage,
                                  blobMap: [String: Blob]) async throws -> [Blob]
     {
-        var blobsToPromote: [Blob] = []
+        var blobsToReturn: [Blob] = []
         var lastBlob: Blob?
-        let maxVotes = 8000     // lines with votes over this are max color on kht image
+        let maxVotes = 12000     // lines with votes over this are max color on kht image
         var _blobMap = blobMap
         
-        let khtImageBase = 0x10
+        let khtImageBase = 0x0A
         var khtImage: [UInt8] = []
         if config.writeOutlierGroupFiles {
             khtImage = [UInt8](repeating: 0, count: width*height)
@@ -178,14 +178,16 @@ extension FrameAirplaneRemover {
 
         Log.i("frame \(frameIndex) has matrix with \(matrix.count) elements")
         for element in matrix {
-            Log.i("frame \(frameIndex) matrix element [\(element.x), \(element.y)]")
-
+            var blobsToPromote: [Blob] = []
             // first run a kernel based hough transform on this matrix element,
             // returning some set of detected lines 
             let lines = await element.image.kernelHoughTransform(maxThetaDiff: 10,
                                                                  maxRhoDiff: 10,
-                                                                 minVotes: 1000,
-                                                                 minResults: 6)
+                                                                 minVotes: 6000,
+                                                                 minResults: 6,
+                                                                 maxResults: 12)
+
+            Log.i("frame \(frameIndex) matrix element [\(element.x), \(element.y)] -> [\(element.image.width), \(element.image.height)] has \(lines.count) lines")
 
             // list of blobs to process for this element
             var blobsToProcess = _blobMap.values.filter { $0.isIn(matrixElement: element) }
@@ -295,6 +297,7 @@ extension FrameAirplaneRemover {
                     Log.i("frame \(frameIndex) frameEdgeMatches.count \(frameEdgeMatches.count) != 2")
                 }
             }
+            blobsToReturn += blobsToPromote
         }
 
         if config.writeOutlierGroupFiles {
@@ -307,7 +310,7 @@ extension FrameAirplaneRemover {
                                          atSize: .preview, overwrite: true)
         }
 
-        return blobsToPromote
+        return blobsToReturn
     }
     
     private func processBlobsAt(x: Int,

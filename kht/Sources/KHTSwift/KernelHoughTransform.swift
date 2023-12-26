@@ -33,7 +33,10 @@ public func kernelHoughTransform(image: NSImage,
 
                                  // always return at least this many lines,
                                  // even if they are below the minVotes 
-                                 minResults: Int = 4) 
+                                 minResults: Int = 4,
+
+                                 // never return more than this many lines
+                                 maxResults: Int = 10) 
   async -> [Line]
 {
     await transformer.kernelHoughTransform(image: image,
@@ -45,7 +48,8 @@ public func kernelHoughTransform(image: NSImage,
                                            maxThetaDiff: maxThetaDiff,
                                            maxRhoDiff: maxRhoDiff,
                                            minVotes: minVotes,
-                                           minResults: minResults)
+                                           minResults: minResults,
+                                           maxResults: maxResults)
 }
 
 /*
@@ -67,7 +71,8 @@ fileprivate actor HoughTransformer {
                                      maxThetaDiff: Double,
                                      maxRhoDiff: Double,
                                      minVotes: Int,
-                                     minResults: Int) -> [Line]
+                                     minResults: Int,
+                                     maxResults: Int) -> [Line]
     {
         var ret: [Line] = []
 
@@ -85,6 +90,9 @@ fileprivate actor HoughTransformer {
             
             for line in lines {
                 if let line = line as? KHTBridgeLine {
+
+                    if ret.count >= maxResults { return ret }
+                    
                     // change how each line is represented
 
                     // convert kht polar central origin polar coord line
@@ -117,7 +125,7 @@ fileprivate actor HoughTransformer {
                     }
 
                     // if there is a sharp decrease in the quality of line votes, don't add more
-                    if newLine.votes < lastVotes/4 {
+                    if newLine.votes < lastVotes/3 { // XXX hardcoded parameter XXX
                         shouldAppend = false
                     }
 
@@ -129,7 +137,6 @@ fileprivate actor HoughTransformer {
             }
         }
         return ret
-
     }
 }
 
