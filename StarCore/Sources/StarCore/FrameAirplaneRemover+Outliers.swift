@@ -104,7 +104,7 @@ extension FrameAirplaneRemover {
                               neighborType: .eight,//.fourCardinal,
                               minimumBlobSize: config.minGroupSize/4, // XXX constant XXX
                               minimumLocalMaximum: config.maxPixelDistance,
-                              contrastMin: 50)      // XXX constant
+                              contrastMin: 52)      // XXX constant
 
         if config.writeOutlierGroupFiles {
             // save blobs image here
@@ -121,6 +121,13 @@ extension FrameAirplaneRemover {
         }
         
         self.state = .detectingOutliers2
+
+        /*
+         Now that we have detected blobs in this frame, the next step is to
+         identify lines in the frame and collate blobs that are close to the lines
+         and close to eachother into a single larger blob.
+         */
+
 
         if let subtractionImage = subtractionImage {
             let blobsToPromote = try await blobKHTAnalysis(subtractionImage: subtractionImage,
@@ -151,7 +158,7 @@ extension FrameAirplaneRemover {
     {
         var blobsToPromote: [Blob] = []
         var lastBlob: Blob?
-
+        let maxVotes = 8000     // lines with votes over this are max color on kht image
         var _blobMap = blobMap
         
         let khtImageBase = 0x10
@@ -160,19 +167,13 @@ extension FrameAirplaneRemover {
             khtImage = [UInt8](repeating: 0, count: width*height)
         }
         
-        /*
-         Now that we have detected blobs in this frame, the next step is to
-         identify lines in the frame and collate blobs that are close to the lines
-         and close to eachother into a single larger blob.
-         */
-
         Log.i("frame \(frameIndex) loaded subtraction image")
 
         // XXX A whole forest of magic numbers here :(
 
         // split the subtraction image into a bunch of small images with some overlap
-        let matrix = subtractionImage.splitIntoMatrix(maxWidth: 1024,
-                                                      maxHeight: 1024,
+        let matrix = subtractionImage.splitIntoMatrix(maxWidth: 512,
+                                                      maxHeight: 512,
                                                       overlapPercent: 50)
 
         Log.i("frame \(frameIndex) has matrix with \(matrix.count) elements")
@@ -191,17 +192,29 @@ extension FrameAirplaneRemover {
             
             //Log.i("frame \(frameIndex) \(blobsToProcess.count) blobs blobber.blobs \(blobber.blobs) and \(lines.count) lines")
 
-            
             for line in lines {
-                // calculate brightness to display line on kht image
-                let valueD = Double(0xFF - khtImageBase)/0xFF * Double(line.count) + Double(khtImageBase)
-                var value: UInt8 = 0
-                if valueD < 0xFF {
-                    value = UInt8(valueD)
-                } else {
-                    value = 0xFF
-                }
 
+                /*
+
+                 count = 0
+                 valueD = khtImageBase
+
+
+                 count = maxVotes
+                 valueD = 0xFF
+
+                 
+                 */
+
+                var brightnessValue: UInt8 = 0xFF
+
+                // calculate brightness to display line on kht image
+                if line.count < maxVotes {
+                    brightnessValue = UInt8(Double(line.count)/Double(maxVotes) *
+                                              Double(0xFF - khtImageBase) +
+                                              Double(khtImageBase))
+                }
+                    
                 // where does this line intersect the edges of this element?
                 let frameEdgeMatches = line.frameBoundries(width: element.image.width,
                                                            height: element.image.height)
@@ -209,6 +222,8 @@ extension FrameAirplaneRemover {
                 if frameEdgeMatches.count == 2 {
                     // sunny day case
 
+                    Log.d("frame \(frameIndex) matrix element [\(element.x), \(element.y)] has line theta \(line.theta) rho \(line.rho) votes \(line.count) brightnessValue \(brightnessValue)")
+                    
                     // calculate a standard line from the edge matches
                     let standardLine = StandardLine(point1: frameEdgeMatches[0],
                                                     point2: frameEdgeMatches[1])
@@ -229,8 +244,8 @@ extension FrameAirplaneRemover {
                                 if config.writeOutlierGroupFiles {
                                     // write kht image data
                                     let index = (y+element.y)*width+(x+element.x)
-                                    if khtImage[index] < value {
-                                        khtImage[index] = value
+                                    if khtImage[index] < brightnessValue {
+                                        khtImage[index] = brightnessValue
                                     }
                                 }
 
@@ -257,8 +272,8 @@ extension FrameAirplaneRemover {
                                 if config.writeOutlierGroupFiles {
                                     // write kht image data
                                     let index = (y+element.y)*width+(x+element.x)
-                                    if khtImage[index] < value {
-                                        khtImage[index] = value
+                                    if khtImage[index] < brightnessValue {
+                                        khtImage[index] = brightnessValue
                                     }
                                 }
 
@@ -306,8 +321,9 @@ extension FrameAirplaneRemover {
         var lastBlob_ = lastBlob
         for blob in blobsToProcess {
             let blobDistance = blob.distanceTo(x: x, y: y)
-            //Log.d("frame \(frameIndex) blobDistance \(blobDistance)")
-            if blobDistance < 10 { // XXX magic number XXX
+
+            // how far is the closest pixel of this blob from (x, y)?
+            if blobDistance < 4 { // XXX magic number XXX
                 if let _lastBlob = lastBlob {
                     if _lastBlob.boundingBox.edgeDistance(to: blob.boundingBox) < 40 { // XXX constant XXX
                         // if they are close enough, simply combine them
