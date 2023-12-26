@@ -123,40 +123,43 @@ public actor FinalProcessor {
 
     private func log() {
         if let updatable = callbacks.updatable {
+           let localFrames = self.frames
             // show what frames are in place to be processed
-            TaskWaiter.task(priority: .userInitiated) {
-                var padding = ""
-                if self.numConcurrentRenders < self.config.progressBarLength {
-                    padding = String(repeating: " ", count: (self.config.progressBarLength - self.numConcurrentRenders))
-                }
-                
-                var message: String = padding + ConsoleColor.blue.rawValue + "["
-                var count = 0
-                let end = self.currentFrameIndex + self.numConcurrentRenders
-                for i in self.currentFrameIndex ..< end {
-                    if i >= self.frames.count {
-                        message += ConsoleColor.yellow.rawValue + "-"
-                    } else {
-                        if let _ = self.frames[i] {
-                            message += ConsoleColor.green.rawValue + "*"
-                            count += 1
-                        } else {
+            Task {
+                await TaskWaiter.shared.task(priority: .userInitiated) {
+                    var padding = ""
+                    if self.numConcurrentRenders < self.config.progressBarLength {
+                        padding = String(repeating: " ", count: (self.config.progressBarLength - self.numConcurrentRenders))
+                    }
+                    
+                    var message: String = padding + ConsoleColor.blue.rawValue + "["
+                    var count = 0
+                    let end = self.currentFrameIndex + self.numConcurrentRenders
+                    for i in self.currentFrameIndex ..< end {
+                        if i >= localFrames.count {
                             message += ConsoleColor.yellow.rawValue + "-"
+                        } else {
+                            if let _ = localFrames[i] {
+                                message += ConsoleColor.green.rawValue + "*"
+                                count += 1
+                            } else {
+                                message += ConsoleColor.yellow.rawValue + "-"
+                            }
                         }
                     }
-                }
-                var lowerBound = self.currentFrameIndex + end
-                if lowerBound > self.frames.count { lowerBound = self.frames.count }
-                
-                for i in lowerBound ..< self.frames.count {
-                    if let _ = self.frames[i] {
-                        count += 1
+                    var lowerBound = self.currentFrameIndex + end
+                    if lowerBound > localFrames.count { lowerBound = localFrames.count }
+                    
+                    for i in lowerBound ..< localFrames.count {
+                        if let _ = localFrames[i] {
+                            count += 1
+                        }
                     }
+                    message += ConsoleColor.blue.rawValue+"]"+ConsoleColor.reset.rawValue
+                    let name = "frames awaiting inter frame processing"
+                    message += " \(count) \(name)"
+                    await updatable.log(name: name, message: message, value: 50)
                 }
-                message += ConsoleColor.blue.rawValue+"]"+ConsoleColor.reset.rawValue
-                let name = "frames awaiting inter frame processing"
-                message += " \(count) \(name)"
-                await updatable.log(name: name, message: message, value: 50)
             }
         }
     }

@@ -77,16 +77,18 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
         self.remainingImagesClosure = { numberOfUnprocessed in
             if let updatable = callbacks.updatable {
                 // log number of unprocessed images here
-                TaskWaiter.task(priority: .userInitiated) {
-                    let progress = Double(numberOfUnprocessed)/Double(imageSequenceSize)
-                    await updatable.log(name: "unprocessed frames",
-                                        message: reverseProgressBar(length: config.progressBarLength, progress: progress) + " \(numberOfUnprocessed) frames waiting to process",
-                                         value: -1)
+                Task {
+                    await TaskWaiter.shared.task(priority: .userInitiated) {
+                        let progress = Double(numberOfUnprocessed)/Double(imageSequenceSize)
+                        await updatable.log(name: "unprocessed frames",
+                                            message: reverseProgressBar(length: config.progressBarLength, progress: progress) + " \(numberOfUnprocessed) frames waiting to process",
+                                            value: -1)
+                    }
                 }
             }
         }
         if let remainingImagesClosure = remainingImagesClosure {
-            TaskWaiter.task(priority: .medium) {
+            await TaskWaiter.shared.task(priority: .medium) {
                 await self.methodList.set(removeClosure: remainingImagesClosure)
                 remainingImagesClosure(await self.methodList.count)
             }

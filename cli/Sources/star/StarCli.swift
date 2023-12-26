@@ -385,7 +385,7 @@ struct StarCli: AsyncParsableCommand {
         } else {
             throw ValidationError("need to provide input")
         }
-        await TaskWaiter.finish()
+        await TaskWaiter.shared.finish()
     }
 }
 

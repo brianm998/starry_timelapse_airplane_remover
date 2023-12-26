@@ -930,14 +930,16 @@ fileprivate actor LogGremlin {
 // this is helpful when testing logging, to see a few test lines, and then avoid further spew 
 public func LOG_ABORT() {
     Log.dispatchGroup.enter()
-    TaskWaiter.task {
-        print("\n\n")
-        print("☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️")
-        print("☠️☠️☠️ was asked to abort ☠️☠️☠️")
-        print("☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️")
-        print("\n\n")
-        Log.dispatchGroup.leave()
-        abort()
+    Task{ 
+        await TaskWaiter.shared.task {
+            print("\n\n")
+            print("☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️")
+            print("☠️☠️☠️ was asked to abort ☠️☠️☠️")
+            print("☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️")
+            print("\n\n")
+            Log.dispatchGroup.leave()
+            abort()
+        }
     }
 }
 
