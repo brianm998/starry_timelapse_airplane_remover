@@ -889,16 +889,18 @@ fileprivate extension Log {
 
 }
 
-fileprivate let gremlin = LogGremlin()
+public let gremlin = LogGremlin()
 
 // this little guy just sits around and keeps the logs orderly by handling one log line at at time
-fileprivate actor LogGremlin {
+public actor LogGremlin {
 
     private var handlers: [Log.Output : LogHandler] = [:]
 
     func add(handler: LogHandler, for outputType: Log.Output) {
         handlers[outputType] = handler
     }
+
+    public func finish() { }           // does nothing, but allowing waiting for other stuff to finish
     
     func log(_ message: String,
              at logLevel: Log.Level,
@@ -930,16 +932,14 @@ fileprivate actor LogGremlin {
 // this is helpful when testing logging, to see a few test lines, and then avoid further spew 
 public func LOG_ABORT() {
     Log.dispatchGroup.enter()
-    Task{ 
-        await TaskWaiter.shared.task {
-            print("\n\n")
-            print("☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️")
-            print("☠️☠️☠️ was asked to abort ☠️☠️☠️")
-            print("☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️")
-            print("\n\n")
-            Log.dispatchGroup.leave()
-            abort()
-        }
+    TaskWaiter.shared.task {
+        print("\n\n")
+        print("☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️")
+        print("☠️☠️☠️ was asked to abort ☠️☠️☠️")
+        print("☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️")
+        print("\n\n")
+        Log.dispatchGroup.leave()
+        abort()
     }
 }
 

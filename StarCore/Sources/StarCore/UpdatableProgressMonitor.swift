@@ -21,20 +21,18 @@ public class UpdatableLogHandler: LogHandler {
                     with data: LogData?,
                     at logLevel: Log.Level)
     {
-        Task {
-            await TaskWaiter.shared.task(priority: .userInitiated) {
-                var logMessage = ""
-                if let data = data {
-                    logMessage = "\(logLevel.emo) \(logLevel) | \(fileLocation): \(message) | \(data.description)"
-                } else {
-                    logMessage = "\(logLevel.emo) \(logLevel) | \(fileLocation): \(message)"
-                }        
+        TaskWaiter.shared.task(priority: .userInitiated) {
+            var logMessage = ""
+            if let data = data {
+                logMessage = "\(logLevel.emo) \(logLevel) | \(fileLocation): \(message) | \(data.description)"
+            } else {
+                logMessage = "\(logLevel.emo) \(logLevel) | \(fileLocation): \(message)"
+            }        
 
-                let now = NSDate().timeIntervalSince1970
-                await self.updatable.log(name: "\(now)",
-                                         message: logMessage,
-                                         value: now)
-            }
+            let now = NSDate().timeIntervalSince1970
+            await self.updatable.log(name: "\(now)",
+                                     message: logMessage,
+                                     value: now)
         }
     }
     
@@ -194,10 +192,8 @@ public actor UpdatableProgressMonitor {
 
         let _updates = updates
 
-        Task {
-            await TaskWaiter.shared.task(priority: .userInitiated) {
-                for update in _updates { await update() }
-            }
+        TaskWaiter.shared.task(priority: .userInitiated) {
+            for update in _updates { await update() }
         }
     }
 }

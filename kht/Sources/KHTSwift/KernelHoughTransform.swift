@@ -84,7 +84,7 @@ fileprivate actor HoughTransformer {
                                            kernelMinHeight: kernelMinHeight,
                                            nSigmas: nSigmas)
         {
-            Log.d("got \(lines.count) lines")
+            //Log.d("got \(lines.count) lines")
 
             var lastVotes: Int = 0
             

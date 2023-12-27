@@ -134,12 +134,11 @@ extension FrameAirplaneRemover {
          and close to eachother into a single larger blob.
          */
 
-
         if let subtractionImage = subtractionImage {
             let blobsToPromote = try await blobKHTAnalysis(subtractionImage: subtractionImage,
                                                            blobMap: blobber.blobMap)
             
-            Log.d("frame \(frameIndex) has \(blobsToPromote.count) blobsToPromote")
+            Log.i("frame \(frameIndex) has \(blobsToPromote.count) blobsToPromote")
             self.state = .detectingOutliers3
 
             // promote found blobs to outlier groups for further processing
@@ -147,6 +146,7 @@ extension FrameAirplaneRemover {
                 if blob.size >= config.minGroupSize {
                     // make outlier group from this blob
                     let outlierGroup = blob.outlierGroup(at: frameIndex)
+                    Log.i("frame \(frameIndex) promoting \(blob) to outlier group \(outlierGroup.name)")
                     outlierGroup.frame = self
                     outlierGroups?.members[outlierGroup.name] = outlierGroup
                 }
@@ -182,10 +182,16 @@ extension FrameAirplaneRemover {
                                                       maxHeight: 512,
                                                       overlapPercent: 50)
 
+        Log.i("frame \(frameIndex) has matrix with \(matrix.count) elements")
+
+        for (index, element) in matrix.enumerated() {
+            Log.i("frame \(frameIndex) matrix element index \(index) \(element)")
+        }
+        
         var elementLines: [MatrixElementLine] = []
         
-        Log.i("frame \(frameIndex) has matrix with \(matrix.count) elements")
         for element in matrix {
+            Log.i("frame \(frameIndex) processing matrix element \(element)")
             // first run a kernel based hough transform on this matrix element,
             // returning some set of detected lines 
             let lines = await element.image.kernelHoughTransform(maxThetaDiff: 10,
@@ -196,21 +202,24 @@ extension FrameAirplaneRemover {
             for line in lines {
                 elementLines.append(MatrixElementLine(element: element, line: line))
             }
+            Log.i("frame \(frameIndex) appended \(lines.count) lines for element \(element)")
         }
+
+        Log.i("frame \(frameIndex) loaded \(elementLines.count) lines")
 
         // process the lines with most votes first
         elementLines.sort { $0.line.votes > $1.line.votes }
+        Log.i("frame \(frameIndex) sorted \(elementLines.count) lines")
 
         for elementLine in elementLines {
             let element = elementLine.element
             let line = elementLine.line
             
-            //Log.i("frame \(frameIndex) matrix element [\(element.x), \(element.y)] -> [\(element.image.width), \(element.image.height)] has \(lines.count) lines")
-
             // list of blobs to process for this element
-            var blobsToProcess = _blobMap.values.filter { $0.isIn(matrixElement: element) }
-            
-            //Log.i("frame \(frameIndex) \(blobsToProcess.count) blobs blobber.blobs \(blobber.blobs) and \(lines.count) lines")
+            var blobsToProcess = _blobMap.values.filter {
+                $0.isIn(matrixElement: element, within: 300)
+            }
+            Log.i("frame \(frameIndex) matrix element [\(element.x), \(element.y)] -> [\(element.image.width), \(element.image.height)] processing line theta \(line.theta) rho \(line.rho) votes \(line.votes) blobsToProcess \(blobsToProcess.count)")
 
             var brightnessValue: UInt8 = 0xFF
 
@@ -228,7 +237,7 @@ extension FrameAirplaneRemover {
             if frameEdgeMatches.count == 2 {
                 // sunny day case
 
-                Log.d("frame \(frameIndex) matrix element [\(element.x), \(element.y)] has line theta \(line.theta) rho \(line.rho) votes \(line.votes) brightnessValue \(brightnessValue)")
+                Log.i("frame \(frameIndex) matrix element [\(element.x), \(element.y)] has line theta \(line.theta) rho \(line.rho) votes \(line.votes) brightnessValue \(brightnessValue)")
                 
                 // calculate a standard line from the edge matches
                 let standardLine = StandardLine(point1: frameEdgeMatches[0],
@@ -244,6 +253,10 @@ extension FrameAirplaneRemover {
                 if iterateOnXAxis {
                     for x in 0..<element.image.width {
                         let y = Int(standardLine.y(forX: Double(x)))
+
+                        // XXX expand this search area a bit on both sides by some
+                        // configurable amount
+                        
                         if y > 0,
                            y < element.image.height
                         {
@@ -333,11 +346,11 @@ extension FrameAirplaneRemover {
             // lines are invalid for this blob
             // if there is already a line on the blob and it doesn't match
             var lineIsValid = true
-
+/*
             if let blobLine = blob.line {
-                lineIsValid = blobLine.matches(line)
+                lineIsValid = blobLine.matches(line, maxRhoDiff: Double(2^64))
             }
-            
+  */          
             // how far is the closest pixel of this blob from (x, y)?
             if lineIsValid,
                blobDistance < 6 // XXX magic number XXX
@@ -346,23 +359,23 @@ extension FrameAirplaneRemover {
                     if _lastBlob.boundingBox.edgeDistance(to: blob.boundingBox) < 40 { // XXX constant XXX
                         // if they are close enough, simply combine them
                         _lastBlob.absorb(blob)
+                        Log.i("frame \(frameIndex) blob \(_lastBlob) absorbing blob \(blob)")
                         blobMap.removeValue(forKey: blob.id)
-                        Log.d("frame \(frameIndex) absorbing blob")
                     } else {
                         // if they are far, then overwrite the lastBlob var
                         blob.line = line
                         blobsToPromote.append(blob)
+                        Log.i("frame \(frameIndex) blobDistance \(blobDistance) from \(_lastBlob) is too far from blob with id \(blob)")
                         lastBlob_ = blob
-                        //Log.d("frame \(frameIndex) blobDistance \(blobDistance) too far")
                     }
                 } else {
-                    Log.d("frame \(frameIndex) no last blob")
+                    Log.i("frame \(frameIndex) no last blob, blob \(blob) is now last")
                     blob.line = line
                     blobsToPromote.append(blob)
                     lastBlob_ = blob
                 }
             } else {
-                //Log.d("frame \(frameIndex) distance too far, not processing blob")
+                //Log.i("frame \(frameIndex) distance \(blobDistance) too far, not processing blob \(blob)")
                 blobsNotProcessed.append(blob)
             }
         }
@@ -482,7 +495,7 @@ extension FrameAirplaneRemover {
         }
         
         if shouldUseDecisionTree {
-            Log.d("frame \(frameIndex) classifying outliers with decision tree")
+            Log.i("frame \(frameIndex) classifying outliers with decision tree")
             self.set(state: .interFrameProcessing)
             await self.applyDecisionTreeToAllOutliers()
         }

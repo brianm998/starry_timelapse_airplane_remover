@@ -8,13 +8,19 @@ import Foundation
     
     private var tasks: [Task<Void,Never>] = []
     
-    public func task(priority: TaskPriority = .medium, closure: @escaping () async -> Void) {
+    public nonisolated func task(priority: TaskPriority = .medium, closure: @escaping () async -> Void) {
         let task = Task(priority: priority) {
             await closure()
         }
-        tasks.append(task)
+        Task {
+            await self.add(task: task)
+        }
     }
 
+    private func add(task: Task<Void,Never>) {
+        tasks.append(task)
+    }
+    
     public func finish() async {
         while tasks.count > 0 {
             let next = tasks.removeFirst()

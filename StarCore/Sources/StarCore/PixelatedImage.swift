@@ -16,10 +16,12 @@ import KHTSwift
 import logging
 import Cocoa
 
-public struct ImageMatrixElement {
+public struct ImageMatrixElement: CustomStringConvertible {
     public let x: Int                  // offset in original image
     public let y: Int
     public let image: PixelatedImage
+
+    public var description: String { "MatrixElement: [\(x), \(y)] -> [\(image.width), \(image.height)]" }
 }
 
 public struct PixelatedImage {
@@ -241,6 +243,8 @@ public struct PixelatedImage {
         let xAdjust = Int(Double(maxWidth)*(100-realOverlap)/100)
         let yAdjust = Int(Double(maxHeight)*(100-realOverlap)/100)
 
+        Log.i("matrix xAdjust \(xAdjust) yAdjust \(yAdjust)")
+
         // starting point for each matrix element
         var xOffset = 0
         var yOffset = 0
@@ -249,6 +253,7 @@ public struct PixelatedImage {
         while xOffset < width {
             yOffset = 0
             while yOffset < height {
+                Log.i("matrix xOffset \(xOffset) yOffset \(yOffset)")
                 var matrixWidth = maxWidth
                 if xOffset + matrixWidth > width {
                     matrixWidth = width - xOffset
@@ -278,10 +283,10 @@ public struct PixelatedImage {
                         let matrixImage = PixelatedImage(width: matrixWidth,
                                                          height: matrixHeight,
                                                          grayscale16BitImageData: matrixImageData)
-                        Log.i("matrix width \(matrixWidth) matrix height \(matrixHeight)")
                         let element = ImageMatrixElement(x: xOffset,
                                                          y: yOffset,
                                                          image: matrixImage)
+                        Log.i("matrix element [\(xOffset), \(yOffset)] image width \(matrixWidth) matrix height \(matrixHeight)")
                         matrix.append(element)
                         
                     case .eightBit(_):
@@ -294,7 +299,7 @@ public struct PixelatedImage {
             }
             xOffset += xAdjust
         }
-        Log.d("matrix  has \(matrix.count) rows")
+        Log.i("matrix  has \(matrix.count) rows")
         return matrix
     }
 

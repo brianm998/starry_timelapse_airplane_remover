@@ -125,44 +125,43 @@ public actor FinalProcessor {
         if let updatable = callbacks.updatable {
            let localFrames = self.frames
             // show what frames are in place to be processed
-            Task {
-                await TaskWaiter.shared.task(priority: .userInitiated) {
-                    var padding = ""
-                    if self.numConcurrentRenders < self.config.progressBarLength {
-                        padding = String(repeating: " ", count: (self.config.progressBarLength - self.numConcurrentRenders))
-                    }
-                    
-                    var message: String = padding + ConsoleColor.blue.rawValue + "["
-                    var count = 0
-                    let end = self.currentFrameIndex + self.numConcurrentRenders
-                    for i in self.currentFrameIndex ..< end {
-                        if i >= localFrames.count {
-                            message += ConsoleColor.yellow.rawValue + "-"
-                        } else {
-                            if let _ = localFrames[i] {
-                                message += ConsoleColor.green.rawValue + "*"
-                                count += 1
-                            } else {
-                                message += ConsoleColor.yellow.rawValue + "-"
-                            }
-                        }
-                    }
-                    var lowerBound = self.currentFrameIndex + end
-                    if lowerBound > localFrames.count { lowerBound = localFrames.count }
-                    
-                    for i in lowerBound ..< localFrames.count {
-                        if let _ = localFrames[i] {
-                            count += 1
-                        }
-                    }
-                    message += ConsoleColor.blue.rawValue+"]"+ConsoleColor.reset.rawValue
-                    let name = "frames awaiting inter frame processing"
-                    message += " \(count) \(name)"
-                    await updatable.log(name: name, message: message, value: 50)
-                }
-            }
+           TaskWaiter.shared.task(priority: .userInitiated) {
+               var padding = ""
+               if self.numConcurrentRenders < self.config.progressBarLength {
+                   padding = String(repeating: " ", count: (self.config.progressBarLength - self.numConcurrentRenders))
+               }
+               
+               var message: String = padding + ConsoleColor.blue.rawValue + "["
+               var count = 0
+               let end = self.currentFrameIndex + self.numConcurrentRenders
+               for i in self.currentFrameIndex ..< end {
+                   if i >= localFrames.count {
+                       message += ConsoleColor.yellow.rawValue + "-"
+                   } else {
+                       if let _ = localFrames[i] {
+                           message += ConsoleColor.green.rawValue + "*"
+                           count += 1
+                       } else {
+                           message += ConsoleColor.yellow.rawValue + "-"
+                       }
+                   }
+               }
+               var lowerBound = self.currentFrameIndex + end
+               if lowerBound > localFrames.count { lowerBound = localFrames.count }
+               
+               for i in lowerBound ..< localFrames.count {
+                   if let _ = localFrames[i] {
+                       count += 1
+                   }
+               }
+               message += ConsoleColor.blue.rawValue+"]"+ConsoleColor.reset.rawValue
+               let name = "frames awaiting inter frame processing"
+               message += " \(count) \(name)"
+               await updatable.log(name: name, message: message, value: 50)
+           }
         }
     }
+
 
     func frame(at index: Int) -> FrameAirplaneRemover? {
         return frames[index]
@@ -282,7 +281,7 @@ public actor FinalProcessor {
                     endIndex = frameCount - 1
                 }
 
-                Log.i("startIndex \(startIndex) endIndex \(endIndex)")
+                Log.d("startIndex \(startIndex) endIndex \(endIndex)")
                 
                 var haveEnoughFramesToInterFrameProcess = true
 

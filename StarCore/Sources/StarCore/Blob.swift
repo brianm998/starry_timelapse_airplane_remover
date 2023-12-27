@@ -1,8 +1,10 @@
 import Foundation
 import KHTSwift
+import logging
 
 // blobs created by the blobber
-public class Blob {
+                   
+public class Blob: CustomStringConvertible {
     public let id: String
     public private(set) var pixels: [SortablePixel]
 
@@ -12,6 +14,8 @@ public class Blob {
 
     public var impactCount: Int = 0
 
+    public var description: String  { "Blob id: \(id) size \(size)" }
+    
     public func add(pixels newPixels: [SortablePixel]) {
         for pixel in pixels {
             pixel.status = .blobbed(self)
@@ -60,6 +64,7 @@ public class Blob {
 
     public func absorb(_ otherBlob: Blob) {
         if self.id != otherBlob.id {
+            Log.d("blob \(self.id) absorbing blob \(otherBlob.id)")
             let newPixels = otherBlob.pixels
             for otherPixel in newPixels {
                 otherPixel.status = .blobbed(self)
@@ -70,8 +75,10 @@ public class Blob {
         }
     }
 
-    public func isIn(matrixElement: ImageMatrixElement) -> Bool{
-        self.boundingBox.overlap(with: matrixElement.boundingBox) != nil
+    public func isIn(matrixElement: ImageMatrixElement,
+                     within borderDistance: Double = 0) -> Bool
+    {
+        self.boundingBox.edgeDistance(to: matrixElement.boundingBox) < borderDistance
     }
     
     public var boundingBox: BoundingBox {
