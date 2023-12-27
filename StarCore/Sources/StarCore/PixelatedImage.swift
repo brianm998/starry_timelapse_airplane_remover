@@ -16,12 +16,27 @@ import KHTSwift
 import logging
 import Cocoa
 
-public struct ImageMatrixElement: CustomStringConvertible {
+public class ImageMatrixElement: CustomStringConvertible {
     public let x: Int                  // offset in original image
     public let y: Int
-    public let image: PixelatedImage
+    public let width: Int
+    public let height: Int
+    
+    public var image: PixelatedImage? // don't keep this image around foreverx
 
-    public var description: String { "MatrixElement: [\(x), \(y)] -> [\(image.width), \(image.height)]" }
+    public init(x: Int,
+                y: Int,
+                image: PixelatedImage)
+
+    {
+        self.x = x
+        self.y = y
+        self.image = image
+        self.width = image.width
+        self.height = image.height
+    }
+    
+    public var description: String { "MatrixElement: [\(x), \(y)] -> [\(width), \(height)]" }
 }
 
 public struct PixelatedImage {

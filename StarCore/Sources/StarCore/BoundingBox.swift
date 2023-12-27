@@ -5,8 +5,8 @@ import logging
 extension ImageMatrixElement {
     var boundingBox: BoundingBox {
         BoundingBox(min: Coord(x: self.x, y: self.y),
-                    max: Coord(x: self.x + image.width,
-                               y: self.y + image.height))
+                    max: Coord(x: self.x + self.width,
+                               y: self.y + self.height))
     }
 }
 
@@ -159,24 +159,36 @@ public struct BoundingBox: Codable {
     // positive if they don't overlap, negative if they do
     public func edgeDistance(to otherBox: BoundingBox) -> Double {
 
+
+        /*
+         check to see if one of these boxes is completely within the bounds of the other.
+
+         If so, return the size of the smaller blob as the edge distance as negative
+         */
+
+        if self.contains(otherBox) {
+            // other box is completely within self
+            return Double(-otherBox.size)
+        } else if otherBox.contains(self) {
+            // self is completely with other box
+            return Double(-self.size)
+        }
+
+
+        let boxesOverlap = self.overlaps(otherBox)
         
-        Log.d("self \(self) edge distance to \(otherBox)")
+        Log.d("self \(self) edge distance to \(otherBox) boxesOverlap \(boxesOverlap)")
         let selfCenter = self.centerDouble
         let otherCenter = otherBox.centerDouble
 
-        var oneInsideTheOther = false
-        
-        if self.contains(coord: otherCenter) {
-            oneInsideTheOther = true
-        } else if otherBox.contains(coord: selfCenter) {
-            oneInsideTheOther = true
-        }
-                
         Log.d("selfCenter \(selfCenter) otherCenter \(otherCenter)")
         
         let line = StandardLine(point1: selfCenter, point2: otherCenter)
 
-        let centerDistance = selfCenter.distance(to: otherCenter)
+        // floating point math can have small errors
+        let mathErrorBuffer = 3.0
+        
+        let centerDistance = selfCenter.distance(to: otherCenter) + mathErrorBuffer
         let selfIntersections = self.intersections(with: line)
         let otherIntersections = otherBox.intersections(with: line)
         
@@ -186,7 +198,7 @@ public struct BoundingBox: Codable {
         for point in selfIntersections {
             let distance = point.distance(to: otherCenter)
             Log.d("self intersection point \(point) distance \(distance) centerDistance \(centerDistance)")
-            if oneInsideTheOther {
+            if boxesOverlap {
                 if Int(distance) >= Int(centerDistance) { // XXX this fails when one is inside the other
                     selfClosest = point
                 }
@@ -200,7 +212,7 @@ public struct BoundingBox: Codable {
         for point in otherIntersections {
             let distance = point.distance(to: selfCenter)
             Log.d("other intersection point \(point) distance \(distance) centerDistance \(centerDistance)")
-            if oneInsideTheOther {
+            if boxesOverlap {
                 if Int(distance) >= Int(centerDistance) { // XXX this fails when one is inside the other
                     otherClosest = point
                 }
@@ -246,6 +258,22 @@ public struct BoundingBox: Codable {
         }
     }
 
+    public func contains(_ other: BoundingBox) -> Bool {
+        self.contains(coord: DoubleCoord(other.min)) && self.contains(coord: DoubleCoord(other.max))
+    }
+    
+    public func overlaps(_ other: BoundingBox) -> Bool {
+        let overlapInX =
+          (self.min.x <= other.min.x && self.min.x >= other.max.x) ||
+          (self.max.x <= other.min.x && self.max.x >= other.max.x)
+
+        let overlapInY =
+          (self.min.y <= other.min.y && self.min.y >= other.max.y) ||
+          (self.max.y <= other.min.y && self.max.y >= other.max.y)
+        
+        return overlapInX && overlapInY
+    }
+    
     public func contains(coord: DoubleCoord) -> Bool {
         if coord.isRational {
             let coord = Coord(coord)

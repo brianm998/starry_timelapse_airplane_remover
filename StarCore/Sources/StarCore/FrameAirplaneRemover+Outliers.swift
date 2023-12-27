@@ -194,18 +194,23 @@ extension FrameAirplaneRemover {
             Log.i("frame \(frameIndex) processing matrix element \(element)")
             // first run a kernel based hough transform on this matrix element,
             // returning some set of detected lines 
-            let lines = await element.image.kernelHoughTransform(maxThetaDiff: 10,
-                                                                 maxRhoDiff: 10,
-                                                                 minVotes: 6000,
-                                                                 minResults: 6,
-                                                                 maxResults: 12)
-            for line in lines {
-                elementLines.append(MatrixElementLine(element: element, line: line))
+            if let image = element.image {
+                let lines = await image.kernelHoughTransform(maxThetaDiff: 10,
+                                                             maxRhoDiff: 10,
+                                                             minVotes: 6000,
+                                                             minResults: 6,
+                                                             maxResults: 12) 
+                for line in lines {
+                    elementLines.append(MatrixElementLine(element: element, line: line))
+                }
+                Log.i("frame \(frameIndex) appended \(lines.count) lines for element \(element)")
+                element.image = nil
+            } else {
+                Log.w("frame \(frameIndex) no image for element \(element)")
             }
-            Log.i("frame \(frameIndex) appended \(lines.count) lines for element \(element)")
         }
 
-        Log.i("frame \(frameIndex) loaded \(elementLines.count) lines")
+    Log.i("frame \(frameIndex) loaded \(elementLines.count) lines")
 
         // process the lines with most votes first
         elementLines.sort { $0.line.votes > $1.line.votes }
@@ -219,7 +224,7 @@ extension FrameAirplaneRemover {
             var blobsToProcess = _blobMap.values.filter {
                 $0.isIn(matrixElement: element, within: 300)
             }
-            //Log.i("frame \(frameIndex) matrix element [\(element.x), \(element.y)] -> [\(element.image.width), \(element.image.height)] processing line theta \(line.theta) rho \(line.rho) votes \(line.votes) blobsToProcess \(blobsToProcess.count)")
+            //Log.i("frame \(frameIndex) matrix element [\(element.x), \(element.y)] -> [\(element.width), \(element.height)] processing line theta \(line.theta) rho \(line.rho) votes \(line.votes) blobsToProcess \(blobsToProcess.count)")
 
             var brightnessValue: UInt8 = 0xFF
 
@@ -231,8 +236,8 @@ extension FrameAirplaneRemover {
             }
             
             // where does this line intersect the edges of this element?
-            let frameEdgeMatches = line.frameBoundries(width: element.image.width,
-                                                       height: element.image.height)
+            let frameEdgeMatches = line.frameBoundries(width: element.width,
+                                                       height: element.height)
 
             if frameEdgeMatches.count == 2 {
                 // sunny day case
@@ -251,14 +256,14 @@ extension FrameAirplaneRemover {
                 let iterateOnXAxis = x_diff > y_diff
 
                 if iterateOnXAxis {
-                    for x in 0..<element.image.width {
+                    for x in 0..<element.width {
                         let y = Int(standardLine.y(forX: Double(x)))
 
                         // XXX expand this search area a bit on both sides by some
                         // configurable amount
                         
                         if y > 0,
-                           y < element.image.height
+                           y < element.height
                         {
                             if config.writeOutlierGroupFiles {
                                 // write kht image data
@@ -284,10 +289,10 @@ extension FrameAirplaneRemover {
                     }
                 } else {
                     // iterate on y axis
-                    for y in 0..<element.image.height {
+                    for y in 0..<element.height {
                         let x = Int(standardLine.x(forY: Double(y)))
                         if x > 0,
-                           x < element.image.width
+                           x < element.width
                         {
                             if config.writeOutlierGroupFiles {
                                 // write kht image data
@@ -353,10 +358,11 @@ extension FrameAirplaneRemover {
   */          
             // how far is the closest pixel of this blob from (x, y)?
             if lineIsValid,
-               blobDistance < 6 // XXX magic number XXX
+               blobDistance < 12 // XXX magic number XXX
             { 
                 if let _lastBlob = lastBlob {
                     let distance = _lastBlob.boundingBox.edgeDistance(to: blob.boundingBox)
+                    Log.i("frame \(frameIndex) blob \(_lastBlob) bounding box \(_lastBlob.boundingBox) is \(distance) from blob \(blob) bounding box \(blob.boundingBox)")
                     if distance < 40 { // XXX constant XXX
                         // if they are close enough, simply combine them
                         if _lastBlob.absorb(blob) {
