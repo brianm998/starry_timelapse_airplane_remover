@@ -24,12 +24,10 @@ let package = Package(
               .product(name: "StarCore", package: "StarCore"),
               .product(name: "StarDecisionTrees", package: "StarDecisionTrees"),
             ],
-            linkerSettings: [/*
-              .unsafeFlags(["-L../StarDecisionTrees",
-                             "-Xlinker", "-force_load",
-                             "-Xlinker", "../StarDecisionTrees/libStarDecisionTrees.a"
-                           ]),
-              .linkedLibrary("StarDecisionTrees")*/
+            linkerSettings: [
+              // use old, slower linker for now to avoid so many linker warnings
+              .unsafeFlags([ "-Xlinker", "-ld_classic" ]),
+/*              .linkedLibrary("StarDecisionTrees")*/
             ]),
         .testTarget(
             name: "starTests",
