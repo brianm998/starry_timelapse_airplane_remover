@@ -157,30 +157,15 @@ extension FrameAirplaneRemover {
         self.state = .readyForInterFrameProcessing
     }
 
-    // analyze the blobs with kernel hough transform data from the subtraction image
-    // filters the blob map, and combines nearby blobs on the same line
-    private func blobKHTAnalysis(subtractionImage: PixelatedImage,
-                                 blobMap: [String: Blob]) async throws -> [Blob]
-    {
-        var blobsToPromote: [String:Blob] = [:]
-        var lastBlob: Blob?
-        let maxVotes = 12000     // lines with votes over this are max color on kht image
-        var _blobMap = blobMap
-        
-        let khtImageBase = 0x0A
-        var khtImage: [UInt8] = []
-        if config.writeOutlierGroupFiles {
-            khtImage = [UInt8](repeating: 0, count: width*height)
-        }
-        
-        Log.i("frame \(frameIndex) loaded subtraction image")
-
+    // returns a list of lines for different sub elements of the given image,
+    // sorted so the lines with the highest votes are first
+    private func elementLines(from image: PixelatedImage) async -> [MatrixElementLine] {
         // XXX A whole forest of magic numbers here :(
 
         // split the subtraction image into a bunch of small images with some overlap
-        let matrix = subtractionImage.splitIntoMatrix(maxWidth: 512,
-                                                      maxHeight: 512,
-                                                      overlapPercent: 50)
+        let matrix = image.splitIntoMatrix(maxWidth: 512,
+                                           maxHeight: 512,
+                                           overlapPercent: 50)
 
         Log.i("frame \(frameIndex) has matrix with \(matrix.count) elements")
 
@@ -210,16 +195,41 @@ extension FrameAirplaneRemover {
             }
         }
 
+        Log.i("frame \(frameIndex) loaded \(elementLines.count) lines")
+
+        // return the lines with most votes first
+        elementLines.sort { $0.line.votes > $1.line.votes }
+
+        Log.i("frame \(frameIndex) sorted \(elementLines.count) lines")
+
+        return elementLines
+    }
+    
+    // analyze the blobs with kernel hough transform data from the subtraction image
+    // filters the blob map, and combines nearby blobs on the same line
+    private func blobKHTAnalysis(subtractionImage: PixelatedImage,
+                                 blobMap: [String: Blob]) async throws -> [Blob]
+    {
+        var blobsToPromote: [String:Blob] = [:]
+        var lastBlob: Blob?
+        let maxVotes = 12000     // lines with votes over this are max color on kht image
+        var _blobMap = blobMap
+        
+        let khtImageBase = 0x0A
+        var khtImage: [UInt8] = []
+        if config.writeOutlierGroupFiles {
+            khtImage = [UInt8](repeating: 0, count: width*height)
+        }
+        
+        Log.i("frame \(frameIndex) loaded subtraction image")
+
+        // run the hough transform on sub sections of the subtraction image
+        let elementLines = await elementLines(from: subtractionImage)
+
         self.state = .detectingOutliers2a
 
         // XXX memory leak after here
         
-        Log.i("frame \(frameIndex) loaded \(elementLines.count) lines")
-
-        // process the lines with most votes first
-        elementLines.sort { $0.line.votes > $1.line.votes }
-        Log.i("frame \(frameIndex) sorted \(elementLines.count) lines")
-
         for elementLine in elementLines {
             let element = elementLine.element
             let line = elementLine.line
@@ -348,14 +358,14 @@ extension FrameAirplaneRemover {
 
             // lines are invalid for this blob
             // if there is already a line on the blob and it doesn't match
-//            var lineIsValid = true
-/*
+            var lineIsValid = true
+
             if let blobLine = blob.line {
                 lineIsValid = blobLine.matches(line, maxRhoDiff: Double(2^64))
             }
-  */          
+
             // how far is the closest pixel of this blob from (x, y)?
-            if //lineIsValid,
+            if lineIsValid,
                blobDistance < 12 // XXX magic number XXX
             { 
                 if let _lastBlob = lastBlob {
