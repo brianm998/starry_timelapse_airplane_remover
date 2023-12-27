@@ -188,7 +188,7 @@ public struct BoundingBox: Codable {
         // floating point math can have small errors
         let mathErrorBuffer = 3.0
         
-        let centerDistance = selfCenter.distance(to: otherCenter) + mathErrorBuffer
+        let centerDistance = selfCenter.distance(to: otherCenter)
         let selfIntersections = self.intersections(with: line)
         let otherIntersections = otherBox.intersections(with: line)
         
@@ -199,11 +199,11 @@ public struct BoundingBox: Codable {
             let distance = point.distance(to: otherCenter)
             Log.d("self intersection point \(point) distance \(distance) centerDistance \(centerDistance)")
             if boxesOverlap {
-                if Int(distance) >= Int(centerDistance) { // XXX this fails when one is inside the other
+                if Int(distance) >= Int(centerDistance-mathErrorBuffer) { // XXX this fails when one is inside the other
                     selfClosest = point
                 }
             } else {
-                if Int(distance) <= Int(centerDistance) { // XXX this fails when one is inside the other
+                if Int(distance) <= Int(centerDistance+mathErrorBuffer) { // XXX this fails when one is inside the other
                     selfClosest = point
                 }
             }
@@ -213,11 +213,11 @@ public struct BoundingBox: Codable {
             let distance = point.distance(to: selfCenter)
             Log.d("other intersection point \(point) distance \(distance) centerDistance \(centerDistance)")
             if boxesOverlap {
-                if Int(distance) >= Int(centerDistance) { // XXX this fails when one is inside the other
+                if Int(distance) >= Int(centerDistance-mathErrorBuffer) { // XXX this fails when one is inside the other
                     otherClosest = point
                 }
             } else {
-                if Int(distance) <= Int(centerDistance) { // XXX fails when one is inside the other
+                if Int(distance) <= Int(centerDistance+mathErrorBuffer) { // XXX fails when one is inside the other
                     otherClosest = point
                 }
             }
