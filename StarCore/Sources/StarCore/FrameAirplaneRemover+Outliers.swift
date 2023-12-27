@@ -225,9 +225,10 @@ extension FrameAirplaneRemover {
             let line = elementLine.line
             
             // list of blobs to process for this element
-            var blobsToProcess = _blobMap.values.filter {
+            let blobsToProcess = _blobMap.values.filter {
                 $0.isIn(matrixElement: element, within: 300)
             }
+            
             //Log.i("frame \(frameIndex) matrix element [\(element.x), \(element.y)] -> [\(element.width), \(element.height)] processing line theta \(line.theta) rho \(line.rho) votes \(line.votes) blobsToProcess \(blobsToProcess.count)")
 
             var brightnessValue: UInt8 = 0xFF
@@ -278,7 +279,7 @@ extension FrameAirplaneRemover {
                             }
 
                             // do blob processing at this location
-                            let (foo, bar) =
+                            lastBlob =
                               processBlobsAt(x: x+element.x,
                                              y: y+element.y,
                                              on: line,
@@ -286,9 +287,6 @@ extension FrameAirplaneRemover {
                                              blobsToPromote: &blobsToPromote,
                                              blobMap: &_blobMap,
                                              lastBlob: lastBlob)
-
-                            blobsToProcess = foo
-                            lastBlob = bar
                         }
                     }
                 } else {
@@ -307,7 +305,7 @@ extension FrameAirplaneRemover {
                             }
 
                             // do blob processing at this location
-                            let (foo, bar) =
+                            lastBlob =
                               processBlobsAt(x: x+element.x,
                                              y: y+element.y,
                                              on: line,
@@ -315,9 +313,6 @@ extension FrameAirplaneRemover {
                                              blobsToPromote: &blobsToPromote,
                                              blobMap: &_blobMap,
                                              lastBlob: lastBlob)
-
-                            blobsToProcess = foo
-                            lastBlob = bar
                         }
                     }
                 }
@@ -345,23 +340,22 @@ extension FrameAirplaneRemover {
                                 blobsToProcess: [Blob],
                                 blobsToPromote: inout [String:Blob],
                                 blobMap: inout [String:Blob],
-                                lastBlob: Blob?) -> ([Blob], Blob?)
+                                lastBlob: Blob?) -> (Blob?)
     {
-        var blobsNotProcessed: [Blob] = []
         var lastBlob_ = lastBlob
         for blob in blobsToProcess {
             let blobDistance = blob.distanceTo(x: x, y: y)
 
             // lines are invalid for this blob
             // if there is already a line on the blob and it doesn't match
-            var lineIsValid = true
+//            var lineIsValid = true
 /*
             if let blobLine = blob.line {
                 lineIsValid = blobLine.matches(line, maxRhoDiff: Double(2^64))
             }
   */          
             // how far is the closest pixel of this blob from (x, y)?
-            if lineIsValid,
+            if //lineIsValid,
                blobDistance < 12 // XXX magic number XXX
             { 
                 if let _lastBlob = lastBlob {
@@ -389,10 +383,9 @@ extension FrameAirplaneRemover {
                 }
             } else {
                 //Log.i("frame \(frameIndex) distance \(blobDistance) too far, not processing blob \(blob)")
-                blobsNotProcessed.append(blob)
             }
         }
-        return (blobsNotProcessed, lastBlob_)
+        return lastBlob_
     }
             
     public func foreachOutlierGroup(_ closure: (OutlierGroup)async->LoopReturn) async {
