@@ -62,7 +62,7 @@ public class Blob: CustomStringConvertible {
         _boundingBox = nil
     }
 
-    public func absorb(_ otherBlob: Blob) {
+    public func absorb(_ otherBlob: Blob) -> Bool {
         if self.id != otherBlob.id {
             Log.d("blob \(self.id) absorbing blob \(otherBlob.id)")
             let newPixels = otherBlob.pixels
@@ -72,7 +72,9 @@ public class Blob: CustomStringConvertible {
             self.pixels += newPixels
             _intensity = nil
             _boundingBox = nil
+            return true
         }
+        return false
     }
 
     public func isIn(matrixElement: ImageMatrixElement,
