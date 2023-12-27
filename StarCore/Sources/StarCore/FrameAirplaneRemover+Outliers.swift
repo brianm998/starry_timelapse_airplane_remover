@@ -162,7 +162,7 @@ extension FrameAirplaneRemover {
     private func blobKHTAnalysis(subtractionImage: PixelatedImage,
                                  blobMap: [String: Blob]) async throws -> [Blob]
     {
-        var blobsToPromote: [Blob] = []
+        var blobsToPromote: [String:Blob] = [:]
         var lastBlob: Blob?
         let maxVotes = 12000     // lines with votes over this are max color on kht image
         var _blobMap = blobMap
@@ -219,7 +219,7 @@ extension FrameAirplaneRemover {
             var blobsToProcess = _blobMap.values.filter {
                 $0.isIn(matrixElement: element, within: 300)
             }
-            Log.i("frame \(frameIndex) matrix element [\(element.x), \(element.y)] -> [\(element.image.width), \(element.image.height)] processing line theta \(line.theta) rho \(line.rho) votes \(line.votes) blobsToProcess \(blobsToProcess.count)")
+            //Log.i("frame \(frameIndex) matrix element [\(element.x), \(element.y)] -> [\(element.image.width), \(element.image.height)] processing line theta \(line.theta) rho \(line.rho) votes \(line.votes) blobsToProcess \(blobsToProcess.count)")
 
             var brightnessValue: UInt8 = 0xFF
 
@@ -237,7 +237,7 @@ extension FrameAirplaneRemover {
             if frameEdgeMatches.count == 2 {
                 // sunny day case
 
-                Log.i("frame \(frameIndex) matrix element [\(element.x), \(element.y)] has line theta \(line.theta) rho \(line.rho) votes \(line.votes) brightnessValue \(brightnessValue)")
+                //Log.i("frame \(frameIndex) matrix element [\(element.x), \(element.y)] has line theta \(line.theta) rho \(line.rho) votes \(line.votes) brightnessValue \(brightnessValue)")
                 
                 // calculate a standard line from the edge matches
                 let standardLine = StandardLine(point1: frameEdgeMatches[0],
@@ -327,14 +327,14 @@ extension FrameAirplaneRemover {
                                          atSize: .preview, overwrite: true)
         }
 
-        return blobsToPromote
+        return Array(blobsToPromote.values)
     }
     
     private func processBlobsAt(x: Int,
                                 y: Int,
                                 on line: Line,
                                 blobsToProcess: [Blob],
-                                blobsToPromote: inout [Blob],
+                                blobsToPromote: inout [String:Blob],
                                 blobMap: inout [String:Blob],
                                 lastBlob: Blob?) -> ([Blob], Blob?)
     {
@@ -356,22 +356,25 @@ extension FrameAirplaneRemover {
                blobDistance < 6 // XXX magic number XXX
             { 
                 if let _lastBlob = lastBlob {
-                    if _lastBlob.boundingBox.edgeDistance(to: blob.boundingBox) < 40 { // XXX constant XXX
+                    let distance = _lastBlob.boundingBox.edgeDistance(to: blob.boundingBox)
+                    if distance < 40 { // XXX constant XXX
                         // if they are close enough, simply combine them
-                        _lastBlob.absorb(blob)
-                        Log.i("frame \(frameIndex) blob \(_lastBlob) absorbing blob \(blob)")
-                        blobMap.removeValue(forKey: blob.id)
+                        if _lastBlob.absorb(blob) {
+                            Log.i("frame \(frameIndex) blob \(_lastBlob) absorbing blob \(blob)")
+                            blobsToPromote.removeValue(forKey: blob.id)
+                            blobMap.removeValue(forKey: blob.id)
+                        }
                     } else {
                         // if they are far, then overwrite the lastBlob var
                         blob.line = line
-                        blobsToPromote.append(blob)
-                        Log.i("frame \(frameIndex) blobDistance \(blobDistance) from \(_lastBlob) is too far from blob with id \(blob)")
+                        blobsToPromote[blob.id] = blob
+                        Log.i("frame \(frameIndex) distance \(distance) from \(_lastBlob) is too far from blob with id \(blob)")
                         lastBlob_ = blob
                     }
                 } else {
                     Log.i("frame \(frameIndex) no last blob, blob \(blob) is now last")
                     blob.line = line
-                    blobsToPromote.append(blob)
+                    blobsToPromote[blob.id] = blob
                     lastBlob_ = blob
                 }
             } else {
