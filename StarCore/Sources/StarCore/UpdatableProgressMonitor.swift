@@ -140,6 +140,10 @@ public actor UpdatableProgressMonitor {
         
         if let update = progressLine(for: .detectingOutliers2) {
             updates.append(update)
+
+        }
+        if let update = progressLine(for: .detectingOutliers2a) {
+            updates.append(update)
         }
         
         if let update = progressLine(for: .detectingOutliers3) {

@@ -210,7 +210,11 @@ extension FrameAirplaneRemover {
             }
         }
 
-    Log.i("frame \(frameIndex) loaded \(elementLines.count) lines")
+        self.state = .detectingOutliers2a
+
+        // XXX memory leak after here
+        
+        Log.i("frame \(frameIndex) loaded \(elementLines.count) lines")
 
         // process the lines with most votes first
         elementLines.sort { $0.line.votes > $1.line.votes }

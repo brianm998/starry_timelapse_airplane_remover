@@ -30,6 +30,7 @@ public enum FrameProcessingState: Int, CaseIterable, Codable {
     case subtractingNeighbor
     case detectingOutliers1
     case detectingOutliers2
+    case detectingOutliers2a
     case detectingOutliers3
     case readyForInterFrameProcessing
     case interFrameProcessing
@@ -57,7 +58,9 @@ public enum FrameProcessingState: Int, CaseIterable, Codable {
         case .detectingOutliers1:
             return "detecting blobs"
         case .detectingOutliers2:
-            return "kht processing blobs"
+            return "extracting lines from frame"
+        case .detectingOutliers2a:
+            return "aligning blobs with lines"
         case .detectingOutliers3:
             return "populating outlier groups"
         case .readyForInterFrameProcessing: // XXX not covered in progress monitor
