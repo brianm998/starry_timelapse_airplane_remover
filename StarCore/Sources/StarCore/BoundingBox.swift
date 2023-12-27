@@ -1,5 +1,6 @@
 import Foundation
 import KHTSwift
+import logging
 
 extension ImageMatrixElement {
     var boundingBox: BoundingBox {
@@ -32,6 +33,11 @@ public struct BoundingBox: Codable {
     public var center: Coord {
         Coord(x: Int(Double(self.min.x) + Double(self.width)/2),
               y: Int(Double(self.min.y) + Double(self.height)/2))
+    }
+
+    public var centerDouble: DoubleCoord {
+        DoubleCoord(x: Double(self.min.x) + Double(self.width)/2,
+                    y: Double(self.min.y) + Double(self.height)/2)
     }
 
     // use for decision tree?
@@ -137,111 +143,186 @@ public struct BoundingBox: Codable {
         return  thetaDegrees
     }
 
+    // XXX this method sucks
 
-    
+    /*
+
+     rewrite it to use the center points of the bounding boxes to define a standard line
+
+     figure out what edge point on each bounding box intersects this line
+
+     find the point where they intersect
+
+     return the distance between the intersection points, negative if they overlap
+     
+     */
     // positive if they don't overlap, negative if they do
     public func edgeDistance(to otherBox: BoundingBox) -> Double {
 
-        let halfWidth1 = Double(self.width)/2
-        let halfHeight1 = Double(self.height)/2
         
-        //Log.v("1 half size [\(halfWidth1), \(halfHeight1)]")
-        
-        let halfWidth2 = Double(otherBox.width)/2
-        let halfHeight2 = Double(otherBox.height)/2
-        
-        //Log.v("2 half size [\(halfWidth2), \(halfHeight2)]")
+        Log.d("self \(self) edge distance to \(otherBox)")
+        let selfCenter = self.centerDouble
+        let otherCenter = otherBox.centerDouble
 
-        let center1X = Double(self.min.x) + halfWidth1
-        let center1Y = Double(self.min.y) + halfHeight1
-
-        //Log.v("1 center [\(center1X), \(center1Y)]")
+        var oneInsideTheOther = false
         
-        let center2X = Double(otherBox.min.x) + halfWidth2
-        let center2Y = Double(otherBox.min.y) + halfHeight2
-        
-
-        //Log.v("2 center [\(center2X), \(center2Y)]")
-
-        if center1Y == center2Y {
-            // special case horizontal alignment
-            // return the distance between their centers minus half of each of their widths
-            return Double(abs(center1X - center2X) - halfWidth1 - halfWidth2)
+        if self.contains(coord: otherCenter) {
+            oneInsideTheOther = true
+        } else if otherBox.contains(coord: selfCenter) {
+            oneInsideTheOther = true
         }
-
-        if center1X == center2X {
-            // special case vertical alignment
-            // return the distance between their centers minus half of each of their heights
-            return Double(abs(center1Y - center2Y) - halfHeight1 - halfHeight2)
-        }
-
-        // calculate slope and y intercept for the line between the center points
-        // y = slope * x + yIntercept
-        let slope = Double(center1Y - center2Y)/Double(center1X - center2X)
-
-        // base the yIntercept on the center 1 coordinates
-        let yIntercept = Double(center1Y) - slope * Double(center1X)
-
-        //Log.v("slope \(slope) yIntercept \(yIntercept)")
+                
+        Log.d("selfCenter \(selfCenter) otherCenter \(otherCenter)")
         
-        var theta: Double = 0
+        let line = StandardLine(point1: selfCenter, point2: otherCenter)
 
-        // width between center points
-        let width = Double(abs(center1X - center2X))
-
-        // height between center points
-        let height = Double(abs(center1Y - center2Y))
-
-        let ninetyDegreesInRadians = 90 * Double.pi/180
-
-        if center1X < center2X {
-            if center1Y < center2Y {
-                // 90 + case
-                theta = ninetyDegreesInRadians + atan(height/width)
-            } else { // center1Y > center2Y
-                // 0 - 90 case
-                theta = atan(width/height)
+        let centerDistance = selfCenter.distance(to: otherCenter)
+        let selfIntersections = self.intersections(with: line)
+        let otherIntersections = otherBox.intersections(with: line)
+        
+        var selfClosest: DoubleCoord?
+        var otherClosest: DoubleCoord?
+        
+        for point in selfIntersections {
+            let distance = point.distance(to: otherCenter)
+            Log.d("self intersection point \(point) distance \(distance) centerDistance \(centerDistance)")
+            if oneInsideTheOther {
+                if Int(distance) >= Int(centerDistance) { // XXX this fails when one is inside the other
+                    selfClosest = point
+                }
+            } else {
+                if Int(distance) <= Int(centerDistance) { // XXX this fails when one is inside the other
+                    selfClosest = point
+                }
             }
-        } else { // center1X > center2X
-            if center1Y < center2Y {
-                // 0 - 90 case
-                theta = atan(width/height)
-            } else { // center1Y > center2Y
-                // 90 + case
-                theta = ninetyDegreesInRadians + atan(height/width)
+        }
+        
+        for point in otherIntersections {
+            let distance = point.distance(to: selfCenter)
+            Log.d("other intersection point \(point) distance \(distance) centerDistance \(centerDistance)")
+            if oneInsideTheOther {
+                if Int(distance) >= Int(centerDistance) { // XXX this fails when one is inside the other
+                    otherClosest = point
+                }
+            } else {
+                if Int(distance) <= Int(centerDistance) { // XXX fails when one is inside the other
+                    otherClosest = point
+                }
             }
         }
 
-        //Log.v("theta \(theta*180/Double.pi) degrees")
-        
-        // the distance along the line between the center points that lies within group 1
-        let dist1 = distanceOn(box: self, slope: slope, yIntercept: yIntercept, theta: theta)
-        //Log.v("dist1 \(dist1)")
-        
-        // the distance along the line between the center points that lies within group 2
-        let dist2 = distanceOn(box: otherBox, slope: slope, yIntercept: yIntercept, theta: theta)
+        if let selfClosest = selfClosest {
+            if let otherClosest = otherClosest {
 
-        //Log.v("dist2 \(dist2)")
+                let selfClosestDist = selfCenter.distance(to: selfClosest)
+                let otherClosestDist = otherCenter.distance(to: otherClosest)
 
-        // the direct distance bewteen the two centers
-        let centerDistance = sqrt(width * width + height * height)
-
-        //Log.v("centerDistance \(centerDistance)")
-        
-        // return the distance between their centers minus the amount of the line which is within each group
-        // will be positive if the distance is separation
-        // will be negative if they overlap
-        let ret = centerDistance - dist1 - dist2
-        //Log.v("returning \(ret)")
-        return ret
+                // how far away are the closest points?
+                let dist = selfClosest.distance(to: otherClosest)
+                
+                if selfClosestDist + otherClosestDist < centerDistance {
+                    // these boxes do not overlap
+                    return dist
+                } else {
+                    // these boxes do overlap
+                    return -dist
+                }
+            } else {
+                // we have no other closest, use other center instead
+                Log.w("normal edge distance from \(self) to \(otherBox) could not be determined")
+                return selfClosest.distance(to: otherCenter)
+            }
+        } else {
+            // we have no self closest, use other closest instead
+            if let otherClosest = otherClosest {
+                // we have other closest, but not self
+                Log.w("normal edge distance from \(self) to \(otherBox) could not be determined")
+                return otherClosest.distance(to: selfCenter)
+            } else {
+                // we have no closest, but not self
+                Log.w("normal edge distance from \(self) to \(otherBox) could not be determined")
+                return centerDistance
+            }
+        }
     }
 
+    public func contains(coord: DoubleCoord) -> Bool {
+        if coord.isRational {
+            let coord = Coord(coord)
+            
+            if coord.x >= Int(min.x),
+               coord.x <= Int(max.x),
+               coord.y >= Int(min.y),
+               coord.y <= Int(max.y)
+            {
+                Log.d("self \(self) contains \(coord) == true")
+                return true
+            }
+            Log.d("self \(self) contains \(coord) == false")
+        }
+        return false
+    }
     
+    public func intersections(with line: StandardLine) -> [DoubleCoord] {
+        Log.d("intersections of \(self) with line \(line)")
+        var ret: [DoubleCoord] = []
+
+        let minY = Double(min.y)
+        let minX = Double(min.x)
+        let maxY = Double(max.y)
+        let maxX = Double(max.x)
+        
+        let yForMinX = line.y(forX: minX)
+        
+        if yForMinX > minY,
+           yForMinX <= maxY
+        {
+            Log.d("yForMinX \(yForMinX) is within range")
+            ret.append(DoubleCoord(x: minX, y: yForMinX))
+        } else {
+            Log.d("yForMinX \(yForMinX) is NOT within range")
+        }
+
+        let yForMaxX = line.y(forX: maxX)
+            
+        if yForMaxX > minY,
+           yForMaxX <= maxY
+        {
+            Log.d("yForMaxX \(yForMaxX) is within range")
+            ret.append(DoubleCoord(x: maxX, y: yForMaxX))
+        } else {
+            Log.d("yForMaxX \(yForMaxX) is NOT within range")
+        }
+        
+        let xForMinY = line.x(forY: minY)
+
+        if xForMinY > minX,
+           xForMinY <= maxX
+        {
+            Log.d("xForMinY \(xForMinY) is within range")
+            ret.append(DoubleCoord(x: xForMinY, y: minY))
+        } else {
+            Log.d("xForMinY \(xForMinY) is NOT within range")
+        }
+        
+        let xForMaxY = line.x(forY: maxY)
+
+        if xForMaxY > minX,
+           xForMaxY <= maxX
+        {
+            Log.d("xForMaxY \(xForMaxY) is within range")
+            ret.append(DoubleCoord(x: xForMaxY, y: maxY))
+        } else {
+            Log.d("xForMaxY \(xForMaxY) is NOT within range")
+        }            
+
+        return ret
+    }
 }
 
 // the distance between the center point of the box described and the exit of the line from it
 fileprivate func distanceOn(box boundingBox: BoundingBox,
-                         slope: Double, yIntercept: Double, theta: Double) -> Double
+                            slope: Double, yIntercept: Double, theta: Double) -> Double
 {
     var edge: Edge = .horizontal
     let yMaxValue = Double(boundingBox.max.x)*slope + Double(yIntercept)

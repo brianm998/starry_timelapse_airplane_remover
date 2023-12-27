@@ -215,6 +215,12 @@ public struct Coord: Codable {
         self.x = x
         self.y = y
     }
+
+    public init(_ coord: DoubleCoord) {
+        self.x = Int(coord.x)
+        self.y = Int(coord.y)
+    }
+    
 }
 
 // x, y coordinates as doubles
@@ -222,11 +228,21 @@ public struct DoubleCoord: Codable {
     public let x: Double
     public let y: Double
 
+    public init(_ coord: Coord) {
+        self.x = Double(coord.x)
+        self.y = Double(coord.y)
+    }
     public init(x: Double, y: Double) {
         self.x = x
         self.y = y
     }
 
+    public func distance(to other: DoubleCoord) -> Double {
+        let x_diff = self.x - other.x
+        let y_diff = self.y - other.y
+        return sqrt(x_diff*x_diff+y_diff*y_diff)
+    }
+    
     public var hasNaN: Bool { x.isNaN || y.isNaN }
     public var isFinite: Bool { x.isFinite && y.isFinite }
     public var isRational: Bool { !self.hasNaN && self.isFinite }
