@@ -195,6 +195,38 @@ public struct Line: Codable {
 
         return true
     }
+
+    public func thetaMatch(_ line: Line,
+                           maxThetaDiff: Double = 5) -> Bool
+    {
+        var selfTheta = self.theta
+        var otherTheta = line.theta
+
+        if selfTheta > 180 { selfTheta -= 180 }
+        if otherTheta > 180 { otherTheta -= 180 }
+        
+        let thetaDiff = abs(selfTheta - otherTheta)
+
+        if thetaDiff > maxThetaDiff {
+            // diff is bigger, check to make sure we're not comparing 179 and 1
+
+            var largerTheta = selfTheta
+            var smallerTheta = otherTheta
+            if otherTheta > selfTheta {
+                largerTheta = otherTheta
+                smallerTheta = selfTheta
+            }
+
+            if smallerTheta + 180 - largerTheta < maxThetaDiff {
+                // handles the case of comparing 179 and 1
+                return true
+            }
+            Log.i("HOLY CRAP theta diff \(thetaDiff) > \(maxThetaDiff)!")
+            return false
+        }
+
+        return true
+    }
 }
 
 
