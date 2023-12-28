@@ -163,9 +163,9 @@ extension FrameAirplaneRemover {
         // XXX A whole forest of magic numbers here :(
 
         // split the subtraction image into a bunch of small images with some overlap
-        let matrix = image.splitIntoMatrix(maxWidth: 512,
-                                           maxHeight: 512,
-                                           overlapPercent: 50)
+        let matrix = image.splitIntoMatrix(maxWidth: 256,
+                                           maxHeight: 256,
+                                           overlapPercent: 66)
 
         Log.i("frame \(frameIndex) has matrix with \(matrix.count) elements")
 
@@ -275,16 +275,25 @@ extension FrameAirplaneRemover {
                 // iterate on the longest axis
                 let iterateOnXAxis = x_diff > y_diff
 
+                // extend this far on each side of the captured line looking for more
+                // blobs that fit the line
+                let lineExtentionAmount: Int = 256 // XXX yet another hardcoded constant :(
+                
                 if iterateOnXAxis {
-                    for x in 0..<element.width {
-                        let y = Int(standardLine.y(forX: Double(x)))
-                        
-                        if y > 0,
-                           y < element.height
+                    for elementX in -lineExtentionAmount..<element.width+lineExtentionAmount {
+                        let elementY = Int(standardLine.y(forX: Double(elementX)))
+
+                        let x = elementX+element.x
+                        let y = elementY+element.y
+
+                        if x >= 0,
+                           x < width,
+                           y >= 0,
+                           y < height
                         {
                             if config.writeOutlierGroupFiles {
                                 // write kht image data
-                                let index = (y+element.y)*width+(x+element.x)
+                                let index = y*width+x
                                 if khtImage[index] < brightnessValue {
                                     khtImage[index] = brightnessValue
                                 }
@@ -292,8 +301,8 @@ extension FrameAirplaneRemover {
 
                             // do blob processing at this location
                             lastBlob =
-                              processBlobsAt(x: x+element.x,
-                                             y: y+element.y,
+                              processBlobsAt(x: x,
+                                             y: y,
                                              on: line,
                                              iterationDirection: .vertical,
                                              blobsToPromote: &blobsToPromote,
@@ -304,14 +313,21 @@ extension FrameAirplaneRemover {
                     }
                 } else {
                     // iterate on y axis
-                    for y in 0..<element.height {
-                        let x = Int(standardLine.x(forY: Double(y)))
-                        if x > 0,
-                           x < element.width
+
+                    for elementY in -lineExtentionAmount..<element.height+lineExtentionAmount {
+                        let elementX = Int(standardLine.x(forY: Double(elementY)))
+
+                        let x = elementX+element.x
+                        let y = elementY+element.y
+
+                        if x >= 0,
+                           x < width,
+                           y >= 0,
+                           y < height
                         {
                             if config.writeOutlierGroupFiles {
                                 // write kht image data
-                                let index = (y+element.y)*width+(x+element.x)
+                                let index = y*width+x
                                 if khtImage[index] < brightnessValue {
                                     khtImage[index] = brightnessValue
                                 }
@@ -319,8 +335,8 @@ extension FrameAirplaneRemover {
 
                             // do blob processing at this location
                             lastBlob =
-                              processBlobsAt(x: x+element.x,
-                                             y: y+element.y,
+                              processBlobsAt(x: x,
+                                             y: y,
                                              on: line,
                                              iterationDirection: .horizontal,
                                              blobsToPromote: &blobsToPromote,
@@ -406,7 +422,7 @@ extension FrameAirplaneRemover {
                     if lineIsValid { 
                         if let _lastBlob = lastBlob {
                             let distance = _lastBlob.boundingBox.edgeDistance(to: blob.boundingBox)
-                            Log.i("frame \(frameIndex) blob \(_lastBlob) bounding box \(_lastBlob.boundingBox) is \(distance) from blob \(blob) bounding box \(blob.boundingBox)")
+                            //Log.i("frame \(frameIndex) blob \(_lastBlob) bounding box \(_lastBlob.boundingBox) is \(distance) from blob \(blob) bounding box \(blob.boundingBox)")
                             if distance < 40 { // XXX constant XXX
                                 // if they are close enough, simply combine them
                                 if _lastBlob.absorb(blob) {
