@@ -384,7 +384,9 @@ extension FrameAirplaneRemover {
         
         for x in startX ..< endX {
             for y in startY ..< endY {
-                if let blobId = blobRefs[y*width+x],
+                if y < height,
+                   x < width,
+                   let blobId = blobRefs[y*width+x],
                    let blob = blobMap[blobId]
                 {
                     // lines are invalid for this blob
