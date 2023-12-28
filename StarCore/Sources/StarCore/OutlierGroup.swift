@@ -41,6 +41,10 @@ public class OutlierGroup: CustomStringConvertible,
     public let brightness: UInt        // the average amount per pixel of brightness over the limit 
     public let lines: [Line]           // sorted lines from the hough transform of this outlier group
 
+    // how far away from the most dominant line in this outlier group are
+    // the pixels in it, on average?
+    public let averageLineVariance: Double
+    
     // pixel value is zero if pixel is not part of group,
     // otherwise it's the amount brighter this pixel was than those in the adjecent frames 
     public let pixels: [UInt16]        // indexed by y * bounds.width + x
@@ -68,45 +72,31 @@ public class OutlierGroup: CustomStringConvertible,
         return nil
     }
 
-    init(name: String,
-         size: UInt,
-         brightness: UInt,      // average brightness
-         bounds: BoundingBox,
-         frame: FrameAirplaneRemover,
-         pixels: [UInt16],
-         maxPixelDistance: UInt16) async
+    convenience init(name: String,
+                     size: UInt,
+                     brightness: UInt,      // average brightness
+                     bounds: BoundingBox,
+                     frame: FrameAirplaneRemover,
+                     pixels: [UInt16],
+                     maxPixelDistance: UInt16) async
     {
-        self.name = name
-        self.size = size
-        self.brightness = brightness
-        self.bounds = bounds
-        self.frameIndex = frame.frameIndex
+        await self.init(name: name,
+                        size: size,
+                        brightness: brightness,
+                        bounds: bounds,
+                        frameIndex: frame.frameIndex,
+                        pixels: pixels,
+                        maxPixelDistance: maxPixelDistance)
         self.frame = frame
-        self.pixels = pixels
-        self.maxPixelDistance = maxPixelDistance
-        self.surfaceAreaToSizeRatio = ratioOfSurfaceAreaToSize(of: pixels,
-                                                               width: bounds.width,
-                                                               height: bounds.height)
-        // do a hough transform on just this outlier group
-
-        let pixelImage = PixelatedImage(width: bounds.width,
-                                        height: bounds.height,
-                                        grayscale16BitImageData: pixels)
-        if let image = pixelImage.nsImage {
-            self.lines = await kernelHoughTransform(image: image)
-        } else {
-            self.lines = []     // XXX
-        }
-        _ = self.houghLineHistogram
     }
-
+    
     public init(name: String,
                 size: UInt,
                 brightness: UInt,      // average brightness
                 bounds: BoundingBox,
                 frameIndex: Int,
                 pixels: [UInt16],
-                maxPixelDistance: UInt16) 
+                maxPixelDistance: UInt16) async
     {
         self.name = name
         self.size = size
@@ -119,13 +109,51 @@ public class OutlierGroup: CustomStringConvertible,
                                                                width: bounds.width,
                                                                height: bounds.height)
         // do a hough transform on just this outlier group
-        let transform = HoughTransform(dataWidth: bounds.width,
-                                       dataHeight: bounds.height,
-                                       inputData: pixels)
 
-        // try a smaller line count, with fixed trimming code
-        self.lines = transform.lines(maxCount: 60, minPixelValue: 1) 
+        let pixelImage = PixelatedImage(width: bounds.width,
+                                        height: bounds.height,
+                                        grayscale16BitImageData: pixels)
+
+        if let image = pixelImage.nsImage {
+            self.lines = await kernelHoughTransform(image: image)
+        } else {
+            self.lines = []     // XXX
+        }
+
+        if lines.count > 0 {
+            self.averageLineVariance =
+              OutlierGroup.averageDistance(for: pixels,
+                                           from: lines[0],
+                                           with: bounds)
+        } else {
+            self.averageLineVariance = 0xFFFFFFFF
+        }
+        
         _ = self.houghLineHistogram
+    }
+
+    // calculate how far, on average, the pixels in this group are from the ideal
+    // line that we have calculated for this group.
+    // A really straight, narrow line will have a low value,
+    // while a big cloud of fuzzy points should have a larger value.
+    private static func averageDistance(for pixels: [UInt16],
+                                        from line: Line,
+                                        with bounds: BoundingBox) -> Double
+    {
+        var distanceSum: Double = 0.0
+        var numDistances: Double = 0.0
+        let standardLine = line.standardLine
+        for x in 0..<bounds.width {
+            for y in 0..<bounds.height {
+                // calculate how close each pixel is to this line
+                if pixels[y*bounds.width+x] > 0 {
+                    let distance = standardLine.distanceTo(x: x, y: y)
+                    distanceSum += distance
+                    numDistances += 1
+                }
+            }
+        }
+        return distanceSum/numDistances
     }
 
     public static func == (lhs: OutlierGroup, rhs: OutlierGroup) -> Bool {
@@ -349,6 +377,7 @@ public class OutlierGroup: CustomStringConvertible,
         case maxOverlap
         case maxOverlapTimesThetaHisto
         case pixelBorderAmount
+        case averageLineVariance
         
         /*
          XXX add:
@@ -466,6 +495,8 @@ public class OutlierGroup: CustomStringConvertible,
                 return 30
             case .pixelBorderAmount:
                 return 31
+            case .averageLineVariance:
+                return 32
             }
         }
 
@@ -557,6 +588,8 @@ public class OutlierGroup: CustomStringConvertible,
             ret = self.maxOverlapTimesThetaHisto
         case .pixelBorderAmount:
             ret = self.pixelBorderAmount
+        case .averageLineVariance:
+            ret = self.averageLineVariance
         }
         //let t1 = NSDate().timeIntervalSince1970
         //Log.d("group \(name) @ frame \(frameIndex) decisionTreeValue(for: \(type)) = \(ret) after \(t1-t0)s")
@@ -1132,6 +1165,16 @@ public class OutlierGroup: CustomStringConvertible,
         
         // surfaceAreaToSizeRatio
 
+        if lines.count > 0 {
+            self.averageLineVariance =
+              OutlierGroup.averageDistance(for: pixels,
+                                           from: lines[0],
+                                           with: bounds)
+        } else {
+            self.averageLineVariance = 0xFFFFFFFF
+        }
+        
+        
         _ = self.houghLineHistogram
     }
     

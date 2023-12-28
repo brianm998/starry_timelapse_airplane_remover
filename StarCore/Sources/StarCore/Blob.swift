@@ -111,15 +111,15 @@ public class Blob: CustomStringConvertible {
         return ret
     }
     
-    public func outlierGroup(at frameIndex: Int) -> OutlierGroup {
+    public func outlierGroup(at frameIndex: Int) async -> OutlierGroup {
         // XXX make this pass on the line, if there is one
-        OutlierGroup(name: self.id,
-                     size: UInt(self.pixels.count),
-                     brightness: UInt(self.intensity),
-                     bounds: self.boundingBox,
-                     frameIndex: frameIndex,
-                     pixels: self.pixelValues,
-                     maxPixelDistance: 0xFFFF) // XXX not sure this is used anymore
+        await OutlierGroup(name: self.id,
+                           size: UInt(self.pixels.count),
+                           brightness: UInt(self.intensity),
+                           bounds: self.boundingBox,
+                           frameIndex: frameIndex,
+                           pixels: self.pixelValues,
+                           maxPixelDistance: 0xFFFF) // XXX not sure this is used anymore
     }
 
     // returns minimum distance found 

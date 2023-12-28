@@ -145,7 +145,7 @@ extension FrameAirplaneRemover {
             for blob in blobsToPromote {
                 if blob.size >= config.minGroupSize {
                     // make outlier group from this blob
-                    let outlierGroup = blob.outlierGroup(at: frameIndex)
+                    let outlierGroup = await blob.outlierGroup(at: frameIndex)
                     Log.i("frame \(frameIndex) promoting \(blob) to outlier group \(outlierGroup.name)")
                     outlierGroup.frame = self
                     outlierGroups?.members[outlierGroup.name] = outlierGroup
@@ -414,9 +414,9 @@ extension FrameAirplaneRemover {
                         lineForNewBlobs = blobLine
                         lineIsValid = blobLine.thetaMatch(line, maxThetaDiff: 10) // medium, 20 was generous, and worked
 
-                        if !lineIsValid {
-                            Log.i("HOLY CRAP blobLine \(blobLine) doesn't match line \(line)")
-                        }
+                        //if !lineIsValid {
+                            //Log.i("HOLY CRAP blobLine \(blobLine) doesn't match line \(line)")
+                    //}
                     }
 
                     if lineIsValid { 
