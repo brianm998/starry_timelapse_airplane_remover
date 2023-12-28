@@ -62,7 +62,7 @@ struct OutlierGroupTableRow: Identifiable {
     let dt_maxOverlap: Double
     let dt_maxOverlapTimesThetaHisto: Double
     let dt_pixelBorderAmount: Double
-    
+    let dt_averageLineVariance: Double
 
     init(_ group: OutlierGroup) async {
         name = group.name
@@ -104,6 +104,7 @@ struct OutlierGroupTableRow: Identifiable {
         dt_maxOverlap = group.decisionTreeValue(for: .maxOverlap)
         dt_maxOverlapTimesThetaHisto = group.decisionTreeValue(for: .maxOverlapTimesThetaHisto)
         dt_pixelBorderAmount = group.decisionTreeValue(for: .pixelBorderAmount)
+        dt_averageLineVariance = group.decisionTreeValue(for: .averageLineVariance)
     }
 }
 
@@ -310,12 +311,19 @@ struct OutlierGroupTable: View {
         }
     }
 
+    var dtAverageLineVariance: DTColumn {
+        self.tableColumn(for: "averageLineVariance",
+                         value: \.dt_averageLineVariance) { row in
+            row.dt_averageLineVariance
+        }
+    }
+    
     func tableColumn(for name: String,
                      value: KeyPath<OutlierGroupTableRow,Double>,
                      closure: @escaping (OutlierGroupTableRow) -> Double) -> DTColumn
     {
         TableColumn(name, value: value) { (row: OutlierGroupTableRow) in
-            Text(String(format: "%.5g", closure(row)))
+            Text(String(format: "%.3g", closure(row)))
         }.width(min: 40, ideal: 60, max: 100)
     }
 
@@ -379,6 +387,9 @@ struct OutlierGroupTable: View {
                         dtMaxOverlap
                         dtMaxOverlapTimesThetaHisto
                         dtPixelBorderAmount
+                    }
+                    Group {
+                        dtAverageLineVariance
                     }
 
                 } .onChange(of: viewModel.selectedOutliers) {newValue in 
