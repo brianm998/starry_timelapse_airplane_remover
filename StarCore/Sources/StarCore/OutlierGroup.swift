@@ -133,7 +133,8 @@ public class OutlierGroup: CustomStringConvertible,
     }
 
     // calculate how far, on average, the pixels in this group are from the ideal
-    // line that we have calculated for this group.
+    // line that we have calculated for this group,
+    // divided by the total length pixels in that line.
     // A really straight, narrow line will have a low value,
     // while a big cloud of fuzzy points should have a larger value.
     private static func averageDistance(for pixels: [UInt16],
@@ -143,17 +144,32 @@ public class OutlierGroup: CustomStringConvertible,
         var distanceSum: Double = 0.0
         var numDistances: Double = 0.0
         let standardLine = line.standardLine
+
+        var minX = bounds.width
+        var minY = bounds.width
+        var maxX = 0
+        var maxY = 0
+        
         for x in 0..<bounds.width {
             for y in 0..<bounds.height {
                 // calculate how close each pixel is to this line
                 if pixels[y*bounds.width+x] > 0 {
+                    if y < minY { minY = y }
+                    if x < minX { minX = x }
+                    if y > maxY { maxY = y }
+                    if x > maxX { maxX = x }
                     let distance = standardLine.distanceTo(x: x, y: y)
                     distanceSum += distance
                     numDistances += 1
                 }
             }
         }
-        return distanceSum/numDistances
+
+        let xDiff = Double(maxX-minX)
+        let yDiff = Double(maxY-minY)
+        let totalLength = sqrt(xDiff*xDiff+yDiff*yDiff)
+
+        return (distanceSum/numDistances)/totalLength
     }
 
     public static func == (lhs: OutlierGroup, rhs: OutlierGroup) -> Bool {
