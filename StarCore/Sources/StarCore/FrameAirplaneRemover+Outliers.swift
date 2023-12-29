@@ -16,13 +16,6 @@ You should have received a copy of the GNU General Public License along with sta
 
 */
 
-
-
-struct MatrixElementLine {
-    let element: ImageMatrixElement
-    let line: Line
-}
-
 /*
 
  Logic that loads, and finds outliers in a frame.
@@ -173,15 +166,15 @@ extension FrameAirplaneRemover {
                                minResults: 6,
                                maxResults: 12) 
                                           
-        var elementLines: [MatrixElementLine] = []
-        
+        var rawElementLines: [MatrixElementLine] = []
+
         for element in matrix {
             Log.i("frame \(frameIndex) processing matrix element \(element)")
             // first run a kernel based hough transform on this matrix element,
             // returning some set of detected lines 
             if let lines = element.lines {
                 for line in lines {
-                    elementLines.append(MatrixElementLine(element: element, line: line))
+                    rawElementLines.append(MatrixElementLine(element: element, line: line))
                 }
                 Log.i("frame \(frameIndex) appended \(lines.count) lines for element \(element)")
             } else {
@@ -189,14 +182,60 @@ extension FrameAirplaneRemover {
             }
         }
 
-        Log.i("frame \(frameIndex) loaded \(elementLines.count) lines")
+        Log.i("frame \(frameIndex) loaded raw \(rawElementLines.count) lines")
+
+        var filteredLines: [MatrixElementLine] = []
+        
+        /* 
+           combine nearby lines from neighboring elements that line up
+           combine their scores, and create a new MatrixElementLine with
+           the combined elements
+         */
+
+        var processed = [Bool](repeating: false, count: rawElementLines.count)
+
+        // lines closer than this will be combined
+        let maxThetaDiff = 8.0  // XXX more constants XXX
+        let maxRhoDiff = 8.0
+
+        // process the lines with most votes first
+        rawElementLines.sort { $0.line.votes > $1.line.votes }
+
+        // filter by combining close lines on neighboring frames
+        for (baseIndex, baseElement) in rawElementLines.enumerated() {
+            if !processed[baseIndex] {
+                processed[baseIndex] = true
+                var filteredElement = baseElement
+                let baseOriginZeroLine = baseElement.originZeroLine
+                
+                for (index, element) in rawElementLines.enumerated() {
+                    if !processed[index] {
+                        let thetaDiff = abs(baseElement.line.theta - element.line.theta)
+                        // first check theta
+                        if thetaDiff < maxThetaDiff {
+                            let originZeroLine = element.originZeroLine
+
+                            let rhoDiff = abs(baseOriginZeroLine.rho - originZeroLine.rho)
+
+                            // then check rho after translating to center origin
+                            if rhoDiff < maxRhoDiff {
+                                filteredElement = baseElement.combine(with: element)
+                                processed[index] = true
+                            }
+                        }
+                    }
+                }
+
+                filteredLines.append(filteredElement)
+            }
+        }
 
         // return the lines with most votes first
-        elementLines.sort { $0.line.votes > $1.line.votes }
+        filteredLines.sort { $0.line.votes > $1.line.votes }
 
-        Log.i("frame \(frameIndex) sorted \(elementLines.count) lines")
+        Log.i("frame \(frameIndex) has \(filteredLines.count) filtered lines")
 
-        return elementLines
+        return filteredLines
     }
     
     // analyze the blobs with kernel hough transform data from the subtraction image
@@ -210,7 +249,7 @@ extension FrameAirplaneRemover {
 
         
         let maxVotes = 12000     // lines with votes over this are max color on kht image
-        let khtImageBase = 0x0A  // dimmest lines will be 
+        let khtImageBase = 0x1F  // dimmest lines will be 
         var khtImage: [UInt8] = []
         if config.writeOutlierGroupFiles {
             khtImage = [UInt8](repeating: 0, count: width*height)
@@ -232,8 +271,6 @@ extension FrameAirplaneRemover {
 
         self.state = .detectingOutliers2a
 
-        // XXX memory leak after here
-        
         for elementLine in elementLines {
             let element = elementLine.element
             let line = elementLine.line
@@ -357,7 +394,8 @@ extension FrameAirplaneRemover {
 
         return Array(blobsToPromote.values)
     }
-    
+
+    // looks around for blobs close to this place
     private func processBlobsAt(x sourceX: Int,
                                 y sourceY: Int,
                                 on line: Line,
@@ -386,12 +424,12 @@ extension FrameAirplaneRemover {
             if startY < 0 { startY = 0 }
 
             for y in startY ..< endY {
-                lastBlob_ = shitHouse(x: sourceX, y: y,
-                                      on: line,
-                                      blobsToPromote: &blobsToPromote,
-                                      blobRefs: &blobRefs,
-                                      blobMap: &blobMap,
-                                      lastBlob: lastBlob)
+                lastBlob_ = processBlobAt(x: sourceX, y: y,
+                                          on: line,
+                                          blobsToPromote: &blobsToPromote,
+                                          blobRefs: &blobRefs,
+                                          blobMap: &blobMap,
+                                          lastBlob: lastBlob)
             }
             
         case .horizontal:
@@ -400,24 +438,25 @@ extension FrameAirplaneRemover {
             if startX < 0 { startX = 0 }
 
             for x in startX ..< endX {
-                lastBlob_ = shitHouse(x: x, y: sourceY,
-                                      on: line,
-                                      blobsToPromote: &blobsToPromote,
-                                      blobRefs: &blobRefs,
-                                      blobMap: &blobMap,
-                                      lastBlob: lastBlob)
+                lastBlob_ = processBlobAt(x: x, y: sourceY,
+                                          on: line,
+                                          blobsToPromote: &blobsToPromote,
+                                          blobRefs: &blobRefs,
+                                          blobMap: &blobMap,
+                                          lastBlob: lastBlob)
             }
         }
         
         return lastBlob_
     }
 
-    private func shitHouse(x: Int, y: Int,
-                           on line: Line,
-                           blobsToPromote: inout [String:Blob],
-                           blobRefs: inout [String?],
-                           blobMap: inout [String:Blob],
-                           lastBlob: Blob?) -> Blob?
+    // process a blob at this particular spot
+    private func processBlobAt(x: Int, y: Int,
+                               on line: Line,
+                               blobsToPromote: inout [String:Blob],
+                               blobRefs: inout [String?],
+                               blobMap: inout [String:Blob],
+                               lastBlob: Blob?) -> Blob?
     {
         var lastBlob_ = lastBlob
         if y < height,
