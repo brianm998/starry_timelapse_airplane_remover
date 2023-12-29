@@ -26,6 +26,17 @@ public class ImageMatrixElement: Hashable, CustomStringConvertible {
     
     public init(x: Int,
                 y: Int,
+                width: Int,
+                height: Int)
+    {
+        self.x = x
+        self.y = y
+        self.width = width
+        self.height = height
+    }
+
+    public init(x: Int,
+                y: Int,
                 image: NSImage)
     {
         self.x = x
