@@ -63,10 +63,12 @@ public class AlertLogHandler: LogHandler {
                     at fileLocation: String,
                     on threadName: String,
                     with data: LogData?,
-                    at logLevel: Log.Level)
+                    at logLevel: Log.Level,
+                    logTime: TimeInterval)
     {
         dispatchQueue.async {
-            let dateString = self.dateFormatter.string(from: Date())
+            let date = Date(timeIntervalSinceReferenceDate: logTime)
+            let dateString = self.dateFormatter.string(from: date)
 
             var logString = "" 
             if let data = data {

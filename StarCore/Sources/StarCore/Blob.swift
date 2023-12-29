@@ -8,7 +8,7 @@ public class Blob: CustomStringConvertible {
     public let id: String
     public private(set) var pixels: [SortablePixel]
 
-    public var line: Line?
+    public var line: Line? 
     
     public var size: Int { pixels.count }
 
@@ -23,6 +23,9 @@ public class Blob: CustomStringConvertible {
         self.pixels += newPixels
         _intensity = nil
         _boundingBox = nil
+        _blobImageData = nil
+        _blobLine = nil
+        _averageDistanceFromIdealLine = nil
     }
 
     public func add(pixel: SortablePixel) {
@@ -30,10 +33,96 @@ public class Blob: CustomStringConvertible {
         self.pixels.append(pixel)
         _intensity = nil
         _boundingBox = nil
+        _blobImageData = nil
+        _blobLine = nil
+        _averageDistanceFromIdealLine = nil
     }
 
     private var _intensity: UInt16?
     private var _boundingBox: BoundingBox?
+    private var _blobImageData: [UInt16]?
+    private var _blobLine: Line?
+
+    // a line computed from the pixels, origin is relative to the bounding box
+    public var blobLine: Line? {
+        get async {
+            if let blobLine = _blobLine { return blobLine }
+            
+            let blobImageData = self.blobImageData
+            
+            let minX = self.boundingBox.min.x
+            let minY = self.boundingBox.min.y
+            
+            let pixelImage = PixelatedImage(width: self.boundingBox.width,
+                                            height: self.boundingBox.height,
+                                            grayscale16BitImageData: blobImageData)
+
+            if let image = pixelImage.nsImage {
+                let lines = await kernelHoughTransform(image: image)
+                Log.d("got \(lines.count) lines from KHT")
+                if lines.count > 0 {
+                    _blobLine = lines[0]
+                    return lines[0]
+                }
+            }
+            return nil
+        }
+    }
+    
+    public var blobImageData: [UInt16] {
+        if let blobImageData = _blobImageData { return blobImageData }
+        
+        var blobImageData = [UInt16](repeating: 0,
+                                     count: self.boundingBox.width*self.boundingBox.height)
+
+        Log.d("blob image data with \(pixels.count) pixels")
+        
+        let minX = self.boundingBox.min.x
+        let minY = self.boundingBox.min.y
+        for pixel in pixels {
+            let imageIndex = (pixel.y - minY)*self.boundingBox.width + (pixel.x - minX)
+            blobImageData[imageIndex] = 0xFFFF//pixel.intensity
+        }
+
+        _blobImageData = blobImageData
+        return blobImageData
+    }
+
+    private var _averageDistanceFromIdealLine: Double? 
+    
+    public var averageDistanceFromIdealLine: Double {
+        get async {
+            if let averageDistanceFromIdealLine = _averageDistanceFromIdealLine {
+                return averageDistanceFromIdealLine
+            }
+            if let line = await self.blobLine {
+                let ret = OutlierGroup.averageDistance(for: self.blobImageData,
+                                                       from: line,
+                                                       with: self.boundingBox)
+                _averageDistanceFromIdealLine = ret
+                return ret
+            } 
+            _averageDistanceFromIdealLine = 420420420
+            return 420420420
+        }
+    }
+    
+    // a line calculated from the pixels in this blob, if possible
+    public var originZeroLine: Line? {
+        get async {
+            if let line = await self.blobLine {
+                let minX = self.boundingBox.min.x
+                let minY = self.boundingBox.min.y
+                let (ap1, ap2) = line.twoPoints
+                return Line(point1: DoubleCoord(x: ap1.x+Double(minX),
+                                                y: ap1.y+Double(minY)),
+                            point2: DoubleCoord(x: ap2.x+Double(minX),
+                                                y: ap2.y+Double(minY)),
+                            votes: 0)
+            }
+            return nil
+        }
+    }
     
     public var intensity: UInt16 {
         if pixels.count == 0 { return 0 }
@@ -46,6 +135,11 @@ public class Blob: CustomStringConvertible {
         let ret = UInt16(max)
         _intensity = ret
         return ret
+    }
+
+    public init(_ other: Blob) {
+        self.id = other.id
+        self.pixels = other.pixels
     }
     
     public init(_ pixel: SortablePixel) {
@@ -60,6 +154,9 @@ public class Blob: CustomStringConvertible {
         pixels = []
         _intensity = nil
         _boundingBox = nil
+        _blobImageData = nil
+        _blobLine = nil
+        _averageDistanceFromIdealLine = nil
     }
 
     public func absorb(_ otherBlob: Blob) -> Bool {
@@ -72,6 +169,9 @@ public class Blob: CustomStringConvertible {
             self.pixels += newPixels
             _intensity = nil
             _boundingBox = nil
+            _blobImageData = nil
+            _blobLine = nil
+            _averageDistanceFromIdealLine = nil
             return true
         }
         return false

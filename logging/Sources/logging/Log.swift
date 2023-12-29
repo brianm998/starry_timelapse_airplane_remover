@@ -883,7 +883,11 @@ fileprivate extension Log {
                 }
             }
 
-            await gremlin.log(string, at: logLevel, extraData: extraData, file, function, line)
+            let logTime = NSDate().timeIntervalSince1970
+            
+            await gremlin.log(string, at: logLevel,
+                              logTime: logTime, extraData: extraData,
+                              file, function, line)
         }
     }
 
@@ -904,6 +908,7 @@ public actor LogGremlin {
     
     func log(_ message: String,
              at logLevel: Log.Level,
+             logTime: TimeInterval,             
              extraData: LogData? = nil,
              _ file: String,
              _ function: String,
@@ -919,7 +924,8 @@ public actor LogGremlin {
                 handler.log(message: message,
                             at: fileLocation,
                             with: extraData,
-                            at: logLevel)
+                            at: logLevel,
+                            logTime: logTime)
             }
         }
     }

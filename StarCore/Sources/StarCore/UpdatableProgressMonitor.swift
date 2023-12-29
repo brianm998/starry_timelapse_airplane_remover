@@ -19,7 +19,8 @@ public class UpdatableLogHandler: LogHandler {
     public func log(message: String,
                     at fileLocation: String,
                     with data: LogData?,
-                    at logLevel: Log.Level)
+                    at logLevel: Log.Level,
+                    logTime: TimeInterval)
     {
         TaskWaiter.shared.task(priority: .userInitiated) {
             var logMessage = ""
@@ -29,10 +30,9 @@ public class UpdatableLogHandler: LogHandler {
                 logMessage = "\(logLevel.emo) \(logLevel) | \(fileLocation): \(message)"
             }        
 
-            let now = NSDate().timeIntervalSince1970
-            await self.updatable.log(name: "\(now)",
+            await self.updatable.log(name: "\(logTime)",
                                      message: logMessage,
-                                     value: now)
+                                     value: logTime)
         }
     }
     

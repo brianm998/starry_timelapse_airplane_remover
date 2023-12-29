@@ -26,9 +26,11 @@ public class ConsoleLogHandler: LogHandler {
     public func log(message: String,
                     at fileLocation: String,
                     with data: LogData?,
-                    at logLevel: Log.Level)
+                    at logLevel: Log.Level,
+                    logTime: TimeInterval)
     {
-        let dateString = self.dateFormatter.string(from: Date())
+        let date = Date(timeIntervalSinceReferenceDate: logTime)
+        let dateString = self.dateFormatter.string(from: date)
         
         if let data = data {
             print("\(dateString) | \(logLevel.emo) \(logLevel) | \(fileLocation): \(message) | \(data.description)")

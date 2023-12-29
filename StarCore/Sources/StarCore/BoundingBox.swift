@@ -177,11 +177,11 @@ public struct BoundingBox: Codable {
 
         let boxesOverlap = self.overlaps(otherBox)
         
-        Log.d("self \(self) edge distance to \(otherBox) boxesOverlap \(boxesOverlap)")
+        //Log.d("self \(self) edge distance to \(otherBox) boxesOverlap \(boxesOverlap)")
         let selfCenter = self.centerDouble
         let otherCenter = otherBox.centerDouble
 
-        Log.d("selfCenter \(selfCenter) otherCenter \(otherCenter)")
+        //Log.d("selfCenter \(selfCenter) otherCenter \(otherCenter)")
         
         let line = StandardLine(point1: selfCenter, point2: otherCenter)
 
@@ -197,7 +197,7 @@ public struct BoundingBox: Codable {
         
         for point in selfIntersections {
             let distance = point.distance(to: otherCenter)
-            Log.d("self intersection point \(point) distance \(distance) centerDistance \(centerDistance)")
+            //Log.d("self intersection point \(point) distance \(distance) centerDistance \(centerDistance)")
             if boxesOverlap {
                 if Int(distance) >= Int(centerDistance-mathErrorBuffer) { // XXX this fails when one is inside the other
                     selfClosest = point
@@ -211,7 +211,7 @@ public struct BoundingBox: Codable {
         
         for point in otherIntersections {
             let distance = point.distance(to: selfCenter)
-            Log.d("other intersection point \(point) distance \(distance) centerDistance \(centerDistance)")
+            //Log.d("other intersection point \(point) distance \(distance) centerDistance \(centerDistance)")
             if boxesOverlap {
                 if Int(distance) >= Int(centerDistance-mathErrorBuffer) { // XXX this fails when one is inside the other
                     otherClosest = point
@@ -241,18 +241,18 @@ public struct BoundingBox: Codable {
                 }
             } else {
                 // we have no other closest, use other center instead
-                Log.w("normal edge distance from \(self) to \(otherBox) could not be determined")
+                Log.i("normal edge distance from \(self) to \(otherBox) could not be determined")
                 return selfClosest.distance(to: otherCenter)
             }
         } else {
             // we have no self closest, use other closest instead
             if let otherClosest = otherClosest {
                 // we have other closest, but not self
-                Log.w("normal edge distance from \(self) to \(otherBox) could not be determined")
+                Log.i("normal edge distance from \(self) to \(otherBox) could not be determined")
                 return otherClosest.distance(to: selfCenter)
             } else {
                 // we have no closest, but not self
-                Log.w("normal edge distance from \(self) to \(otherBox) could not be determined")
+                Log.i("normal edge distance from \(self) to \(otherBox) could not be determined")
                 return centerDistance
             }
         }
@@ -283,16 +283,16 @@ public struct BoundingBox: Codable {
                coord.y >= Int(min.y),
                coord.y <= Int(max.y)
             {
-                Log.d("self \(self) contains \(coord) == true")
+                //Log.d("self \(self) contains \(coord) == true")
                 return true
             }
-            Log.d("self \(self) contains \(coord) == false")
+            //Log.d("self \(self) contains \(coord) == false")
         }
         return false
     }
     
     public func intersections(with line: StandardLine) -> [DoubleCoord] {
-        Log.d("intersections of \(self) with line \(line)")
+        //Log.d("intersections of \(self) with line \(line)")
         var ret: [DoubleCoord] = []
 
         let minY = Double(min.y)
@@ -305,10 +305,10 @@ public struct BoundingBox: Codable {
         if yForMinX > minY,
            yForMinX <= maxY
         {
-            Log.d("yForMinX \(yForMinX) is within range")
+            //Log.d("yForMinX \(yForMinX) is within range")
             ret.append(DoubleCoord(x: minX, y: yForMinX))
         } else {
-            Log.d("yForMinX \(yForMinX) is NOT within range")
+            //Log.d("yForMinX \(yForMinX) is NOT within range")
         }
 
         let yForMaxX = line.y(forX: maxX)
@@ -316,10 +316,10 @@ public struct BoundingBox: Codable {
         if yForMaxX > minY,
            yForMaxX <= maxY
         {
-            Log.d("yForMaxX \(yForMaxX) is within range")
+            //Log.d("yForMaxX \(yForMaxX) is within range")
             ret.append(DoubleCoord(x: maxX, y: yForMaxX))
         } else {
-            Log.d("yForMaxX \(yForMaxX) is NOT within range")
+            //Log.d("yForMaxX \(yForMaxX) is NOT within range")
         }
         
         let xForMinY = line.x(forY: minY)
@@ -327,10 +327,10 @@ public struct BoundingBox: Codable {
         if xForMinY > minX,
            xForMinY <= maxX
         {
-            Log.d("xForMinY \(xForMinY) is within range")
+            //Log.d("xForMinY \(xForMinY) is within range")
             ret.append(DoubleCoord(x: xForMinY, y: minY))
         } else {
-            Log.d("xForMinY \(xForMinY) is NOT within range")
+            //Log.d("xForMinY \(xForMinY) is NOT within range")
         }
         
         let xForMaxY = line.x(forY: maxY)
@@ -338,10 +338,10 @@ public struct BoundingBox: Codable {
         if xForMaxY > minX,
            xForMaxY <= maxX
         {
-            Log.d("xForMaxY \(xForMaxY) is within range")
+            //Log.d("xForMaxY \(xForMaxY) is within range")
             ret.append(DoubleCoord(x: xForMaxY, y: maxY))
         } else {
-            Log.d("xForMaxY \(xForMaxY) is NOT within range")
+            //Log.d("xForMaxY \(xForMaxY) is NOT within range")
         }            
 
         return ret

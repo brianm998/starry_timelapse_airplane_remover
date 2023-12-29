@@ -137,9 +137,10 @@ public class OutlierGroup: CustomStringConvertible,
     // divided by the total length pixels in that line.
     // A really straight, narrow line will have a low value,
     // while a big cloud of fuzzy points should have a larger value.
-    private static func averageDistance(for pixels: [UInt16],
-                                        from line: Line,
-                                        with bounds: BoundingBox) -> Double
+    // XXX move this elsewhere
+    public static func averageDistance(for pixels: [UInt16],
+                                       from line: Line,
+                                       with bounds: BoundingBox) -> Double
     {
         var distanceSum: Double = 0.0
         var numDistances: Double = 0.0

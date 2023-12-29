@@ -20,14 +20,6 @@ public func kernelHoughTransform(image: NSImage,
                                  kernelMinHeight: Double = 0.002,
                                  nSigmas: Double = 2.0,
                                  
-                                 // how rotated from a less voted line needs
-                                 // to be from a higher voted one
-                                 maxThetaDiff: Double = 5,
-
-                                 // how far away a less voted line needs
-                                 // to be from a higher voted line
-                                 maxRhoDiff: Double = 4,
-
                                  // discard lines with fewer votes than this
                                  minVotes: Int = 20,
 
@@ -45,8 +37,6 @@ public func kernelHoughTransform(image: NSImage,
                                            delta: delta,
                                            kernelMinHeight: kernelMinHeight,
                                            nSigmas: nSigmas,
-                                           maxThetaDiff: maxThetaDiff,
-                                           maxRhoDiff: maxRhoDiff,
                                            minVotes: minVotes,
                                            minResults: minResults,
                                            maxResults: maxResults)
@@ -59,14 +49,6 @@ public func kernelHoughTransform(elements: [ImageMatrixElement],
                                  delta: Double = 0.5,
                                  kernelMinHeight: Double = 0.002,
                                  nSigmas: Double = 2.0,
-                                 
-                                 // how rotated from a less voted line needs
-                                 // to be from a higher voted one
-                                 maxThetaDiff: Double = 5,
-
-                                 // how far away a less voted line needs
-                                 // to be from a higher voted line
-                                 maxRhoDiff: Double = 4,
 
                                  // discard lines with fewer votes than this
                                  minVotes: Int = 20,
@@ -85,8 +67,6 @@ public func kernelHoughTransform(elements: [ImageMatrixElement],
                                            delta: delta,
                                            kernelMinHeight: kernelMinHeight,
                                            nSigmas: nSigmas,
-                                           maxThetaDiff: maxThetaDiff,
-                                           maxRhoDiff: maxRhoDiff,
                                            minVotes: minVotes,
                                            minResults: minResults,
                                            maxResults: maxResults)
@@ -110,8 +90,6 @@ fileprivate actor HoughTransformer {
                                      delta: Double,
                                      kernelMinHeight: Double,
                                      nSigmas: Double,
-                                     maxThetaDiff: Double,
-                                     maxRhoDiff: Double,
                                      minVotes: Int,
                                      minResults: Int,
                                      maxResults: Int) -> [ImageMatrixElement]
@@ -126,8 +104,6 @@ fileprivate actor HoughTransformer {
                                        delta: delta,
                                        kernelMinHeight: kernelMinHeight,
                                        nSigmas: nSigmas,
-                                       maxThetaDiff: maxThetaDiff,
-                                       maxRhoDiff: maxRhoDiff,
                                        minVotes: minVotes,
                                        minResults: minResults,
                                        maxResults: maxResults)
@@ -144,8 +120,6 @@ fileprivate actor HoughTransformer {
                                      delta: Double,
                                      kernelMinHeight: Double,
                                      nSigmas: Double,
-                                     maxThetaDiff: Double,
-                                     maxRhoDiff: Double,
                                      minVotes: Int,
                                      minResults: Int,
                                      maxResults: Int) -> [Line]
@@ -184,20 +158,6 @@ fileprivate actor HoughTransformer {
                         // ignore lines with small counts,
                         // as long as we have more than minResults
                         shouldAppend = false
-                    } else {
-                        // check lines we are already going to return to see
-                        // if there are any closely matching lines that had a
-                        // higher count.  If so, this line is basically noise,
-                        // don't return it.
-                        for lineToReturn in ret {
-                            if lineToReturn.matches(newLine,
-                                                    maxThetaDiff: maxThetaDiff,
-                                                    maxRhoDiff: maxRhoDiff)
-                            {
-                                shouldAppend = false
-                                break
-                            }
-                        }
                     }
 
                     // if there is a sharp decrease in the quality of line votes, don't add more

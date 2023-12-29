@@ -350,35 +350,7 @@ public struct PixelatedImage {
         }
         return nil
     }
-
-    // XXX may go away
-    public func kernelHoughTransform(clusterMinSize: Int32 = 10,
-                                     clusterMinDeviation: Double = 2.0,
-                                     delta: Double = 0.5,
-                                     kernelMinHeight: Double = 0.002,
-                                     nSigmas: Double = 2.0,
-                                     maxThetaDiff: Double = 5,
-                                     maxRhoDiff: Double = 4,
-                                     minVotes: Int = 20,
-                                     minResults: Int = 4,
-                                     maxResults: Int = 10) async -> [Line]
-    {
-        if let image = self.nsImage {
-            return await KHTSwift.kernelHoughTransform(image: image,
-                                                       clusterMinSize: clusterMinSize,
-                                                       clusterMinDeviation: clusterMinDeviation,
-	                                               delta: delta,
-                                                       kernelMinHeight: kernelMinHeight,
-                                                       nSigmas: nSigmas,
-                                                       maxThetaDiff: maxThetaDiff,
-                                                       maxRhoDiff: maxRhoDiff,
-                                                       minVotes: minVotes,
-                                                       minResults: minResults,
-                                                       maxResults: maxResults)
-        }
-        return []
-    }
-
+    
     // write out the base image data
     public func writeTIFFEncoding(toFilename imageFilename: String) throws {
         try self.writeTIFFEncoding(ofData: self.imageData.data,

@@ -16,7 +16,8 @@ public protocol LogHandler {
     func log(message: String,
              at fileLocation: String,
              with data: LogData?,
-             at logLevel: Log.Level)
+             at logLevel: Log.Level,
+             logTime: TimeInterval)
     
     var level: Log.Level? { get set }
 }
