@@ -50,6 +50,47 @@ public func kernelHoughTransform(image: NSImage,
                                            minVotes: minVotes,
                                            minResults: minResults,
                                            maxResults: maxResults)
+
+}
+
+public func kernelHoughTransform(elements: [ImageMatrixElement],
+                                 clusterMinSize: Int32 = 10,
+                                 clusterMinDeviation: Double = 2.0,
+                                 delta: Double = 0.5,
+                                 kernelMinHeight: Double = 0.002,
+                                 nSigmas: Double = 2.0,
+                                 
+                                 // how rotated from a less voted line needs
+                                 // to be from a higher voted one
+                                 maxThetaDiff: Double = 5,
+
+                                 // how far away a less voted line needs
+                                 // to be from a higher voted line
+                                 maxRhoDiff: Double = 4,
+
+                                 // discard lines with fewer votes than this
+                                 minVotes: Int = 20,
+
+                                 // always return at least this many lines,
+                                 // even if they are below the minVotes 
+                                 minResults: Int = 4,
+
+                                 // never return more than this many lines
+                                 maxResults: Int = 10) 
+  async -> [ImageMatrixElement]
+{
+    await transformer.kernelHoughTransform(elements: elements,
+                                           clusterMinSize: clusterMinSize,
+                                           clusterMinDeviation: clusterMinDeviation,
+                                           delta: delta,
+                                           kernelMinHeight: kernelMinHeight,
+                                           nSigmas: nSigmas,
+                                           maxThetaDiff: maxThetaDiff,
+                                           maxRhoDiff: maxRhoDiff,
+                                           minVotes: minVotes,
+                                           minResults: minResults,
+                                           maxResults: maxResults)
+
 }
 
 /*
@@ -62,6 +103,41 @@ public func kernelHoughTransform(image: NSImage,
 fileprivate let transformer = HoughTransformer()
 
 fileprivate actor HoughTransformer {
+
+    public func kernelHoughTransform(elements: [ImageMatrixElement],
+                                     clusterMinSize: Int32,
+                                     clusterMinDeviation: Double,
+                                     delta: Double,
+                                     kernelMinHeight: Double,
+                                     nSigmas: Double,
+                                     maxThetaDiff: Double,
+                                     maxRhoDiff: Double,
+                                     minVotes: Int,
+                                     minResults: Int,
+                                     maxResults: Int) -> [ImageMatrixElement]
+    {
+        var ret = elements
+        for element in ret {
+            if let image = element.image {
+                element.lines = 
+                  kernelHoughTransform(image: image,
+                                       clusterMinSize: clusterMinSize,
+                                       clusterMinDeviation: clusterMinDeviation,
+                                       delta: delta,
+                                       kernelMinHeight: kernelMinHeight,
+                                       nSigmas: nSigmas,
+                                       maxThetaDiff: maxThetaDiff,
+                                       maxRhoDiff: maxRhoDiff,
+                                       minVotes: minVotes,
+                                       minResults: minResults,
+                                       maxResults: maxResults)
+                element.image = nil
+            }
+        }
+        return ret
+    }
+
+    
     public func kernelHoughTransform(image: NSImage,
                                      clusterMinSize: Int32,
                                      clusterMinDeviation: Double,

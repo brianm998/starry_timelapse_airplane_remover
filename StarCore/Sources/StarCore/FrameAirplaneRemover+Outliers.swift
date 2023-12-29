@@ -163,33 +163,27 @@ extension FrameAirplaneRemover {
         // XXX A whole forest of magic numbers here :(
 
         // split the subtraction image into a bunch of small images with some overlap
-        let matrix = image.splitIntoMatrix(maxWidth: 256,
-                                           maxHeight: 256,
-                                           overlapPercent: 66)
-
-        Log.i("frame \(frameIndex) has matrix with \(matrix.count) elements")
-
-        for (index, element) in matrix.enumerated() {
-            Log.i("frame \(frameIndex) matrix element index \(index) \(element)")
-        }
-        
+        let matrix = await
+          kernelHoughTransform(elements: image.splitIntoMatrix(maxWidth: 256,
+                                                               maxHeight: 256,
+                                                               overlapPercent: 66),
+                               maxThetaDiff: 10,
+                               maxRhoDiff: 10,
+                               minVotes: 6000,
+                               minResults: 6,
+                               maxResults: 12) 
+                                          
         var elementLines: [MatrixElementLine] = []
         
         for element in matrix {
             Log.i("frame \(frameIndex) processing matrix element \(element)")
             // first run a kernel based hough transform on this matrix element,
             // returning some set of detected lines 
-            if let image = element.image {
-                let lines = await image.kernelHoughTransform(maxThetaDiff: 10,
-                                                             maxRhoDiff: 10,
-                                                             minVotes: 6000,
-                                                             minResults: 6,
-                                                             maxResults: 12) 
+            if let lines = element.lines {
                 for line in lines {
                     elementLines.append(MatrixElementLine(element: element, line: line))
                 }
                 Log.i("frame \(frameIndex) appended \(lines.count) lines for element \(element)")
-                element.image = nil
             } else {
                 Log.w("frame \(frameIndex) no image for element \(element)")
             }
@@ -375,7 +369,6 @@ extension FrameAirplaneRemover {
     {
         var lastBlob_ = lastBlob
 
-
         // XXX calculate this differently based upon the theta of the line
         // a 45 degree line needs more extension to have the same distance covered
         var searchDistanceEachDirection = 8 // XXX constant
@@ -390,68 +383,93 @@ extension FrameAirplaneRemover {
         case .vertical:
             startY -= searchDistanceEachDirection
             endY += searchDistanceEachDirection
+            if startY < 0 { startY = 0 }
+
+            for y in startY ..< endY {
+                lastBlob_ = shitHouse(x: sourceX, y: y,
+                                      on: line,
+                                      blobsToPromote: &blobsToPromote,
+                                      blobRefs: &blobRefs,
+                                      blobMap: &blobMap,
+                                      lastBlob: lastBlob)
+            }
+            
         case .horizontal:
             startX -= searchDistanceEachDirection
             endX += searchDistanceEachDirection
+            if startX < 0 { startX = 0 }
+
+            for x in startX ..< endX {
+                lastBlob_ = shitHouse(x: x, y: sourceY,
+                                      on: line,
+                                      blobsToPromote: &blobsToPromote,
+                                      blobRefs: &blobRefs,
+                                      blobMap: &blobMap,
+                                      lastBlob: lastBlob)
+            }
         }
-
-        if startX < 0 { startX = 0 }
-        if startY < 0 { startY = 0 }
         
-        for x in startX ..< endX {
-            for y in startY ..< endY {
-                if y < height,
-                   x < width,
-                   let blobId = blobRefs[y*width+x],
-                   let blob = blobMap[blobId]
-                {
-                    // lines are invalid for this blob
-                    // if there is already a line on the blob and it doesn't match
-                    var lineIsValid = true
+        return lastBlob_
+    }
 
-                    var lineForNewBlobs = line
-                    if let blobLine = blob.line {
-                        lineForNewBlobs = blobLine
-                        lineIsValid = blobLine.thetaMatch(line, maxThetaDiff: 10) // medium, 20 was generous, and worked
+    private func shitHouse(x: Int, y: Int,
+                           on line: Line,
+                           blobsToPromote: inout [String:Blob],
+                           blobRefs: inout [String?],
+                           blobMap: inout [String:Blob],
+                           lastBlob: Blob?) -> Blob?
+    {
+        var lastBlob_ = lastBlob
+        if y < height,
+           x < width,
+           let blobId = blobRefs[y*width+x],
+           let blob = blobMap[blobId]
+        {
+            // lines are invalid for this blob
+            // if there is already a line on the blob and it doesn't match
+            var lineIsValid = true
 
-                        //if !lineIsValid {
-                            //Log.i("HOLY CRAP blobLine \(blobLine) doesn't match line \(line)")
-                    //}
-                    }
+            var lineForNewBlobs = line
+            if let blobLine = blob.line {
+                lineForNewBlobs = blobLine
+                lineIsValid = blobLine.thetaMatch(line, maxThetaDiff: 10) // medium, 20 was generous, and worked
 
-                    if lineIsValid { 
-                        if let _lastBlob = lastBlob {
-                            let distance = _lastBlob.boundingBox.edgeDistance(to: blob.boundingBox)
-                            //Log.i("frame \(frameIndex) blob \(_lastBlob) bounding box \(_lastBlob.boundingBox) is \(distance) from blob \(blob) bounding box \(blob.boundingBox)")
-                            if distance < 40 { // XXX constant XXX
-                                // if they are close enough, simply combine them
-                                if _lastBlob.absorb(blob) {
-                                    Log.i("frame \(frameIndex) blob \(_lastBlob) absorbing blob \(blob)")
+                //if !lineIsValid {
+                //Log.i("HOLY CRAP blobLine \(blobLine) doesn't match line \(line)")
+                //}
+            }
 
-                                    // update blobRefs after blob absorbtion
-                                    for pixel in blob.pixels {
-                                        blobRefs[pixel.y*width+pixel.x] = _lastBlob.id
-                                    }
-                                    blobMap.removeValue(forKey: blob.id)
-                                    blobsToPromote.removeValue(forKey: blob.id)
-                                }
-                            } else {
-                                // if they are far, then overwrite the lastBlob var
-                                blob.line = lineForNewBlobs
-                                blobsToPromote[blob.id] = blob
-                                Log.i("frame \(frameIndex) distance \(distance) from \(_lastBlob) is too far from blob with id \(blob)")
-                                lastBlob_ = blob
+            if lineIsValid { 
+                if let _lastBlob = lastBlob {
+                    let distance = _lastBlob.boundingBox.edgeDistance(to: blob.boundingBox)
+                    //Log.i("frame \(frameIndex) blob \(_lastBlob) bounding box \(_lastBlob.boundingBox) is \(distance) from blob \(blob) bounding box \(blob.boundingBox)")
+                    if distance < 40 { // XXX constant XXX
+                        // if they are close enough, simply combine them
+                        if _lastBlob.absorb(blob) {
+                            Log.i("frame \(frameIndex) blob \(_lastBlob) absorbing blob \(blob)")
+
+                            // update blobRefs after blob absorbtion
+                            for pixel in blob.pixels {
+                                blobRefs[pixel.y*width+pixel.x] = _lastBlob.id
                             }
-                        } else {
-                            Log.i("frame \(frameIndex) no last blob, blob \(blob) is now last")
-                            blob.line = lineForNewBlobs
-                            blobsToPromote[blob.id] = blob
-                            lastBlob_ = blob
+                            blobMap.removeValue(forKey: blob.id)
+                            blobsToPromote.removeValue(forKey: blob.id)
                         }
                     } else {
-                        //Log.i("frame \(frameIndex) distance \(blobDistance) too far, not processing blob \(blob)")
+                        // if they are far, then overwrite the lastBlob var
+                        blob.line = lineForNewBlobs
+                        blobsToPromote[blob.id] = blob
+                        Log.i("frame \(frameIndex) distance \(distance) from \(_lastBlob) is too far from blob with id \(blob)")
+                        lastBlob_ = blob
                     }
+                } else {
+                    Log.i("frame \(frameIndex) no last blob, blob \(blob) is now last")
+                    blob.line = lineForNewBlobs
+                    blobsToPromote[blob.id] = blob
+                    lastBlob_ = blob
                 }
+            } else {
+                //Log.i("frame \(frameIndex) distance \(blobDistance) too far, not processing blob \(blob)")
             }
         }
         return lastBlob_
@@ -554,7 +572,7 @@ extension FrameAirplaneRemover {
          */
 
         // XXX the validation images seem to be broken
-        if false && !outliersLoadedFromFile { 
+        if !outliersLoadedFromFile { 
             if let image = await imageAccessor.load(type: .validated, atSize: .original) {
                 switch image.imageData {
                 case .eightBit(let validationArr):

@@ -16,28 +16,6 @@ import KHTSwift
 import logging
 import Cocoa
 
-public class ImageMatrixElement: CustomStringConvertible {
-    public let x: Int                  // offset in original image
-    public let y: Int
-    public let width: Int
-    public let height: Int
-    
-    public var image: PixelatedImage? // don't keep this image around foreverx
-
-    public init(x: Int,
-                y: Int,
-                image: PixelatedImage)
-
-    {
-        self.x = x
-        self.y = y
-        self.image = image
-        self.width = image.width
-        self.height = image.height
-    }
-    
-    public var description: String { "MatrixElement: [\(x), \(y)] -> [\(width), \(height)]" }
-}
 
 public struct PixelatedImage {
     public let width: Int
@@ -298,12 +276,16 @@ public struct PixelatedImage {
                         let matrixImage = PixelatedImage(width: matrixWidth,
                                                          height: matrixHeight,
                                                          grayscale16BitImageData: matrixImageData)
-                        let element = ImageMatrixElement(x: xOffset,
-                                                         y: yOffset,
-                                                         image: matrixImage)
-                        Log.i("matrix element [\(xOffset), \(yOffset)] image width \(matrixWidth) matrix height \(matrixHeight)")
-                        matrix.append(element)
-                        
+                        if let nsImage = matrixImage.nsImage {
+                            let element = ImageMatrixElement(x: xOffset,
+                                                             y: yOffset,
+                                                             image: nsImage)
+                            
+                            Log.i("matrix element [\(xOffset), \(yOffset)] image width \(matrixWidth) matrix height \(matrixHeight)")
+                            matrix.append(element)
+                        } else {
+                            Log.w("unable to make image")
+                        }
                     case .eightBit(_):
                         Log.e("eight bit not yet implemented")
                         break       // XXX do this too
@@ -368,7 +350,8 @@ public struct PixelatedImage {
         }
         return nil
     }
-    
+
+    // XXX may go away
     public func kernelHoughTransform(clusterMinSize: Int32 = 10,
                                      clusterMinDeviation: Double = 2.0,
                                      delta: Double = 0.5,
