@@ -222,7 +222,7 @@ namespace kht {
                 // Alternative reference system definition.
                 std::double_t mean_x = 0.0;
                 std::double_t mean_y = 0.0;
-                for (auto pixel_itr = cluster.begin; pixel_itr != cluster.end; ++pixel_itr) {
+                for (auto pixel_itr = cluster.begin; pixel_itr < cluster.end; ++pixel_itr) {
                     mean_x += pixel_itr->x;
                     mean_y += pixel_itr->y;
                 }
@@ -230,7 +230,7 @@ namespace kht {
                 mean_y *= one_div_npixels;
                 
                 Sxx = Syy = Sxy = 0.0;
-                for (auto pixel_itr = cluster.begin; pixel_itr != cluster.end; ++pixel_itr) {
+                for (auto pixel_itr = cluster.begin; pixel_itr < cluster.end; ++pixel_itr) {
                     std::double_t x = pixel_itr->x - mean_x;
                     std::double_t y = pixel_itr->y - mean_y;
                 
@@ -260,7 +260,7 @@ namespace kht {
                 Matrix nabla = {-(u_x * mean_x + u_y * mean_y), 1.0, aux != 0.0 ? (u_x / aux) * rad_to_deg : 0.0, 0.0};
 
                 aux = 0.0;
-                for (auto pixel_itr = cluster.begin; pixel_itr != cluster.end; ++pixel_itr) {
+                for (auto pixel_itr = cluster.begin; pixel_itr < cluster.end; ++pixel_itr) {
                     std::double_t x = (u_x * (pixel_itr->x - mean_x)) + (u_y * (pixel_itr->y - mean_y));
                     aux += (x * x);
                 }
@@ -303,7 +303,7 @@ namespace kht {
             norm = 1.0 / norm;
 
             std::size_t i = 0;
-            for (std::size_t k = 0, end = used_kernels.size(); k != end; ++k) {
+            for (std::size_t k = 0, end = used_kernels.size(); k < end; ++k) {
                 if ((used_kernels[k]->height * norm) >= kernel_min_height) {
                     if (i != k) {
                         Kernel *temp = used_kernels[i];

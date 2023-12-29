@@ -50,7 +50,7 @@ namespace kht {
             * Algorithm 6
             */
 
-            for (std::size_t i = 0; i != 8; ++i) {
+            for (std::size_t i = 0; i < 8; ++i) {
                 std::int32_t x = x_seed + X_OFFSET[i];
                 if (0 <= x && x < static_cast<std::int32_t>(image_width)) {
                     std::int32_t y = y_seed + Y_OFFSET[i];
@@ -108,9 +108,9 @@ namespace kht {
             std::double_t half_height = 0.5 * image_height;
 
             chains.clear();
-            for (std::int32_t y = 1, y_end = static_cast<std::int32_t>(image_height) - 1; y != y_end; ++y) {
-                for (std::int32_t x = 1, x_end = static_cast<std::int32_t>(image_width) - 1; x != x_end; ++x) {
-                    if (binary_image[y * image_width + x]) {
+            for (std::int32_t y = 1, y_end = static_cast<std::int32_t>(image_height) - 1; y < y_end; ++y) {
+                for (std::int32_t x = 1, x_end = static_cast<std::int32_t>(image_width) - 1; x < x_end; ++x) {
+                    if (y >=0 && y < image_height && x>= 0 && x < image_width && binary_image[y * image_width + x]) {
                         chains.emplace_back();
                         ChainOfPixels &chain = chains.back();
                         linking_procedure(chain, binary_image, image_width, image_height, x, y, half_width, half_height);
