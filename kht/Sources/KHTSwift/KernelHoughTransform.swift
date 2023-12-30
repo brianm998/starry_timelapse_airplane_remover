@@ -82,7 +82,7 @@ public func kernelHoughTransform(elements: [ImageMatrixElement],
  */
 fileprivate let transformer = HoughTransformer()
 
-fileprivate actor HoughTransformer {
+fileprivate class/*actor*/ HoughTransformer {
 
     public func kernelHoughTransform(elements: [ImageMatrixElement],
                                      clusterMinSize: Int32,
