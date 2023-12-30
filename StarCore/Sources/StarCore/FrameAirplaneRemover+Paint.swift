@@ -56,104 +56,71 @@ extension FrameAirplaneRemover {
         
 
         // THIS IS SLOW
+
+        /*
+         instead of the slow logic below,
+
+         rewrite this to first once calculate a blending mask to apply over each pixel
+         in the frame that we want to change.  This mask will be intBorderFuzzAmount
+         pixels on each side of the pixel in question.  We will then convolve this mask
+         across the image looking for pixels to paint.  Each time we find one, impress
+         the mask onto the alpha channel.
+
+
+         let innerArea = config.outlierGroupPaintBorderInnerWallPixels
+         let fadeArea = config.outlierGroupPaintBorderPixels
+         
+         the mask is 100% opacity for central pixel,
+         and for innerArea away from it.
+         the mask then decreases linearly from 100% at distance innerArea
+         to 0% at distance innerArea + fadeArea.
+
+         the mask is 1 + 2*(innerArea+fadeArea) pixels square
+         
+         config.outlierGroupPaintBorderInnerWallPixels
+         config.outlierGroupPaintBorderPixels
+         
+         */
+
+        let paintMask = self.paintMask
+        let paintMaskIntRadius = Int(paintMask.radius)
+        
         for (_, group) in outlierGroups.members {
             if let reason = group.shouldPaint {
                 if reason.willPaint {
                     Log.d("frame \(frameIndex) painting over group \(group) for reason \(reason)")
-                    //let x = index % width;
-                    //let y = index / width;
+                    for x in 0..<group.bounds.width {
+                        for y in 0..<group.bounds.height {
+                            if group.pixels[y*group.bounds.width + x] > 0 {
+                                // center of paint mask in frame coords
+                                let maskCenterX = x + group.bounds.min.x
+                                let maskCenterY = y + group.bounds.min.y
 
-                    //  somehow figure out how to do a border of X pixels
+                                // start in frame coords
+                                let maskStartX = maskCenterX - paintMaskIntRadius
+                                let maskStartY = maskCenterY - paintMaskIntRadius
 
-                    let intBorderFuzzAmount = Int(config.outlierGroupPaintBorderPixels)
-                    var searchMinX = group.bounds.min.x - intBorderFuzzAmount 
-                    var searchMaxX = group.bounds.max.x + intBorderFuzzAmount 
-                    var searchMinY = group.bounds.min.y - intBorderFuzzAmount 
-                    var searchMaxY = group.bounds.max.y + intBorderFuzzAmount 
-                    if searchMinX < 0 { searchMinX = 0 }
-                    if searchMinY < 0 { searchMinY = 0 }
-                    if searchMaxX >= width { searchMaxX = width - 1 }
-                    if searchMaxY >= height { searchMaxY = height - 1 }
-                    
-                    for x in searchMinX ... searchMaxX {
-                        for y in searchMinY ... searchMaxY {
+                                for maskX in 0..<paintMask.size {
+                                    for maskY in 0..<paintMask.size {
+                                        let frameX = maskX + maskStartX
+                                        let frameY = maskY + maskStartY
 
-                            var pixelAmount: UInt16 = 0
-
-                            if y >= group.bounds.min.y,
-                               y <= group.bounds.max.y,
-                               x >= group.bounds.min.x,
-                               x <= group.bounds.max.x
-                            {
-                                let pixelIndex = (y - group.bounds.min.y)*group.bounds.width + (x - group.bounds.min.x)
-                                pixelAmount = group.pixels[pixelIndex]
-                            }
-                            
-                            if pixelAmount == 0 {
-                                // here check distance to a non-zero pixel and maybe paint
-                                var shouldPaint = false
-                                var minDistance: Double = config.outlierGroupPaintBorderPixels
-
-                                var fuzzXstart = x - intBorderFuzzAmount
-                                var fuzzXend = x + intBorderFuzzAmount
-                                if fuzzXstart < group.bounds.min.x {
-                                    fuzzXstart = group.bounds.min.x
-                                }
-                                if fuzzXend > group.bounds.max.x {
-                                    fuzzXend = group.bounds.max.x
-                                }
-                                
-                                for fuzzX in fuzzXstart ... fuzzXend {
-                                    if shouldPaint { break }
-                                    var fuzzYstart = y - intBorderFuzzAmount
-                                    var fuzzYend = y + intBorderFuzzAmount
-
-                                    if fuzzYstart < group.bounds.min.y {
-                                        fuzzYstart = group.bounds.min.y
-                                    }
-                                    if fuzzYend > group.bounds.max.y {
-                                        fuzzYend = group.bounds.max.y
-                                    }
-                                    
-                                    for fuzzY in fuzzYstart ... fuzzYend {
-                                        let fuzzPixelIndex = (fuzzY - group.bounds.min.y)*group.bounds.width + (fuzzX - group.bounds.min.x)
+                                        if frameX >= 0,
+                                           frameX < width,
+                                           frameY >= 0,
+                                           frameY < height
+                                        {
+                                            let frameIndex = frameY*width+frameX
+                                            let maskIndex = maskY*paintMask.size+maskX
                                         
-                                        if fuzzPixelIndex < 0 ||
-                                           fuzzPixelIndex >= group.pixels.count { continue }
-                                        
-                                        let fuzzAmount = group.pixels[fuzzPixelIndex]
-
-                                        if fuzzAmount == 0 { continue }
-
-                                        let distX = Double(abs(x - fuzzX))
-                                        let distY = Double(abs(y - fuzzY))
-                                        let hypoDist = sqrt(distX*distX+distY*distY)
-
-                                        if hypoDist < minDistance {
-                                            minDistance = hypoDist
-                                            shouldPaint = true
-                                            break
+                                            let frameAlpha = alphaLevels[frameIndex]
+                                            let maskAlpha = paintMask.pixels[maskIndex]
+                                            if maskAlpha > frameAlpha {
+                                                alphaLevels[frameIndex] = maskAlpha
+                                            }
                                         }
                                     }
                                 }
-                                if shouldPaint {
-                                    var alpha: Double = 0
-                                    if minDistance <= config.outlierGroupPaintBorderInnerWallPixels {
-                                        alpha = 1
-                                    } else {
-                                        // how close are we to the inner wall of full opacity?
-                                        let foo = minDistance - config.outlierGroupPaintBorderInnerWallPixels
-                                        // the length in pixels of the fade window
-                                        let bar = config.outlierGroupPaintBorderPixels - config.outlierGroupPaintBorderInnerWallPixels
-                                        alpha = (bar-foo)/bar
-                                    }
-                                    if alpha > 0 {
-                                        alphaLevels[y*width+x] += alpha
-                                    }
-                                }
-                            } else {
-                                // paint fully over the marked pixels
-                                alphaLevels[y*width+x] += 1
                             }
                         }
                     }
@@ -269,5 +236,50 @@ extension FrameAirplaneRemover {
                                        paintPixel.blue,
                                        paintPixel.alpha])
         }
+    }
+}
+
+// A square paint mask of opacity levels 
+struct PaintMask {
+    let pixels: [Double]        // 0...1
+    let size: Int               // both width and height, always square
+
+    let center: Int
+
+    let innerWallSize: Double
+    let radius: Double
+    
+    init(innerWallSize: Double, // from center, opacity 100% throughout
+         radius: Double)        // total size, from center
+    {
+        self.innerWallSize = innerWallSize
+        self.radius = radius
+        self.center = Int(radius+1)
+        self.size = 1 + 2*center
+        var pixelArray = [Double](repeating: 0, count: size*size)
+
+        let centerD = Double(center)
+        let radius = radius
+
+        // the length in pixels of the fade window
+        let fadeSize = radius - innerWallSize
+        
+        for x in 0..<size {
+            for y in 0..<size {
+                let xDiff = Double(x - center)
+                let yDiff = Double(y - center)
+                let distance = sqrt(xDiff*xDiff + yDiff*yDiff)
+                var pixelValue = 0.0
+                if distance < innerWallSize {
+                    pixelValue = 1
+                } else if distance < radius {
+                    // how close are we to the inner wall of full opacity?
+                    let fadeProgress = distance - innerWallSize
+                    pixelValue = (fadeSize-fadeProgress) / fadeSize
+                }
+                pixelArray[y*size+x] = pixelValue
+            }
+        }
+        self.pixels = pixelArray
     }
 }

@@ -156,7 +156,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                                     to: baseFilename,
                                     inDir: dirname)
         }
-        
+
         // this takes a long time, and the gui does it later
         if fullyProcess {
             try await loadOutliers()
@@ -169,6 +169,17 @@ public class FrameAirplaneRemover: Equatable, Hashable {
             Log.d("frame \(frameIndex) loaded without outlier groups")
         }
 
+    }
+
+    var _paintMask: PaintMask?
+    
+    var paintMask: PaintMask {
+        if let _paintMask = _paintMask { return _paintMask }
+
+        let mask = PaintMask(innerWallSize: config.outlierGroupPaintBorderInnerWallPixels,
+                             radius: config.outlierGroupPaintBorderPixels)
+        _paintMask = mask
+        return mask
     }
 
     // run after shouldPaint has been set for each group, 
