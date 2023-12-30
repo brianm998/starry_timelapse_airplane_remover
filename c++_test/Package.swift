@@ -17,7 +17,8 @@ let package = Package(
           name: "cpp_test",
           dependencies: [
             .product(name: "StarCore", package: "StarCore"),
-          ]
+          ],
+          linkerSettings: [ .unsafeFlags([ "-Xlinker", "-ld_classic" ]) ]
         )
     ]
 )
