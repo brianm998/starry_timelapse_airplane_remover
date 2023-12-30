@@ -56,8 +56,9 @@ public class Blob: CustomStringConvertible {
                                         grayscale16BitImageData: blobImageData)
 
         if let image = pixelImage.nsImage {
-            let lines = kernelHoughTransform(image: image)
-            Log.d("frame \(frameIndex) frame \(frameIndex) got \(lines.count) lines from KHT")
+            let lines = kernelHoughTransform(image: image,
+                                             clusterMinSize: 4)
+            Log.d("frame \(frameIndex) blob \(self) got \(lines.count) lines from KHT")
             if lines.count > 0 {
                 _blobLine = lines[0]
                 return lines[0]
@@ -71,7 +72,7 @@ public class Blob: CustomStringConvertible {
         
         var blobImageData = [UInt16](repeating: 0,
                                      count: self.boundingBox.width*self.boundingBox.height)
-
+        
         Log.d("frame \(frameIndex) blob image data with \(pixels.count) pixels")
         
         let minX = self.boundingBox.min.x
@@ -88,20 +89,21 @@ public class Blob: CustomStringConvertible {
     private var _averageDistanceFromIdealLine: Double? 
     
     public var averageDistanceFromIdealLine: Double {
-        get async {
-            if let averageDistanceFromIdealLine = _averageDistanceFromIdealLine {
-                return averageDistanceFromIdealLine
-            }
-            if let line = self.line {
-                let (ret, _) = OutlierGroup.averageDistance(for: self.blobImageData,
-                                                            from: line,
-                                                            with: self.boundingBox)
-                _averageDistanceFromIdealLine = ret
-                return ret
-            } 
-            _averageDistanceFromIdealLine = 420420420
-            return 420420420
+        if let averageDistanceFromIdealLine = _averageDistanceFromIdealLine {
+            return averageDistanceFromIdealLine
         }
+        if let line = self.line {
+            let (ret, _) = OutlierGroup.averageDistance(for: self.blobImageData,
+                                                        from: line,
+                                                        with: self.boundingBox,
+                                                        frameIndex: frameIndex)
+            Log.d("frame \(frameIndex) blob \(self) averageDistanceFromIdealLine \(line) = \(ret)")
+            _averageDistanceFromIdealLine = ret
+            return ret
+        }
+        Log.d("frame \(frameIndex) blob \(self) averageDistanceFromIdealLine has no lines :(")
+        _averageDistanceFromIdealLine = 420420420
+        return 420420420
     }
     
     // a line calculated from the pixels in this blob, if possible

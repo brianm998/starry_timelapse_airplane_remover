@@ -151,7 +151,7 @@ extension FrameAirplaneRemover {
             for (index, blob) in blobsToPromote.enumerated() {
                 Log.d("frame \(frameIndex) index \(index) filtering blob \(blob)")
                 if blobsProcessed[index] { continue }
-                var blobToAddAgv = await blob.averageDistanceFromIdealLine
+                var blobToAddAgv = blob.averageDistanceFromIdealLine
                 var blobToAdd = blob
                 blobsProcessed[index] = true
 
@@ -160,19 +160,19 @@ extension FrameAirplaneRemover {
                 for (innerIndex, innerBlob) in blobsToPromote.enumerated() {
                     if blobsProcessed[innerIndex] { continue }
                                                                   // XXX constant VVV
-                    if blob.boundingBox.edgeDistance(to: innerBlob.boundingBox) > 200 { continue }
+                    if blob.boundingBox.edgeDistance(to: innerBlob.boundingBox) > 120 { continue }
                     
-                    let innerBlobAvg = await blobToAdd.averageDistanceFromIdealLine
+                    let innerBlobAvg = innerBlob.averageDistanceFromIdealLine
                     
                     let newBlob = Blob(blobToAdd)
                     if newBlob.absorb(innerBlob) {
-                        let newBlobAvg = await newBlob.averageDistanceFromIdealLine
+                        let newBlobAvg = newBlob.averageDistanceFromIdealLine
                         Log.d("frame \(frameIndex) blob \(blobToAdd) avg \(blobToAddAgv) innerBlob \(innerBlob) avg \(innerBlobAvg) newBlobAvg \(newBlobAvg)")
 
                         if newBlobAvg < innerBlobAvg,
                            newBlobAvg < blobToAddAgv
                         {
-                            Log.d("frame \(frameIndex) adding new absorbed blob \(newBlob) from \(blobToAdd) and \(innerBlob)")
+                            Log.d("frame \(frameIndex) adding new absorbed blob \(newBlob) from \(blobToAdd) and \(innerBlob) because \(newBlobAvg) < \(innerBlobAvg) && \(newBlobAvg) < \(blobToAddAgv)")
                             blobToAdd = newBlob
                             blobToAddAgv = newBlobAvg
                             blobsProcessed[innerIndex] = true
@@ -576,9 +576,9 @@ extension FrameAirplaneRemover {
                 lineForNewBlobs = blobLine
                 lineIsValid = blobLine.thetaMatch(line, maxThetaDiff: 10) // medium, 20 was generous, and worked
 
-                if !lineIsValid {
-                    Log.i("frame \(frameIndex) HOLY CRAP [\(x), \(y)]  blobLine \(blobLine) from \(blob) doesn't match line \(line)")
-                }
+//                if !lineIsValid {
+                    //Log.i("frame \(frameIndex) HOLY CRAP [\(x), \(y)]  blobLine \(blobLine) from \(blob) doesn't match line \(line)")
+//                }
             }
 
             if lineIsValid { 
