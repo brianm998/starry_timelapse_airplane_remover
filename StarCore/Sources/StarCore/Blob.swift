@@ -93,11 +93,7 @@ public class Blob: CustomStringConvertible {
             return averageDistanceFromIdealLine
         }
         if let line = self.line {
-            let (ret, _) = OutlierGroup.averageDistance(for: self.blobImageData,
-                                                        from: line,
-                                                        with: self.boundingBox,
-                                                        frameIndex: frameIndex)
-            Log.d("frame \(frameIndex) blob \(self) averageDistanceFromIdealLine \(line) = \(ret)")
+            let ret = averageDistance(from: line)
             _averageDistanceFromIdealLine = ret
             return ret
         }
@@ -105,22 +101,29 @@ public class Blob: CustomStringConvertible {
         _averageDistanceFromIdealLine = 420420420
         return 420420420
     }
+
+    public func averageDistance(from line: Line) -> Double {
+        let (ret, _) = OutlierGroup.averageDistance(for: self.blobImageData,
+                                                    from: line,
+                                                    with: self.boundingBox,
+                                                    frameIndex: frameIndex)
+        Log.d("frame \(frameIndex) blob \(self) averageDistanceFromIdealLine \(line) = \(ret)")
+        return ret
+    }
     
     // a line calculated from the pixels in this blob, if possible
     public var originZeroLine: Line? {
-        get async {
-            if let line = self.line {
-                let minX = self.boundingBox.min.x
-                let minY = self.boundingBox.min.y
-                let (ap1, ap2) = line.twoPoints
-                return Line(point1: DoubleCoord(x: ap1.x+Double(minX),
-                                                y: ap1.y+Double(minY)),
-                            point2: DoubleCoord(x: ap2.x+Double(minX),
-                                                y: ap2.y+Double(minY)),
-                            votes: 0)
-            }
-            return nil
+        if let line = self.line {
+            let minX = self.boundingBox.min.x
+            let minY = self.boundingBox.min.y
+            let (ap1, ap2) = line.twoPoints
+            return Line(point1: DoubleCoord(x: ap1.x+Double(minX),
+                                            y: ap1.y+Double(minY)),
+                        point2: DoubleCoord(x: ap2.x+Double(minX),
+                                            y: ap2.y+Double(minY)),
+                        votes: 0)
         }
+        return nil
     }
     
     public var intensity: UInt16 {

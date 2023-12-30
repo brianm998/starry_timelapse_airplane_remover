@@ -151,7 +151,6 @@ extension FrameAirplaneRemover {
             for (index, blob) in blobsToPromote.enumerated() {
                 Log.d("frame \(frameIndex) index \(index) filtering blob \(blob)")
                 if blobsProcessed[index] { continue }
-                var blobToAddAgv = blob.averageDistanceFromIdealLine
                 var blobToAdd = blob
                 blobsProcessed[index] = true
 
@@ -162,20 +161,33 @@ extension FrameAirplaneRemover {
                                                                   // XXX constant VVV
                     if blob.boundingBox.edgeDistance(to: innerBlob.boundingBox) > 120 { continue }
                     
-                    let innerBlobAvg = innerBlob.averageDistanceFromIdealLine
-                    
                     let newBlob = Blob(blobToAdd)
                     if newBlob.absorb(innerBlob) {
-                        let newBlobAvg = newBlob.averageDistanceFromIdealLine
-                        Log.d("frame \(frameIndex) blob \(blobToAdd) avg \(blobToAddAgv) innerBlob \(innerBlob) avg \(innerBlobAvg) newBlobAvg \(newBlobAvg)")
+                        if let newLine = newBlob.line {
+                            let newBlobAvg = newBlob.averageDistance(from: newLine)
+                            let blobToAddAvg = blobToAdd.averageDistance(from: newLine)
+                            let innerBlobAvg = innerBlob.averageDistance(from: newLine)
 
-                        if newBlobAvg < innerBlobAvg,
-                           newBlobAvg < blobToAddAgv
-                        {
-                            Log.d("frame \(frameIndex) adding new absorbed blob \(newBlob) from \(blobToAdd) and \(innerBlob) because \(newBlobAvg) < \(innerBlobAvg) && \(newBlobAvg) < \(blobToAddAgv)")
-                            blobToAdd = newBlob
-                            blobToAddAgv = newBlobAvg
-                            blobsProcessed[innerIndex] = true
+                            Log.d("frame \(frameIndex) blob \(blobToAdd) avg \(blobToAddAvg) innerBlob \(innerBlob) avg \(innerBlobAvg) newBlobAvg \(newBlobAvg)")
+
+                            if newBlobAvg < innerBlobAvg,
+                               newBlobAvg < blobToAddAvg,
+                               newBlobAvg < blobToAdd.averageDistanceFromIdealLine,
+                               newBlobAvg < innerBlob.averageDistanceFromIdealLine
+                            {
+                                // only add the new blob if the line score is better
+                                // than that of the separate blobs on both the new
+                                // blob line, and also their own ideal lines
+                                Log.d("frame \(frameIndex) adding new absorbed blob \(newBlob) from \(blobToAdd) and \(innerBlob) because \(newBlobAvg) < \(innerBlobAvg) && \(newBlobAvg) < \(blobToAddAvg) && \(newBlobAvg) < \(blobToAdd.averageDistanceFromIdealLine) && \(newBlobAvg) < \(innerBlob.averageDistanceFromIdealLine)")
+
+                                // use this new blob as it is better combined than separate
+                                blobToAdd = newBlob
+
+                                // ignore the index of the absorbed blob in the future
+                                blobsProcessed[innerIndex] = true
+                            }
+                        } else {
+                            Log.i("frame \(frameIndex) blob \(newBlob) has no line")
                         }
                     } else {
                         Log.i("frame \(frameIndex) blob \(newBlob) failed to absorb blob (blobToAdd)")
