@@ -7,8 +7,7 @@ import logging
 public class Blob: CustomStringConvertible {
     public let id: String
     public private(set) var pixels: [SortablePixel]
-
-    public var line: Line? 
+    public let frameIndex: Int
     
     public var size: Int { pixels.count }
 
@@ -44,7 +43,7 @@ public class Blob: CustomStringConvertible {
     private var _blobLine: Line?
 
     // a line computed from the pixels, origin is relative to the bounding box
-    public var blobLine: Line? {
+    public var line: Line? {
         get async {
             if let blobLine = _blobLine { return blobLine }
             
@@ -59,7 +58,7 @@ public class Blob: CustomStringConvertible {
 
             if let image = pixelImage.nsImage {
                 let lines = await kernelHoughTransform(image: image)
-                Log.d("got \(lines.count) lines from KHT")
+                Log.d("frame \(frameIndex) frame \(frameIndex) got \(lines.count) lines from KHT")
                 if lines.count > 0 {
                     _blobLine = lines[0]
                     return lines[0]
@@ -75,7 +74,7 @@ public class Blob: CustomStringConvertible {
         var blobImageData = [UInt16](repeating: 0,
                                      count: self.boundingBox.width*self.boundingBox.height)
 
-        Log.d("blob image data with \(pixels.count) pixels")
+        Log.d("frame \(frameIndex) blob image data with \(pixels.count) pixels")
         
         let minX = self.boundingBox.min.x
         let minY = self.boundingBox.min.y
@@ -95,10 +94,10 @@ public class Blob: CustomStringConvertible {
             if let averageDistanceFromIdealLine = _averageDistanceFromIdealLine {
                 return averageDistanceFromIdealLine
             }
-            if let line = await self.blobLine {
-                let ret = OutlierGroup.averageDistance(for: self.blobImageData,
-                                                       from: line,
-                                                       with: self.boundingBox)
+            if let line = await self.line {
+                let (ret, _) = OutlierGroup.averageDistance(for: self.blobImageData,
+                                                            from: line,
+                                                            with: self.boundingBox)
                 _averageDistanceFromIdealLine = ret
                 return ret
             } 
@@ -110,7 +109,7 @@ public class Blob: CustomStringConvertible {
     // a line calculated from the pixels in this blob, if possible
     public var originZeroLine: Line? {
         get async {
-            if let line = await self.blobLine {
+            if let line = await self.line {
                 let minX = self.boundingBox.min.x
                 let minY = self.boundingBox.min.y
                 let (ap1, ap2) = line.twoPoints
@@ -140,11 +139,13 @@ public class Blob: CustomStringConvertible {
     public init(_ other: Blob) {
         self.id = other.id
         self.pixels = other.pixels
+        self.frameIndex = other.frameIndex
     }
     
-    public init(_ pixel: SortablePixel) {
+    public init(_ pixel: SortablePixel, frameIndex: Int) {
         self.pixels = [pixel]
         self.id = "\(pixel.x) x \(pixel.y)"
+        self.frameIndex = frameIndex
     }
 
     public func makeBackground() {
@@ -161,7 +162,7 @@ public class Blob: CustomStringConvertible {
 
     public func absorb(_ otherBlob: Blob) -> Bool {
         if self.id != otherBlob.id {
-            Log.d("blob \(self.id) absorbing blob \(otherBlob.id)")
+            Log.d("frame \(frameIndex) blob \(self.id) absorbing blob \(otherBlob.id)")
             let newPixels = otherBlob.pixels
             for otherPixel in newPixels {
                 otherPixel.status = .blobbed(self)

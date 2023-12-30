@@ -44,7 +44,10 @@ public class OutlierGroup: CustomStringConvertible,
     // how far away from the most dominant line in this outlier group are
     // the pixels in it, on average?
     public let averageLineVariance: Double
-    
+
+    // what is the length of the assumed line? 
+    public let lineLength: Double
+
     // pixel value is zero if pixel is not part of group,
     // otherwise it's the amount brighter this pixel was than those in the adjecent frames 
     public let pixels: [UInt16]        // indexed by y * bounds.width + x
@@ -121,12 +124,13 @@ public class OutlierGroup: CustomStringConvertible,
         }
 
         if lines.count > 0 {
-            self.averageLineVariance =
+            (self.averageLineVariance, self.lineLength) = 
               OutlierGroup.averageDistance(for: pixels,
                                            from: lines[0],
                                            with: bounds)
         } else {
             self.averageLineVariance = 0xFFFFFFFF
+            self.lineLength = 0
         }
         
         _ = self.houghLineHistogram
@@ -140,7 +144,7 @@ public class OutlierGroup: CustomStringConvertible,
     // XXX move this elsewhere
     public static func averageDistance(for pixels: [UInt16],
                                        from line: Line,
-                                       with bounds: BoundingBox) -> Double
+                                       with bounds: BoundingBox) -> (Double, Double)
     {
         var distanceSum: Double = 0.0
         var numDistances: Double = 0.0
@@ -155,11 +159,20 @@ public class OutlierGroup: CustomStringConvertible,
             for y in 0..<bounds.height {
                 // calculate how close each pixel is to this line
                 if pixels[y*bounds.width+x] > 0 {
-                    if y < minY { minY = y }
-                    if x < minX { minX = x }
-                    if y > maxY { maxY = y }
-                    if x > maxX { maxX = x }
                     let distance = standardLine.distanceTo(x: x, y: y)
+
+                    // don't use a small outlying pixel with large distance
+                    // from the line for the maximum, this can create situations
+                    // where the score is reduced (improved) by adding a small
+                    // far away pixel that is out of line
+
+                    if distance < 4 { // XXX another constant :(
+                        if y < minY { minY = y }
+                        if x < minX { minX = x }
+                        if y > maxY { maxY = y }
+                        if x > maxX { maxX = x }
+                    }
+
                     distanceSum += distance
                     numDistances += 1
                 }
@@ -170,7 +183,7 @@ public class OutlierGroup: CustomStringConvertible,
         let yDiff = Double(maxY-minY)
         let totalLength = sqrt(xDiff*xDiff+yDiff*yDiff)
 
-        return (distanceSum/numDistances)/totalLength
+        return (distanceSum/numDistances, totalLength)
     }
 
     public static func == (lhs: OutlierGroup, rhs: OutlierGroup) -> Bool {
@@ -395,6 +408,7 @@ public class OutlierGroup: CustomStringConvertible,
         case maxOverlapTimesThetaHisto
         case pixelBorderAmount
         case averageLineVariance
+        case lineLength
         
         /*
          XXX add:
@@ -514,6 +528,8 @@ public class OutlierGroup: CustomStringConvertible,
                 return 31
             case .averageLineVariance:
                 return 32
+            case .lineLength:
+                return 33
             }
         }
 
@@ -607,6 +623,8 @@ public class OutlierGroup: CustomStringConvertible,
             ret = self.pixelBorderAmount
         case .averageLineVariance:
             ret = self.averageLineVariance
+        case .lineLength:
+            ret = self.lineLength
         }
         //let t1 = NSDate().timeIntervalSince1970
         //Log.d("group \(name) @ frame \(frameIndex) decisionTreeValue(for: \(type)) = \(ret) after \(t1-t0)s")
@@ -1183,12 +1201,13 @@ public class OutlierGroup: CustomStringConvertible,
         // surfaceAreaToSizeRatio
 
         if lines.count > 0 {
-            self.averageLineVariance =
+            (self.averageLineVariance, self.lineLength) =
               OutlierGroup.averageDistance(for: pixels,
                                            from: lines[0],
                                            with: bounds)
         } else {
             self.averageLineVariance = 0xFFFFFFFF
+            self.lineLength = 0
         }
         
         

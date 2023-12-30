@@ -36,7 +36,8 @@ public class Blobber {
     public let imageWidth: Int
     public let imageHeight: Int
     public let pixelData: [UInt16]
-
+    public let frameIndex: Int
+    
     // [x][y] accessable array
     public var pixels: [[SortablePixel]]
 
@@ -82,6 +83,7 @@ public class Blobber {
     }
     
     public convenience init(filename: String,
+                            frameIndex: Int,
                             neighborType: NeighborType,
                             minimumBlobSize: Int,
                             minimumLocalMaximum: UInt16,
@@ -97,13 +99,14 @@ public class Blobber {
                 self.init(imageWidth: image.width,
                           imageHeight: image.height,
                           pixelData: pixelData,
+                          frameIndex: frameIndex,
                           neighborType: neighborType,
                           minimumBlobSize: minimumBlobSize,
                           minimumLocalMaximum: minimumLocalMaximum,
                           contrastMin: contrastMin)
             }
             
-            Log.v("loaded image of size (\(image.width), \(image.height))")
+            Log.v("frame \(frameIndex) loaded image of size (\(image.width), \(image.height))")
         } else {
             throw "couldn't load image from \(filename)"
         }
@@ -112,6 +115,7 @@ public class Blobber {
     public init(imageWidth: Int,
                 imageHeight: Int,
                 pixelData: [UInt16],
+                frameIndex: Int,
                 neighborType: NeighborType,
                 minimumBlobSize: Int,
                 minimumLocalMaximum: UInt16,
@@ -120,6 +124,7 @@ public class Blobber {
         self.imageWidth = imageWidth
         self.imageHeight = imageHeight
         self.pixelData = pixelData
+        self.frameIndex = frameIndex
         self.neighborType = neighborType
         self.minimumBlobSize = minimumBlobSize
         self.minimumLocalMaximum = minimumLocalMaximum
@@ -129,11 +134,11 @@ public class Blobber {
             fatalError("pixelData.count \(pixelData.count) is not imageWidth*imageHeight \(imageWidth*imageHeight)")
         }
         
-        Log.v("blobbing image of size (\(imageWidth), \(imageHeight))")
+        Log.v("frame \(frameIndex) blobbing image of size (\(imageWidth), \(imageHeight))")
 
-        Log.v("minimumLocalMaximum \(minimumLocalMaximum) 0x\(String(format: "%x", minimumLocalMaximum))")
+        Log.v("frame \(frameIndex) minimumLocalMaximum \(minimumLocalMaximum) 0x\(String(format: "%x", minimumLocalMaximum))")
         
-        Log.d("loading pixels")
+        Log.d("frame \(frameIndex) loading pixels")
         
         pixels = [[SortablePixel]](repeating: [SortablePixel](repeating: SortablePixel(),
                                                               count: imageHeight),
@@ -147,11 +152,11 @@ public class Blobber {
             }
         }
         
-        Log.d("sorting pixel values")
+        Log.d("frame \(frameIndex) sorting pixel values")
         
         sortedPixels.sort { $0.intensity > $1.intensity }
 
-        Log.d("detecting blobs")
+        Log.d("frame \(frameIndex) detecting blobs")
         
         for pixel in sortedPixels {
 
@@ -167,7 +172,7 @@ public class Blobber {
                 if higherNeighbors.count == 0 {
                     // no higher neighbors
                     // a local maximum, this pixel is a blob seed
-                    let newBlob = Blob(pixel)
+                    let newBlob = Blob(pixel, frameIndex: frameIndex)
                     blobs.append(newBlob)
                     
                     //Log.d("expanding from seed pixel.intensity \(pixel.intensity)")
@@ -185,7 +190,7 @@ public class Blobber {
             }
         }
 
-        Log.d("initially found \(blobs.count) blobs")
+        Log.d("frame \(frameIndex) initially found \(blobs.count) blobs")
 
         // filter out a lot of the blobs
         self.blobs = self.blobs.filter { blob in
@@ -215,7 +220,7 @@ public class Blobber {
             // this blob has passed all checks, keep it 
             return true
         }         
-        Log.i("found \(blobs.count) blobs larger than \(minimumBlobSize) pixels")
+        Log.i("frame \(frameIndex) found \(blobs.count) blobs larger than \(minimumBlobSize) pixels")
     }
 
     var blobMap: [String: Blob] {

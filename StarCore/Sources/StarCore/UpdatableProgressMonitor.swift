@@ -146,6 +146,10 @@ public actor UpdatableProgressMonitor {
             updates.append(update)
         }
         
+        if let update = progressLine(for: .detectingOutliers2b) {
+            updates.append(update)
+        }
+        
         if let update = progressLine(for: .detectingOutliers3) {
             updates.append(update)
         }
@@ -173,6 +177,10 @@ public actor UpdatableProgressMonitor {
         }
         
         if let update = progressLine(for: .painting) {
+            updates.append(update)
+        }
+        
+        if let update = progressLine(for: .painting2) {
             updates.append(update)
         }
         

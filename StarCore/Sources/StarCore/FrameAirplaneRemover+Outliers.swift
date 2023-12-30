@@ -105,6 +105,7 @@ extension FrameAirplaneRemover {
         let blobber = Blobber(imageWidth: width,
                               imageHeight: height,
                               pixelData: subtractionArray,
+                              frameIndex: frameIndex,
                               neighborType: .eight,//.fourCardinal,
                               minimumBlobSize: config.minGroupSize/4, // XXX constant XXX
                               minimumLocalMaximum: config.maxPixelDistance,
@@ -143,6 +144,8 @@ extension FrameAirplaneRemover {
 
             Log.i("frame \(frameIndex) has \(blobsToPromote.count) blobsToPromote")
 
+            self.state = .detectingOutliers2b
+
             var filteredBlobs: [Blob] = []
             
             for (index, blob) in blobsToPromote.enumerated() {
@@ -169,7 +172,7 @@ extension FrameAirplaneRemover {
                         if newBlobAvg < innerBlobAvg,
                            newBlobAvg < blobToAddAgv
                         {
-                            Log.d("frame \(frameIndex) adding new blob from \(blobToAdd) and \(innerBlob)")
+                            Log.d("frame \(frameIndex) adding new absorbed blob \(newBlob) from \(blobToAdd) and \(innerBlob)")
                             blobToAdd = newBlob
                             blobToAddAgv = newBlobAvg
                             blobsProcessed[innerIndex] = true
@@ -191,7 +194,7 @@ extension FrameAirplaneRemover {
                 if blob.size >= config.minGroupSize {
                     // make outlier group from this blob
                     let outlierGroup = await blob.outlierGroup(at: frameIndex)
-                    Log.i("frame \(frameIndex) promoting \(blob) to outlier group \(outlierGroup.name) line \(blob.line)")
+                    Log.i("frame \(frameIndex) promoting \(blob) to outlier group \(outlierGroup.name) line \(await blob.line)")
                     outlierGroup.frame = self
                     outlierGroups?.members[outlierGroup.name] = outlierGroup
                 }
@@ -253,7 +256,7 @@ extension FrameAirplaneRemover {
         let maxThetaDiff = 8.0  // XXX more constants XXX
         let maxRhoDiff = 8.0
 
-        // filter by combining close lines on neighboring frames
+        // filter by combining close lines on neighboring frame elements
         for (baseIndex, baseElement) in rawElementLines.enumerated() {
             if !processed[baseIndex] {
                 processed[baseIndex] = true
@@ -424,14 +427,14 @@ extension FrameAirplaneRemover {
                             }
 
                             // do blob processing at this location
-                            processBlobsAt(x: x,
-                                           y: y,
-                                           on: line,
-                                           iterationDirection: .vertical,
-                                           blobsToPromote: &blobsToPromote,
-                                           blobRefs: &blobRefs,
-                                           blobMap: &blobMap,
-                                           lastBlob: &lastBlob)
+                            await processBlobsAt(x: x,
+                                                 y: y,
+                                                 on: line,
+                                                 iterationDirection: .vertical,
+                                                 blobsToPromote: &blobsToPromote,
+                                                 blobRefs: &blobRefs,
+                                                 blobMap: &blobMap,
+                                                 lastBlob: &lastBlob)
                         }
                     }
                 } else {
@@ -464,14 +467,14 @@ extension FrameAirplaneRemover {
                             }
 
                             // do blob processing at this location
-                            processBlobsAt(x: x,
-                                           y: y,
-                                           on: line,
-                                           iterationDirection: .horizontal,
-                                           blobsToPromote: &blobsToPromote,
-                                           blobRefs: &blobRefs,
-                                           blobMap: &blobMap,
-                                           lastBlob: &lastBlob)
+                            await processBlobsAt(x: x,
+                                                 y: y,
+                                                 on: line,
+                                                 iterationDirection: .horizontal,
+                                                 blobsToPromote: &blobsToPromote,
+                                                 blobRefs: &blobRefs,
+                                                 blobMap: &blobMap,
+                                                 lastBlob: &lastBlob)
                         }
                     }
                 }
@@ -501,7 +504,7 @@ extension FrameAirplaneRemover {
                                 blobsToPromote: inout [String:Blob],
                                 blobRefs: inout [String?],
                                 blobMap: inout [String:Blob],
-                                lastBlob: inout LastBlob)
+                                lastBlob: inout LastBlob) async
     {
 
         //Log.d("frame \(frameIndex) processBlobsAt [\(sourceX), \(sourceY)] on line \(line) lastBlob \(lastBlob)")
@@ -525,12 +528,12 @@ extension FrameAirplaneRemover {
             //Log.d("frame \(frameIndex) processing vertically from \(startY) to \(endY) on line \(line) lastBlob \(lastBlob.blob)")
             
             for y in startY ..< endY {
-                processBlobAt(x: sourceX, y: y,
-                              on: line,
-                              blobsToPromote: &blobsToPromote,
-                              blobRefs: &blobRefs,
-                              blobMap: &blobMap,
-                              lastBlob: &lastBlob)
+                await processBlobAt(x: sourceX, y: y,
+                                    on: line,
+                                    blobsToPromote: &blobsToPromote,
+                                    blobRefs: &blobRefs,
+                                    blobMap: &blobMap,
+                                    lastBlob: &lastBlob)
             }
             
         case .horizontal:
@@ -541,12 +544,12 @@ extension FrameAirplaneRemover {
             //Log.d("frame \(frameIndex) processing horizontally from \(startX) to \(endX) on line \(line) lastBlob \(lastBlob.blob)")
             
             for x in startX ..< endX {
-                processBlobAt(x: x, y: sourceY,
-                              on: line,
-                              blobsToPromote: &blobsToPromote,
-                              blobRefs: &blobRefs,
-                              blobMap: &blobMap,
-                              lastBlob: &lastBlob)
+                await processBlobAt(x: x, y: sourceY,
+                                    on: line,
+                                    blobsToPromote: &blobsToPromote,
+                                    blobRefs: &blobRefs,
+                                    blobMap: &blobMap,
+                                    lastBlob: &lastBlob)
             }
         }
     }
@@ -557,7 +560,7 @@ extension FrameAirplaneRemover {
                                blobsToPromote: inout [String:Blob],
                                blobRefs: inout [String?],
                                blobMap: inout [String:Blob],
-                               lastBlob: inout LastBlob)
+                               lastBlob: inout LastBlob) async
     {
         if y < height,
            x < width,
@@ -569,7 +572,7 @@ extension FrameAirplaneRemover {
             var lineIsValid = true
 
             var lineForNewBlobs = line
-            if let blobLine = blob.line {
+            if let blobLine = await blob.line {
                 lineForNewBlobs = blobLine
                 lineIsValid = blobLine.thetaMatch(line, maxThetaDiff: 10) // medium, 20 was generous, and worked
 
@@ -586,7 +589,7 @@ extension FrameAirplaneRemover {
                         if distance < 40 { // XXX constant XXX
                             // if they are close enough, simply combine them
                             if _lastBlob.absorb(blob) {
-                                //Log.d("frame \(frameIndex)  blob \(_lastBlob) absorbing blob \(blob)")
+                                Log.d("frame \(frameIndex)  blob \(_lastBlob) absorbing blob \(blob)")
 
                                 // update blobRefs after blob absorbtion
                                 for pixel in blob.pixels {
@@ -601,15 +604,13 @@ extension FrameAirplaneRemover {
                             }
                         } else {
                             // if they are far, then overwrite the lastBlob var
-                            blob.line = lineForNewBlobs
                             blobsToPromote[blob.id] = blob
-                            //Log.d("frame \(frameIndex) [\(x), \(y)] distance \(distance) from \(_lastBlob) is too far from blob with id \(blob) line \(lineForNewBlobs)")
+                            Log.d("frame \(frameIndex) [\(x), \(y)] distance \(distance) from \(_lastBlob) is too far from blob with id \(blob) line \(lineForNewBlobs)")
                             lastBlob.blob = blob
                         }
                     }
                 } else {
-                    //Log.d("frame \(frameIndex) [\(x), \(y)] no last blob, blob \(blob) is now last - line \(lineForNewBlobs)")
-                    blob.line = lineForNewBlobs
+                    Log.d("frame \(frameIndex) [\(x), \(y)] no last blob, blob \(blob) is now last - line \(lineForNewBlobs)")
                     blobsToPromote[blob.id] = blob
                     lastBlob.blob = blob
                 }

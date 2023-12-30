@@ -31,6 +31,7 @@ public enum FrameProcessingState: Int, CaseIterable, Codable {
     case detectingOutliers1
     case detectingOutliers2
     case detectingOutliers2a
+    case detectingOutliers2b
     case detectingOutliers3
     case readyForInterFrameProcessing
     case interFrameProcessing
@@ -42,6 +43,7 @@ public enum FrameProcessingState: Int, CaseIterable, Codable {
     
     case reloadingImages
     case painting
+    case painting2
     case writingOutputFile
     case complete
 
@@ -61,6 +63,8 @@ public enum FrameProcessingState: Int, CaseIterable, Codable {
             return "extracting lines from frame"
         case .detectingOutliers2a:
             return "aligning blobs with lines"
+        case .detectingOutliers2b:
+            return "aligning blobs further"
         case .detectingOutliers3:
             return "populating outlier groups"
         case .readyForInterFrameProcessing: // XXX not covered in progress monitor
@@ -76,6 +80,8 @@ public enum FrameProcessingState: Int, CaseIterable, Codable {
         case .reloadingImages:
             return "reloadingImages"
         case .painting:
+            return "paint prep"
+        case .painting2:
             return "painting"
         case .writingOutputFile:
             return "frames writing to disk"

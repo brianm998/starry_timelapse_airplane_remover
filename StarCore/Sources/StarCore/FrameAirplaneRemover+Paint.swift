@@ -54,6 +54,8 @@ extension FrameAirplaneRemover {
         // alpha zero means no painting, keep original pixel
         // alpha one means overwrite original pixel entierly with data from other frame
         
+
+        // THIS IS SLOW
         for (_, group) in outlierGroups.members {
             if let reason = group.shouldPaint {
                 if reason.willPaint {
@@ -102,6 +104,7 @@ extension FrameAirplaneRemover {
                                 }
                                 
                                 for fuzzX in fuzzXstart ... fuzzXend {
+                                    if shouldPaint { break }
                                     var fuzzYstart = y - intBorderFuzzAmount
                                     var fuzzYend = y + intBorderFuzzAmount
 
@@ -129,6 +132,7 @@ extension FrameAirplaneRemover {
                                         if hypoDist < minDistance {
                                             minDistance = hypoDist
                                             shouldPaint = true
+                                            break
                                         }
                                     }
                                 }
@@ -159,6 +163,9 @@ extension FrameAirplaneRemover {
             }
         }
 
+
+        self.state = .painting2
+        
         // then actually paint each non zero alpha pizel
         for x in 0 ..< width {
             for y in 0 ..< height {
@@ -167,10 +174,10 @@ extension FrameAirplaneRemover {
                     if alpha > 1 { alpha = 1 }
 
                     paint(x: x, y: y,
-                         alpha: alpha,
-                         toData: &data,
-                         image: image,
-                         otherFrame: otherFrame)
+                          alpha: alpha,
+                          toData: &data,
+                          image: image,
+                          otherFrame: otherFrame)
 
                     /*
 
@@ -192,10 +199,10 @@ extension FrameAirplaneRemover {
 
     // paint over a selected outlier pixel with data from pixels from adjecent frames
     internal func paint(x: Int, y: Int,
-                      alpha: Double,
-                      toData data: inout [UInt16],
-                      image: PixelatedImage,
-                      otherFrame: PixelatedImage)
+                        alpha: Double,
+                        toData data: inout [UInt16],
+                        image: PixelatedImage,
+                        otherFrame: PixelatedImage)
     {
         var paintPixel = otherFrame.readPixel(atX: x, andY: y)
 
@@ -234,10 +241,10 @@ extension FrameAirplaneRemover {
 
     // paint over a selected outlier pixel with data from pixels from adjecent frames
     internal func paint(x: Int, y: Int,
-                      alpha: Double,
-                      toData data: inout [UInt16],
-                      image: PixelatedImage,
-                      paintPixel: Pixel)
+                        alpha: Double,
+                        toData data: inout [UInt16],
+                        image: PixelatedImage,
+                        paintPixel: Pixel)
     {
         var paintPixel = paintPixel
         if alpha < 1 {
