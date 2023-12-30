@@ -12,7 +12,6 @@ let RADIANS_TO_DEGREES = 45 / atan(1.0)
 // we convert the coordinate system of the returned lines, and filter them a bit
 // these default parameter values need more documentation.  All but the last
 // four were taken from main.cpp from the kht implementation.
-// This needs to be async because the underlying c++ code is not thread safe.
 public func kernelHoughTransform(image: NSImage,
                                  clusterMinSize: Int32 = 10,
                                  clusterMinDeviation: Double = 2.0,
@@ -28,19 +27,17 @@ public func kernelHoughTransform(image: NSImage,
                                  minResults: Int = 4,
 
                                  // never return more than this many lines
-                                 maxResults: Int = 10) 
-  async -> [Line]
+                                 maxResults: Int = 10) -> [Line]
 {
-    await transformer.kernelHoughTransform(image: image,
-                                           clusterMinSize: clusterMinSize,
-                                           clusterMinDeviation: clusterMinDeviation,
-                                           delta: delta,
-                                           kernelMinHeight: kernelMinHeight,
-                                           nSigmas: nSigmas,
-                                           minVotes: minVotes,
-                                           minResults: minResults,
-                                           maxResults: maxResults)
-
+    transformer.kernelHoughTransform(image: image,
+                                     clusterMinSize: clusterMinSize,
+                                     clusterMinDeviation: clusterMinDeviation,
+                                     delta: delta,
+                                     kernelMinHeight: kernelMinHeight,
+                                     nSigmas: nSigmas,
+                                     minVotes: minVotes,
+                                     minResults: minResults,
+                                     maxResults: maxResults)
 }
 
 public func kernelHoughTransform(elements: [ImageMatrixElement],
@@ -58,19 +55,18 @@ public func kernelHoughTransform(elements: [ImageMatrixElement],
                                  minResults: Int = 4,
 
                                  // never return more than this many lines
-                                 maxResults: Int = 10) 
-  async -> [ImageMatrixElement]
+                                 maxResults: Int = 10) -> [ImageMatrixElement]
 {
-    await transformer.kernelHoughTransform(elements: elements,
-                                           clusterMinSize: clusterMinSize,
-                                           clusterMinDeviation: clusterMinDeviation,
-                                           delta: delta,
-                                           kernelMinHeight: kernelMinHeight,
-                                           nSigmas: nSigmas,
-                                           minVotes: minVotes,
-                                           minResults: minResults,
-                                           maxResults: maxResults)
-
+    transformer.kernelHoughTransform(elements: elements,
+                                     clusterMinSize: clusterMinSize,
+                                     clusterMinDeviation: clusterMinDeviation,
+                                     delta: delta,
+                                     kernelMinHeight: kernelMinHeight,
+                                     nSigmas: nSigmas,
+                                     minVotes: minVotes,
+                                     minResults: minResults,
+                                     maxResults: maxResults)
+    
 }
 
 /*
@@ -82,7 +78,7 @@ public func kernelHoughTransform(elements: [ImageMatrixElement],
  */
 fileprivate let transformer = HoughTransformer()
 
-fileprivate class/*actor*/ HoughTransformer {
+fileprivate class HoughTransformer {
 
     public func kernelHoughTransform(elements: [ImageMatrixElement],
                                      clusterMinSize: Int32,

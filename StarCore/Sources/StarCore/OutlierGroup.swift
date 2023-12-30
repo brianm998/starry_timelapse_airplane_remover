@@ -81,15 +81,15 @@ public class OutlierGroup: CustomStringConvertible,
                      bounds: BoundingBox,
                      frame: FrameAirplaneRemover,
                      pixels: [UInt16],
-                     maxPixelDistance: UInt16) async
+                     maxPixelDistance: UInt16) 
     {
-        await self.init(name: name,
-                        size: size,
-                        brightness: brightness,
-                        bounds: bounds,
-                        frameIndex: frame.frameIndex,
-                        pixels: pixels,
-                        maxPixelDistance: maxPixelDistance)
+        self.init(name: name,
+                  size: size,
+                  brightness: brightness,
+                  bounds: bounds,
+                  frameIndex: frame.frameIndex,
+                  pixels: pixels,
+                  maxPixelDistance: maxPixelDistance)
         self.frame = frame
     }
     
@@ -99,7 +99,7 @@ public class OutlierGroup: CustomStringConvertible,
                 bounds: BoundingBox,
                 frameIndex: Int,
                 pixels: [UInt16],
-                maxPixelDistance: UInt16) async
+                maxPixelDistance: UInt16) 
     {
         self.name = name
         self.size = size
@@ -118,7 +118,7 @@ public class OutlierGroup: CustomStringConvertible,
                                         grayscale16BitImageData: pixels)
 
         if let image = pixelImage.nsImage {
-            self.lines = await kernelHoughTransform(image: image)
+            self.lines = kernelHoughTransform(image: image)
         } else {
             self.lines = []     // XXX
         }
@@ -323,17 +323,15 @@ public class OutlierGroup: CustomStringConvertible,
     
     // ordered by the list of features below
     var decisionTreeValues: [Double] {
-        get async {
-            if let _decisionTreeValues = _decisionTreeValues {
-                return _decisionTreeValues
-            }
-            var ret: [Double] = []
-            for type in OutlierGroup.Feature.allCases {
-                ret.append(self.decisionTreeValue(for: type))
-            }
-            _decisionTreeValues = ret
-            return ret
-        } 
+        if let _decisionTreeValues = _decisionTreeValues {
+            return _decisionTreeValues
+        }
+        var ret: [Double] = []
+        for type in OutlierGroup.Feature.allCases {
+            ret.append(self.decisionTreeValue(for: type))
+        }
+        _decisionTreeValues = ret
+        return ret
     }
 
     // cached value
@@ -353,15 +351,13 @@ public class OutlierGroup: CustomStringConvertible,
     }
 
      public var decisionTreeGroupValues: OutlierFeatureData {
-        get async {
-            var rawValues = OutlierFeatureData.rawValues()
-            for type in OutlierGroup.Feature.allCases {
-                let value = self.decisionTreeValue(for: type)
-                rawValues[type.sortOrder] = value
-                //Log.d("frame \(frameIndex) type \(type) value \(value)")
-            }
-            return OutlierFeatureData(rawValues)
-        } 
+         var rawValues = OutlierFeatureData.rawValues()
+         for type in OutlierGroup.Feature.allCases {
+             let value = self.decisionTreeValue(for: type)
+             rawValues[type.sortOrder] = value
+             //Log.d("frame \(frameIndex) type \(type) value \(value)")
+         }
+         return OutlierFeatureData(rawValues)
     }
     
     // we derive a Double value from each of these

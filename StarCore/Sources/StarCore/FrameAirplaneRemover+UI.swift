@@ -76,7 +76,7 @@ extension FrameAirplaneRemover {
                     if group.shouldPaint == nil {
                         // only apply classifier when no other classification is otherwise present
                         await taskGroup.addTask() {
-                            let values = await group.decisionTreeValues
+                            let values = group.decisionTreeValues
                             let valueTypes = OutlierGroup.decisionTreeValueTypes
 
                             let score = classifier.classification(of: valueTypes, and: values)

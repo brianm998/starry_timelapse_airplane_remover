@@ -193,8 +193,8 @@ extension FrameAirplaneRemover {
             for blob in filteredBlobs {
                 if blob.size >= config.minGroupSize {
                     // make outlier group from this blob
-                    let outlierGroup = await blob.outlierGroup(at: frameIndex)
-                    Log.i("frame \(frameIndex) promoting \(blob) to outlier group \(outlierGroup.name) line \(await blob.line)")
+                    let outlierGroup = blob.outlierGroup(at: frameIndex)
+                    Log.i("frame \(frameIndex) promoting \(blob) to outlier group \(outlierGroup.name) line \(blob.line)")
                     outlierGroup.frame = self
                     outlierGroups?.members[outlierGroup.name] = outlierGroup
                 }
@@ -207,11 +207,11 @@ extension FrameAirplaneRemover {
 
     // returns a list of lines for different sub elements of the given image,
     // sorted so the lines with the highest votes are first
-    private func houghLines(from image: PixelatedImage) async -> [MatrixElementLine] {
+    private func houghLines(from image: PixelatedImage) -> [MatrixElementLine] {
         // XXX A whole forest of magic numbers here :(
 
         // split the subtraction image into a bunch of small images with some overlap
-        let matrix = await
+        let matrix = 
           kernelHoughTransform(elements: image.splitIntoMatrix(maxWidth: 256,
                                                                maxHeight: 256,
                                                                overlapPercent: 60),
@@ -353,7 +353,7 @@ extension FrameAirplaneRemover {
         Log.i("frame \(frameIndex) loaded subtraction image")
 
         // run the hough transform on sub sections of the subtraction image
-        let houghLines = await houghLines(from: subtractionImage)
+        let houghLines = houghLines(from: subtractionImage)
 
         self.state = .detectingOutliers2a
 
@@ -427,14 +427,14 @@ extension FrameAirplaneRemover {
                             }
 
                             // do blob processing at this location
-                            await processBlobsAt(x: x,
-                                                 y: y,
-                                                 on: line,
-                                                 iterationDirection: .vertical,
-                                                 blobsToPromote: &blobsToPromote,
-                                                 blobRefs: &blobRefs,
-                                                 blobMap: &blobMap,
-                                                 lastBlob: &lastBlob)
+                            processBlobsAt(x: x,
+                                           y: y,
+                                           on: line,
+                                           iterationDirection: .vertical,
+                                           blobsToPromote: &blobsToPromote,
+                                           blobRefs: &blobRefs,
+                                           blobMap: &blobMap,
+                                           lastBlob: &lastBlob)
                         }
                     }
                 } else {
@@ -467,14 +467,14 @@ extension FrameAirplaneRemover {
                             }
 
                             // do blob processing at this location
-                            await processBlobsAt(x: x,
-                                                 y: y,
-                                                 on: line,
-                                                 iterationDirection: .horizontal,
-                                                 blobsToPromote: &blobsToPromote,
-                                                 blobRefs: &blobRefs,
-                                                 blobMap: &blobMap,
-                                                 lastBlob: &lastBlob)
+                            processBlobsAt(x: x,
+                                           y: y,
+                                           on: line,
+                                           iterationDirection: .horizontal,
+                                           blobsToPromote: &blobsToPromote,
+                                           blobRefs: &blobRefs,
+                                           blobMap: &blobMap,
+                                           lastBlob: &lastBlob)
                         }
                     }
                 }
@@ -504,7 +504,7 @@ extension FrameAirplaneRemover {
                                 blobsToPromote: inout [String:Blob],
                                 blobRefs: inout [String?],
                                 blobMap: inout [String:Blob],
-                                lastBlob: inout LastBlob) async
+                                lastBlob: inout LastBlob) 
     {
 
         //Log.d("frame \(frameIndex) processBlobsAt [\(sourceX), \(sourceY)] on line \(line) lastBlob \(lastBlob)")
@@ -528,12 +528,12 @@ extension FrameAirplaneRemover {
             //Log.d("frame \(frameIndex) processing vertically from \(startY) to \(endY) on line \(line) lastBlob \(lastBlob.blob)")
             
             for y in startY ..< endY {
-                await processBlobAt(x: sourceX, y: y,
-                                    on: line,
-                                    blobsToPromote: &blobsToPromote,
-                                    blobRefs: &blobRefs,
-                                    blobMap: &blobMap,
-                                    lastBlob: &lastBlob)
+                processBlobAt(x: sourceX, y: y,
+                              on: line,
+                              blobsToPromote: &blobsToPromote,
+                              blobRefs: &blobRefs,
+                              blobMap: &blobMap,
+                              lastBlob: &lastBlob)
             }
             
         case .horizontal:
@@ -544,12 +544,12 @@ extension FrameAirplaneRemover {
             //Log.d("frame \(frameIndex) processing horizontally from \(startX) to \(endX) on line \(line) lastBlob \(lastBlob.blob)")
             
             for x in startX ..< endX {
-                await processBlobAt(x: x, y: sourceY,
-                                    on: line,
-                                    blobsToPromote: &blobsToPromote,
-                                    blobRefs: &blobRefs,
-                                    blobMap: &blobMap,
-                                    lastBlob: &lastBlob)
+                processBlobAt(x: x, y: sourceY,
+                              on: line,
+                              blobsToPromote: &blobsToPromote,
+                              blobRefs: &blobRefs,
+                              blobMap: &blobMap,
+                              lastBlob: &lastBlob)
             }
         }
     }
@@ -560,7 +560,7 @@ extension FrameAirplaneRemover {
                                blobsToPromote: inout [String:Blob],
                                blobRefs: inout [String?],
                                blobMap: inout [String:Blob],
-                               lastBlob: inout LastBlob) async
+                               lastBlob: inout LastBlob) 
     {
         if y < height,
            x < width,
@@ -572,7 +572,7 @@ extension FrameAirplaneRemover {
             var lineIsValid = true
 
             var lineForNewBlobs = line
-            if let blobLine = await blob.line {
+            if let blobLine = blob.line {
                 lineForNewBlobs = blobLine
                 lineIsValid = blobLine.thetaMatch(line, maxThetaDiff: 10) // medium, 20 was generous, and worked
 

@@ -10,7 +10,7 @@ public class OutlierGroupValueMatrix {
     
     public func append(outlierGroup: OutlierGroup) async {
         if let shouldPaint = outlierGroup.shouldPaint {
-            let values = await outlierGroup.decisionTreeValues
+            let values = outlierGroup.decisionTreeValues
             if shouldPaint.willPaint {
                 positiveValues.append(values)
             } else {
