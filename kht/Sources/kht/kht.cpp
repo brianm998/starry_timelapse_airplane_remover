@@ -39,9 +39,9 @@ namespace kht {
     void run_kht(ListOfLines &result, std::uint8_t *binary_image, std::size_t image_width, std::size_t image_height, std::int32_t cluster_min_size, std::double_t cluster_min_deviation, std::double_t delta, std::double_t kernel_min_height, std::double_t n_sigmas) {
         using namespace detail;
         
-        static ListOfChains chains;
-        static ListOfClusters clusters;
-        static Accumulator accumulator;
+        ListOfChains chains;
+        ListOfClusters clusters;
+        Accumulator accumulator;
 
         // Group feature pixels from an input binary into clusters of approximately collinear pixels.
         find_chains(chains, binary_image, image_width, image_height, cluster_min_size);

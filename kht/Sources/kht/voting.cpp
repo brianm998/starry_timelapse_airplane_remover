@@ -197,8 +197,8 @@ namespace kht {
             *
             * Algorithm 2
             */
-            static ListOfKernels kernels;
-            static ListOfKernelsPtr used_kernels;
+            ListOfKernels kernels;
+            ListOfKernelsPtr used_kernels;
 
             kernels.clear();
             kernels.reserve(clusters.size());

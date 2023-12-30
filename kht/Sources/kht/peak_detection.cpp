@@ -138,7 +138,7 @@ namespace kht {
             std::vector<std::double_t> const &theta = accumulator.theta();
 
             // Create a list with all cells that receive at least one vote.
-            static ListOfBins used_bins;
+            ListOfBins used_bins;
             
             std::size_t used_bins_count = 0;
             for (std::size_t theta_index = 1, theta_end = accumulator.height() + 1; theta_index != theta_end; ++theta_index) {
@@ -164,7 +164,7 @@ namespace kht {
             std::sort(used_bins.begin(), used_bins.end(), [](Bin const &bin1, Bin const &bin2) { return bin2.votes < bin1.votes; });
 
             // Use a sweep plane that visits each cell of the list.
-            static VisitedMap visited;
+            VisitedMap visited;
             visited.init(accumulator.width(), accumulator.height());
 
             lines.clear();
@@ -178,7 +178,5 @@ namespace kht {
                 visited.set_visited(bin.rho_index, bin.theta_index);
             }
         }
-
     }
-
 }
