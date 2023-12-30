@@ -80,7 +80,7 @@ public enum FrameProcessingState: Int, CaseIterable, Codable {
         case .reloadingImages:
             return "reloadingImages"
         case .painting:
-            return "paint prep"
+            return "creating paint mask"
         case .painting2:
             return "painting"
         case .writingOutputFile:
