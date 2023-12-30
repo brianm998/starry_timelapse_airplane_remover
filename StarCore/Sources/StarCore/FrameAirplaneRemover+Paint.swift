@@ -47,41 +47,16 @@ extension FrameAirplaneRemover {
         
         // the alpha level to apply to each pixel in the image
         // indexed by y*width+x
+        // this is esentially a layer mask for the frame, 
+        // with the adjusted neighbor frame underneath
         var alphaLevels = [Double](repeating: 0, count: width*height)
 
         // first go through the outlier groups and determine what alpha
         // level to apply to each pixel in this frame.
         // alpha zero means no painting, keep original pixel
         // alpha one means overwrite original pixel entierly with data from other frame
-        
 
-        // THIS IS SLOW
-
-        /*
-         instead of the slow logic below,
-
-         rewrite this to first once calculate a blending mask to apply over each pixel
-         in the frame that we want to change.  This mask will be intBorderFuzzAmount
-         pixels on each side of the pixel in question.  We will then convolve this mask
-         across the image looking for pixels to paint.  Each time we find one, impress
-         the mask onto the alpha channel.
-
-
-         let innerArea = config.outlierGroupPaintBorderInnerWallPixels
-         let fadeArea = config.outlierGroupPaintBorderPixels
-         
-         the mask is 100% opacity for central pixel,
-         and for innerArea away from it.
-         the mask then decreases linearly from 100% at distance innerArea
-         to 0% at distance innerArea + fadeArea.
-
-         the mask is 1 + 2*(innerArea+fadeArea) pixels square
-         
-         config.outlierGroupPaintBorderInnerWallPixels
-         config.outlierGroupPaintBorderPixels
-         
-         */
-
+        // the alpha mask that we will convolve across all paintable pixels
         let paintMask = self.paintMask
         let paintMaskIntRadius = Int(paintMask.radius)
         
