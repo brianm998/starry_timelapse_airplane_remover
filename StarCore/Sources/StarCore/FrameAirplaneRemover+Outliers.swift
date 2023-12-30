@@ -733,6 +733,7 @@ extension FrameAirplaneRemover {
                 case .eightBit(let validationArr):
                     classifyOutliers(with: validationArr)
                     shouldUseDecisionTree = false
+                    self.markAsChanged()
                     
                 case .sixteenBit(_):
                     Log.e("frame \(frameIndex) cannot load 16 bit validation image")
