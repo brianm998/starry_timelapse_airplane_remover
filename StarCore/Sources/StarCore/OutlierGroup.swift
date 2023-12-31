@@ -118,7 +118,8 @@ public class OutlierGroup: CustomStringConvertible,
                                         grayscale16BitImageData: pixels)
 
         if let image = pixelImage.nsImage {
-            self.lines = kernelHoughTransform(image: image)
+            self.lines = kernelHoughTransform(image: image,
+                                              clusterMinSize: 4)
         } else {
             self.lines = []     // XXX
         }
@@ -144,7 +145,8 @@ public class OutlierGroup: CustomStringConvertible,
     // XXX move this elsewhere
     public static func averageDistance(for pixels: [UInt16],
                                        from line: Line,
-                                       with bounds: BoundingBox) -> (Double, Double)
+                                       with bounds: BoundingBox,
+                                       frameIndex: Int? = nil) -> (Double, Double)
     {
         var distanceSum: Double = 0.0
         var numDistances: Double = 0.0
@@ -179,11 +181,17 @@ public class OutlierGroup: CustomStringConvertible,
             }
         }
 
+
         let xDiff = Double(maxX-minX)
         let yDiff = Double(maxY-minY)
         let totalLength = sqrt(xDiff*xDiff+yDiff*yDiff)
+        let distance = distanceSum/numDistances
 
-        return (distanceSum/numDistances, totalLength)
+        if let frameIndex = frameIndex {
+            Log.d("frame \(frameIndex) averageDistance \(distance) \(numDistances) totalLength \(totalLength)")
+        }
+        
+        return (distance, totalLength)
     }
 
     public static func == (lhs: OutlierGroup, rhs: OutlierGroup) -> Bool {
@@ -1331,6 +1339,8 @@ public class OutlierGroup: CustomStringConvertible,
             fileManager.createFile(atPath: filename,
                                    contents: jsonData,
                                    attributes: nil)
+        } else {
+            Log.i("group \(self) cannot write paint json because of missing shouldPaint")
         }
     }
 }
