@@ -103,6 +103,11 @@ extension FrameAirplaneRemover {
         if let subtractionImage = subtractionImage {
 
             self.state = .detectingOutliers1
+            
+            // first run the hough transform on sub sections of the subtraction image
+            let houghLines = houghLines(from: subtractionImage)
+            
+            self.state = .detectingOutliers2
 
             let blobber: Blobber = FullFrameBlobber(imageWidth: width,
                                                     imageHeight: height,
@@ -135,11 +140,6 @@ extension FrameAirplaneRemover {
              */
 
 
-            self.state = .detectingOutliers2
-            
-            // run the hough transform on sub sections of the subtraction image
-            let houghLines = houghLines(from: subtractionImage)
-            
             self.state = .detectingOutliers2a
 
             let blobsToPromote = try await blobKHTAnalysis(houghLines: houghLines,

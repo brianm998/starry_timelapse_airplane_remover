@@ -58,9 +58,9 @@ public enum FrameProcessingState: Int, CaseIterable, Codable {
         case .subtractingNeighbor:
             return "subtracting aligned neighbor frame"
         case .detectingOutliers1:
-            return "detecting blobs"
-        case .detectingOutliers2:
             return "finding lines"
+        case .detectingOutliers2:
+            return "detecting blobs"
         case .detectingOutliers2a:
             return "aligning blobs with lines"
         case .detectingOutliers2b:
