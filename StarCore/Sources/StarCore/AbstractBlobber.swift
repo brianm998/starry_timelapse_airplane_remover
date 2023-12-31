@@ -25,9 +25,6 @@ public class AbstractBlobber: Blobber {
     // [x][y] accessable array
     public var pixels: [[SortablePixel]]
 
-    // sorted by brightness
-    public var sortedPixels: [SortablePixel] = []
-
     // running blob bucket
     public var blobs: [Blob] = []
 
@@ -87,14 +84,9 @@ public class AbstractBlobber: Blobber {
         for x in 0..<imageWidth {
             for y in 0..<imageHeight {
                 let pixel = SortablePixel(x: x, y: y, intensity: pixelData[y*imageWidth+x])
-                sortedPixels.append(pixel)
                 pixels[x][y] = pixel
             }
         }
-
-        Log.d("frame \(frameIndex) sorting pixel values")
-        
-        sortedPixels.sort { $0.intensity > $1.intensity }
 
         // subclasses can populate blobs from the pixel array as they wish
     }    

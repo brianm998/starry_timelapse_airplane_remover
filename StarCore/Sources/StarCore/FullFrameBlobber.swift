@@ -40,6 +40,9 @@ public class FullFrameBlobber: AbstractBlobber {
     // pixels that are local maximums, but have a value lower than this are ignored
     let minimumLocalMaximum: UInt16
 
+    // sorted by brightness
+    public var sortedPixels: [SortablePixel] = []
+    
     public convenience init(filename: String,
                             frameIndex: Int,
                             neighborType: NeighborType,
@@ -88,9 +91,19 @@ public class FullFrameBlobber: AbstractBlobber {
                    frameIndex: frameIndex,
                    neighborType: neighborType,
                    contrastMin: contrastMin)
-        
 
         Log.d("frame \(frameIndex) detecting blobs")
+
+        for x in 0..<imageWidth {
+            for y in 0..<imageHeight {
+                let pixel = pixels[x][y]
+                sortedPixels.append(pixel)
+            }
+        }
+
+        Log.d("frame \(frameIndex) sorting pixel values")
+        
+        sortedPixels.sort { $0.intensity > $1.intensity }
         
         for pixel in sortedPixels {
 
@@ -110,8 +123,9 @@ public class FullFrameBlobber: AbstractBlobber {
                     blobs.append(newBlob)
                     
                     //Log.d("expanding from seed pixel.intensity \(pixel.intensity)")
-                    
-                    newBlob.add(pixel: pixel)
+
+                    // should not be necessary
+                    //newBlob.add(pixel: pixel)
                     
                     expand(blob: newBlob, seedPixel: pixel)
                     
