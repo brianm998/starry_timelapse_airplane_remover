@@ -9,7 +9,7 @@ public struct Line: Codable {
 
     public init(theta: Double,
                 rho: Double,
-                votes: Int)
+                votes: Int = 0)
     {
         self.theta = theta
         self.rho = rho
@@ -26,75 +26,26 @@ public struct Line: Codable {
                     rho: self.rho*selfAmt + other.rho*otherAmt,
                     votes: maxVotes)
     }
-    
-    // returns to random points that are on this line
+
+    // returns to points that are on this line
     public var twoPoints: (DoubleCoord, DoubleCoord) {
-        if theta == 0 {
-            // vertical line
-            return (DoubleCoord(x: rho, y: 0),
-                    DoubleCoord(x: rho, y: 10))
-        } else if theta < 90 {
-            let angle = theta*DEGREES_TO_RADIANS
-            // where this line meets the x axis
-            // adject = rho 
-            // cos(theta) = adjecent / hypotenuse
-            // hypotenuse * cos(theta) = adjecent
-            // hypotenuse = adjecent / cos(theta)
+        // this point is always on the line
+        let rhoCoord = DoubleCoord(x: rho*cos(theta*DEGREES_TO_RADIANS),
+                                   y: rho*sin(theta*DEGREES_TO_RADIANS))
 
-            // where the rho line intersects this line
-            // hypotenuse = rho 
-            // cos(theta) = adjecent / hypotenuse
-            // cos(theta) * rho = adjecent
+        // make a 45 degree triangle with rho,
+        // the hypotenuse is the distance to the line at 45 degrees
+        
+        let hypoRho = sqrt(rho*rho + rho*rho)
+        
+        let hypoTheta = theta - 45
+        
+        let hypoCoord = DoubleCoord(x: hypoRho*cos(hypoTheta*DEGREES_TO_RADIANS),
+                                    y: hypoRho*sin(hypoTheta*DEGREES_TO_RADIANS))
 
-            return (DoubleCoord(x: rho / cos(angle), y: 0),
-                    DoubleCoord(x: cos(angle) * rho,
-                                y: sin(angle) * rho))
-            
-        } else if theta == 90 {
-            // horizontal line
-            return (DoubleCoord(x: 10, y: rho),
-                    DoubleCoord(x: 0, y: rho))
-        } else if theta < 180 {
-            
-            let angle = (theta - 90)*DEGREES_TO_RADIANS
-            
-            return (DoubleCoord(x: 0, y: rho / cos(angle)),
-                    DoubleCoord(x: -sin(angle) * rho,
-                                y: cos(angle) * rho))
-            
-        } else if theta == 180 {
-            // vertical line
-            return (DoubleCoord(x: -rho, y: 0),
-                    DoubleCoord(x: -rho, y: 10))
-        } else if theta < 270 {
-            
-            let angle = (theta - 180)*DEGREES_TO_RADIANS
-            
-            return (DoubleCoord(x: -rho / cos(angle), y: 0),
-                    DoubleCoord(x: -cos(angle) * rho,
-                                y: -sin(angle) * rho))
-        } else if theta == 270 {
-            // horizontal line
-            return (DoubleCoord(x: 10, y: -rho),
-                    DoubleCoord(x: 0, y: -rho))
-        } else if theta < 360 {
-            // theta between 270 and 360
-            
-            let angle = (theta - 270)*DEGREES_TO_RADIANS
-            
-            return (DoubleCoord(x: 0, y: -rho / cos(angle)),
-                    DoubleCoord(x: sin(angle) * rho,
-                                y: -cos(angle) * rho))
-            
-        } else if theta == 360 {
-            // vertical line
-            return (DoubleCoord(x: rho, y: 0),
-                    DoubleCoord(x: rho, y: 10))
-        } else {
-            fatalError("invalid theta \(theta)")
-        }
+        return (rhoCoord, hypoCoord)
     }
-
+    
     // returns a line in standard form a*x + b*y + c = 0 
     public var standardLine: StandardLine {
         let (p1, p2) = self.twoPoints
