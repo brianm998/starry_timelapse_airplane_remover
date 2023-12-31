@@ -16,6 +16,11 @@ You should have received a copy of the GNU General Public License along with sta
 */
 
 
+public protocol Blobber {
+    var blobs: [Blob] { get }
+    var blobMap: [String: Blob] { get } // keyed by blob id
+}
+
 /*
  A bright blob detector.
 
@@ -32,7 +37,7 @@ You should have received a copy of the GNU General Public License along with sta
 
  Blobs dimmer on average than minimumLocalMaximum are discarded.
  */
-public class Blobber {
+public class FullFrameBlobber: Blobber {
     public let imageWidth: Int
     public let imageHeight: Int
     public let pixelData: [UInt16]
@@ -223,7 +228,7 @@ public class Blobber {
         Log.i("frame \(frameIndex) found \(blobs.count) blobs larger than \(minimumBlobSize) pixels")
     }
 
-    var blobMap: [String: Blob] {
+    public var blobMap: [String: Blob] {
         var ret: [String: Blob] = [:]
         for blob in self.blobs { ret[blob.id] = blob }
         return ret

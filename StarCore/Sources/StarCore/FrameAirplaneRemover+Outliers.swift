@@ -100,41 +100,49 @@ extension FrameAirplaneRemover {
             Log.d("loaded subtractionArray with \(subtractionArray.count) items")
         }
 
-        self.state = .detectingOutliers1
-
-        let blobber = Blobber(imageWidth: width,
-                              imageHeight: height,
-                              pixelData: subtractionArray,
-                              frameIndex: frameIndex,
-                              neighborType: .eight,//.fourCardinal,
-                              minimumBlobSize: config.minGroupSize/4, // XXX constant XXX
-                              minimumLocalMaximum: config.maxPixelDistance,
-                              contrastMin: 52)      // XXX constant
-
-        if config.writeOutlierGroupFiles {
-            // save blobs image here
-            var blobImageData = [UInt8](repeating: 0, count: width*height)
-            for blob in blobber.blobs {
-                for pixel in blob.pixels {
-                    blobImageData[pixel.y*width+pixel.x] = 0xFF // make different per blob?
-                }
-            }
-            let blobImage = PixelatedImage(width: width, height: height,
-                                           grayscale8BitImageData: blobImageData)
-            try await imageAccessor.save(blobImage, as: .blobs, atSize: .original, overwrite: true)
-            try await imageAccessor.save(blobImage, as: .blobs, atSize: .preview, overwrite: true)
-        }
-        
-        self.state = .detectingOutliers2
-
-        /*
-         Now that we have detected blobs in this frame, the next step is to
-         identify lines in the frame and collate blobs that are close to the lines
-         and close to eachother into a single larger blob.
-         */
-
         if let subtractionImage = subtractionImage {
-            let blobsToPromote = try await blobKHTAnalysis(subtractionImage: subtractionImage,
+
+            self.state = .detectingOutliers1
+
+            let blobber: Blobber = FullFrameBlobber(imageWidth: width,
+                                                    imageHeight: height,
+                                                    pixelData: subtractionArray,
+                                                    frameIndex: frameIndex,
+                                                    neighborType: .eight,//.fourCardinal,
+                                                    minimumBlobSize: config.minGroupSize/4, // XXX constant XXX
+                                                    minimumLocalMaximum: config.maxPixelDistance,
+                                                    contrastMin: 52)      // XXX constant
+            
+            if config.writeOutlierGroupFiles {
+                // save blobs image here
+                var blobImageData = [UInt8](repeating: 0, count: width*height)
+                for blob in blobber.blobs {
+                    for pixel in blob.pixels {
+                        blobImageData[pixel.y*width+pixel.x] = 0xFF // make different per blob?
+                    }
+                }
+                let blobImage = PixelatedImage(width: width, height: height,
+                                               grayscale8BitImageData: blobImageData)
+                try await imageAccessor.save(blobImage, as: .blobs, atSize: .original, overwrite: true)
+                try await imageAccessor.save(blobImage, as: .blobs, atSize: .preview, overwrite: true)
+            }
+            
+
+            /*
+             Now that we have detected blobs in this frame, the next step is to
+             identify lines in the frame and collate blobs that are close to the lines
+             and close to eachother into a single larger blob.
+             */
+
+
+            self.state = .detectingOutliers2
+            
+            // run the hough transform on sub sections of the subtraction image
+            let houghLines = houghLines(from: subtractionImage)
+            
+            self.state = .detectingOutliers2a
+
+            let blobsToPromote = try await blobKHTAnalysis(houghLines: houghLines,
                                                            blobMap: blobber.blobMap)
 
 
@@ -339,7 +347,7 @@ extension FrameAirplaneRemover {
     
     // analyze the blobs with kernel hough transform data from the subtraction image
     // filters the blob map, and combines nearby blobs on the same line
-    private func blobKHTAnalysis(subtractionImage: PixelatedImage,
+    private func blobKHTAnalysis(houghLines: [MatrixElementLine],
                                  blobMap _blobMap: [String: Blob]) async throws -> [Blob]
     {
         var blobsToPromote: [String:Blob] = [:]
@@ -363,11 +371,6 @@ extension FrameAirplaneRemover {
         }
         
         Log.i("frame \(frameIndex) loaded subtraction image")
-
-        // run the hough transform on sub sections of the subtraction image
-        let houghLines = houghLines(from: subtractionImage)
-
-        self.state = .detectingOutliers2a
 
         for elementLine in houghLines {
             let element = elementLine.element
@@ -726,7 +729,6 @@ extension FrameAirplaneRemover {
            - don't apply decision tree, use the validation image instead
          */
 
-        // XXX the validation images seem to be broken
         if !outliersLoadedFromFile { 
             if let image = await imageAccessor.load(type: .validated, atSize: .original) {
                 switch image.imageData {
