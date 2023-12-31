@@ -108,7 +108,6 @@ extension FrameAirplaneRemover {
             let houghLines = houghLines(from: subtractionImage)
             
             self.state = .detectingOutliers2
-
             let blobber: Blobber = FullFrameBlobber(imageWidth: width,
                                                     imageHeight: height,
                                                     pixelData: subtractionArray,
@@ -117,6 +116,15 @@ extension FrameAirplaneRemover {
                                                     minimumBlobSize: config.minGroupSize/4, // XXX constant XXX
                                                     minimumLocalMaximum: config.maxPixelDistance,
                                                     contrastMin: 52)      // XXX constant
+/*
+            let blobber: Blobber = HoughLineBlobber(imageWidth: width,
+                                                    imageHeight: height,
+                                                    pixelData: subtractionArray,
+                                                    frameIndex: frameIndex,
+                                                    neighborType: .eight,//.fourCardinal,
+                                                    contrastMin: 52,
+                                                    houghLines: houghLines)
+ */
             
             if config.writeOutlierGroupFiles {
                 // save blobs image here
@@ -384,115 +392,33 @@ extension FrameAirplaneRemover {
                                           Double(0xFF - khtImageBase) +
                                           Double(khtImageBase))
             }
+
+            var lastBlob = LastBlob()
             
-            // where does this line intersect the edges of this element?
-            let frameEdgeMatches = line.frameBoundries(width: element.width,
-                                                       height: element.height)
-
-            if frameEdgeMatches.count == 2 {
-                // sunny day case
-
-                //Log.d("frame \(frameIndex) matrix element [\(element.x), \(element.y)] has line \(line)")
-                
-                //Log.i("frame \(frameIndex) matrix element [\(element.x), \(element.y)] has line theta \(line.theta) rho \(line.rho) votes \(line.votes) brightnessValue \(brightnessValue)")
-                
-                // calculate a standard line from the edge matches
-                let standardLine = StandardLine(point1: frameEdgeMatches[0],
-                                                point2: frameEdgeMatches[1])
-
-                // calculate line orientation
-                let x_diff = abs(frameEdgeMatches[0].x - frameEdgeMatches[1].x)
-                let y_diff = abs(frameEdgeMatches[0].y - frameEdgeMatches[1].y)
-                
-                // iterate on the longest axis
-                let iterateOnXAxis = x_diff > y_diff
-
-                // extend this far on each side of the captured line looking for more
-                // blobs that fit the line
-                let lineExtentionAmount: Int = 256 // XXX yet another hardcoded constant :(
-
-                var lastBlob = LastBlob()
-                
-                if iterateOnXAxis {
-
-                    let startX = -lineExtentionAmount+element.x
-                    let endX = element.width+lineExtentionAmount + element.x
-
-                    //Log.d("frame \(frameIndex) iterating on X axis from \(startX)..<\(endX) lastBlob \(lastBlob)")
-                    
-                    for elementX in -lineExtentionAmount..<element.width+lineExtentionAmount {
-                        let elementY = Int(standardLine.y(forX: Double(elementX)))
-
-                        let x = elementX+element.x
-                        let y = elementY+element.y
-
-                        if x >= 0,
-                           x < width,
-                           y >= 0,
-                           y < height
-                        {
-                            if config.writeOutlierGroupFiles {
-                                // write kht image data
-                                let index = y*width+x
-                                if khtImage[index] < brightnessValue {
-                                    khtImage[index] = brightnessValue
-                                }
-                            }
-
-                            // do blob processing at this location
-                            processBlobsAt(x: x,
-                                           y: y,
-                                           on: line,
-                                           iterationDirection: .vertical,
-                                           blobsToPromote: &blobsToPromote,
-                                           blobRefs: &blobRefs,
-                                           blobMap: &blobMap,
-                                           lastBlob: &lastBlob)
+            // XXX yet another hardcoded constant :(
+            line.iterate(on: elementLine, withExtension: 256) { x, y, direction in
+                if x < width,
+                   y < height
+                {
+                    if config.writeOutlierGroupFiles {
+                        // write kht image data
+                        let index = y*width+x
+                        if khtImage[index] < brightnessValue {
+                            khtImage[index] = brightnessValue
                         }
                     }
-                } else {
-                    // iterate on y axis
 
-                    let startY = -lineExtentionAmount+element.y
-                    let endY = element.height+lineExtentionAmount + element.y
-
-                    //Log.d("frame \(frameIndex) iterating on Y axis from \(startY)..<\(endY) lastBlob \(lastBlob)")
+                    // do blob processing at this location
+                    processBlobsAt(x: x,
+                                   y: y,
+                                   on: line,
+                                   iterationDirection: direction,
+                                   blobsToPromote: &blobsToPromote,
+                                   blobRefs: &blobRefs,
+                                   blobMap: &blobMap,
+                                   lastBlob: &lastBlob)
                     
-
-                    for elementY in -lineExtentionAmount..<element.height+lineExtentionAmount {
-                        let elementX = Int(standardLine.x(forY: Double(elementY)))
-
-                        let x = elementX+element.x
-                        let y = elementY+element.y
-
-                        if x >= 0,
-                           x < width,
-                           y >= 0,
-                           y < height
-                        {
-
-                            if config.writeOutlierGroupFiles {
-                                // write kht image data
-                                let index = y*width+x
-                                if khtImage[index] < brightnessValue {
-                                    khtImage[index] = brightnessValue
-                                }
-                            }
-
-                            // do blob processing at this location
-                            processBlobsAt(x: x,
-                                           y: y,
-                                           on: line,
-                                           iterationDirection: .horizontal,
-                                           blobsToPromote: &blobsToPromote,
-                                           blobRefs: &blobRefs,
-                                           blobMap: &blobMap,
-                                           lastBlob: &lastBlob)
-                        }
-                    }
                 }
-            } else {
-                Log.i("frame \(frameIndex) frameEdgeMatches.count \(frameEdgeMatches.count) != 2")
             }
         }
 
@@ -793,7 +719,3 @@ extension FrameAirplaneRemover {
     }
 }
 
-enum IterationDirection {
-    case vertical
-    case horizontal
-}

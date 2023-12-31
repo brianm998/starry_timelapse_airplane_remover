@@ -21,7 +21,6 @@ You should have received a copy of the GNU General Public License along with sta
  
  This line has its origin point at element.x, element.y
  */
-
 public struct MatrixElementLine {
     let element: ImageMatrixElement
     let line: Line
@@ -77,4 +76,78 @@ public struct MatrixElementLine {
                                         y: op2.y + Double(element.y)),
                     votes: line.votes)
     }
+}
+
+extension Line {
+    public func iterate(on elementLine: MatrixElementLine,
+                        withExtension lineExtension: Int = 0, // extend this far in each direction
+                        closure: (Int, Int, IterationDirection) -> Void)
+    {
+        let element = elementLine.element
+        
+        // where does this line intersect the edges of this element?
+        let frameEdgeMatches = self.frameBoundries(width: element.width,
+                                                   height: element.height)
+
+        if frameEdgeMatches.count == 2 {
+            // calculate a standard line from the edge matches
+            let standardLine = StandardLine(point1: frameEdgeMatches[0],
+                                            point2: frameEdgeMatches[1])
+
+            // calculate line orientation
+            let x_diff = abs(frameEdgeMatches[0].x - frameEdgeMatches[1].x)
+            let y_diff = abs(frameEdgeMatches[0].y - frameEdgeMatches[1].y)
+            
+            // iterate on the longest axis
+            let iterateOnXAxis = x_diff > y_diff
+
+            if iterateOnXAxis {
+
+                let startX = -lineExtension+element.x
+                let endX = element.width+lineExtension + element.x
+
+                //Log.d("frame \(frameIndex) iterating on X axis from \(startX)..<\(endX) lastBlob \(lastBlob)")
+                
+                for elementX in -lineExtension..<element.width+lineExtension {
+                    let elementY = Int(standardLine.y(forX: Double(elementX)))
+
+                    let x = elementX+element.x
+                    let y = elementY+element.y
+
+                    if x >= 0,
+                       y >= 0
+                    {
+                        closure(x, y, .horizontal)
+                    }
+                }
+            } else {
+                // iterate on y axis
+
+                let startY = -lineExtension+element.y
+                let endY = element.height+lineExtension + element.y
+
+                //Log.d("frame \(frameIndex) iterating on Y axis from \(startY)..<\(endY) lastBlob \(lastBlob)")
+
+                for elementY in -lineExtension..<element.height+lineExtension {
+                    let elementX = Int(standardLine.x(forY: Double(elementY)))
+
+                    let x = elementX+element.x
+                    let y = elementY+element.y
+
+                    if x >= 0,
+                       y >= 0
+                    {
+                        closure(x, y, .vertical)
+                    }
+                }
+            }
+        } else {
+            Log.i("cannot iterate with \(frameEdgeMatches.count) edge matches")
+        }
+    }
+}
+
+public enum IterationDirection {
+    case vertical
+    case horizontal
 }
