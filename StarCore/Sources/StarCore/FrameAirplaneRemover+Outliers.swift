@@ -131,14 +131,12 @@ extension FrameAirplaneRemover {
                 try await imageAccessor.save(blobImage, as: .blobs, atSize: .original, overwrite: true)
                 try await imageAccessor.save(blobImage, as: .blobs, atSize: .preview, overwrite: true)
             }
-            
 
             /*
              Now that we have detected blobs in this frame, the next step is to
-             identify lines in the frame and collate blobs that are close to the lines
-             and close to eachother into a single larger blob.
+             collate blobs that are close to the lines and close to eachother into a
+             single larger blob.
              */
-
 
             self.state = .detectingOutliers2a
 
