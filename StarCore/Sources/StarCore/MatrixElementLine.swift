@@ -22,7 +22,7 @@ You should have received a copy of the GNU General Public License along with sta
  This line has its origin point at element.x, element.y
  */
 
-struct MatrixElementLine {
+public struct MatrixElementLine {
     let element: ImageMatrixElement
     let line: Line
 
