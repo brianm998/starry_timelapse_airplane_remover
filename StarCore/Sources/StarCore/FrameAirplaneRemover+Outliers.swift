@@ -108,6 +108,9 @@ extension FrameAirplaneRemover {
             let houghLines = houghLines(from: subtractionImage)
             
             self.state = .detectingOutliers2
+
+
+            /*
             let blobber: Blobber = FullFrameBlobber(imageWidth: width,
                                                     imageHeight: height,
                                                     pixelData: subtractionArray,
@@ -116,7 +119,8 @@ extension FrameAirplaneRemover {
                                                     minimumBlobSize: config.minGroupSize/4, // XXX constant XXX
                                                     minimumLocalMaximum: config.maxPixelDistance,
                                                     contrastMin: 52)      // XXX constant
-/*
+*/
+
             let blobber: Blobber = HoughLineBlobber(imageWidth: width,
                                                     imageHeight: height,
                                                     pixelData: subtractionArray,
@@ -124,7 +128,7 @@ extension FrameAirplaneRemover {
                                                     neighborType: .eight,//.fourCardinal,
                                                     contrastMin: 52,
                                                     houghLines: houghLines)
- */
+
             
             if config.writeOutlierGroupFiles {
                 // save blobs image here
@@ -253,7 +257,9 @@ extension FrameAirplaneRemover {
             // returning some set of detected lines 
             if let lines = element.lines {
                 for line in lines {
-                    rawElementLines.append(MatrixElementLine(element: element, line: line))
+                    rawElementLines.append(MatrixElementLine(element: element,
+                                                             line: line,
+                                                             frameIndex: frameIndex))
                 }
                 //Log.i("frame \(frameIndex) appended \(lines.count) lines for element \(element)")
             } else {

@@ -24,10 +24,15 @@ You should have received a copy of the GNU General Public License along with sta
 public struct MatrixElementLine {
     let element: ImageMatrixElement
     let line: Line
+    let frameIndex: Int
 
     // combine these elements
     func combine(with other: MatrixElementLine) -> MatrixElementLine {
         // do both element and line combination
+
+        if other.frameIndex != self.frameIndex {
+            fatalError("cannot combine frames from different indices - \(other.frameIndex) != \(self.frameIndex)")
+        }
 
         // calculate proper x, y, width and height
         var minX = self.element.x
@@ -59,7 +64,7 @@ public struct MatrixElementLine {
                         point2: DoubleCoord(x: op2.x-Double(minX), y: op2.y-Double(minY)),
                         votes: combinedOriginZeroLine.votes)
 
-        return MatrixElementLine(element: combinedElement, line: line)
+        return MatrixElementLine(element: combinedElement, line: line, frameIndex: frameIndex)
     }
 
     var originZeroLine: Line {
@@ -79,70 +84,77 @@ public struct MatrixElementLine {
 }
 
 extension Line {
+
+    
+    public var iterationDirection: IterationDirection {
+        let (p1, p2) = self.twoPoints
+
+        let x_diff = abs(p1.x - p2.x)
+        let y_diff = abs(p1.y - p2.y)
+        
+        // iterate on the longest axis
+        let iterateOnXAxis = x_diff > y_diff
+
+        if iterateOnXAxis {
+            return .horizontal
+        } else {
+            return .vertical
+        }
+    }
+
+    /*
+
+     XXX this method can sometimes iterate where the line does not exist
+
+     XXX it can also sometimes give the wrong Y value for a line
+
+     XXX test this more separatetly, this is the root of the wrong math
+     in the HoughLineBlobber.
+     
+     */
     public func iterate(on elementLine: MatrixElementLine,
                         withExtension lineExtension: Int = 0, // extend this far in each direction
                         closure: (Int, Int, IterationDirection) -> Void)
     {
         let element = elementLine.element
         
-        // where does this line intersect the edges of this element?
-        let frameEdgeMatches = self.frameBoundries(width: element.width,
-                                                   height: element.height)
+        let standardLine = self.standardLine
 
-        if frameEdgeMatches.count == 2 {
-            // calculate a standard line from the edge matches
-            let standardLine = StandardLine(point1: frameEdgeMatches[0],
-                                            point2: frameEdgeMatches[1])
+        switch self.iterationDirection {
+        case .horizontal:
 
-            // calculate line orientation
-            let x_diff = abs(frameEdgeMatches[0].x - frameEdgeMatches[1].x)
-            let y_diff = abs(frameEdgeMatches[0].y - frameEdgeMatches[1].y)
+            let startX = -lineExtension+element.x
+            let endX = element.width+lineExtension + element.x
+
+            Log.d("elementLine \(elementLine) iterating on X axis from \(startX)..<\(endX)")
             
-            // iterate on the longest axis
-            let iterateOnXAxis = x_diff > y_diff
+            for x in startX..<endX {
+                let y = Int(standardLine.y(forX: Double(x)))
 
-            if iterateOnXAxis {
-
-                let startX = -lineExtension+element.x
-                let endX = element.width+lineExtension + element.x
-
-                //Log.d("frame \(frameIndex) iterating on X axis from \(startX)..<\(endX) lastBlob \(lastBlob)")
-                
-                for elementX in -lineExtension..<element.width+lineExtension {
-                    let elementY = Int(standardLine.y(forX: Double(elementX)))
-
-                    let x = elementX+element.x
-                    let y = elementY+element.y
-
-                    if x >= 0,
-                       y >= 0
-                    {
-                        closure(x, y, .horizontal)
-                    }
-                }
-            } else {
-                // iterate on y axis
-
-                let startY = -lineExtension+element.y
-                let endY = element.height+lineExtension + element.y
-
-                //Log.d("frame \(frameIndex) iterating on Y axis from \(startY)..<\(endY) lastBlob \(lastBlob)")
-
-                for elementY in -lineExtension..<element.height+lineExtension {
-                    let elementX = Int(standardLine.x(forY: Double(elementY)))
-
-                    let x = elementX+element.x
-                    let y = elementY+element.y
-
-                    if x >= 0,
-                       y >= 0
-                    {
-                        closure(x, y, .vertical)
-                    }
+                if x >= 0,
+                   y >= 0
+                {
+                    closure(x, y, .horizontal)
                 }
             }
-        } else {
-            Log.i("cannot iterate with \(frameEdgeMatches.count) edge matches")
+
+        case .vertical:
+            // iterate on y axis
+
+            let startY = -lineExtension+element.y
+            let endY = element.height+lineExtension + element.y
+
+            Log.d("elementLine \(elementLine) iterating on Y axis from \(startY)..<\(endY)")
+
+            for y in startY..<endY {
+                let x = Int(standardLine.x(forY: Double(y)))
+
+                if x >= 0,
+                   y >= 0
+                {
+                    closure(x, y, .vertical)
+                }
+            }
         }
     }
 }
