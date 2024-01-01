@@ -22,10 +22,20 @@ You should have received a copy of the GNU General Public License along with sta
  This line has its origin point at element.x, element.y
  */
 public struct MatrixElementLine {
-    let element: ImageMatrixElement
-    let line: Line
-    let frameIndex: Int
+    public let element: ImageMatrixElement
+    public let line: Line
+    public let frameIndex: Int
 
+    public init(element: ImageMatrixElement,
+                line: Line,
+                frameIndex: Int)
+
+    {
+        self.element = element
+        self.line = line
+        self.frameIndex = frameIndex
+    }
+    
     // combine these elements
     func combine(with other: MatrixElementLine) -> MatrixElementLine {
         // do both element and line combination
@@ -67,7 +77,7 @@ public struct MatrixElementLine {
         return MatrixElementLine(element: combinedElement, line: line, frameIndex: frameIndex)
     }
 
-    var originZeroLine: Line {
+    public var originZeroLine: Line {
         // the line here has its origin at element.x and element.y
 
         // get two raster points that are on the line
