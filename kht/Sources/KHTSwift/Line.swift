@@ -230,6 +230,7 @@ public func polarCoords(point1: DoubleCoord,
         let x_diff = dx1-dx2
         let y_diff = dy1-dy2
 
+        
         let distance_between_points = sqrt(x_diff*x_diff + y_diff*y_diff)
 
         // calculate the angle of the line
@@ -285,7 +286,7 @@ public func polarCoords(point1: DoubleCoord,
         // find points hypo pixels from the origin on this line
         let parallel_x = hypo * cos(theta*DEGREES_TO_RADIANS)
         let parallel_y = hypo * sin(theta*DEGREES_TO_RADIANS)
-
+        
         // this point is on the line that rho travels on, at
         // an arbitrary distance from the origin.  
         let parallelCoord = DoubleCoord(x: parallel_x, y: parallel_y)
@@ -302,18 +303,6 @@ public func polarCoords(point1: DoubleCoord,
         // rho is the hypotenuse of the meeting point x, y
         let rho = sqrt(meetPoint.x*meetPoint.x+meetPoint.y*meetPoint.y)
 
-        // sometimes rho needs to be negative, 
-        // if theta is pointing away from the line
-        // flip the theta instead, and keep rho positive in that case
-        
-        let yAtZeroX = origStandardLine.yAtZeroX
-
-        if (yAtZeroX < 0 && theta < 180) ||
-           (yAtZeroX > 0 && theta > 180)
-        {
-            theta = (theta + 180).truncatingRemainder(dividingBy: 360)
-        }
-        
         return (theta, rho)
     }
 }
