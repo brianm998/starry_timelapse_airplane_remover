@@ -64,25 +64,14 @@ public class HoughLineBlobber: AbstractBlobber {
         for elementLine in houghLines {
             Log.d("frame \(frameIndex) processing elementLine \(elementLine)")
             let element = elementLine.element
-            let line = elementLine.line
+            let line = elementLine.originZeroLine
 
-            // convert this line into the full frame reference frame, by default
-            // the reference frame for this line is the element line
-            let (p1, p2) = line.twoPoints
-
-            let ap1 = DoubleCoord(x: p1.x + Double(element.x),
-                                  y: p1.y + Double(element.y))
-            let ap2 = DoubleCoord(x: p2.x + Double(element.x),
-                                  y: p2.y + Double(element.y))
-
-            let adjustedLine = Line(point1: ap1, point2: ap2)
-            
             // the point on the line which is perpendicular to the origin, in the
             // full frame reference frame
-            let rhoX = adjustedLine.rho * cos(adjustedLine.theta*DEGREES_TO_RADIANS)
-            let rhoY = adjustedLine.rho * sin(adjustedLine.theta*DEGREES_TO_RADIANS)
+            let rhoX = line.rho * cos(line.theta*DEGREES_TO_RADIANS)
+            let rhoY = line.rho * sin(line.theta*DEGREES_TO_RADIANS)
             
-            adjustedLine.iterate(on: elementLine, withExtension: 256) { x, y, direction in
+            line.iterate(on: elementLine, withExtension: 256) { x, y, direction in
                 if x < imageWidth,
                    y < imageHeight
                 {
@@ -142,10 +131,10 @@ public class HoughLineBlobber: AbstractBlobber {
                              */
                             var perpTheta: Double = 0
 
-                            if pixelTheta > adjustedLine.theta {
-                                perpTheta = adjustedLine.theta+90
+                            if pixelTheta > line.theta {
+                                perpTheta = line.theta+90
                             } else {
-                                perpTheta = adjustedLine.theta-90
+                                perpTheta = line.theta-90
                             }
                             
                             if perpTheta < 0 { perpTheta += 360 }
@@ -159,7 +148,7 @@ public class HoughLineBlobber: AbstractBlobber {
                             let perpLine = Line(theta: perpTheta, rho: perpRho).standardLine
 
                             // if the math is right, this should be very close to x, y
-                            let me = perpLine.intersection(with: adjustedLine.standardLine)
+                            let me = perpLine.intersection(with: line.standardLine)
 
                             /*
 
@@ -174,18 +163,18 @@ public class HoughLineBlobber: AbstractBlobber {
                             if abs(Double(x)-me.x) < 5,
                                abs(Double(y)-me.y) < 5
                             {
-                                Log.d("frame \(frameIndex) coord me RIGHT \(direction) \(me) == \(x), \(y) rho [\(Int(rhoX)), \(Int(rhoY))] pixelTheta \(Int(pixelTheta)) lineTheta \(Int(line.theta)) lineRho \(Int(adjustedLine.rho)) perpTheta \(Int(perpTheta)) perpRho \(Int(perpRho)) xDiff \(Int(xDiff)) yDiff \(Int(yDiff)) elementLine \(elementLine)")
+                                Log.d("frame \(frameIndex) coord me RIGHT \(direction) \(me) == \(x), \(y) rho [\(Int(rhoX)), \(Int(rhoY))] pixelTheta \(Int(pixelTheta)) lineTheta \(Int(line.theta)) lineRho \(Int(line.rho)) perpTheta \(Int(perpTheta)) perpRho \(Int(perpRho)) xDiff \(Int(xDiff)) yDiff \(Int(yDiff)) elementLine \(elementLine)")
                             } else {
-                                Log.d("frame \(frameIndex) coord me WRONG \(direction) \(me) != \(x), \(y) rho [\(Int(rhoX)), \(Int(rhoY))] pixelTheta \(Int(pixelTheta)) lineTheta \(Int(line.theta)) lineRho \(Int(adjustedLine.rho)) perpTheta \(Int(perpTheta)) perpRho \(Int(perpRho)) xDiff \(Int(xDiff)) yDiff \(Int(yDiff)) elementLine \(elementLine)")
+                                Log.d("frame \(frameIndex) coord me WRONG \(direction) \(me) != \(x), \(y) rho [\(Int(rhoX)), \(Int(rhoY))] pixelTheta \(Int(pixelTheta)) lineTheta \(Int(line.theta)) lineRho \(Int(line.rho)) perpTheta \(Int(perpTheta)) perpRho \(Int(perpRho)) xDiff \(Int(xDiff)) yDiff \(Int(yDiff)) elementLine \(elementLine)")
                             }
                             
                             // iterate on this line close to x, y
 
-                            let boundary1Line = Line(theta: adjustedLine.theta,
-                                                     rho: adjustedLine.rho-contrastDetectionSize)
+                            let boundary1Line = Line(theta: line.theta,
+                                                     rho: line.rho-contrastDetectionSize)
 
-                            let boundary2Line = Line(theta: adjustedLine.theta,
-                                                     rho: adjustedLine.rho+contrastDetectionSize)
+                            let boundary2Line = Line(theta: line.theta,
+                                                     rho: line.rho+contrastDetectionSize)
 
                             let itCoord1 = boundary1Line.standardLine.intersection(with: perpLine)
                             let itCoord2 = boundary2Line.standardLine.intersection(with: perpLine)

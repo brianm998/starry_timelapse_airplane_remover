@@ -110,7 +110,6 @@ extension FrameAirplaneRemover {
             self.state = .detectingOutliers2
 
 
-            /*
             let blobber: Blobber = FullFrameBlobber(imageWidth: width,
                                                     imageHeight: height,
                                                     pixelData: subtractionArray,
@@ -119,7 +118,7 @@ extension FrameAirplaneRemover {
                                                     minimumBlobSize: config.minGroupSize/4, // XXX constant XXX
                                                     minimumLocalMaximum: config.maxPixelDistance,
                                                     contrastMin: 52)      // XXX constant
-*/
+            /*
 
             let blobber: Blobber = HoughLineBlobber(imageWidth: width,
                                                     imageHeight: height,
@@ -129,6 +128,7 @@ extension FrameAirplaneRemover {
                                                     contrastMin: 52,
                                                     houghLines: houghLines)
 
+*/
             
             if config.writeOutlierGroupFiles {
                 // save blobs image here
@@ -386,7 +386,7 @@ extension FrameAirplaneRemover {
 
         for elementLine in houghLines {
             let element = elementLine.element
-            let line = elementLine.line
+            let line = elementLine.originZeroLine
             
             //Log.i("frame \(frameIndex) matrix element [\(element.x), \(element.y)] -> [\(element.width), \(element.height)] processing line theta \(line.theta) rho \(line.rho) votes \(line.votes) blobsToProcess \(blobsToProcess.count)")
 
