@@ -3,8 +3,8 @@ import CoreGraphics
 import logging
 import Cocoa
 
-let DEGREES_TO_RADIANS = atan(1.0) / 45.0
-let RADIANS_TO_DEGREES = 45 / atan(1.0)
+public let DEGREES_TO_RADIANS = atan(1.0) / 45.0
+public let RADIANS_TO_DEGREES = 45 / atan(1.0)
 
 
 // this swift method wraps an objc method which wraps a c++ implementation
@@ -252,14 +252,19 @@ public struct Coord: Codable {
         self.x = Int(coord.x)
         self.y = Int(coord.y)
     }
-    
 }
 
 // x, y coordinates as doubles
-public struct DoubleCoord: Codable {
+public struct DoubleCoord: Codable, CustomStringConvertible {
     public let x: Double
     public let y: Double
 
+    public var description: String {
+        let xStr = String(format: "%2f", x)
+        let yStr = String(format: "%2f", y)
+        return "DoubleCoord [\(xStr), \(yStr)]"
+    }
+    
     public init(_ coord: Coord) {
         self.x = Double(coord.x)
         self.y = Double(coord.y)
