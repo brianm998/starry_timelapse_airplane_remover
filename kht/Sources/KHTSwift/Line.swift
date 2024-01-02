@@ -202,7 +202,7 @@ public struct Line: Codable {
 public func polarCoords(point1: DoubleCoord,
                         point2: DoubleCoord) -> (theta: Double, rho: Double)
 {
-    Log.d("polarCoords point1 \(point1) point2 \(point2)")
+    //Log.d("polarCoords point1 \(point1) point2 \(point2)")
     let dx1 = point1.x
     let dy1 = point1.y
     let dx2 = point2.x
@@ -231,11 +231,11 @@ public func polarCoords(point1: DoubleCoord,
         let x_diff = dx1-dx2
         let y_diff = dy1-dy2
 
-        Log.d("x_diff \(x_diff) y_diff \(y_diff)")
+        //Log.d("x_diff \(x_diff) y_diff \(y_diff)")
         
         let distance_between_points = sqrt(x_diff*x_diff + y_diff*y_diff)
 
-        Log.d("distance_between_points \(distance_between_points)")
+        //Log.d("distance_between_points \(distance_between_points)")
         
         // calculate the angle of the line
         let line_theta_radians = acos(abs(x_diff/distance_between_points))
@@ -244,7 +244,7 @@ public func polarCoords(point1: DoubleCoord,
         // in which direction
         var line_theta = line_theta_radians*RADIANS_TO_DEGREES
 
-        Log.d("line_theta \(line_theta)")
+        //Log.d("line_theta \(line_theta)")
         
         /*
          after handling directly vertical and horiontal lines as sepecial cases above,
