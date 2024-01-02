@@ -1,6 +1,21 @@
 import Foundation
 import logging
 
+extension Double {
+  static func equal(_ lhs: Double, _ rhs: Double, precise value: Int? = nil) -> Bool {
+    guard let value = value else {
+      return lhs == rhs
+    }
+        
+    return lhs.precised(value) == rhs.precised(value)
+  }
+
+  func precised(_ value: Int = 1) -> Double {
+    let offset = pow(10, Double(value))
+    return (self * offset).rounded() / offset
+  }
+}
+
 // describes a line by the standard formula of a*x + b*y + c = 0
 public struct StandardLine {
     // a*x + b*y + c = 0
@@ -9,6 +24,16 @@ public struct StandardLine {
     let b: Double
     let c: Double
 
+    public static func != (lhs: StandardLine, rhs: StandardLine) -> Bool {
+        return !(lhs == rhs)
+    }
+    
+    public static func == (lhs: StandardLine, rhs: StandardLine) -> Bool {
+        return Double.equal(lhs.a, rhs.a, precise: 8) &&
+               Double.equal(lhs.b, rhs.b, precise: 8) &&
+               Double.equal(lhs.c, rhs.c, precise: 8)
+    }
+    
     public init(a: Double,
                 b: Double,
                 c: Double)
@@ -23,7 +48,7 @@ public struct StandardLine {
         //Log.d("standard line with point1 \(point1) point2 \(point2)")
         self = point1.standardLine(with: point2)
     }
-
+    
     // gives a line with polar coordinates with origin at [0, 0]
     public var polarLine: Line {
         let x_intercept = DoubleCoord(x: 0, y: self.y(forX: 0))
