@@ -58,7 +58,7 @@ public class Blob: CustomStringConvertible {
         if let image = pixelImage.nsImage {
             let lines = kernelHoughTransform(image: image,
                                              clusterMinSize: 4)
-            Log.d("frame \(frameIndex) blob \(self) got \(lines.count) lines from KHT")
+            //Log.d("frame \(frameIndex) blob \(self) got \(lines.count) lines from KHT")
             if lines.count > 0 {
                 _blobLine = lines[0]
                 return lines[0]
@@ -73,7 +73,7 @@ public class Blob: CustomStringConvertible {
         var blobImageData = [UInt16](repeating: 0,
                                      count: self.boundingBox.width*self.boundingBox.height)
         
-        Log.d("frame \(frameIndex) blob image data with \(pixels.count) pixels")
+        //Log.d("frame \(frameIndex) blob image data with \(pixels.count) pixels")
         
         let minX = self.boundingBox.min.x
         let minY = self.boundingBox.min.y
@@ -97,7 +97,7 @@ public class Blob: CustomStringConvertible {
             _averageDistanceFromIdealLine = ret
             return ret
         }
-        Log.d("frame \(frameIndex) blob \(self) averageDistanceFromIdealLine has no lines :(")
+        //Log.d("frame \(frameIndex) blob \(self) averageDistanceFromIdealLine has no lines :(")
         _averageDistanceFromIdealLine = 420420420
         return 420420420
     }
@@ -107,7 +107,7 @@ public class Blob: CustomStringConvertible {
                                                     from: line,
                                                     with: self.boundingBox,
                                                     frameIndex: frameIndex)
-        Log.d("frame \(frameIndex) blob \(self) averageDistanceFromIdealLine \(line) = \(ret)")
+        //Log.d("frame \(frameIndex) blob \(self) averageDistanceFromIdealLine \(line) = \(ret)")
         return ret
     }
     
@@ -165,7 +165,7 @@ public class Blob: CustomStringConvertible {
 
     public func absorb(_ otherBlob: Blob) -> Bool {
         if self.id != otherBlob.id {
-            Log.d("frame \(frameIndex) blob \(self.id) absorbing blob \(otherBlob.id)")
+            //Log.d("frame \(frameIndex) blob \(self.id) absorbing blob \(otherBlob.id)")
             let newPixels = otherBlob.pixels
             for otherPixel in newPixels {
                 otherPixel.status = .blobbed(self)
