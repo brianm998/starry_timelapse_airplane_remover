@@ -118,7 +118,7 @@ extension Line {
     {
         let standardLine = self.standardLine
 
-        Log.i("self.standardLine \(self.standardLine)")
+        //Log.i("self.standardLine \(self.standardLine)")
         
         switch self.iterationDirection {
         case .horizontal:
@@ -129,7 +129,12 @@ extension Line {
                 maxX = coord1.x
             }
             for x in Int(minX)...Int(maxX) {
-                closure(x, Int(standardLine.y(forX: Double(x))), .horizontal)
+                let y = Int(standardLine.y(forX: Double(x)))
+                if x >= 0,
+                   y >= 0
+                {
+                    closure(x, y, .horizontal)
+                }
             }
             
         case .vertical:
@@ -140,7 +145,12 @@ extension Line {
                 maxY = coord1.y
             }
             for y in Int(minY)...Int(maxY) {
-                closure(Int(standardLine.x(forY: Double(y))), y, .vertical)
+                let x = Int(standardLine.x(forY: Double(y)))
+                if x >= 0,
+                   y >= 0
+                {
+                    closure(x, y, .vertical)
+                }
             }
         }
     }
@@ -159,7 +169,7 @@ extension Line {
             let startX = -lineExtension+element.x
             let endX = element.width+lineExtension + element.x
 
-            Log.d("elementLine \(elementLine) iterating on X axis from \(startX)..<\(endX)")
+            //Log.d("elementLine \(elementLine) iterating on X axis from \(startX)..<\(endX)")
             
             for x in startX..<endX {
                 let y = Int(standardLine.y(forX: Double(x)))
@@ -177,7 +187,7 @@ extension Line {
             let startY = -lineExtension+element.y
             let endY = element.height+lineExtension + element.y
 
-            Log.d("elementLine \(elementLine) iterating on Y axis from \(startY)..<\(endY)")
+            //Log.d("elementLine \(elementLine) iterating on Y axis from \(startY)..<\(endY)")
 
             for y in startY..<endY {
                 let x = Int(standardLine.x(forY: Double(y)))
