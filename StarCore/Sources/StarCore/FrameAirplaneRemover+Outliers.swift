@@ -109,7 +109,7 @@ extension FrameAirplaneRemover {
             
             self.state = .detectingOutliers2
 
-
+/*
             let blobber: Blobber = FullFrameBlobber(imageWidth: width,
                                                     imageHeight: height,
                                                     pixelData: subtractionArray,
@@ -118,7 +118,7 @@ extension FrameAirplaneRemover {
                                                     minimumBlobSize: config.minGroupSize/4, // XXX constant XXX
                                                     minimumLocalMaximum: config.maxPixelDistance,
                                                     contrastMin: 52)      // XXX constant
-            /*
+            */
 
             let blobber: Blobber = HoughLineBlobber(imageWidth: width,
                                                     imageHeight: height,
@@ -128,8 +128,7 @@ extension FrameAirplaneRemover {
                                                     contrastMin: 52,
                                                     houghLines: houghLines)
 
-*/
-            
+
             if config.writeOutlierGroupFiles {
                 // save blobs image here
                 var blobImageData = [UInt8](repeating: 0, count: width*height)
@@ -154,7 +153,6 @@ extension FrameAirplaneRemover {
 
             let blobsToPromote = try await blobKHTAnalysis(houghLines: houghLines,
                                                            blobMap: blobber.blobMap)
-
 
             // XXX add another step here where we look for all blobs to promote, and
             // see if we get a better line score if we combine with another 
@@ -215,7 +213,6 @@ extension FrameAirplaneRemover {
                 filteredBlobs.append(blobToAdd)
             }
             
-            
             Log.i("frame \(frameIndex) has \(filteredBlobs.count) filteredBlobs")
             self.state = .detectingOutliers3
             
@@ -244,7 +241,7 @@ extension FrameAirplaneRemover {
         let matrix = 
           kernelHoughTransform(elements: image.splitIntoMatrix(maxWidth: 256,
                                                                maxHeight: 256,
-                                                               overlapPercent: 60),
+                                                               overlapPercent: 70),
                                minVotes: 8000,
                                minResults: 6,
                                maxResults: 20) 
@@ -386,6 +383,9 @@ extension FrameAirplaneRemover {
 
         for elementLine in houghLines {
             let element = elementLine.element
+
+
+            // when theta is around 300 or more, then we get a bad line here :(
             let line = elementLine.originZeroLine
             
             //Log.i("frame \(frameIndex) matrix element [\(element.x), \(element.y)] -> [\(element.width), \(element.height)] processing line theta \(line.theta) rho \(line.rho) votes \(line.votes) blobsToProcess \(blobsToProcess.count)")
@@ -530,11 +530,11 @@ extension FrameAirplaneRemover {
                 if let _lastBlob = lastBlob.blob {
                     if _lastBlob.id != blob.id  {
                         let distance = _lastBlob.boundingBox.edgeDistance(to: blob.boundingBox)
-                        Log.i("frame \(frameIndex) blob \(_lastBlob) bounding box \(_lastBlob.boundingBox) is \(distance) from blob \(blob) bounding box \(blob.boundingBox)")
+                        //Log.i("frame \(frameIndex) blob \(_lastBlob) bounding box \(_lastBlob.boundingBox) is \(distance) from blob \(blob) bounding box \(blob.boundingBox)")
                         if distance < 40 { // XXX constant XXX
                             // if they are close enough, simply combine them
                             if _lastBlob.absorb(blob) {
-                                Log.d("frame \(frameIndex)  blob \(_lastBlob) absorbing blob \(blob)")
+                                //Log.d("frame \(frameIndex)  blob \(_lastBlob) absorbing blob \(blob)")
 
                                 // update blobRefs after blob absorbtion
                                 for pixel in blob.pixels {
@@ -550,12 +550,12 @@ extension FrameAirplaneRemover {
                         } else {
                             // if they are far, then overwrite the lastBlob var
                             blobsToPromote[blob.id] = blob
-                            Log.d("frame \(frameIndex) [\(x), \(y)] distance \(distance) from \(_lastBlob) is too far from blob with id \(blob) line \(lineForNewBlobs)")
+                            //Log.d("frame \(frameIndex) [\(x), \(y)] distance \(distance) from \(_lastBlob) is too far from blob with id \(blob) line \(lineForNewBlobs)")
                             lastBlob.blob = blob
                         }
                     }
                 } else {
-                    Log.d("frame \(frameIndex) [\(x), \(y)] no last blob, blob \(blob) is now last - line \(lineForNewBlobs)")
+                    //Log.d("frame \(frameIndex) [\(x), \(y)] no last blob, blob \(blob) is now last - line \(lineForNewBlobs)")
                     blobsToPromote[blob.id] = blob
                     lastBlob.blob = blob
                 }

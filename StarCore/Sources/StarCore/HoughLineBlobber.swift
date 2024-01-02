@@ -59,7 +59,7 @@ public class HoughLineBlobber: AbstractBlobber {
 
 
         // this many pixels on each side of the line
-        let contrastDetectionSize: Double = 8
+        let contrastDetectionSize: Double = 5
         
         for elementLine in houghLines {
             Log.d("frame \(frameIndex) processing elementLine \(elementLine)")
@@ -70,59 +70,41 @@ public class HoughLineBlobber: AbstractBlobber {
             // full frame reference frame
             let rhoX = line.rho * cos(line.theta*DEGREES_TO_RADIANS)
             let rhoY = line.rho * sin(line.theta*DEGREES_TO_RADIANS)
+
+            // parallel lines contrastDetectionSize away from the line we're iterating on
+            let boundary1Line = Line(theta: line.theta,
+                                     rho: line.rho-contrastDetectionSize)
+
+            let boundary2Line = Line(theta: line.theta,
+                                     rho: line.rho+contrastDetectionSize)
+
+            let standardLine = line.standardLine
             
             line.iterate(on: elementLine, withExtension: 256) { x, y, direction in
                 if x < imageWidth,
                    y < imageHeight
                 {
-                    Log.d("frame \(frameIndex) elementLine \(elementLine) iterate \(x) \(y)")
+                    //Log.d("frame \(frameIndex) elementLine \(elementLine) iterate \(x) \(y)")
                     
-                    let pixel = pixels[x][y]
+                    let pixel = self.pixels[x][y]
 
                     switch pixel.status {
                     case .blobbed(_):
                         break
                     case .unknown:
-                        if pixel.intensity > 2000 { // XXX constant
+                        if pixel.intensity > 0xF000 { // XXX constant
                             // create blob here
 
                             let newBlob = Blob(pixel, frameIndex: frameIndex)
                             blobs.append(newBlob)
                             
-                            Log.d("frame \(frameIndex) expanding from seed pixel.intensity \(pixel.intensity)")
+                            Log.d("frame \(frameIndex) expanding from seed pixel \(pixel)")
                             
                             expand(blob: newBlob, seedPixel: pixel)
-                        } else if pixel.intensity > 100 { // XXX another constant
+                        } else if pixel.intensity > 0x0F00 { // XXX another constant
 
-                            /*
-
-                             This doesn't work yet, but should be:
-
-                             finding two coords to iterate between that span x, y
-                             and are perpendicular to the line here
-
-                             iterate between those coords looking for a specific
-                             pattern of dark to bright to dark again.
-
-                             If found, then create a blob from this pixel
-                             
-                             */
-                            // create orthogonal line and detect contrast across it
-                            // if contrast is high enough, then blob here
-
-                            // this line HOPEFULLY IS perpendicular to the line we are iterating on
-
-                            // XXX subtract 90 if x,y is behind,
-                            // this assumes that it's ahead
-
-                            /*
-                             XXX calculate theta for x,y
-
-                             tan(theta) = y/x
-
-                             theta = atan(y/x)
-                             */
-
+                            // do contrast analysis on orthogonal pixels to find blobs
+                            
                             // angle from origin to this pixel
                             let pixelTheta = atan(Double(y)/Double(x))*RADIANS_TO_DEGREES
                             
@@ -136,7 +118,7 @@ public class HoughLineBlobber: AbstractBlobber {
                             } else {
                                 perpTheta = line.theta-90
                             }
-                            
+
                             if perpTheta < 0 { perpTheta += 360 }
                             if perpTheta > 360 { perpTheta -= 360 }
 
@@ -145,56 +127,154 @@ public class HoughLineBlobber: AbstractBlobber {
 
                             let perpRho = sqrt(xDiff*xDiff + yDiff*yDiff)
 
+                            // a perpendicular line to the line we are iterating on,
+                            // which intersects it at x, y
                             let perpLine = Line(theta: perpTheta, rho: perpRho).standardLine
 
+                            // testing
+                            // testing
+                            // testing
                             // if the math is right, this should be very close to x, y
                             let me = perpLine.intersection(with: line.standardLine)
 
-                            /*
-
-                             underlying math error somewhere,
-                             some of these are right,
-                             some aren't
-
-                             NOT SURE WHY
-                             
-                             */
-
-                            if abs(Double(x)-me.x) < 5,
-                               abs(Double(y)-me.y) < 5
+                            if abs(Double(x)-me.x) < 2,
+                               abs(Double(y)-me.y) < 2
                             {
-                                Log.d("frame \(frameIndex) coord me RIGHT \(direction) \(me) == \(x), \(y) rho [\(Int(rhoX)), \(Int(rhoY))] pixelTheta \(Int(pixelTheta)) lineTheta \(Int(line.theta)) lineRho \(Int(line.rho)) perpTheta \(Int(perpTheta)) perpRho \(Int(perpRho)) xDiff \(Int(xDiff)) yDiff \(Int(yDiff)) elementLine \(elementLine)")
+                                // ok
                             } else {
-                                Log.d("frame \(frameIndex) coord me WRONG \(direction) \(me) != \(x), \(y) rho [\(Int(rhoX)), \(Int(rhoY))] pixelTheta \(Int(pixelTheta)) lineTheta \(Int(line.theta)) lineRho \(Int(line.rho)) perpTheta \(Int(perpTheta)) perpRho \(Int(perpRho)) xDiff \(Int(xDiff)) yDiff \(Int(yDiff)) elementLine \(elementLine)")
+                                fatalError("frame \(frameIndex) coord me WRONG \(direction) \(me) != \(x), \(y) rho [\(Int(rhoX)), \(Int(rhoY))] pixelTheta \(Int(pixelTheta)) lineTheta \(Int(line.theta)) lineRho \(Int(line.rho)) perpTheta \(Int(perpTheta)) perpRho \(Int(perpRho)) xDiff \(Int(xDiff)) yDiff \(Int(yDiff)) elementLine \(elementLine)")
                             }
+                            // testing
+                            // testing
+                            // testing
                             
                             // iterate on this line close to x, y
 
-                            let boundary1Line = Line(theta: line.theta,
-                                                     rho: line.rho-contrastDetectionSize)
-
-                            let boundary2Line = Line(theta: line.theta,
-                                                     rho: line.rho+contrastDetectionSize)
+                            let firstIterationPoint = DoubleCoord(x: Double(x), y: Double(y))
 
                             let itCoord1 = boundary1Line.standardLine.intersection(with: perpLine)
                             let itCoord2 = boundary2Line.standardLine.intersection(with: perpLine)
+
+                            let fullDistance = itCoord1.distance(to: itCoord2)
+                            let coord1Dist = itCoord1.distance(to: firstIterationPoint)
+                            let coord2Dist = itCoord2.distance(to: firstIterationPoint)
+
+                            /*
+                            if coord1Dist > fullDistance ||
+                               coord1Dist > fullDistance
+                            {
+                                fatalError("HOLY FUCK NUTS \(fullDistance) \(coord1Dist) \(coord2Dist) \(firstIterationPoint) c1 \(itCoord1) c2 \(itCoord2)")
+                                }
+
+                                XXX this can happen because of rounding errors between Int and Double :(
+                            */
+                            let perpPolar = perpLine.polarLine
                             
-                            Log.d("frame \(frameIndex) from [\(x), \(y)], iterate from \(itCoord1) to \(itCoord2)")
+                            Log.d("frame \(frameIndex) from [\(x), \(y)], iterate from \(itCoord1) to \(itCoord2) on \(perpPolar)")
+
+
+                            /*
+
+                             iterate from one side of the line to the other
+
+                             keep track of dimmest, brightest, and their locations
+
+                             if, it gets dimmer by the same agreed amount on both sides,
+                             and the brightest spot is close enough to the line,
+
+                             then start a blob at the brightest spot, if pixel not blobbed or backgrounded
+                             
+                             */
+                            // dimmest on one side
+                            var dimmest1: UInt16 = 0xFFFF
+
+                            // dimmest on the other side
+                            var dimmest2: UInt16 = 0xFFFF
                             
-                            // XXX make sure this perp line is really perpendicular,
-                            // and make a method to iterate within a distance of it
-                            // and call a callback that measures the intensity curve
-                            // across the iteration, and applies some kind of heuristic
-                            // too determine if a blob should be seeded at this x, y 
+                            var brighest: UInt16 = 0
+                            var brightestCoord: DoubleCoord?
+                            
+                            perpPolar.iterate(between: itCoord1, and: itCoord2) { px, py, dir in
+                                if px < imageWidth,
+                                   py < imageHeight
+                                {
+                                    let distance = standardLine.distanceTo(x: px, y: py)
+                                    if px >= self.pixels.count {
+                                        fatalError("CRAPNUTS x \(px) >= \(self.pixels.count)")
+                                    }
+                                    if px < 0 {
+                                        fatalError("CRAPNUTS x \(px) >= \(self.pixels.count)")
+                                    }
+                                    let fuck = self.pixels[px]
+
+                                    if py >= fuck.count {
+                                        fatalError("CRAPNUTS y \(py) >= \(fuck.count)")
+                                    }
+                                    
+                                    let pixel = self.pixels[px][py]
+                                    let coord = DoubleCoord(x: Double(px), y: Double(py))
+
+                                    if pixel.intensity > brighest {
+                                        brighest = pixel.intensity
+                                        brightestCoord = coord
+                                    }
+
+                                    let dist1 = itCoord1.distance(to: coord)
+                                    let dist2 = itCoord2.distance(to: coord)
+                                    if dist1 < dist2 {
+                                        if pixel.intensity < dimmest1 { dimmest1 = pixel.intensity }
+                                    } else {
+                                        if pixel.intensity < dimmest2 { dimmest2 = pixel.intensity }
+                                    }
+                                }
+                            }
+
+                            // how many times brighter does the middle peak have to be?
+                            //let brightnessThreshold = 20.0 // XXX constant
+                            let brightnessThreshold = 50.0 // XXX constant
+                            //let brightnessThreshold = 100.0 // XXX constant
+
+                            // how far away can the brighest coord be from the line?
+                            let distanceThreshold = 2.0   // XXX constant
+
+                            let minBrightness = 0x1000 // XXX constant
+                            //let minBrightness = 0x0B00 // too small
+                            //let minBrightness = 800 // too small
+                            
+                            if brighest > minBrightness, 
+                               Double(brighest)/Double(dimmest1) > brightnessThreshold,
+                               Double(brighest)/Double(dimmest2) > brightnessThreshold,
+                               let brightestCoord = brightestCoord,
+                               standardLine.distanceTo(brightestCoord) < distanceThreshold
+                            {
+                                let pixel = self.pixels[Int(brightestCoord.x)][Int(brightestCoord.y)]
+                                switch pixel.status {
+                                case .unknown:
+                                    let newBlob = Blob(pixel, frameIndex: frameIndex)
+                                    blobs.append(newBlob)
+                                    Log.d("frame \(frameIndex) expanding from seed pixel \(pixel)")
+                                    expand(blob: newBlob, seedPixel: pixel)
+                                    
+                                case .background:
+                                    break
+                                    
+                                case .blobbed(_):
+                                    break
+                                }
+                            }
                         }
                         
                     case .background:
                         break
                     }
                 } else {
-                    Log.d("frame \(frameIndex) elementLine \(elementLine) OUT OF BOUNDS iterate \(x) \(y)")
+                    //Log.d("frame \(frameIndex) elementLine \(elementLine) OUT OF BOUNDS iterate \(x) \(y)")
                 }
             }
         }
+
+        // filter blobs here
+
+        self.blobs = self.blobs.filter { $0.size > 20 }
     }
 }
