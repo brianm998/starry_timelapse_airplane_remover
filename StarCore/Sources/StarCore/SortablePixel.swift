@@ -44,8 +44,8 @@ public class SortablePixel {
     }
     
     public init(x: Int = 0,
-         y: Int = 0,
-         intensity: UInt16 = 0)
+                y: Int = 0,
+                intensity: UInt16 = 0)
     {
         self.x = x
         self.y = y
