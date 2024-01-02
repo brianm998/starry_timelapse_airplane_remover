@@ -246,7 +246,7 @@ public struct PixelatedImage {
         while xOffset < width {
             yOffset = 0
             while yOffset < height {
-                Log.i("matrix xOffset \(xOffset) yOffset \(yOffset)")
+                //Log.i("matrix xOffset \(xOffset) yOffset \(yOffset)")
                 var matrixWidth = maxWidth
                 if xOffset + matrixWidth > width {
                     matrixWidth = width - xOffset
@@ -281,7 +281,7 @@ public struct PixelatedImage {
                                                              y: yOffset,
                                                              image: nsImage)
                             
-                            Log.i("matrix element [\(xOffset), \(yOffset)] image width \(matrixWidth) matrix height \(matrixHeight)")
+                            //Log.i("matrix element [\(xOffset), \(yOffset)] image width \(matrixWidth) matrix height \(matrixHeight)")
                             matrix.append(element)
                         } else {
                             Log.w("unable to make image")
