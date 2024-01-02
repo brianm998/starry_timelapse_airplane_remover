@@ -112,16 +112,39 @@ extension Line {
         }
     }
 
-    /*
+    public func iterate(between coord1: DoubleCoord,
+                        and coord2: DoubleCoord,
+                        closure: (Int, Int, IterationDirection) -> Void)
+    {
+        let standardLine = self.standardLine
 
-     XXX this method can sometimes iterate where the line does not exist
-
-     XXX it can also sometimes give the wrong Y value for a line
-
-     XXX test this more separatetly, this is the root of the wrong math
-     in the HoughLineBlobber.
-     
-     */
+        Log.i("self.standardLine \(self.standardLine)")
+        
+        switch self.iterationDirection {
+        case .horizontal:
+            var minX = coord1.x
+            var maxX = coord2.x
+            if coord2.x < minX {
+                minX = coord2.x
+                maxX = coord1.x
+            }
+            for x in Int(minX)...Int(maxX) {
+                closure(x, Int(standardLine.y(forX: Double(x))), .horizontal)
+            }
+            
+        case .vertical:
+            var minY = coord1.y
+            var maxY = coord2.y
+            if coord2.y < minY {
+                minY = coord2.y
+                maxY = coord1.y
+            }
+            for y in Int(minY)...Int(maxY) {
+                closure(Int(standardLine.x(forY: Double(y))), y, .vertical)
+            }
+        }
+    }
+    
     public func iterate(on elementLine: MatrixElementLine,
                         withExtension lineExtension: Int = 0, // extend this far in each direction
                         closure: (Int, Int, IterationDirection) -> Void)
