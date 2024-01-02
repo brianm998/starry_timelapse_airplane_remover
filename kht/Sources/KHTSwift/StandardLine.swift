@@ -94,6 +94,10 @@ public struct StandardLine {
         return (-c - b*y)/a
     }
 
+    public func distanceTo(_ coord: DoubleCoord) -> Double {
+        abs(a*coord.x + b*coord.y + c) / sqrt(a*a+b*b)
+    }
+
     // how var is the given point from this line?
     public func distanceTo(x: Int, y: Int) -> Double {
         abs(a*Double(x) + b*Double(y) + c) / sqrt(a*a+b*b)
