@@ -246,4 +246,51 @@ public class Blob: CustomStringConvertible {
         }
         return min
     }
+
+    // returns a merged blob, if and only if the combined blob
+    // is closer to being a line when combined
+    // than when the blobs are separate 
+    public func lineMerge(with otherBlob: Blob) -> Blob? {
+
+        // first clone self
+        let newBlob = Blob(self)
+
+        // then see if we can absorb the other blob
+        if newBlob.absorb(otherBlob) {
+
+            // make sure this new blob has an ideal line detected
+            if let newLine = newBlob.line {
+
+                // new blobs distance from its own ideal line
+                let newBlobAvg = newBlob.averageDistance(from: newLine)
+
+                // self distance from newBlobs ideal line
+                let selfAvg = self.averageDistance(from: newLine)
+
+                // otherBlob distance from newBlobs ideal line
+                let otherBlobAvg = otherBlob.averageDistance(from: newLine)
+
+                Log.d("frame \(frameIndex) blob \(self) avg \(selfAvg) otherBlob \(otherBlob) avg \(otherBlobAvg) newBlobAvg \(newBlobAvg)")
+
+                // this new blob needs to be closer to its own line than anything else
+                if newBlobAvg < otherBlobAvg,
+                   newBlobAvg < selfAvg,
+                   newBlobAvg < self.averageDistanceFromIdealLine,
+                   newBlobAvg < otherBlob.averageDistanceFromIdealLine
+                {
+                    // only add the new blob if the line score is better
+                    // than that of the separate blobs on both the new
+                    // blob line, and also their own ideal lines
+                    Log.d("frame \(frameIndex) adding new absorbed blob \(newBlob) from \(self) and \(otherBlob) because \(newBlobAvg) < \(otherBlobAvg) && \(newBlobAvg) < \(selfAvg) && \(newBlobAvg) < \(self.averageDistanceFromIdealLine) && \(newBlobAvg) < \(otherBlob.averageDistanceFromIdealLine)")
+
+                    return newBlob
+                }
+            } else {
+                Log.i("frame \(frameIndex) blob \(newBlob) has no line")
+            }
+        } else {
+            Log.i("frame \(frameIndex) blob \(newBlob) failed to absorb blob (self)")
+        }
+        return nil
+    }
 }
