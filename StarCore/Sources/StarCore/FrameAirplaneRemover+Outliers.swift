@@ -103,10 +103,12 @@ extension FrameAirplaneRemover {
 
          New outlier detection logic:
 
-         - do pretty radical initial blob detection, get lots of small dim blobs
-         - originally sort blobs by size * intensity, process largest brighest first
-         - if a blob can have a line detected from it, search in a rougly linear area
-         - if a blob has no line, search in a more circular area
+         * do pretty radical initial full frame blob detection, get lots of small dim blobs
+         * originally sort blobs by size, processing largest first
+         - if a blob can have a line detected from it,
+           search along the line by convolving a search area across it to find pixels
+           extend some amount past the known blob area on each side of the line
+         - if a blob has no line, search in a larger circular area centered on the blob
          - each other nearby blob found is then subject to line analysis,
            and if a fit, is absorbed into the original blob.
            This can then expand the search area.
@@ -114,7 +116,7 @@ extension FrameAirplaneRemover {
            be very picky and throw out a lot of blobs:
             - too small
             - no line
-            - line vote score too low
+            - line has too few votes
             - averageLineVariance / lineLength calculations
          - then promote them to outlier groups for further analysis
          */
@@ -136,7 +138,7 @@ extension FrameAirplaneRemover {
                                                     minimumLocalMaximum: config.maxPixelDistance/2,
                                                     contrastMin: 58)      // XXX constant
 /*
-
+ XXX this one misses some blobs because there is no line :(
             let blobber: Blobber = HoughLineBlobber(imageWidth: width,
                                                     imageHeight: height,
                                                     pixelData: subtractionArray,
@@ -144,9 +146,8 @@ extension FrameAirplaneRemover {
                                                     neighborType: .eight,//.fourCardinal,
                                                     contrastMin: 52,
                                                     houghLines: houghLines)
-
-
-            */
+ */
+            
             if config.writeOutlierGroupFiles {
                 // save blobs image here
                 var blobImageData = [UInt8](repeating: 0, count: width*height)
@@ -168,15 +169,22 @@ extension FrameAirplaneRemover {
              */
 
             self.state = .detectingOutliers2a
-/*
+
+            /*
+             XXX blob KHT analysis misses existing blobs because of no lines :(
             let blobsToPromote = try await blobKHTAnalysis(houghLines: houghLines,
                                                            blobMap: blobber.blobMap)
- */
-            let blobsToPromote = blobber.blobs
+             */
+            
+            var blobsToPromote = blobber.blobs
+
+            // sort by size, biggest first
+            blobsToPromote.sort { $0.size > $1.size }
             
             // XXX add another step here where we look for all blobs to promote, and
             // see if we get a better line score if we combine with another 
-            var blobsProcessed = [Bool](repeating: false, count: blobsToPromote.count)
+
+            var blobsProcessed: [String: Bool] = [:] // keyed by blob id, true if processed
 
             Log.i("frame \(frameIndex) has \(blobsToPromote.count) blobsToPromote")
 
@@ -185,50 +193,47 @@ extension FrameAirplaneRemover {
             var filteredBlobs: [Blob] = []
 
             // XXX need to sort blobs here by size / brightness
-            for (index, blob) in blobsToPromote.enumerated() {
+            for blob in blobsToPromote {
                 Log.d("frame \(frameIndex) index \(index) filtering blob \(blob)")
-                if blobsProcessed[index] { continue }
+                if let blobProcessed = blobsProcessed[blob.id],
+                   blobProcessed
+                {
+                    continue
+                }
                 var blobToAdd = blob
-                blobsProcessed[index] = true
+                blobsProcessed[blob.id] = true
 
                 Log.d("frame \(frameIndex) index \(index) filtering blob \(blob)")
 
+                if let blobLine = blob.line {
+                    // search along the line, convolving a small search area across it
+                    // search first one direction from the blob center,
+                    // then search the other direction from the blob center, to attach
+                    // closer blob first
+                    
+                } else {
+                    // search radially, in an ever expanding circle from the center point,
+                    // processing closer blobs first
+                   
+                }
+                
                 // XXX need to sort other blobs by distance here
                 for (innerIndex, innerBlob) in blobsToPromote.enumerated() {
-                    if blobsProcessed[innerIndex] { continue }
+
+                    if let blobProcessed = blobsProcessed[blob.id],
+                       blobProcessed
+                    {
+                        continue
+                    }
+                    
                                                                   // XXX constant VVV
                     if blob.boundingBox.edgeDistance(to: innerBlob.boundingBox) > 500 { continue }
-                    
-                    let newBlob = Blob(blobToAdd)
-                    if newBlob.absorb(innerBlob) {
-                        if let newLine = newBlob.line {
-                            let newBlobAvg = newBlob.averageDistance(from: newLine)
-                            let blobToAddAvg = blobToAdd.averageDistance(from: newLine)
-                            let innerBlobAvg = innerBlob.averageDistance(from: newLine)
 
-                            Log.d("frame \(frameIndex) blob \(blobToAdd) avg \(blobToAddAvg) innerBlob \(innerBlob) avg \(innerBlobAvg) newBlobAvg \(newBlobAvg)")
-
-                            if newBlobAvg < innerBlobAvg,
-                               newBlobAvg < blobToAddAvg,
-                               newBlobAvg < blobToAdd.averageDistanceFromIdealLine,
-                               newBlobAvg < innerBlob.averageDistanceFromIdealLine
-                            {
-                                // only add the new blob if the line score is better
-                                // than that of the separate blobs on both the new
-                                // blob line, and also their own ideal lines
-                                Log.d("frame \(frameIndex) adding new absorbed blob \(newBlob) from \(blobToAdd) and \(innerBlob) because \(newBlobAvg) < \(innerBlobAvg) && \(newBlobAvg) < \(blobToAddAvg) && \(newBlobAvg) < \(blobToAdd.averageDistanceFromIdealLine) && \(newBlobAvg) < \(innerBlob.averageDistanceFromIdealLine)")
-
-                                // use this new blob as it is better combined than separate
-                                blobToAdd = newBlob
-
-                                // ignore the index of the absorbed blob in the future
-                                blobsProcessed[innerIndex] = true
-                            }
-                        } else {
-                            Log.i("frame \(frameIndex) blob \(newBlob) has no line")
-                        }
-                    } else {
-                        Log.i("frame \(frameIndex) blob \(newBlob) failed to absorb blob (blobToAdd)")
+                    if let absorbedBlob = blobToAdd.lineMerge(with: innerBlob) {
+                        // use this new blob as it is better combined than separate
+                        blobToAdd = absorbedBlob
+                        // ignore the index of the absorbed blob in the future
+                        blobsProcessed[innerBlob.id] = true
                     }
                 }
                 Log.d("frame \(frameIndex) adding filtered blob \(blobToAdd)")
