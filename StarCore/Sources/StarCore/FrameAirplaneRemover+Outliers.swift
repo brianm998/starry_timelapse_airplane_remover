@@ -114,8 +114,8 @@ extension FrameAirplaneRemover {
            This can then expand the search area.
          - after all possible line connections are made, 
            be very picky and throw out a lot of blobs:
-            - too small
-            - no line
+            * too small
+            * no line
             - line has too few votes
             - averageLineVariance / lineLength calculations
          - then promote them to outlier groups for further analysis
@@ -125,7 +125,7 @@ extension FrameAirplaneRemover {
             self.state = .detectingOutliers1
 
             // first run the hough transform on sub sections of the subtraction image
-            let houghLines = houghLines(from: subtractionImage)
+            //let houghLines = houghLines(from: subtractionImage)
 
             self.state = .detectingOutliers2
 
@@ -181,8 +181,8 @@ extension FrameAirplaneRemover {
             // sort by size, biggest first
             blobsToPromote.sort { $0.size > $1.size }
             
-            // XXX add another step here where we look for all blobs to promote, and
-            // see if we get a better line score if we combine with another 
+            // look for all blobs to promote,
+            // and see if we get a better line score if we combine with another 
 
             var blobsProcessed: [String: Bool] = [:] // keyed by blob id, true if processed
 
@@ -192,7 +192,6 @@ extension FrameAirplaneRemover {
 
             var filteredBlobs: [Blob] = []
 
-            // XXX need to sort blobs here by size / brightness
             for blob in blobsToPromote {
                 Log.d("frame \(frameIndex) index \(index) filtering blob \(blob)")
                 if let blobProcessed = blobsProcessed[blob.id],
@@ -245,7 +244,9 @@ extension FrameAirplaneRemover {
             
             // promote found blobs to outlier groups for further processing
             for blob in filteredBlobs {
-                if blob.size >= config.minGroupSize {
+                if let _ = blob.line,
+                   blob.size >= config.minGroupSize
+                {
                     // make outlier group from this blob
                     let outlierGroup = blob.outlierGroup(at: frameIndex)
                     Log.i("frame \(frameIndex) promoting \(blob) to outlier group \(outlierGroup.name) line \(blob.line)")
@@ -445,7 +446,7 @@ extension FrameAirplaneRemover {
                     processBlobsAt(x: x,
                                    y: y,
                                    on: line,
-                                   iterationDirection: direction,
+                                   iterationOrientation: direction,
                                    blobsToPromote: &blobsToPromote,
                                    blobRefs: &blobRefs,
                                    blobMap: &blobMap,
@@ -472,7 +473,7 @@ extension FrameAirplaneRemover {
     private func processBlobsAt(x sourceX: Int,
                                 y sourceY: Int,
                                 on line: Line,
-                                iterationDirection: IterationDirection,
+                                iterationOrientation: IterationOrientation,
                                 blobsToPromote: inout [String:Blob],
                                 blobRefs: inout [String?],
                                 blobMap: inout [String:Blob],
@@ -491,7 +492,7 @@ extension FrameAirplaneRemover {
         var endX = sourceX+1
         var endY = sourceY+1
         
-        switch iterationDirection {
+        switch iterationOrientation {
         case .vertical:
             startY -= searchDistanceEachDirection
             endY += searchDistanceEachDirection

@@ -1,9 +1,19 @@
 import Foundation
 import KHTSwift
 
+public enum IterationOrientation {
+    case vertical
+    case horizontal
+}
+
+public enum IterationDirection {
+    case positive
+    case negative
+}
+
 extension Line {
-    
-    public var iterationDirection: IterationDirection {
+
+    public var iterationOrientation: IterationOrientation {
         let (p1, p2) = self.twoPoints
 
         let x_diff = abs(p1.x - p2.x)
@@ -21,13 +31,13 @@ extension Line {
 
     public func iterate(between coord1: DoubleCoord,
                         and coord2: DoubleCoord,
-                        closure: (Int, Int, IterationDirection) -> Void)
+                        closure: (Int, Int, IterationOrientation) -> Void)
     {
         let standardLine = self.standardLine
 
         //Log.i("self.standardLine \(self.standardLine)")
         
-        switch self.iterationDirection {
+        switch self.iterationOrientation {
         case .horizontal:
             var minX = coord1.x
             var maxX = coord2.x
@@ -64,13 +74,13 @@ extension Line {
     
     public func iterate(on elementLine: MatrixElementLine,
                         withExtension lineExtension: Int = 0, // extend this far in each direction
-                        closure: (Int, Int, IterationDirection) -> Void)
+                        closure: (Int, Int, IterationOrientation) -> Void)
     {
         let element = elementLine.element
         
         let standardLine = self.standardLine
 
-        switch self.iterationDirection {
+        switch self.iterationOrientation {
         case .horizontal:
 
             let startX = -lineExtension+element.x
@@ -107,9 +117,4 @@ extension Line {
             }
         }
     }
-}
-
-public enum IterationDirection {
-    case vertical
-    case horizontal
 }
