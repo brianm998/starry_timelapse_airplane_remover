@@ -99,26 +99,43 @@ extension FrameAirplaneRemover {
             }
             Log.d("loaded subtractionArray with \(subtractionArray.count) items")
         }
+        /*
 
+         New outlier detection logic:
+
+         - do pretty radical initial blob detection, get lots of small dim blobs
+         - originally sort blobs by size * intensity, process largest brighest first
+         - if a blob can have a line detected from it, search in a rougly linear area
+         - if a blob has no line, search in a more circular area
+         - each other nearby blob found is then subject to line analysis,
+           and if a fit, is absorbed into the original blob.
+           This can then expand the search area.
+         - after all possible line connections are made, 
+           be very picky and throw out a lot of blobs:
+            - too small
+            - no line
+            - line vote score too low
+            - averageLineVariance / lineLength calculations
+         - then promote them to outlier groups for further analysis
+         */
         if let subtractionImage = subtractionImage {
 
             self.state = .detectingOutliers1
-            
+
             // first run the hough transform on sub sections of the subtraction image
             let houghLines = houghLines(from: subtractionImage)
-            
+
             self.state = .detectingOutliers2
 
-/*
             let blobber: Blobber = FullFrameBlobber(imageWidth: width,
                                                     imageHeight: height,
                                                     pixelData: subtractionArray,
                                                     frameIndex: frameIndex,
                                                     neighborType: .eight,//.fourCardinal,
                                                     minimumBlobSize: config.minGroupSize/4, // XXX constant XXX
-                                                    minimumLocalMaximum: config.maxPixelDistance,
-                                                    contrastMin: 52)      // XXX constant
-            */
+                                                    minimumLocalMaximum: config.maxPixelDistance/2,
+                                                    contrastMin: 58)      // XXX constant
+/*
 
             let blobber: Blobber = HoughLineBlobber(imageWidth: width,
                                                     imageHeight: height,
@@ -129,6 +146,7 @@ extension FrameAirplaneRemover {
                                                     houghLines: houghLines)
 
 
+            */
             if config.writeOutlierGroupFiles {
                 // save blobs image here
                 var blobImageData = [UInt8](repeating: 0, count: width*height)
@@ -150,10 +168,12 @@ extension FrameAirplaneRemover {
              */
 
             self.state = .detectingOutliers2a
-
+/*
             let blobsToPromote = try await blobKHTAnalysis(houghLines: houghLines,
                                                            blobMap: blobber.blobMap)
-
+ */
+            let blobsToPromote = blobber.blobs
+            
             // XXX add another step here where we look for all blobs to promote, and
             // see if we get a better line score if we combine with another 
             var blobsProcessed = [Bool](repeating: false, count: blobsToPromote.count)
@@ -163,7 +183,8 @@ extension FrameAirplaneRemover {
             self.state = .detectingOutliers2b
 
             var filteredBlobs: [Blob] = []
-            
+
+            // XXX need to sort blobs here by size / brightness
             for (index, blob) in blobsToPromote.enumerated() {
                 Log.d("frame \(frameIndex) index \(index) filtering blob \(blob)")
                 if blobsProcessed[index] { continue }
@@ -171,11 +192,12 @@ extension FrameAirplaneRemover {
                 blobsProcessed[index] = true
 
                 Log.d("frame \(frameIndex) index \(index) filtering blob \(blob)")
-                
+
+                // XXX need to sort other blobs by distance here
                 for (innerIndex, innerBlob) in blobsToPromote.enumerated() {
                     if blobsProcessed[innerIndex] { continue }
                                                                   // XXX constant VVV
-                    if blob.boundingBox.edgeDistance(to: innerBlob.boundingBox) > 120 { continue }
+                    if blob.boundingBox.edgeDistance(to: innerBlob.boundingBox) > 500 { continue }
                     
                     let newBlob = Blob(blobToAdd)
                     if newBlob.absorb(innerBlob) {
