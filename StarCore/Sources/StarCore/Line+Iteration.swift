@@ -29,6 +29,54 @@ extension Line {
         }
     }
 
+    // iterate from a central point on the line,
+    // in some iteration direction.
+    // iteration stops when closure returns false
+    public func iterate(from centralCoord: DoubleCoord,
+                        in iterationDirection: IterationDirection,
+                        closure: (Int, Int, IterationOrientation) -> Bool)
+    {
+        let standardLine = self.standardLine
+        switch self.iterationOrientation {
+        case .horizontal:
+
+            // start at the middle
+            var currentX = Int(centralCoord.x)
+            var currentY = Int(standardLine.y(forX: Double(currentX)))
+
+            while(closure(currentX, currentY, .horizontal)) {
+                switch iterationDirection {
+                case .positive:
+                    currentX += 1
+                    
+                case .negative:
+                    currentX -= 1
+                    
+                }
+                //if currentX < 0 { break }
+                currentY = Int(standardLine.y(forX: Double(currentX)))
+            }
+            
+        case .vertical:
+            // start at the middle
+            var currentY = Int(centralCoord.y)
+            var currentX = Int(standardLine.x(forY: Double(currentY)))
+
+            while(closure(currentX, currentY, .vertical)) {
+                switch iterationDirection {
+                case .positive:
+                    currentY += 1
+                    
+                case .negative:
+                    currentY -= 1
+                    
+                }
+                //if currentY < 0 { break }
+                currentX = Int(standardLine.x(forY: Double(currentY)))
+            }
+        }        
+    }
+    
     public func iterate(between coord1: DoubleCoord,
                         and coord2: DoubleCoord,
                         closure: (Int, Int, IterationOrientation) -> Void)
