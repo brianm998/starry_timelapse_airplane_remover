@@ -176,68 +176,17 @@ extension FrameAirplaneRemover {
                                                            blobMap: blobber.blobMap)
              */
             
-            var blobsToPromote = blobber.blobs
+            self.state = .detectingOutliers2b
 
-            // sort by size, biggest first
-            blobsToPromote.sort { $0.size > $1.size }
-            
+            let absorber = BlobAbsorber(blobMap: blobber.blobMap,
+                                        frameIndex: frameIndex,
+                                        frameWidth: width,
+                                        frameHeight: height)
+
             // look for all blobs to promote,
             // and see if we get a better line score if we combine with another 
 
-            var blobsProcessed: [String: Bool] = [:] // keyed by blob id, true if processed
-
-            Log.i("frame \(frameIndex) has \(blobsToPromote.count) blobsToPromote")
-
-            self.state = .detectingOutliers2b
-
-            var filteredBlobs: [Blob] = []
-
-            for blob in blobsToPromote {
-                Log.d("frame \(frameIndex) index \(index) filtering blob \(blob)")
-                if let blobProcessed = blobsProcessed[blob.id],
-                   blobProcessed
-                {
-                    continue
-                }
-                var blobToAdd = blob
-                blobsProcessed[blob.id] = true
-
-                Log.d("frame \(frameIndex) index \(index) filtering blob \(blob)")
-
-                if let blobLine = blob.line {
-                    // search along the line, convolving a small search area across it
-                    // search first one direction from the blob center,
-                    // then search the other direction from the blob center, to attach
-                    // closer blob first
-                    
-                } else {
-                    // search radially, in an ever expanding circle from the center point,
-                    // processing closer blobs first
-                   
-                }
-                
-                // XXX need to sort other blobs by distance here
-                for (innerIndex, innerBlob) in blobsToPromote.enumerated() {
-
-                    if let blobProcessed = blobsProcessed[blob.id],
-                       blobProcessed
-                    {
-                        continue
-                    }
-                    
-                                                                  // XXX constant VVV
-                    if blob.boundingBox.edgeDistance(to: innerBlob.boundingBox) > 500 { continue }
-
-                    if let absorbedBlob = blobToAdd.lineMerge(with: innerBlob) {
-                        // use this new blob as it is better combined than separate
-                        blobToAdd = absorbedBlob
-                        // ignore the index of the absorbed blob in the future
-                        blobsProcessed[innerBlob.id] = true
-                    }
-                }
-                Log.d("frame \(frameIndex) adding filtered blob \(blobToAdd)")
-                filteredBlobs.append(blobToAdd)
-            }
+            let filteredBlobs = absorber.filteredBlobs
             
             Log.i("frame \(frameIndex) has \(filteredBlobs.count) filteredBlobs")
             self.state = .detectingOutliers3
@@ -254,6 +203,7 @@ extension FrameAirplaneRemover {
                     outlierGroups?.members[outlierGroup.name] = outlierGroup
                 }
             }
+
         } else {
             Log.e("frame \(frameIndex) has no subtraction image, no outliers produced")
         }
@@ -743,7 +693,7 @@ extension FrameAirplaneRemover {
             Log.w("cannot classify nil outlier groups")
         }
     }
-    
+
     public func outlierGroupList() -> [OutlierGroup]? {
         if let outlierGroups = outlierGroups {
             let groups = outlierGroups.members

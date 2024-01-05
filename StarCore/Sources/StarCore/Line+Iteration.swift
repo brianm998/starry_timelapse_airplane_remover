@@ -7,8 +7,8 @@ public enum IterationOrientation {
 }
 
 public enum IterationDirection {
-    case positive
-    case negative
+    case forwards
+    case backwards
 }
 
 extension Line {
@@ -32,8 +32,8 @@ extension Line {
     // iterate from a central point on the line,
     // in some iteration direction.
     // iteration stops when closure returns false
-    public func iterate(from centralCoord: DoubleCoord,
-                        in iterationDirection: IterationDirection,
+    public func iterate(_ iterationDirection: IterationDirection,
+                        from centralCoord: DoubleCoord,
                         closure: (Int, Int, IterationOrientation) -> Bool)
     {
         let standardLine = self.standardLine
@@ -46,10 +46,10 @@ extension Line {
 
             while(closure(currentX, currentY, .horizontal)) {
                 switch iterationDirection {
-                case .positive:
+                case .forwards:
                     currentX += 1
                     
-                case .negative:
+                case .backwards:
                     currentX -= 1
                     
                 }
@@ -64,10 +64,10 @@ extension Line {
 
             while(closure(currentX, currentY, .vertical)) {
                 switch iterationDirection {
-                case .positive:
+                case .forwards:
                     currentY += 1
                     
-                case .negative:
+                case .backwards:
                     currentY -= 1
                     
                 }
