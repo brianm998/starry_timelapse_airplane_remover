@@ -48,16 +48,12 @@ public class Blob: CustomStringConvertible {
         
         let blobImageData = self.blobImageData
         
-        let minX = self.boundingBox.min.x
-        let minY = self.boundingBox.min.y
-        
         let pixelImage = PixelatedImage(width: self.boundingBox.width,
                                         height: self.boundingBox.height,
                                         grayscale16BitImageData: blobImageData)
 
         if let image = pixelImage.nsImage {
-            let lines = kernelHoughTransform(image: image,
-                                             clusterMinSize: 4)
+            let lines = kernelHoughTransform(image: image, clusterMinSize: 4)
             //Log.d("frame \(frameIndex) blob \(self) got \(lines.count) lines from KHT")
             if lines.count > 0 {
                 _blobLine = lines[0]
