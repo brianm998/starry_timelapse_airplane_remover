@@ -214,7 +214,25 @@ public class Blob: CustomStringConvertible {
         }
         return ret
     }
-    
+
+    // a point close to the center of this blob if it's a line
+    public var centralLineCoord: DoubleCoord? {
+        let center = self.boundingBox.centerDouble
+        if let line = self.line {
+            let standardLine = line.standardLine
+            
+            switch line.iterationOrientation {
+            case .horizontal:
+                return DoubleCoord(x: center.x,
+                                   y: standardLine.y(forX: Double(center.x)))
+            case .vertical:
+                return DoubleCoord(x: standardLine.x(forY: Double(center.y)),
+                                   y: center.y)
+            }
+        }
+        return nil
+    }
+        
     public func outlierGroup(at frameIndex: Int) -> OutlierGroup {
         // XXX make this pass on the line, if there is one
         OutlierGroup(name: self.id,
