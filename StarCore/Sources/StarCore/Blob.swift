@@ -88,7 +88,7 @@ public class Blob: CustomStringConvertible {
         if let averageDistanceFromIdealLine = _averageDistanceFromIdealLine {
             return averageDistanceFromIdealLine
         }
-        if let line = self.line {
+        if let line = self.originZeroLine {
             let ret = averageDistance(from: line)
             _averageDistanceFromIdealLine = ret
             return ret
@@ -98,13 +98,14 @@ public class Blob: CustomStringConvertible {
         return 420420420
     }
 
+    // assumes line has 0,0 origin
     public func averageDistance(from line: Line) -> Double {
-        let (ret, _) = OutlierGroup.averageDistance(for: self.blobImageData,
-                                                    from: line,
-                                                    with: self.boundingBox,
-                                                    frameIndex: frameIndex)
-        //Log.d("frame \(frameIndex) blob \(self) averageDistanceFromIdealLine \(line) = \(ret)")
-        return ret
+        let standardLine = line.standardLine
+        var distanceSum: Double = 0.0
+        for pixel in pixels {
+            distanceSum += standardLine.distanceTo(x: pixel.x, y: pixel.y)
+        }
+        return distanceSum/Double(pixels.count)
     }
     
     // a line calculated from the pixels in this blob, if possible
@@ -144,6 +145,12 @@ public class Blob: CustomStringConvertible {
     public init(_ pixel: SortablePixel, frameIndex: Int) {
         self.pixels = [pixel]
         self.id = "\(pixel.x) x \(pixel.y)"
+        self.frameIndex = frameIndex
+    }
+
+    public init(frameIndex: Int) {
+        self.pixels = []
+        self.id = "empty"
         self.frameIndex = frameIndex
     }
 
@@ -211,10 +218,28 @@ public class Blob: CustomStringConvertible {
         return ret
     }
 
-    // a point close to the center of this blob if it's a line
+    // a point close to the center of this blob if it's a line, relative to its boundingBox
     public var centralLineCoord: DoubleCoord? {
         let center = self.boundingBox.centerDouble
         if let line = self.line {
+            let standardLine = line.standardLine
+            
+            switch line.iterationOrientation {
+            case .horizontal:
+                return DoubleCoord(x: center.x,
+                                   y: standardLine.y(forX: Double(center.x)))
+            case .vertical:
+                return DoubleCoord(x: standardLine.x(forY: Double(center.y)),
+                                   y: center.y)
+            }
+        }
+        return nil
+    }
+        
+    // a point close to the center of this blob if it's a line, with origin zero 
+    public var originZeroCentralLineCoord: DoubleCoord? {
+        let center = self.boundingBox.centerDouble
+        if let line = self.originZeroLine {
             let standardLine = line.standardLine
             
             switch line.iterationOrientation {
@@ -273,8 +298,22 @@ public class Blob: CustomStringConvertible {
         if newBlob.absorb(otherBlob) {
 
             // make sure this new blob has an ideal line detected
-            if let newLine = newBlob.line {
+            if let newLine = newBlob.originZeroLine {
 
+
+                /*
+
+                 averageDistance(from: ) is expecting a line in the bounding box of the blob
+
+                 we're using the same line with different reference frames
+
+                 need to update this to translate lines appropriately when measuring
+                 the distance of the pixels in a blob to it.
+
+                 right now it's a mess because that's not the case
+                 
+                 */
+                
                 // new blobs distance from its own ideal line
                 let newBlobAvg = newBlob.averageDistance(from: newLine)
 
@@ -284,20 +323,30 @@ public class Blob: CustomStringConvertible {
                 // otherBlob distance from newBlobs ideal line
                 let otherBlobAvg = otherBlob.averageDistance(from: newLine)
 
-                Log.d("frame \(frameIndex) blob \(self) avg \(selfAvg) otherBlob \(otherBlob) avg \(otherBlobAvg) newBlobAvg \(newBlobAvg)")
+                //Log.d("frame \(frameIndex) blob \(self) avg \(selfAvg) otherBlob \(otherBlob) avg \(otherBlobAvg) newBlobAvg \(newBlobAvg)")
 
+                let distance = self.boundingBox.edgeDistance(to: otherBlob.boundingBox)
+
+                var fudge: Double = -1.44 // XXX constant
+/*
+                if distance < 20 { // XXX constants
+                    fudge = -1.44
+                }
+  */              
                 // this new blob needs to be closer to its own line than anything else
-                if newBlobAvg < otherBlobAvg,
-                   newBlobAvg < selfAvg,
-                   newBlobAvg < self.averageDistanceFromIdealLine,
-                   newBlobAvg < otherBlob.averageDistanceFromIdealLine
+                if newBlobAvg+fudge < otherBlobAvg,
+                   newBlobAvg+fudge < selfAvg,
+                   newBlobAvg+fudge < self.averageDistanceFromIdealLine,
+                   newBlobAvg+fudge < otherBlob.averageDistanceFromIdealLine
                 {
                     // only add the new blob if the line score is better
                     // than that of the separate blobs on both the new
                     // blob line, and also their own ideal lines
-                    Log.d("frame \(frameIndex) adding new absorbed blob \(newBlob) from \(self) and \(otherBlob) because \(newBlobAvg) < \(otherBlobAvg) && \(newBlobAvg) < \(selfAvg) && \(newBlobAvg) < \(self.averageDistanceFromIdealLine) && \(newBlobAvg) < \(otherBlob.averageDistanceFromIdealLine)")
+                    Log.d("frame \(frameIndex) adding new absorbed blob \(newBlob) from \(self) and \(otherBlob) because \(newBlobAvg) < \(otherBlobAvg) && < \(selfAvg) && < \(self.averageDistanceFromIdealLine) && < \(otherBlob.averageDistanceFromIdealLine)")
 
                     return newBlob
+                } else {
+                    Log.d("frame \(frameIndex) NOT adding new absorbed blob \(newBlob) from \(self) and \(otherBlob) because something is wrong in this calculation: fudge \(fudge) distance \(distance) - \(newBlobAvg) < \(otherBlobAvg) && < \(selfAvg) && < \(self.averageDistanceFromIdealLine) && < \(otherBlob.averageDistanceFromIdealLine)")
                 }
             } else {
                 Log.i("frame \(frameIndex) blob \(newBlob) has no line")

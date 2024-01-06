@@ -16,6 +16,8 @@ You should have received a copy of the GNU General Public License along with sta
 
 */
 
+// this class takes a map of blobs and digests them by absorbing ones which
+// form good lines together
 public class BlobAbsorber {
 
     // a reference for each pixel for each blob it might belong to
@@ -28,11 +30,16 @@ public class BlobAbsorber {
     
     private var blobMap: [String: Blob]
     private var blobs: [Blob]
+
+    private var lastX: Int = 0
+    private var lastY: Int = 0
+
+    private var iterationCount = 0
     
     // row major indexed array used for keeping track of checked pixels
     private var pixelProcessing: [String?]
 
-    private var blobToAdd: Blob?
+    private var blobToAdd: Blob
     
     var filteredBlobs: [Blob] = []
     
@@ -40,6 +47,23 @@ public class BlobAbsorber {
     let frameWidth: Int
     let frameHeight: Int
 
+    // XXX constants
+    
+    // how many pixels do we search away from the line for other blobs
+    let circularMaskRadius: Int = 16
+
+    // radius used when searching without a line
+    let circularIterationRadus = 20
+
+    // how far away from the last blob pixel do we iterate on a line
+    let maxLineIterationDistance: Double = 50
+
+    // blobs smaller than this aren't processed directly, though they
+    // may be absorbed by larger nearby blobs 
+    let minBlobProcessingSize = 65
+
+    // how var away from a line do we look for members of a group?
+    let maxLineDist = 2
     
     init(blobMap: [String: Blob],
          frameIndex: Int,
@@ -59,24 +83,26 @@ public class BlobAbsorber {
         
         self.blobRefs = [String?](repeating: nil, count: frameWidth*frameHeight)
 
+        self.blobToAdd = Blob(frameIndex: frameIndex)
+        
         for blob in blobs {
             for pixel in blob.pixels {
                 blobRefs[pixel.y*frameWidth+pixel.x] = blob.id
             }
         }
 
-        let maskRadius: Int = 8 // XXX constant XXX
         // used for blobs with lines, convolved across line
-        self.mask = CircularMask(radius: maskRadius)
+        self.mask = CircularMask(radius: circularMaskRadius)
 
         // used for blobs without lines, starts at center of blob
-        self.circularIterator = CircularIterator(radius: 80) // XXX constant XXX
+        self.circularIterator = CircularIterator(radius: circularIterationRadus)
         
         // row major indexed array used for keeping track of checked pixels
         self.pixelProcessing = [String?](repeating: nil, count: frameWidth*frameHeight)
 
-        for blob in blobs {
-            Log.d("frame \(frameIndex) index \(index) filtering blob \(blob)")
+        for (index, blob) in blobs.enumerated() {
+            if blob.size < minBlobProcessingSize { break } // XXX hardcoded constant XXX
+            
             if let blobProcessed = blobsProcessed[blob.id],
                blobProcessed
             {
@@ -85,10 +111,10 @@ public class BlobAbsorber {
             self.blobToAdd = blob
             blobsProcessed[blob.id] = true
 
-            Log.d("frame \(frameIndex) index \(index) filtering blob \(blob)")
+            let startTime = NSDate().timeIntervalSince1970
 
-            if let blobLine = blob.line,
-               let centralLineCoord = blob.centralLineCoord
+            if let blobLine = blob.originZeroLine,
+               let centralLineCoord = blob.originZeroCentralLineCoord
             {
                 // search along the line, convolving a small search area across it
                 // search first one direction from the blob center,
@@ -100,24 +126,32 @@ public class BlobAbsorber {
                 // stop when we go too far or out of frame,
                 // or too far from last blob point on the line
 
-                /*
-
-                 for iteration here, create a circular mask like the paint mask 
-
-                 */
+                self.lastX = Int(centralLineCoord.x)
+                self.lastY = Int(centralLineCoord.y)
                 
+                Log.d("frame \(frameIndex) blob index \(index) line filtering blob \(blob) lastX \(lastX) lastY \(lastY)")
+
+                iterationCount = 0
+
                 blobLine.iterate(.forwards, from: centralLineCoord) { x, y, _ in
                     self.blobLineIterate(x, y)
                 }
 
+                Log.d("frame \(frameIndex) blob index \(index) iterated fowards \(iterationCount) times")
+
+                self.lastX = Int(centralLineCoord.x)
+                self.lastY = Int(centralLineCoord.y)
+                
+                iterationCount = 0
+                
                 blobLine.iterate(.backwards, from: centralLineCoord) { x, y, _ in
                     self.blobLineIterate(x, y)
                 }
-                
+                Log.d("frame \(frameIndex) blob index \(index) iterated backwards \(iterationCount) times")
             } else {
+                Log.d("frame \(frameIndex) blob index \(index) circularly filtering blob \(blob)")
                 // search radially, in an ever expanding circle from the center point,
                 // processing closer blobs first
-
 
                 // create pixel mask like CenterMask, but allow sorting of pixels by distance
                 // from center.
@@ -141,6 +175,9 @@ public class BlobAbsorber {
                             // this blob and another were just combined and have a line
                             // need to switch to the line iteration
                             // and break out of this iteration loop.
+
+                            Log.d("frame \(frameIndex) blob index \(index) blobToAdd \(blobToAdd) just absorbed another blob")
+                            
                             didAbsorb = true
                             return false
                         }
@@ -148,35 +185,48 @@ public class BlobAbsorber {
                     return true
                 }
                 if didAbsorb,
-                   let blobToAdd = blobToAdd,
-                   let blobLine = blobToAdd.line,
-                   let centralLineCoord = blobToAdd.centralLineCoord
+                   let blobLine = blobToAdd.originZeroLine,
+                   let centralLineCoord = blobToAdd.originZeroCentralLineCoord
                 {
+                    Log.d("frame \(frameIndex) absorbed non-line blob into line \(blobLine) and now line iterating")
                     // here we found a blob that had no line and combined it with another
                     // and now there is a line.
                     // iterate across that line
 
+                    self.lastX = Int(centralLineCoord.x)
+                    self.lastY = Int(centralLineCoord.y)
+                    
+                    iterationCount = 0
+                
                     blobLine.iterate(.forwards, from: centralLineCoord) { x, y, _ in
                         self.blobLineIterate(x, y)
                     }
 
+                    self.lastX = Int(centralLineCoord.x)
+                    self.lastY = Int(centralLineCoord.y)
+
+                    iterationCount = 0
+                    
                     blobLine.iterate(.backwards, from: centralLineCoord) { x, y, _ in
                         self.blobLineIterate(x, y)
                     }
                 }
             }
 
-            if let blobToAdd = blobToAdd {
-                Log.d("frame \(frameIndex) adding filtered blob \(blobToAdd)")
-                filteredBlobs.append(blobToAdd)
-                self.blobToAdd = nil
-            }
+            let endTime = NSDate().timeIntervalSince1970
+            Log.d("frame \(frameIndex) adding filtered blob \(blobToAdd) after \(endTime-startTime) seconds of processing")
+            filteredBlobs.append(blobToAdd)
+
+            // reset the blobToAdd to be empty after adding filtered blob
+            self.blobToAdd = Blob(frameIndex: frameIndex)
         }
     }
 
     // iterate across the circular mask centered at x/y
     private func blobLineIterate(_ x: Int, _ y: Int) -> Bool {
 
+        iterationCount += 1
+        
         let xStart = x - mask.radius
         let yStart = y - mask.radius
 
@@ -184,15 +234,13 @@ public class BlobAbsorber {
         let yEnd = y + mask.radius + 1
 
         // all of these cases are completely outside the frame
+        /*
         if xStart > frameWidth { return false }
         if yStart > frameHeight { return false }
         if xEnd < 0 { return false }
         if yEnd < 0 { return false }
-
-        
+        */
         mask.iterate { blobX, blobY in
-            guard let blobToAdd = blobToAdd else { return }
-            
             let frameX = xStart + blobX
             let frameY = yStart + blobY
             
@@ -202,40 +250,47 @@ public class BlobAbsorber {
                frameY < frameHeight
             {
                 process(frameIndex: frameY*frameWidth+frameX)
-                // XXX also check here to see if this x/y is close to
+
+                // check to see if this x/y is close to
                 // blobToAdd, and use that to see how far away from
                 // that blob we have become.
+
+                for checkX in frameX-maxLineDist..<frameX+maxLineDist {
+                    for checkY in frameY-maxLineDist..<frameY+maxLineDist {
+                        if checkX >= 0,
+                           checkY >= 0,
+                           checkX < frameWidth,
+                           checkY < frameHeight,
+                           let blobId = blobRefs[checkY*frameWidth+checkX],
+                           blobId == blobToAdd.id
+                        {
+                            lastX = checkX
+                            lastY = checkY
+                        }
+                    }
+                }
             }
         }
 
-        /*
-         XXX
-         XXX
-         XXX
+        // use lastX/lastY to see how far away we are from the last know part of blobToAdd
+        let xDiff = Double(x - lastX)
+        let yDiff = Double(y - lastY)
+        let distance = sqrt(xDiff*xDiff + yDiff*yDiff)
 
-         need more logic here to figure out how far we should iterate from the center
+        if distance < maxLineIterationDistance {
+            // continue if iterating on this line if distance is low enough
+            return true
+        }
 
-
-         proposal:
-
-         - keep track of how far we are from the last pixel of the blob that we're tracking
-         - don't go more than XXX pixels away from it
-
-
-         
-         XXX
-         XXX
-         XXX
-        */
+        Log.d("frame \(frameIndex) after \(iterationCount) iterations blob \(blobToAdd) at [\(x), \(y)] has distance \(distance) from [\(lastX), \(lastY)]")
         
-        return false            // XXX decide when to go further still 
+        return false
     }
 
 
     // see if we can absorb another blob from the given frame index that makes
     // the blobToAdd a better line
     private func process(frameIndex: Int) -> Bool {
-        guard let blobToAdd = blobToAdd else { return false }
         
         if let processingBlob = pixelProcessing[frameIndex],
            processingBlob == blobToAdd.id
@@ -258,6 +313,7 @@ public class BlobAbsorber {
             if let innerBlob = blobMap[blobId],
                let absorbedBlob = blobToAdd.lineMerge(with: innerBlob)
             {
+                Log.d("frame \(frameIndex) blobToAdd \(blobToAdd) absorbed \(innerBlob) to become \(absorbedBlob)")
                 // use this new blob as it is better combined than separate
                 self.blobToAdd = absorbedBlob
                 // ignore the index of the absorbed blob in the future
@@ -267,6 +323,7 @@ public class BlobAbsorber {
                     blobRefs[pixel.y*frameWidth+pixel.x] = absorbedBlob.id
                 }
 
+                
                 return true
             }
         }

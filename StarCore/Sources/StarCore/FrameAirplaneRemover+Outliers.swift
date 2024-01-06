@@ -105,11 +105,11 @@ extension FrameAirplaneRemover {
 
          * do pretty radical initial full frame blob detection, get lots of small dim blobs
          * originally sort blobs by size, processing largest first
-         - if a blob can have a line detected from it,
+         * if a blob can have a line detected from it,
            search along the line by convolving a search area across it to find pixels
            extend some amount past the known blob area on each side of the line
-         - if a blob has no line, search in a larger circular area centered on the blob
-         - each other nearby blob found is then subject to line analysis,
+         * if a blob has no line, search in a larger circular area centered on the blob
+         * each other nearby blob found is then subject to line analysis,
            and if a fit, is absorbed into the original blob.
            This can then expand the search area.
          - after all possible line connections are made, 
@@ -122,7 +122,7 @@ extension FrameAirplaneRemover {
          */
         if let subtractionImage = subtractionImage {
 
-            self.state = .detectingOutliers1
+            //self.state = .detectingOutliers1
 
             // first run the hough transform on sub sections of the subtraction image
             //let houghLines = houghLines(from: subtractionImage)
@@ -134,8 +134,8 @@ extension FrameAirplaneRemover {
                                                     pixelData: subtractionArray,
                                                     frameIndex: frameIndex,
                                                     neighborType: .eight,//.fourCardinal,
-                                                    minimumBlobSize: config.minGroupSize/4, // XXX constant XXX
-                                                    minimumLocalMaximum: config.maxPixelDistance/2,
+                                                    minimumBlobSize: config.minGroupSize/*/3*/, // XXX constant XXX
+                                                    minimumLocalMaximum: config.maxPixelDistance/*/3*/,
                                                     contrastMin: 58)      // XXX constant
 /*
  XXX this one misses some blobs because there is no line :(
@@ -168,7 +168,7 @@ extension FrameAirplaneRemover {
              single larger blob.
              */
 
-            self.state = .detectingOutliers2a
+//            self.state = .detectingOutliers2a
 
             /*
              XXX blob KHT analysis misses existing blobs because of no lines :(
@@ -340,7 +340,6 @@ extension FrameAirplaneRemover {
         var blobsToPromote: [String:Blob] = [:]
         var blobMap = _blobMap   // we need to mutate this arg
 
-        
         let maxVotes = 12000     // lines with votes over this are max color on kht image
         let khtImageBase = 0x1F  // dimmest lines will be 
         var khtImage: [UInt8] = []
@@ -356,12 +355,11 @@ extension FrameAirplaneRemover {
                 blobRefs[pixel.y*width+pixel.x] = blob.id
             }
         }
-        
+
         Log.i("frame \(frameIndex) loaded subtraction image")
 
         for elementLine in houghLines {
             let element = elementLine.element
-
 
             // when theta is around 300 or more, then we get a bad line here :(
             let line = elementLine.originZeroLine
@@ -405,7 +403,7 @@ extension FrameAirplaneRemover {
                 }
             }
         }
-
+/*
         if config.writeOutlierGroupFiles {
             // save image of kht lines
             let image = PixelatedImage(width: width, height: height,
@@ -415,7 +413,7 @@ extension FrameAirplaneRemover {
             try await imageAccessor.save(image, as: .houghLines,
                                          atSize: .preview, overwrite: true)
         }
-
+*/
         return Array(blobsToPromote.values)
     }
 
@@ -660,7 +658,6 @@ extension FrameAirplaneRemover {
         }
     }
 
-    // XXX this method does classify, but does not appear to be saved :(
     private func classifyOutliers(with validationData: [UInt8]) {
         Log.d("frame \(frameIndex) classifying outliers with validation image data")
 
