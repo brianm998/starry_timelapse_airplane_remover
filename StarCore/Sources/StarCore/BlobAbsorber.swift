@@ -24,7 +24,8 @@ public class BlobAbsorber {
     private var blobsProcessed: [String: Bool] = [:] // keyed by blob id, true if processed
 
     private let mask: CircularMask
-
+    private let circularIterator: CircularIterator
+    
     private var blobMap: [String: Blob]
     private var blobs: [Blob]
     
@@ -65,9 +66,12 @@ public class BlobAbsorber {
         }
 
         let maskRadius: Int = 8 // XXX constant XXX
-        
+        // used for blobs with lines, convolved across line
         self.mask = CircularMask(radius: maskRadius)
 
+        // used for blobs without lines, starts at center of blob
+        self.circularIterator = CircularIterator(radius: 80) // XXX constant XXX
+        
         // row major indexed array used for keeping track of checked pixels
         self.pixelProcessing = [String?](repeating: nil, count: frameWidth*frameHeight)
 
@@ -103,26 +107,65 @@ public class BlobAbsorber {
                  */
                 
                 blobLine.iterate(.forwards, from: centralLineCoord) { x, y, _ in
-                    self.blobIterate(x, y)
+                    self.blobLineIterate(x, y)
                 }
-                
+
                 blobLine.iterate(.backwards, from: centralLineCoord) { x, y, _ in
-                    self.blobIterate(x, y)
+                    self.blobLineIterate(x, y)
                 }
                 
             } else {
                 // search radially, in an ever expanding circle from the center point,
                 // processing closer blobs first
 
-                // XXX do this
+
+                // create pixel mask like CenterMask, but allow sorting of pixels by distance
+                // from center.
+         
+                var didAbsorb = false
+                
+                let blobCenter = blob.boundingBox.center
+
+                // iterate out from the center
+                circularIterator.iterate(x: blobCenter.x, y: blobCenter.y) { x, y in
+                    if x >= 0,
+                       y >= 0,
+                       x < frameWidth,
+                       y < frameHeight
+                    {
+                        let frameIndex = y*frameWidth+x
+
+                        // see if there is another blob at this frame index that
+                        // we can use to form a line
+                        if process(frameIndex: frameIndex) {
+                            // this blob and another were just combined and have a line
+                            // need to switch to the line iteration
+                            // and break out of this iteration loop.
+                            didAbsorb = true
+                            return false
+                        }
+                    }
+                    return true
+                }
+                if didAbsorb,
+                   let blobToAdd = blobToAdd,
+                   let blobLine = blobToAdd.line,
+                   let centralLineCoord = blobToAdd.centralLineCoord
+                {
+                    // here we found a blob that had no line and combined it with another
+                    // and now there is a line.
+                    // iterate across that line
+
+                    blobLine.iterate(.forwards, from: centralLineCoord) { x, y, _ in
+                        self.blobLineIterate(x, y)
+                    }
+
+                    blobLine.iterate(.backwards, from: centralLineCoord) { x, y, _ in
+                        self.blobLineIterate(x, y)
+                    }
+                }
             }
 
-
-            /*
-
-             XXX add logic here to see if we've enlarged the blob, and if so, iterate along the line further
-             */
-            
             if let blobToAdd = blobToAdd {
                 Log.d("frame \(frameIndex) adding filtered blob \(blobToAdd)")
                 filteredBlobs.append(blobToAdd)
@@ -131,7 +174,8 @@ public class BlobAbsorber {
         }
     }
 
-    private func blobIterate(_ x: Int, _ y: Int) -> Bool {
+    // iterate across the circular mask centered at x/y
+    private func blobLineIterate(_ x: Int, _ y: Int) -> Bool {
 
         let xStart = x - mask.radius
         let yStart = y - mask.radius
@@ -157,38 +201,10 @@ public class BlobAbsorber {
                frameX < frameWidth,
                frameY < frameHeight
             {
-                let frameIndex = frameY*frameWidth+frameX
-                if let processingBlob = pixelProcessing[frameIndex],
-                   processingBlob == blobToAdd.id
-                {
-                    // this blob has already processed this pixel
-                    return
-                }
-                pixelProcessing[frameIndex] = blobToAdd.id
-
-                // is there a different blob at this x,y?
-                if let blobId = blobRefs[frameIndex],
-                   blobId != blobToAdd.id
-                {
-                    if let blobProcessed = blobsProcessed[blobId],
-                       blobProcessed
-                    {
-                        // we've already processed this blob
-                        return
-                    }
-                    if let innerBlob = blobMap[blobId],
-                       let absorbedBlob = blobToAdd.lineMerge(with: innerBlob)
-                    {
-                        // use this new blob as it is better combined than separate
-                        self.blobToAdd = absorbedBlob
-                        // ignore the index of the absorbed blob in the future
-                        blobsProcessed[innerBlob.id] = true
-
-                        for pixel in innerBlob.pixels {
-                            blobRefs[pixel.y*frameWidth+pixel.x] = absorbedBlob.id
-                        }
-                    }
-                }
+                process(frameIndex: frameY*frameWidth+frameX)
+                // XXX also check here to see if this x/y is close to
+                // blobToAdd, and use that to see how far away from
+                // that blob we have become.
             }
         }
 
@@ -199,12 +215,62 @@ public class BlobAbsorber {
 
          need more logic here to figure out how far we should iterate from the center
 
+
+         proposal:
+
+         - keep track of how far we are from the last pixel of the blob that we're tracking
+         - don't go more than XXX pixels away from it
+
+
+         
          XXX
          XXX
          XXX
         */
         
         return false            // XXX decide when to go further still 
+    }
+
+
+    // see if we can absorb another blob from the given frame index that makes
+    // the blobToAdd a better line
+    private func process(frameIndex: Int) -> Bool {
+        guard let blobToAdd = blobToAdd else { return false }
+        
+        if let processingBlob = pixelProcessing[frameIndex],
+           processingBlob == blobToAdd.id
+        {
+            // this blob has already processed this pixel
+            return false
+        }
+        pixelProcessing[frameIndex] = blobToAdd.id
+
+        // is there a different blob at this x,y?
+        if let blobId = blobRefs[frameIndex],
+           blobId != blobToAdd.id
+        {
+            if let blobProcessed = blobsProcessed[blobId],
+               blobProcessed
+            {
+                // we've already processed this blob
+                return false
+            }
+            if let innerBlob = blobMap[blobId],
+               let absorbedBlob = blobToAdd.lineMerge(with: innerBlob)
+            {
+                // use this new blob as it is better combined than separate
+                self.blobToAdd = absorbedBlob
+                // ignore the index of the absorbed blob in the future
+                blobsProcessed[innerBlob.id] = true
+
+                for pixel in innerBlob.pixels {
+                    blobRefs[pixel.y*frameWidth+pixel.x] = absorbedBlob.id
+                }
+
+                return true
+            }
+        }
+        return false
     }
 }
 

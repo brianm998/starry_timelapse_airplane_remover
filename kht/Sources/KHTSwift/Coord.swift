@@ -14,4 +14,10 @@ public struct Coord: Codable {
         self.x = Int(coord.x)
         self.y = Int(coord.y)
     }
+
+    public func distance(from other: Coord) -> Double {
+        let x_diff = Double(x - other.x)
+        let y_diff = Double(y - other.y)
+        return sqrt(x_diff*x_diff + y_diff*y_diff)
+    }
 }
