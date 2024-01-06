@@ -28,7 +28,7 @@ public enum FrameImageType {
     case aligned
     case subtracted
     case blobs
-    case houghLines
+//    case houghLines
     case validated
     case processed
 }
@@ -102,7 +102,7 @@ struct ImageAccessor: ImageAccess {
         mkdir(ofType: .aligned)
         mkdir(ofType: .subtracted)
         mkdir(ofType: .blobs)
-        mkdir(ofType: .houghLines)
+//        mkdir(ofType: .houghLines)
         mkdir(ofType: .validated)
         mkdir(ofType: .processed)
         
@@ -112,7 +112,7 @@ struct ImageAccessor: ImageAccess {
             mkdir(ofType: .subtracted, andSize: .preview)
             mkdir(ofType: .validated, andSize: .preview)
             mkdir(ofType: .blobs, andSize: .preview)
-            mkdir(ofType: .houghLines, andSize: .preview)
+//            mkdir(ofType: .houghLines, andSize: .preview)
         }
         if config.writeFrameThumbnailFiles {
             mkdir(ofType: .original, andSize: .thumbnail)
@@ -242,6 +242,7 @@ struct ImageAccessor: ImageAccess {
             case .thumbnail:
                 return nil
             }
+            /*
         case .houghLines:
             switch size {
             case .original:
@@ -250,7 +251,7 @@ struct ImageAccessor: ImageAccess {
                 return "\(config.outputPath)/\(baseDirName)-kht-preview"
             case .thumbnail:
                 return nil
-            }
+            }*/
         case .validated:
             switch size {
             case .original:
