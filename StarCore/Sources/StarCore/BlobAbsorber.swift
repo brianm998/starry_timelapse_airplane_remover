@@ -50,17 +50,17 @@ public class BlobAbsorber {
     // XXX constants
     
     // how many pixels do we search away from the line for other blobs
-    let circularMaskRadius: Int = 18
+    let circularMaskRadius: Int = 14
 
     // radius used when searching without a line
-    let circularIterationRadus = 20
+    let circularIterationRadus = 18
 
     // how far away from the last blob pixel do we iterate on a line
-    let maxLineIterationDistance: Double = 50
+    let maxLineIterationDistance: Double = 40
 
     // blobs smaller than this aren't processed directly, though they
     // may be absorbed by larger nearby blobs 
-    let minBlobProcessingSize = 90
+    let minBlobProcessingSize = 220
 
     // how var away from a line do we look for members of a group?
     let maxLineDist = 2
@@ -102,7 +102,11 @@ public class BlobAbsorber {
         self.pixelProcessing = [String?](repeating: nil, count: frameWidth*frameHeight)
 
         for (index, blob) in blobs.enumerated() {
-            if blob.size < minBlobProcessingSize { break } // XXX hardcoded constant XXX
+            if blob.size < minBlobProcessingSize {
+                // don't process them, but don't discard them either
+                filteredBlobs.append(blobToAdd)
+                break
+            }
             
             if let blobProcessed = blobsProcessed[blob.id],
                blobProcessed
