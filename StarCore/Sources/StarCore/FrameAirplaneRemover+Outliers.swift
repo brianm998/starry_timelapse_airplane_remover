@@ -165,7 +165,6 @@ extension FrameAirplaneRemover {
             self.state = .detectingOutliers2b
 
             let absorber = BlobAbsorber(blobMap: kht.blobMap,
-                                        blobsNotPromoted: kht.blobsNotPromoted,
                                         frameIndex: frameIndex,
                                         frameWidth: width,
                                         frameHeight: height)
@@ -187,7 +186,7 @@ extension FrameAirplaneRemover {
             // promote found blobs to outlier groups for further processing
             for blob in filteredBlobs {
                 if let _ = blob.line,
-                   blob.size >= config.minGroupSize
+                   blob.size >= 100//config.minGroupSize
                 {
                     // make outlier group from this blob
                     let outlierGroup = blob.outlierGroup(at: frameIndex)

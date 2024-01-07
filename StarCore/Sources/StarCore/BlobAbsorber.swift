@@ -60,13 +60,12 @@ public class BlobAbsorber {
 
     // blobs smaller than this aren't processed directly, though they
     // may be absorbed by larger nearby blobs 
-    let minBlobProcessingSize = 300
+    let minBlobProcessingSize = 200
 
     // how var away from a line do we look for members of a group?
     let maxLineDist = 2
     
     init(blobMap: [String: Blob],
-         blobsNotPromoted: [String: Blob],
          frameIndex: Int,
          frameWidth: Int,
          frameHeight: Int)
@@ -75,7 +74,7 @@ public class BlobAbsorber {
         self.frameWidth = frameWidth
         self.frameHeight = frameHeight
         self.blobMap = blobMap
-        self.blobs = Array(blobsNotPromoted.values)
+        self.blobs = Array(blobMap.values)
 
         Log.i("frame \(frameIndex) has \(blobs.count) blobs")
 
@@ -102,17 +101,18 @@ public class BlobAbsorber {
         self.pixelProcessing = [String?](repeating: nil, count: frameWidth*frameHeight)
 
         for (index, blob) in blobs.enumerated() {
-            if blob.size < minBlobProcessingSize {
-                // don't process them, but don't discard them either
-                filteredBlobs.append(blobToAdd)
-                continue
-            }
-            
             if let blobProcessed = blobsProcessed[blob.id],
                blobProcessed
             {
                 continue
             }
+            
+            if blob.size < minBlobProcessingSize {
+                // don't process them, but don't discard all of them either
+                filteredBlobs.append(blob)
+                continue
+            }
+            
             self.blobToAdd = blob
             blobsProcessed[blob.id] = true
 
@@ -328,6 +328,8 @@ public class BlobAbsorber {
                     blobRefs[pixel.y*frameWidth+pixel.x] = absorbedBlob.id
                 }
 
+                // XXX XXX XXX remove inner blob from results
+                
                 
                 return true
             }
