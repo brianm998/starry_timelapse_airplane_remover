@@ -231,6 +231,22 @@ public func polarCoords(point1: DoubleCoord,
         let x_diff = dx1-dx2
         let y_diff = dy1-dy2
 
+        var isPositiveInBothDirections = false
+        
+        if dx1 < dx2,
+           dy1 < dy2
+        {
+            isPositiveInBothDirections = true 
+            //Log.d("case 1")
+        } else if dx1 > dx2,
+                  dy1 > dy2
+        {
+            isPositiveInBothDirections = true 
+            //Log.d("case 2")
+        } else {
+            //Log.d("case 3")
+        }
+
         //Log.d("x_diff \(x_diff) y_diff \(y_diff)")
         
         let distance_between_points = sqrt(x_diff*x_diff + y_diff*y_diff)
@@ -245,7 +261,28 @@ public func polarCoords(point1: DoubleCoord,
         var line_theta = line_theta_radians*RADIANS_TO_DEGREES
 
         //Log.d("line_theta \(line_theta)")
-        
+
+        var theta: Double = 0.0
+        if isPositiveInBothDirections {
+            let standardLine = point1.standardLine(with: point2)
+            /* check y value at x = 0
+               if negative, use line_theta - 90
+               if positive, use line_theta + 90
+
+               positive rho in both cases
+             */
+
+            let yAtZeroX = standardLine.y(forX: 0)
+            //Log.d("yAtZeroX \(yAtZeroX)")
+            if yAtZeroX < 0 {
+                theta = line_theta - 90
+            } else {
+                theta = line_theta + 90
+            }
+        } else {
+            theta = 90-line_theta
+        }
+
         /*
          after handling directly vertical and horiontal lines as sepecial cases above,
          all lines we are left with fall into one of two categories,
@@ -270,18 +307,7 @@ public func polarCoords(point1: DoubleCoord,
         // so make it negative, and keep it between 0..<360
         if needFlip { line_theta = 360 - line_theta }
         
-        // the theta we want is perpendicular to the angle of this line
-
-        var theta: Double = 0.0
-
-        if y_diff > 0 {
-            theta = line_theta + 90
-        } else {
-            theta = line_theta - 90
-        }
-        
-        // keep theta within 0..<360
-        if theta >= 360 { theta -= 360 }
+        Log.d("theta \(theta)")
 
         // next get rho
 
