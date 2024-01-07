@@ -17,10 +17,6 @@ You should have received a copy of the GNU General Public License along with sta
 */
 
 
-class LastBlob {
-    var blob: Blob?
-}
-
 /*
 
  Logic that loads, and finds outliers in a frame.
@@ -104,6 +100,7 @@ extension FrameAirplaneRemover {
          New outlier detection logic:
 
          * do pretty radical initial full frame blob detection, get lots of small dim blobs
+         * stick back kht first, but 
          * originally sort blobs by size, processing largest first
          * if a blob can have a line detected from it,
            search along the line by convolving a search area across it to find pixels
@@ -122,10 +119,10 @@ extension FrameAirplaneRemover {
          */
         if let subtractionImage = subtractionImage {
 
-            //self.state = .detectingOutliers1
+            self.state = .detectingOutliers1
 
             // first run the hough transform on sub sections of the subtraction image
-            //let houghLines = houghLines(from: subtractionImage)
+            let houghLines = houghLines(from: subtractionImage)
 
             self.state = .detectingOutliers2
 
@@ -134,8 +131,8 @@ extension FrameAirplaneRemover {
                                                     pixelData: subtractionArray,
                                                     frameIndex: frameIndex,
                                                     neighborType: .eight,//.fourCardinal,
-                                                    minimumBlobSize: config.minGroupSize/*/3*/, // XXX constant XXX
-                                                    minimumLocalMaximum: config.maxPixelDistance/*/3*/,
+                                                    minimumBlobSize: config.minGroupSize/2, // XXX constant XXX
+                                                    minimumLocalMaximum: config.maxPixelDistance/3,
                                                     contrastMin: 58)      // XXX constant
 /*
  XXX this one misses some blobs because there is no line :(
@@ -168,17 +165,22 @@ extension FrameAirplaneRemover {
              single larger blob.
              */
 
-//            self.state = .detectingOutliers2a
+            self.state = .detectingOutliers2a
+
+            let kht = try await BlobKHTAnalysis(houghLines: houghLines,
+                                                blobMap: blobber.blobMap,
+                                                config: config,
+                                                width: width,
+                                                height: height,
+                                                frameIndex: frameIndex,
+                                                imageAccessor: imageAccessor)
+            let blobsToPromote = kht.blobMap //kht.blobsToPromote
 
             /*
-             XXX blob KHT analysis misses existing blobs because of no lines :(
-            let blobsToPromote = try await blobKHTAnalysis(houghLines: houghLines,
-                                                           blobMap: blobber.blobMap)
              */
-            
             self.state = .detectingOutliers2b
 
-            let absorber = BlobAbsorber(blobMap: blobber.blobMap,
+            let absorber = BlobAbsorber(blobMap: blobsToPromote,
                                         frameIndex: frameIndex,
                                         frameWidth: width,
                                         frameHeight: height)
@@ -219,10 +221,10 @@ extension FrameAirplaneRemover {
         let matrix = 
           kernelHoughTransform(elements: image.splitIntoMatrix(maxWidth: 256,
                                                                maxHeight: 256,
-                                                               overlapPercent: 70),
-                               minVotes: 8000,
-                               minResults: 6,
-                               maxResults: 20) 
+                                                               overlapPercent: 50),
+                               minVotes: 10000,
+                               minResults: 4,
+                               maxResults: 10) 
                                           
         var rawElementLines: [MatrixElementLine] = []
 
@@ -329,213 +331,6 @@ extension FrameAirplaneRemover {
             let mean = Double(totalVotes)/Double(elements.count)
 
             Log.i("frame \(frameIndex) has \(elements.count) lines votes: first \(first.line.votes) last \(last.line.votes) mean \(mean) median \(median.line.votes)")
-        }
-    }
-    
-    // analyze the blobs with kernel hough transform data from the subtraction image
-    // filters the blob map, and combines nearby blobs on the same line
-    private func blobKHTAnalysis(houghLines: [MatrixElementLine],
-                                 blobMap _blobMap: [String: Blob]) async throws -> [Blob]
-    {
-        var blobsToPromote: [String:Blob] = [:]
-        var blobMap = _blobMap   // we need to mutate this arg
-
-        let maxVotes = 12000     // lines with votes over this are max color on kht image
-        let khtImageBase = 0x1F  // dimmest lines will be 
-        var khtImage: [UInt8] = []
-        if config.writeOutlierGroupFiles {
-            khtImage = [UInt8](repeating: 0, count: width*height)
-        }
-
-        // a reference for each pixel for each blob it might belong to
-        var blobRefs = [String?](repeating: nil, count: width*height)
-
-        for (key, blob) in blobMap {
-            for pixel in blob.pixels {
-                blobRefs[pixel.y*width+pixel.x] = blob.id
-            }
-        }
-
-        Log.i("frame \(frameIndex) loaded subtraction image")
-
-        for elementLine in houghLines {
-            let element = elementLine.element
-
-            // when theta is around 300 or more, then we get a bad line here :(
-            let line = elementLine.originZeroLine
-            
-            //Log.i("frame \(frameIndex) matrix element [\(element.x), \(element.y)] -> [\(element.width), \(element.height)] processing line theta \(line.theta) rho \(line.rho) votes \(line.votes) blobsToProcess \(blobsToProcess.count)")
-
-            var brightnessValue: UInt8 = 0xFF
-
-            // calculate brightness to display line on kht image
-            if line.votes < maxVotes {
-                brightnessValue = UInt8(Double(line.votes)/Double(maxVotes) *
-                                          Double(0xFF - khtImageBase) +
-                                          Double(khtImageBase))
-            }
-
-            var lastBlob = LastBlob()
-            
-            // XXX yet another hardcoded constant :(
-            line.iterate(on: elementLine, withExtension: 256) { x, y, direction in
-                if x < width,
-                   y < height
-                {
-                    if config.writeOutlierGroupFiles {
-                        // write kht image data
-                        let index = y*width+x
-                        if khtImage[index] < brightnessValue {
-                            khtImage[index] = brightnessValue
-                        }
-                    }
-
-                    // do blob processing at this location
-                    processBlobsAt(x: x,
-                                   y: y,
-                                   on: line,
-                                   iterationOrientation: direction,
-                                   blobsToPromote: &blobsToPromote,
-                                   blobRefs: &blobRefs,
-                                   blobMap: &blobMap,
-                                   lastBlob: &lastBlob)
-                    
-                }
-            }
-        }
-/*
-        if config.writeOutlierGroupFiles {
-            // save image of kht lines
-            let image = PixelatedImage(width: width, height: height,
-                                       grayscale8BitImageData: khtImage)
-            try await imageAccessor.save(image, as: .houghLines,
-                                         atSize: .original, overwrite: true)
-            try await imageAccessor.save(image, as: .houghLines,
-                                         atSize: .preview, overwrite: true)
-        }
-*/
-        return Array(blobsToPromote.values)
-    }
-
-    // looks around for blobs close to this place
-    private func processBlobsAt(x sourceX: Int,
-                                y sourceY: Int,
-                                on line: Line,
-                                iterationOrientation: IterationOrientation,
-                                blobsToPromote: inout [String:Blob],
-                                blobRefs: inout [String?],
-                                blobMap: inout [String:Blob],
-                                lastBlob: inout LastBlob) 
-    {
-
-        //Log.d("frame \(frameIndex) processBlobsAt [\(sourceX), \(sourceY)] on line \(line) lastBlob \(lastBlob)")
-                            
-        // XXX calculate this differently based upon the theta of the line
-        // a 45 degree line needs more extension to have the same distance covered
-        var searchDistanceEachDirection = 8 // XXX constant
-
-        var startX = sourceX
-        var startY = sourceY
-
-        var endX = sourceX+1
-        var endY = sourceY+1
-        
-        switch iterationOrientation {
-        case .vertical:
-            startY -= searchDistanceEachDirection
-            endY += searchDistanceEachDirection
-            if startY < 0 { startY = 0 }
-            
-            //Log.d("frame \(frameIndex) processing vertically from \(startY) to \(endY) on line \(line) lastBlob \(lastBlob.blob)")
-            
-            for y in startY ..< endY {
-                processBlobAt(x: sourceX, y: y,
-                              on: line,
-                              blobsToPromote: &blobsToPromote,
-                              blobRefs: &blobRefs,
-                              blobMap: &blobMap,
-                              lastBlob: &lastBlob)
-            }
-            
-        case .horizontal:
-            startX -= searchDistanceEachDirection
-            endX += searchDistanceEachDirection
-            if startX < 0 { startX = 0 }
-            
-            //Log.d("frame \(frameIndex) processing horizontally from \(startX) to \(endX) on line \(line) lastBlob \(lastBlob.blob)")
-            
-            for x in startX ..< endX {
-                processBlobAt(x: x, y: sourceY,
-                              on: line,
-                              blobsToPromote: &blobsToPromote,
-                              blobRefs: &blobRefs,
-                              blobMap: &blobMap,
-                              lastBlob: &lastBlob)
-            }
-        }
-    }
-
-    // process a blob at this particular spot
-    private func processBlobAt(x: Int, y: Int,
-                               on line: Line,
-                               blobsToPromote: inout [String:Blob],
-                               blobRefs: inout [String?],
-                               blobMap: inout [String:Blob],
-                               lastBlob: inout LastBlob) 
-    {
-        if y < height,
-           x < width,
-           let blobId = blobRefs[y*width+x],
-           let blob = blobMap[blobId]
-        {
-            // lines are invalid for this blob
-            // if there is already a line on the blob and it doesn't match
-            var lineIsValid = true
-
-            var lineForNewBlobs = line
-            if let blobLine = blob.line {
-                lineForNewBlobs = blobLine
-                lineIsValid = blobLine.thetaMatch(line, maxThetaDiff: 10) // medium, 20 was generous, and worked
-
-//                if !lineIsValid {
-                    //Log.i("frame \(frameIndex) HOLY CRAP [\(x), \(y)]  blobLine \(blobLine) from \(blob) doesn't match line \(line)")
-//                }
-            }
-
-            if lineIsValid { 
-                if let _lastBlob = lastBlob.blob {
-                    if _lastBlob.id != blob.id  {
-                        let distance = _lastBlob.boundingBox.edgeDistance(to: blob.boundingBox)
-                        //Log.i("frame \(frameIndex) blob \(_lastBlob) bounding box \(_lastBlob.boundingBox) is \(distance) from blob \(blob) bounding box \(blob.boundingBox)")
-                        if distance < 40 { // XXX constant XXX
-                            // if they are close enough, simply combine them
-                            if _lastBlob.absorb(blob) {
-                                //Log.d("frame \(frameIndex)  blob \(_lastBlob) absorbing blob \(blob)")
-
-                                // update blobRefs after blob absorbtion
-                                for pixel in blob.pixels {
-                                    blobRefs[pixel.y*width+pixel.x] = _lastBlob.id
-                                }
-                                blobMap.removeValue(forKey: blob.id)
-                                blobsToPromote.removeValue(forKey: blob.id)
-                            } else {
-                                if _lastBlob.id != blob.id {
-                                    Log.i("frame \(frameIndex) [\(x), \(y)] blob \(_lastBlob) failed to absorb blob \(blob)")
-                                }
-                            }
-                        } else {
-                            // if they are far, then overwrite the lastBlob var
-                            blobsToPromote[blob.id] = blob
-                            //Log.d("frame \(frameIndex) [\(x), \(y)] distance \(distance) from \(_lastBlob) is too far from blob with id \(blob) line \(lineForNewBlobs)")
-                            lastBlob.blob = blob
-                        }
-                    }
-                } else {
-                    //Log.d("frame \(frameIndex) [\(x), \(y)] no last blob, blob \(blob) is now last - line \(lineForNewBlobs)")
-                    blobsToPromote[blob.id] = blob
-                    lastBlob.blob = blob
-                }
-            }
         }
     }
     
