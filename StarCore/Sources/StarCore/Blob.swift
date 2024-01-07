@@ -197,11 +197,16 @@ public class Blob: CustomStringConvertible {
         var max_x:Int = 0
         var max_y:Int = 0
 
-        for pixel in pixels {
-            if pixel.x < min_x { min_x = pixel.x }
-            if pixel.y < min_y { min_y = pixel.y }
-            if pixel.x > max_x { max_x = pixel.x }
-            if pixel.y > max_y { max_y = pixel.y }
+        if pixels.count == 0 {
+             min_x = 0
+             min_y = 0
+        } else {
+            for pixel in pixels {
+                if pixel.x < min_x { min_x = pixel.x }
+                if pixel.y < min_y { min_y = pixel.y }
+                if pixel.x > max_x { max_x = pixel.x }
+                if pixel.y > max_y { max_y = pixel.y }
+            }
         }
         let ret = BoundingBox(min: Coord(x: min_x, y: min_y),
                               max: Coord(x: max_x, y: max_y))
