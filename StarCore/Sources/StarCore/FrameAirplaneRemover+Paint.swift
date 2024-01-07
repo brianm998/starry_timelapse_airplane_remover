@@ -27,7 +27,7 @@ extension FrameAirplaneRemover {
 
     // actually paint over outlier groups that have been selected as airplane tracks
     internal func paintOverAirplanes(toData data: inout [UInt16],
-                                 otherFrame: PixelatedImage) async throws
+                                     otherFrame: PixelatedImage) async throws
     {
         Log.i("frame \(frameIndex) painting airplane outlier groups")
 
@@ -105,7 +105,29 @@ extension FrameAirplaneRemover {
             }
         }
 
+        if config.writeOutlierGroupFiles { // XXX this config value is very much overloaded
+            var paintMaskImageData = [UInt8](repeating: 0, count: width*height)
 
+            for x in 0 ..< width {
+                for y in 0 ..< height {
+                    let index = y*width+x
+                    var alpha = alphaLevels[index]
+                    if alpha > 0 {
+                        var value = Int(alpha*Double(0xFF))
+                        if value > 0xFF { value = 0xFF }
+                        paintMaskImageData[index] = UInt8(value)
+                    }
+                }
+            }
+
+            let paintMaskImage = PixelatedImage(width: width, height: height,
+                                                grayscale8BitImageData: paintMaskImageData)
+            await (try imageAccessor.save(paintMaskImage, as: .paintMask,
+                                          atSize: .original, overwrite: true),
+                   try imageAccessor.save(paintMaskImage, as: .paintMask,
+                                          atSize: .preview, overwrite: true))
+        }
+        
         self.state = .painting2
         
         // then actually paint each non zero alpha pizel

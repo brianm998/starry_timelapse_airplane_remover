@@ -73,7 +73,7 @@ struct BottomLeftView: View {
                               Show each frame as either the original   
                               or with star processing applied.
                               """)
-                      .frame(width: 250)
+                      .frame(width: 400)
                       .help("show original or processed frame")
                       .onChange(of: viewModel.frameViewMode) { pick in
                           Log.d("pick \(pick)")

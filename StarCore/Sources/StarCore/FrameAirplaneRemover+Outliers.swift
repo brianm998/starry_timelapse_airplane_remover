@@ -137,16 +137,7 @@ extension FrameAirplaneRemover {
             
             if config.writeOutlierGroupFiles {
                 // save blobs image here
-                var blobImageData = [UInt8](repeating: 0, count: width*height)
-                for blob in blobber.blobs {
-                    for pixel in blob.pixels {
-                        blobImageData[pixel.y*width+pixel.x] = 0xFF // make different per blob?
-                    }
-                }
-                let blobImage = PixelatedImage(width: width, height: height,
-                                               grayscale8BitImageData: blobImageData)
-                await (try imageAccessor.save(blobImage, as: .blobs, atSize: .original, overwrite: true),
-                       try imageAccessor.save(blobImage, as: .blobs, atSize: .preview, overwrite: true))
+                try await saveImages(for: blobber.blobs, as: .blobs)
             }
 
             /*
@@ -165,13 +156,14 @@ extension FrameAirplaneRemover {
                                                 frameIndex: frameIndex,
                                                 imageAccessor: imageAccessor)
 
-            // XXX save kht.blobMap image here
 
+            if config.writeOutlierGroupFiles {
+                // save kht.blobMap image here
+                try await saveImages(for: kht.filteredBlobs, as: .khtb)
+            }
             
             self.state = .detectingOutliers2b
 
-
-            
             let absorber = BlobAbsorber(blobMap: kht.blobMap,
                                         blobsNotPromoted: kht.blobsNotPromoted,
                                         frameIndex: frameIndex,
@@ -184,6 +176,10 @@ extension FrameAirplaneRemover {
             let filteredBlobs = absorber.filteredBlobs
 
             // XXX save filtered blob image here
+            if config.writeOutlierGroupFiles {
+                // save filtered blobs image here
+                try await saveImages(for: filteredBlobs, as: .absorbed)
+            }
             
             Log.i("frame \(frameIndex) has \(filteredBlobs.count) filteredBlobs")
             self.state = .detectingOutliers3
@@ -487,6 +483,23 @@ extension FrameAirplaneRemover {
             return groups.map {$0.value}
         }
         return nil
+    }
+
+    // used for saving different images of blobs
+    public func saveImages(for blobs: [Blob], as frameImageType: FrameImageType) async throws {
+        var blobImageData = [UInt8](repeating: 0, count: width*height)
+        for blob in blobs {
+            for pixel in blob.pixels {
+                blobImageData[pixel.y*width+pixel.x] = 0xFF // make different per blob?
+            }
+        }
+        let blobImage = PixelatedImage(width: width, height: height,
+                                       grayscale8BitImageData: blobImageData)
+        await (try imageAccessor.save(blobImage, as: frameImageType,
+                                      atSize: .original, overwrite: true),
+               try imageAccessor.save(blobImage, as: frameImageType,
+                                      atSize: .preview, overwrite: true))
+
     }
 }
 
