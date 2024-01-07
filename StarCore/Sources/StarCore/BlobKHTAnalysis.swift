@@ -17,7 +17,7 @@ You should have received a copy of the GNU General Public License along with sta
 */
 
 
-class LastBlob {
+fileprivate class LastBlob {
     var blob: Blob?
 }
 
@@ -38,6 +38,8 @@ class BlobKHTAnalysis {
     private let height: Int
     private let frameIndex: Int
     private let imageAccessor: ImageAccess
+
+    var blobsNotPromoted: [String:Blob] = [:]
     
     init(houghLines: [MatrixElementLine],
          blobMap blobMap: [String: Blob],
@@ -124,6 +126,12 @@ class BlobKHTAnalysis {
         }
 
         self.filteredBlobs = Array(blobsToPromote.values)
+
+        for (blobId, blob) in blobMap {
+            if blobsToPromote[blobId] == nil {
+                blobsNotPromoted[blobId] = blob
+            }
+        }
     }
 
     

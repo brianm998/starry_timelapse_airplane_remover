@@ -134,16 +134,6 @@ extension FrameAirplaneRemover {
                                                     minimumBlobSize: config.minGroupSize/2, // XXX constant XXX
                                                     minimumLocalMaximum: config.maxPixelDistance/3,
                                                     contrastMin: 58)      // XXX constant
-/*
- XXX this one misses some blobs because there is no line :(
-            let blobber: Blobber = HoughLineBlobber(imageWidth: width,
-                                                    imageHeight: height,
-                                                    pixelData: subtractionArray,
-                                                    frameIndex: frameIndex,
-                                                    neighborType: .eight,//.fourCardinal,
-                                                    contrastMin: 52,
-                                                    houghLines: houghLines)
- */
             
             if config.writeOutlierGroupFiles {
                 // save blobs image here
@@ -155,8 +145,8 @@ extension FrameAirplaneRemover {
                 }
                 let blobImage = PixelatedImage(width: width, height: height,
                                                grayscale8BitImageData: blobImageData)
-                try await imageAccessor.save(blobImage, as: .blobs, atSize: .original, overwrite: true)
-                try await imageAccessor.save(blobImage, as: .blobs, atSize: .preview, overwrite: true)
+                await (try imageAccessor.save(blobImage, as: .blobs, atSize: .original, overwrite: true),
+                       try imageAccessor.save(blobImage, as: .blobs, atSize: .preview, overwrite: true))
             }
 
             /*
@@ -174,13 +164,16 @@ extension FrameAirplaneRemover {
                                                 height: height,
                                                 frameIndex: frameIndex,
                                                 imageAccessor: imageAccessor)
-            let blobsToPromote = kht.blobMap //kht.blobsToPromote
 
-            /*
-             */
+            // XXX save kht.blobMap image here
+
+            
             self.state = .detectingOutliers2b
 
-            let absorber = BlobAbsorber(blobMap: blobsToPromote,
+
+            
+            let absorber = BlobAbsorber(blobMap: kht.blobMap,
+                                        blobsNotPromoted: kht.blobsNotPromoted,
                                         frameIndex: frameIndex,
                                         frameWidth: width,
                                         frameHeight: height)
@@ -189,6 +182,8 @@ extension FrameAirplaneRemover {
             // and see if we get a better line score if we combine with another 
 
             let filteredBlobs = absorber.filteredBlobs
+
+            // XXX save filtered blob image here
             
             Log.i("frame \(frameIndex) has \(filteredBlobs.count) filteredBlobs")
             self.state = .detectingOutliers3
