@@ -60,7 +60,7 @@ public class BlobAbsorber {
 
     // blobs smaller than this aren't processed directly, though they
     // may be absorbed by larger nearby blobs 
-    let minBlobProcessingSize = 220
+    let minBlobProcessingSize = 300
 
     // how var away from a line do we look for members of a group?
     let maxLineDist = 2
@@ -105,7 +105,7 @@ public class BlobAbsorber {
             if blob.size < minBlobProcessingSize {
                 // don't process them, but don't discard them either
                 filteredBlobs.append(blobToAdd)
-                break
+                continue
             }
             
             if let blobProcessed = blobsProcessed[blob.id],
