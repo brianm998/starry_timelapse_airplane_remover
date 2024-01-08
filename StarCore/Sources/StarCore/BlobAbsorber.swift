@@ -37,7 +37,7 @@ public class BlobAbsorber {
     private var iterationCount = 0
     
     // row major indexed array used for keeping track of checked pixels
-    private var pixelProcessing: [String?]
+    private var pixelsProcessed: [Bool]
 
     private var blobToAdd: Blob
     
@@ -50,13 +50,13 @@ public class BlobAbsorber {
     // XXX constants
     
     // how many pixels do we search away from the line for other blobs
-    let circularMaskRadius: Int = 14
+    let circularMaskRadius: Int = 8
 
     // radius used when searching without a line
     let circularIterationRadus = 18
 
     // how far away from the last blob pixel do we iterate on a line
-    let maxLineIterationDistance: Double = 30
+    let maxLineIterationDistance: Double = 40
 
     // blobs smaller than this aren't processed directly, though they
     // may be absorbed by larger nearby blobs
@@ -100,7 +100,7 @@ public class BlobAbsorber {
         self.circularIterator = CircularIterator(radius: circularIterationRadus)
         
         // row major indexed array used for keeping track of checked pixels for this blob
-        self.pixelProcessing = [String?](repeating: nil, count: frameWidth*frameHeight)
+        self.pixelsProcessed = [Bool](repeating: false, count: frameWidth*frameHeight)
 
         for (index, blob) in blobs.enumerated() {
 
@@ -116,7 +116,7 @@ public class BlobAbsorber {
                 continue
             }
 
-            for i in 0..<pixelProcessing.count { pixelProcessing[i] = nil }
+            for i in 0..<pixelsProcessed.count { pixelsProcessed[i] = false }
             
             self.blobToAdd = blob
             blobsProcessed[blob.id] = true
@@ -259,12 +259,21 @@ public class BlobAbsorber {
                frameX < frameWidth,
                frameY < frameHeight
             {
-                process(frameIndex: frameY*frameWidth+frameX)
+                let index = frameY*frameWidth+frameX
+                process(frameIndex: index)
 
                 // check to see if this x/y is close to
                 // blobToAdd, and use that to see how far away from
                 // that blob we have become.
 
+                if let blobId = blobRefs[index],
+                   blobId == blobToAdd.id
+                {
+                    lastX = frameX
+                    lastY = frameY
+                }
+                
+                /*
                 for checkX in frameX-maxLineDist..<frameX+maxLineDist {
                     for checkY in frameY-maxLineDist..<frameY+maxLineDist {
                         if checkX >= 0,
@@ -279,6 +288,7 @@ public class BlobAbsorber {
                         }
                     }
                 }
+                 */
             }
         }
 
@@ -302,13 +312,11 @@ public class BlobAbsorber {
     // the blobToAdd a better line
     private func process(frameIndex: Int) -> Bool {
         
-        if let processingBlob = pixelProcessing[frameIndex],
-           processingBlob == blobToAdd.id
-        {
+        if pixelsProcessed[frameIndex] {
             // this blob has already processed this pixel
             return false
         }
-        pixelProcessing[frameIndex] = blobToAdd.id
+        pixelsProcessed[frameIndex] = true
 
         // is there a different blob at this x,y?
         if let blobId = blobRefs[frameIndex],
