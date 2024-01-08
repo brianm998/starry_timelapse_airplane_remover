@@ -98,6 +98,32 @@ public class Blob: CustomStringConvertible {
         return 420420420
     }
 
+    // trims outlying pixels from the group
+    public func trim() {
+        var newPixels:[SortablePixel] = []
+        
+        if let line = self.originZeroLine {
+            let standardLine = line.standardLine
+            let (average, median, max) = averageMedianMaxDistance(from: line)
+            //let maxDistanceFromLine = (average+median)/2 // guess
+            let maxDistanceFromLine = (median+max)/2 // guess
+
+            for pixel in pixels {
+                let pixelDistance = standardLine.distanceTo(x: pixel.x, y: pixel.y)
+                if pixelDistance <= maxDistanceFromLine {
+                    newPixels.append(pixel)
+                }
+            }
+        }
+
+        self.pixels = newPixels
+        _intensity = nil
+        _boundingBox = nil
+        _blobImageData = nil
+        _blobLine = nil
+        _averageDistanceFromIdealLine = nil
+    }
+    
     // assumes line has 0,0 origin
     public func averageDistance(from line: Line) -> Double {
         let standardLine = line.standardLine
@@ -106,6 +132,27 @@ public class Blob: CustomStringConvertible {
             distanceSum += standardLine.distanceTo(x: pixel.x, y: pixel.y)
         }
         return distanceSum/Double(pixels.count)
+    }
+    
+    public func averageMedianMaxDistance(from line: Line) -> (Double, Double, Double) {
+        let standardLine = line.standardLine
+        var distanceSum: Double = 0.0
+        var distances:[Double] = []
+        var max: Double = 0
+        for pixel in pixels {
+            let distance = standardLine.distanceTo(x: pixel.x, y: pixel.y)
+            distanceSum += distance
+            distances.append(distance)
+            if distance > max { max = distance }
+        }
+        distances.sort { $0 > $1 }
+        if pixels.count == 0 {
+            return (0, 0, 0)
+        } else {
+            let average = distanceSum/Double(pixels.count)
+            let median = distances[distances.count/2]
+            return (average, median, max)
+        }
     }
     
     // a line calculated from the pixels in this blob, if possible
@@ -332,7 +379,9 @@ public class Blob: CustomStringConvertible {
 
                 let distance = self.boundingBox.edgeDistance(to: otherBlob.boundingBox)
 
-                var fudge: Double = -1.44 // XXX constant
+                //var fudge: Double = -1.44 // XXX constant
+                var fudge: Double = -1 // XXX constant
+                //var fudge: Double = -0.44 // XXX constant
 /*
                 if distance < 20 { // XXX constants
                     fudge = -1.44
