@@ -100,9 +100,9 @@ public class Blob: CustomStringConvertible {
 
     // trims outlying pixels from the group
     public func trim() {
-        var newPixels:[SortablePixel] = []
-        
         if let line = self.originZeroLine {
+            var newPixels:[SortablePixel] = []
+            
             let standardLine = line.standardLine
             let (average, median, max) = averageMedianMaxDistance(from: line)
             //let maxDistanceFromLine = (average+median)/2 // guess
@@ -114,14 +114,15 @@ public class Blob: CustomStringConvertible {
                     newPixels.append(pixel)
                 }
             }
+            let diff = self.pixels.count - newPixels.count
+            self.pixels = newPixels
+            Log.d("blog \(self) trimming \(diff) pixels")
+            _intensity = nil
+            _boundingBox = nil
+            _blobImageData = nil
+            _blobLine = nil
+            _averageDistanceFromIdealLine = nil
         }
-
-        self.pixels = newPixels
-        _intensity = nil
-        _boundingBox = nil
-        _blobImageData = nil
-        _blobLine = nil
-        _averageDistanceFromIdealLine = nil
     }
     
     // assumes line has 0,0 origin
