@@ -307,7 +307,7 @@ public func polarCoords(point1: DoubleCoord,
         // so make it negative, and keep it between 0..<360
         if needFlip { line_theta = 360 - line_theta }
         
-        Log.d("theta \(theta)")
+        //Log.d("theta \(theta)")
 
         // next get rho
 
