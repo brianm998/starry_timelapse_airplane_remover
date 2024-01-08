@@ -188,6 +188,8 @@ extension FrameAirplaneRemover {
                 if let _ = blob.line,
                    blob.size >= 100//config.minGroupSize
                 {
+                    // first trim pixels too far away
+                    blob.trim()
                     // make outlier group from this blob
                     let outlierGroup = blob.outlierGroup(at: frameIndex)
                     Log.i("frame \(frameIndex) promoting \(blob) to outlier group \(outlierGroup.name) line \(blob.line)")
