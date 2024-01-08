@@ -187,9 +187,9 @@ public class OutlierGroup: CustomStringConvertible,
         let totalLength = sqrt(xDiff*xDiff+yDiff*yDiff)
         let distance = distanceSum/numDistances
 
-        if let frameIndex = frameIndex {
-            Log.d("frame \(frameIndex) averageDistance \(distance) \(numDistances) totalLength \(totalLength)")
-        }
+        //if let frameIndex = frameIndex {
+            //Log.d("frame \(frameIndex) averageDistance \(distance) \(numDistances) totalLength \(totalLength)")
+    //}
         
         return (distance, totalLength)
     }
