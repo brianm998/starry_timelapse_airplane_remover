@@ -56,11 +56,13 @@ public class BlobAbsorber {
     let circularIterationRadus = 18
 
     // how far away from the last blob pixel do we iterate on a line
-    let maxLineIterationDistance: Double = 40
+    let maxLineIterationDistance: Double = 30
 
     // blobs smaller than this aren't processed directly, though they
-    // may be absorbed by larger nearby blobs 
-    let minBlobProcessingSize = 200
+    // may be absorbed by larger nearby blobs
+    // processing all of the blobs like this take a really long time, this is a cutoff
+    let minBlobProcessingSize = 160
+    //let minBlobProcessingSize = 320
 
     // how var away from a line do we look for members of a group?
     let maxLineDist = 2
@@ -97,10 +99,11 @@ public class BlobAbsorber {
         // used for blobs without lines, starts at center of blob
         self.circularIterator = CircularIterator(radius: circularIterationRadus)
         
-        // row major indexed array used for keeping track of checked pixels
+        // row major indexed array used for keeping track of checked pixels for this blob
         self.pixelProcessing = [String?](repeating: nil, count: frameWidth*frameHeight)
 
         for (index, blob) in blobs.enumerated() {
+
             if let blobProcessed = blobsProcessed[blob.id],
                blobProcessed
             {
@@ -112,6 +115,8 @@ public class BlobAbsorber {
                 filteredBlobs.append(blob)
                 continue
             }
+
+            for i in 0..<pixelProcessing.count { pixelProcessing[i] = nil }
             
             self.blobToAdd = blob
             blobsProcessed[blob.id] = true
@@ -291,7 +296,7 @@ public class BlobAbsorber {
         
         return false
     }
-
+    
 
     // see if we can absorb another blob from the given frame index that makes
     // the blobToAdd a better line
@@ -327,9 +332,6 @@ public class BlobAbsorber {
                 for pixel in innerBlob.pixels {
                     blobRefs[pixel.y*frameWidth+pixel.x] = absorbedBlob.id
                 }
-
-                // XXX XXX XXX remove inner blob from results
-                
                 
                 return true
             }
