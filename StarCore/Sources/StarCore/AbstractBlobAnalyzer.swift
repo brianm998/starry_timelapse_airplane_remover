@@ -100,11 +100,12 @@ class AbstractBlobAnalyzer {
             if startY < 0 { startY = 0 }
             
             //Log.d("frame \(frameIndex) processing vertically from \(startY) to \(endY) on line \(line) lastBlob \(lastBlob.blob)")
-            
-            for y in startY ..< endY {
-                processBlobAt(x: sourceX, y: y,
-                              on: line,
-                              lastBlob: &lastBlob)
+            if startY < endY {
+                for y in startY ..< endY {
+                    processBlobAt(x: sourceX, y: y,
+                                  on: line,
+                                  lastBlob: &lastBlob)
+                }
             }
             
         case .horizontal:
@@ -114,10 +115,12 @@ class AbstractBlobAnalyzer {
             
             //Log.d("frame \(frameIndex) processing horizontally from \(startX) to \(endX) on line \(line) lastBlob \(lastBlob.blob)")
             
-            for x in startX ..< endX {
-                processBlobAt(x: x, y: sourceY,
-                              on: line,
-                              lastBlob: &lastBlob)
+            if startY < endY {
+                for x in startX ..< endX {
+                    processBlobAt(x: x, y: sourceY,
+                                  on: line,
+                                  lastBlob: &lastBlob)
+                }
             }
         }
     }

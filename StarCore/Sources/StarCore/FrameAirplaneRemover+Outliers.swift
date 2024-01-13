@@ -56,7 +56,18 @@ extension FrameAirplaneRemover {
     }
     
     func findOutliers() async throws {
+        /*
+         Outlier Detection Logic:
 
+          - align neighboring frame
+          - subtract aligned frame from this frame
+          - identify lines on subtracted frame
+          - detect blobs from subtracted frame
+          - do KHT blob processing
+          - do blob absorbsion processing
+          - keep only bigger blobs with lines
+         
+         */
         Log.d("frame \(frameIndex) finding outliers")
 
         // contains the difference in brightness between the frame being processed
@@ -159,11 +170,11 @@ extension FrameAirplaneRemover {
 
             if config.writeOutlierGroupFiles {
                 // save kht.blobMap image here
-                try await saveImages(for: kht.filteredBlobs, as: .khtb)
+                try await saveImages(for: Array(kht.filteredBlobs.values), as: .khtb)
             }
             
             self.state = .detectingOutliers2b
-
+/*
             let absorber = BlobAbsorber(blobMap: kht.blobMap,
                                         frameIndex: frameIndex,
                                         frameWidth: width,
@@ -173,6 +184,19 @@ extension FrameAirplaneRemover {
             // and see if we get a better line score if we combine with another 
 
             let filteredBlobs = absorber.filteredBlobs
+*/
+
+            let absorber = BlobAbsorberRewrite(blobMap: kht.blobMap,
+                                               config: config,
+                                               width: width,
+                                               height: height,
+                                               frameIndex: frameIndex,
+                                               imageAccessor: imageAccessor)
+
+            // look for all blobs to promote,
+            // and see if we get a better line score if we combine with another 
+
+            let filteredBlobs = Array(absorber.filteredBlobs.values)
 
             // XXX save filtered blob image here
             if config.writeOutlierGroupFiles {
