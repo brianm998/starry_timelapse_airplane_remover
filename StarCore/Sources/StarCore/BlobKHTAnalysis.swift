@@ -17,27 +17,13 @@ You should have received a copy of the GNU General Public License along with sta
 */
 
 
-fileprivate class LastBlob {
-    var blob: Blob?
-}
-
-
 // analyze the blobs with kernel hough transform data from the subtraction image
 // filters the blob map, and combines nearby blobs on the same line
-class BlobKHTAnalysis {
+class BlobKHTAnalysis: AbstractBlobAnalyzer {
 
-    var filteredBlobs: [Blob] = []
-    
     var blobsToPromote: [String:Blob] = [:]
-    var blobMap: [String: Blob]
     private let maxVotes = 12000     // lines with votes over this are max color on kht image
     private let khtImageBase = 0x1F  // dimmest lines will be 
-    private let config: Config
-    private var blobRefs: [String?]
-    private let width: Int
-    private let height: Int
-    private let frameIndex: Int
-    private let imageAccessor: ImageAccess
 
     var blobsNotPromoted: [String:Blob] = [:]
     
@@ -49,25 +35,17 @@ class BlobKHTAnalysis {
          frameIndex: Int,
          imageAccessor: ImageAccess) async throws
     {
-        self.blobMap = blobMap
-        self.config = config
-        self.width = width
-        self.height = height
-        self.frameIndex = frameIndex
-        self.imageAccessor = imageAccessor
+
+        super.init(blobMap: blobMap,
+                   config: config,
+                   width: width,
+                   height: height,
+                   frameIndex: frameIndex,
+                   imageAccessor: imageAccessor)
 
         var khtImage: [UInt8] = []
         if config.writeOutlierGroupFiles {
             khtImage = [UInt8](repeating: 0, count: width*height)
-        }
-
-        // a reference for each pixel for each blob it might belong to
-        self.blobRefs = [String?](repeating: nil, count: width*height)
-
-        for (key, blob) in blobMap {
-            for pixel in blob.pixels {
-                blobRefs[pixel.y*width+pixel.x] = blob.id
-            }
         }
 
         Log.i("frame \(frameIndex) loaded subtraction image")
