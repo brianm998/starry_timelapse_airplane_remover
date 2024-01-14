@@ -30,7 +30,7 @@ class BlobAbsorberRewrite: AbstractBlobAnalyzer {
     // blobs smaller than this aren't processed directly, though they
     // may be absorbed by larger nearby blobs
     // processing all of the blobs like this take a really long time, this is a cutoff
-    let minBlobProcessingSize = 160
+    let minBlobProcessingSize = 0
 
     override init(blobMap: [String: Blob],
                   config: Config,
@@ -42,7 +42,6 @@ class BlobAbsorberRewrite: AbstractBlobAnalyzer {
         // used for blobs without lines, starts at center of blob
         self.circularIterator = CircularIterator(radius: circularIterationRadus)
         
-
         super.init(blobMap: blobMap,
                    config: config,
                    width: width,
@@ -68,11 +67,16 @@ class BlobAbsorberRewrite: AbstractBlobAnalyzer {
             var lastBlob = LastBlob()
             lastBlob.blob = blob
 
+            filteredBlobs[blob.id] = blob
+            
             blobsProcessed[blob.id] = true
 
+            Log.d("frame \(frameIndex) processing blob \(blob)")
+
             // XXX this is a guess, that doesn't take into account the line's orientation
-            let maxDistanceForThisBlob = Double(blob.boundingBox.width + blob.boundingBox.height)
-            
+            var maxDistanceForThisBlob = Double(blob.boundingBox.width + blob.boundingBox.height)
+            if maxDistanceForThisBlob < 100 { maxDistanceForThisBlob = 100 } // XXX constant XXX
+
             if let blobLine = blob.originZeroLine,
                let centralLineCoord = blob.originZeroCentralLineCoord
             {
@@ -86,7 +90,13 @@ class BlobAbsorberRewrite: AbstractBlobAnalyzer {
                 // stop when we go too far or out of frame,
                 // or too far from last blob point on the line
 
+                Log.d("frame \(frameIndex) iterating along \(blobLine) from \(centralLineCoord)")
+
+                var iterationCount = 0
+                
                 blobLine.iterate(.forwards, from: centralLineCoord) { x, y, direction in
+                    Log.d("frame \(frameIndex) iterate [\(x), \(y)]")
+                    iterationCount += 1
                     if x >= 0,
                        y >= 0,
                        x < width,
@@ -103,6 +113,8 @@ class BlobAbsorberRewrite: AbstractBlobAnalyzer {
                                           max: maxDistanceForThisBlob)
                 }
 
+                Log.d("frame \(frameIndex) iterated forwards \(iterationCount) times")
+                
                 blobLine.iterate(.backwards, from: centralLineCoord) { x, y, direction in
                     if x >= 0,
                        y >= 0,

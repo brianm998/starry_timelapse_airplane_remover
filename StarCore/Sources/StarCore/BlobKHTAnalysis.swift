@@ -27,7 +27,7 @@ class BlobKHTAnalysis: AbstractBlobAnalyzer {
     var blobsNotPromoted: [String:Blob] = [:]
     
     init(houghLines: [MatrixElementLine],
-         blobMap blobMap: [String: Blob],
+         blobMap: [String: Blob],
          config: Config,
          width: Int,
          height: Int,
