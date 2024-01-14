@@ -221,7 +221,7 @@ extension FrameAirplaneRemover {
 
             Log.d("frame \(frameIndex) absorber rectification gave \(rectifier.blobMap.count) blobs")
 
-
+            // look for lines that we can extend 
             let blobExtender = BlobLineExtender(pixelData: subtractionArray,
                                                 blobMap: rectifier.blobMap,
                                                 config: config,
@@ -248,35 +248,18 @@ extension FrameAirplaneRemover {
                     // first trim pixels too far away
                     blob.trim()
 
-                    /*
-                       XXX add some pixels along the line?
-                       even over the edges a bit?
-
-                       iterate along the blob line,
-                       from the center along the length,
-                       adding a pixel to the blob for each spot on the
-                       line which is not already set
-
-                       but only for lines with enough length
-                       and average line distance
-
-                       if 
-                       length > 40
-                       average distance < 6
-
-                       then add line pixels to blob
-
-                       may need to rectify afterwards, as we could be overlapping
-                     */
-
                     if blob.size >= config.minGroupSize {
                         // make outlier group from this blob
                         let outlierGroup = blob.outlierGroup(at: frameIndex)
 
                         if outlierGroup.lineLength > 0 {
-                            Log.i("frame \(frameIndex) promoting \(blob) to outlier group \(outlierGroup.name) line \(blob.line)")
-                            outlierGroup.frame = self
-                            outlierGroups?.members[outlierGroup.name] = outlierGroup
+                            if outlierGroup.averageLineVariance < outlierGroup.lineLength {
+                                Log.i("frame \(frameIndex) promoting \(blob) to outlier group \(outlierGroup.name) line \(blob.line)")
+                                outlierGroup.frame = self
+                                outlierGroups?.members[outlierGroup.name] = outlierGroup
+                            } else {
+                                Log.i("frame \(frameIndex) NOT promoting \(blob) with \(outlierGroup.averageLineVariance) > \(outlierGroup.lineLength)")
+                            }
                         } else {
                             Log.i("frame \(frameIndex) NOT promoting \(blob) with zero line length")
                         }
