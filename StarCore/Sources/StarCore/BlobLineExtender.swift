@@ -24,7 +24,7 @@ class BlobLineExtender: AbstractBlobAnalyzer {
              below threshold: 38.6/6.82 = 5.65982404692082111436
      */
     // threshold of line length / average distance
-    private let threshold: Double = 6.2 // XXX guess from the two above
+    private let threshold: Double = 6.5 // XXX guess from the two above
 
     private let pixelData: [UInt16]
     
@@ -47,7 +47,7 @@ class BlobLineExtender: AbstractBlobAnalyzer {
 
         for (index, blob) in blobMap.values.enumerated() {
 
-            if blob.size < 40 { continue } // XXX constant
+            if blob.size < 45 { continue } // XXX constant
             
             // if no line, pass
             if let line = blob.originZeroLine,
@@ -87,7 +87,7 @@ class BlobLineExtender: AbstractBlobAnalyzer {
                         }
                         return shouldContinue(from: centralCoord,//referenceCoord,
                                               x: x, y: y,
-                                              max: 200) // XXX constant
+                                              max: 180) // XXX constant
                     }
 
                     referenceCoord = centralCoord
@@ -111,7 +111,7 @@ class BlobLineExtender: AbstractBlobAnalyzer {
                         }
                         return shouldContinue(from: centralCoord,//referenceCoord,
                                               x: x, y: y,
-                                              max: 200) // XXX constant
+                                              max: 180) // XXX constant
                     }
                 }
             }
