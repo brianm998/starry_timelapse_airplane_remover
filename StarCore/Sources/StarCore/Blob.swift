@@ -6,7 +6,7 @@ import logging
                    
 public class Blob: CustomStringConvertible {
     public let id: String
-    public private(set) var pixels: [SortablePixel]
+    public private(set) var pixels = Set<SortablePixel>()
     public let frameIndex: Int
     
     public var size: Int { pixels.count }
@@ -15,11 +15,11 @@ public class Blob: CustomStringConvertible {
 
     public var description: String  { "Blob id: \(id) size \(size)" }
     
-    public func add(pixels newPixels: [SortablePixel]) {
+    public func add(pixels newPixels: Set<SortablePixel>) {
         for pixel in pixels {
             pixel.status = .blobbed(self)
         }
-        self.pixels += newPixels
+        self.pixels = self.pixels.union(newPixels)
         _intensity = nil
         _boundingBox = nil
         _blobImageData = nil
@@ -29,7 +29,7 @@ public class Blob: CustomStringConvertible {
 
     public func add(pixel: SortablePixel) {
         pixel.status = .blobbed(self)
-        self.pixels.append(pixel)
+        self.pixels.insert(pixel)
         _intensity = nil
         _boundingBox = nil
         _blobImageData = nil
@@ -101,7 +101,7 @@ public class Blob: CustomStringConvertible {
     // trims outlying pixels from the group
     public func trim() {
         if let line = self.originZeroLine {
-            var newPixels:[SortablePixel] = []
+            var newPixels = Set<SortablePixel>()
             
             let standardLine = line.standardLine
             let (average, median, max) = averageMedianMaxDistance(from: line)
@@ -111,7 +111,7 @@ public class Blob: CustomStringConvertible {
             for pixel in pixels {
                 let pixelDistance = standardLine.distanceTo(x: pixel.x, y: pixel.y)
                 if pixelDistance <= maxDistanceFromLine {
-                    newPixels.append(pixel)
+                    newPixels.insert(pixel)
                 }
             }
             let diff = self.pixels.count - newPixels.count
@@ -221,7 +221,7 @@ public class Blob: CustomStringConvertible {
             for otherPixel in newPixels {
                 otherPixel.status = .blobbed(self)
             }
-            self.pixels += newPixels
+            self.pixels = self.pixels.union(newPixels)
             _intensity = nil
             _boundingBox = nil
             _blobImageData = nil

@@ -1,12 +1,21 @@
 import Foundation
 
 // a monochrome pixel that is used by the blobber
-public class SortablePixel {
+public class SortablePixel: Hashable {
     public let x: Int
     public let y: Int
     public let intensity: UInt16
     public var status = Status.unknown
-    
+
+    public static func == (lhs: SortablePixel, rhs: SortablePixel) -> Bool {
+        return lhs.x == rhs.x && lhs.y == rhs.y
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(x)
+        hasher.combine(y)
+    }
+
     public enum Status {
         case unknown
         case background
