@@ -144,7 +144,10 @@ extension FrameAirplaneRemover {
                                                     neighborType: .eight,//.fourCardinal,
                                                     minimumBlobSize: config.minGroupSize/2, // XXX constant XXX
                                                     minimumLocalMaximum: config.maxPixelDistance/3,
-                                                    contrastMin: 58)      // XXX constant
+                                                    // blobs can grow until the get this much
+                                                    // darker than their seed pixel
+                                                    // larger values give more blobs
+                                                    contrastMin: 60)      // XXX constant
             
             if config.writeOutlierGroupFiles {
                 // save blobs image here
@@ -216,9 +219,18 @@ extension FrameAirplaneRemover {
                                           height: height,
                                           frameIndex: frameIndex)
 
-
             Log.d("frame \(frameIndex) absorber rectification gave \(rectifier.blobMap.count) blobs")
-            let filteredBlobs = Array(rectifier.blobMap.values)
+
+
+            let blobExtender = BlobLineExtender(pixelData: subtractionArray,
+                                                blobMap: rectifier.blobMap,
+                                                config: config,
+                                                width: width,
+                                                height: height,
+                                                frameIndex: frameIndex,
+                                                imageAccessor: imageAccessor)
+
+            let filteredBlobs = Array(blobExtender.blobMap.values)
             
 //            let filteredBlobs = Array(kht.filteredBlobs.values)
             // XXX save filtered blob image here
@@ -257,13 +269,17 @@ extension FrameAirplaneRemover {
                        may need to rectify afterwards, as we could be overlapping
                      */
 
-                    if blob.size >= config.minGroupSize
-                    {
+                    if blob.size >= config.minGroupSize {
                         // make outlier group from this blob
                         let outlierGroup = blob.outlierGroup(at: frameIndex)
-                        Log.i("frame \(frameIndex) promoting \(blob) to outlier group \(outlierGroup.name) line \(blob.line)")
-                        outlierGroup.frame = self
-                        outlierGroups?.members[outlierGroup.name] = outlierGroup
+
+                        if outlierGroup.lineLength > 0 {
+                            Log.i("frame \(frameIndex) promoting \(blob) to outlier group \(outlierGroup.name) line \(blob.line)")
+                            outlierGroup.frame = self
+                            outlierGroups?.members[outlierGroup.name] = outlierGroup
+                        } else {
+                            Log.i("frame \(frameIndex) NOT promoting \(blob) with zero line length")
+                        }
                     } else {
                         Log.i("frame \(frameIndex) NOT promoting \(blob)")
                     }

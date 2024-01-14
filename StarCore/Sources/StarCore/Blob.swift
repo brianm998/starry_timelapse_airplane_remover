@@ -135,6 +135,35 @@ public class Blob: CustomStringConvertible {
         return distanceSum/Double(pixels.count)
     }
     
+    // assumes line has 0,0 origin
+    public func averageDistanceAndLineLength(from line: Line) -> (Double, Double) {
+        var minX = Int.max
+        var minY = Int.max
+        var maxX = 0
+        var maxY = 0
+        
+        let standardLine = line.standardLine
+        var distanceSum: Double = 0.0
+        for pixel in pixels {
+
+            let distance = standardLine.distanceTo(x: pixel.x, y: pixel.y)
+            
+            if distance < 4 { // XXX another constant :(
+                if pixel.y < minY { minY = pixel.y }
+                if pixel.x < minX { minX = pixel.x }
+                if pixel.y > maxY { maxY = pixel.y }
+                if pixel.x > maxX { maxX = pixel.x }
+            }
+
+            distanceSum += distance 
+        }
+        let xDiff = Double(maxX-minX)
+        let yDiff = Double(maxY-minY)
+        let totalLength = sqrt(xDiff*xDiff+yDiff*yDiff)
+        
+        return (distanceSum/Double(pixels.count), totalLength)
+    }
+    
     public func averageMedianMaxDistance(from line: Line) -> (Double, Double, Double) {
         let standardLine = line.standardLine
         var distanceSum: Double = 0.0
@@ -274,7 +303,7 @@ public class Blob: CustomStringConvertible {
     // a point close to the center of this blob if it's a line, relative to its boundingBox
     public var centralLineCoord: DoubleCoord? {
         let center = self.boundingBox.centerDouble
-        if let line = self.line {
+        if let line = self.originZeroLine {
             let standardLine = line.standardLine
             
             switch line.iterationOrientation {
