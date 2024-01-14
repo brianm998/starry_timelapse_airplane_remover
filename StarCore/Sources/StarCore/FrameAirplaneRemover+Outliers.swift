@@ -253,13 +253,9 @@ extension FrameAirplaneRemover {
                         let outlierGroup = blob.outlierGroup(at: frameIndex)
 
                         if outlierGroup.lineLength > 0 {
-                            if outlierGroup.averageLineVariance < outlierGroup.lineLength {
-                                Log.i("frame \(frameIndex) promoting \(blob) to outlier group \(outlierGroup.name) line \(blob.line)")
-                                outlierGroup.frame = self
-                                outlierGroups?.members[outlierGroup.name] = outlierGroup
-                            } else {
-                                Log.i("frame \(frameIndex) NOT promoting \(blob) with \(outlierGroup.averageLineVariance) > \(outlierGroup.lineLength)")
-                            }
+                            Log.i("frame \(frameIndex) promoting \(blob) to outlier group \(outlierGroup.name) line \(blob.line)")
+                            outlierGroup.frame = self
+                            outlierGroups?.members[outlierGroup.name] = outlierGroup
                         } else {
                             Log.i("frame \(frameIndex) NOT promoting \(blob) with zero line length")
                         }
