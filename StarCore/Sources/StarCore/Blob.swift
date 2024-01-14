@@ -381,20 +381,6 @@ public class Blob: CustomStringConvertible {
 
             // make sure this new blob has an ideal line detected
             if let newLine = newBlob.originZeroLine {
-
-
-                /*
-
-                 averageDistance(from: ) is expecting a line in the bounding box of the blob
-
-                 we're using the same line with different reference frames
-
-                 need to update this to translate lines appropriately when measuring
-                 the distance of the pixels in a blob to it.
-
-                 right now it's a mess because that's not the case
-                 
-                 */
                 
                 // new blobs distance from its own ideal line
                 let newBlobAvg = newBlob.averageDistance(from: newLine)
@@ -410,7 +396,7 @@ public class Blob: CustomStringConvertible {
                 let distance = self.boundingBox.edgeDistance(to: otherBlob.boundingBox)
 
                 //var fudge: Double = -1.44 // XXX constant
-                var fudge: Double = -1 // XXX constant
+                var fudge: Double = -3 // XXX constant
                 //var fudge: Double = -0.44 // XXX constant
 /*
                 if distance < 20 { // XXX constants
