@@ -27,11 +27,6 @@ class BlobAbsorberRewrite: AbstractBlobAnalyzer {
 
     private var blobsProcessed: [String: Bool] = [:] // keyed by blob id, true if processed
 
-    // blobs smaller than this aren't processed directly, though they
-    // may be absorbed by larger nearby blobs
-    // processing all of the blobs like this take a really long time, this is a cutoff
-    let minBlobProcessingSize = 0
-
     override init(blobMap: [String: Blob],
                   config: Config,
                   width: Int,
@@ -49,7 +44,6 @@ class BlobAbsorberRewrite: AbstractBlobAnalyzer {
                    frameIndex: frameIndex,
                    imageAccessor: imageAccessor)
 
-
         for (index, blob) in blobMap.values.enumerated() {
 
             if let blobProcessed = blobsProcessed[blob.id],
@@ -58,12 +52,6 @@ class BlobAbsorberRewrite: AbstractBlobAnalyzer {
                 continue
             }
             
-            if blob.size < minBlobProcessingSize {
-                // don't process them, but don't discard all of them either
-                filteredBlobs[blob.id] = blob
-                continue
-            }
-
             var lastBlob = LastBlob()
             lastBlob.blob = blob
 
