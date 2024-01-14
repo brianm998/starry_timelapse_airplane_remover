@@ -83,6 +83,7 @@ public class FrameViewModel: ObservableObject {
     @Published var blobsPreviewImage: Image = initialImage
     @Published var khtbPreviewImage: Image = initialImage
     @Published var absorbedPreviewImage: Image = initialImage
+    @Published var rectifiedPreviewImage: Image = initialImage
     @Published var paintMaskPreviewImage: Image = initialImage
     @Published var houghLinesPreviewImage: Image = initialImage
     @Published var validationPreviewImage: Image = initialImage

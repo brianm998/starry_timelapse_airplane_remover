@@ -16,6 +16,7 @@ public enum FrameViewMode: String, Equatable, CaseIterable {
     case blobs
     case khtBlobs
     case absorbedBlobs
+    case rectifiedBlobs
     case houghLines
     case validation
     case paintMask
@@ -37,6 +38,8 @@ public enum FrameViewMode: String, Equatable, CaseIterable {
             return "khtb"
         case .absorbedBlobs:
             return "asb"
+        case .rectifiedBlobs:
+            return "rect"
         case .paintMask:
             return "pmask"
         case .houghLines:
@@ -45,6 +48,31 @@ public enum FrameViewMode: String, Equatable, CaseIterable {
             return "valid"
         case .processed:
             return "proc"
+        }
+    }
+
+    var longName: String {
+        switch self {
+        case .original:
+            return "original frame"
+        case .subtraction:
+            return "subtracted frame"
+        case .blobs:
+            return "initially detected blobs"
+        case .khtBlobs:
+            return "blobs that match lines"
+        case .absorbedBlobs:
+            return "blobs after the absorber"
+        case .rectifiedBlobs:
+            return "rectified blobs"
+        case .paintMask:
+            return "computed paint mask"
+        case .houghLines:
+            return "lines from kernel hough transform"
+        case .validation:
+            return "validation data"
+        case .processed:
+            return "processed frame"
         }
     }
 }
@@ -293,6 +321,12 @@ public final class ViewModel: ObservableObject {
             self.frames[frame.frameIndex].absorbedPreviewImage = viewImage
         }
 
+        if let image = await frame.imageAccessor.loadNSImage(type: .rectified, atSize: .preview) {
+            Log.d("loaded rectified blobs preview for self.frames[\(frame.frameIndex)] from jpeg")
+            let viewImage = Image(nsImage: image).resizable()
+            self.frames[frame.frameIndex].rectifiedPreviewImage = viewImage
+        }
+
         if let image = await frame.imageAccessor.loadNSImage(type: .paintMask, atSize: .preview) {
             Log.d("loaded paint mask preview for self.frames[\(frame.frameIndex)] from jpeg")
             let viewImage = Image(nsImage: image).resizable()
@@ -300,7 +334,7 @@ public final class ViewModel: ObservableObject {
         }
 
         if let image = await frame.imageAccessor.loadNSImage(type: .houghLines, atSize: .preview) {
-            Log.d("loaded houghLines preview for self.frames[\(frame.frameIndex)] from jpeg")
+            Log.d("loaded houghLinesrr preview for self.frames[\(frame.frameIndex)] from jpeg")
             let viewImage = Image(nsImage: image).resizable()
             self.frames[frame.frameIndex].houghLinesPreviewImage = viewImage
         }
@@ -790,6 +824,8 @@ public extension ViewModel {
                     self.currentFrameImage = newFrameView.khtbPreviewImage
                 case .absorbedBlobs:
                     self.currentFrameImage = newFrameView.absorbedPreviewImage
+                case .rectifiedBlobs:
+                    self.currentFrameImage = newFrameView.rectifiedPreviewImage
                 case .paintMask:
                     self.currentFrameImage = newFrameView.paintMaskPreviewImage
                 case .houghLines:
@@ -836,6 +872,12 @@ public extension ViewModel {
                             }
                         case .absorbedBlobs:
                             if let baseImage = await nextFrame.imageAccessor.loadNSImage(type: .absorbed, atSize: .original) {
+                                if nextFrame.frameIndex == self.currentIndex {
+                                    self.currentFrameImage = Image(nsImage: baseImage)
+                                }
+                            }
+                        case .rectifiedBlobs:
+                            if let baseImage = await nextFrame.imageAccessor.loadNSImage(type: .rectified, atSize: .original) {
                                 if nextFrame.frameIndex == self.currentIndex {
                                     self.currentFrameImage = Image(nsImage: baseImage)
                                 }
@@ -1041,6 +1083,10 @@ public extension ViewModel {
                     case .absorbedBlobs: 
                         self.currentFrameImage =
                           self.frames[currentIdx].absorbedPreviewImage
+
+                    case .rectifiedBlobs: 
+                        self.currentFrameImage =
+                          self.frames[currentIdx].rectifiedPreviewImage
 
                     case .paintMask: 
                         self.currentFrameImage =

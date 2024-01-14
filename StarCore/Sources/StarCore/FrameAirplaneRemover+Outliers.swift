@@ -159,6 +159,8 @@ extension FrameAirplaneRemover {
 
             self.state = .detectingOutliers2a
 
+            Log.d("frame \(frameIndex) starting with \(blobber.blobMap.count) blobs")
+
             let kht = try await BlobKHTAnalysis(houghLines: houghLines,
                                                 blobMap: blobber.blobMap,
                                                 config: config,
@@ -173,8 +175,11 @@ extension FrameAirplaneRemover {
                 try await saveImages(for: Array(kht.filteredBlobs.values), as: .khtb)
             }
             
+            Log.d("frame \(frameIndex) kht analysis gave \(kht.filteredBlobs.count) blobs")
             self.state = .detectingOutliers2b
-/*
+            /*
+
+             // XXX this mofo is slow as fuck, but seems to work
             let absorber = BlobAbsorber(blobMap: kht.blobMap,
                                         frameIndex: frameIndex,
                                         frameWidth: width,
@@ -186,6 +191,7 @@ extension FrameAirplaneRemover {
             let filteredBlobs = absorber.filteredBlobs
 */
 
+            // this mofo is fast as lightning, and seems to mostly work now
             let absorber = BlobAbsorberRewrite(blobMap: kht.blobMap,
                                                config: config,
                                                width: width,
@@ -196,29 +202,73 @@ extension FrameAirplaneRemover {
             // look for all blobs to promote,
             // and see if we get a better line score if we combine with another 
 
-            let filteredBlobs = Array(absorber.filteredBlobs.values)
+            Log.d("frame \(frameIndex) absorber analysis gave \(absorber.filteredBlobs.count) blobs")
+            if config.writeOutlierGroupFiles {
+                // save filtered blobs image here
+                try await saveImages(for: Array(absorber.filteredBlobs.values), as: .absorbed)
+            }
+            
 
+            // rectifier makes sure no blobs have the same pixel
+            // if so, they get combined
+            let rectifier = BlobRectifier(blobMap: absorber.filteredBlobs,
+                                          width: width,
+                                          height: height,
+                                          frameIndex: frameIndex)
+
+
+            Log.d("frame \(frameIndex) absorber rectification gave \(rectifier.blobMap.count) blobs")
+            let filteredBlobs = Array(rectifier.blobMap.values)
+            
+//            let filteredBlobs = Array(kht.filteredBlobs.values)
             // XXX save filtered blob image here
             if config.writeOutlierGroupFiles {
                 // save filtered blobs image here
-                try await saveImages(for: filteredBlobs, as: .absorbed)
+                try await saveImages(for: filteredBlobs, as: .rectified)
             }
             
             Log.i("frame \(frameIndex) has \(filteredBlobs.count) filteredBlobs")
             self.state = .detectingOutliers3
-            
+
             // promote found blobs to outlier groups for further processing
             for blob in filteredBlobs {
-                if let _ = blob.line,
-                   blob.size >= 100//config.minGroupSize
-                {
+                if let _ = blob.line {
                     // first trim pixels too far away
                     blob.trim()
-                    // make outlier group from this blob
-                    let outlierGroup = blob.outlierGroup(at: frameIndex)
-                    Log.i("frame \(frameIndex) promoting \(blob) to outlier group \(outlierGroup.name) line \(blob.line)")
-                    outlierGroup.frame = self
-                    outlierGroups?.members[outlierGroup.name] = outlierGroup
+
+                    /*
+                       XXX add some pixels along the line?
+                       even over the edges a bit?
+
+                       iterate along the blob line,
+                       from the center along the length,
+                       adding a pixel to the blob for each spot on the
+                       line which is not already set
+
+                       but only for lines with enough length
+                       and average line distance
+
+                       if 
+                       length > 40
+                       average distance < 6
+
+                       then add line pixels to blob
+
+                       may need to rectify afterwards, as we could be overlapping
+                     */
+
+                    if blob.size >= config.minGroupSize
+                    {
+                        // make outlier group from this blob
+                        let outlierGroup = blob.outlierGroup(at: frameIndex)
+                        Log.i("frame \(frameIndex) promoting \(blob) to outlier group \(outlierGroup.name) line \(blob.line)")
+                        outlierGroup.frame = self
+                        outlierGroups?.members[outlierGroup.name] = outlierGroup
+                    } else {
+                        Log.i("frame \(frameIndex) NOT promoting \(blob)")
+                    }
+                } else {
+                    Log.i("frame \(frameIndex) NOT promoting \(blob)")
                 }
             }
 
