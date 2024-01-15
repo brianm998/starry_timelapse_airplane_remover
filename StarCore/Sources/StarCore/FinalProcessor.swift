@@ -170,7 +170,9 @@ public actor FinalProcessor {
     
     func finishAll() async throws {
         Log.d("finishing all")
-        try await withLimitedThrowingTaskGroup(of: Void.self, at: .userInitiated) { taskGroup in
+        try await withLimitedThrowingTaskGroup(of: Void.self,
+                                               at: .userInitiated,
+                                               idle: 12) { taskGroup in
             for (_, frame) in frames.enumerated() {
                 if let frame = frame {
                     Log.d("adding frame \(frame.frameIndex) to final queue")
@@ -218,7 +220,9 @@ public actor FinalProcessor {
         let frameCount = await frames.count
         
         var done = false
-        try await withLimitedThrowingTaskGroup(of: Void.self, at: .userInitiated) { taskGroup in
+        try await withLimitedThrowingTaskGroup(of: Void.self,
+                                               at: .userInitiated,
+                                               idle: 12) { taskGroup in
             while(!done) {
                 Log.v("FINAL THREAD running")
                 let (cfi, framesCount) = await (currentFrameIndex, frames.count)

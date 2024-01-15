@@ -20,9 +20,13 @@ public actor LimitedThrowingTaskGroup<T> {
     var iterator = 0
     
     let taskPriority: TaskPriority
+    let idlePercentage: Double
     
-    public init(at taskPriority: TaskPriority) {
+    public init(at taskPriority: TaskPriority,
+                idlePercentage: Double) // percentage of idle CPU needed before starting task
+    {
         self.taskPriority = taskPriority
+        self.idlePercentage = idlePercentage
     }
 
     public func next() async throws ->  T? {
@@ -40,19 +44,23 @@ public actor LimitedThrowingTaskGroup<T> {
     }
     
     public func addTask(closure: @escaping () async throws -> T) async throws {
-        tasks.append(try await runThrowingTask(at: taskPriority, closure))
+        tasks.append(try await runThrowingTask(at: taskPriority,
+                                               idlePercentage: idlePercentage,
+                                               closure))
     }
 }
 
 public func withLimitedThrowingTaskGroup<ChildTaskResult, GroupResult>(
   of childTaskResultType: ChildTaskResult.Type,
   at taskPriority: TaskPriority = .high,
+  idle idlePercentage: Double = 20,
   returning returnType: GroupResult.Type = GroupResult.self,
   body: (inout LimitedThrowingTaskGroup<ChildTaskResult>) async throws -> GroupResult
 ) async throws -> GroupResult where ChildTaskResult : Sendable
 {
     return try await withThrowingTaskGroup(of: ChildTaskResult.self, returning: returnType) { taskGroup in
-        var limitedTaskGroup: LimitedThrowingTaskGroup<ChildTaskResult> = LimitedThrowingTaskGroup(at: taskPriority)
+        var limitedTaskGroup: LimitedThrowingTaskGroup<ChildTaskResult> =
+          LimitedThrowingTaskGroup(at: taskPriority, idlePercentage: idlePercentage)
         return try await body(&limitedTaskGroup)
     }
 }
