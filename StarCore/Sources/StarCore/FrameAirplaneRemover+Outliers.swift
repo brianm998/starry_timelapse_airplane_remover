@@ -142,12 +142,12 @@ extension FrameAirplaneRemover {
                                                     pixelData: subtractionArray,
                                                     frameIndex: frameIndex,
                                                     neighborType: .eight,//.fourCardinal,
-                                                    minimumBlobSize: config.minGroupSize/2, // XXX constant XXX
-                                                    minimumLocalMaximum: config.maxPixelDistance/3,
+                                                    minimumBlobSize: config.minGroupSize/4, // XXX constant XXX
+                                                    minimumLocalMaximum: config.maxPixelDistance/4,
                                                     // blobs can grow until the get this much
                                                     // darker than their seed pixel
                                                     // larger values give more blobs
-                                                    contrastMin: 60)      // XXX constant
+                                                    contrastMin: 62)      // XXX constant
             
             if config.writeOutlierGroupFiles {
                 // save blobs image here
@@ -252,13 +252,9 @@ extension FrameAirplaneRemover {
                         // make outlier group from this blob
                         let outlierGroup = blob.outlierGroup(at: frameIndex)
 
-                        if outlierGroup.lineLength > 0 {
-                            Log.i("frame \(frameIndex) promoting \(blob) to outlier group \(outlierGroup.name) line \(blob.line)")
-                            outlierGroup.frame = self
-                            outlierGroups?.members[outlierGroup.name] = outlierGroup
-                        } else {
-                            Log.i("frame \(frameIndex) NOT promoting \(blob) with zero line length")
-                        }
+                        Log.i("frame \(frameIndex) promoting \(blob) to outlier group \(outlierGroup.name) line \(blob.line)")
+                        outlierGroup.frame = self
+                        outlierGroups?.members[outlierGroup.name] = outlierGroup
                     } else {
                         Log.i("frame \(frameIndex) NOT promoting \(blob)")
                     }
