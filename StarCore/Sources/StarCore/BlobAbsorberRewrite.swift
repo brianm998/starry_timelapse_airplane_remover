@@ -83,7 +83,7 @@ class BlobAbsorberRewrite: AbstractBlobAnalyzer {
                 var iterationCount = 0
                 
                 blobLine.iterate(.forwards, from: centralLineCoord) { x, y, direction in
-                    Log.d("frame \(frameIndex) iterate [\(x), \(y)]")
+                    //Log.d("frame \(frameIndex) iterate [\(x), \(y)]")
                     iterationCount += 1
                     if x >= 0,
                        y >= 0,
