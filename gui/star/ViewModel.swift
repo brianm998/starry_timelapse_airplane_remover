@@ -506,7 +506,6 @@ public final class ViewModel: ObservableObject {
         let callbacks = makeCallbacks()
         
         let eraser = try await NighttimeAirplaneRemover(with: config,
-                                                        numConcurrentRenders: ProcessInfo.processInfo.activeProcessorCount,
                                                         callbacks: callbacks,
                                                         processExistingFiles: true,
                                                         fullyProcess: false,
@@ -568,7 +567,6 @@ public final class ViewModel: ObservableObject {
         Log.i("have config")
 
         let eraser = try await NighttimeAirplaneRemover(with: config,
-                                                        numConcurrentRenders: numConcurrentRenders,
                                                         callbacks: callbacks,
                                                         processExistingFiles: true,
                                                         isGUI: true)

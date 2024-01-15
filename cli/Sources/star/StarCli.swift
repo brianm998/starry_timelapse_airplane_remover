@@ -192,14 +192,6 @@ struct StarCli: AsyncParsableCommand {
         but also might end with more twinkling stars.
         """)
     var minGroupSize = Defaults.minGroupSize // groups smaller than this are completely ignored
-    
-    @Option(name: .shortAndLong, help: """
-        Max Number of frames to process at once.
-        The default of all cpus works good in most cases.
-        May need to be reduced to a lower value if to consume less ram on some machines.
-        """)
-    // XXX this isn't respected when loading from a config
-    var numConcurrentRenders: Int = ProcessInfo.processInfo.activeProcessorCount
 
     @Option(name: .shortAndLong, help: """
         When set, outlier groups closer to the bottom of the screen than this are ignored.
@@ -256,8 +248,6 @@ struct StarCli: AsyncParsableCommand {
                 } catch {
                     print("\(error)")
                 }
-
-                TaskRunner.maxConcurrentTasks = UInt(numConcurrentRenders)
 
             } else {
                 // here we are processing a new image sequence 
@@ -348,12 +338,10 @@ struct StarCli: AsyncParsableCommand {
             
             Log.i("looking for files to processes in \(inputImageSequenceDirname)")
             let writeOutputFiles = !skipOutputFiles
-            let max = numConcurrentRenders
 
             let task = Task {
                 do {
                     let eraser = try await NighttimeAirplaneRemover(with: config,
-                                                                    numConcurrentRenders: max,
                                                                     callbacks: callbacks,
                                                                     processExistingFiles: false,
                                                                     maxResidentImages: 40, // XXX
@@ -363,7 +351,7 @@ struct StarCli: AsyncParsableCommand {
                         // setup sequence monitor
                         let updatableProgressMonitor =
                           await UpdatableProgressMonitor(frameCount: eraser.imageSequence.filenames.count,
-                                                         numConcurrentRenders: max,
+                                                         numConcurrentRenders: 40, // xXX
                                                          config: eraser.config,
                                                          callbacks: callbacks)
                         eraser.callbacks.frameStateChangeCallback = { frame, state in
