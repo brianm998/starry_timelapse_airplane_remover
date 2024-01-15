@@ -3,7 +3,8 @@ import logging
 
 // an alternative to task groups, looking for thread stability
 
-fileprivate var numberRunning = NumberRunning()
+//fileprivate var numberRunning = NumberRunning()
+fileprivate let processorUsage = ProcessorUsage()
 
 public actor TaskRunner {
     // XXX getting this number right is hard
@@ -39,14 +40,18 @@ fileprivate func determineMax() -> UInt {
     // handle each response
  }
  */
-public func runTask<Type>(_ closure: @escaping () async -> Type,
-                       withCPUCount numCPUs: UInt = 1) async -> Task<Type,Never>
+
+
+// how idle does the system have to be to start another task?
+fileprivate let idlePercentage = 20.0
+
+public func runTask<Type>(_ closure: @escaping () async -> Type) async -> Task<Type,Never>
 {
     //Log.i("runtask with cpuUsage \(cpuUsage())")
     let baseMax = TaskRunner.maxConcurrentTasks
     let max = baseMax// > reserve ? baseMax - reserve : baseMax
 
-    while !(await numberRunning.startOnIncrement(to: max)) {
+    while !(await processorUsage.isIdle(byAtLeast: idlePercentage)) {
         do {
             try await Task.sleep(nanoseconds: 1_000_000_000)
         } catch { }
@@ -54,7 +59,6 @@ public func runTask<Type>(_ closure: @escaping () async -> Type,
     return Task<Type,Never> {
         let ret = await closure() // run closure in separate task
         //Log.v("new task done")
-        await numberRunning.decrement()
         return ret
     }
 }
@@ -71,13 +75,9 @@ public func runTask<Type>(_ closure: @escaping () async -> Type,
     // handle each response
  }
  */
-public func runThrowingTask<Type>(_ closure: @escaping () async throws -> Type,
-                              withCPUCount numCPUs: UInt = 1) async throws -> Task<Type,Error>
+public func runThrowingTask<Type>(_ closure: @escaping () async throws -> Type) async throws -> Task<Type,Error>
 {
-    let baseMax = TaskRunner.maxConcurrentTasks
-    let max = baseMax// > reserve ? baseMax - reserve : baseMax
-
-    while !(await numberRunning.startOnIncrement(to: max)) {
+    while !(await processorUsage.isIdle(byAtLeast: idlePercentage)) {
         do {
             try await Task.sleep(nanoseconds: 1_000_000_000)
         } catch { }
@@ -87,7 +87,6 @@ public func runThrowingTask<Type>(_ closure: @escaping () async throws -> Type,
     return Task<Type,Error> {
         let ret = try await closure() // run closure in separate task
         //Log.v("new task done")
-        await numberRunning.decrement()
         return ret
     }
 }

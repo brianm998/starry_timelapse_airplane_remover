@@ -61,8 +61,6 @@ public actor FinalProcessor {
     // will be canceled upon de-init
     var publishCancellable: AnyCancellable?
 
-    let numberRunning = NumberRunning()
-
     let numConcurrentRenders: Int
 
     // are we running on the gui?
@@ -97,17 +95,6 @@ public actor FinalProcessor {
             Log.d("frame \(index) added for final inter-frame analysis \(self.maxAddedIndex)")
             self.frames[index] = frame
             self.log()
-        }
-
-        await self.numberRunning.updateCallback() { numberOfFinishingFrames in
-            // set the number of processes allowed for non-finishing activities
-            let numConcurrentRenders = self.numConcurrentRenders - Int(numberOfFinishingFrames)
-            if numConcurrentRenders > 0 {
-                TaskRunner.maxConcurrentTasks = UInt(numConcurrentRenders)
-            } else {
-                TaskRunner.maxConcurrentTasks = 1
-            }
-            Log.d("numberOfFinishingFrames \(numberOfFinishingFrames) set TaskRunner.numConcurrentRendersTasks = \(TaskRunner.maxConcurrentTasks)")
         }
     }
 
@@ -314,10 +301,6 @@ public actor FinalProcessor {
                             Log.v("FINAL THREAD frame \(indexToProcess) adding task")
 
 
-                            while(await numberRunning.currentValue() > numConcurrentRenders) {
-                                Log.v("FINAL THREAD sleeping")
-                                try await Task.sleep(nanoseconds: 1_000_000_000)
-                            }
                             Log.v("FINAL THREAD finishing sleeping")
                             await frameToFinish.clearOutlierGroupValueCaches()
                             while await self.centralClassifier.classify(frame: frameToFinish) == false {
@@ -326,7 +309,6 @@ public actor FinalProcessor {
                                 try await Task.sleep(nanoseconds: 1_000_000_000)
                             }
                             frameToFinish.set(state: .outlierProcessingComplete)
-                            await numberRunning.increment()
                             try await taskGroup.addTask() { 
                                 Log.v("FINAL THREAD frame \(indexToProcess) task running")
                                 Log.v("FINAL THREAD frame \(indexToProcess) classified")
@@ -339,7 +321,6 @@ public actor FinalProcessor {
                                 } catch {
                                     Log.e("FINAL THREAD frame \(indexToProcess) ERROR \(error)")
                                 }
-                                await self.numberRunning.decrement()
                                 Log.v("FINAL THREAD frame \(indexToProcess) DONE")
                                 
   //                              }

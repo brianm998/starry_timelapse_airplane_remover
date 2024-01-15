@@ -82,4 +82,10 @@ public actor ProcessorUsage {
         }
         return 0              // XXX fall back case where we can't read 
     }
+
+    public func isIdle(byAtLeast idleAmountPercent: Double) -> Bool {
+        if self.percentIdle() < idleAmountPercent { return false }
+        self.reset()        
+        return true
+    }
 }
