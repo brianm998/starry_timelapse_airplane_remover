@@ -19,7 +19,11 @@ public actor LimitedThrowingTaskGroup<T> {
     var tasks: [Task<T,Error>] = []
     var iterator = 0
     
-    public init() { }
+    let taskPriority: TaskPriority
+    
+    public init(at taskPriority: TaskPriority) {
+        self.taskPriority = taskPriority
+    }
 
     public func next() async throws ->  T? {
         if iterator >= tasks.count { return nil }
@@ -36,19 +40,19 @@ public actor LimitedThrowingTaskGroup<T> {
     }
     
     public func addTask(closure: @escaping () async throws -> T) async throws {
-        tasks.append(try await runThrowingTask(closure))
+        tasks.append(try await runThrowingTask(at: taskPriority, closure))
     }
 }
 
 public func withLimitedThrowingTaskGroup<ChildTaskResult, GroupResult>(
   of childTaskResultType: ChildTaskResult.Type,
-  limitedTo maxConcurrent: Int = ProcessInfo.processInfo.activeProcessorCount,
+  at taskPriority: TaskPriority = .medium,
   returning returnType: GroupResult.Type = GroupResult.self,
   body: (inout LimitedThrowingTaskGroup<ChildTaskResult>) async throws -> GroupResult
 ) async throws -> GroupResult where ChildTaskResult : Sendable
 {
     return try await withThrowingTaskGroup(of: ChildTaskResult.self, returning: returnType) { taskGroup in
-        var limitedTaskGroup: LimitedThrowingTaskGroup<ChildTaskResult> = LimitedThrowingTaskGroup()
+        var limitedTaskGroup: LimitedThrowingTaskGroup<ChildTaskResult> = LimitedThrowingTaskGroup(at: taskPriority)
         return try await body(&limitedTaskGroup)
     }
 }

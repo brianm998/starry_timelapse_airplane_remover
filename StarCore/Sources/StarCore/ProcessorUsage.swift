@@ -15,77 +15,59 @@ You should have received a copy of the GNU General Public License along with sta
 
 */
 
-
-
-//Garth:cli brian$ top -l  2 | grep -E "^CPU" | tail -1
-//CPU usage: 76.15% user, 7.1% sys, 16.82% idle 
-
-
-public struct ProcesserUsageInfo {
-    let user: Double
-    let sys: Double
-    let idle: Double
-}
-
 public actor ProcessorUsage {
-    public init () { }
+    public init () {
+        self.usage = numProcessors*100
+    }
 
-    let regex = /\s*CPU usage: ([\d.]+)% user, ([\d.]+)% sys, ([\d.]+)% idle\s*/
-
-    var usage: ProcesserUsageInfo?
+    // percent usage per cpu, i.e. two cpus, 200.0 usage
+    var usage: Double
     var lastReadTime: TimeInterval?
 
-    let checkIntervalSeconds: TimeInterval = 10.0
+    let checkIntervalSeconds: TimeInterval = 15.0
 
     let numProcessors = Double(ProcessInfo.processInfo.activeProcessorCount)
     
     private func readUsage() {
         do {
-            let topOutput = try shellOut(to: "top -l  2 | grep -E \"^CPU\" | tail -1")
-            if let result = try regex.wholeMatch(in: topOutput),
-               let user = Double(result.1),
-               let sys = Double(result.2),
-               let idle = Double(result.3)
-            {
-                Log.d("idle \(idle)")
-                self.usage = ProcesserUsageInfo(user: user, sys: sys, idle: idle)
-                self.lastReadTime = NSDate().timeIntervalSince1970
+            let usageString = try shellOut(to: "ps -e -o %cpu | awk '{s+=$1} END {print s}'")
+            if let cpuUsage = Double(usageString) {
+                Log.d("read cpuUsage \(cpuUsage)")
+                usage = cpuUsage
+                lastReadTime = NSDate().timeIntervalSince1970
             }
         } catch {
             Log.e("error \(error)")
         }
     }
 
+    // called to indicate that a new cpu intensive process may have started
     public func reset() {
-
-        if let usage = usage,
-           usage.idle > 10.0/numProcessors
-        {
-            self.usage = ProcesserUsageInfo(user: usage.user,
-                                            sys: usage.sys,
-                                            idle: usage.idle - 2/numProcessors)
+        if idlePercent() > 20 {
+            usage += 100
+            Log.d("reset to usage \(usage)")
         } else {
-            self.usage = nil
+            Log.d("reset to nil")
+            lastReadTime = nil
         }
+    }
+
+    public func idlePercent() -> Double {
+        (numProcessors*100 - usage) / numProcessors
     }
     
     public func percentIdle() -> Double {
-        if let usage = usage,
-           let lastReadTime = lastReadTime,
+        if let lastReadTime = lastReadTime,
            NSDate().timeIntervalSince1970 - lastReadTime < checkIntervalSeconds
         {
-            return usage.idle
+            return idlePercent()
         }
         readUsage()
-        if let usage = usage {
-            return usage.idle
-        }
-        return 0              // XXX fall back case where we can't read 
+        return idlePercent()
     }
 
     public func isIdle(byAtLeast idleAmountPercent: Double) -> Bool {
         if self.percentIdle() < idleAmountPercent { return false }
-        self.reset()        
         return true
     }
 }

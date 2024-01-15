@@ -20,8 +20,12 @@ You should have received a copy of the GNU General Public License along with sta
 public actor LimitedTaskGroup<T> {
     var tasks: [Task<T,Never>] = []
     var iterator = 0
+
+    let taskPriority: TaskPriority
     
-    public init() { }
+    public init(at taskPriority: TaskPriority) {
+        self.taskPriority = taskPriority
+    }
 
     public func next() async ->  T? {
         if iterator >= tasks.count { return nil }
@@ -40,7 +44,7 @@ public actor LimitedTaskGroup<T> {
     public func addTask(closure: @escaping () async -> T) async {
         // this may or may not run in the background, depending upon how
         // many other active Tasks are running
-        tasks.append(await runTask(closure))
+        tasks.append(await runTask(at: taskPriority, closure))
     }
 }
 
@@ -60,11 +64,11 @@ func example() async {
 
 public func withLimitedTaskGroup<ChildTaskResult, GroupResult>(
   of childTaskResultType: ChildTaskResult.Type,
-  limitedTo maxConcurrent: Int = ProcessInfo.processInfo.activeProcessorCount,
+  at taskPriority: TaskPriority = .medium,
   returning returnType: GroupResult.Type = GroupResult.self,
   body: (inout LimitedTaskGroup<ChildTaskResult>) async -> GroupResult
 ) async -> GroupResult where ChildTaskResult : Sendable
 {
-    var limitedTaskGroup: LimitedTaskGroup<ChildTaskResult> = LimitedTaskGroup()
+    var limitedTaskGroup: LimitedTaskGroup<ChildTaskResult> = LimitedTaskGroup(at: taskPriority)
     return await body(&limitedTaskGroup)
 }
