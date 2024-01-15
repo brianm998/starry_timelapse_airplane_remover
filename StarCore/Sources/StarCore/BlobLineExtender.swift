@@ -70,7 +70,7 @@ class BlobLineExtender: AbstractBlobAnalyzer {
                     // than the average intensity of the blob
                     // lowering it gives more noise
                     // raising it shrinks wanted groups
-                    let minIntensity = UInt16(Double(initialIntensity)*0.68) // XXX constant
+                    let minIntensity = UInt16(Double(initialIntensity)*0.72) // XXX constant
 
                     //var referenceCoord = centralCoord
                     
