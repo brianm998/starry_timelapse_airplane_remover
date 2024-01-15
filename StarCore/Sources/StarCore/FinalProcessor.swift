@@ -112,7 +112,7 @@ public actor FinalProcessor {
     }
 
     func clearFrame(at index: Int) {
-        frames[index] = nil
+        frames[index] = nil //SIGABRT after reloading a different sequence
     }
     
     func incrementCurrentFrameIndex() {
@@ -234,7 +234,7 @@ public actor FinalProcessor {
         let frameCount = await frames.count
         
         var done = false
-        try await withThrowingTaskGroup(of: Void.self) { taskGroup in
+        try await withLimitedThrowingTaskGroup(of: Void.self) { taskGroup in
             while(!done) {
                 Log.v("FINAL THREAD running")
                 let (cfi, framesCount) = await (currentFrameIndex, frames.count)
@@ -248,7 +248,6 @@ public actor FinalProcessor {
                 let indexToProcess = await currentFrameIndex
 
                 Log.d("indexToProcess \(indexToProcess) shouldProcess[indexToProcess] \(shouldProcess[indexToProcess])")
-
                 
                 if !isGUI,         // always process on gui so we can see them all
                    !shouldProcess[indexToProcess]
@@ -328,7 +327,7 @@ public actor FinalProcessor {
                             }
                             frameToFinish.set(state: .outlierProcessingComplete)
                             await numberRunning.increment()
-                            /*try await*/ taskGroup.addTask() { 
+                            try await taskGroup.addTask() { 
                                 Log.v("FINAL THREAD frame \(indexToProcess) task running")
                                 Log.v("FINAL THREAD frame \(indexToProcess) classified")
 
