@@ -61,13 +61,10 @@ public actor FinalProcessor {
     // will be canceled upon de-init
     var publishCancellable: AnyCancellable?
 
-    let numConcurrentRenders: Int
-
     // are we running on the gui?
     public let isGUI: Bool
 
     init(with config: Config,
-         numConcurrentRenders: Int,
          callbacks: Callbacks,
          publisher: PassthroughSubject<FrameAirplaneRemover, Never>,
          numberOfFrames frameCount: Int,
@@ -75,7 +72,6 @@ public actor FinalProcessor {
          imageSequence: ImageSequence,
          isGUI: Bool) async
     {
-        self.numConcurrentRenders = numConcurrentRenders
         self.isGUI = isGUI
         self.config = config
         self.callbacks = callbacks
@@ -114,13 +110,14 @@ public actor FinalProcessor {
             // show what frames are in place to be processed
            TaskWaiter.shared.task(priority: .userInitiated) {
                var padding = ""
-               if self.numConcurrentRenders < self.config.progressBarLength {
-                   padding = String(repeating: " ", count: (self.config.progressBarLength - self.numConcurrentRenders))
+               let numConcurrentRenders = 40 // XXX
+               if numConcurrentRenders < self.config.progressBarLength {
+                   padding = String(repeating: " ", count: (self.config.progressBarLength - numConcurrentRenders))
                }
                
                var message: String = padding + ConsoleColor.blue.rawValue + "["
                var count = 0
-               let end = self.currentFrameIndex + self.numConcurrentRenders
+               let end = self.currentFrameIndex + numConcurrentRenders
                for i in self.currentFrameIndex ..< end {
                    if i >= localFrames.count {
                        message += ConsoleColor.yellow.rawValue + "-"
@@ -173,7 +170,7 @@ public actor FinalProcessor {
     
     func finishAll() async throws {
         Log.d("finishing all")
-        try await withLimitedThrowingTaskGroup(of: Void.self) { taskGroup in
+        try await withLimitedThrowingTaskGroup(of: Void.self, at: .userInitiated) { taskGroup in
             for (_, frame) in frames.enumerated() {
                 if let frame = frame {
                     Log.d("adding frame \(frame.frameIndex) to final queue")
@@ -221,7 +218,7 @@ public actor FinalProcessor {
         let frameCount = await frames.count
         
         var done = false
-        try await withLimitedThrowingTaskGroup(of: Void.self) { taskGroup in
+        try await withLimitedThrowingTaskGroup(of: Void.self, at: .userInitiated) { taskGroup in
             while(!done) {
                 Log.v("FINAL THREAD running")
                 let (cfi, framesCount) = await (currentFrameIndex, frames.count)
@@ -360,7 +357,7 @@ public actor FinalProcessor {
                 Log.d("FINAL THREAD countOfFramesToCheck \(count)")
                 while(count > 0) {
                     Log.d("FINAL THREAD sleeping with count \(count)")
-                    try await Task.sleep(nanoseconds: 1_000_000_000)
+                    try await Task.sleep(nanoseconds: 1_000_000)
                     count = await countOfFramesToCheck()
                 }
             } else {

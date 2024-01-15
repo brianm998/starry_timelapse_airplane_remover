@@ -42,7 +42,6 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
     let publisher = PassthroughSubject<FrameAirplaneRemover, Never>()
 
     public init(with config: Config,
-                numConcurrentRenders: Int,
                 callbacks: Callbacks,
                 processExistingFiles: Bool,
                 maxResidentImages: Int? = nil,
@@ -61,7 +60,6 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
 
         try super.init(imageSequenceDirname: "\(config.imageSequencePath)/\(config.imageSequenceDirname)",
                        outputDirname: "\(config.outputPath)/\(basename)",
-                       maxConcurrent: numConcurrentRenders,
                        supportedImageFileTypes: config.supportedImageFileTypes,
                        numberFinalProcessingNeighborsNeeded: config.numberFinalProcessingNeighborsNeeded,
                        processExistingFiles: processExistingFiles,
@@ -98,7 +96,6 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
         }
         
         finalProcessor = await FinalProcessor(with: config,
-                                          numConcurrentRenders: numConcurrentRenders,
                                           callbacks: callbacks,
                                           publisher: publisher,
                                           numberOfFrames: imageSequenceSize,
@@ -168,17 +165,17 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
     // called by the superclass to process each frame
     // called async check access to shared data
     override func processFrame(number index: Int,
-                            outputFilename: String,
-                            baseName: String) async throws -> FrameAirplaneRemover
+                               outputFilename: String,
+                               baseName: String) async throws -> FrameAirplaneRemover
     {
         // the other frames that we use to detect outliers and repaint from
         let framePlaneRemover =
           try await self.createFrame(atIndex: index,
-                                  outputFilename: "\(self.outputDirname)/\(baseName)",
-                                  baseName: baseName,
-                                  imageWidth: imageWidth!,
-                                  imageHeight: imageHeight!,
-                                  imageBytesPerPixel: imageBytesPerPixel!)
+                                     outputFilename: "\(self.outputDirname)/\(baseName)",
+                                     baseName: baseName,
+                                     imageWidth: imageWidth!,
+                                     imageHeight: imageHeight!,
+                                     imageBytesPerPixel: imageBytesPerPixel!)
 
         return framePlaneRemover
     }

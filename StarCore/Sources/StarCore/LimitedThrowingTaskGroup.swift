@@ -46,7 +46,7 @@ public actor LimitedThrowingTaskGroup<T> {
 
 public func withLimitedThrowingTaskGroup<ChildTaskResult, GroupResult>(
   of childTaskResultType: ChildTaskResult.Type,
-  at taskPriority: TaskPriority = .medium,
+  at taskPriority: TaskPriority = .high,
   returning returnType: GroupResult.Type = GroupResult.self,
   body: (inout LimitedThrowingTaskGroup<ChildTaskResult>) async throws -> GroupResult
 ) async throws -> GroupResult where ChildTaskResult : Sendable

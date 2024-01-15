@@ -21,9 +21,6 @@ public class ImageSequenceProcessor<T> {
     // the name of the directory to write processed images to
     public let outputDirname: String
 
-    // the max number of frames to process at one time
-    public let maxConcurrentRenders: Int
-
     public let numberFinalProcessingNeighborsNeeded: Int
     
     // the following properties get included into the output videoname
@@ -44,14 +41,12 @@ public class ImageSequenceProcessor<T> {
     
     init(imageSequenceDirname: String,
          outputDirname: String,
-         maxConcurrent: Int,
          supportedImageFileTypes: [String],
          numberFinalProcessingNeighborsNeeded: Int,
          processExistingFiles: Bool,
          maxImages: Int? = nil,
          fullyProcess: Bool = true) throws
     {
-        self.maxConcurrentRenders = maxConcurrent
         self.imageSequenceDirname = imageSequenceDirname
         self.outputDirname = outputDirname
         self.numberFinalProcessingNeighborsNeeded = numberFinalProcessingNeighborsNeeded
@@ -62,7 +57,6 @@ public class ImageSequenceProcessor<T> {
         self.existingOutputFiles = [Bool](repeating: false, count: imageSequence.filenames.count)
         self.fullyProcess = fullyProcess
         self.methodList = try assembleMethodList()
-        TaskRunner.maxConcurrentTasks = UInt(maxConcurrent)
     }
 
     func processFrame(number index: Int,
@@ -72,7 +66,7 @@ public class ImageSequenceProcessor<T> {
         Log.e("should be overridden")
         fatalError("should be overridden")
     }
-
+    
     func assembleMethodList() throws -> MethodList<T> {
         /*
            read all existing output files 
@@ -155,7 +149,7 @@ public class ImageSequenceProcessor<T> {
         // each of these methods removes the airplanes from a particular frame
         Log.i("processing a total of \(await methodList.list.count) frames")
         
-        try await withLimitedThrowingTaskGroup(of: T.self) { group in
+        try await withLimitedThrowingTaskGroup(of: T.self, at: .medium) { group in
             while(await methodList.list.count > 0) {
                 Log.d("we have \(await methodList.list.count) more frames to process")
                 Log.d("processing new frame")
