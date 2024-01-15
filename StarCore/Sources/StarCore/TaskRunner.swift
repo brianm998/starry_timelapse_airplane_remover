@@ -5,34 +5,6 @@ import logging
 
 fileprivate var numberRunning = NumberRunning()
 
-public actor AllowedToRun {
-    enum State {
-        case pending
-        case allowed
-        case running
-        case done
-    }
-    
-    var state = State.pending
-
-    var isPending: Bool     { self.state == .pending }
-    var isAllowedToRun: Bool { self.state == .allowed }
-    var isRunning: Bool     { self.state == .running }
-    var isDone: Bool        { self.state == .done }
-
-    func allowExecution() {
-        self.state = .allowed
-    }
-
-    func startRunning() {
-        self.state = .running
-    }
-
-    func copmlete() {
-        self.state = .done
-    }
-}
-
 public actor TaskRunner {
     // XXX getting this number right is hard
     // too big and the swift runtime barfs underneath
@@ -50,8 +22,8 @@ public actor TaskRunner {
 
 fileprivate func determineMax() -> UInt {
     var numProcessors = ProcessInfo.processInfo.activeProcessorCount
-    numProcessors -= numProcessors/4
-    if numProcessors < 2 { numProcessors = 2 }
+//    numProcessors -= numProcessors/4
+//    if numProcessors < 2 { numProcessors = 2 }
     return UInt(numProcessors)
 }
 
@@ -73,19 +45,17 @@ public func runTask<Type>(_ closure: @escaping () async -> Type,
     //Log.i("runtask with cpuUsage \(cpuUsage())")
     let baseMax = TaskRunner.maxConcurrentTasks
     let max = baseMax// > reserve ? baseMax - reserve : baseMax
-//    if true {
-    if await numberRunning.startOnIncrement(to: max) {
-        //Log.v("running in new task")
-        return Task<Type,Never> {
-            let ret = await closure() // run closure in separate task
-            //Log.v("new task done")
-            await numberRunning.decrement()
-            return ret
-        }
-    } else {
-        //Log.v("running in existing task")
-        let ret = await closure()     // run closure in same task 
-        return Task { ret }           // use task only to return value
+
+    while !(await numberRunning.startOnIncrement(to: max)) {
+        do {
+            try await Task.sleep(nanoseconds: 1_000_000_000)
+        } catch { }
+    }
+    return Task<Type,Never> {
+        let ret = await closure() // run closure in separate task
+        //Log.v("new task done")
+        await numberRunning.decrement()
+        return ret
     }
 }
 
@@ -106,18 +76,18 @@ public func runThrowingTask<Type>(_ closure: @escaping () async throws -> Type,
 {
     let baseMax = TaskRunner.maxConcurrentTasks
     let max = baseMax// > reserve ? baseMax - reserve : baseMax
-//    if true {
-    if await numberRunning.startOnIncrement(to: max) {
-        //Log.v("running in new task")
-        return Task<Type,Error> {
-            let ret = try await closure() // run closure in separate task
-            //Log.v("new task done")
-            await numberRunning.decrement()
-            return ret
-        }
-    } else {
-        //Log.v("running in existing task")
-        let ret = try await closure()     // run closure in same task 
-        return Task { ret }               // use task only to return value
+
+    while !(await numberRunning.startOnIncrement(to: max)) {
+        do {
+            try await Task.sleep(nanoseconds: 1_000_000_000)
+        } catch { }
+    }
+    
+    //Log.v("running in new task")
+    return Task<Type,Error> {
+        let ret = try await closure() // run closure in separate task
+        //Log.v("new task done")
+        await numberRunning.decrement()
+        return ret
     }
 }

@@ -11,7 +11,11 @@ star is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY
 
 You should have received a copy of the GNU General Public License along with star. If not, see <https://www.gnu.org/licenses/>.
 
-*/
+ */
+
+
+fileprivate let processorUsage = ProcessorUsage()
+
 public actor NumberRunning {
     private var count: UInt = 0 {
         didSet(newValue) {
@@ -32,9 +36,12 @@ public actor NumberRunning {
     public func increment() { count += 1 }
     public func decrement() { if count > 0 {count -= 1} else { Log.e("cannot decrement past zero") } }
     public func currentValue() -> UInt { count }
-    public func startOnIncrement(to max: UInt) -> Bool {
-        if count >= max { return false }
+    public func startOnIncrement(to max: UInt) async -> Bool {
+        let percentIdle = await processorUsage.percentIdle()
+        if percentIdle < 15 { return false }
+//        if count >= max { return false }
         count += 1
+        await processorUsage.reset()        
         return true
     }
 }
