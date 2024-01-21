@@ -5,10 +5,6 @@ import logging
 fileprivate let processorUsage = ProcessorUsageTracker()
 fileprivate let prioritizer = Prioritizer()
 
-// XXX next keep track of how many are running, and cap it at some number
-// there is a failure mode where we can still crash if the machine is thrashing,
-// cpu usage can be low, but adding more tasks doesn't increase it, just digs deeper
-
 // an alternative to task groups, looking for thread stability
 
 public func runTask<Type>(at taskPriority: TaskPriority,
@@ -22,7 +18,7 @@ public func runTask<Type>(at taskPriority: TaskPriority,
     while !(await canRun(at: taskPriority, with: idlePercentage)) {
         do { try await Task.sleep(nanoseconds: sleeptime) } catch { }
     }
-    await processorUsage.reset()
+    await processorUsage.processRunning()
     await prioritizer.registerRunning(at: taskPriority)
     
     return Task<Type,Never>(priority: taskPriority) { await closure() }
@@ -51,7 +47,7 @@ public func runThrowingTask<Type>(at taskPriority: TaskPriority,
     while !(await canRun(at: taskPriority, with: idlePercentage)) {
         do { try await Task.sleep(nanoseconds: sleeptime) } catch { }
     }
-    await processorUsage.reset()
+    await processorUsage.processRunning()
     await prioritizer.registerRunning(at: taskPriority)
 
     return Task<Type,Error>(priority: taskPriority) { try await closure() }

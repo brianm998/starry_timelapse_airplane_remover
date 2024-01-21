@@ -25,7 +25,7 @@ public actor LimitedTaskGroup<T> {
     let idlePercentage: Double
     
     public init(at taskPriority: TaskPriority,
-                idlePercentage: Double = 20) // percentage of idle CPU needed before starting task
+                idlePercentage: Double = 15) // percentage of idle CPU needed before starting task
     {
         self.taskPriority = taskPriority
         self.idlePercentage = idlePercentage

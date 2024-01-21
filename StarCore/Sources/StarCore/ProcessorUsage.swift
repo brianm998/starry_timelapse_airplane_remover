@@ -166,10 +166,10 @@ public actor ProcessorUsageTracker {
     }
 
     // called to indicate that a new cpu intensive process may have started
-    public func reset() {
+    public func processRunning() {
         let idle = idlePercent()
         if idle > 20 {
-            self.usage = self.usage.withAdditional(cpus: 2)
+            self.usage = self.usage.withAdditional(cpus: 4)
             Log.d("reset to usage \(usage)")
         } else {
             Log.d("reset to nil")
