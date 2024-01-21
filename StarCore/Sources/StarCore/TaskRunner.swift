@@ -2,9 +2,12 @@ import Foundation
 import logging
 
 
-fileprivate let processorUsage = ProcessorUsage()
-
+fileprivate let processorUsage = ProcessorUsageTracker()
 fileprivate let prioritizer = Prioritizer()
+
+// XXX next keep track of how many are running, and cap it at some number
+// there is a failure mode where we can still crash if the machine is thrashing,
+// cpu usage can be low, but adding more tasks doesn't increase it, just digs deeper
 
 // an alternative to task groups, looking for thread stability
 
@@ -21,6 +24,7 @@ public func runTask<Type>(at taskPriority: TaskPriority,
     }
     await processorUsage.reset()
     await prioritizer.registerRunning(at: taskPriority)
+    
     return Task<Type,Never>(priority: taskPriority) { await closure() }
 }
 
@@ -75,22 +79,28 @@ fileprivate actor Prioritizer {
     var userInitiated: Int = 0
 
     func canRun(at taskPriority: TaskPriority) -> Bool {
+
+        var ret = true
         if taskPriority == .userInitiated {
-            return true
+            ret = true
         } else if taskPriority == .high {
-            return userInitiated == 0
+            ret = userInitiated == 0
         } else if taskPriority == .medium {
-            return high == 0 && userInitiated == 0
+            ret = high == 0 && userInitiated == 0
         } else if taskPriority == .low {
-            return medium == 0 && high == 0 && userInitiated == 0
+            ret = medium == 0 && high == 0 && userInitiated == 0
         } else if taskPriority == .utility {
-            return low == 0 && medium == 0 && high == 0 && userInitiated == 0
+            ret = low == 0 && medium == 0 && high == 0 && userInitiated == 0
         } else if taskPriority == .background {
-            return utility == 0 && low == 0 && medium == 0 && high == 0 && userInitiated == 0
+            ret = utility == 0 && low == 0 && medium == 0 && high == 0 && userInitiated == 0
         } else {
             Log.e("unhandled task priority \(taskPriority)")
-            return false
+            ret = false
         }
+
+        //Log.d("canRun(at: \(taskPriority): \(ret) - background \(background) utility \(utility) low \(low) medium \(medium) high \(high) userInitiated \(userInitiated)")
+        
+        return ret
     }
 
     // increment counters per priority
@@ -136,18 +146,18 @@ fileprivate actor Prioritizer {
 
 fileprivate func nanosecondsOfSleep(for taskPriority: TaskPriority) -> UInt64 {
     if taskPriority == .userInitiated {
-        return 1_000_000_000
+        return 100_000_000
     } else if taskPriority == .high {
-        return 2_000_000_000
+        return 200_000_000
     } else if taskPriority == .medium {
-        return 4_000_000_000
+        return 400_000_000
     } else if taskPriority == .low {
-        return 6_000_000_000
+        return 600_000_000
     } else if taskPriority == .utility {
-        return 8_000_000_000
+        return 800_000_000
     } else if taskPriority == .background {
-        return 10_000_000_000
+        return 1_000_000_000
     } else {
-        return 20_000_000_000
+        return 2_000_000_000
     }
 }
