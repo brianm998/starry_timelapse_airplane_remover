@@ -50,11 +50,14 @@ public struct ProcessorUsage {
     let user: Double            
     let sys: Double
     let idle: Double
-
+    let date: TimeInterval
+    
     public init(user: Double,
                 sys: Double,
                 idle: Double)
     {
+        self.date = NSDate().timeIntervalSince1970
+
         if user < 0 {
             self.user = 0
         } else if user > 100 {
@@ -95,6 +98,7 @@ public struct ProcessorUsage {
             self.user = user
             self.sys = sys
             self.idle = idle
+            self.date = NSDate().timeIntervalSince1970
         } else {
             return nil
         }
@@ -121,14 +125,28 @@ public struct ProcessorUsage {
                               idle: self.idle-percentage)
         
     }
+
+    public var idlePercent: Double {
+        if self.sys > 20 {
+            // here we guard against an observed case where the kernel is thrashing
+            // in this case the system can report idle cpus, even though
+            // those cores cannot accept new processes due to busy kernel.
+            // adding new tasks in this case is a bad idea, as it increases thrash :(
+            return 0
+        } else {
+            return self.idle
+        }
+    }
 }
 
 public actor ProcessorUsageTracker {
-    // percent usage per cpu, i.e. two cpus, 200.0 usage
+    // overal usage percentage, not per cpu, i.e. range of 0...100 percent 
     var usage: ProcessorUsage
-    var lastRealUsage: ProcessorUsage?
-    var lastReadTime: TimeInterval?
 
+    // the last usage that was read from the system, not guessed
+    var realUsages: [ProcessorUsage] = []
+
+    // when the last read happened
     let checkIntervalSeconds: TimeInterval = 7.0
 
     public init () {
@@ -137,7 +155,7 @@ public actor ProcessorUsageTracker {
                                     idle: 0)
     }
 
-    private func readUsage() {
+    private func readUsage() -> Double {
         do {
             let usageString = try shellOut(to: "top -R -F -n 0 -l 2 -s 0")
 
@@ -153,9 +171,13 @@ public actor ProcessorUsageTracker {
                     } else {
                         if let usage = ProcessorUsage(from: String(line)) {
                             self.usage = usage
-                            self.lastRealUsage = usage
+                            self.realUsages.append(usage)
+
+                            while realUsages.count > 10 {
+                                realUsages.removeFirst(1)
+                            }
+
                             Log.d("read usage \(usage)")
-                            lastReadTime = NSDate().timeIntervalSince1970
                         }
                     }
                 }
@@ -163,50 +185,70 @@ public actor ProcessorUsageTracker {
         } catch {
             Log.e("error \(error)")
         }
+        return usage.idlePercent
     }
 
     // called to indicate that a new cpu intensive process may have started
     public func processRunning() {
-        let idle = idlePercent()
-        if idle > 20 {
-            self.usage = self.usage.withAdditional(cpus: 4)
-            Log.d("reset to usage \(usage)")
-        } else {
-            Log.d("reset to nil")
-            lastReadTime = nil
-        }
+        self.usage = self.usage.withAdditional(cpus: 2)
+        Log.d("processRunning has usage \(usage)")
     }
 
-    public func idlePercent() -> Double {
-        if usage.sys > 20 {
-            // here we guard against an observed case where the kernel is thrashing
-            // in this case the system can report idle cpus, even though
-            // those cores cannot accept new processes due to busy kernel.
-            // adding new tasks in this case is a bad idea, as it increases thrash :(
-            return 0
-        } else {
-            return usage.idle
-        }
-    }
-    
     public func percentIdle() -> Double {
-        if let lastReadTime = lastReadTime,
-           NSDate().timeIntervalSince1970 - lastReadTime < checkIntervalSeconds
-        {
-            // we have a recent processor usage check, maybe use it
+        //if true { return readUsage() }
+        let now = NSDate().timeIntervalSince1970
 
-            if let lastRealUsage = lastRealUsage,
-               lastRealUsage.isDifferent(from: self.usage)
-            {
-                readUsage()
-                return idlePercent()
+
+            // first check out list of stored real usages
+        if realUsages.count > 0,
+           let last = realUsages.last
+        {
+            if now - last.date < checkIntervalSeconds {
+                // we have a recent processor usage check, maybe use it
+            
+                if realUsages.count == 1 {
+                    // we have just one previous stored value
+                    if realUsages[0].isDifferent(from: self.usage) {
+                        return readUsage()
+                    } else {
+                        return usage.idlePercent
+                    }
+                } else {
+                    // we have more than one old real usage
+
+                    if last.date - realUsages[0].date > checkIntervalSeconds,
+                       usage.idlePercent < 10
+                    {
+                        // always re-read
+                        return readUsage()
+                    } else {
+                        // here we have a bunch of repeated checks close together
+                        // just use one of them if they're close to the same
+                        // this can happen when we're starting a lot of tasks
+                        // that don't use much CPU
+                        let first = realUsages[0]
+                        var allAreSame = true
+                        for other in realUsages.dropFirst() {
+                            if other.isDifferent(from: first, by: 20) {
+                                allAreSame = false
+                                break
+                            }
+                        }
+                        if allAreSame {
+                            return first.idlePercent
+                        } else {
+                            return readUsage()
+                        }
+                    }
+                }
             } else {
-                // use cached values because our guesses hasn't changed much
-                return idlePercent()
+                // over the check interval, read real usage
+                return readUsage()
             }
         } else {
-            readUsage()
-            return idlePercent()
+            // we have no real old usages
+            // always re-read
+            return readUsage()
         }
     }
 
