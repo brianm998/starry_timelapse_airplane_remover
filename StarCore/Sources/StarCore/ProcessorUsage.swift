@@ -15,36 +15,6 @@ You should have received a copy of the GNU General Public License along with sta
 
 */
 
-
-/*
- XXX this class needs to keep two historgrams of cpu activity over time.
-     one is the real usage coming from reading ps, the other is our bogus
-     guesses on reset to avoid calling ps every 200 ms.
- 
- XXX also needs to keep track of system usage, as we can crash if system
- usage is high but there is still idle cpu
-
-
- run
-
- top -R -F -n 0 -l 2 -s 0
-
- read the second one:
-
- Processes: 984 total, 2 running, 982 sleeping, 4432 threads 
-2024/01/21 07:53:54
-Load Avg: 5.84, 6.34, 4.56 
-CPU usage: 0.98% user, 3.70% sys, 95.30% idle 
-MemRegions: 439065 total, 31G resident, 0B private, 12G shared.
-PhysMem: 97G used (8025M wired, 1001M compressor), 31G unused.
-VM: 49T vsize, 0B framework vsize, 0(0) swapins, 0(0) swapouts.
-Networks: packets: 54438748/65G in, 4907575/355G out.
-Disks: 34553173/683G read, 5761387/113G written.
-
-
- 
- */
-
 // overall percentage, not per cpu
 public struct ProcessorUsage {
     let user: Double            
@@ -177,7 +147,7 @@ public actor ProcessorUsageTracker {
                                 realUsages.removeFirst(1)
                             }
 
-                            Log.d("read usage \(usage)")
+                            Log.d("CPU usage: \(usage)")
                         }
                     }
                 }
@@ -188,10 +158,32 @@ public actor ProcessorUsageTracker {
         return usage.idlePercent
     }
 
+    private var averageIdle: Double {
+        var ret: Double = 0
+        for usage in realUsages {
+            ret += usage.idle
+        }
+        ret /= Double(realUsages.count)
+        return ret
+    }
+
+    let counterMax = ProcessInfo.processInfo.activeProcessorCount > 4 ?
+      ProcessInfo.processInfo.activeProcessorCount - 2 :
+      ProcessInfo.processInfo.activeProcessorCount
+    var counter: UInt = 0
+    
     // called to indicate that a new cpu intensive process may have started
     public func processRunning() {
-        self.usage = self.usage.withAdditional(cpus: 2)
-        Log.d("processRunning has usage \(usage)")
+        Log.d("averageIdle \(averageIdle)")
+        if averageIdle < 50,
+           counter < counterMax
+        {
+            counter += 1
+            self.usage = self.usage.withAdditional(cpus: 2)
+            Log.d("processRunning has usage \(usage)")
+        } else {
+            counter = 0
+        }
     }
 
     public func percentIdle() -> Double {
@@ -205,13 +197,19 @@ public actor ProcessorUsageTracker {
         {
             if now - last.date < checkIntervalSeconds {
                 // we have a recent processor usage check, maybe use it
-            
+
+                if now - last.date < 2 { return usage.idlePercent }
+                
                 if realUsages.count == 1 {
                     // we have just one previous stored value
                     if realUsages[0].isDifferent(from: self.usage) {
-                        return readUsage()
+                        let ret = readUsage()
+                        //Log.d("ret \(ret)")
+                        return ret
                     } else {
-                        return usage.idlePercent
+                        let ret = usage.idlePercent
+                        //Log.d("ret usage \(ret)")
+                        return ret
                     }
                 } else {
                     // we have more than one old real usage
@@ -220,7 +218,9 @@ public actor ProcessorUsageTracker {
                        usage.idlePercent < 10
                     {
                         // always re-read
-                        return readUsage()
+                        let ret = readUsage()
+                        //Log.d("ret \(ret)")
+                        return ret
                     } else {
                         // here we have a bunch of repeated checks close together
                         // just use one of them if they're close to the same
@@ -234,21 +234,32 @@ public actor ProcessorUsageTracker {
                                 break
                             }
                         }
-                        if allAreSame {
-                            return first.idlePercent
+                        if allAreSame,
+                           now - last.date < 1
+                        {
+                            // XXX sometimes this goes bad
+                            let ret = usage.idlePercent
+                            //Log.d("ret usage \(ret)")
+                            return ret
                         } else {
-                            return readUsage()
+                            let ret = readUsage()
+                            //Log.d("ret \(ret)")
+                            return ret
                         }
                     }
                 }
             } else {
                 // over the check interval, read real usage
-                return readUsage()
+                let ret = readUsage()
+                //Log.d("ret \(ret)")
+                return ret
             }
         } else {
             // we have no real old usages
             // always re-read
-            return readUsage()
+            let ret = readUsage()
+            //Log.d("ret \(ret)")
+            return ret
         }
     }
 
