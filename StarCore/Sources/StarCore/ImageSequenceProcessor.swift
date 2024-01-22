@@ -168,6 +168,7 @@ public class ImageSequenceProcessor<T> {
                     Log.e("FUCK") 
                     fatalError("FUCK")
                 }
+                do { try await Task.sleep(nanoseconds: 400_000_000) } catch { }
             }
             try await group.waitForAll()
             
