@@ -159,7 +159,8 @@ public actor ProcessorUsageTracker {
     }
 
     private var averageIdle: Double {
-        var ret: Double = 0
+        // assume not idle at start to force loading some real cpu usage info
+        var ret: Double = 0     
         for usage in realUsages {
             ret += usage.idle
         }
@@ -167,22 +168,15 @@ public actor ProcessorUsageTracker {
         return ret
     }
 
-    let counterMax = ProcessInfo.processInfo.activeProcessorCount > 4 ?
-      ProcessInfo.processInfo.activeProcessorCount - 2 :
-      ProcessInfo.processInfo.activeProcessorCount
-    var counter: UInt = 0
-    
     // called to indicate that a new cpu intensive process may have started
     public func processRunning() {
-        Log.d("averageIdle \(averageIdle)")
-        if averageIdle < 50,
-           counter < counterMax
-        {
-            counter += 1
+        if averageIdle < 50 {
+            // only care if the average idle is less than 50%
+            // fast batches of large sizes will be missed,
+            // but restarts are fast, so it's worth it.
+            // need to make sure batches have small sleeps between frames
             self.usage = self.usage.withAdditional(cpus: 2)
             Log.d("processRunning has usage \(usage)")
-        } else {
-            counter = 0
         }
     }
 
