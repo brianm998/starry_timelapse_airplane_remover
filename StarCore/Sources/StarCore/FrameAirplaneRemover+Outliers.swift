@@ -246,7 +246,7 @@ extension FrameAirplaneRemover {
             for blob in filteredBlobs {
                 if let _ = blob.line {
                     // first trim pixels too far away
-                    blob.trim()
+                    blob.lineTrim()
 
                     if blob.size >= config.minGroupSize {
                         // make outlier group from this blob

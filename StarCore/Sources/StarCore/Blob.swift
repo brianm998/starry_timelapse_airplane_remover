@@ -98,8 +98,73 @@ public class Blob: CustomStringConvertible {
         return 420420420
     }
 
-    // trims outlying pixels from the group
-    public func trim() {
+    public func neighboringPixelTrim(by minNeighbors: Int = 2) {
+        /*
+         for each pixel in pixels
+         if no other pixels are next to it, discard it
+         */
+
+        var trimmedPixels = Set<SortablePixel>()
+
+        let bounds = self.boundingBox
+        
+        var members = [Bool](repeating: false,
+                             count: bounds.width*bounds.height)
+
+        for pixel in pixels {
+            let x = pixel.x - self.boundingBox.min.x
+            let y = pixel.y - self.boundingBox.min.y
+            
+            let index = y*bounds.width+x
+            if index < 0 || index >= members.count {
+                fatalError("bad index \(index) from [\(x), \(y)] and \(self.boundingBox)")
+            }
+            members[index] = true
+        }
+
+        for pixel in pixels {
+            let x = pixel.x - self.boundingBox.min.x
+            let y = pixel.y - self.boundingBox.min.y
+            
+            var neighborCount: Int = 0
+            neighborCount += self.hasPixel(x: x-1, y: y-1, members: members)
+            neighborCount += self.hasPixel(x: x,   y: y-1, members: members)
+            neighborCount += self.hasPixel(x: x+1, y: y-1, members: members)
+            neighborCount += self.hasPixel(x: x-1, y: y,   members: members)
+            neighborCount += self.hasPixel(x: x+1, y: y,   members: members)
+            neighborCount += self.hasPixel(x: x-1, y: y+1, members: members)
+            neighborCount += self.hasPixel(x: x,   y: y+1, members: members)
+            neighborCount += self.hasPixel(x: x+1, y: y+1, members: members)
+
+            if neighborCount > minNeighbors { trimmedPixels.insert(pixel) }
+        }
+
+        if trimmedPixels.count != self.pixels.count {
+            self.pixels = trimmedPixels
+            _intensity = nil
+            _boundingBox = nil
+            _blobImageData = nil
+            _blobLine = nil
+            _averageDistanceFromIdealLine = nil
+        }
+    }
+
+    private func hasPixel(x: Int, y: Int, members: [Bool]) -> Int {
+        if x >= 0,
+           y >= 0,
+           x < self.boundingBox.width,
+           y < self.boundingBox.height,
+           members[y*self.boundingBox.width+x]
+        {
+            return 1
+        } else {
+            return 0
+        }
+    }
+    
+    // trims outlying pixels from the group, ones that are not
+    // close enough to the ideal line for this group
+    public func lineTrim() {
         if let line = self.originZeroLine {
             var newPixels = Set<SortablePixel>()
             

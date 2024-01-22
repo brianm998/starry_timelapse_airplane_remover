@@ -25,6 +25,7 @@ class BlobLineExtender: AbstractBlobAnalyzer {
      */
     // threshold of line length / average distance
     // true lines have a higher value
+    // lowering this value applies extender logic to more blobs
     private let threshold: Double = 6.5 // XXX guess from the two above
 
     private let pixelData: [UInt16]
@@ -47,7 +48,7 @@ class BlobLineExtender: AbstractBlobAnalyzer {
                    imageAccessor: imageAccessor)
 
         for (index, blob) in blobMap.values.enumerated() {
-
+            
             if blob.size < 45 { continue } // XXX constant
             
             // if no line, pass
@@ -121,6 +122,9 @@ class BlobLineExtender: AbstractBlobAnalyzer {
                     }
                 }
             }
+
+            // filter added pixels to throw out noise and keep signal
+            blob.neighboringPixelTrim(by: 3)
         }
     }
 
