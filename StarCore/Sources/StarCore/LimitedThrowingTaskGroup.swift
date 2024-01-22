@@ -53,7 +53,7 @@ public actor LimitedThrowingTaskGroup<T> {
 public func withLimitedThrowingTaskGroup<ChildTaskResult, GroupResult>(
   of childTaskResultType: ChildTaskResult.Type,
   at taskPriority: TaskPriority = .high,
-  idle idlePercentage: Double = 15,
+  idle idlePercentage: Double = 20,
   returning returnType: GroupResult.Type = GroupResult.self,
   body: (inout LimitedThrowingTaskGroup<ChildTaskResult>) async throws -> GroupResult
 ) async throws -> GroupResult where ChildTaskResult : Sendable
