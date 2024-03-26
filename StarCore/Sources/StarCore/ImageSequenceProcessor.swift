@@ -18,6 +18,8 @@ public class ImageSequenceProcessor<T> {
     // the name of the directory holding the image sequence being processed
     public let imageSequenceDirname: String
 
+    public var pauseBetweenFrames: UInt64 = 0 // nanoseconds
+    
     // the name of the directory to write processed images to
     public let outputDirname: String
 
@@ -168,7 +170,11 @@ public class ImageSequenceProcessor<T> {
                     Log.e("FUCK") 
                     fatalError("FUCK")
                 }
-                do { try await Task.sleep(nanoseconds: 400_000_000) } catch { }
+
+                // gui doesn't need a pause, cli does
+                if pauseBetweenFrames > 0 {
+                    do { try await Task.sleep(nanoseconds: pauseBetweenFrames) } catch { }
+                }
             }
             try await group.waitForAll()
             

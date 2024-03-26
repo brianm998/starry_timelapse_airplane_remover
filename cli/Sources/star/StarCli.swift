@@ -27,15 +27,6 @@ You should have received a copy of the GNU General Public License along with sta
  - try this for GPU, metal sucks:
    https://github.com/philipturner/swift-opencl
  
- - look into kernel based hough transform:
-   https://github.com/laffernandes/kht
-   c++ should work in swift now
-   
- - FIX HANGING BUG
-   This happens when all frames have been through detection,
-   and for some yet unknown reason the app hangs forever without finishing
-   stop and re-start works for now, but isn't ideal.
- 
  - try image blending
  - make it faster (can always be faster) 
  - make crash detection perl script better
@@ -346,6 +337,8 @@ struct StarCli: AsyncParsableCommand {
                                                                     processExistingFiles: false,
                                                                     maxResidentImages: 40, // XXX
                                                                     writeOutputFiles: writeOutputFiles)
+
+                    eraser.pauseBetweenFrames = 1_000_000_000 // 1 second
                     
                     if let _ = eraser.callbacks.updatable {
                         // setup sequence monitor
