@@ -1,8 +1,13 @@
 import Foundation
 import logging
+import KHTSwift
+import kht_bridge
 
 
-fileprivate let processorUsage = ProcessorUsageTracker()
+//fileprivate let processorUsage = ProcessorUsageTracker()
+
+public let processorTracker = ProcessorUsageTracker()
+
 fileprivate let prioritizer = Prioritizer()
 
 // an alternative to task groups, looking for thread stability
@@ -11,15 +16,22 @@ public func runTask<Type>(at taskPriority: TaskPriority,
                           idlePercentage: Double = 20,
                           _ closure: @escaping () async -> Type) async -> Task<Type,Never>
 {
+    // XXX not on gui
+    /*
+     */
     await prioritizer.registerToRun(at: taskPriority)
 
-    let sleeptime = nanosecondsOfSleep(for: taskPriority)
+    //let foo = processorFinder
     
+    let sleeptime = nanosecondsOfSleep(for: taskPriority)
+
     while !(await canRun(at: taskPriority, with: idlePercentage)) {
         do { try await Task.sleep(nanoseconds: sleeptime) } catch { }
     }
-    await processorUsage.processRunning()
+    await processorTracker.processRunning()
     await prioritizer.registerRunning(at: taskPriority)
+      /**/
+    // XXX not on gui
     
     return Task<Type,Never>(priority: taskPriority) { await closure() }
 }
@@ -40,6 +52,8 @@ public func runThrowingTask<Type>(at taskPriority: TaskPriority,
                                   idlePercentage: Double = 20,
                                   _ closure: @escaping () async throws -> Type) async throws -> Task<Type,Error>
 {
+    // XXX not on gui
+    /**/
     await prioritizer.registerToRun(at: taskPriority)
 
     let sleeptime = nanosecondsOfSleep(for: taskPriority)
@@ -47,15 +61,15 @@ public func runThrowingTask<Type>(at taskPriority: TaskPriority,
     while !(await canRun(at: taskPriority, with: idlePercentage)) {
         do { try await Task.sleep(nanoseconds: sleeptime) } catch { }
     }
-    await processorUsage.processRunning()
+    await processorTracker.processRunning()
     await prioritizer.registerRunning(at: taskPriority)
-
+    /**/
     return Task<Type,Error>(priority: taskPriority) { try await closure() }
 }
 
 fileprivate func canRun(at taskPriority: TaskPriority, with idlePercentage: Double) async -> Bool {
     if await prioritizer.canRun(at: taskPriority) {
-        if await processorUsage.isIdle(byAtLeast: idlePercentage) {
+        if await processorTracker.isIdle(byAtLeast: idlePercentage) {
             return true
         }
     }
@@ -157,3 +171,18 @@ fileprivate func nanosecondsOfSleep(for taskPriority: TaskPriority) -> UInt64 {
         return 2_000_000_000
     }
 }
+
+/*
+
+ // XXX make this .h file
+
+#import <Foundation/Foundation.h>
+
+
+
+// XXX use this .m file
+
+
+// XXX with this swift extension 
+// whenever we shell out    
+*/

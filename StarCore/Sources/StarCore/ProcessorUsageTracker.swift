@@ -1,6 +1,8 @@
 import Foundation
 import ShellOut
 import logging
+import KHTSwift
+import kht_bridge
 
 
 /*
@@ -36,35 +38,38 @@ public actor ProcessorUsageTracker {
     }
 
     private func readUsage() -> Double {
+        var ret = ProcessorUsage.busy()
         do {
-            let usageString = try shellOut(to: "top -R -F -n 0 -l 2 -s 0")
+            try ObjC.catchException {
+                let usageString = try shellOut(to: "top -R -F -n 0 -l 2 -s 0")
 
-            let lines = usageString.split(whereSeparator: \.isNewline)
+                let lines = usageString.split(whereSeparator: \.isNewline)
 
-            var isFirst = true
-            
-            for line in lines {
-                if line.starts(with: "CPU usage:") {
-                    if isFirst {
-                        // ignore the first reading 
-                        isFirst = false
-                    } else {
-                        if let usage = ProcessorUsage(from: String(line)) {
-                            self.usage = usage
-                            self.realUsages.append(usage)
+                var isFirst = true
+                
+                for line in lines {
+                    if line.starts(with: "CPU usage:") {
+                        if isFirst {
+                            // ignore the first reading 
+                            isFirst = false
+                        } else {
+                            if let usage = ProcessorUsage(from: String(line)) {
+                                self.realUsages.append(usage)
+                                ret = usage
+                                while realUsages.count > 10 {
+                                    realUsages.removeFirst(1)
+                                }
 
-                            while realUsages.count > 10 {
-                                realUsages.removeFirst(1)
+                                Log.d("CPU usage: \(usage)")
                             }
-
-                            Log.d("CPU usage: \(usage)")
                         }
                     }
                 }
             }
         } catch {
-            Log.e("error \(error)")
+            Log.i("error \(error)")
         }
+        self.usage = ret
         return usage.idlePercent
     }
 

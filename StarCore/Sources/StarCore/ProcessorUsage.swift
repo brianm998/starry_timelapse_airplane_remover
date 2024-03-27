@@ -55,6 +55,10 @@ public struct ProcessorUsage {
         }
     }
     
+    public static func busy() -> ProcessorUsage { // all busy
+        ProcessorUsage(user: 100, sys: 0, idle: 0)
+    }
+    
     init?(from line: String) {
         // CPU usage: 3.44% user, 3.81% sys, 92.74% idle
 
@@ -94,13 +98,13 @@ public struct ProcessorUsage {
     }
 
     // artifically boost cpu usage by some number of cpus
-    func withAdditional(cpus: Int) -> ProcessorUsage {
-        let percentage = (Double(cpus)/numProcessors)*100
+    func withAdditional(cpus: Double) -> ProcessorUsage {
+        let percentage = (cpus/numProcessors)*100
         return ProcessorUsage(user: self.user+percentage,
                               sys: self.sys,
                               idle: self.idle-percentage)
     }
-
+    
     public var idlePercent: Double {
         if self.sys > 20 {
             // here we guard against an observed case where the kernel is thrashing
