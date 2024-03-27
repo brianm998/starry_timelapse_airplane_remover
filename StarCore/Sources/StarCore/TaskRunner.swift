@@ -1,39 +1,92 @@
 import Foundation
 import logging
-import KHTSwift
-import kht_bridge
-
-
-//fileprivate let processorUsage = ProcessorUsageTracker()
-
-public let processorTracker = ProcessorUsageTracker()
-
-fileprivate let prioritizer = Prioritizer()
 
 // an alternative to task groups, looking for thread stability
 
-public func runTask<Type>(at taskPriority: TaskPriority,
-                          idlePercentage: Double = 20,
-                          _ closure: @escaping () async -> Type) async -> Task<Type,Never>
-{
-    // XXX not on gui
-    /*
-     */
-    await prioritizer.registerToRun(at: taskPriority)
+fileprivate var numberRunning = NumberRunning()
 
-    //let foo = processorFinder
-    
-    let sleeptime = nanosecondsOfSleep(for: taskPriority)
-
-    while !(await canRun(at: taskPriority, with: idlePercentage)) {
-        do { try await Task.sleep(nanoseconds: sleeptime) } catch { }
+public actor AllowedToRun {
+    enum State {
+        case pending
+        case allowed
+        case running
+        case done
     }
-    await processorTracker.processRunning()
-    await prioritizer.registerRunning(at: taskPriority)
-      /**/
-    // XXX not on gui
     
-    return Task<Type,Never>(priority: taskPriority) { await closure() }
+    var state = State.pending
+
+    var isPending: Bool     { self.state == .pending }
+    var isAllowedToRun: Bool { self.state == .allowed }
+    var isRunning: Bool     { self.state == .running }
+    var isDone: Bool        { self.state == .done }
+
+    func allowExecution() {
+        self.state = .allowed
+    }
+
+    func startRunning() {
+        self.state = .running
+    }
+
+    func copmlete() {
+        self.state = .done
+    }
+}
+
+public actor TaskRunner {
+    // XXX getting this number right is hard
+    // too big and the swift runtime barfs underneath
+    // too small and the process runs without available cpu resources
+    public static var maxConcurrentTasks: UInt = determineMax() {
+        didSet {
+            Log.i("using maximum of \(maxConcurrentTasks) concurrent tasks")
+        }
+    }
+
+    //private var allowedToRun
+    //private var closures: [ClosureType] = []
+    
+}
+
+fileprivate func determineMax() -> UInt {
+    var numProcessors = ProcessInfo.processInfo.activeProcessorCount
+    numProcessors -= numProcessors/4
+    if numProcessors < 2 { numProcessors = 2 }
+    return UInt(numProcessors)
+}
+
+/**
+ var tasks: [Task<ValueDistribution,Never>] = []
+ let task = await runTask() {
+     // do something
+     return valueDistribution 
+ }
+ tasks.append(task)
+ for task in tasks {
+    let response = await task.value
+    // handle each response
+ }
+ */
+public func runTask<Type>(_ closure: @escaping () async -> Type,
+                       withCPUCount numCPUs: UInt = 1) async -> Task<Type,Never>
+{
+    //Log.i("runtask with cpuUsage \(cpuUsage())")
+    let baseMax = TaskRunner.maxConcurrentTasks
+    let max = baseMax// > reserve ? baseMax - reserve : baseMax
+//    if true {
+    if await numberRunning.startOnIncrement(to: max) {
+        //Log.v("running in new task")
+        return Task<Type,Never> {
+            let ret = await closure() // run closure in separate task
+            //Log.v("new task done")
+            await numberRunning.decrement()
+            return ret
+        }
+    } else {
+        //Log.v("running in existing task")
+        let ret = await closure()     // run closure in same task 
+        return Task { ret }           // use task only to return value
+    }
 }
 
 /**
@@ -48,141 +101,23 @@ public func runTask<Type>(at taskPriority: TaskPriority,
     // handle each response
  }
  */
-public func runThrowingTask<Type>(at taskPriority: TaskPriority,
-                                  idlePercentage: Double = 20,
-                                  _ closure: @escaping () async throws -> Type) async throws -> Task<Type,Error>
+public func runThrowingTask<Type>(_ closure: @escaping () async throws -> Type,
+                              withCPUCount numCPUs: UInt = 1) async throws -> Task<Type,Error>
 {
-    // XXX not on gui
-    /**/
-    await prioritizer.registerToRun(at: taskPriority)
-
-    let sleeptime = nanosecondsOfSleep(for: taskPriority)
-    
-    while !(await canRun(at: taskPriority, with: idlePercentage)) {
-        do { try await Task.sleep(nanoseconds: sleeptime) } catch { }
-    }
-    await processorTracker.processRunning()
-    await prioritizer.registerRunning(at: taskPriority)
-    /**/
-    return Task<Type,Error>(priority: taskPriority) { try await closure() }
-}
-
-fileprivate func canRun(at taskPriority: TaskPriority, with idlePercentage: Double) async -> Bool {
-    if await prioritizer.canRun(at: taskPriority) {
-        if await processorTracker.isIdle(byAtLeast: idlePercentage) {
-            return true
+    let baseMax = TaskRunner.maxConcurrentTasks
+    let max = baseMax// > reserve ? baseMax - reserve : baseMax
+//    if true {
+    if await numberRunning.startOnIncrement(to: max) {
+        //Log.v("running in new task")
+        return Task<Type,Error> {
+            let ret = try await closure() // run closure in separate task
+            //Log.v("new task done")
+            await numberRunning.decrement()
+            return ret
         }
-    }
-    return false
-}
-
-// make sure higher priority jobs run first
-fileprivate actor Prioritizer {
-
-    init () { } 
-    
-    var background: Int = 0
-    var utility: Int = 0
-    var low: Int = 0
-    var medium: Int = 0
-    var high: Int = 0
-    var userInitiated: Int = 0
-
-    func canRun(at taskPriority: TaskPriority) -> Bool {
-
-        var ret = true
-        if taskPriority == .userInitiated {
-            ret = true
-        } else if taskPriority == .high {
-            ret = userInitiated == 0
-        } else if taskPriority == .medium {
-            ret = high == 0 && userInitiated == 0
-        } else if taskPriority == .low {
-            ret = medium == 0 && high == 0 && userInitiated == 0
-        } else if taskPriority == .utility {
-            ret = low == 0 && medium == 0 && high == 0 && userInitiated == 0
-        } else if taskPriority == .background {
-            ret = utility == 0 && low == 0 && medium == 0 && high == 0 && userInitiated == 0
-        } else {
-            Log.e("unhandled task priority \(taskPriority)")
-            ret = false
-        }
-
-        //Log.d("canRun(at: \(taskPriority): \(ret) - background \(background) utility \(utility) low \(low) medium \(medium) high \(high) userInitiated \(userInitiated)")
-        
-        return ret
-    }
-
-    // increment counters per priority
-    func registerToRun(at taskPriority: TaskPriority) {
-        if taskPriority == .userInitiated {
-            userInitiated += 1
-        } else if taskPriority == .high {
-            high += 1
-        } else if taskPriority == .medium {
-            medium += 1
-        } else if taskPriority == .low {
-            low += 1
-        } else if taskPriority == .utility {
-            utility += 1
-        } else if taskPriority == .background {
-            background += 1
-        }
-    }
-
-    // decrement counters per priority
-    func registerRunning(at taskPriority: TaskPriority) {
-        if taskPriority == .userInitiated {
-            userInitiated -= 1
-            if userInitiated < 0 { userInitiated = 0 }
-        } else if taskPriority == .high {
-            high -= 1
-            if high < 0 { high = 0 }
-        } else if taskPriority == .medium {
-            medium -= 1
-            if medium < 0 { medium = 0 }
-        } else if taskPriority == .low {
-            low -= 1
-            if low < 0 { low = 0 }
-        } else if taskPriority == .utility {
-            utility -= 1
-            if utility < 0 { utility = 0 }
-        } else if taskPriority == .background {
-            background -= 1
-            if background < 0 { background = 0 }
-        }
-    }
-}
-
-fileprivate func nanosecondsOfSleep(for taskPriority: TaskPriority) -> UInt64 {
-    if taskPriority == .userInitiated {
-        return 100_000_000
-    } else if taskPriority == .high {
-        return 200_000_000
-    } else if taskPriority == .medium {
-        return 400_000_000
-    } else if taskPriority == .low {
-        return 600_000_000
-    } else if taskPriority == .utility {
-        return 800_000_000
-    } else if taskPriority == .background {
-        return 1_000_000_000
     } else {
-        return 2_000_000_000
+        //Log.v("running in existing task")
+        let ret = try await closure()     // run closure in same task 
+        return Task { ret }               // use task only to return value
     }
 }
-
-/*
-
- // XXX make this .h file
-
-#import <Foundation/Foundation.h>
-
-
-
-// XXX use this .m file
-
-
-// XXX with this swift extension 
-// whenever we shell out    
-*/
