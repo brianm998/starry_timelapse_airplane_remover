@@ -1,6 +1,7 @@
 import Foundation
 import ShellOut
 import logging
+import kht_bridge
 
 /*
 
@@ -48,27 +49,29 @@ public class StarAlignment {
         }
         
         do {
-            // first try to run hugin star alignment 
-            try shellOut(to: "\(StarAlignment.pathToBinary)/\(StarAlignment.binaryName)",
-                         arguments: ["--use-given-order", "-a", baseName,
-                                     referenceImageName, alignmentImageName],
-                         at: outputDirname)
-            Log.d("alignment worked")
+            try ObjC.catchException {
+                // first try to run hugin star alignment 
+                try shellOut(to: "\(StarAlignment.pathToBinary)/\(StarAlignment.binaryName)",
+                             arguments: ["--use-given-order", "-a", baseName,
+                                         referenceImageName, alignmentImageName],
+                             at: outputDirname)
+                Log.d("alignment worked")
 
-            // the first output file is simply a copy of the reference frame, delete it
-            try shellOut(to: "rm",
-                         arguments: ["\(baseName)0000.tif"],
-                         at: outputDirname)
-            Log.d("rm worked")
+                // the first output file is simply a copy of the reference frame, delete it
+                try shellOut(to: "rm",
+                             arguments: ["\(baseName)0000.tif"],
+                             at: outputDirname)
+                Log.d("rm worked")
 
-            // the second output file is the other image mapped to the base one, rename
-            // it to have the same name as the base name, it will live in a different dir
-            try shellOut(to: "mv",
-                         arguments: ["\(baseName)0001.tif",
-                                     "\(baseName).\(baseExt)"],
-                         at: outputDirname)
-            Log.d("mv worked")
+                // the second output file is the other image mapped to the base one, rename
+                // it to have the same name as the base name, it will live in a different dir
+                try shellOut(to: "mv",
+                             arguments: ["\(baseName)0001.tif",
+                                         "\(baseName).\(baseExt)"],
+                             at: outputDirname)
+                Log.d("mv worked")
 
+            }
             return outputFilename
         } catch {
             if let error = error as? ShellOutError {
@@ -80,7 +83,9 @@ public class StarAlignment {
             // if the alignment fails, simply hard link them together
             // assuming same volume :(
             do {
-                try shellOut(to: "ln", arguments: [referenceImageName, outputFilename])
+                try ObjC.catchException {
+                    try shellOut(to: "ln", arguments: [referenceImageName, outputFilename])
+                }
                 return outputFilename
             } catch {
                 if let error = error as? ShellOutError {
