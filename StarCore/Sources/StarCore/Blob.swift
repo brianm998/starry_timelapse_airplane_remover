@@ -20,21 +20,13 @@ public class Blob: CustomStringConvertible {
             pixel.status = .blobbed(self)
         }
         self.pixels = self.pixels.union(newPixels)
-        _intensity = nil
-        _boundingBox = nil
-        _blobImageData = nil
-        _blobLine = nil
-        _averageDistanceFromIdealLine = nil
+        reset()
     }
 
     public func add(pixel: SortablePixel) {
         pixel.status = .blobbed(self)
         self.pixels.insert(pixel)
-        _intensity = nil
-        _boundingBox = nil
-        _blobImageData = nil
-        _blobLine = nil
-        _averageDistanceFromIdealLine = nil
+        reset()
     }
 
     private var _intensity: UInt16?
@@ -98,14 +90,62 @@ public class Blob: CustomStringConvertible {
         return 420420420
     }
 
-    public func neighboringPixelTrim(by minNeighbors: Int = 2) {
-        /*
-         for each pixel in pixels
-         if no other pixels are next to it, discard it
-         */
+    // trims outlying pixels from the group, especially
+    // ones with very few neighboring pixels
+    public func fancyLineTrim(by minNeighbors: Int = 3) {
+        if let line = self.originZeroLine {
+            var newPixels = Set<SortablePixel>()
+            
+            let standardLine = line.standardLine
+            let (average, median, max) = averageMedianMaxDistance(from: line)
 
-        var trimmedPixels = Set<SortablePixel>()
+            for pixel in pixels {
 
+                let pixelDistance = standardLine.distanceTo(x: pixel.x, y: pixel.y)
+                if pixelDistance < 2 {
+                    newPixels.insert(pixel)
+                } else {
+
+                    let x = pixel.x - self.boundingBox.min.x
+                    let y = pixel.y - self.boundingBox.min.y
+
+                    var neighborCount: Int = 0
+                    neighborCount += self.hasPixel(x: x-1, y: y-1)
+                    neighborCount += self.hasPixel(x: x,   y: y-1)
+                    neighborCount += self.hasPixel(x: x+1, y: y-1)
+                    neighborCount += self.hasPixel(x: x-1, y: y)
+                    neighborCount += self.hasPixel(x: x+1, y: y)
+                    neighborCount += self.hasPixel(x: x-1, y: y+1)
+                    neighborCount += self.hasPixel(x: x,   y: y+1)
+                    neighborCount += self.hasPixel(x: x+1, y: y+1)
+
+                    if pixelDistance < median {
+                        if neighborCount > 2 { newPixels.insert(pixel) }
+                    } else if neighborCount > 1 {
+                        newPixels.insert(pixel)
+                    }
+                }
+            }
+            let diff = self.pixels.count - newPixels.count
+            self.pixels = newPixels
+            Log.d("blog \(self) trimming \(diff) pixels")
+            reset()
+        }
+    }
+
+    private func reset() {
+        _intensity = nil
+        _boundingBox = nil
+        _blobImageData = nil
+        _blobLine = nil
+        _averageDistanceFromIdealLine = nil
+        _membersArray = nil
+    }
+
+    private var _membersArray: ([Bool])?
+    
+    public var membersArray: [Bool] {
+        if let _membersArray = _membersArray { return _membersArray }
         let bounds = self.boundingBox
         
         var members = [Bool](repeating: false,
@@ -121,40 +161,50 @@ public class Blob: CustomStringConvertible {
             }
             members[index] = true
         }
+        _membersArray = members
+        return members
+    }
+    
+    public func neighboringPixelTrim(by minNeighbors: Int = 2) {
+        /*
+         for each pixel in pixels
+         if no other pixels are next to it, discard it
+         */
+
+        var trimmedPixels = Set<SortablePixel>()
 
         for pixel in pixels {
             let x = pixel.x - self.boundingBox.min.x
             let y = pixel.y - self.boundingBox.min.y
             
             var neighborCount: Int = 0
-            neighborCount += self.hasPixel(x: x-1, y: y-1, members: members)
-            neighborCount += self.hasPixel(x: x,   y: y-1, members: members)
-            neighborCount += self.hasPixel(x: x+1, y: y-1, members: members)
-            neighborCount += self.hasPixel(x: x-1, y: y,   members: members)
-            neighborCount += self.hasPixel(x: x+1, y: y,   members: members)
-            neighborCount += self.hasPixel(x: x-1, y: y+1, members: members)
-            neighborCount += self.hasPixel(x: x,   y: y+1, members: members)
-            neighborCount += self.hasPixel(x: x+1, y: y+1, members: members)
+            neighborCount += self.hasPixel(x: x-1, y: y-1)
+            neighborCount += self.hasPixel(x: x,   y: y-1)
+            neighborCount += self.hasPixel(x: x+1, y: y-1)
+            neighborCount += self.hasPixel(x: x-1, y: y)
+            neighborCount += self.hasPixel(x: x+1, y: y)
+            neighborCount += self.hasPixel(x: x-1, y: y+1)
+            neighborCount += self.hasPixel(x: x,   y: y+1)
+            neighborCount += self.hasPixel(x: x+1, y: y+1)
 
             if neighborCount > minNeighbors { trimmedPixels.insert(pixel) }
         }
 
         if trimmedPixels.count != self.pixels.count {
+            Log.d("frame \(frameIndex) blob \(self) DID PIXEL TRIM \(self.pixels.count-trimmedPixels.count) pixels from a start of \(self.pixels.count) pixels")
             self.pixels = trimmedPixels
-            _intensity = nil
-            _boundingBox = nil
-            _blobImageData = nil
-            _blobLine = nil
-            _averageDistanceFromIdealLine = nil
+            reset()
+        } else {
+            Log.d("frame \(frameIndex) blob \(self) DID NOT PIXEL TRIM ANY PIXELS")
         }
     }
 
-    private func hasPixel(x: Int, y: Int, members: [Bool]) -> Int {
+    private func hasPixel(x: Int, y: Int) -> Int {
         if x >= 0,
            y >= 0,
            x < self.boundingBox.width,
            y < self.boundingBox.height,
-           members[y*self.boundingBox.width+x]
+           self.membersArray[y*self.boundingBox.width+x]
         {
             return 1
         } else {
@@ -182,11 +232,7 @@ public class Blob: CustomStringConvertible {
             let diff = self.pixels.count - newPixels.count
             self.pixels = newPixels
             Log.d("blog \(self) trimming \(diff) pixels")
-            _intensity = nil
-            _boundingBox = nil
-            _blobImageData = nil
-            _blobLine = nil
-            _averageDistanceFromIdealLine = nil
+            reset()
         }
     }
     
@@ -301,11 +347,7 @@ public class Blob: CustomStringConvertible {
             pixel.status = .background
         }
         pixels = []
-        _intensity = nil
-        _boundingBox = nil
-        _blobImageData = nil
-        _blobLine = nil
-        _averageDistanceFromIdealLine = nil
+        reset()
     }
 
     public func absorb(_ otherBlob: Blob) -> Bool {
@@ -316,11 +358,7 @@ public class Blob: CustomStringConvertible {
                 otherPixel.status = .blobbed(self)
             }
             self.pixels = self.pixels.union(newPixels)
-            _intensity = nil
-            _boundingBox = nil
-            _blobImageData = nil
-            _blobLine = nil
-            _averageDistanceFromIdealLine = nil
+            reset()
             return true
         }
         return false

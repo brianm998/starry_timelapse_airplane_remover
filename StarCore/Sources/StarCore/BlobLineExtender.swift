@@ -124,7 +124,10 @@ class BlobLineExtender: AbstractBlobAnalyzer {
             }
 
             // filter added pixels to throw out noise and keep signal
-            blob.neighboringPixelTrim(by: 3)
+            // XXX this shit doesn't work, WTF?
+            // maybe the membersArray is calculated wrong?
+            //blob.neighboringPixelTrim(by: 1)
+            blob.fancyLineTrim(by: 2)
         }
     }
 
