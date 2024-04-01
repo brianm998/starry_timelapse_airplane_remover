@@ -48,9 +48,12 @@ public protocol ImageAccess {
     func load(type imageType: FrameImageType,
               atSize size: ImageDisplaySize) async -> PixelatedImage?
 
+    func urlForImage(ofType imageType: FrameImageType,
+                     atSize size: ImageDisplaySize) -> URL?
+    
     // load an image of some type and size
     func loadNSImage(type imageType: FrameImageType,
-                     atSize size: ImageDisplaySize) async -> NSImage?
+                     atSize size: ImageDisplaySize) -> NSImage?
     
     // where to load or save this type of image from
     func dirForImage(ofType type: FrameImageType,
@@ -135,14 +138,23 @@ struct ImageAccessor: ImageAccess {
     }
 
     func loadNSImage(type imageType: FrameImageType,
-                     atSize size: ImageDisplaySize) async -> NSImage?
+                     atSize size: ImageDisplaySize) -> NSImage?
     {
-        if let filename = nameForImage(ofType: imageType, atSize: size) {
-            if fileManager.fileExists(atPath: filename),
-               let image = NSImage(contentsOf: URL(fileURLWithPath: filename))
-            {
-                return image
-            }
+        if let url = urlForImage(ofType: imageType, atSize: size),
+           let image = NSImage(contentsOf: url)
+        {
+            return image
+        }
+        return nil
+    }
+
+    func urlForImage(ofType imageType: FrameImageType,
+                     atSize size: ImageDisplaySize) -> URL?
+    {
+        if let filename = nameForImage(ofType: imageType, atSize: size),
+           fileManager.fileExists(atPath: filename)
+        {
+            return URL(fileURLWithPath: filename)
         }
         return nil
     }
