@@ -9,17 +9,17 @@ struct FrameEditView: View {
     @EnvironmentObject var viewModel: ViewModel
     @Environment(\.openWindow) private var openWindow
 
-    let image: Image
+    let imageURL: URL
     @Binding private var interactionMode: InteractionMode
     @Binding private var showFullResolution: Bool
 
     @State private var isDragging = false
 
-    public init(image: Image,
+    public init(url: URL,
                interactionMode: Binding<InteractionMode>,
                showFullResolution: Binding<Bool>)
     {
-        self.image = image
+        self.imageURL = url
         _interactionMode = interactionMode
         _showFullResolution = showFullResolution
     }
@@ -51,8 +51,17 @@ struct FrameEditView: View {
         // alignment is .bottomLeading because of the bug outlied below
         ZStack(alignment: .bottomLeading) {
             // the main image shown
-            image
-              .frame(width: viewModel.frameWidth, height: viewModel.frameHeight)
+            AsyncImage(url: imageURL) { phase in
+                if let image = phase.image {
+                    image
+                      .resizable()
+                      .frame(width: viewModel.frameWidth, height: viewModel.frameHeight)
+                } else if phase.error != nil {
+                    Color.red // Indicates an error.
+                } else {
+                    Color.blue // Acts as a placeholder.
+                }
+            }
             if interactionMode == .edit {
                 // in edit mode, show outliers groups 
                 let current_frame_view = viewModel.currentFrameView

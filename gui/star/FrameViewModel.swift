@@ -76,17 +76,17 @@ public class FrameViewModel: ObservableObject {
 
     // we don't keep full resolution images here
 
-    @Published var thumbnailImage: Image = initialImage
-    @Published var previewImage: Image = initialImage
-    @Published var processedPreviewImage: Image = initialImage
-    @Published var subtractionPreviewImage: Image = initialImage
-    @Published var blobsPreviewImage: Image = initialImage
-    @Published var khtbPreviewImage: Image = initialImage
-    @Published var absorbedPreviewImage: Image = initialImage
-    @Published var rectifiedPreviewImage: Image = initialImage
-    @Published var paintMaskPreviewImage: Image = initialImage
-    @Published var houghLinesPreviewImage: Image = initialImage
-    @Published var validationPreviewImage: Image = initialImage
+    @Published var thumbnailImage: URL?
+    @Published var previewImage: URL?
+    @Published var processedPreviewImage: URL?
+    @Published var subtractionPreviewImage: URL?
+    @Published var blobsPreviewImage: URL?
+    @Published var khtbPreviewImage: URL?
+    @Published var absorbedPreviewImage: URL?
+    @Published var rectifiedPreviewImage: URL?
+    @Published var paintMaskPreviewImage: URL?
+    @Published var houghLinesPreviewImage: URL?
+    @Published var validationPreviewImage: URL?
 
     public func update() {
         self.objectWillChange.send()
@@ -133,3 +133,5 @@ public class FrameViewModel: ObservableObject {
 }
 
 fileprivate let initialImage = Image(systemName: "rectangle.fill").resizable()
+fileprivate let initialAsyncImage = AsyncImage(url: nil)
+

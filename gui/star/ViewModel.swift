@@ -137,7 +137,7 @@ public final class ViewModel: ObservableObject {
     @Published var frames: [FrameViewModel] = [FrameViewModel(0)]
 
     // the image we're showing to the user right now
-    @Published var currentFrameImage: Image?
+    @Published var currentFrameURL: URL?
 
     // the frame index of the image that produced the currentFrameImage
     @Published var currentFrameImageIndex: Int = 0
@@ -288,83 +288,62 @@ public final class ViewModel: ObservableObject {
         Log.d("refreshing frame \(frame.frameIndex)")
         
         // load the view frames from the main image
-        
+
         // look for saved versions of these
-        if let image = await frame.imageAccessor.loadNSImage(type: .validated, atSize: .preview) {
-            Log.d("loaded validation preview for self.frames[\(frame.frameIndex)] from jpeg")
-            let viewImage = Image(nsImage: image).resizable()
-            self.frames[frame.frameIndex].validationPreviewImage = viewImage  // died here index out of range
+
+        if let url = frame.imageAccessor.urlForImage(ofType: .validated, atSize: .preview) {
+            self.frames[frame.frameIndex].validationPreviewImage = url
         }
         
-        if let image = await frame.imageAccessor.loadNSImage(type: .subtracted, atSize: .preview) {
-            Log.d("loaded subtraction preview for self.frames[\(frame.frameIndex)] from jpeg")
-            let viewImage = Image(nsImage: image).resizable()
-            self.frames[frame.frameIndex].subtractionPreviewImage = viewImage
+        if let url = frame.imageAccessor.urlForImage(ofType: .subtracted, atSize: .preview) {
+            self.frames[frame.frameIndex].subtractionPreviewImage = url
         }
 
-        if let image = await frame.imageAccessor.loadNSImage(type: .blobs, atSize: .preview) {
-            Log.d("loaded blobs preview for self.frames[\(frame.frameIndex)] from jpeg")
-            let viewImage = Image(nsImage: image).resizable()
-            self.frames[frame.frameIndex].blobsPreviewImage = viewImage
-        }
-
-
-        if let image = await frame.imageAccessor.loadNSImage(type: .khtb, atSize: .preview) {
-            Log.d("loaded kht blobs preview for self.frames[\(frame.frameIndex)] from jpeg")
-            let viewImage = Image(nsImage: image).resizable()
-            self.frames[frame.frameIndex].khtbPreviewImage = viewImage
-        }
-
-        if let image = await frame.imageAccessor.loadNSImage(type: .absorbed, atSize: .preview) {
-            Log.d("loaded absorbed blobs preview for self.frames[\(frame.frameIndex)] from jpeg")
-            let viewImage = Image(nsImage: image).resizable()
-            self.frames[frame.frameIndex].absorbedPreviewImage = viewImage
-        }
-
-        if let image = await frame.imageAccessor.loadNSImage(type: .rectified, atSize: .preview) {
-            Log.d("loaded rectified blobs preview for self.frames[\(frame.frameIndex)] from jpeg")
-            let viewImage = Image(nsImage: image).resizable()
-            self.frames[frame.frameIndex].rectifiedPreviewImage = viewImage
-        }
-
-        if let image = await frame.imageAccessor.loadNSImage(type: .paintMask, atSize: .preview) {
-            Log.d("loaded paint mask preview for self.frames[\(frame.frameIndex)] from jpeg")
-            let viewImage = Image(nsImage: image).resizable()
-            self.frames[frame.frameIndex].paintMaskPreviewImage = viewImage
-        }
-
-        if let image = await frame.imageAccessor.loadNSImage(type: .houghLines, atSize: .preview) {
-            Log.d("loaded houghLinesrr preview for self.frames[\(frame.frameIndex)] from jpeg")
-            let viewImage = Image(nsImage: image).resizable()
-            self.frames[frame.frameIndex].houghLinesPreviewImage = viewImage
-        }
-
-        if let image = await frame.imageAccessor.loadNSImage(type: .processed, atSize: .preview) {
-            
-            Log.d("loaded processed preview for self.frames[\(frame.frameIndex)] from jpeg")
-            let viewImage = Image(nsImage: image).resizable()
-            self.frames[frame.frameIndex].processedPreviewImage = viewImage
+        if let url = frame.imageAccessor.urlForImage(ofType: .blobs, atSize: .preview) {
+            self.frames[frame.frameIndex].blobsPreviewImage = url
         }
         
-        if let image = await frame.imageAccessor.loadNSImage(type: .original, atSize: .preview) {
-            Log.d("loaded preview for self.frames[\(frame.frameIndex)] from jpeg")
-            let viewImage = Image(nsImage: image).resizable()
-            self.frames[frame.frameIndex].previewImage = viewImage
+        if let url = frame.imageAccessor.urlForImage(ofType: .khtb, atSize: .preview) {
+            self.frames[frame.frameIndex].khtbPreviewImage = url
+        }
+
+        if let url = frame.imageAccessor.urlForImage(ofType: .absorbed, atSize: .preview) {
+            self.frames[frame.frameIndex].absorbedPreviewImage = url
+        }
+
+        if let url = frame.imageAccessor.urlForImage(ofType: .rectified, atSize: .preview) {
+            self.frames[frame.frameIndex].rectifiedPreviewImage = url
+        }
+
+        if let url = frame.imageAccessor.urlForImage(ofType: .paintMask, atSize: .preview) {
+            self.frames[frame.frameIndex].paintMaskPreviewImage = url
+        }
+
+        if let url = frame.imageAccessor.urlForImage(ofType: .houghLines, atSize: .preview) {
+            self.frames[frame.frameIndex].houghLinesPreviewImage = url
+        }
+
+        if let url = frame.imageAccessor.urlForImage(ofType: .processed, atSize: .preview) {
+            self.frames[frame.frameIndex].processedPreviewImage = url
+        }
+        
+        if let url = frame.imageAccessor.urlForImage(ofType: .original, atSize: .preview) {
+            self.frames[frame.frameIndex].previewImage = url
         } 
         
-        if let image = await frame.imageAccessor.loadNSImage(type: .original, atSize: .thumbnail) {
-            Log.d("loaded thumbnail for self.frames[\(frame.frameIndex)] from jpeg")
-            self.frames[frame.frameIndex].thumbnailImage = Image(nsImage: image)
+        if let url = frame.imageAccessor.urlForImage(ofType: .original, atSize: .thumbnail) {
+            self.frames[frame.frameIndex].thumbnailImage = url
         }
 
         if self.frames[frame.frameIndex].outlierViews == nil {
             await self.setOutlierGroups(forFrame: frame)
-
+/*
             // refresh ui 
             await MainActor.run {
                 self.objectWillChange.send()
 
             }
+ */
         }
     }
 
@@ -467,7 +446,7 @@ public final class ViewModel: ObservableObject {
         }
         self.sequenceLoaded = false
         self.frames = [FrameViewModel(0)]
-        self.currentFrameImage = nil
+        self.currentFrameURL = nil
         self.currentFrameImageIndex = 0
         self.initialLoadInProgress = false
         self.loadingAllOutliers = false
@@ -498,7 +477,7 @@ public final class ViewModel: ObservableObject {
     func startup(withConfig jsonConfigFilename: String) async throws {
         Log.d("outlier_json_startup with \(jsonConfigFilename)")
         // first read config from json
-
+        
         UserPreferences.shared.justOpened(filename: jsonConfigFilename)
         
         let config = try await Config.read(fromJsonFilename: jsonConfigFilename)
@@ -650,11 +629,11 @@ public final class ViewModel: ObservableObject {
             // XXX not getting preview here
 
 
-            if let baseImage = await newFrame.imageAccessor.loadNSImage(type: .original, atSize: .original) {
+            if let url = await newFrame.imageAccessor.urlForImage(ofType: .original, atSize: .original) {
                 if self.currentIndex == newFrame.frameIndex {
                     _ = await MainActor.run {
                         Task {
-                            self.currentFrameImage = Image(nsImage: baseImage)
+                            self.currentFrameURL = url
                             self.update()
                         }
                     }
@@ -813,27 +792,32 @@ public extension ViewModel {
 
                 switch self.frameViewMode {
                 case .original:
-                    self.currentFrameImage = newFrameView.previewImage
+                    self.currentFrameURL = newFrameView.previewImage
                 case .subtraction:
-                    self.currentFrameImage = newFrameView.subtractionPreviewImage
+                    self.currentFrameURL = newFrameView.subtractionPreviewImage
                 case .blobs:
-                    self.currentFrameImage = newFrameView.blobsPreviewImage
+                    self.currentFrameURL = newFrameView.blobsPreviewImage
                 case .khtBlobs:
-                    self.currentFrameImage = newFrameView.khtbPreviewImage
+                    self.currentFrameURL = newFrameView.khtbPreviewImage
                 case .absorbedBlobs:
-                    self.currentFrameImage = newFrameView.absorbedPreviewImage
+                    self.currentFrameURL = newFrameView.absorbedPreviewImage
                 case .rectifiedBlobs:
-                    self.currentFrameImage = newFrameView.rectifiedPreviewImage
+                    self.currentFrameURL = newFrameView.rectifiedPreviewImage
                 case .paintMask:
-                    self.currentFrameImage = newFrameView.paintMaskPreviewImage
+                    self.currentFrameURL = newFrameView.paintMaskPreviewImage
                 case .houghLines:
-                    self.currentFrameImage = newFrameView.houghLinesPreviewImage
+                    self.currentFrameURL = newFrameView.houghLinesPreviewImage
                 case .validation:
-                    self.currentFrameImage = newFrameView.validationPreviewImage
+                    self.currentFrameURL = newFrameView.validationPreviewImage
                 case .processed:
-                    self.currentFrameImage = newFrameView.processedPreviewImage
+                    self.currentFrameURL = newFrameView.processedPreviewImage
                 }
             }
+
+            /*
+              return expression of type '_ConditionalContent<_ConditionalContent<Image, Color>, Color>' to return type 'Image'
+             
+             */
             if showFullResolution {
                 if nextFrame.frameIndex == self.currentIndex {
                     Task {
@@ -844,66 +828,66 @@ public extension ViewModel {
                         
                         switch self.frameViewMode {
                         case .original:
-                            if let baseImage = await nextFrame.imageAccessor.loadNSImage(type: .original, atSize: .original) {
+                            if let url = await nextFrame.imageAccessor.urlForImage(ofType: .original, atSize: .original) {
                                 if nextFrame.frameIndex == self.currentIndex {
-                                    self.currentFrameImage = Image(nsImage: baseImage)
+                                    self.currentFrameURL = url
                                 }
                             }
                         case .subtraction:
-                            if let baseImage = await nextFrame.imageAccessor.loadNSImage(type: .subtracted, atSize: .original) {
+                            if let url = await nextFrame.imageAccessor.urlForImage(ofType: .subtracted, atSize: .original) {
                                 if nextFrame.frameIndex == self.currentIndex {
-                                    self.currentFrameImage = Image(nsImage: baseImage)
+                                    self.currentFrameURL = url
                                 }
                             }
                         case .blobs:
-                            if let baseImage = await nextFrame.imageAccessor.loadNSImage(type: .blobs, atSize: .original) {
+                            if let url = await nextFrame.imageAccessor.urlForImage(ofType: .blobs, atSize: .original) {
                                 if nextFrame.frameIndex == self.currentIndex {
-                                    self.currentFrameImage = Image(nsImage: baseImage)
+                                    self.currentFrameURL = url
                                 }
                             }
 
                         case .khtBlobs:
-                            if let baseImage = await nextFrame.imageAccessor.loadNSImage(type: .khtb, atSize: .original) {
+                            if let url = await nextFrame.imageAccessor.urlForImage(ofType: .khtb, atSize: .original) {
                                 if nextFrame.frameIndex == self.currentIndex {
-                                    self.currentFrameImage = Image(nsImage: baseImage)
+                                    self.currentFrameURL = url
                                 }
                             }
                         case .absorbedBlobs:
-                            if let baseImage = await nextFrame.imageAccessor.loadNSImage(type: .absorbed, atSize: .original) {
+                            if let url = await nextFrame.imageAccessor.urlForImage(ofType: .absorbed, atSize: .original) {
                                 if nextFrame.frameIndex == self.currentIndex {
-                                    self.currentFrameImage = Image(nsImage: baseImage)
+                                    self.currentFrameURL = url
                                 }
                             }
                         case .rectifiedBlobs:
-                            if let baseImage = await nextFrame.imageAccessor.loadNSImage(type: .rectified, atSize: .original) {
+                            if let url = await nextFrame.imageAccessor.urlForImage(ofType: .rectified, atSize: .original) {
                                 if nextFrame.frameIndex == self.currentIndex {
-                                    self.currentFrameImage = Image(nsImage: baseImage)
+                                    self.currentFrameURL = url
                                 }
                             }
                         case .paintMask:
-                            if let baseImage = await nextFrame.imageAccessor.loadNSImage(type: .paintMask, atSize: .original) {
+                            if let url = await nextFrame.imageAccessor.urlForImage(ofType: .paintMask, atSize: .original) {
                                 if nextFrame.frameIndex == self.currentIndex {
-                                    self.currentFrameImage = Image(nsImage: baseImage)
+                                    self.currentFrameURL = url
                                 }
                             }
 
                         case .houghLines:
-                            if let baseImage = await nextFrame.imageAccessor.loadNSImage(type: .houghLines, atSize: .original) {
+                            if let url = await nextFrame.imageAccessor.urlForImage(ofType: .houghLines, atSize: .original) {
                                 if nextFrame.frameIndex == self.currentIndex {
-                                    self.currentFrameImage = Image(nsImage: baseImage)
+                                    self.currentFrameURL = url
                                 }
                             }
                         case .validation:
-                            if let baseImage = await nextFrame.imageAccessor.loadNSImage(type: .validated, atSize: .original) {
+                            if let url = await nextFrame.imageAccessor.urlForImage(ofType: .validated, atSize: .original) {
                                 if nextFrame.frameIndex == self.currentIndex {
-                                    self.currentFrameImage = Image(nsImage: baseImage)
+                                    self.currentFrameURL = url
                                 }
                             }
                             
                         case .processed:
-                            if let baseImage = await nextFrame.imageAccessor.loadNSImage(type: .processed, atSize: .original) {
+                            if let url = await nextFrame.imageAccessor.urlForImage(ofType: .processed, atSize: .original) {
                                 if nextFrame.frameIndex == self.currentIndex {
-                                    self.currentFrameImage = Image(nsImage: baseImage)
+                                    self.currentFrameURL = url
                                 }
                             }
                         }
@@ -1063,43 +1047,43 @@ public extension ViewModel {
                     // play each frame of the video in sequence
                     switch self.frameViewMode {
                     case .original:
-                        self.currentFrameImage =
+                        self.currentFrameURL =
                           self.frames[currentIdx].previewImage
                         
                     case .subtraction:
-                        self.currentFrameImage =
+                        self.currentFrameURL =
                           self.frames[currentIdx].subtractionPreviewImage
 
                     case .blobs: 
-                        self.currentFrameImage =
+                        self.currentFrameURL =
                           self.frames[currentIdx].blobsPreviewImage
 
                     case .khtBlobs: 
-                        self.currentFrameImage =
+                        self.currentFrameURL =
                           self.frames[currentIdx].khtbPreviewImage
 
                     case .absorbedBlobs: 
-                        self.currentFrameImage =
+                        self.currentFrameURL =
                           self.frames[currentIdx].absorbedPreviewImage
 
                     case .rectifiedBlobs: 
-                        self.currentFrameImage =
+                        self.currentFrameURL =
                           self.frames[currentIdx].rectifiedPreviewImage
 
                     case .paintMask: 
-                        self.currentFrameImage =
+                        self.currentFrameURL =
                           self.frames[currentIdx].paintMaskPreviewImage
 
                     case .houghLines: 
-                        self.currentFrameImage =
+                        self.currentFrameURL =
                           self.frames[currentIdx].houghLinesPreviewImage
 
                     case .validation:
-                        self.currentFrameImage =
+                        self.currentFrameURL =
                           self.frames[currentIdx].validationPreviewImage
                         
                     case .processed:
-                        self.currentFrameImage =
+                        self.currentFrameURL =
                           self.frames[currentIdx].processedPreviewImage
                     }
                     
