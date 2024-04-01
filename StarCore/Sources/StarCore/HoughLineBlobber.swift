@@ -155,11 +155,11 @@ public class HoughLineBlobber: AbstractBlobber {
                             let itCoord1 = boundary1Line.standardLine.intersection(with: perpLine)
                             let itCoord2 = boundary2Line.standardLine.intersection(with: perpLine)
 
+                            /*
                             let fullDistance = itCoord1.distance(to: itCoord2)
                             let coord1Dist = itCoord1.distance(to: firstIterationPoint)
                             let coord2Dist = itCoord2.distance(to: firstIterationPoint)
 
-                            /*
                             if coord1Dist > fullDistance ||
                                coord1Dist > fullDistance
                             {
