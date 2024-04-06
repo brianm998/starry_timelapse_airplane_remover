@@ -50,6 +50,8 @@ class BlobLineExtender: AbstractBlobAnalyzer {
         for (index, blob) in blobMap.values.enumerated() {
             
             if blob.size < 45 { continue } // XXX constant
+
+            let lineContinuationAmount: Double = 40
             
             // if no line, pass
             if let line = blob.originZeroLine,
@@ -94,7 +96,7 @@ class BlobLineExtender: AbstractBlobAnalyzer {
                         }
                         return shouldContinue(from: centralCoord,//referenceCoord,
                                               x: x, y: y,
-                                              max: 140) // XXX constant
+                                              max: lineContinuationAmount) 
                     }
 
                     //referenceCoord = centralCoord
@@ -118,7 +120,7 @@ class BlobLineExtender: AbstractBlobAnalyzer {
                         }
                         return shouldContinue(from: centralCoord,//referenceCoord,
                                               x: x, y: y,
-                                              max: 140) // XXX constant
+                                              max: lineContinuationAmount) 
                     }
                 }
             }
@@ -127,7 +129,9 @@ class BlobLineExtender: AbstractBlobAnalyzer {
             // XXX this shit doesn't work, WTF?
             // maybe the membersArray is calculated wrong?
             //blob.neighboringPixelTrim(by: 1)
-            blob.fancyLineTrim(by: 2)
+
+            // XXX does this work??
+            //blob.fancyLineTrim(by: 2)
         }
     }
 
@@ -138,7 +142,7 @@ class BlobLineExtender: AbstractBlobAnalyzer {
     {
 
         // how far away from x,y do we look for a brigher pixel?
-        let searchArea = 3
+        let searchArea = 2
 
         var newPixels: [SortablePixel] = []
         
