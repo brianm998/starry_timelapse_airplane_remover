@@ -61,7 +61,7 @@ class BlobRectifier {
                     }
                 }
             }
-            if let overlappingBlob = overlappingBlob,
+            if let overlappingBlob,
                overlappingBlob.absorb(blob)
             {
                 self.blobMap.removeValue(forKey: blob.id)
