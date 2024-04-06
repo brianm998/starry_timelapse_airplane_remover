@@ -163,7 +163,6 @@ class AbstractBlobAnalyzer {
                                 for pixel in blob.pixels {
                                     blobRefs[pixel.y*width+pixel.x] = _lastBlob.id
                                 }
-                                blobMap.removeValue(forKey: blob.id)
                                 filteredBlobs.removeValue(forKey: blob.id)
                             } else {
                                 if _lastBlob.id != blob.id {
