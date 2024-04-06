@@ -130,7 +130,7 @@ extension FrameAirplaneRemover {
          */
         if let subtractionImage = subtractionImage {
 
-            self.state = .detectingOutliers1
+            //self.state = .detectingOutliers1
 
             // first run the hough transform on sub sections of the subtraction image
             let houghLines = houghLines(from: subtractionImage)
@@ -160,10 +160,10 @@ extension FrameAirplaneRemover {
              single larger blob.
              */
 
+
             self.state = .detectingOutliers2a
 
             Log.d("frame \(frameIndex) starting with \(blobber.blobMap.count) blobs")
-
             let kht = try await BlobKHTAnalysis(houghLines: houghLines,
                                                 blobMap: blobber.blobMap,
                                                 config: config,
@@ -179,6 +179,7 @@ extension FrameAirplaneRemover {
             }
             
             Log.d("frame \(frameIndex) kht analysis gave \(kht.filteredBlobs.count) blobs")
+
             self.state = .detectingOutliers2b
             /*
 
@@ -210,27 +211,26 @@ extension FrameAirplaneRemover {
                 // save filtered blobs image here
                 try await saveImages(for: Array(absorber.filteredBlobs.values), as: .absorbed)
             }
-            
-
-            // rectifier makes sure no blobs have the same pixel
-            // if so, they get combined
-            let rectifier = BlobRectifier(blobMap: absorber.filteredBlobs,
-                                          width: width,
-                                          height: height,
-                                          frameIndex: frameIndex)
-
-            Log.d("frame \(frameIndex) absorber rectification gave \(rectifier.blobMap.count) blobs")
 
             // look for lines that we can extend 
             let blobExtender = BlobLineExtender(pixelData: subtractionArray,
-                                                blobMap: rectifier.blobMap,
+                                                blobMap: absorber.filteredBlobs,
                                                 config: config,
                                                 width: width,
                                                 height: height,
                                                 frameIndex: frameIndex,
                                                 imageAccessor: imageAccessor)
 
-            let filteredBlobs = Array(blobExtender.blobMap.values)
+
+            // rectifier makes sure no blobs have the same pixel
+            // if so, they get combined
+
+            let rectifier = BlobRectifier(blobMap: blobExtender.blobMap,
+                                          width: width,
+                                          height: height,
+                                          frameIndex: frameIndex)
+            Log.d("frame \(frameIndex) absorber rectification gave \(rectifier.blobMap.count) blobs")
+            let filteredBlobs = Array(rectifier.blobMap.values)
             
 //            let filteredBlobs = Array(kht.filteredBlobs.values)
             // XXX save filtered blob image here
@@ -246,9 +246,22 @@ extension FrameAirplaneRemover {
             for blob in filteredBlobs {
                 if let _ = blob.line {
                     // first trim pixels too far away
-                    blob.lineTrim()
+                    //blob.lineTrim() // XXX this kills good blobs :(
 
-                    if blob.size >= config.minGroupSize {
+                    // XXX apply some kind of brightness / size criteria here?
+
+                    var process = true
+
+                    var threshold = 2000 * Double(config.minGroupSize) / 2 // XXX constants
+
+                    let blobValue = Double(blob.medianIntensity) * Double(blob.size)
+                    
+                    if blobValue < threshold {
+                        // allow smaller groups if they are bright enough
+                        //process = false
+                    }
+
+                    if process {
                         // make outlier group from this blob
                         let outlierGroup = blob.outlierGroup(at: frameIndex)
 
@@ -259,7 +272,12 @@ extension FrameAirplaneRemover {
                         Log.i("frame \(frameIndex) NOT promoting \(blob)")
                     }
                 } else {
-                    Log.i("frame \(frameIndex) NOT promoting \(blob)")
+                    //Log.i("frame \(frameIndex) NOT promoting \(blob)")
+                    let outlierGroup = blob.outlierGroup(at: frameIndex)
+
+                    Log.i("frame \(frameIndex) promoting \(blob) to outlier group \(outlierGroup.name) line \(blob.line)")
+                    outlierGroup.frame = self
+                    outlierGroups?.members[outlierGroup.name] = outlierGroup
                 }
             }
 
