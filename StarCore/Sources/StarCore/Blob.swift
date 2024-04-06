@@ -30,6 +30,7 @@ public class Blob: CustomStringConvertible {
     }
 
     private var _intensity: UInt16?
+    private var _medianIntensity: UInt16?
     private var _boundingBox: BoundingBox?
     private var _blobImageData: [UInt16]?
     private var _blobLine: Line?
@@ -135,6 +136,7 @@ public class Blob: CustomStringConvertible {
 
     private func reset() {
         _intensity = nil
+        _medianIntensity = nil
         _boundingBox = nil
         _blobImageData = nil
         _blobLine = nil
@@ -313,7 +315,7 @@ public class Blob: CustomStringConvertible {
     
     public var intensity: UInt16 {
         if pixels.count == 0 { return 0 }
-        if let _intensity = _intensity { return _intensity }
+        if let _intensity { return _intensity }
         var max: UInt64 = 0
         for pixel in pixels {
             max += UInt64(pixel.intensity)
@@ -321,6 +323,16 @@ public class Blob: CustomStringConvertible {
         max /= UInt64(pixels.count)
         let ret = UInt16(max)
         _intensity = ret
+        return ret
+    }
+
+    public var medianIntensity: UInt16 {
+        if pixels.count == 0 { return 0 }
+        if let _medianIntensity { return _medianIntensity }
+        let intensities = pixels.map { $0.intensity }
+
+        let ret = intensities.sorted()[intensities.count/2]
+        _medianIntensity = ret
         return ret
     }
 
