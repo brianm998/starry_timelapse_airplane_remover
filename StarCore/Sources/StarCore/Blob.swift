@@ -313,7 +313,7 @@ public class Blob: CustomStringConvertible {
         return nil
     }
     
-    public var intensity: UInt16 {
+    public var intensity: UInt16 { // mean intensity
         if pixels.count == 0 { return 0 }
         if let _intensity { return _intensity }
         var max: UInt64 = 0
@@ -330,7 +330,10 @@ public class Blob: CustomStringConvertible {
         if pixels.count == 0 { return 0 }
         if let _medianIntensity { return _medianIntensity }
         let intensities = pixels.map { $0.intensity }
-
+        if intensities.count == 0 {
+            _medianIntensity = 0
+            return 0
+        }
         let ret = intensities.sorted()[intensities.count/2]
         _medianIntensity = ret
         return ret
