@@ -212,7 +212,7 @@ public class OutlierGroup: CustomStringConvertible,
     }
     
     public func shouldPaint(_ shouldPaint: PaintReason) async {
-        //Log.d("\(self) should paint \(shouldPaint)")
+        //Log.d("\(self) should paint \(shouldPaint) self.frame \(self.frame)")
         self.shouldPaint = shouldPaint
 
         // XXX update frame that it's different 
@@ -416,6 +416,13 @@ public class OutlierGroup: CustomStringConvertible,
         
         /*
          XXX add:
+           - A new feature that accounts for empty space along the line
+             given a line for the outlier group, what percentage of the pixels
+             along that line (withing a small distance) are filled in by the
+             outlier group, and what ones are not?  Airplane lines have more
+             pixels along the line, random other assortments do not.
+             
+         
            - config stuff:
              - outlierMaxThreshold
              - minGroupSize
@@ -653,6 +660,7 @@ public class OutlierGroup: CustomStringConvertible,
             }
         }
         // XXX all zero pixels :(
+        if values.count == 0 { return 0 }
         return Double(values.sorted()[values.count/2]) // SIGABRT HERE :(
     }
 

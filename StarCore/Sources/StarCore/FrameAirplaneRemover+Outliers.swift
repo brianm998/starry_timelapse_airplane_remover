@@ -137,12 +137,13 @@ extension FrameAirplaneRemover {
 
             self.state = .detectingOutliers2
 
-            let blobber: Blobber = FullFrameBlobber(imageWidth: width,
+            let blobber: Blobber = FullFrameBlobber(config: config,
+                                                    imageWidth: width,
                                                     imageHeight: height,
                                                     pixelData: subtractionArray,
                                                     frameIndex: frameIndex,
                                                     neighborType: .eight,//.fourCardinal,
-                                                    minimumBlobSize: config.minGroupSize/4, // XXX constant XXX
+                                                    minimumBlobSize: config.minGroupSize,
                                                     minimumLocalMaximum: config.maxPixelDistance/4,
                                                     // blobs can grow until the get this much
                                                     // darker than their seed pixel
@@ -206,15 +207,15 @@ extension FrameAirplaneRemover {
             // look for all blobs to promote,
             // and see if we get a better line score if we combine with another 
 
-            Log.d("frame \(frameIndex) absorber analysis gave \(absorber.filteredBlobs.count) blobs")
+            Log.d("frame \(frameIndex) absorber analysis gave \(absorber.blobMap.count) blobs")
             if config.writeOutlierGroupFiles {
                 // save filtered blobs image here
-                try await saveImages(for: Array(absorber.filteredBlobs.values), as: .absorbed)
+                try await saveImages(for: Array(absorber.blobMap.values), as: .absorbed)
             }
 
             // look for lines that we can extend 
             let blobExtender = BlobLineExtender(pixelData: subtractionArray,
-                                                blobMap: absorber.filteredBlobs,
+                                                blobMap: absorber.blobMap,
                                                 config: config,
                                                 width: width,
                                                 height: height,

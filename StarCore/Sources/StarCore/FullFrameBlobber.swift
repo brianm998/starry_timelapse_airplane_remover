@@ -37,43 +37,16 @@ public class FullFrameBlobber: AbstractBlobber {
     // blobs smaller than this are not returned
     public let minimumBlobSize: Int
 
+    private let config: Config
+    
     // pixels that are local maximums, but have a value lower than this are ignored
     let minimumLocalMaximum: UInt16
 
     // sorted by brightness
     public var sortedPixels: [SortablePixel] = []
-    
-    public convenience init(filename: String,
-                            frameIndex: Int,
-                            neighborType: NeighborType,
-                            minimumBlobSize: Int,
-                            minimumLocalMaximum: UInt16,
-                            contrastMin: Double)
-      async throws
-    {
-        if let image = try await PixelatedImage(fromFile: filename) {
-            switch image.imageData {
-            case .eightBit(_):
-                throw "eight bit images not supported here now"
-                
-            case .sixteenBit(let pixelData):
-                self.init(imageWidth: image.width,
-                          imageHeight: image.height,
-                          pixelData: pixelData,
-                          frameIndex: frameIndex,
-                          neighborType: neighborType,
-                          minimumBlobSize: minimumBlobSize,
-                          minimumLocalMaximum: minimumLocalMaximum,
-                          contrastMin: contrastMin)
-            }
-            
-            Log.v("frame \(frameIndex) loaded image of size (\(image.width), \(image.height))")
-        } else {
-            throw "couldn't load image from \(filename)"
-        }
-    }
 
-    public init(imageWidth: Int,
+    public init(config: Config,
+                imageWidth: Int,
                 imageHeight: Int,
                 pixelData: [UInt16],
                 frameIndex: Int,
@@ -84,7 +57,7 @@ public class FullFrameBlobber: AbstractBlobber {
     {
         self.minimumBlobSize = minimumBlobSize
         self.minimumLocalMaximum = minimumLocalMaximum
-
+        self.config = config
         super.init(imageWidth: imageWidth,
                    imageHeight: imageHeight,
                    pixelData: pixelData,
@@ -143,34 +116,24 @@ public class FullFrameBlobber: AbstractBlobber {
         // filter out a lot of the blobs
         self.blobs = self.blobs.filter { blob in
 
-            // XXX apply a combination of intensity and size,
-            // i.e. allow smaller blobs that are more intense
-            // produce a score based upon both and use that instead of
-            // this crazy logic below
-            
-            // too small, too dim
-
-            if blob.size <= minimumBlobSize,
-               blob.intensity < 15000 // XXX constant
+            if let ignoreLowerPixels = config.ignoreLowerPixels,
+               blob.boundingBox.min.y + ignoreLowerPixels > imageHeight
             {
-                //return false
-            }
-
-            // allow larger blobs that are a little dimmer
-            if blob.size <= minimumBlobSize * 2, // XXX constant
-               blob.intensity < 10000 // XXX constant
-            {
+                // too close to the bottom 
                 return false
             }
 
-            // hard cap at half the minmum size, regardless of intensity
-            if blob.size <= minimumBlobSize/2 { return false } // XXX constant
-
-            // overal blob intensity check
-            if blob.intensity < minimumLocalMaximum {
-                //Log.v("dumping blob of size \(blob.size) intensity \(blob.intensity)")
+            // these blobs are just too dim
+            if blob.medianIntensity < 3800 { // XXX constant
                 return false
             }
+
+            // only keep smaller blobs if they are bright enough
+            if blob.size <= 20,
+               blob.medianIntensity < 5000 { return false }
+
+            // anything this small is noise
+            if blob.size <= 4 { return false }
 
             // this blob has passed all checks, keep it 
             return true
