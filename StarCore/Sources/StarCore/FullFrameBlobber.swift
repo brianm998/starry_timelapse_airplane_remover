@@ -142,11 +142,18 @@ public class FullFrameBlobber: AbstractBlobber {
 
         // filter out a lot of the blobs
         self.blobs = self.blobs.filter { blob in
+
+            // XXX apply a combination of intensity and size,
+            // i.e. allow smaller blobs that are more intense
+            // produce a score based upon both and use that instead of
+            // this crazy logic below
+            
             // too small, too dim
+
             if blob.size <= minimumBlobSize,
                blob.intensity < 15000 // XXX constant
             {
-                return false
+                //return false
             }
 
             // allow larger blobs that are a little dimmer
