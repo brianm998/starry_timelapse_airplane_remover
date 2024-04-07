@@ -216,7 +216,7 @@ struct StarCli: AsyncParsableCommand {
         Max Number of frames to process at once.
         May need to be reduced to a lower value if to consume less ram on some machines.
         """)
-    var numConcurrentRenders: Int = TaskRunner.maxConcurrentTasks
+    var numConcurrentRenders: UInt = TaskRunner.maxConcurrentTasks
     
     @Option(name: .shortAndLong, help: """
         When set, outlier groups closer to the bottom of the screen than this are ignored.
