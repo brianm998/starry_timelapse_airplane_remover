@@ -44,9 +44,7 @@ public actor LimitedThrowingTaskGroup<T> {
     }
     
     public func addTask(closure: @escaping () async throws -> T) async throws {
-        tasks.append(try await runThrowingTask(/*at: taskPriority,
-                                               idlePercentage: idlePercentage,*/
-                                               closure))
+        tasks.append(try await runThrowingTask(at: taskPriority, closure))
     }
 }
 

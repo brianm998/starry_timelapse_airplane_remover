@@ -24,6 +24,34 @@ You should have received a copy of the GNU General Public License along with sta
 /*
  todo:
 
+ - fix selection of outliers to not miss obvious ones
+  - 03_16_2024-fx3 test:
+   - corrected frames
+     1483 - top middle
+     1242-1245 - top middle missed
+     944-968 - bright lower left airplane missed a lot - mostly fixed
+     1633
+   - frames that need star software update:
+     1524 - lower left - previous star trail painted with due to extended group
+     1576 - top right - no group found here
+     1625 - top mid right WTF? large group not found WTF
+     1632 - on right, missed entirely
+     1686 - upper right - end of airplane missed engirely
+     833-870 - lots of missed low hanging airplanes - need to tweak bright small groups
+         
+   - found bad frames:
+
+ 
+     
+ 
+ - use brightness as a factor w/ size, i.e. allow for smaller really bright groups
+ - make render this frame have a keyboard shortcut
+ - change how gui frame saver works, sometimes it misses changes
+ - have saved frames also render
+ - make UI async images load with previews first
+ 
+
+ 
  - try this for GPU, metal sucks:
    https://github.com/philipturner/swift-opencl
  
@@ -337,8 +365,6 @@ struct StarCli: AsyncParsableCommand {
                                                                     processExistingFiles: false,
                                                                     maxResidentImages: 40, // XXX
                                                                     writeOutputFiles: writeOutputFiles)
-
-                    eraser.pauseBetweenFrames = 1_000_000_000 // 1 second
                     
                     if let _ = eraser.callbacks.updatable {
                         // setup sequence monitor
@@ -368,7 +394,7 @@ struct StarCli: AsyncParsableCommand {
         }
         try await Task.sleep(nanoseconds: 1_000_000_000)
         await TaskWaiter.shared.finish()
-        await logging.gremlin.finish()
+        // FIX THIS await logging.gremlin.finish()
     }
 }
 

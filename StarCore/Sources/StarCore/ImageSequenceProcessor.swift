@@ -18,8 +18,6 @@ public class ImageSequenceProcessor<T> {
     // the name of the directory holding the image sequence being processed
     public let imageSequenceDirname: String
 
-    public var pauseBetweenFrames: UInt64 = 0 // nanoseconds
-    
     // the name of the directory to write processed images to
     public let outputDirname: String
 
@@ -109,14 +107,15 @@ public class ImageSequenceProcessor<T> {
             let outputFilename = "\(outputDirname)/\(basename)"
             if shouldProcess[index] {
                 _methodList[index] = {
-                    // this method is run async later                                           
-                    Log.i("loading \(imageFilename)")
+                    // this method is run async later
+                    Log.i("loading \(imageFilename) for frame \(index)")
                     //let image = await self.imageSequence.getImage(withName: imageFilename)
                     if let result = try await self.processFrame(number: index,
                                                                 outputFilename: outputFilename,
                                                                 baseName: basename) {
                         return result
                     }
+                    Log.e("error processing frame #\(index)")
                     throw "could't load image for \(imageFilename)"
                 }
             } else {
@@ -169,11 +168,6 @@ public class ImageSequenceProcessor<T> {
                 } else {
                     Log.e("FUCK") 
                     fatalError("FUCK")
-                }
-
-                // gui doesn't need a pause, cli does
-                if pauseBetweenFrames > 0 {
-                    do { try await Task.sleep(nanoseconds: pauseBetweenFrames) } catch { }
                 }
             }
             try await group.waitForAll()

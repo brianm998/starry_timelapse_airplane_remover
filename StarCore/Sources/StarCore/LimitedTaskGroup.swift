@@ -46,9 +46,7 @@ public actor LimitedTaskGroup<T> {
     }
 
     public func addTask(closure: @escaping () async -> T) async {
-        tasks.append(await runTask(/*at: taskPriority,
-                                   idlePercentage: idlePercentage,*/
-                                   closure))
+        tasks.append(await runTask(at: taskPriority, closure))
     }
 }
 

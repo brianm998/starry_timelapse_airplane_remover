@@ -28,10 +28,15 @@ public actor NumberRunning {
         self.updateCallback = updateCallback
         updateCallback(count)
     }
-    
-    public func increment() { count += 1 }
-    public func decrement() { if count > 0 {count -= 1} else { Log.e("cannot decrement past zero") } }
+
+    public func decrement() {
+        if count > 0 {count -= 1} else { Log.e("cannot decrement past zero") }
+        // let the task master know that it can maybe start a pending task
+        Task { await taskMaster.enableTask() }
+    }
+
     public func currentValue() -> UInt { count }
+
     public func startOnIncrement(to max: UInt) -> Bool {
         if count >= max { return false }
         count += 1
