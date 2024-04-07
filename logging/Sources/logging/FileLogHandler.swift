@@ -15,7 +15,7 @@ import Foundation
 public class FileLogHandler: LogHandler {
     
     let dateFormatter = DateFormatter()
-    public var level: Log.Level?
+    public var level: Log.Level
     //private let logfilename: String
     public let full_log_path: String
     public let logURL: URL

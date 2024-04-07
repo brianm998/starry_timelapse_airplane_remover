@@ -19,6 +19,6 @@ public protocol LogHandler {
              at logLevel: Log.Level,
              logTime: TimeInterval)
     
-    var level: Log.Level? { get set }
+    var level: Log.Level { get set }
 }
 

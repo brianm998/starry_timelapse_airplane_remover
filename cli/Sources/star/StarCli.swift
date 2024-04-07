@@ -392,9 +392,12 @@ struct StarCli: AsyncParsableCommand {
         } else {
             throw ValidationError("need to provide input")
         }
-        try await Task.sleep(nanoseconds: 1_000_000_000)
+        try? await Task.sleep(nanoseconds: 1_000_000_000)
         await TaskWaiter.shared.finish()
-        // FIX THIS await logging.gremlin.finish()
+
+        while(await logging.gremlin.pendingLogCount() > 0) {
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
+        }
     }
 }
 

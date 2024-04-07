@@ -161,6 +161,22 @@ public class Log {
             return left.num <= right.num
         }
 
+        public static func <(_ left: Level, right: Level) -> Bool {
+            return left.num < right.num
+        }
+
+        public static func >=(_ left: Level, right: Level) -> Bool {
+            return left.num >= right.num
+        }
+
+        public static func >(_ left: Level, right: Level) -> Bool {
+            return left.num > right.num
+        }
+
+        public static func ==(_ left: Level, right: Level) -> Bool {
+            return left.num == right.num
+        }
+
         public var emo: String {
             switch self {
             case .verbose:
@@ -893,19 +909,60 @@ fileprivate extension Log {
 
 }
 
+public struct LogHolder {
+    let message: String
+    let fileLocation: String
+    let data: LogData?
+    let logLevel: Log.Level
+    let logTime: TimeInterval
+}
+
 public let gremlin = LogGremlin()
 
 // this little guy just sits around and keeps the logs orderly by handling one log line at at time
 public actor LogGremlin {
 
+    public init() {
+        Task {
+            let foo = true
+            while(foo) {
+                if let log = await gremlin.nextLog() {
+                    for handler in await gremlin.getHandlers().values {
+                        if log.logLevel <= handler.level {
+                            handler.log(message: log.message,
+                                        at: log.fileLocation,
+                                        with: log.data,
+                                        at: log.logLevel,
+                                        logTime: log.logTime)
+                        }
+                    }
+                } else {
+                    try? await Task.sleep(nanoseconds: 1_000_000_000)
+                }
+            }
+        }
+    }
+    
     private var handlers: [Log.Output : LogHandler] = [:]
 
+    private var pendingLogs: [LogHolder] = []
+
+    public func getHandlers() -> [Log.Output : LogHandler] { handlers }
+
+    private var minimumLogLevel: Log.Level = .error
+    
     func add(handler: LogHandler, for outputType: Log.Output) {
         handlers[outputType] = handler
+        if handler.level < minimumLogLevel { minimumLogLevel = handler.level }
     }
 
-    public func finish() { }           // does nothing, but allowing waiting for other stuff to finish
+    public func pendingLogCount() -> Int { pendingLogs.count }
     
+    func nextLog() -> LogHolder? {
+        if pendingLogs.count > 0 { return pendingLogs.removeFirst() }
+        return nil
+    }
+
     func log(_ message: String,
              at logLevel: Log.Level,
              logTime: TimeInterval,             
@@ -914,21 +971,19 @@ public actor LogGremlin {
              _ function: String,
              _ line: Int)
     {
+        guard logLevel >= minimumLogLevel else { return }
+        
         let filename = file.components(separatedBy: "/").last ?? file
         let fileLocation = "\(filename)@\(line)"
-            
-        for handler in handlers.values {
-            if let handlerLevel = handler.level,
-               logLevel <= handlerLevel
-            {
-                handler.log(message: message,
-                            at: fileLocation,
-                            with: extraData,
-                            at: logLevel,
-                            logTime: logTime)
-            }
-        }
+
+        pendingLogs.append(LogHolder(message: message,
+                                     fileLocation: fileLocation,
+                                     data: extraData,
+                                     logLevel: logLevel,
+                                     logTime: logTime))
+        
     }
+    
 }
 
 

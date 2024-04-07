@@ -14,7 +14,7 @@ import Foundation
 public class ConsoleLogHandler: LogHandler {
 
     public let dispatchQueue: DispatchQueue
-    public var level: Log.Level?
+    public var level: Log.Level
     private let dateFormatter = DateFormatter()
 
     public init(at level: Log.Level) {
