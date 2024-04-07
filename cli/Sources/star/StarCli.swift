@@ -213,6 +213,12 @@ struct StarCli: AsyncParsableCommand {
     var minGroupSize = Defaults.minGroupSize // groups smaller than this are completely ignored
 
     @Option(name: .shortAndLong, help: """
+        Max Number of frames to process at once.
+        May need to be reduced to a lower value if to consume less ram on some machines.
+        """)
+    var numConcurrentRenders: Int = TaskRunner.maxConcurrentTasks
+    
+    @Option(name: .shortAndLong, help: """
         When set, outlier groups closer to the bottom of the screen than this are ignored.
         This can be helpful to reduce the number of outlier groups on the ground.
         """)
@@ -237,9 +243,8 @@ struct StarCli: AsyncParsableCommand {
 
     mutating func run() async throws {
 
-        //try await testCode()
-
-
+        TaskRunner.maxConcurrentTasks = numConcurrentRenders
+        
         StarCore.currentClassifier = OutlierGroupClassifierForest_a7624239()
         
         if version {
