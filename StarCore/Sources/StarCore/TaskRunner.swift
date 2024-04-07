@@ -6,6 +6,8 @@ import Semaphore
 
 fileprivate var numberRunning = NumberRunning()
 
+public let taskMaster = TaskMaster()
+
 public class TaskRunner {
     // XXX getting this number right is hard
     // too big and the swift runtime barfs underneath
@@ -15,10 +17,6 @@ public class TaskRunner {
             Log.i("using maximum of \(maxConcurrentTasks) concurrent tasks")
         }
     }
-
-    //private var allowedToRun
-    //private var closures: [ClosureType] = []
-    
 }
 
 fileprivate func determineMax() -> UInt {
@@ -32,7 +30,7 @@ public class TaskEnabler {
     public let priority: TaskPriority
     private let semaphore = AsyncSemaphore(value: 0)
     
-    public init(priority: TaskPriority) async {
+    public init(priority: TaskPriority) {
         self.priority = priority
     }
 
@@ -50,8 +48,10 @@ public actor TaskMaster {
 
     public func register(_ enabler: TaskEnabler) async {
         if await numberRunning.startOnIncrement(to: TaskRunner.maxConcurrentTasks) {
+            // let it run right now
             enabler.enable()
         } else {
+            // register to run it later
             switch enabler.priority {
             case .userInitiated:
                 highPrioTasks.append(enabler)
@@ -73,6 +73,7 @@ public actor TaskMaster {
     
     public func enableTask() async {
         while await numberRunning.startOnIncrement(to: TaskRunner.maxConcurrentTasks) {
+            // we can start another task, look for one
             if highPrioTasks.count > 0 {
                 highPrioTasks.removeFirst().enable()
             } else if mediumPrioTasks.count > 0 {
@@ -80,13 +81,13 @@ public actor TaskMaster {
             } else if lowPrioTasks.count > 0 {
                 lowPrioTasks.removeFirst().enable()
             } else {
+                // no tasks found to run,
+                // decrement number running after increment above
                 await numberRunning.decrement()
             }
         }
     }
 }
-
-public let taskMaster = TaskMaster()
 
 /**
  var tasks: [Task<ValueDistribution,Never>] = []
@@ -103,7 +104,7 @@ public let taskMaster = TaskMaster()
 public func runTask<Type>(at priority: TaskPriority = .medium,
                           _ closure: @escaping () async -> Type) async -> Task<Type,Never>
 {
-    let enabler = await TaskEnabler(priority: priority)
+    let enabler = TaskEnabler(priority: priority)
     await taskMaster.register(enabler)
     await enabler.wait()
     return Task<Type,Never> {
@@ -129,7 +130,7 @@ public func runThrowingTask<Type>(at priority: TaskPriority,
                                   _ closure: @escaping () async throws -> Type)
   async throws -> Task<Type,Error>
 {
-    let enabler = await TaskEnabler(priority: priority)
+    let enabler = TaskEnabler(priority: priority)
     await taskMaster.register(enabler)
     await enabler.wait()
     return Task<Type,Error> {
