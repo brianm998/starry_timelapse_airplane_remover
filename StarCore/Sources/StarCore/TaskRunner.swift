@@ -28,41 +28,18 @@ fileprivate func determineMax() -> UInt {
     return UInt(numProcessors)
 }
 
-public actor Counter {
-    private var number: Int = 0
-
-    public init() { }
-    
-    public func nextNumber() -> Int {
-        let ret = number
-        number += 1
-        return ret
-    }
-}
-
-fileprivate let counter = Counter()
-
-public actor TaskEnabler {
+public class TaskEnabler {
     public let priority: TaskPriority
     private let semaphore = AsyncSemaphore(value: 0)
-    public let number: Int
     
     public init(priority: TaskPriority) async {
         self.priority = priority
-        self.number = await counter.nextNumber()
-        Log.d("created task enabler #\(number)")
     }
 
-    public func wait() async {
-        Log.d("task enabler #\(number) waiting")
-        await semaphore.wait()
-        Log.d("task enabler #\(number) done waiting")
-    }
+    public func wait() async { await semaphore.wait() }
     
-    public func enable() {
-        Log.d("task enabler #\(number) signal")
-        semaphore.signal()
-    }
+    public func enable() { semaphore.signal() }
+
 }
 
 public actor TaskMaster {
@@ -73,7 +50,7 @@ public actor TaskMaster {
 
     public func register(_ enabler: TaskEnabler) async {
         if await numberRunning.startOnIncrement(to: TaskRunner.maxConcurrentTasks) {
-            await enabler.enable()
+            enabler.enable()
         } else {
             switch enabler.priority {
             case .userInitiated:
@@ -97,11 +74,11 @@ public actor TaskMaster {
     public func enableTask() async {
         while await numberRunning.startOnIncrement(to: TaskRunner.maxConcurrentTasks) {
             if highPrioTasks.count > 0 {
-                await highPrioTasks.removeFirst().enable()
+                highPrioTasks.removeFirst().enable()
             } else if mediumPrioTasks.count > 0 {
-                await mediumPrioTasks.removeFirst().enable()
+                mediumPrioTasks.removeFirst().enable()
             } else if lowPrioTasks.count > 0 {
-                await lowPrioTasks.removeFirst().enable()
+                lowPrioTasks.removeFirst().enable()
             } else {
                 await numberRunning.decrement()
             }
@@ -129,13 +106,9 @@ public func runTask<Type>(at priority: TaskPriority = .medium,
     let enabler = await TaskEnabler(priority: priority)
     await taskMaster.register(enabler)
     await enabler.wait()
-    Log.d("task enabler #\(enabler.number) returning closure")
     return Task<Type,Never> {
-        Log.d("task enabler #\(enabler.number) running closure")
         let ret = await closure() // run closure in separate task
-        Log.d("task enabler #\(enabler.number) about to decrement number running")
         await numberRunning.decrement()
-        Log.d("task enabler #\(enabler.number) decremented number running")
         return ret
     }
 }
@@ -159,19 +132,13 @@ public func runThrowingTask<Type>(at priority: TaskPriority,
     let enabler = await TaskEnabler(priority: priority)
     await taskMaster.register(enabler)
     await enabler.wait()
-    Log.d("task enabler #\(enabler.number) returning closure")
     return Task<Type,Error> {
-        Log.d("task enabler #\(enabler.number) running closure")
         do {
             let ret = try await closure() // run closure in separate task
-            Log.d("task enabler #\(enabler.number) about to decrement number running")
             await numberRunning.decrement()
-            Log.d("task enabler #\(enabler.number) decremented number running")
             return ret
         } catch {
-            Log.e("Task Error: \(error)")
             await numberRunning.decrement()
-            Log.d("task enabler #\(enabler.number) decremented number running after error")
             throw error
         }
     }
