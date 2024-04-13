@@ -22,29 +22,8 @@ import Combine
 // We need to line up all of the frames in order so that each frame can access
 // some number of neighboring frames in each data when calculating partulcar features.
 
-public actor ClassifierCentral {
-
-    private var frameNumber: Int?
-    
-    public func classify(frame: FrameAirplaneRemover) async -> Bool {
-        while frameNumber != nil {
-            return false
-            //try await Task.sleep(nanoseconds: 1_000_000_000)
-        }
-        if frameNumber != nil { Log.e("FUCKNUTS") }
-        frameNumber = frame.frameIndex
-        //Log.w("frame \(frame.frameIndex) \(frameNumber) BEGIN CENTRAL classify")
-        await frame.maybeApplyOutlierGroupClassifier()
-        //Log.w("frame \(frame.frameIndex) \(frameNumber) END CENTRAL classify")
-        frameNumber = nil
-        return true
-    }
-}
-
 public actor FinalProcessor {
 
-    let centralClassifier = ClassifierCentral()
-    
     var frames: [FrameAirplaneRemover?]
     var currentFrameIndex = 0
     var maxAddedIndex = 0
@@ -171,18 +150,14 @@ public actor FinalProcessor {
     func finishAll() async throws {
         Log.d("finishing all")
         try await withLimitedThrowingTaskGroup(of: Void.self,
-                                               at: .userInitiated,
-                                               idle: 12) { taskGroup in
+                                               at: .userInitiated) { taskGroup in
             for (_, frame) in frames.enumerated() {
                 if let frame = frame {
                     Log.d("adding frame \(frame.frameIndex) to final queue")
                     try await taskGroup.addTask() {
 
-                        while await self.centralClassifier.classify(frame: frame) == false {
-                            //Log.w("WAITING")
-                            try await Task.sleep(nanoseconds: 1_000_000_000)
-                        }
-                        
+                        await frame.maybeApplyOutlierGroupClassifier()
+
                         frame.set(state: .outlierProcessingComplete)
                         try await self.finish(frame: frame)
                     }
@@ -221,8 +196,7 @@ public actor FinalProcessor {
         
         var done = false
         try await withLimitedThrowingTaskGroup(of: Void.self,
-                                               at: .userInitiated,
-                                               idle: 12) { taskGroup in
+                                               at: .userInitiated) { taskGroup in
             while(!done) {
                 Log.v("FINAL THREAD running")
                 let (cfi, framesCount) = await (currentFrameIndex, frames.count)
@@ -304,11 +278,7 @@ public actor FinalProcessor {
 
                             Log.v("FINAL THREAD finishing sleeping")
                             await frameToFinish.clearOutlierGroupValueCaches()
-                            while await self.centralClassifier.classify(frame: frameToFinish) == false {
-
-                                Log.w("WAITING")
-                                try await Task.sleep(nanoseconds: 1_000_000_000)
-                            }
+                            await frameToFinish.maybeApplyOutlierGroupClassifier()
                             frameToFinish.set(state: .outlierProcessingComplete)
                             try await taskGroup.addTask() { 
                                 Log.v("FINAL THREAD frame \(indexToProcess) task running")
@@ -356,12 +326,14 @@ public actor FinalProcessor {
             
             // XXX need to await here for the frame check if it's happening
 
+            // XXX use semaphore instead of sleeping
+            
             if let countOfFramesToCheck = callbacks.countOfFramesToCheck {
                 var count = await countOfFramesToCheck()
                 Log.d("FINAL THREAD countOfFramesToCheck \(count)")
                 while(count > 0) {
-                    Log.d("FINAL THREAD sleeping with count \(count)")
-                    try await Task.sleep(nanoseconds: 1_000_000)
+                    //Log.d("FINAL THREAD sleeping with count \(count)")
+                    try await Task.sleep(nanoseconds: 100_000_000)
                     count = await countOfFramesToCheck()
                 }
             } else {
