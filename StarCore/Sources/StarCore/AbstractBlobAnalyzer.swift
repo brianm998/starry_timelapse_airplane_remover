@@ -24,9 +24,6 @@ class LastBlob {
 // skeleton for analyzer of blobs that can then manipulate the blobs in some way
 class AbstractBlobAnalyzer {
 
-    // the output from the analyzer
-    var filteredBlobs: [String:Blob] = [:]
-    
     // map of all known blobs keyed by blob id
     var blobMap: [String: Blob]
 
@@ -47,6 +44,8 @@ class AbstractBlobAnalyzer {
     // a reference for each pixel for each blob it might belong to
     internal var blobRefs: [String?]
 
+    // keep track of absorbed blobs so we don't reference them again accidentally
+    internal var absorbedBlobs = Set<String>()
     
     init(blobMap: [String: Blob],
          config: Config,
@@ -67,11 +66,20 @@ class AbstractBlobAnalyzer {
 
         for (key, blob) in blobMap {
             for pixel in blob.pixels {
-                blobRefs[pixel.y*width+pixel.x] = blob.id
+                let blobRefIndex = pixel.y*width+pixel.x
+                blobRefs[blobRefIndex] = blob.id
             }
         }
     }
 
+    // skips blobs that are absorbed during iteration
+    internal func iterateOverAllBlobs(closure: (Int, Blob) -> Void) {
+        for (index, blob) in blobMap.values.enumerated() {
+            if !absorbedBlobs.contains(blob.id) {
+                closure(index, blob)
+            }
+        }
+    }
         
     // looks around for blobs close to this place
     internal func processBlobsAt(x sourceX: Int,
@@ -142,7 +150,7 @@ class AbstractBlobAnalyzer {
             var lineForNewBlobs = line
             if let blobLine = blob.line {
                 lineForNewBlobs = blobLine
-                lineIsValid = blobLine.thetaMatch(line, maxThetaDiff: 10) // medium, 20 was generous, and worked
+                lineIsValid = blobLine.thetaMatch(line, maxThetaDiff: 16) // medium, 20 was generous, and worked
 
 //                if !lineIsValid {
                     //Log.i("frame \(frameIndex) HOLY CRAP [\(x), \(y)]  blobLine \(blobLine) from \(blob) doesn't match line \(line)")
@@ -157,13 +165,18 @@ class AbstractBlobAnalyzer {
                         if distance < 40 { // XXX constant XXX
                             // if they are close enough, simply combine them
                             if _lastBlob.absorb(blob) {
-                                //Log.d("frame \(frameIndex)  blob \(_lastBlob) absorbing blob \(blob)")
+
+                                absorbedBlobs.insert(blob.id)
+                                Log.d("frame \(frameIndex)  blob \(_lastBlob) absorbing blob \(blob)")
 
                                 // update blobRefs after blob absorbtion
                                 for pixel in blob.pixels {
-                                    blobRefs[pixel.y*width+pixel.x] = _lastBlob.id
+                                    let blobRefIndex = pixel.y*width+pixel.x
+                                    blobRefs[blobRefIndex] = _lastBlob.id
                                 }
-                                filteredBlobs.removeValue(forKey: blob.id)
+
+                                blobMap.removeValue(forKey: blob.id)
+
                             } else {
                                 if _lastBlob.id != blob.id {
                                     Log.i("frame \(frameIndex) [\(x), \(y)] blob \(_lastBlob) failed to absorb blob \(blob)")
@@ -171,14 +184,12 @@ class AbstractBlobAnalyzer {
                             }
                         } else {
                             // if they are far, then overwrite the lastBlob var
-                            filteredBlobs[blob.id] = blob
                             //Log.d("frame \(frameIndex) [\(x), \(y)] distance \(distance) from \(_lastBlob) is too far from blob with id \(blob) line \(lineForNewBlobs)")
                             lastBlob.blob = blob
                         }
                     }
                 } else {
                     //Log.d("frame \(frameIndex) [\(x), \(y)] no last blob, blob \(blob) is now last - line \(lineForNewBlobs)")
-                    filteredBlobs[blob.id] = blob
                     lastBlob.blob = blob
                 }
             }

@@ -43,20 +43,20 @@ class BlobAbsorberRewrite: AbstractBlobAnalyzer {
                    height: height,
                    frameIndex: frameIndex,
                    imageAccessor: imageAccessor)
+    }
 
-        for (index, blob) in blobMap.values.enumerated() {
+    public func process() {
+        iterateOverAllBlobs() { index, blob in 
 
             if let blobProcessed = blobsProcessed[blob.id],
                blobProcessed
             {
-                continue
+                return
             }
             
             var lastBlob = LastBlob()
             lastBlob.blob = blob
 
-            filteredBlobs[blob.id] = blob
-            
             blobsProcessed[blob.id] = true
 
             Log.d("frame \(frameIndex) processing blob \(blob)")

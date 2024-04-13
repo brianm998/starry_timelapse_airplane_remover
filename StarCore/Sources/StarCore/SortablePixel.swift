@@ -1,7 +1,7 @@
 import Foundation
 
 // a monochrome pixel that is used by the blobber
-public class SortablePixel: Hashable {
+public class SortablePixel: Hashable, CustomStringConvertible {
     public let x: Int
     public let y: Int
     public let intensity: UInt16
@@ -14,6 +14,10 @@ public class SortablePixel: Hashable {
     public func hash(into hasher: inout Hasher) {
         hasher.combine(x)
         hasher.combine(y)
+    }
+
+    public var description: String {
+        return "[\(x), \(y)]"
     }
 
     public enum Status {

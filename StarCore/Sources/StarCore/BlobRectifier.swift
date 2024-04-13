@@ -17,36 +17,10 @@ You should have received a copy of the GNU General Public License along with sta
 */
 
 // combines any overlapping blobs
-class BlobRectifier {
+class BlobRectifier: AbstractBlobAnalyzer {
 
-    // map of all known blobs keyed by blob id
-    var blobMap: [String: Blob]
-
-    // width of the frame
-    internal let width: Int
-
-    // height of the frame
-    internal let height: Int
-
-    // what frame in the sequence we're processing
-    internal let frameIndex: Int
-
-    // a reference for each pixel for each blob it might belong to
-    internal var blobRefs: [String?]
-    
-    init(blobMap: [String: Blob],
-         width: Int,
-         height: Int,
-         frameIndex: Int)
-    {
-        self.blobMap =  blobMap
-        self.width = width
-        self.height = height
-        self.frameIndex = frameIndex
-
-        self.blobRefs = [String?](repeating: nil, count: width*height)
-
-        for (key, blob) in self.blobMap {
+    public func process() {
+        iterateOverAllBlobs() { _, blob in 
 
             var overlappingBlob: Blob? = nil
             
@@ -64,6 +38,7 @@ class BlobRectifier {
             if let overlappingBlob,
                overlappingBlob.absorb(blob)
             {
+                absorbedBlobs.insert(blob.id)
                 self.blobMap.removeValue(forKey: blob.id)
                 for pixel in blob.pixels {
                     let index = pixel.y*width+pixel.x

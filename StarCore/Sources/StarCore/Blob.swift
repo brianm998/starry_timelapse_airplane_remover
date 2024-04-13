@@ -367,13 +367,24 @@ public class Blob: CustomStringConvertible {
 
     public func absorb(_ otherBlob: Blob) -> Bool {
         if self.id != otherBlob.id {
-            //Log.d("frame \(frameIndex) blob \(self.id) absorbing blob \(otherBlob.id)")
+
+            let selfBeforeSize = self.size
+            
             let newPixels = otherBlob.pixels
             for otherPixel in newPixels {
                 otherPixel.status = .blobbed(self)
             }
             self.pixels = self.pixels.union(newPixels)
             reset()
+
+            let selfAfterSize = self.size
+
+            if selfAfterSize != selfBeforeSize + otherBlob.size {
+                // here the blobs overlapped, which isn't supposed to happen
+                Log.w("frame \(frameIndex) blob \(self.id) size \(selfBeforeSize) -> \(selfAfterSize) absorbed blob \(otherBlob.id) size \(otherBlob.size)")
+            } else {
+                Log.d("frame \(frameIndex) blob \(self.id) size \(selfBeforeSize) -> \(selfAfterSize) absorbed blob \(otherBlob.id) size \(otherBlob.size)")
+            }
             return true
         }
         return false

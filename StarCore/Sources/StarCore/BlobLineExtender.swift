@@ -47,9 +47,12 @@ class BlobLineExtender: AbstractBlobAnalyzer {
                    frameIndex: frameIndex,
                    imageAccessor: imageAccessor)
 
-        for (index, blob) in blobMap.values.enumerated() {
+    }
+
+    public func process() {
+        iterateOverAllBlobs() { index, blob in 
             
-            if blob.size < 45 { continue } // XXX constant
+            if blob.size < 45 { return } // XXX constant
 
             let lineContinuationAmount: Double = 40
             

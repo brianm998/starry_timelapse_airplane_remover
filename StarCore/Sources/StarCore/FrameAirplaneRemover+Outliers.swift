@@ -28,6 +28,7 @@ extension FrameAirplaneRemover {
         if self.outlierGroups == nil {
             Log.d("frame \(frameIndex) loading outliers")
             if let outlierGroups = await outlierGroupLoader() {
+                Log.d("frame \(frameIndex) loading outliers from file")
                 for outlier in outlierGroups.members.values {
                     outlier.setFrame(self) 
                 }
@@ -41,6 +42,7 @@ extension FrameAirplaneRemover {
                 self.outliersLoadedFromFile = true
                 Log.i("loaded \(String(describing: self.outlierGroups?.members.count)) outlier groups for frame \(frameIndex)")
             } else {
+                Log.d("frame \(frameIndex) calculating outliers")
                 self.outlierGroups = OutlierGroups(frameIndex: frameIndex,
                                                    members: [:])
 
@@ -165,36 +167,24 @@ extension FrameAirplaneRemover {
             self.state = .detectingOutliers2a
 
             Log.d("frame \(frameIndex) starting with \(blobber.blobMap.count) blobs")
-            let kht = try await BlobKHTAnalysis(houghLines: houghLines,
-                                                blobMap: blobber.blobMap,
-                                                config: config,
-                                                width: width,
-                                                height: height,
-                                                frameIndex: frameIndex,
-                                                imageAccessor: imageAccessor)
+            let kht = BlobKHTAnalysis(houghLines: houghLines,
+                                      blobMap: blobber.blobMap,
+                                      config: config,
+                                      width: width,
+                                      height: height,
+                                      frameIndex: frameIndex,
+                                      imageAccessor: imageAccessor)
 
-
+            try await kht.process()
+            
             if config.writeOutlierGroupFiles {
                 // save kht.blobMap image here
-                try await saveImages(for: Array(kht.filteredBlobs.values), as: .khtb)
+                try await saveImages(for: Array(kht.blobMap.values), as: .khtb)
             }
             
-            Log.d("frame \(frameIndex) kht analysis gave \(kht.filteredBlobs.count) blobs")
+            Log.d("frame \(frameIndex) kht analysis done")
 
             self.state = .detectingOutliers2b
-            /*
-
-             // XXX this mofo is slow as fuck, but seems to work
-            let absorber = BlobAbsorber(blobMap: kht.blobMap,
-                                        frameIndex: frameIndex,
-                                        frameWidth: width,
-                                        frameHeight: height)
-
-            // look for all blobs to promote,
-            // and see if we get a better line score if we combine with another 
-
-            let filteredBlobs = absorber.filteredBlobs
-*/
 
             // this mofo is fast as lightning, and seems to mostly work now
             let absorber = BlobAbsorberRewrite(blobMap: kht.blobMap,
@@ -204,6 +194,8 @@ extension FrameAirplaneRemover {
                                                frameIndex: frameIndex,
                                                imageAccessor: imageAccessor)
 
+            absorber.process()
+                                               
             // look for all blobs to promote,
             // and see if we get a better line score if we combine with another 
 
@@ -222,22 +214,28 @@ extension FrameAirplaneRemover {
                                                 frameIndex: frameIndex,
                                                 imageAccessor: imageAccessor)
 
+            blobExtender.process()
 
             // rectifier makes sure no blobs have the same pixel
             // if so, they get combined
 
             let rectifier = BlobRectifier(blobMap: blobExtender.blobMap,
+                                          config: config,
                                           width: width,
                                           height: height,
-                                          frameIndex: frameIndex)
+                                          frameIndex: frameIndex,
+                                          imageAccessor: imageAccessor)
             Log.d("frame \(frameIndex) absorber rectification gave \(rectifier.blobMap.count) blobs")
-            let filteredBlobs = Array(rectifier.blobMap.values)
+
+            rectifier.process()
             
-//            let filteredBlobs = Array(kht.filteredBlobs.values)
+            let filteredBlobs = Array(rectifier.blobMap.values)
+
+            //let filteredBlobs = Array(kht.blobMap.values)
             // XXX save filtered blob image here
             if config.writeOutlierGroupFiles {
                 // save filtered blobs image here
-                try await saveImages(for: filteredBlobs, as: .rectified)
+//                try await saveImages(for: filteredBlobs, as: .rectified)
             }
             
             Log.i("frame \(frameIndex) has \(filteredBlobs.count) filteredBlobs")

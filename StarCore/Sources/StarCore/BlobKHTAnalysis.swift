@@ -24,7 +24,7 @@ class BlobKHTAnalysis: AbstractBlobAnalyzer {
     private let maxVotes = 12000     // lines with votes over this are max color on kht image
     private let khtImageBase = 0x1F  // dimmest lines will be 
 
-    var blobsNotPromoted: [String:Blob] = [:]
+    let houghLines: [MatrixElementLine]
     
     init(houghLines: [MatrixElementLine],
          blobMap: [String: Blob],
@@ -32,16 +32,18 @@ class BlobKHTAnalysis: AbstractBlobAnalyzer {
          width: Int,
          height: Int,
          frameIndex: Int,
-         imageAccessor: ImageAccess) async throws
+         imageAccessor: ImageAccess) 
     {
-
+        self.houghLines = houghLines
         super.init(blobMap: blobMap,
                    config: config,
                    width: width,
                    height: height,
                    frameIndex: frameIndex,
                    imageAccessor: imageAccessor)
+    }
 
+    public func process() async throws {
         var khtImage: [UInt8] = []
         if config.writeOutlierGroupFiles {
             khtImage = [UInt8](repeating: 0, count: width*height)
@@ -100,12 +102,6 @@ class BlobKHTAnalysis: AbstractBlobAnalyzer {
                                          atSize: .original, overwrite: true)
             try await imageAccessor.save(image, as: .houghLines,
                                          atSize: .preview, overwrite: true)
-        }
-
-        for (blobId, blob) in blobMap {
-            if filteredBlobs[blobId] == nil {
-                blobsNotPromoted[blobId] = blob
-            }
         }
     }
 }
