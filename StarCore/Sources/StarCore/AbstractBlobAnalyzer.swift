@@ -74,7 +74,9 @@ class AbstractBlobAnalyzer {
 
     // skips blobs that are absorbed during iteration
     internal func iterateOverAllBlobs(closure: (Int, Blob) -> Void) {
-        for (index, blob) in blobMap.values.enumerated() {
+        // iterate over largest blobs first
+        let allBlobs = blobMap.values.sorted() { $0.size > $1.size }
+        for (index, blob) in allBlobs.enumerated() {
             if !absorbedBlobs.contains(blob.id) {
                 closure(index, blob)
             }
