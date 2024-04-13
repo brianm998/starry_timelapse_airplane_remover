@@ -36,7 +36,7 @@ public class UpdatableLogHandler: LogHandler {
         }
     }
     
-    public var level: Log.Level?
+    public var level: Log.Level
     let updatable: UpdatableLog
     
     public init(_ updatable: UpdatableLog) {
@@ -68,6 +68,18 @@ public actor UpdatableProgressMonitor {
             padding = String(repeating: " ", count: (config.progressBarLength - self.numConcurrentRenders))
         }
         self.padding = padding
+        Task {
+            await self.startLoop()
+        }
+    }
+
+    private func startLoop() {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+            Task {
+                await self.redraw()
+                await self.startLoop()
+            }
+        }
     }
 
     private var lastUpdateTime: TimeInterval?
@@ -194,13 +206,24 @@ public actor UpdatableProgressMonitor {
               Double(self.numberOfFrames)
             updates.append() {
                 await updatable.log(name: "complete",
-                                    message: progressBar(length: self.config.progressBarLength, progress: progress) +
+                                    message: progressBar(length: self.config.progressBarLength,
+                                                         progress: progress) +
                                       " \(complete.count) / \(self.numberOfFrames) frames complete",
                                     value: self.value)
             }
         } else {
             // log crap here
         }
+/*
+        updates.append() {
+            let progress = await processorTracker.percentIdle()
+            Log.d("percent idle \(progress)")
+            await updatable.log(name: "percent idle",
+                                message: progressBar(length: self.config.progressBarLength,
+                                                     progress: progress/100) + " cpu usage ",
+                                value: self.value)
+        }
+  */      
 
         let _updates = updates
 
