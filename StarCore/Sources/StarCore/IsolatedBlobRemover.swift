@@ -37,14 +37,18 @@ class IsolatedBlobRemover: AbstractBlobAnalyzer {
     public func process() {
         iterateOverAllBlobs() { _, blob in
             // only deal with small blobs
-            if blob.size > 20 { // XXX constant XXX
+            if blob.size > 24 { // XXX constant XXX
                 return
             }
 
-            // XXX maybe also check intensity, and allow really bright ones still
-            
-            let scanSize = 10   // each direction from center
+            // XXX constant XXX
+            var scanSize = 12   // each direction from center
 
+            if blob.medianIntensity > 8000 { // XXX constant XXX 
+                // scan farther from brighter blobs
+                scanSize = 24   // XXX constant XXX
+            }
+            
             let blobCenter = blob.boundingBox.center
             
             var startX = blobCenter.x - scanSize
