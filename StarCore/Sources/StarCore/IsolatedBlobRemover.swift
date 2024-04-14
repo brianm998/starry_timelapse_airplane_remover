@@ -19,21 +19,6 @@ You should have received a copy of the GNU General Public License along with sta
 // gets rid of small blobs by themselves in nowhere
 class IsolatedBlobRemover: AbstractBlobAnalyzer {
 
-    override init(blobMap: [String: Blob],
-                  config: Config,
-                  width: Int,
-                  height: Int,
-                  frameIndex: Int,
-                  imageAccessor: ImageAccess)
-    {
-        super.init(blobMap: blobMap,
-                   config: config,
-                   width: width,
-                   height: height,
-                   frameIndex: frameIndex,
-                   imageAccessor: imageAccessor)
-    }
-
     public func process() {
         iterateOverAllBlobs() { _, blob in
             // only deal with small blobs

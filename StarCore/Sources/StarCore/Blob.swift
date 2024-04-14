@@ -45,10 +45,16 @@ public class Blob: CustomStringConvertible {
                                         height: self.boundingBox.height,
                                         grayscale16BitImageData: blobImageData)
 
+        // XXX XXX XXX
+//        if self.id == "1498 x 288" {
+//            try? pixelImage.writeTIFFEncoding(toFilename: "/tmp/FF_\(self).png")
+//        }
+        // XXX XXX XXX
+        
         if let image = pixelImage.nsImage {
             let lines = kernelHoughTransform(image: image, clusterMinSize: 4)
-            //Log.d("frame \(frameIndex) blob \(self) got \(lines.count) lines from KHT")
             if lines.count > 0 {
+                Log.d("frame \(frameIndex) blob \(self) got \(lines.count) lines from KHT returning \(lines[0]) [\(self.boundingBox.width), \(self.boundingBox.height)]")
                 _blobLine = lines[0]
                 return lines[0]
             }
@@ -68,7 +74,8 @@ public class Blob: CustomStringConvertible {
         let minY = self.boundingBox.min.y
         for pixel in pixels {
             let imageIndex = (pixel.y - minY)*self.boundingBox.width + (pixel.x - minX)
-            blobImageData[imageIndex] = 0xFFFF//pixel.intensity
+            //blobImageData[imageIndex] = pixel.intensity
+            blobImageData[imageIndex] = 0xFFFF
         }
 
         _blobImageData = blobImageData
@@ -541,11 +548,62 @@ public class Blob: CustomStringConvertible {
                     // only add the new blob if the line score is better
                     // than that of the separate blobs on both the new
                     // blob line, and also their own ideal lines
-                    //Log.d("frame \(frameIndex) adding new absorbed blob \(newBlob) from \(self) and \(otherBlob) because \(newBlobAvg) < \(otherBlobAvg) && < \(selfAvg) && < \(self.averageDistanceFromIdealLine) && < \(otherBlob.averageDistanceFromIdealLine)")
+                    Log.d("frame \(frameIndex) adding new absorbed blob \(newBlob) from \(self) and \(otherBlob) because \(newBlobAvg) < \(otherBlobAvg) && < \(selfAvg) && < \(self.averageDistanceFromIdealLine) && < \(otherBlob.averageDistanceFromIdealLine)")
 
                     return newBlob
                 } else {
-                    //Log.v("frame \(frameIndex) NOT adding new absorbed blob \(newBlob) from \(self) and \(otherBlob) because something is wrong in this calculation: fudge \(fudge) distance \(distance) - \(newBlobAvg) < \(otherBlobAvg) && < \(selfAvg) && < \(self.averageDistanceFromIdealLine) && < \(otherBlob.averageDistanceFromIdealLine)")
+                    Log.v("frame \(frameIndex) NOT adding new absorbed blob \(newBlob) from \(self) and \(otherBlob) because something is wrong in this calculation: fudge \(fudge) distance \(distance) - \(newBlobAvg) < \(otherBlobAvg) && < \(selfAvg) && < \(self.averageDistanceFromIdealLine) && < \(otherBlob.averageDistanceFromIdealLine)")
+                }
+            } else {
+               // Log.i("frame \(frameIndex) blob \(newBlob) has no line")
+            }
+        } else {
+           // Log.i("frame \(frameIndex) blob \(newBlob) failed to absorb blob (self)")
+        }
+        return nil
+    }
+
+    public func lineMergeV2(with otherBlob: Blob) -> Blob? {
+
+        // first clone self
+        let newBlob = Blob(self)
+
+        // then see if we can absorb the other blob
+        if newBlob.absorb(otherBlob) {
+
+            // make sure this new blob has an ideal line detected
+            if let newLine = newBlob.originZeroLine {
+
+                // new blobs distance from its own ideal line
+                let newBlobAvg = newBlob.averageDistance(from: newLine)
+
+                // self distance from its own ideal line
+                let selfAvg = self.averageDistance(from: newLine)
+
+                // otherBlob distance from its own ideal line
+                //let otherBlobAvg = otherBlob.averageDistanceFromIdealLine
+
+                // otherBlob distance from newBlobs ideal line
+                let otherBlobAvg = otherBlob.averageDistance(from: newLine)
+                
+                Log.d("frame \(frameIndex) blob \(self) avg \(selfAvg) otherBlob \(otherBlob) avg \(otherBlobAvg) newBlobAvg \(newBlobAvg)")
+
+                let distance = self.boundingBox.edgeDistance(to: otherBlob.boundingBox)
+
+                var fudge: Double = 3 // XXX constant
+
+                // this new blob needs to be closer to its own line than anything else
+                if newBlobAvg < otherBlobAvg+fudge,
+                   newBlobAvg < selfAvg+fudge
+                {
+                    // only add the new blob if the line score is better
+                    // than that of the separate blobs on both the new
+                    // blob line, and also their own ideal lines
+                    Log.d("frame \(frameIndex) adding new absorbed blob \(newBlob) from \(self) and \(otherBlob) because \(newBlobAvg) < \(otherBlobAvg+fudge) && \(newBlobAvg) < \(selfAvg+fudge)")
+
+                    return newBlob
+                } else {
+                    Log.v("frame \(frameIndex) NOT adding new absorbed blob \(newBlob) from \(self) and \(otherBlob) because \(newBlobAvg) > \(otherBlobAvg+fudge) || \(newBlobAvg) > \(selfAvg+fudge)")
                 }
             } else {
                // Log.i("frame \(frameIndex) blob \(newBlob) has no line")

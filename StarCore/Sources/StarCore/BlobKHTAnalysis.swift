@@ -25,6 +25,8 @@ class BlobKHTAnalysis: AbstractBlobAnalyzer {
     private let khtImageBase = 0x1F  // dimmest lines will be 
 
     let houghLines: [MatrixElementLine]
+
+    let imageAccessor: ImageAccess
     
     init(houghLines: [MatrixElementLine],
          blobMap: [String: Blob],
@@ -35,12 +37,12 @@ class BlobKHTAnalysis: AbstractBlobAnalyzer {
          imageAccessor: ImageAccess) 
     {
         self.houghLines = houghLines
+        self.imageAccessor = imageAccessor
         super.init(blobMap: blobMap,
                    config: config,
                    width: width,
                    height: height,
-                   frameIndex: frameIndex,
-                   imageAccessor: imageAccessor)
+                   frameIndex: frameIndex)
     }
 
     public func process() async throws {

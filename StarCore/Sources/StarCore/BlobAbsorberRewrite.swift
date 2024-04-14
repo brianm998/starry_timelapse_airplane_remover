@@ -31,8 +31,7 @@ class BlobAbsorberRewrite: AbstractBlobAnalyzer {
                   config: Config,
                   width: Int,
                   height: Int,
-                  frameIndex: Int,
-                  imageAccessor: ImageAccess)
+                  frameIndex: Int)
     {
         // used for blobs without lines, starts at center of blob
         self.circularIterator = CircularIterator(radius: circularIterationRadus)
@@ -41,8 +40,7 @@ class BlobAbsorberRewrite: AbstractBlobAnalyzer {
                    config: config,
                    width: width,
                    height: height,
-                   frameIndex: frameIndex,
-                   imageAccessor: imageAccessor)
+                   frameIndex: frameIndex)
     }
 
     public func process() {
@@ -78,7 +76,7 @@ class BlobAbsorberRewrite: AbstractBlobAnalyzer {
                 // stop when we go too far or out of frame,
                 // or too far from last blob point on the line
 
-                Log.d("frame \(frameIndex) iterating along \(blobLine) from \(centralLineCoord)")
+                Log.d("frame \(frameIndex) iterating from \(blob) along \(blobLine) from \(centralLineCoord)")
 
                 var iterationCount = 0
                 
@@ -101,7 +99,7 @@ class BlobAbsorberRewrite: AbstractBlobAnalyzer {
                                           max: maxDistanceForThisBlob)
                 }
 
-                Log.d("frame \(frameIndex) iterated forwards \(iterationCount) times")
+                Log.d("frame \(frameIndex) on blob \(blob) iterated forwards \(iterationCount) times")
                 
                 blobLine.iterate(.backwards, from: centralLineCoord) { x, y, direction in
                     if x >= 0,
@@ -119,6 +117,8 @@ class BlobAbsorberRewrite: AbstractBlobAnalyzer {
                                           x: x, y: y,
                                           max: maxDistanceForThisBlob)
                 }
+                Log.d("frame \(frameIndex) done iterating from \(blob) along \(blobLine) from \(centralLineCoord)")
+                
             } else {
                 Log.d("frame \(frameIndex) blob index \(index) circularly filtering blob \(blob)")
                 // search radially, in an ever expanding circle from the center point,
@@ -138,11 +138,9 @@ class BlobAbsorberRewrite: AbstractBlobAnalyzer {
                        x < width,
                        y < height
                     {
-                        let frameIndex = y*width+x
-
                         // see if there is another blob at this frame index that
                         // we can use to form a line
-                        if process(frameIndex: frameIndex, lastBlob: &lastBlob) {
+                        if process(x: x, y: y, lastBlob: &lastBlob) {
                             // this blob and another were just combined and have a line
                             // need to switch to the line iteration
                             // and break out of this iteration loop.
@@ -159,7 +157,7 @@ class BlobAbsorberRewrite: AbstractBlobAnalyzer {
                    let blobLine = blob.originZeroLine,
                    let centralLineCoord = blob.originZeroCentralLineCoord
                 {
-                    Log.d("frame \(frameIndex) absorbed non-line blob into line \(blobLine) and now line iterating")
+                    Log.d("frame \(frameIndex) absorbed non-line blob into blob \(blob) with line \(blobLine) and now line iterating")
                     // here we found a blob that had no line and combined it with another
                     // and now there is a line.
                     // iterate across that line
@@ -191,12 +189,12 @@ class BlobAbsorberRewrite: AbstractBlobAnalyzer {
         }
     }
 
-
     // see if we can absorb another blob from the given frame index that makes
     // the blobToAdd a better line
-    private func process(frameIndex: Int,
+    private func process(x: Int, y: Int,
                          lastBlob lastBlobParam: inout LastBlob) -> Bool {
         
+        let frameIndex = y*width+x
         // is there a different blob at this x,y?
         if let blobId = blobRefs[frameIndex],
            let lastBlob = lastBlobParam.blob,
@@ -214,6 +212,8 @@ class BlobAbsorberRewrite: AbstractBlobAnalyzer {
                 Log.d("frame \(frameIndex) lastBlob \(lastBlob) absorbed \(innerBlob) to become \(absorbedBlob)")
                 // use this new blob as it is better combined than separate
                 lastBlobParam.blob = absorbedBlob
+
+                absorbedBlobs.insert(innerBlob.id)
                 
                 // ignore the index of the absorbed blob in the future
                 blobsProcessed[innerBlob.id] = true

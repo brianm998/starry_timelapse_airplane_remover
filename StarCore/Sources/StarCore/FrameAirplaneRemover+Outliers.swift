@@ -157,12 +157,13 @@ extension FrameAirplaneRemover {
                 try await saveImages(for: blobber.blobs, as: .blobs)
             }
 
+            Log.d("frame \(frameIndex) starting with \(blobber.blobMap.count) blobs")
+
             /*
              Now that we have detected blobs in this frame, the next step is to
              weed out small, isolated blobs.  This helps speed things up and,
              if tuned well, doesn't skip anything important.
              */
-
 
             self.state = .detectingOutliers2a
 
@@ -170,18 +171,16 @@ extension FrameAirplaneRemover {
                                                       config: config,
                                                       width: width,
                                                       height: height,
-                                                      frameIndex: frameIndex,
-                                                      imageAccessor: imageAccessor)
+                                                      frameIndex: frameIndex)
 
             isolatedRemover.process()            
+
+            Log.d("frame \(frameIndex) isolation remover has \(isolatedRemover.blobMap.count) blobs")
             
             /*
              The next step is to collate blobs that are close to the
              lines and close to eachother into a single larger blob.
              */
-
-            
-            Log.d("frame \(frameIndex) starting with \(blobber.blobMap.count) blobs")
             let kht = BlobKHTAnalysis(houghLines: houghLines,
                                       blobMap: isolatedRemover.blobMap,
                                       config: config,
@@ -200,13 +199,14 @@ extension FrameAirplaneRemover {
 
             self.state = .detectingOutliers2b
 
+            // XXX these last two steps appear to not help as much as would be nice.
+             
             // this mofo is fast as lightning, and seems to mostly work now
             let absorber = BlobAbsorberRewrite(blobMap: kht.blobMap,
                                                config: config,
                                                width: width,
                                                height: height,
-                                               frameIndex: frameIndex,
-                                               imageAccessor: imageAccessor)
+                                               frameIndex: frameIndex)
 
             absorber.process()
                                                
@@ -225,33 +225,23 @@ extension FrameAirplaneRemover {
                                                 config: config,
                                                 width: width,
                                                 height: height,
-                                                frameIndex: frameIndex,
-                                                imageAccessor: imageAccessor)
+                                                frameIndex: frameIndex)
 
             blobExtender.process()
 
-            // rectifier makes sure no blobs have the same pixel
-            // if so, they get combined
-
-            let rectifier = BlobRectifier(blobMap: blobExtender.blobMap,
+            // another pass at trying to unify nearby blobs that fit together
+            let blobSmasher = BlobSmasher(blobMap: blobExtender.blobMap,
                                           config: config,
                                           width: width,
                                           height: height,
-                                          frameIndex: frameIndex,
-                                          imageAccessor: imageAccessor)
-            Log.d("frame \(frameIndex) absorber rectification gave \(rectifier.blobMap.count) blobs")
+                                          frameIndex: frameIndex)
 
-            rectifier.process()
-            
-            let filteredBlobs = Array(rectifier.blobMap.values)
+            blobSmasher.process()
 
-            //let filteredBlobs = Array(kht.blobMap.values)
-            // XXX save filtered blob image here
-            if config.writeOutlierGroupFiles {
-                // save filtered blobs image here
-//                try await saveImages(for: filteredBlobs, as: .rectified)
-            }
-            
+            let filteredBlobs = Array(blobSmasher.blobMap.values)
+
+            //let filteredBlobs = Array(blobExtender.blobMap.values)
+
             Log.i("frame \(frameIndex) has \(filteredBlobs.count) filteredBlobs")
             self.state = .detectingOutliers3
 

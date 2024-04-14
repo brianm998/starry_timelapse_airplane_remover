@@ -35,8 +35,7 @@ class BlobLineExtender: AbstractBlobAnalyzer {
          config: Config,
          width: Int,
          height: Int,
-         frameIndex: Int,
-         imageAccessor: ImageAccess)
+         frameIndex: Int)
     {
         self.pixelData = pixelData
         
@@ -44,8 +43,7 @@ class BlobLineExtender: AbstractBlobAnalyzer {
                    config: config,
                    width: width,
                    height: height,
-                   frameIndex: frameIndex,
-                   imageAccessor: imageAccessor)
+                   frameIndex: frameIndex)
 
     }
 

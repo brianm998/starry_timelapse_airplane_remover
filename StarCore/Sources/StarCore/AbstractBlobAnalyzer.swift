@@ -38,9 +38,6 @@ class AbstractBlobAnalyzer {
     // what frame in the sequence we're processing
     internal let frameIndex: Int
 
-    // gives access to images
-    internal let imageAccessor: ImageAccess
-
     // a reference for each pixel for each blob it might belong to
     internal var blobRefs: [String?]
 
@@ -51,8 +48,7 @@ class AbstractBlobAnalyzer {
          config: Config,
          width: Int,
          height: Int,
-         frameIndex: Int,
-         imageAccessor: ImageAccess) 
+         frameIndex: Int)
     {
 
         self.blobMap =  blobMap
@@ -60,7 +56,6 @@ class AbstractBlobAnalyzer {
         self.width = width
         self.height = height
         self.frameIndex = frameIndex
-        self.imageAccessor = imageAccessor
 
         self.blobRefs = [String?](repeating: nil, count: width*height)
 
@@ -183,7 +178,7 @@ class AbstractBlobAnalyzer {
                                _lastBlob.absorb(blob)
                             {
                                 absorbedBlobs.insert(blob.id)
-                                Log.d("frame \(frameIndex)  blob \(_lastBlob) absorbing blob \(blob)")
+                                //Log.d("frame \(frameIndex)  blob \(_lastBlob) absorbing blob \(blob)")
 
                                 // update blobRefs after blob absorbtion
                                 for pixel in blob.pixels {
