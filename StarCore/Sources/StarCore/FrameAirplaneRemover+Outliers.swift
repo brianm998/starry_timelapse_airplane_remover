@@ -159,16 +159,31 @@ extension FrameAirplaneRemover {
 
             /*
              Now that we have detected blobs in this frame, the next step is to
-             collate blobs that are close to the lines and close to eachother into a
-             single larger blob.
+             weed out small, isolated blobs.  This helps speed things up and,
+             if tuned well, doesn't skip anything important.
              */
 
 
             self.state = .detectingOutliers2a
 
+            let isolatedRemover = IsolatedBlobRemover(blobMap: blobber.blobMap,
+                                                      config: config,
+                                                      width: width,
+                                                      height: height,
+                                                      frameIndex: frameIndex,
+                                                      imageAccessor: imageAccessor)
+
+            isolatedRemover.process()            
+            
+            /*
+             The next step is to collate blobs that are close to the
+             lines and close to eachother into a single larger blob.
+             */
+
+            
             Log.d("frame \(frameIndex) starting with \(blobber.blobMap.count) blobs")
             let kht = BlobKHTAnalysis(houghLines: houghLines,
-                                      blobMap: blobber.blobMap,
+                                      blobMap: isolatedRemover.blobMap,
                                       config: config,
                                       width: width,
                                       height: height,
@@ -176,7 +191,6 @@ extension FrameAirplaneRemover {
                                       imageAccessor: imageAccessor)
 
             try await kht.process()
-            
             if config.writeOutlierGroupFiles {
                 // save kht.blobMap image here
                 try await saveImages(for: Array(kht.blobMap.values), as: .khtb)
@@ -186,17 +200,8 @@ extension FrameAirplaneRemover {
 
             self.state = .detectingOutliers2b
 
-            let isolatedRemover = IsolatedBlobRemover(blobMap: kht.blobMap,
-                                                      config: config,
-                                                      width: width,
-                                                      height: height,
-                                                      frameIndex: frameIndex,
-                                                      imageAccessor: imageAccessor)
-
-            isolatedRemover.process()            
-            
             // this mofo is fast as lightning, and seems to mostly work now
-            let absorber = BlobAbsorberRewrite(blobMap: isolatedRemover.blobMap,
+            let absorber = BlobAbsorberRewrite(blobMap: kht.blobMap,
                                                config: config,
                                                width: width,
                                                height: height,
