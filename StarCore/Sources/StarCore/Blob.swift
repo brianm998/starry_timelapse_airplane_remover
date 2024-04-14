@@ -368,7 +368,7 @@ public class Blob: CustomStringConvertible {
     public func absorb(_ otherBlob: Blob) -> Bool {
         if self.id != otherBlob.id {
 
-            let selfBeforeSize = self.size
+            //let selfBeforeSize = self.size
             
             let newPixels = otherBlob.pixels
             for otherPixel in newPixels {
@@ -377,14 +377,14 @@ public class Blob: CustomStringConvertible {
             self.pixels = self.pixels.union(newPixels)
             reset()
 
-            let selfAfterSize = self.size
+            //let selfAfterSize = self.size
 
-            if selfAfterSize != selfBeforeSize + otherBlob.size {
+            //if selfAfterSize != selfBeforeSize + otherBlob.size {
                 // here the blobs overlapped, which isn't supposed to happen
-                Log.w("frame \(frameIndex) blob \(self.id) size \(selfBeforeSize) -> \(selfAfterSize) absorbed blob \(otherBlob.id) size \(otherBlob.size)")
-            } else {
-                Log.d("frame \(frameIndex) blob \(self.id) size \(selfBeforeSize) -> \(selfAfterSize) absorbed blob \(otherBlob.id) size \(otherBlob.size)")
-            }
+                //Log.w("frame \(frameIndex) blob \(self.id) size \(selfBeforeSize) -> \(selfAfterSize) absorbed blob \(otherBlob.id) size \(otherBlob.size)")
+        //} else {
+                //Log.d("frame \(frameIndex) blob \(self.id) size \(selfBeforeSize) -> \(selfAfterSize) absorbed blob \(otherBlob.id) size \(otherBlob.size)")
+          //  }
             return true
         }
         return false
@@ -404,8 +404,8 @@ public class Blob: CustomStringConvertible {
         var max_y:Int = 0
 
         if pixels.count == 0 {
-             min_x = 0
-             min_y = 0
+            min_x = 0
+            min_y = 0
         } else {
             for pixel in pixels {
                 if pixel.x < min_x { min_x = pixel.x }
@@ -446,7 +446,7 @@ public class Blob: CustomStringConvertible {
         }
         return nil
     }
-        
+    
     // a point close to the center of this blob if it's a line, with origin zero 
     public var originZeroCentralLineCoord: DoubleCoord? {
         let center = self.boundingBox.centerDouble
@@ -464,7 +464,7 @@ public class Blob: CustomStringConvertible {
         }
         return nil
     }
-        
+    
     public func outlierGroup(at frameIndex: Int) -> OutlierGroup {
         // XXX make this pass on the line, if there is one
         OutlierGroup(name: self.id,
@@ -541,17 +541,17 @@ public class Blob: CustomStringConvertible {
                     // only add the new blob if the line score is better
                     // than that of the separate blobs on both the new
                     // blob line, and also their own ideal lines
-                    Log.d("frame \(frameIndex) adding new absorbed blob \(newBlob) from \(self) and \(otherBlob) because \(newBlobAvg) < \(otherBlobAvg) && < \(selfAvg) && < \(self.averageDistanceFromIdealLine) && < \(otherBlob.averageDistanceFromIdealLine)")
+                    //Log.d("frame \(frameIndex) adding new absorbed blob \(newBlob) from \(self) and \(otherBlob) because \(newBlobAvg) < \(otherBlobAvg) && < \(selfAvg) && < \(self.averageDistanceFromIdealLine) && < \(otherBlob.averageDistanceFromIdealLine)")
 
                     return newBlob
                 } else {
-                    Log.d("frame \(frameIndex) NOT adding new absorbed blob \(newBlob) from \(self) and \(otherBlob) because something is wrong in this calculation: fudge \(fudge) distance \(distance) - \(newBlobAvg) < \(otherBlobAvg) && < \(selfAvg) && < \(self.averageDistanceFromIdealLine) && < \(otherBlob.averageDistanceFromIdealLine)")
+                    //Log.v("frame \(frameIndex) NOT adding new absorbed blob \(newBlob) from \(self) and \(otherBlob) because something is wrong in this calculation: fudge \(fudge) distance \(distance) - \(newBlobAvg) < \(otherBlobAvg) && < \(selfAvg) && < \(self.averageDistanceFromIdealLine) && < \(otherBlob.averageDistanceFromIdealLine)")
                 }
             } else {
-                Log.i("frame \(frameIndex) blob \(newBlob) has no line")
+               // Log.i("frame \(frameIndex) blob \(newBlob) has no line")
             }
         } else {
-            Log.i("frame \(frameIndex) blob \(newBlob) failed to absorb blob (self)")
+           // Log.i("frame \(frameIndex) blob \(newBlob) failed to absorb blob (self)")
         }
         return nil
     }
