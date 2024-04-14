@@ -166,8 +166,22 @@ class AbstractBlobAnalyzer {
                         //Log.i("frame \(frameIndex) blob \(_lastBlob) bounding box \(_lastBlob.boundingBox) is \(distance) from blob \(blob) bounding box \(blob.boundingBox)")
                         if distance < 40 { // XXX constant XXX
                             // if they are close enough, simply combine them
-                            if _lastBlob.absorb(blob) {
 
+                            var proceed = true
+
+                            // check the center of blob for how far it is from the
+
+                            if let idealLastLine = _lastBlob.line,
+                               blob.averageDistance(from: idealLastLine) > 6 // XXX constant XXX
+                            {
+                                // here we have a blob with a similar line,
+                                // but is too far from the line it should be on (rho diff)
+                                proceed = false
+                            }
+                            
+                            if proceed,
+                               _lastBlob.absorb(blob)
+                            {
                                 absorbedBlobs.insert(blob.id)
                                 Log.d("frame \(frameIndex)  blob \(_lastBlob) absorbing blob \(blob)")
 
@@ -181,7 +195,7 @@ class AbstractBlobAnalyzer {
 
                             } else {
                                 if _lastBlob.id != blob.id {
-                                    Log.i("frame \(frameIndex) [\(x), \(y)] blob \(_lastBlob) failed to absorb blob \(blob)")
+                                    //Log.i("frame \(frameIndex) [\(x), \(y)] blob \(_lastBlob) failed to absorb blob \(blob)")
                                 }
                             }
                         } else {
