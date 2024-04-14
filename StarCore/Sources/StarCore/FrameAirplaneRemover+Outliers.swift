@@ -186,8 +186,17 @@ extension FrameAirplaneRemover {
 
             self.state = .detectingOutliers2b
 
+            let isolatedRemover = IsolatedBlobRemover(blobMap: kht.blobMap,
+                                                      config: config,
+                                                      width: width,
+                                                      height: height,
+                                                      frameIndex: frameIndex,
+                                                      imageAccessor: imageAccessor)
+
+            isolatedRemover.process()            
+            
             // this mofo is fast as lightning, and seems to mostly work now
-            let absorber = BlobAbsorberRewrite(blobMap: kht.blobMap,
+            let absorber = BlobAbsorberRewrite(blobMap: isolatedRemover.blobMap,
                                                config: config,
                                                width: width,
                                                height: height,
