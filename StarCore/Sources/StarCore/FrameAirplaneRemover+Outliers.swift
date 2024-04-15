@@ -238,9 +238,16 @@ extension FrameAirplaneRemover {
 
             blobSmasher.process()
 
-            let filteredBlobs = Array(blobSmasher.blobMap.values)
 
-            //let filteredBlobs = Array(blobExtender.blobMap.values)
+            let finalIsolatedRemover = IsolatedBlobRemover(blobMap: blobSmasher.blobMap,
+                                                           config: config,
+                                                           width: width,
+                                                           height: height,
+                                                           frameIndex: frameIndex)
+
+            finalIsolatedRemover.process(minSize: 50, scanSize: 20)            
+            
+            let filteredBlobs = Array(finalIsolatedRemover.blobMap.values)
 
             Log.i("frame \(frameIndex) has \(filteredBlobs.count) filteredBlobs")
             self.state = .detectingOutliers3
