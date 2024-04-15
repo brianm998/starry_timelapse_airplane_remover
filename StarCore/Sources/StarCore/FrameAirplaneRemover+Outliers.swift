@@ -132,7 +132,7 @@ extension FrameAirplaneRemover {
          */
         if let subtractionImage = subtractionImage {
 
-            //self.state = .detectingOutliers1
+            self.state = .detectingOutliers1
 
             // first run the hough transform on sub sections of the subtraction image
             let houghLines = houghLines(from: subtractionImage)
@@ -174,6 +174,7 @@ extension FrameAirplaneRemover {
 
             isolatedRemover.process()            
 
+            self.state = .detectingOutliers2aa
             Log.d("frame \(frameIndex) isolation remover has \(isolatedRemover.blobMap.count) blobs")
             
             /*
@@ -208,6 +209,9 @@ extension FrameAirplaneRemover {
 
             absorber.process()
                                                
+
+            self.state = .detectingOutliers2c
+
             // look for all blobs to promote,
             // and see if we get a better line score if we combine with another 
 
@@ -226,6 +230,9 @@ extension FrameAirplaneRemover {
 
             blobExtender.process()
 
+
+            self.state = .detectingOutliers2d
+            
             // another pass at trying to unify nearby blobs that fit together
             let blobSmasher = BlobSmasher(blobMap: blobExtender.blobMap,
                                           width: width,
@@ -234,13 +241,14 @@ extension FrameAirplaneRemover {
 
             blobSmasher.process()
 
+            self.state = .detectingOutliers2e
 
             let finalIsolatedRemover = IsolatedBlobRemover(blobMap: blobSmasher.blobMap,
                                                            width: width,
                                                            height: height,
                                                            frameIndex: frameIndex)
 
-            finalIsolatedRemover.process(minSize: 50, scanSize: 20)            
+            finalIsolatedRemover.process(minSize: 50, scanSize: 16)
             
             let filteredBlobs = Array(finalIsolatedRemover.blobMap.values)
 
