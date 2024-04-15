@@ -35,25 +35,32 @@ public class Blob: CustomStringConvertible {
     private var _blobImageData: [UInt16]?
     private var _blobLine: Line?
 
+    // XXX this affects the reference point of lines returned !!! XXX
+    let blobImageDataBorderSize = 24
+    // XXX if this works, need to modify the line returned so its reference point is
+    // taken into account, originZeroLine has been modified, does it work?
+    
     // a line computed from the pixels, origin is relative to the bounding box
     public var line: Line? {
         if let blobLine = _blobLine { return blobLine }
         
         let blobImageData = self.blobImageData
         
-        let pixelImage = PixelatedImage(width: self.boundingBox.width,
-                                        height: self.boundingBox.height,
+        let pixelImage = PixelatedImage(width: self.boundingBox.width + blobImageDataBorderSize * 2,
+                                        height: self.boundingBox.height + blobImageDataBorderSize * 2,
                                         grayscale16BitImageData: blobImageData)
 
         // XXX XXX XXX
 //        if self.id == "1498 x 288" {
-//            try? pixelImage.writeTIFFEncoding(toFilename: "/tmp/FF_\(self).png")
+//        try? pixelImage.writeTIFFEncoding(toFilename: "/tmp/Blob_frame_\(frameIndex)_\(self).png")
 //        }
         // XXX XXX XXX
         
         if let image = pixelImage.nsImage {
             let lines = kernelHoughTransform(image: image, clusterMinSize: 4)
-            if lines.count > 0 {
+            if lines.count > 0,
+               lines[0].votes > 500 // XXX hardcode to ignore lines without much data behind them
+            {
                 Log.d("frame \(frameIndex) blob \(self) got \(lines.count) lines from KHT returning \(lines[0]) [\(self.boundingBox.width), \(self.boundingBox.height)]")
                 _blobLine = lines[0]
                 return lines[0]
@@ -66,14 +73,16 @@ public class Blob: CustomStringConvertible {
         if let blobImageData = _blobImageData { return blobImageData }
         
         var blobImageData = [UInt16](repeating: 0,
-                                     count: self.boundingBox.width*self.boundingBox.height)
+                                     count: (self.boundingBox.width+blobImageDataBorderSize*2) *
+                                            (self.boundingBox.height+blobImageDataBorderSize*2))
         
         //Log.d("frame \(frameIndex) blob image data with \(pixels.count) pixels")
         
         let minX = self.boundingBox.min.x
         let minY = self.boundingBox.min.y
         for pixel in pixels {
-            let imageIndex = (pixel.y - minY)*self.boundingBox.width + (pixel.x - minX)
+            let imageIndex = (pixel.y - minY + blobImageDataBorderSize)*self.boundingBox.width +
+                             (pixel.x - minX + blobImageDataBorderSize)
             //blobImageData[imageIndex] = pixel.intensity
             blobImageData[imageIndex] = 0xFFFF
         }
@@ -308,8 +317,8 @@ public class Blob: CustomStringConvertible {
     // a line calculated from the pixels in this blob, if possible
     public var originZeroLine: Line? {
         if let line = self.line {
-            let minX = self.boundingBox.min.x
-            let minY = self.boundingBox.min.y
+            let minX = self.boundingBox.min.x - blobImageDataBorderSize
+            let minY = self.boundingBox.min.y - blobImageDataBorderSize
             let (ap1, ap2) = line.twoPoints
             return Line(point1: DoubleCoord(x: ap1.x+Double(minX),
                                             y: ap1.y+Double(minY)),
@@ -581,7 +590,7 @@ public class Blob: CustomStringConvertible {
                 let selfAvg = self.averageDistance(from: newLine)
 
                 // otherBlob distance from its own ideal line
-                //let otherBlobAvg = otherBlob.averageDistanceFromIdealLine
+                let otherBlobIdealAvg = otherBlob.averageDistanceFromIdealLine
 
                 // otherBlob distance from newBlobs ideal line
                 let otherBlobAvg = otherBlob.averageDistance(from: newLine)
@@ -593,17 +602,17 @@ public class Blob: CustomStringConvertible {
                 var fudge: Double = 3 // XXX constant
 
                 // this new blob needs to be closer to its own line than anything else
-                if newBlobAvg < otherBlobAvg+fudge,
+                if otherBlobAvg < otherBlobIdealAvg+fudge, // is the other blob closer to this line than its own?
                    newBlobAvg < selfAvg+fudge
                 {
                     // only add the new blob if the line score is better
                     // than that of the separate blobs on both the new
                     // blob line, and also their own ideal lines
-                    Log.d("frame \(frameIndex) adding new absorbed blob \(newBlob) from \(self) and \(otherBlob) because \(newBlobAvg) < \(otherBlobAvg+fudge) && \(newBlobAvg) < \(selfAvg+fudge)")
+                    Log.d("frame \(frameIndex) adding new absorbed blob \(newBlob) from \(self) and \(otherBlob) because \(newBlobAvg) < \(otherBlobAvg+fudge) && \(newBlobAvg) < \(selfAvg+fudge) from \(newLine)")
 
                     return newBlob
                 } else {
-                    Log.v("frame \(frameIndex) NOT adding new absorbed blob \(newBlob) from \(self) and \(otherBlob) because \(newBlobAvg) > \(otherBlobAvg+fudge) || \(newBlobAvg) > \(selfAvg+fudge)")
+                    Log.v("frame \(frameIndex) NOT adding new absorbed blob \(newBlob) from \(self) and \(otherBlob) because \(newBlobAvg) > \(otherBlobAvg+fudge) || \(newBlobAvg) > \(selfAvg+fudge) from \(newLine)")
                 }
             } else {
                // Log.i("frame \(frameIndex) blob \(newBlob) has no line")
