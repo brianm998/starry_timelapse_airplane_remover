@@ -32,7 +32,6 @@ class BlobLineExtender: AbstractBlobAnalyzer {
     
     init(pixelData: [UInt16],
          blobMap: [String: Blob],
-         config: Config,
          width: Int,
          height: Int,
          frameIndex: Int)
@@ -40,7 +39,6 @@ class BlobLineExtender: AbstractBlobAnalyzer {
         self.pixelData = pixelData
         
         super.init(blobMap: blobMap,
-                   config: config,
                    width: width,
                    height: height,
                    frameIndex: frameIndex)

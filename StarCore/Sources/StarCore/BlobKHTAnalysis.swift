@@ -27,6 +27,7 @@ class BlobKHTAnalysis: AbstractBlobAnalyzer {
     let houghLines: [MatrixElementLine]
 
     let imageAccessor: ImageAccess
+    let config: Config
     
     init(houghLines: [MatrixElementLine],
          blobMap: [String: Blob],
@@ -38,8 +39,8 @@ class BlobKHTAnalysis: AbstractBlobAnalyzer {
     {
         self.houghLines = houghLines
         self.imageAccessor = imageAccessor
+        self.config = config
         super.init(blobMap: blobMap,
-                   config: config,
                    width: width,
                    height: height,
                    frameIndex: frameIndex)

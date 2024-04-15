@@ -168,7 +168,6 @@ extension FrameAirplaneRemover {
             self.state = .detectingOutliers2a
 
             let isolatedRemover = IsolatedBlobRemover(blobMap: blobber.blobMap,
-                                                      config: config,
                                                       width: width,
                                                       height: height,
                                                       frameIndex: frameIndex)
@@ -203,7 +202,6 @@ extension FrameAirplaneRemover {
              
             // this mofo is fast as lightning, and seems to mostly work now
             let absorber = BlobAbsorberRewrite(blobMap: kht.blobMap,
-                                               config: config,
                                                width: width,
                                                height: height,
                                                frameIndex: frameIndex)
@@ -222,7 +220,6 @@ extension FrameAirplaneRemover {
             // look for lines that we can extend 
             let blobExtender = BlobLineExtender(pixelData: subtractionArray,
                                                 blobMap: absorber.blobMap,
-                                                config: config,
                                                 width: width,
                                                 height: height,
                                                 frameIndex: frameIndex)
@@ -231,7 +228,6 @@ extension FrameAirplaneRemover {
 
             // another pass at trying to unify nearby blobs that fit together
             let blobSmasher = BlobSmasher(blobMap: blobExtender.blobMap,
-                                          config: config,
                                           width: width,
                                           height: height,
                                           frameIndex: frameIndex)
@@ -240,7 +236,6 @@ extension FrameAirplaneRemover {
 
 
             let finalIsolatedRemover = IsolatedBlobRemover(blobMap: blobSmasher.blobMap,
-                                                           config: config,
                                                            width: width,
                                                            height: height,
                                                            frameIndex: frameIndex)

@@ -27,8 +27,6 @@ class AbstractBlobAnalyzer {
     // map of all known blobs keyed by blob id
     var blobMap: [String: Blob]
 
-    internal let config: Config
-
     // width of the frame
     internal let width: Int
 
@@ -45,14 +43,12 @@ class AbstractBlobAnalyzer {
     internal var absorbedBlobs = Set<String>()
     
     init(blobMap: [String: Blob],
-         config: Config,
          width: Int,
          height: Int,
          frameIndex: Int)
     {
 
         self.blobMap =  blobMap
-        self.config = config
         self.width = width
         self.height = height
         self.frameIndex = frameIndex

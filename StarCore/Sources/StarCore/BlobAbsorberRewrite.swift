@@ -28,7 +28,6 @@ class BlobAbsorberRewrite: AbstractBlobAnalyzer {
     private var blobsProcessed: [String: Bool] = [:] // keyed by blob id, true if processed
 
     override init(blobMap: [String: Blob],
-                  config: Config,
                   width: Int,
                   height: Int,
                   frameIndex: Int)
@@ -37,7 +36,6 @@ class BlobAbsorberRewrite: AbstractBlobAnalyzer {
         self.circularIterator = CircularIterator(radius: circularIterationRadus)
         
         super.init(blobMap: blobMap,
-                   config: config,
                    width: width,
                    height: height,
                    frameIndex: frameIndex)
