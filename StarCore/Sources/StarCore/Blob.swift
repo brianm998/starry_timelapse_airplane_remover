@@ -51,9 +51,8 @@ public class Blob: CustomStringConvertible {
                                         grayscale16BitImageData: blobImageData)
 
         // XXX XXX XXX
-//        if self.id == "1498 x 288" {
-//        try? pixelImage.writeTIFFEncoding(toFilename: "/tmp/Blob_frame_\(frameIndex)_\(self).png")
-//        }
+        // write out an image for every blob, slow, but helpful for debugging blob stuff
+        //try? pixelImage.writeTIFFEncoding(toFilename: "/tmp/Blob_frame_\(frameIndex)_\(self).png")
         // XXX XXX XXX
         
         if let image = pixelImage.nsImage {
@@ -359,20 +358,27 @@ public class Blob: CustomStringConvertible {
         self.id = other.id
         self.pixels = other.pixels
         self.frameIndex = other.frameIndex
+        //Log.d("frame \(frameIndex) blob \(self.id) alloc")
     }
     
     public init(_ pixel: SortablePixel, frameIndex: Int) {
         self.pixels = [pixel]
         self.id = "\(pixel.x) x \(pixel.y)"
         self.frameIndex = frameIndex
+        //Log.d("frame \(frameIndex) blob \(self.id) alloc")
     }
 
     public init(frameIndex: Int) {
         self.pixels = []
         self.id = "empty"
         self.frameIndex = frameIndex
+        //Log.d("frame \(frameIndex) blob \(self.id) alloc")
     }
 
+    deinit {
+        Log.d("frame \(frameIndex) blob \(self.id) dealloc")
+    }
+    
     public func makeBackground() {
         for pixel in pixels {
             pixel.status = .background
@@ -574,8 +580,13 @@ public class Blob: CustomStringConvertible {
 
     public func lineMergeV2(with otherBlob: Blob) -> Blob? {
 
+        let startTime = NSDate().timeIntervalSince1970
+        Log.d("frame \(frameIndex) \(self) lineMergeV2 with: \(otherBlob)")
+        
         // first clone self
         let newBlob = Blob(self)
+
+        var ret: Blob?
 
         // then see if we can absorb the other blob
         if newBlob.absorb(otherBlob) {
@@ -608,18 +619,21 @@ public class Blob: CustomStringConvertible {
                     // only add the new blob if the line score is better
                     // than that of the separate blobs on both the new
                     // blob line, and also their own ideal lines
+
                     Log.d("frame \(frameIndex) adding new absorbed blob \(newBlob) from \(self) and \(otherBlob) because \(newBlobAvg) < \(otherBlobAvg+fudge) && \(newBlobAvg) < \(selfAvg+fudge) from \(newLine)")
 
-                    return newBlob
+                    ret = newBlob
                 } else {
                     Log.v("frame \(frameIndex) NOT adding new absorbed blob \(newBlob) from \(self) and \(otherBlob) because \(newBlobAvg) > \(otherBlobAvg+fudge) || \(newBlobAvg) > \(selfAvg+fudge) from \(newLine)")
                 }
             } else {
-               // Log.i("frame \(frameIndex) blob \(newBlob) has no line")
+                Log.i("frame \(frameIndex) blob \(newBlob) has no line")
             }
         } else {
-           // Log.i("frame \(frameIndex) blob \(newBlob) failed to absorb blob (self)")
+            Log.i("frame \(frameIndex) blob \(newBlob) failed to absorb blob (self)")
         }
-        return nil
+        let endTime = NSDate().timeIntervalSince1970
+        Log.d("frame \(frameIndex) \(self) lineMergeV2 with: \(otherBlob) after \(endTime - startTime) seconds, ret = \(ret)")
+        return ret
     }
 }

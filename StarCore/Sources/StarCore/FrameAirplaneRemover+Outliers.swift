@@ -139,25 +139,34 @@ extension FrameAirplaneRemover {
 
             self.state = .detectingOutliers2
 
-            let blobber: Blobber = FullFrameBlobber(config: config,
-                                                    imageWidth: width,
-                                                    imageHeight: height,
-                                                    pixelData: subtractionArray,
-                                                    frameIndex: frameIndex,
-                                                    neighborType: .eight,//.fourCardinal,
-                                                    minimumBlobSize: config.minGroupSize,
-                                                    minimumLocalMaximum: config.maxPixelDistance/4,
-                                                    // blobs can grow until the get this much
-                                                    // darker than their seed pixel
-                                                    // larger values give more blobs
-                                                    contrastMin: 62)      // XXX constant
+            // detect blobs of difference in brightness on the subtraction array
             
+            var blobber: Blobber? = FullFrameBlobber(config: config,
+                                                     imageWidth: width,
+                                                     imageHeight: height,
+                                                     pixelData: subtractionArray,
+                                                     frameIndex: frameIndex,
+                                                     neighborType: .eight,//.fourCardinal,
+                                                     minimumBlobSize: config.minGroupSize,
+                                                     minimumLocalMaximum: config.maxPixelDistance/4,
+                                                     // blobs can grow until the get this much
+                                                     // darker than their seed pixel
+                                                     // larger values give more blobs
+                                                     contrastMin: 62)      // XXX constant
+            
+            guard let blobberBlobs = blobber?.blobMap else {
+                Log.w("frame \(frameIndex) no blobs from blobber")
+                return 
+            }
+            
+            blobber = nil
+
             if config.writeOutlierGroupFiles {
                 // save blobs image here
-                try await saveImages(for: blobber.blobs, as: .blobs)
+                try await saveImages(for: Array(blobberBlobs.values), as: .blobs)
             }
-
-            Log.d("frame \(frameIndex) starting with \(blobber.blobMap.count) blobs")
+            
+            Log.d("frame \(frameIndex) starting with \(blobberBlobs.count) blobs")
 
             /*
              Now that we have detected blobs in this frame, the next step is to
@@ -166,33 +175,47 @@ extension FrameAirplaneRemover {
              */
 
             self.state = .detectingOutliers2a
+            var isolatedRemover: IsolatedBlobRemover? = .init(blobMap: blobberBlobs,
+                                                              width: width,
+                                                              height: height,
+                                                              frameIndex: frameIndex)
 
-            let isolatedRemover = IsolatedBlobRemover(blobMap: blobber.blobMap,
-                                                      width: width,
-                                                      height: height,
-                                                      frameIndex: frameIndex)
-
-            isolatedRemover.process()            
+            isolatedRemover?.process()            
 
             self.state = .detectingOutliers2aa
-            Log.d("frame \(frameIndex) isolation remover has \(isolatedRemover.blobMap.count) blobs")
+            Log.d("frame \(frameIndex) isolation remover has \(isolatedRemover?.blobMap.count) blobs")
+
+            guard let isolatedRemoverBolbs = isolatedRemover?.blobMap else {
+                Log.w("frame \(frameIndex) no blobs from isolated remover")
+                return
+            }
+            
+            isolatedRemover = nil
             
             /*
              The next step is to collate blobs that are close to the
              lines and close to eachother into a single larger blob.
              */
-            let kht = BlobKHTAnalysis(houghLines: houghLines,
-                                      blobMap: isolatedRemover.blobMap,
-                                      config: config,
-                                      width: width,
-                                      height: height,
-                                      frameIndex: frameIndex,
-                                      imageAccessor: imageAccessor)
+            var kht: BlobKHTAnalysis? = .init(houghLines: houghLines,
+                                              blobMap: isolatedRemoverBolbs,
+                                              config: config,
+                                              width: width,
+                                              height: height,
+                                              frameIndex: frameIndex,
+                                              imageAccessor: imageAccessor)
+            
+            try await kht?.process()
 
-            try await kht.process()
+            guard let khtBlobs = kht?.blobMap else {
+                Log.w("frame \(frameIndex) no blobs from kht")
+                return
+            }
+
+            kht = nil
+            
             if config.writeOutlierGroupFiles {
-                // save kht.blobMap image here
-                try await saveImages(for: Array(kht.blobMap.values), as: .khtb)
+                // save khtBlobs image here
+                try await saveImages(for: Array(khtBlobs.values), as: .khtb)
             }
             
             Log.d("frame \(frameIndex) kht analysis done")
@@ -202,48 +225,66 @@ extension FrameAirplaneRemover {
             // XXX these last two steps appear to not help as much as would be nice.
              
             // this mofo is fast as lightning, and seems to mostly work now
-            let absorber = BlobAbsorberRewrite(blobMap: kht.blobMap,
-                                               width: width,
-                                               height: height,
-                                               frameIndex: frameIndex)
+            var absorber: BlobAbsorberRewrite? = .init(blobMap: khtBlobs,
+                                                       width: width,
+                                                       height: height,
+                                                       frameIndex: frameIndex)
+            
+            absorber?.process()
 
-            absorber.process()
-                                               
-
+            guard let absorberBlobs = absorber?.blobMap else {
+                Log.w("frame \(frameIndex) no blobs from absorber")
+                return
+            }
+            
+            absorber = nil
+            
             self.state = .detectingOutliers2c
 
             // look for all blobs to promote,
             // and see if we get a better line score if we combine with another 
 
-            Log.d("frame \(frameIndex) absorber analysis gave \(absorber.blobMap.count) blobs")
+            Log.d("frame \(frameIndex) absorber analysis gave \(absorberBlobs.count) blobs")
             if config.writeOutlierGroupFiles {
                 // save filtered blobs image here
-                try await saveImages(for: Array(absorber.blobMap.values), as: .absorbed)
+                try await saveImages(for: Array(absorberBlobs.values), as: .absorbed)
             }
 
             // look for lines that we can extend 
-            let blobExtender = BlobLineExtender(pixelData: subtractionArray,
-                                                blobMap: absorber.blobMap,
-                                                width: width,
-                                                height: height,
-                                                frameIndex: frameIndex)
+            var blobExtender: BlobLineExtender? = .init(pixelData: subtractionArray,
+                                                        blobMap: absorberBlobs,
+                                                        width: width,
+                                                        height: height,
+                                                        frameIndex: frameIndex)
+            blobExtender?.process()
 
-            blobExtender.process()
-
+            guard let extenderBlobs = blobExtender?.blobMap else {
+                Log.w("frame \(frameIndex) no blobs from extender")
+                return
+            }
+            
+            blobExtender = nil
 
             self.state = .detectingOutliers2d
             
             // another pass at trying to unify nearby blobs that fit together
-            let blobSmasher = BlobSmasher(blobMap: blobExtender.blobMap,
-                                          width: width,
-                                          height: height,
-                                          frameIndex: frameIndex)
+            var blobSmasher: BlobSmasher? = .init(blobMap: extenderBlobs,
+                                                  width: width,
+                                                  height: height,
+                                                  frameIndex: frameIndex)
 
-            blobSmasher.process()
+            blobSmasher?.process()
+
+            guard let smasherBlobs = blobSmasher?.blobMap else {
+                Log.w("frame \(frameIndex) no blobs from smasher")
+                return
+            }
+            
+            blobSmasher = nil
 
             self.state = .detectingOutliers2e
 
-            let finalIsolatedRemover = IsolatedBlobRemover(blobMap: blobSmasher.blobMap,
+            let finalIsolatedRemover = IsolatedBlobRemover(blobMap: smasherBlobs,
                                                            width: width,
                                                            height: height,
                                                            frameIndex: frameIndex)
