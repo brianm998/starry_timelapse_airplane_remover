@@ -23,17 +23,21 @@ class BlobSmasher: AbstractBlobAnalyzer {
         iterateOverAllBlobs() { index, blob in 
             if blob.size < 20 { return } // XXX constant
 
+            self.alreadyScannedBlobs = Set<String>()
+            
             smash(blob: blob)
 
             Log.d("frame \(frameIndex) Smasher has a total of \(self.blobMap.count) blobs")
         }
     }
 
-    private func smash(blob: Blob,
-                       alreadyScannedBlobs: Set<String> = Set<String>(),
-                       iterationCount: Int = 1,
-                       previousBoundingBox: BoundingBox? = nil)
-    {
+    private var absorbingBlob: Blob = Blob(frameIndex: 0) // XXX dummy
+
+    private var alreadyScannedBlobs = Set<String>()
+    private lazy var usedPixels = [UInt16](repeating: 0, count: self.width*self.height)
+    private var currentIndex: UInt16 = 0 
+    
+    private func smash(blob: Blob) {
         /*
 
          define a search area around the blob.
@@ -47,56 +51,81 @@ class BlobSmasher: AbstractBlobAnalyzer {
 
          // XXX THIS FILE HAS A BIG MEMORY LEAK WHICH CAUSES A KILL -9 from the OS :(
          
+
+             - keep one frame sized array of UInt16 values, one per pixel
+             - for each blob iteration, choose a number, this number is the one for the array
+             - call the inner smash function with a particular bounding box
+               - ignore all pixels already marked with our number
+               - mark all pixels with our number after processing
+               - return a list of bounding boxes of absorbed blobs
+               - add any returned bounding boxes to the list to process
+               - unless they are fully within the bounding box of the original box
+
          */
 
+
+        Log.d("frame \(frameIndex) trying to smash blob \(blob)")
+
+        currentIndex += 1       // look for this volue in usedPixels
+
+        var boundingBoxes: [BoundingBox] = []
+        boundingBoxes.append(blob.boundingBox) // start with the blob's bounding box
+
+        absorbingBlob = blob
+        
+        while(boundingBoxes.count > 0) {
+            Log.d("iterating on \(boundingBoxes.count) boundingBoxes")
+            let next = boundingBoxes.removeFirst()
+            // inner smash may contain extra bounding boxes to search in 
+            boundingBoxes.append(contentsOf: self.innerSmash(boundingBox: next))
+        }
+        
+    }
+
+    private func innerSmash(boundingBox: BoundingBox) -> [BoundingBox] {
         // how far outside the blob's bounding box to search
         var searchBorderSize = 20 // XXX constant
         
-        let blobCenter = blob.boundingBox.center
+        let blobCenter = boundingBox.center
         
-        var startX = blob.boundingBox.min.x - searchBorderSize
-        var startY = blob.boundingBox.min.y - searchBorderSize
+        var startX = boundingBox.min.x - searchBorderSize
+        var startY = boundingBox.min.y - searchBorderSize
         
         if startX < 0 { startX = 0 }
         if startY < 0 { startY = 0 }
 
-        var endX = blob.boundingBox.max.x + searchBorderSize
-        var endY = blob.boundingBox.max.y + searchBorderSize
+        var endX = boundingBox.max.x + searchBorderSize
+        var endY = boundingBox.max.y + searchBorderSize
 
         if endX >= width { endX = width - 1 }
         if endY >= height { endY = height - 1 }
 
-        Log.d("frame \(frameIndex) trying to smash blob \(blob) iteration \(iterationCount) ideal avd \(blob.averageDistanceFromIdealLine) from originZeroLine \(blob.originZeroLine) blob.line \(blob.line) tp \(blob.line?.twoPoints) searching [\(startX), \(startY)] to [\(endX), \(endY)]")
-
-        var alreadyScannedBlobs = alreadyScannedBlobs
-
-        var shouldRecurse = false
-
-        var absorbingBlob = blob
-
-        let currentBoundingBox = blob.boundingBox
+        var ret: [BoundingBox] = []
         
         for x in (startX ... endX) {
             for y in (startY ... endY) {
-                if let previousBoundingBox,
-                   previousBoundingBox.contains(x: x, y: y) { continue }
-                
-                if let blobRef = blobRefs[y*width+x],
-                   blobRef != absorbingBlob.id,
-                   !alreadyScannedBlobs.contains(blobRef),
-                   let otherBlob = blobMap[blobRef]
+                let pixelIndex = usedPixels[y*width+x] 
+                if let blobRef = blobRefs[y*width+x],   // is there a blob at this pixel?
+                   pixelIndex != currentIndex,          // have we already visited this pixel?
+                   blobRef != absorbingBlob.id,         // is it not the current blob?
+                   !alreadyScannedBlobs.contains(blobRef), // a blob we've not already dealt with?
+                   let otherBlob = blobMap[blobRef]        // the actual other blob to look at
                 {
                     Log.d("frame \(frameIndex) \(absorbingBlob) is nearby \(otherBlob)")
                     // we found another blob close by that we've not already looked at
+
+                    // make sure we don't process this blob more than once
                     alreadyScannedBlobs.insert(otherBlob.id)
 
+                    // make sure this pixel isn't used again
+                    usedPixels[y*width+x] = currentIndex
+                    
                     if let mergedBlob = absorbingBlob.lineMergeV2(with: otherBlob) {
                         // successful line merge
                         Log.d("frame \(frameIndex) successfully line merged blob \(absorbingBlob) with \(otherBlob)")
-                        if mergedBlob.boundingBox != absorbingBlob.boundingBox {
-                            // we will recurse now because absorbtion has
-                            // changed the size of the blob's bounding box
-                            shouldRecurse = true
+
+                        if !absorbingBlob.boundingBox.contains(otherBlob.boundingBox) {
+                            ret.append(otherBlob.boundingBox)
                         }
 
                         blobMap.removeValue(forKey: absorbingBlob.id)
@@ -118,49 +147,11 @@ class BlobSmasher: AbstractBlobAnalyzer {
                             blobRefs[pixel.y*width+pixel.x] = mergedBlob.id
                         }
                     } else {
-                        Log.d("frame \(frameIndex) could not line merged blob \(absorbingBlob) with \(otherBlob)")
+                        //Log.d("frame \(frameIndex) could not line merged blob \(absorbingBlob) with \(otherBlob)")
                     }
                 }
             }
         }
-        if true,               // XXX REWRITE THIS SO IT DOESN'T TAKE FOREVER AND HOG TOO MUCH RAM
-           /*
-            one solution would be to keep a full frame map of visited pixels, boolean for each,
-            and upon re-smash, ignore any pixels already seen
-
-            or pass in the previous bounding box searched, and use that?
-
-             ^^^^^^^
-
-             do this next to speed things up, recursion here was killing it
-
-
-             NEXT TRY:
-
-             - identify BoundingBoxes for each absorbed blob
-             - remove parts of them that have been already scanned
-             - iterate over this list instead of recursing like this
-
-             WHAT ABOUT:
-
-             - keep one frame sized array of UInt16 values, one per pixel
-             - for each blob iteration, choose a number, this number is the one for the array
-             - call the inner smash function with a particular bounding box
-               - ignore all pixels already marked with our number
-               - mark all pixels with our number after processing
-               - return a list of bounding boxes of absorbed blobs
-               - add any returned bounding boxes to the list to process
-               - unless they are fully within the bounding box of the original box
-             
-             
-            */
-           shouldRecurse
-        {
-            Log.d("frame \(frameIndex) recursing on blob \(absorbingBlob) after \(iterationCount) iterations")
-            smash(blob: absorbingBlob,
-                  alreadyScannedBlobs: alreadyScannedBlobs,
-                  iterationCount: iterationCount + 1,
-                  previousBoundingBox: currentBoundingBox)
-        }
+        return ret
     }
 }
