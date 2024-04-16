@@ -11,7 +11,7 @@ extension ImageMatrixElement {
 }
 
 // the bounding box of an outlier group
-public struct BoundingBox: Codable {
+public struct BoundingBox: Codable, Equatable {
     public let min: Coord
     public let max: Coord
 
@@ -30,6 +30,10 @@ public struct BoundingBox: Codable {
         return sqrt(width*width + height*height)
     }
 
+    public static func == (lhs: BoundingBox, rhs: BoundingBox) -> Bool {
+        lhs.min == rhs.min && lhs.max == rhs.max 
+    }
+    
     public var center: Coord {
         Coord(x: Int(Double(self.min.x) + Double(self.width)/2),
               y: Int(Double(self.min.y) + Double(self.height)/2))
@@ -56,10 +60,17 @@ public struct BoundingBox: Codable {
 
     // true if this BoundingBox fully contains the other
     public func contains(other: BoundingBox) -> Bool {
-        return self.min.x <= other.min.x &&
-               self.max.x >= other.max.x &&
-               self.min.y <= other.min.y &&
-               self.max.y >= other.max.y
+        self.min.x <= other.min.x &&
+        self.max.x >= other.max.x &&
+        self.min.y <= other.min.y &&
+        self.max.y >= other.max.y
+    }
+
+    public func contains(x: Int, y: Int) -> Bool {
+         self.min.x <= x &&
+         self.max.x >= x &&
+         self.min.y <= y &&
+         self.max.y >= y
     }
     
     public func overlap(with other: BoundingBox) -> BoundingBox? {
