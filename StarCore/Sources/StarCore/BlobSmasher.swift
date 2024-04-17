@@ -36,6 +36,10 @@ class BlobSmasher: AbstractBlobAnalyzer {
     private var alreadyScannedBlobs = Set<String>()
     private lazy var usedPixels = [UInt16](repeating: 0, count: self.width*self.height)
     private var currentIndex: UInt16 = 0 
+
+    // things like clouds or foreground features can make really large blobs,
+    // which slows us down a lot.  
+    private let maximumBlobSize = 1000
     
     private func smash(blob: Blob) {
         /*
@@ -61,6 +65,13 @@ class BlobSmasher: AbstractBlobAnalyzer {
                - add any returned bounding boxes to the list to process
                - unless they are fully within the bounding box of the original box
 
+            XXX really large blobs end up in foreground sometimes, and slow this down a LOT
+               - trying a maximum Blob Size, seems to really help
+            
+            XXX sometimes blobs get smashed with blobs that don't match at all
+            
+            XXX sometimes a few small blobs are missing from an obvious line blob, middle or ends
+               
          */
 
 
@@ -73,7 +84,7 @@ class BlobSmasher: AbstractBlobAnalyzer {
 
         absorbingBlob = blob
         
-        while(boundingBoxes.count > 0) {
+        while(boundingBoxes.count > 0 && absorbingBlob.size < maximumBlobSize) {
             Log.d("iterating on \(boundingBoxes.count) boundingBoxes")
             let next = boundingBoxes.removeFirst()
             // inner smash may contain extra bounding boxes to search in 
@@ -125,6 +136,8 @@ class BlobSmasher: AbstractBlobAnalyzer {
                         Log.d("frame \(frameIndex) successfully line merged blob \(absorbingBlob) with \(otherBlob)")
 
                         if !absorbingBlob.boundingBox.contains(otherBlob.boundingBox) {
+                            // XXX apply the searchBorderSize to this XXX
+                            // XXX some bounding boxes are making it through when they don't need to
                             ret.append(otherBlob.boundingBox)
                         }
 
