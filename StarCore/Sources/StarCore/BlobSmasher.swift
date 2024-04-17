@@ -16,12 +16,12 @@ You should have received a copy of the GNU General Public License along with sta
 
 */
 
-// tries to smash larger blobs together with a line merge
+// tries to smash blobs together, but only if they look more like a line after doing so
 class BlobSmasher: AbstractBlobAnalyzer {
 
     public func process() {
         iterateOverAllBlobs() { index, blob in 
-            if blob.size < 20 { return } // XXX constant
+            if blob.size < minimumBlobSize { return }
 
             self.alreadyScannedBlobs = Set<String>()
             
@@ -34,13 +34,28 @@ class BlobSmasher: AbstractBlobAnalyzer {
     private var absorbingBlob: Blob = Blob(frameIndex: 0) // XXX dummy
 
     private var alreadyScannedBlobs = Set<String>()
+
+    // full frame array of what pixels are used by what blob
+    // values in it come from currentIndex
     private lazy var usedPixels = [UInt16](repeating: 0, count: self.width*self.height)
+
+    // the current index that we use to mark usage of blobs in usedPixels above.
+    // we simply increment it upon a new blob to avoid having to reset the entire array each time
     private var currentIndex: UInt16 = 0 
 
+    // when a blob gets bigger than this, stop smashing it
     // things like clouds or foreground features can make really large blobs,
-    // which slows us down a lot.  
-    private let maximumBlobSize = 1000
+    // which slows us down a lot.
+    private let maximumBlobSize = 1000 // XXX constant
+
+    // how far outside the blob's bounding box to search
+    private let searchBorderSize = 20 // XXX constant
+
+    // blobs smaller than this cannot initiate the smash
+    // they can however be later absorbed by larger blobs if nearby
+    private let minimumBlobSize = 20 // XXX constant
     
+    // attempt to make this blob bigger by absorbing nearby blobs 
     private func smash(blob: Blob) {
         /*
 
@@ -93,11 +108,13 @@ class BlobSmasher: AbstractBlobAnalyzer {
         
     }
 
+    /*
+     The actual smash logic.
+
+     given a bounding box, attempt to see what other blobs are in it,
+     and if they are a good match for being absorbed into self.absorbingBlob
+     */
     private func innerSmash(boundingBox: BoundingBox) -> [BoundingBox] {
-        // how far outside the blob's bounding box to search
-        var searchBorderSize = 20 // XXX constant
-        
-        let blobCenter = boundingBox.center
         
         var startX = boundingBox.min.x - searchBorderSize
         var startY = boundingBox.min.y - searchBorderSize
@@ -115,12 +132,13 @@ class BlobSmasher: AbstractBlobAnalyzer {
         
         for x in (startX ... endX) {
             for y in (startY ... endY) {
-                let pixelIndex = usedPixels[y*width+x] 
-                if let blobRef = blobRefs[y*width+x],   // is there a blob at this pixel?
-                   pixelIndex != currentIndex,          // have we already visited this pixel?
-                   blobRef != absorbingBlob.id,         // is it not the current blob?
-                   !alreadyScannedBlobs.contains(blobRef), // a blob we've not already dealt with?
-                   let otherBlob = blobMap[blobRef]        // the actual other blob to look at
+                let frameIndex = y*width+x
+                let pixelUsage = usedPixels[frameIndex]  // get any previous usage of this pixel
+                if pixelUsage != currentIndex,           // make sure we haven't already seen this
+                   let blobRef = blobRefs[frameIndex],   // is there a blob at this pixel?
+                   blobRef != absorbingBlob.id,          // disregard the current blob
+                   !alreadyScannedBlobs.contains(blobRef), // don't re-process blobs
+                   let otherBlob = blobMap[blobRef]        // get the actual other blob to look at
                 {
                     Log.d("frame \(frameIndex) \(absorbingBlob) is nearby \(otherBlob)")
                     // we found another blob close by that we've not already looked at
@@ -129,7 +147,7 @@ class BlobSmasher: AbstractBlobAnalyzer {
                     alreadyScannedBlobs.insert(otherBlob.id)
 
                     // make sure this pixel isn't used again
-                    usedPixels[y*width+x] = currentIndex
+                    usedPixels[frameIndex] = currentIndex
                     
                     if let mergedBlob = absorbingBlob.lineMergeV2(with: otherBlob) {
                         // successful line merge
@@ -138,6 +156,8 @@ class BlobSmasher: AbstractBlobAnalyzer {
                         if !absorbingBlob.boundingBox.contains(otherBlob.boundingBox) {
                             // XXX apply the searchBorderSize to this XXX
                             // XXX some bounding boxes are making it through when they don't need to
+                            // could be faster if we remove already searched pixels from
+                            // this new bounding box
                             ret.append(otherBlob.boundingBox)
                         }
 
