@@ -16,5 +16,7 @@ You should have received a copy of the GNU General Public License along with sta
 public protocol Blobber {
     var blobs: [Blob] { get }
     var blobMap: [String: Blob] { get } // keyed by blob id
+
+    func process() 
 }
 

@@ -65,10 +65,14 @@ extension FrameAirplaneRemover {
           - subtract aligned frame from this frame
           - identify lines on subtracted frame
           - detect blobs from subtracted frame
+          - remove small isolated blobs
           - do KHT blob processing
           - do blob absorbsion processing
-          - keep only bigger blobs with lines
-         
+          - do blob extending
+          - do blob smashing
+          - final pass at more isolation removal
+          - do more filtering before promoting blobs to outlier groups
+          
          */
         Log.d("frame \(frameIndex) finding outliers")
 
@@ -113,7 +117,8 @@ extension FrameAirplaneRemover {
          New outlier detection logic:
 
          * do pretty radical initial full frame blob detection, get lots of small dim blobs
-         * stick back kht first, but 
+         * filter out small isolated blobs first
+         * run kht to try to condense blobs along lines
          * originally sort blobs by size, processing largest first
          * if a blob can have a line detected from it,
            search along the line by convolving a search area across it to find pixels
@@ -134,13 +139,15 @@ extension FrameAirplaneRemover {
 
             self.state = .detectingOutliers1
 
-            // first run the hough transform on sub sections of the subtraction image
+            // run the hough transform on sub sections of the subtraction image
             let houghLines = houghLines(from: subtractionImage)
 
             self.state = .detectingOutliers2
 
-            // detect blobs of difference in brightness on the subtraction array
-            
+            // detect blobs of difference in brightness in the subtraction array
+            // airplanes show up as lines or does in a line
+            // because the image subtracted from this frame had the sky aligned,
+            // the ground may get moved, and therefore may contain blobs as well.
             var blobber: Blobber? = FullFrameBlobber(config: config,
                                                      imageWidth: width,
                                                      imageHeight: height,
@@ -153,16 +160,21 @@ extension FrameAirplaneRemover {
                                                      // darker than their seed pixel
                                                      // larger values give more blobs
                                                      contrastMin: 62)      // XXX constant
-            
+
+            // run the blobber
+            blobber.process()
+
+            // get the blobs out of the blobber
             guard let blobberBlobs = blobber?.blobMap else {
                 Log.w("frame \(frameIndex) no blobs from blobber")
                 return 
             }
-            
+
+            // nil out the blobber to try to save memory
             blobber = nil
 
             if config.writeOutlierGroupFiles {
-                // save blobs image here
+                // save blobs image 
                 try await saveImages(for: Array(blobberBlobs.values), as: .blobs)
             }
             
@@ -298,43 +310,13 @@ extension FrameAirplaneRemover {
 
             // promote found blobs to outlier groups for further processing
             for blob in filteredBlobs {
-                if let _ = blob.line {
-                    // first trim pixels too far away
-                    //blob.lineTrim() // XXX this kills good blobs :(
+                // make outlier group from this blob
+                let outlierGroup = blob.outlierGroup(at: frameIndex)
 
-                    // XXX apply some kind of brightness / size criteria here?
-
-                    var process = true
-
-                    var threshold = 2000 * Double(config.minGroupSize) / 2 // XXX constants
-
-                    let blobValue = Double(blob.medianIntensity) * Double(blob.size)
-                    
-                    if blobValue < threshold {
-                        // allow smaller groups if they are bright enough
-                        //process = false
-                    }
-
-                    if process {
-                        // make outlier group from this blob
-                        let outlierGroup = blob.outlierGroup(at: frameIndex)
-
-                        Log.i("frame \(frameIndex) promoting \(blob) to outlier group \(outlierGroup.name) line \(blob.line)")
-                        outlierGroup.frame = self
-                        outlierGroups?.members[outlierGroup.name] = outlierGroup
-                    } else {
-                        Log.i("frame \(frameIndex) NOT promoting \(blob)")
-                    }
-                } else {
-                    //Log.i("frame \(frameIndex) NOT promoting \(blob)")
-                    let outlierGroup = blob.outlierGroup(at: frameIndex)
-
-                    Log.i("frame \(frameIndex) promoting \(blob) to outlier group \(outlierGroup.name) line \(blob.line)")
-                    outlierGroup.frame = self
-                    outlierGroups?.members[outlierGroup.name] = outlierGroup
-                }
+                Log.i("frame \(frameIndex) promoting \(blob) to outlier group \(outlierGroup.name) line \(blob.line)")
+                outlierGroup.frame = self
+                outlierGroups?.members[outlierGroup.name] = outlierGroup
             }
-
         } else {
             Log.e("frame \(frameIndex) has no subtraction image, no outliers produced")
         }
@@ -582,6 +564,10 @@ extension FrameAirplaneRemover {
         }
     }
 
+    // used to classify outliers given a validation image.
+    // this validation image contains a non zero pixel for each outlier
+    // that should be painted over.
+    // any outlier that matches any pixels is classified to paint here.
     private func classifyOutliers(with validationData: [UInt8]) {
         Log.d("frame \(frameIndex) classifying outliers with validation image data")
 
