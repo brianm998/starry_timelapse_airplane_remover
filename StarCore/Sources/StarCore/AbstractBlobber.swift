@@ -16,6 +16,10 @@ You should have received a copy of the GNU General Public License along with sta
 */
 
 public class AbstractBlobber: Blobber {
+    public func process() {
+        Log.w("abstract blobber does nothing")
+    }
+    
 
     public let imageWidth: Int
     public let imageHeight: Int

@@ -66,7 +66,7 @@ public class FullFrameBlobber: AbstractBlobber {
                    contrastMin: contrastMin)
     }
 
-    public func process() {
+    public override func process() {
         Log.d("frame \(frameIndex) detecting blobs")
 
         for x in 0..<imageWidth {

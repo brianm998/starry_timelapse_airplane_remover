@@ -162,7 +162,7 @@ extension FrameAirplaneRemover {
                                                      contrastMin: 62)      // XXX constant
 
             // run the blobber
-            blobber.process()
+            blobber?.process()
 
             // get the blobs out of the blobber
             guard let blobberBlobs = blobber?.blobMap else {
