@@ -37,7 +37,7 @@ public class FrameViewModel: ObservableObject {
     }
 
     var numberOfNegativeOutliers: Int? {
-        Log.i("numberOfNegativeOutliers \(String(describing: outlierViews))")
+        Log.d("numberOfNegativeOutliers \(String(describing: outlierViews?.count))")
 
         if let outlierViews = outlierViews {
             var total: Int = 0

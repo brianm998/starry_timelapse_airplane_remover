@@ -174,7 +174,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
     var _paintMask: PaintMask?
     
     var paintMask: PaintMask {
-        if let _paintMask = _paintMask { return _paintMask }
+        if let _paintMask { return _paintMask }
 
         let mask = PaintMask(innerWallSize: config.outlierGroupPaintBorderInnerWallPixels,
                              radius: config.outlierGroupPaintBorderPixels)
@@ -244,7 +244,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
             try await imageAccessor.save(processedImage, as: .processed,
                                       atSize: .preview, overwrite: true)
 
-            if let outlierGroups = outlierGroups {
+            if let outlierGroups {
                 let validationImage = outlierGroups.validationImage
                 try await imageAccessor.save(validationImage, as: .validated,
                                          atSize: .original, overwrite: false)

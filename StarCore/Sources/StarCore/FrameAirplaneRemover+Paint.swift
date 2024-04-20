@@ -100,7 +100,7 @@ extension FrameAirplaneRemover {
                         }
                     }
                 } else {
-                    Log.v("frame \(frameIndex) NOT painting over group \(group) for reason \(reason)")
+                    //Log.v("frame \(frameIndex) NOT painting over group \(group) for reason \(reason)")
                 }
             }
         }

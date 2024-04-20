@@ -234,8 +234,8 @@ public struct BoundingBox: Codable, Equatable {
             }
         }
 
-        if let selfClosest = selfClosest {
-            if let otherClosest = otherClosest {
+        if let selfClosest {
+            if let otherClosest {
 
                 let selfClosestDist = selfCenter.distance(to: selfClosest)
                 let otherClosestDist = otherCenter.distance(to: otherClosest)
@@ -257,7 +257,7 @@ public struct BoundingBox: Codable, Equatable {
             }
         } else {
             // we have no self closest, use other closest instead
-            if let otherClosest = otherClosest {
+            if let otherClosest {
                 // we have other closest, but not self
                 Log.i("normal edge distance from \(self) to \(otherBox) could not be determined")
                 return otherClosest.distance(to: selfCenter)

@@ -149,7 +149,7 @@ public class HoughTransform {
         let sortedLines = lines.sorted() { $0.votes > $1.votes }
 
         var linesToReturn: Array<Line> = []
-        if let maxCount = maxCount {
+        if let maxCount {
             // return lines with the highest counts at the front of the list
             linesToReturn = Array<Line>(sortedLines.prefix(maxCount))
         } else {

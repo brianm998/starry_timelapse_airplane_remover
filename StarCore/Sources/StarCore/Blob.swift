@@ -162,7 +162,7 @@ public class Blob: CustomStringConvertible {
     private var _membersArray: ([Bool])?
     
     public var membersArray: [Bool] {
-        if let _membersArray = _membersArray { return _membersArray }
+        if let _membersArray { return _membersArray }
         let bounds = self.boundingBox
         
         var members = [Bool](repeating: false,
@@ -419,7 +419,7 @@ public class Blob: CustomStringConvertible {
     }
     
     public var boundingBox: BoundingBox {
-        if let _boundingBox = _boundingBox { return _boundingBox }
+        if let _boundingBox { return _boundingBox }
         var min_x:Int = Int.max
         var min_y:Int = Int.max
         var max_x:Int = 0

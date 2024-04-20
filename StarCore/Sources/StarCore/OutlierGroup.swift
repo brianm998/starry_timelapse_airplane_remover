@@ -182,7 +182,7 @@ public class OutlierGroup: CustomStringConvertible,
         let totalLength = sqrt(xDiff*xDiff+yDiff*yDiff)
         let distance = distanceSum/numDistances
 
-        //if let frameIndex = frameIndex {
+        //if let frameIndex {
             //Log.d("frame \(frameIndex) averageDistance \(distance) \(numDistances) totalLength \(totalLength)")
     //}
         
@@ -724,7 +724,7 @@ public class OutlierGroup: CustomStringConvertible,
     // tries to find a streak with hough line histograms
     fileprivate var histogramStreakDetection: Double {
         get {
-            if let frame = frame {
+            if let frame {
                 var bestScore = 0.0
                 let selfHisto = self.houghLineHistogram
 
@@ -784,7 +784,7 @@ public class OutlierGroup: CustomStringConvertible,
     fileprivate var maxOverlap: Double {
         get {
             var maxOverlap = 0.0
-            if let frame = frame {
+            if let frame {
                 if let previousFrame = frame.previousFrame,
                    let nearbyGroups = previousFrame.outlierGroups(within: OutlierGroup.maxNearbyGroupDistance,
                                                                   of: self)
@@ -811,7 +811,7 @@ public class OutlierGroup: CustomStringConvertible,
     fileprivate var maxOverlapTimesThetaHisto: Double {
         get {
             var maxOverlap = 0.0
-            if let frame = frame {
+            if let frame {
                 let selfHisto = self.houghLineHistogram
 
                 if let previousFrame = frame.previousFrame,
@@ -883,7 +883,7 @@ public class OutlierGroup: CustomStringConvertible,
     fileprivate var neighboringInterFrameOutlierThetaScore: Double {
         // XXX doesn't use related frames 
         get {
-            if let frame = frame,
+            if let frame,
                let nearbyGroups = frame.outlierGroups(within: OutlierGroup.maxNearbyGroupDistance,
                                                       of: self)
             {
@@ -921,7 +921,7 @@ public class OutlierGroup: CustomStringConvertible,
          is only one good (or decent) match, or a slew of bad matches
          */
         get {
-            if let frame = frame {
+            if let frame {
                 let thisTheta = self.firstLine?.theta ?? 180
                 var smallestDifference: Double = 360
                 if let previousFrame = frame.previousFrame,

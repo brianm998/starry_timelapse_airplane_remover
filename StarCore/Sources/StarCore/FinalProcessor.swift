@@ -152,7 +152,7 @@ public actor FinalProcessor {
         try await withLimitedThrowingTaskGroup(of: Void.self,
                                                at: .userInitiated) { taskGroup in
             for (_, frame) in frames.enumerated() {
-                if let frame = frame {
+                if let frame {
                     Log.d("adding frame \(frame.frameIndex) to final queue")
                     try await taskGroup.addTask() {
 
@@ -198,10 +198,10 @@ public actor FinalProcessor {
         try await withLimitedThrowingTaskGroup(of: Void.self,
                                                at: .userInitiated) { taskGroup in
             while(!done) {
-                Log.v("FINAL THREAD running")
+                //Log.v("FINAL THREAD running")
                 let (cfi, framesCount) = await (currentFrameIndex, frames.count)
                 done = cfi >= framesCount
-                Log.v("FINAL THREAD done \(done) currentFrameIndex \(cfi) frames.count \(framesCount)")
+                //Log.v("FINAL THREAD done \(done) currentFrameIndex \(cfi) frames.count \(framesCount)")
                 if done {
                     Log.d("we are done")
                     continue
@@ -209,24 +209,24 @@ public actor FinalProcessor {
                 
                 let indexToProcess = await currentFrameIndex
 
-                Log.d("indexToProcess \(indexToProcess) shouldProcess[indexToProcess] \(shouldProcess[indexToProcess])")
+                //Log.d("indexToProcess \(indexToProcess) shouldProcess[indexToProcess] \(shouldProcess[indexToProcess])")
                 
                 if !isGUI,         // always process on gui so we can see them all
                    !shouldProcess[indexToProcess]
                 {
                     if let frameCheckClosure = callbacks.frameCheckClosure {
                         if let frame = await self.frame(at: indexToProcess) {
-                            Log.d("calling frameCheckClosure for frame \(frame.frameIndex)")
+                            //Log.d("calling frameCheckClosure for frame \(frame.frameIndex)")
                             await frameCheckClosure(frame)
                         } else {
-                            Log.d("NOT calling frameCheckClosure for frame \(indexToProcess)")
+                            //Log.d("NOT calling frameCheckClosure for frame \(indexToProcess)")
                         }
                     } else {
-                        Log.d("NOT calling frameCheckClosure for frame \(indexToProcess)")
+                        //Log.d("NOT calling frameCheckClosure for frame \(indexToProcess)")
                     }
                     
                     // don't process existing files on cli
-                    Log.d("not processing \(indexToProcess)")
+                    //Log.d("not processing \(indexToProcess)")
                     await self.incrementCurrentFrameIndex()
                     continue
                 }
@@ -242,12 +242,12 @@ public actor FinalProcessor {
                     endIndex = frameCount - 1
                 }
 
-                Log.d("startIndex \(startIndex) endIndex \(endIndex)")
+                //Log.d("startIndex \(startIndex) endIndex \(endIndex)")
                 
                 var haveEnoughFramesToInterFrameProcess = true
 
                 for i in startIndex ... endIndex {
-                    Log.v("looking for frame at \(i)")
+                    //Log.v("looking for frame at \(i)")
                     if let nextFrame = await self.frame(at: i) {
                         imagesToProcess.append(nextFrame)
                     } else {
@@ -259,7 +259,7 @@ public actor FinalProcessor {
                     Log.i("FINAL THREAD frame \(indexToProcess) doing inter-frame analysis with \(imagesToProcess.count) frames")
 
                     // doubly link the outliers so their feature values across frames work
-                    await doublyLink(frames: imagesToProcess)    
+                    doublyLink(frames: imagesToProcess)    
 
                     Log.i("FINAL THREAD frame \(indexToProcess) done with inter-frame analysis")
                     await self.incrementCurrentFrameIndex()
@@ -270,18 +270,18 @@ public actor FinalProcessor {
                         // maybe finish a previous frame
                         // leave the ones at the end to finishAll()
                         let immutableStart = startIndex
-                        Log.v("FINAL THREAD frame \(indexToProcess) queueing into final queue")
+                        //Log.v("FINAL THREAD frame \(indexToProcess) queueing into final queue")
                         if let frameToFinish = await self.frame(at: immutableStart - 1) {
                             await self.clearFrame(at: immutableStart - 1)
-                            Log.v("FINAL THREAD frame \(indexToProcess) adding task")
+                            //Log.v("FINAL THREAD frame \(indexToProcess) adding task")
 
 
-                            Log.v("FINAL THREAD finishing sleeping")
+                            //Log.v("FINAL THREAD finishing sleeping")
                             await frameToFinish.clearOutlierGroupValueCaches()
                             await frameToFinish.maybeApplyOutlierGroupClassifier()
                             frameToFinish.set(state: .outlierProcessingComplete)
                             try await taskGroup.addTask() { 
-                                Log.v("FINAL THREAD frame \(indexToProcess) task running")
+                                //Log.v("FINAL THREAD frame \(indexToProcess) task running")
                                 Log.v("FINAL THREAD frame \(indexToProcess) classified")
 
 //                                try await taskGroup.addTask() { 
@@ -297,16 +297,16 @@ public actor FinalProcessor {
   //                              }
                             }
                         }
-                        Log.v("FINAL THREAD frame \(indexToProcess) done queueing into final queue")
+                        //Log.v("FINAL THREAD frame \(indexToProcess) done queueing into final queue")
                     }
                 } else {
-                    Log.v("FINAL THREAD sleeping")
+                    //Log.v("FINAL THREAD sleeping")
                     await self.setAsleep(to: true)
 
                     try await Task.sleep(nanoseconds: 1_000_000_000)
                     //sleep(1)        // XXX hardcoded sleep amount
                     
-                    Log.v("FINAL THREAD waking up")
+                    //Log.v("FINAL THREAD waking up")
                     await self.setAsleep(to: false)
                 }
             }
@@ -320,7 +320,7 @@ public actor FinalProcessor {
         Log.i("FINAL THREAD done finishing all remaining frames")
 
         if let _ = callbacks.frameCheckClosure {
-            Log.d("FINAL THREAD check closure")
+            //Log.d("FINAL THREAD check closure")
 
             // XXX look for method to call here
             
@@ -346,7 +346,7 @@ public actor FinalProcessor {
 }    
 
 
-fileprivate func doublyLink(frames: [FrameAirplaneRemover]) async {
+fileprivate func doublyLink(frames: [FrameAirplaneRemover]) {
     // doubly link frames here so that the decision tree can have acess to other frames
     for (i, frame) in frames.enumerated() {
         if frames[i].previousFrame == nil,

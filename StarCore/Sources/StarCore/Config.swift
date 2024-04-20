@@ -55,7 +55,7 @@ public struct Config: Codable {
                 writeFrameProcessedPreviewFiles: Bool,
                 writeFrameThumbnailFiles: Bool)
     {
-        if let outputPath = outputPath {
+        if let outputPath {
             self.outputPath = outputPath
         } else {
             self.outputPath = "."

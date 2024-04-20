@@ -15,7 +15,7 @@ You should have received a copy of the GNU General Public License along with sta
 public actor NumberRunning {
     private var count: UInt = 0 {
         didSet(newValue) {
-            if let updateCallback = updateCallback {
+            if let updateCallback {
                 updateCallback(newValue)
             }
         }

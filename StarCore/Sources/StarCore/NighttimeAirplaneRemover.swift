@@ -83,7 +83,7 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
                 }
             }
         }
-        if let remainingImagesClosure = remainingImagesClosure {
+        if let remainingImagesClosure {
             TaskWaiter.shared.task(priority: .medium) {
                 await self.methodList.set(removeClosure: remainingImagesClosure)
                 remainingImagesClosure(await self.methodList.count)
