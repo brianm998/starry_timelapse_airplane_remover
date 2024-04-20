@@ -49,14 +49,14 @@ class BlobSmasher: AbstractBlobAnalyzer {
     // when a blob gets bigger than this, stop smashing it
     // things like clouds or foreground features can make really large blobs,
     // which slows us down a lot.
-    private let maximumBlobSize = 300 // XXX constant
+    private let maximumBlobSize = 200 // XXX constant
 
     // how far outside the blob's bounding box to search
     private let searchBorderSize = 20 // XXX constant
 
     // blobs smaller than this cannot initiate the smash
     // they can however be later absorbed by larger blobs if nearby
-    private let minimumBlobSize = 20 // XXX constant
+    private let minimumBlobSize = 24 // XXX constant
     
     // attempt to make this blob bigger by absorbing nearby blobs 
     private func smash(blob: Blob) {
