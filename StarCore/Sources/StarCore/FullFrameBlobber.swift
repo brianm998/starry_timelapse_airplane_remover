@@ -126,13 +126,13 @@ public class FullFrameBlobber: AbstractBlobber {
             }
 
             // these blobs are just too dim
-            if blob.medianIntensity < 3800 { // XXX constant
+            if blob.medianIntensity < 2000 { // XXX constant
                 return false
             }
 
             // only keep smaller blobs if they are bright enough
             if blob.size <= 20,
-               blob.medianIntensity < 5000 { return false }
+               blob.medianIntensity < 3000 { return false }
 
             // anything this small is noise
             if blob.size <= 4 { return false }
