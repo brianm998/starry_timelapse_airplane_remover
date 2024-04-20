@@ -24,25 +24,51 @@ You should have received a copy of the GNU General Public License along with sta
 /*
  todo:
 
- - fix selection of outliers to not miss obvious ones
-  - 03_16_2024-fx3 test:
+ - outlier detection gets missing parts now, but:
+   - gets way too many small oultiers
+   - sometimes combines outlier groups that it shouldn't
+   - planes which record as dots in a line are not properly grouped
+   - load all outliers seems busted for large amounts
+ 
+
+ - 03_16_2024-fx3 test:
+   - frame 221 is where mountains move :(
+   
    - corrected frames
      1483 - top middle
      1242-1245 - top middle missed
      944-968 - bright lower left airplane missed a lot - mostly fixed
      1633
-   - frames that need star software update:
-     1524 - lower left - previous star trail painted with due to extended group
      1576 - top right - no group found here
-     1625 - top mid right WTF? large group not found WTF
+     1570 - lower left, really dim streak
+     1630 - lower left by mountains
+     1631 - lower left by mountains
      1632 - on right, missed entirely
+     1693 - two low mid streaks on either side
+
+   - frames that 0.6.1 got
+     1625 - top mid right WTF? large group not found WTF
+     1524 - lower left - previous star trail painted with due to extended group
      1686 - upper right - end of airplane missed engirely
+     
+   - frames that need star software update:
      833-870 - lots of missed low hanging airplanes - need to tweak bright small groups
-         
+
+   - check again
+     
    - found bad frames:
 
- 
-     
+     732 and before need re-do
+   
+     745 += 10-20 frames
+     - 740 is a good test case, 782 as well
+       - need better outlier detection analysis
+       - some outlier groups include large groups of sky :(
+       - some outlier groups like dots in a line are not grouped rights
+
+       775 and close to it have some green airplanes
+     - frame 786 has an enormous group that includes mountains and an airplane,
+       and when they're not connected at all
  
  - use brightness as a factor w/ size, i.e. allow for smaller really bright groups
  - make render this frame have a keyboard shortcut
@@ -196,22 +222,6 @@ struct StarCli: AsyncParsableCommand {
         """)
     var outputPath: String?
     
-    @Option(name: [.customShort("b"), .long], help: """
-        The percentage in brightness increase necessary for a single pixel to be considered an outlier.
-        Higher values decrease the number and size of found outlier groups.
-        Lower values increase the size and number of outlier groups,
-        which may find more airplanes, but also may yield more false positives.
-        Outlier Pixels with brightness increases greater than this are fully painted over.
-        """)
-    var outlierMaxThreshold = Defaults.outlierMaxThreshold
-
-    @Option(name: .shortAndLong, help: """
-        The minimum outlier group size.  Outlier groups smaller than this will be ignored.
-        Smaller values produce more groups, which may get more small airplane streaks,
-        but also might end with more twinkling stars.
-        """)
-    var minGroupSize = Defaults.minGroupSize // groups smaller than this are completely ignored
-
     @Option(name: .shortAndLong, help: """
         Max Number of frames to process at once.
         May need to be reduced to a lower value if to consume less ram on some machines.
@@ -308,8 +318,6 @@ struct StarCli: AsyncParsableCommand {
                 }
 
                 config = Config(outputPath: _outputPath,
-                                outlierMaxThreshold: outlierMaxThreshold,
-                                minGroupSize: minGroupSize,
                                 imageSequenceName: inputImageSequenceName,
                                 imageSequencePath: inputImageSequencePath,
                                 writeOutlierGroupFiles: shouldWriteOutlierGroupFiles,

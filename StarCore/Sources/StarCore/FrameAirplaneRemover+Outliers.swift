@@ -154,7 +154,6 @@ extension FrameAirplaneRemover {
                                                      pixelData: subtractionArray,
                                                      frameIndex: frameIndex,
                                                      neighborType: .eight,//.fourCardinal,
-                                                     minimumBlobSize: config.minGroupSize,
                                                      minimumLocalMaximum: config.maxPixelDistance,
                                                      // blobs can grow until the get this much
                                                      // darker than their seed pixel

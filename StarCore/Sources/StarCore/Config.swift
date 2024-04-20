@@ -21,8 +21,6 @@ public struct Config: Codable {
 
     public init() {
         self.outputPath = "."
-        self.outlierMaxThreshold = 0
-        self.minGroupSize = 0
         //self.numConcurrentRenders = 0
         self.imageSequenceDirname = ""
         self.imageSequencePath = ""
@@ -46,8 +44,6 @@ public struct Config: Codable {
     }
 
     public init(outputPath: String?,
-                outlierMaxThreshold: Double,
-                minGroupSize: Int,
                 imageSequenceName: String,
                 imageSequencePath: String,
                 writeOutlierGroupFiles: Bool,
@@ -60,8 +56,6 @@ public struct Config: Codable {
         } else {
             self.outputPath = "."
         }
-        self.outlierMaxThreshold = outlierMaxThreshold
-        self.minGroupSize = minGroupSize
         self.imageSequenceDirname = imageSequenceName
         self.imageSequencePath = imageSequencePath
         self.writeOutlierGroupFiles = writeOutlierGroupFiles
@@ -77,14 +71,11 @@ public struct Config: Codable {
     public var outputPath: String
     
     // percentage difference between same pixels on different frames to consider an outlier
-    public var outlierMaxThreshold: Double
+    public let outlierMaxThreshold: Double = 1
 
     // computed over 16 bits per pixel from the value above
     public var maxPixelDistance: UInt16
     
-    // groups smaller than this are ignored
-    public var minGroupSize: Int
-
     // the name of the directory containing the input sequence
     public var imageSequenceDirname: String
 
@@ -106,24 +97,13 @@ public struct Config: Codable {
     // how far in each direction do we go when doing final processing?
     public var numberFinalProcessingNeighborsNeeded = 2 // in each direction
 
-    // the minimum outlier group size at the top of the screen
-    // smaller outliers at the top are discarded early on
-    public var minGroupSizeAtTop = 400
-    
-
-    // what percentage of the top of the screen is considered far enough
-    // above the horizon to not need really small outlier groups
-    // between the bottom and the top of this area, the minimum
-    // outlier group size increases
-    public var upperSkyPercentage: Double = 90 // top 90% of the screen
-
     public var supportedImageFileTypes = [".tif", ".tiff"] // XXX move this out
 
     // XXX use this to try to avoid running out of memory somehow
     // maybe determine megapixels of images, and guestimate usage and
     // avoid spawaning too many threads?
-    public var memorySizeBytes = ProcessInfo.processInfo.physicalMemory
-    public var memorySizeGigs = ProcessInfo.processInfo.physicalMemory/(1024*1024*1024)
+//    public var memorySizeBytes = ProcessInfo.processInfo.physicalMemory
+//    public var memorySizeGigs = ProcessInfo.processInfo.physicalMemory/(1024*1024*1024)
 
     // used by updatable log
     public var progressBarLength = 50
@@ -188,7 +168,7 @@ public struct Config: Codable {
     // 0.6.0 kernel hough transform and new blob to outlier group logic
     // 0.6.1 rewrote outlier detection logic to find smaller groups better
     // 0.6.2 added IsolatedBolbRemover, and BlobSmasher, tweaked lots of other blob stuff as well
-    // 0.6.3 more cleanup, lowered outlierMaxThreshold, changed how this is represented (/4 gone)
+    // 0.6.3 more cleanup, removed outlierMaxThreshold, changed how this is represented (/4 gone)
     
     public var starVersion = "0.6.3" // XXX move this out
 

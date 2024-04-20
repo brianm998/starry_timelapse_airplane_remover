@@ -28,14 +28,9 @@ You should have received a copy of the GNU General Public License along with sta
 
  Directly adjcent blobs should be combined.
 
- All returned blobs will meet minimumBlobSize.
-
  Blobs dimmer on average than minimumLocalMaximum are discarded.
  */
 public class FullFrameBlobber: AbstractBlobber {
-
-    // blobs smaller than this are not returned
-    public let minimumBlobSize: Int
 
     private let config: Config
     
@@ -51,11 +46,9 @@ public class FullFrameBlobber: AbstractBlobber {
                 pixelData: [UInt16],
                 frameIndex: Int,
                 neighborType: NeighborType,
-                minimumBlobSize: Int,
                 minimumLocalMaximum: UInt16,
                 contrastMin: Double)
     {
-        self.minimumBlobSize = minimumBlobSize
         self.minimumLocalMaximum = minimumLocalMaximum
         self.config = config
         super.init(imageWidth: imageWidth,
@@ -140,7 +133,7 @@ public class FullFrameBlobber: AbstractBlobber {
             // this blob has passed all checks, keep it 
             return true
         }         
-        Log.i("frame \(frameIndex) found \(blobs.count) blobs larger than \(minimumBlobSize) pixels")
+        Log.i("frame \(frameIndex) found \(blobs.count) blobs")
     }
     
 }
