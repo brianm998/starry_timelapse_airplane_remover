@@ -24,7 +24,7 @@ public class UpdatableLogHandler: LogHandler {
     {
         TaskWaiter.shared.task(priority: .userInitiated) {
             var logMessage = ""
-            if let data = data {
+            if let data {
                 logMessage = "\(logLevel.emo) \(logLevel) | \(fileLocation): \(message) | \(data.description)"
             } else {
                 logMessage = "\(logLevel.emo) \(logLevel) | \(fileLocation): \(message)"
