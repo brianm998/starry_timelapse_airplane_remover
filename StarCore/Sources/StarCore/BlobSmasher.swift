@@ -20,11 +20,14 @@ You should have received a copy of the GNU General Public License along with sta
 class BlobSmasher: AbstractBlobAnalyzer {
 
     public func process() {
-        iterateOverAllBlobs() { index, blob in 
+        iterateOverAllBlobs() { index, blob in
+            // don't start smashing with smaller blobs,
+            // they can be added to larger blobs later if they are nearby.
             if blob.size < minimumBlobSize { return }
 
             self.alreadyScannedBlobs = Set<String>()
-            
+
+            // try smashing this blob
             smash(blob: blob)
 
             Log.d("frame \(frameIndex) Smasher has a total of \(self.blobMap.count) blobs")
@@ -46,7 +49,7 @@ class BlobSmasher: AbstractBlobAnalyzer {
     // when a blob gets bigger than this, stop smashing it
     // things like clouds or foreground features can make really large blobs,
     // which slows us down a lot.
-    private let maximumBlobSize = 1000 // XXX constant
+    private let maximumBlobSize = 300 // XXX constant
 
     // how far outside the blob's bounding box to search
     private let searchBorderSize = 20 // XXX constant
@@ -92,7 +95,7 @@ class BlobSmasher: AbstractBlobAnalyzer {
 
         Log.d("frame \(frameIndex) trying to smash blob \(blob)")
 
-        currentIndex += 1       // look for this volue in usedPixels
+        currentIndex += 1       // look for this value in usedPixels
 
         var boundingBoxes: [BoundingBox] = []
         boundingBoxes.append(blob.boundingBox) // start with the blob's bounding box
@@ -100,7 +103,7 @@ class BlobSmasher: AbstractBlobAnalyzer {
         absorbingBlob = blob
         
         while(boundingBoxes.count > 0 && absorbingBlob.size < maximumBlobSize) {
-            Log.d("iterating on \(boundingBoxes.count) boundingBoxes")
+            Log.d("frame \(frameIndex) blobl \(absorbingBlob) iterating on \(boundingBoxes.count) boundingBoxes")
             let next = boundingBoxes.removeFirst()
             // inner smash may contain extra bounding boxes to search in 
             boundingBoxes.append(contentsOf: self.innerSmash(boundingBox: next))
