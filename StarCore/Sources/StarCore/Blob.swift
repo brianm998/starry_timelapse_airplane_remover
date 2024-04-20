@@ -494,8 +494,7 @@ public class Blob: CustomStringConvertible {
                      brightness: UInt(self.intensity),
                      bounds: self.boundingBox,
                      frameIndex: frameIndex,
-                     pixels: self.pixelValues,
-                     maxPixelDistance: 0xFFFF) // XXX not sure this is used anymore
+                     pixels: self.pixelValues)
     }
 
     // returns minimum distance found 

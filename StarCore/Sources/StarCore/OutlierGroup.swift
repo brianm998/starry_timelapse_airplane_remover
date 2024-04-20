@@ -52,7 +52,6 @@ public class OutlierGroup: CustomStringConvertible,
     // otherwise it's the amount brighter this pixel was than those in the adjecent frames 
     public let pixels: [UInt16]        // indexed by y * bounds.width + x
 
-    public let maxPixelDistance: UInt16
     public let surfaceAreaToSizeRatio: Double
 
     // after init, shouldPaint is usually set to a base value based upon different statistics 
@@ -80,16 +79,14 @@ public class OutlierGroup: CustomStringConvertible,
                      brightness: UInt,      // average brightness
                      bounds: BoundingBox,
                      frame: FrameAirplaneRemover,
-                     pixels: [UInt16],
-                     maxPixelDistance: UInt16) 
+                     pixels: [UInt16]) 
     {
         self.init(name: name,
                   size: size,
                   brightness: brightness,
                   bounds: bounds,
                   frameIndex: frame.frameIndex,
-                  pixels: pixels,
-                  maxPixelDistance: maxPixelDistance)
+                  pixels: pixels)
         self.frame = frame
     }
     
@@ -98,8 +95,7 @@ public class OutlierGroup: CustomStringConvertible,
                 brightness: UInt,      // average brightness
                 bounds: BoundingBox,
                 frameIndex: Int,
-                pixels: [UInt16],
-                maxPixelDistance: UInt16) 
+                pixels: [UInt16]) 
     {
         self.name = name
         self.size = size
@@ -107,7 +103,6 @@ public class OutlierGroup: CustomStringConvertible,
         self.bounds = bounds
         self.frameIndex = frameIndex
         self.pixels = pixels
-        self.maxPixelDistance = maxPixelDistance
         self.surfaceAreaToSizeRatio = ratioOfSurfaceAreaToSize(of: pixels,
                                                                width: bounds.width,
                                                                height: bounds.height)
@@ -1115,7 +1110,7 @@ public class OutlierGroup: CustomStringConvertible,
         //pixels: [UInt16]
         size += pixels.count * 2
         
-        //maxPixelDistance: UInt16
+        //was, maxPixelDistance: UInt16 NO LONGER USEDx
         size += 2
         
         //surfaceAreaToSizeRatio: Double (64 bits)
@@ -1203,7 +1198,8 @@ public class OutlierGroup: CustomStringConvertible,
         self.pixels = pixels
         
         let mpdd = persitentData.subdata(in: index..<index+2)
-        self.maxPixelDistance = mpdd.withUnsafeBytes { $0.load(as: UInt16.self).bigEndian }
+        // XXX no longer used
+        //self.maxPixelDistance = mpdd.withUnsafeBytes { $0.load(as: UInt16.self).bigEndian }
         index += 2
 
         let satsrd = persitentData.subdata(in: index..<index+8)
@@ -1298,8 +1294,9 @@ public class OutlierGroup: CustomStringConvertible,
             index += 2
         }
 
-        let mpdd = withUnsafeBytes(of: self.maxPixelDistance.bigEndian) { Data($0) }
-        data.replaceSubrange(index..<index+2, with: mpdd)
+        // XXX no longer used (EMPTY SPACE)
+        //let mpdd = withUnsafeBytes(of: self.maxPixelDistance.bigEndian) { Data($0) }
+        //data.replaceSubrange(index..<index+2, with: mpdd)
         index += 2
 
         data.replaceSubrange(index..<index+8,
