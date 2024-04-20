@@ -55,11 +55,16 @@ class BlobKHTAnalysis: AbstractBlobAnalyzer {
         Log.i("frame \(frameIndex) loaded subtraction image")
 
         for elementLine in houghLines {
+
+
+            
             let element = elementLine.element
 
             // when theta is around 300 or more, then we get a bad line here :(
             let line = elementLine.originZeroLine
             
+            if line.votes < 800 { continue } // XXX constant XXX
+
             //Log.i("frame \(frameIndex) matrix element [\(element.x), \(element.y)] -> [\(element.width), \(element.height)] processing line theta \(line.theta) rho \(line.rho) votes \(line.votes) blobsToProcess \(blobsToProcess.count)")
 
             var brightnessValue: UInt8 = 0xFF
