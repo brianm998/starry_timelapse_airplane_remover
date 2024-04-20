@@ -44,6 +44,12 @@ class BlobAbsorberRewrite: AbstractBlobAnalyzer {
     public func process() {
         iterateOverAllBlobs() { index, blob in 
 
+            // ingnore smaller blobs here
+            if blob.size < 30 { return } // XXX constant
+
+            // don't iterate over lines that don't really match the blob
+            if blob.averageDistanceFromIdealLine > Double(blob.size) / 2 { return } // XXX constant
+            
             if let blobProcessed = blobsProcessed[blob.id],
                blobProcessed
             {
