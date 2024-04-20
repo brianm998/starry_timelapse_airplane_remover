@@ -135,7 +135,7 @@ extension FrameAirplaneRemover {
             - averageLineVariance / lineLength calculations
          - then promote them to outlier groups for further analysis
          */
-        if let subtractionImage = subtractionImage {
+        if let subtractionImage {
 
             self.state = .detectingOutliers1
 
@@ -325,7 +325,7 @@ extension FrameAirplaneRemover {
 
     // returns a list of lines for different sub elements of the given image,
     // sorted so the lines with the highest votes are first
-    private func houghLines(from image: PixelatedImage) -> [MatrixElementLine] {
+    fileprivate func houghLines(from image: PixelatedImage) -> [MatrixElementLine] {
         // XXX A whole forest of magic numbers here :(
 
         // split the subtraction image into a bunch of small images with some overlap
@@ -458,7 +458,7 @@ extension FrameAirplaneRemover {
     public func outlierGroups(within distance: Double,
                               of group: OutlierGroup) -> [OutlierGroup]?
     {
-        if let outlierGroups = outlierGroups {
+        if let outlierGroups {
             let groups = outlierGroups.groups(nearby: group)
             var ret: [OutlierGroup] = []
             for otherGroup in groups {
@@ -476,7 +476,7 @@ extension FrameAirplaneRemover {
     public func outlierGroups(within distance: Double,
                               of boundingBox: BoundingBox) -> [OutlierGroup]?
     {
-        if let outlierGroups = outlierGroups {
+        if let outlierGroups {
             let groups = outlierGroups.members
             var ret: [OutlierGroup] = []
             for (_, group) in groups {
@@ -571,7 +571,7 @@ extension FrameAirplaneRemover {
     private func classifyOutliers(with validationData: [UInt8]) {
         Log.d("frame \(frameIndex) classifying outliers with validation image data")
 
-        if let outlierGroups = outlierGroups {
+        if let outlierGroups {
 
             for group in outlierGroups.members.values {
                 var groupIsValid = false
@@ -602,7 +602,7 @@ extension FrameAirplaneRemover {
     }
 
     public func outlierGroupList() -> [OutlierGroup]? {
-        if let outlierGroups = outlierGroups {
+        if let outlierGroups {
             let groups = outlierGroups.members
             return groups.map {$0.value}
         }
