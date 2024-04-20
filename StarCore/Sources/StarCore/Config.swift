@@ -188,8 +188,9 @@ public struct Config: Codable {
     // 0.6.0 kernel hough transform and new blob to outlier group logic
     // 0.6.1 rewrote outlier detection logic to find smaller groups better
     // 0.6.2 added IsolatedBolbRemover, and BlobSmasher, tweaked lots of other blob stuff as well
+    // 0.6.3 more cleanup, lowered outlierMaxThreshold, changed how this is represented (/4 gone)
     
-    public var starVersion = "0.6.2" // XXX move this out
+    public var starVersion = "0.6.3" // XXX move this out
 
     public func writeJson(named filename: String) {
         

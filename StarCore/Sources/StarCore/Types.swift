@@ -19,7 +19,12 @@ public struct Defaults {
 //    public static let outlierMaxThreshold: Double = 11.00 // still misses some
 
     //public static let outlierMaxThreshold: Double = 12.2
-    public static let outlierMaxThreshold: Double = 11.50
+
+
+    
+    //public static let outlierMaxThreshold: Double = 11.50 // gets most, misses a few small parts
+    // adjusted for removed /4 division
+    public static let outlierMaxThreshold: Double = 2.5
 
     // groups smaller than this are completely ignored
     // this is scaled by image size:
