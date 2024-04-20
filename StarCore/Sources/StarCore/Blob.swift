@@ -356,7 +356,7 @@ public class Blob: CustomStringConvertible {
 
     public init(_ other: Blob) {
         self.id = other.id
-        self.pixels = other.pixels
+        self.pixels = other.pixels // same reference or new map?
         self.frameIndex = other.frameIndex
         //Log.d("frame \(frameIndex) blob \(self.id) alloc")
     }
@@ -605,6 +605,8 @@ public class Blob: CustomStringConvertible {
 
                 // otherBlob distance from newBlobs ideal line
                 let otherBlobAvg = otherBlob.averageDistance(from: newLine)
+
+                let minimumAvgDist = Double(self.size)/2
                 
                 Log.d("frame \(frameIndex) blob \(self) avg \(selfAvg) otherBlob \(otherBlob) avg \(otherBlobAvg) newBlobAvg \(newBlobAvg)")
 
@@ -614,17 +616,19 @@ public class Blob: CustomStringConvertible {
 
                 // this new blob needs to be closer to its own line than anything else
                 if otherBlobAvg < otherBlobIdealAvg+fudge, // is the other blob closer to this line than its own?
-                   newBlobAvg < selfAvg+fudge
+                   newBlobAvg < selfAvg+fudge,
+                   selfAvg < minimumAvgDist,
+                   selfAvg*2 < newBlobAvg // XXX constant to keep smashing from killing the blob avg
                 {
                     // only add the new blob if the line score is better
                     // than that of the separate blobs on both the new
                     // blob line, and also their own ideal lines
 
-                    Log.d("frame \(frameIndex) adding new absorbed blob \(newBlob) from \(self) and \(otherBlob) because \(newBlobAvg) < \(otherBlobAvg+fudge) && \(newBlobAvg) < \(selfAvg+fudge) from \(newLine)")
+                    Log.d("frame \(frameIndex) adding new absorbed blob \(newBlob) from \(self) and \(otherBlob) because \(otherBlobAvg) < \(otherBlobAvg+fudge) && \(newBlobAvg) < \(selfAvg+fudge) && \(selfAvg) < \(minimumAvgDist) && \(selfAvg*2) < \(newBlobAvg) from \(newLine)")
 
                     ret = newBlob
                 } else {
-                    Log.v("frame \(frameIndex) NOT adding new absorbed blob \(newBlob) from \(self) and \(otherBlob) because \(newBlobAvg) > \(otherBlobAvg+fudge) || \(newBlobAvg) > \(selfAvg+fudge) from \(newLine)")
+                    Log.v("frame \(frameIndex) NOT adding new absorbed blob \(newBlob) from \(self) and \(otherBlob) because \(otherBlobAvg) > \(otherBlobAvg+fudge) || \(newBlobAvg) > \(selfAvg+fudge) || \(selfAvg) > \(minimumAvgDist) || \(selfAvg*2) > \(newBlobAvg) from \(newLine)")
                 }
             } else {
                 Log.i("frame \(frameIndex) blob \(newBlob) has no line")
