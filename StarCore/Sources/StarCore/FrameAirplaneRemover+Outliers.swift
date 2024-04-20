@@ -301,7 +301,7 @@ extension FrameAirplaneRemover {
                                                            height: height,
                                                            frameIndex: frameIndex)
 
-            finalIsolatedRemover.process(minSize: 50, scanSize: 16)
+            finalIsolatedRemover.process(minSize: 40, scanSize: 16)
             
             let filteredBlobs = Array(finalIsolatedRemover.blobMap.values)
 
