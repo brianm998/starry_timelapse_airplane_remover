@@ -14,6 +14,7 @@ import Foundation
 import CoreGraphics
 import logging
 import Cocoa
+import Semaphore
 import Combine
 
 // this class handles the final processing of every frame
@@ -33,9 +34,9 @@ public actor FinalProcessor {
     let config: Config
     let callbacks: Callbacks
     let shouldProcess: [Bool]
-    
-    var isAsleep = false
 
+    private let semaphore = AsyncSemaphore(value: 0)
+    
     // this is kept around to keep the subscription active
     // will be canceled upon de-init
     var publishCancellable: AnyCancellable?
@@ -69,6 +70,9 @@ public actor FinalProcessor {
 
             Log.d("frame \(index) added for final inter-frame analysis \(self.maxAddedIndex)")
             self.frames[index] = frame
+
+            self.semaphore.signal()
+            
             self.log()
         }
     }
@@ -130,21 +134,11 @@ public actor FinalProcessor {
         return frames[index]
     }
 
-    func setAsleep(to value: Bool) {
-        self.isAsleep = value
-    }
-
     var framesBetween: Int {
         var ret = maxAddedIndex - currentFrameIndex
         if ret < 0 { ret = 0 }
         
         return ret
-    }
-    
-    var isWorking: Bool {
-        get {
-            return !isAsleep
-        }
     }
     
     func finishAll() async throws {
@@ -193,6 +187,9 @@ public actor FinalProcessor {
     nonisolated func run() async throws {
 
         let frameCount = await frames.count
+
+        // wait here for at least one frame to be published
+        await semaphore.wait()
         
         var done = false
         try await withLimitedThrowingTaskGroup(of: Void.self,
@@ -300,17 +297,11 @@ public actor FinalProcessor {
                         //Log.v("FINAL THREAD frame \(indexToProcess) done queueing into final queue")
                     }
                 } else {
-                    //Log.v("FINAL THREAD sleeping")
-                    await self.setAsleep(to: true)
-
-                    try await Task.sleep(nanoseconds: 1_000_000_000)
-                    //sleep(1)        // XXX hardcoded sleep amount
-                    
-                    //Log.v("FINAL THREAD waking up")
-                    await self.setAsleep(to: false)
+                    // we don't have enough frames to process, wait for another
+                    await semaphore.wait()
                 }
             }
-
+                    
             // wait for all existing tasks to complete 
             try await taskGroup.waitForAll()
         }
