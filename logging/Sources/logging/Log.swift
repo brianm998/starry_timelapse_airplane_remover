@@ -873,6 +873,8 @@ fileprivate extension Log {
                                _ function: String,
                                _ line: Int)
     {
+        let logTime = NSDate().timeIntervalSince1970
+            
         Task {
             var string = ""
             
@@ -899,8 +901,6 @@ fileprivate extension Log {
                 }
             }
 
-            let logTime = NSDate().timeIntervalSince1970
-            
             await gremlin.log(string, at: logLevel,
                               logTime: logTime, extraData: extraData,
                               file, function, line)
