@@ -17,26 +17,33 @@ You should have received a copy of the GNU General Public License along with sta
 */
 
 // tries to smash blobs together, but only if they look more like a line after doing so
+
 class BlobSmasher: AbstractBlobAnalyzer {
 
     public func process() {
+        let startTime = NSDate().timeIntervalSince1970
+        var count = 0
+
+        self.alreadyScannedBlobRecords = Set<BlobScanRecord>()
+        self.alreadyScannedBlobRecords = Set<BlobScanRecord>()
+        
         iterateOverAllBlobs() { index, blob in
             // don't start smashing with smaller blobs,
             // they can be added to larger blobs later if they are nearby.
             if blob.size < minimumBlobSize { return }
 
-            self.alreadyScannedBlobs = Set<String>()
-
             // try smashing this blob
             smash(blob: blob)
-
+            count += 1
             Log.d("frame \(frameIndex) Smasher has a total of \(self.blobMap.count) blobs")
         }
+        let endTime = NSDate().timeIntervalSince1970
+        Log.d("frame \(frameIndex) done smashing \(count) blobs after \(endTime-startTime) seconds")
     }
 
     private var absorbingBlob: Blob = Blob(frameIndex: 0) // XXX dummy
 
-    private var alreadyScannedBlobs = Set<String>()
+    private var alreadyScannedBlobRecords = Set<BlobScanRecord>()
 
     // full frame array of what pixels are used by what blob
     // values in it come from currentIndex
@@ -60,6 +67,10 @@ class BlobSmasher: AbstractBlobAnalyzer {
     
     // attempt to make this blob bigger by absorbing nearby blobs 
     private func smash(blob: Blob) {
+
+        let startTime = NSDate().timeIntervalSince1970
+        let startBlobSize = blob.size
+        
         /*
 
          define a search area around the blob.
@@ -70,9 +81,6 @@ class BlobSmasher: AbstractBlobAnalyzer {
          if not, keep track of ones that didn't line merge well and don't do it again
 
          if we get a successfull line merge, then recurse and start again.
-
-         // XXX THIS FILE HAS A BIG MEMORY LEAK WHICH CAUSES A KILL -9 from the OS :(
-         
 
              - keep one frame sized array of UInt16 values, one per pixel
              - for each blob iteration, choose a number, this number is the one for the array
@@ -103,11 +111,14 @@ class BlobSmasher: AbstractBlobAnalyzer {
         absorbingBlob = blob
         
         while(boundingBoxes.count > 0 && absorbingBlob.size < maximumBlobSize) {
-            Log.d("frame \(frameIndex) blobl \(absorbingBlob) iterating on \(boundingBoxes.count) boundingBoxes")
+            Log.d("frame \(frameIndex) blob \(absorbingBlob) iterating on \(boundingBoxes.count) boundingBoxes")
             let next = boundingBoxes.removeFirst()
             // inner smash may contain extra bounding boxes to search in 
             boundingBoxes.append(contentsOf: self.innerSmash(boundingBox: next))
         }
+
+        let endTime = NSDate().timeIntervalSince1970
+        Log.d("frame \(frameIndex) smashing \(blob) increased size by \(blob.size-startBlobSize) pixels in \(endTime-startTime) seconds")
         
     }
 
@@ -135,22 +146,28 @@ class BlobSmasher: AbstractBlobAnalyzer {
         
         for x in (startX ... endX) {
             for y in (startY ... endY) {
-                let frameIndex = y*width+x
-                let pixelUsage = usedPixels[frameIndex]  // get any previous usage of this pixel
+                let otherBlobIndex = y*width+x
+                let pixelUsage = usedPixels[otherBlobIndex]  // get any previous usage of this pixel
                 if pixelUsage != currentIndex,           // make sure we haven't already seen this
-                   let blobRef = blobRefs[frameIndex],   // is there a blob at this pixel?
+                   let blobRef = blobRefs[otherBlobIndex],   // is there a blob at this pixel?
                    blobRef != absorbingBlob.id,          // disregard the current blob
-                   !alreadyScannedBlobs.contains(blobRef), // don't re-process blobs
                    let otherBlob = blobMap[blobRef]        // get the actual other blob to look at
                 {
+                    // create two scan records, one in either direction
+                    let scanRecordA = BlobScanRecord(with: absorbingBlob, and: otherBlob)
+                    let scanRecordB = BlobScanRecord(with: otherBlob, and: absorbingBlob)
+                    if alreadyScannedBlobRecords.contains(scanRecordA) { continue }
+                    if alreadyScannedBlobRecords.contains(scanRecordB) { continue }
+
                     Log.d("frame \(frameIndex) \(absorbingBlob) is nearby \(otherBlob)")
                     // we found another blob close by that we've not already looked at
 
-                    // make sure we don't process this blob more than once
-                    alreadyScannedBlobs.insert(otherBlob.id)
+                    // make sure we don't process this blob pair more than once
+                    alreadyScannedBlobRecords.insert(scanRecordA)
+                    alreadyScannedBlobRecords.insert(scanRecordB)
 
                     // make sure this pixel isn't used again
-                    usedPixels[frameIndex] = currentIndex
+                    usedPixels[otherBlobIndex] = currentIndex
                     
                     if let mergedBlob = absorbingBlob.lineMergeV2(with: otherBlob) {
                         // successful line merge
@@ -191,3 +208,20 @@ class BlobSmasher: AbstractBlobAnalyzer {
         return ret
     }
 }
+
+// keep track of blob pairs we've already scanned
+fileprivate struct BlobScanRecord: Hashable {
+    let blob1: String
+    let blob2: String
+
+    public init(with blob1: Blob, and blob2: Blob) {
+        self.blob1 = blob1.id
+        self.blob2 = blob2.id
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(blob1)
+        hasher.combine(blob2)
+    }
+}
+
