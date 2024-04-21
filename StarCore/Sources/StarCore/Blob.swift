@@ -35,20 +35,26 @@ public class Blob: CustomStringConvertible {
     private var _blobImageData: [UInt16]?
     private var _blobLine: Line?
 
-    // XXX this affects the reference point of lines returned !!! XXX
-    let blobImageDataBorderSize = 24
-    // XXX if this works, need to modify the line returned so its reference point is
-    // taken into account, originZeroLine has been modified, does it work?
+
+    // it seems that the kernel hough transform works better on really small images
+    // if they're padded a bit on the sides. 
+    let blobImageDataBorderSize = 8
     
-    // a line computed from the pixels, origin is relative to the bounding box
+    // a line computed from the pixels,
+    // origin is relative to the bounding box + blobImageDataBorderSize on each side
     public var line: Line? {
-        if let blobLine = _blobLine { return blobLine }
+        if let _blobLine { return _blobLine }
         
+        //Log.d("frame \(frameIndex) blob \(self) calculating line")
+                
         let blobImageData = self.blobImageData
         
         let pixelImage = PixelatedImage(width: self.boundingBox.width + blobImageDataBorderSize * 2,
                                         height: self.boundingBox.height + blobImageDataBorderSize * 2,
                                         grayscale16BitImageData: blobImageData)
+
+
+        //Log.d("frame \(frameIndex) blob \(self) created image")
 
         // XXX XXX XXX
         // write out an image for every blob, slow, but helpful for debugging blob stuff
@@ -56,11 +62,12 @@ public class Blob: CustomStringConvertible {
         // XXX XXX XXX
         
         if let image = pixelImage.nsImage {
+            //Log.d("frame \(frameIndex) blob \(self) created ns image")
             let lines = kernelHoughTransform(image: image, clusterMinSize: 4)
             if lines.count > 0,
                lines[0].votes > 500 // XXX hardcode to ignore lines without much data behind them
             {
-                Log.d("frame \(frameIndex) blob \(self) got \(lines.count) lines from KHT returning \(lines[0]) [\(self.boundingBox.width), \(self.boundingBox.height)]")
+                //Log.d("frame \(frameIndex) blob \(self) got \(lines.count) lines from KHT returning \(lines[0]) [\(self.boundingBox.width), \(self.boundingBox.height)]")
                 _blobLine = lines[0]
                 return lines[0]
             }
@@ -375,9 +382,9 @@ public class Blob: CustomStringConvertible {
         //Log.d("frame \(frameIndex) blob \(self.id) alloc")
     }
 
-    deinit {
-        Log.d("frame \(frameIndex) blob \(self.id) dealloc")
-    }
+//    deinit {
+//        Log.d("frame \(frameIndex) blob \(self.id) dealloc")
+//    }
     
     public func makeBackground() {
         for pixel in pixels {
@@ -546,7 +553,7 @@ public class Blob: CustomStringConvertible {
                 let distance = self.boundingBox.edgeDistance(to: otherBlob.boundingBox)
 
                 //var fudge: Double = -1.44 // XXX constant
-                var fudge: Double = -3 // XXX constant
+                let fudge: Double = -3 // XXX constant
                 //var fudge: Double = -0.44 // XXX constant
 /*
                 if distance < 20 { // XXX constants
@@ -580,7 +587,7 @@ public class Blob: CustomStringConvertible {
     public func lineMergeV2(with otherBlob: Blob) -> Blob? {
 
         let startTime = NSDate().timeIntervalSince1970
-        Log.d("frame \(frameIndex) \(self) lineMergeV2 with: \(otherBlob)")
+        //Log.d("frame \(frameIndex) \(self) lineMergeV2 with: \(otherBlob)")
         
         // first clone self
         let newBlob = Blob(self)
@@ -589,9 +596,12 @@ public class Blob: CustomStringConvertible {
 
         // then see if we can absorb the other blob
         if newBlob.absorb(otherBlob) {
+            //Log.d("frame \(frameIndex) \(self) absorbed \(otherBlob)")
 
             // make sure this new blob has an ideal line detected
-            if let newLine = newBlob.originZeroLine {
+            if let newLine = newBlob.originZeroLine { // XXX time is all here because of KHT
+
+                //Log.d("frame \(frameIndex) \(self) got new line")
 
                 // new blobs distance from its own ideal line
                 let newBlobAvg = newBlob.averageDistance(from: newLine)
@@ -607,11 +617,11 @@ public class Blob: CustomStringConvertible {
 
                 let minimumAvgDist = Double(self.size)/2
                 
-                Log.d("frame \(frameIndex) blob \(self) avg \(selfAvg) otherBlob \(otherBlob) avg \(otherBlobAvg) newBlobAvg \(newBlobAvg)")
+                //Log.d("frame \(frameIndex) blob \(self) avg \(selfAvg) otherBlob \(otherBlob) avg \(otherBlobAvg) newBlobAvg \(newBlobAvg)")
 
                 let distance = self.boundingBox.edgeDistance(to: otherBlob.boundingBox)
 
-                var fudge: Double = 3 // XXX constant
+                let fudge: Double = 3 // XXX constant
 
                 // this new blob needs to be closer to its own line than anything else
                 if otherBlobAvg < otherBlobIdealAvg+fudge, // is the other blob closer to this line than its own?
@@ -623,20 +633,20 @@ public class Blob: CustomStringConvertible {
                     // than that of the separate blobs on both the new
                     // blob line, and also their own ideal lines
 
-                    Log.d("frame \(frameIndex) adding new absorbed blob \(newBlob) from \(self) and \(otherBlob) because \(otherBlobAvg) < \(otherBlobAvg+fudge) && \(newBlobAvg) < \(selfAvg+fudge) && \(selfAvg) < \(minimumAvgDist) && \(selfAvg*2) < \(newBlobAvg) from \(newLine)")
+                    //Log.d("frame \(frameIndex) adding new absorbed blob \(newBlob) from \(self) and \(otherBlob) because \(otherBlobAvg) < \(otherBlobAvg+fudge) && \(newBlobAvg) < \(selfAvg+fudge) && \(selfAvg) < \(minimumAvgDist) && \(selfAvg*2) < \(newBlobAvg) from \(newLine)")
 
                     ret = newBlob
                 } else {
-                    Log.v("frame \(frameIndex) NOT adding new absorbed blob \(newBlob) from \(self) and \(otherBlob) because \(otherBlobAvg) > \(otherBlobAvg+fudge) || \(newBlobAvg) > \(selfAvg+fudge) || \(selfAvg) > \(minimumAvgDist) || \(selfAvg*2) > \(newBlobAvg) from \(newLine)")
+                    //Log.v("frame \(frameIndex) NOT adding new absorbed blob \(newBlob) from \(self) and \(otherBlob) because \(otherBlobAvg) > \(otherBlobAvg+fudge) || \(newBlobAvg) > \(selfAvg+fudge) || \(selfAvg) > \(minimumAvgDist) || \(selfAvg*2) > \(newBlobAvg) from \(newLine)")
                 }
             } else {
-                Log.i("frame \(frameIndex) blob \(newBlob) has no line")
+                //Log.i("frame \(frameIndex) blob \(newBlob) has no line")
             }
         } else {
-            Log.i("frame \(frameIndex) blob \(newBlob) failed to absorb blob (self)")
+            //Log.i("frame \(frameIndex) blob \(newBlob) failed to absorb blob (self)")
         }
         let endTime = NSDate().timeIntervalSince1970
-        Log.d("frame \(frameIndex) \(self) lineMergeV2 with: \(otherBlob) after \(endTime - startTime) seconds, ret = \(ret)")
+        //Log.d("frame \(frameIndex) \(self) lineMergeV2 with: \(otherBlob) after \(endTime - startTime) seconds, ret = \(ret)")
         return ret
     }
 }
