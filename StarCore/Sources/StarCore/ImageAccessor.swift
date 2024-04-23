@@ -162,25 +162,45 @@ struct ImageAccessor: ImageAccess {
     func load(type imageType: FrameImageType,
               atSize size: ImageDisplaySize) async -> PixelatedImage?
     {
-        do {
-            if let filename = nameForImage(ofType: imageType, atSize: size) {
-                if fileManager.fileExists(atPath: filename) {
-                    return try await imageSequence.getImage(withName: filename).image()
-                    //return try await PixelatedImage(fromFile: filename)
-                } else {
-                    // no file
-                    // if this is not a request for an original file, then try
-                    // to load the original and rescale it 
-                    switch size {
-                    case .original:
-                        return nil  // original does not exist, nothing to return
-                    default:
-                        return try await createMissingImage(ofType: imageType, andSize: size)
+        var numRetries = 4
+
+        while numRetries > 0 {
+            do {
+                if let filename = nameForImage(ofType: imageType, atSize: size) {
+                    if fileManager.fileExists(atPath: filename) {
+                        return try await imageSequence.getImage(withName: filename).image()
+                        //return try await PixelatedImage(fromFile: filename)
+                    } else {
+                        // no file
+                        // if this is not a request for an original file, then try
+                        // to load the original and rescale it 
+                        switch size {
+                        case .original:
+                            return nil  // original does not exist, nothing to return
+                        default:
+                            return try await createMissingImage(ofType: imageType, andSize: size)
+                        }
                     }
                 }
+            } catch let error as NSError {
+                if error.code == -1001 {
+                    // The request timed out.
+                    // keep trying here
+                    numRetries -= 1
+                    if numRetries > 0 {
+                        Log.w("couldn't load image of type \(imageType) at size \(size): \(error) will try again \(numRetries) more times")
+                        try? await Task.sleep(nanoseconds: 1_000_000_000)
+                    } else {
+                        Log.e("couldn't load image of type \(imageType) at size \(size): \(error) will try again \(numRetries) more times")
+                    }
+                } else {
+                    Log.e("couldn't load image of type \(imageType) at size \(size): \(error)")
+                    numRetries = 0
+                }
+            } catch {
+                numRetries = 0
+                Log.e("couldn't load image of type \(imageType) at size \(size): \(error)")
             }
-        } catch {
-            Log.e("couldn't load image of type \(imageType) at size \(size): \(error)")
         }
         return nil
     }
