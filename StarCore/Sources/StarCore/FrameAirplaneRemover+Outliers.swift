@@ -255,12 +255,6 @@ extension FrameAirplaneRemover {
             // look for all blobs to promote,
             // and see if we get a better line score if we combine with another 
 
-            Log.d("frame \(frameIndex) absorber analysis gave \(absorberBlobs.count) blobs")
-            if config.writeOutlierGroupFiles {
-                // save filtered blobs image here
-                try await saveImages(for: Array(absorberBlobs.values), as: .absorbed)
-            }
-
             // look for lines that we can extend 
             var blobExtender: BlobLineExtender? = .init(pixelData: subtractionArray,
                                                         blobMap: absorberBlobs,
@@ -296,19 +290,32 @@ extension FrameAirplaneRemover {
 
             self.state = .detectingOutliers2e
 
+            if config.writeOutlierGroupFiles {
+                // save filtered blobs image here
+                try await saveImages(for: Array(smasherBlobs.values), as: .absorbed)
+            }
+
+            
             // filter out all really small blobs here
             let fewerBlobs = self.reduce(smasherBlobs, withMinSize: 16) // XXX constant
             
+
+            if config.writeOutlierGroupFiles {
+                // save filtered blobs image here
+                try await saveImages(for: Array(fewerBlobs.values), as: .rectified)
+            }
+
             let finalIsolatedRemover = IsolatedBlobRemover(blobMap: fewerBlobs,
                                                            width: width,
                                                            height: height,
                                                            frameIndex: frameIndex)
 
-            finalIsolatedRemover.process(minNeighborSize: 40,
-                                         scanSize: 4)
+            finalIsolatedRemover.process(minNeighborSize: 10,
+                                         scanSize: 6)
             
             let filteredBlobs = Array(finalIsolatedRemover.blobMap.values)
 
+            
             Log.i("frame \(frameIndex) has \(filteredBlobs.count) filteredBlobs")
             self.state = .detectingOutliers3
 
