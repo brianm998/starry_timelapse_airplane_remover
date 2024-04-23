@@ -277,9 +277,10 @@ extension FrameAirplaneRemover {
             blobExtender = nil
 
             self.state = .detectingOutliers2d
-            
+
             // another pass at trying to unify nearby blobs that fit together
-            var blobSmasher: BlobSmasher? = .init(blobMap: extenderBlobs,
+            var blobSmasher: BlobSmasher? = .init(blobMap: self.reduce(extenderBlobs,
+                                                                       withMinSize: 8), // XXX constant,
                                                   width: width,
                                                   height: height,
                                                   frameIndex: frameIndex)
@@ -295,12 +296,16 @@ extension FrameAirplaneRemover {
 
             self.state = .detectingOutliers2e
 
-            let finalIsolatedRemover = IsolatedBlobRemover(blobMap: smasherBlobs,
+            // filter out all really small blobs here
+            let fewerBlobs = self.reduce(smasherBlobs, withMinSize: 16) // XXX constant
+            
+            let finalIsolatedRemover = IsolatedBlobRemover(blobMap: fewerBlobs,
                                                            width: width,
                                                            height: height,
                                                            frameIndex: frameIndex)
 
-            finalIsolatedRemover.process(minSize: 40, scanSize: 16)
+            finalIsolatedRemover.process(minNeighborSize: 40,
+                                         scanSize: 4)
             
             let filteredBlobs = Array(finalIsolatedRemover.blobMap.values)
 
@@ -322,6 +327,16 @@ extension FrameAirplaneRemover {
         self.state = .readyForInterFrameProcessing
     }
 
+    fileprivate func reduce(_ map: [String: Blob], withMinSize minSize: Int) -> [String: Blob] {
+        map.compactMapValues { blob in
+            if blob.size > minSize { 
+                return blob
+            } else {
+                return nil
+            }
+        }
+    }
+    
     // returns a list of lines for different sub elements of the given image,
     // sorted so the lines with the highest votes are first
     fileprivate func houghLines(from image: PixelatedImage) -> [MatrixElementLine] {
@@ -540,22 +555,29 @@ extension FrameAirplaneRemover {
            - don't apply decision tree, use the validation image instead
          */
 
-        if !outliersLoadedFromFile { 
-            if let image = await imageAccessor.load(type: .validated, atSize: .original) {
-                switch image.imageData {
-                case .eightBit(let validationArr):
-                    classifyOutliers(with: validationArr)
-                    shouldUseDecisionTree = false
-                    self.markAsChanged()
-                    
-                case .sixteenBit(_):
-                    Log.e("frame \(frameIndex) cannot load 16 bit validation image")
-                }
-            } else {
-                Log.i("frame \(frameIndex) couldn't load validation image from")
+        if let image = await imageAccessor.load(type: .validated, atSize: .original) {
+            switch image.imageData {
+            case .eightBit(let validationArr):
+                classifyOutliers(with: validationArr)
+                shouldUseDecisionTree = false
+                self.markAsChanged()
+                
+            case .sixteenBit(_):
+                Log.e("frame \(frameIndex) cannot load 16 bit validation image")
+            }
+        } else {
+            Log.i("frame \(frameIndex) couldn't load validation image from")
+        }
+/*
+        if config.writeOutlierGroupFiles,
+           let outlierGroups
+        {
+            // calculate decision tree values first 
+            for group in outlierGroups.members.values {
+                let _ = group.decisionTreeValues
             }
         }
-        
+  */      
         if shouldUseDecisionTree {
             Log.i("frame \(frameIndex) classifying outliers with decision tree")
             self.set(state: .interFrameProcessing)
