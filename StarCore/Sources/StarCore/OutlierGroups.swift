@@ -96,15 +96,43 @@ public class OutlierGroups {
         
         mkdir(frameDir)
 
+        // data to save for paint reasons for all outliers in this frame
+        var outlierGroupPaintData: [String:PaintReason] = [:]
+        
         for group in members.values {
-            try await group.writeToFile(in: frameDir)
+            // collate paint reasons for each group
+            if let shouldPaint = group.shouldPaint {
+                outlierGroupPaintData[group.name] = shouldPaint
+            }
+            try await group.writeToFile(in: frameDir) // XXX don't write paint reason here anymore
         }
+
+        // write outlier paint reason json here 
+        
+        let outlierGroupPaintDataFilename = "\(dir)/OutlierGroupPaintData.json"
+
+        let encoder = JSONEncoder()
+//            encoder.outputFormatting = [.prettyPrinted, .withoutEscapingSlashes]
+        encoder.nonConformingFloatEncodingStrategy = .convertToString(
+          positiveInfinity: "inf",
+          negativeInfinity: "-inf",
+          nan: "nan")
+
+        if fileManager.fileExists(atPath: outlierGroupPaintDataFilename) {
+            try fileManager.removeItem(atPath: outlierGroupPaintDataFilename)
+        } 
+        fileManager.createFile(atPath: outlierGroupPaintDataFilename,
+                               contents: try encoder.encode(outlierGroupPaintData),
+                               attributes: nil)
+        
         Log.d("wrote  \(self.members.count) outlier groups for frame \(self.frameIndex) to binary file")
     }
     
     public init(at frameIndex: Int,
                 from dir: String) async throws
     {
+        let startTime = NSDate().timeIntervalSince1970
+        Log.d("frame \(frameIndex) loading outlier groups from \(dir)")
         self.frameIndex = frameIndex
 
         var dataBinFiles: [String] = []
@@ -115,64 +143,65 @@ public class OutlierGroups {
                 dataBinFiles.append(file)
             }
         }
-        self.members = try await withLimitedThrowingTaskGroup(of: OutlierGroup.self) { taskGroup in
+
+        let outlierGroupPaintDataFilename = "\(dir)/OutlierGroupPaintData.json"
+
+        var outlierGroupPaintData: [String:PaintReason]?
+        
+        let decoder = JSONDecoder()
+        decoder.nonConformingFloatDecodingStrategy = .convertFromString(
+          positiveInfinity: "inf",
+          negativeInfinity: "-inf",
+          nan: "nan")
+
+
+        if fileManager.fileExists(atPath: outlierGroupPaintDataFilename) {
+
+            // look for OutlierGroupPaintData.json
+
+            let paintfileurl = NSURL(fileURLWithPath: outlierGroupPaintDataFilename,
+                                     isDirectory: false)
+
+            let (paintData, _) = try await URLSession.shared.data(for: URLRequest(url: paintfileurl as URL))
+                        
+            outlierGroupPaintData = try decoder.decode([String:PaintReason].self, from: paintData)
+        }
+
+        let _outlierGroupPaintData = outlierGroupPaintData
+        
+        self.members = try await withThrowingTaskGroup(of: OutlierGroup.self/*,
+                                                              ioOnly: false*/) { taskGroup in
           var groups: [String: OutlierGroup] = [:]
             for file in dataBinFiles {
                 // load file into data
-                try await taskGroup.addTask() {
+                taskGroup.addTask() {
+                    Log.d("frame \(frameIndex) trying to load outlier group from \(dir)/\(file)")
                     let fileurl = NSURL(fileURLWithPath: "\(dir)/\(file)", isDirectory: false)
  
                     let (groupData, _) = try await URLSession.shared.data(for: URLRequest(url: fileurl as URL))
                     let fu: String = file
                     let fuck = String(fu.dropLast(OutlierGroup.dataBinSuffix.count+1))
-                    //Log.d("trying to load group \(fuck)")
+                    Log.d("frame \(frameIndex) trying to load group \(fuck)")
                     let group = OutlierGroup(withName: fuck,
                                              frameIndex: frameIndex,
                                              with:groupData)
 
                     let paintFilename = String(file.dropLast(OutlierGroup.dataBinSuffix.count) + OutlierGroup.paintJsonSuffix)
 
-                    if fileManager.fileExists(atPath: "\(dir)/\(paintFilename)") {
-                        //Log.d("paintFilename \(paintFilename) exists for \(file) \(fuck)")
-                        // XXX load this shit up too
+                    if let _outlierGroupPaintData {
+                        // the newer full frame json file
 
-                        let paintfileurl = NSURL(fileURLWithPath: "\(dir)/\(paintFilename)",
-                                                 isDirectory: false)
-
-                        let (paintData, _) = try await URLSession.shared.data(for: URLRequest(url: paintfileurl as URL))
-                        
-                        // XXX this is json, decode it
-                        
-                        let decoder = JSONDecoder()
-                        decoder.nonConformingFloatDecodingStrategy = .convertFromString(
-                          positiveInfinity: "inf",
-                          negativeInfinity: "-inf",
-                          nan: "nan")
-                        
-                        await group.shouldPaint(try decoder.decode(PaintReason.self, from: paintData))
-
-                        //Log.d("loaded group.shouldPaint \(group.shouldPaint) for \(group.name) \(fuck)")
-                    }
-
-                    /*
-                     XXX this causes a failure on startup when there is no classification
-                     for this outlier group yet
-                     the crash is because of no loaded frame yet
-                     else {
-                        // classify it
-                        
-                        if let currentClassifier = currentClassifier {
-                            Log.i("no classification for group \(group.name), applying the default classifier now")
-                            let classificationScore = await currentClassifier.classification(of: group)
-                            await group.shouldPaint(.fromClassifier(classificationScore))
+                        if let shouldPaint = _outlierGroupPaintData[group.name] {
+                            await group.shouldPaint(shouldPaint)
+                        } else {
+                            Log.w("frame \(frameIndex) could not find outlier group info for group \(group.name) in outlierGroupPaintData")
                         }
                     }
-                     */
-
+                    
                     return group
-                    }
+                }
             }
-            try await taskGroup.forEach() { group in
+            for try await group in taskGroup {
                 groups[group.name] = group
             }
             return groups
@@ -185,6 +214,9 @@ public class OutlierGroups {
             let (XIndex, YIndex) = self.index(for: group)
             spatialArr[XIndex][YIndex].append(group)
         }
+        let endTime = NSDate().timeIntervalSince1970
+
+        Log.d("frame \(frameIndex) loaded \(self.members.count) outlier groups from file \(dir) in \(endTime-startTime) seconds")
         //Log.i("spatialXCount \(self.spatialXCount) spatialYCount \(self.spatialYCount)")
     }
 

@@ -1121,7 +1121,8 @@ public class OutlierGroup: CustomStringConvertible,
 
     public init(withName name: String,
                 frameIndex: Int,
-                with persitentData: Data) {
+                with persitentData: Data)
+    {
         var index: Int = 0
 
         self.name = name
@@ -1322,30 +1323,6 @@ public class OutlierGroup: CustomStringConvertible,
             fileManager.createFile(atPath: filename,
                                    contents: self.persistentData,
                                    attributes: nil)
-        }
-        if let shouldPaint = self.shouldPaint {
-            // also write out a separate json file with paint reason
-            // this can be easily changed later if desired without re-writing the whole binary file
-            let filename = "\(dir)/\(self.name)-\(OutlierGroup.paintJsonSuffix)"
-
-            let encoder = JSONEncoder()
-            encoder.outputFormatting = [.prettyPrinted, .withoutEscapingSlashes]
-            encoder.nonConformingFloatEncodingStrategy = .convertToString(
-              positiveInfinity: "inf",
-              negativeInfinity: "-inf",
-              nan: "nan")
-
-            let jsonData = try encoder.encode(shouldPaint)
-            if fileManager.fileExists(atPath: filename) {
-                //Log.i("removing already existing paint reason \(filename)")
-                try fileManager.removeItem(atPath: filename)
-            } 
-            //Log.i("creating \(filename)")                      
-            fileManager.createFile(atPath: filename,
-                                   contents: jsonData,
-                                   attributes: nil)
-        } else {
-            Log.i("group \(self) cannot write paint json because of missing shouldPaint")
         }
     }
 }
