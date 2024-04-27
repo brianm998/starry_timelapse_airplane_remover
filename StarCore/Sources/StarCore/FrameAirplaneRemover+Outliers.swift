@@ -282,13 +282,11 @@ extension FrameAirplaneRemover {
 
             self.state = .detectingOutliers2d
 
-            let noSmallBlobs = self.reduce(extenderBlobs, withMinSize: 8) // XXX constant,
-
-            Log.d("frame \(frameIndex) no small blobs returned \(noSmallBlobs.count) blobs")
+         //   Log.d("frame \(frameIndex) no small blobs returned \(noSmallBlobs.count) blobs")
             
             // another pass at trying to unify nearby blobs that fit together
             // drop all blobs 8 pixels or smaller before smashing
-            var blobSmasher: BlobSmasher? = .init(blobMap: noSmallBlobs, 
+            var blobSmasher: BlobSmasher? = .init(blobMap: extenderBlobs,
                                                   width: width,
                                                   height: height,
                                                   frameIndex: frameIndex)
@@ -315,16 +313,44 @@ extension FrameAirplaneRemover {
             //let fewerBlobs = self.reduce(smasherBlobs, withMinSize: 16) // XXX constant
 
 //            Log.d("frame \(frameIndex) fewer blobs returned \(fewerBlobs.count) blobs")
-            
+
+            // weed out blobs that are too small and not bright enough
+            let brighterBlobs: [String: Blob] = smasherBlobs.compactMapValues { blob in
+                if blob.size < 35, // XXX constant
+                   blob.medianIntensity < 2000 // XXX constant
+                { 
+                    return nil
+                } else if blob.size < 20, // XXX constant
+                          blob.medianIntensity < 3000 // XXX constant
+                {
+                    return nil
+                } else if blob.size < 10, // XXX constants 
+                          blob.medianIntensity < 10000
+                {
+                    return nil
+                } else if blob.size < 8,
+                          blob.medianIntensity < 20000 // XXX constants
+                {
+                    return nil
+                } else {
+                    // this blob is either bigger than the largest size tested for above,
+                    // or brighter than the medianIntensity set for its size group
+                    return blob
+                }
+            }
+
+            if config.writeOutlierGroupFiles {
+                // save filtered blobs image here
+                try await saveImages(for: Array(brighterBlobs.values), as: .rectified)
+            }
+
             /*
              Make sure all smaller blobs are close to another blob.  Weeds out a lot of noise.
              */
-            let finalIsolatedRemover = IsolatedBlobRemover(blobMap: smasherBlobs,
+            let finalIsolatedRemover = IsolatedBlobRemover(blobMap: brighterBlobs,
                                                            width: width,
                                                            height: height,
                                                            frameIndex: frameIndex)
-
-
 
             finalIsolatedRemover.process(minNeighborSize: 10, scanSize: 6)
 
@@ -333,11 +359,6 @@ extension FrameAirplaneRemover {
             // blobs to promote to outlier groups
             let filteredBlobs = Array(finalIsolatedRemover.blobMap.values)
             
-            if config.writeOutlierGroupFiles {
-                // save filtered blobs image here
-                try await saveImages(for: Array(filteredBlobs.values), as: .rectified)
-            }
-
             Log.i("frame \(frameIndex) has \(filteredBlobs.count) filteredBlobs")
             self.state = .detectingOutliers3
 
