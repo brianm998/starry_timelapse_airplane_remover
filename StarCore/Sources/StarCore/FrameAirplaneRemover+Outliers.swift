@@ -224,7 +224,6 @@ extension FrameAirplaneRemover {
             }
 
             kht = nil
-
             Log.d("frame \(frameIndex) blob kht analysis returned \(khtBlobs.count) blobs")
             
             if config.writeOutlierGroupFiles {
@@ -234,6 +233,7 @@ extension FrameAirplaneRemover {
             
             Log.d("frame \(frameIndex) kht analysis done")
 
+            /*
             self.state = .detectingOutliers2b
 
             /*
@@ -279,6 +279,7 @@ extension FrameAirplaneRemover {
             blobExtender = nil
 
             Log.d("frame \(frameIndex) blob extender returned \(extenderBlobs.count) blobs")
+*/
 
             self.state = .detectingOutliers2d
 
@@ -286,7 +287,7 @@ extension FrameAirplaneRemover {
             
             // another pass at trying to unify nearby blobs that fit together
             // drop all blobs 8 pixels or smaller before smashing
-            var blobSmasher: BlobSmasher? = .init(blobMap: extenderBlobs,
+            var blobSmasher: BlobSmasher? = .init(blobMap: khtBlobs,//isolatedRemoverBlobs,//extenderBlobs,
                                                   width: width,
                                                   height: height,
                                                   frameIndex: frameIndex)
@@ -300,7 +301,7 @@ extension FrameAirplaneRemover {
             
             blobSmasher = nil
 
-            Log.d("frame \(frameIndex) blob smasher returned \(extenderBlobs.count) blobs")
+//            Log.d("frame \(frameIndex) blob smasher returned \(extenderBlobs.count) blobs")
             
             self.state = .detectingOutliers2e
 
