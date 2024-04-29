@@ -111,7 +111,9 @@ public class OutlierGroup: CustomStringConvertible,
         let pixelImage = PixelatedImage(width: bounds.width,
                                         height: bounds.height,
                                         grayscale16BitImageData: pixels)
-
+        
+        // XXX apply some edge border here like with the blobs?
+        
         if let image = pixelImage.nsImage {
             self.lines = kernelHoughTransform(image: image,
                                               clusterMinSize: 4)
@@ -1085,6 +1087,31 @@ public class OutlierGroup: CustomStringConvertible,
         }
     }
 
+    /*
+
+     persistent data rewrite:
+
+     instead of keeping a separate binary file for each outlier group,
+     keep only a single image for each frame, with the index of the outlier
+     group present at each location as the value of the pixel.
+     star group numbers higher than zero, something like 1000 or morex
+
+     outlier groups will be named by number, not min of bounds
+
+     grabbing outlier data from file:
+
+     - iterate over every pixel of frame outlier image
+     - each non-zero pixel is part of the outlier group with that name
+     - keep track of all pixels for all outlier groups while iterating on image
+     - after image iteration, create outlier groups from each group of pixels found,
+       named by the key in the assembled pixel map
+       - calculate bounds, brightness, size, hough lines from pixels
+       - use lazy computed properties for these
+
+     - special case where there are no outliers?  don't write image and set some flag? 
+     */
+
+    
     public var persistentDataSizeBytes: Int {
 
         var size = 0

@@ -109,7 +109,7 @@ public class OutlierGroups {
 
         // write outlier paint reason json here 
         
-        let outlierGroupPaintDataFilename = "\(dir)/OutlierGroupPaintData.json"
+        let outlierGroupPaintDataFilename = "\(dir)/\(frameIndex)/OutlierGroupPaintData.json"
 
         let encoder = JSONEncoder()
 //            encoder.outputFormatting = [.prettyPrinted, .withoutEscapingSlashes]
@@ -148,15 +148,15 @@ public class OutlierGroups {
 
         var outlierGroupPaintData: [String:PaintReason]?
         
-        let decoder = JSONDecoder()
-        decoder.nonConformingFloatDecodingStrategy = .convertFromString(
-          positiveInfinity: "inf",
-          negativeInfinity: "-inf",
-          nan: "nan")
-
 
         if fileManager.fileExists(atPath: outlierGroupPaintDataFilename) {
 
+            let decoder = JSONDecoder()
+            decoder.nonConformingFloatDecodingStrategy = .convertFromString(
+              positiveInfinity: "inf",
+              negativeInfinity: "-inf",
+              nan: "nan")
+            
             // look for OutlierGroupPaintData.json
 
             let paintfileurl = NSURL(fileURLWithPath: outlierGroupPaintDataFilename,
@@ -194,7 +194,7 @@ public class OutlierGroups {
                         if let shouldPaint = _outlierGroupPaintData[group.name] {
                             await group.shouldPaint(shouldPaint)
                         } else {
-                            Log.w("frame \(frameIndex) could not find outlier group info for group \(group.name) in outlierGroupPaintData")
+                            Log.i("frame \(frameIndex) could not find outlier group info for group \(group.name) in outlierGroupPaintData")
                         }
                     }
                     

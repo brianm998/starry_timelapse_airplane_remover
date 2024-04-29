@@ -169,8 +169,9 @@ public struct Config: Codable {
     // 0.6.1 rewrote outlier detection logic to find smaller groups better
     // 0.6.2 added IsolatedBolbRemover, and BlobSmasher, tweaked lots of other blob stuff as well
     // 0.6.3 more cleanup, removed outlierMaxThreshold, changed how this is represented (/4 gone)
+    // 0.6.4 attempted speed up, more blob filtering
     
-    public var starVersion = "0.6.3" // XXX move this out
+    public var starVersion = "0.6.4" // XXX move this out
 
     public func writeJson(named filename: String) {
         
