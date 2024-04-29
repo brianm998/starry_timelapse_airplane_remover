@@ -4,9 +4,7 @@ import Semaphore
 
 // an alternative to task groups, looking for thread stability
 
-fileprivate var numberRunning = NumberRunning()
-
-public let taskMaster = TaskMaster()
+public let defaultTaskMaster = TaskMaster(maxConcurrentTasks: TaskRunner.maxConcurrentTasks)
 
 public class TaskRunner {
     // XXX getting this number right is hard
@@ -46,8 +44,16 @@ public actor TaskMaster {
     private var mediumPrioTasks: [TaskEnabler] = []
     private var lowPrioTasks: [TaskEnabler] = []
 
+    public var numberRunning = NumberRunning()
+    private let maxConcurrentTasks: UInt
+    
+    public init(maxConcurrentTasks: UInt) {
+        self.maxConcurrentTasks = maxConcurrentTasks
+        Task { await self.numberRunning.set(taskMaster: self) }
+    }
+    
     public func register(_ enabler: TaskEnabler) async {
-        if await numberRunning.startOnIncrement(to: TaskRunner.maxConcurrentTasks) {
+        if await numberRunning.startOnIncrement(to: maxConcurrentTasks) {
             // let it run right now
             enabler.enable()
         } else {
@@ -72,7 +78,7 @@ public actor TaskMaster {
     }
     
     public func enableTask() async {
-        while await numberRunning.startOnIncrement(to: TaskRunner.maxConcurrentTasks) {
+        while await numberRunning.startOnIncrement(to: maxConcurrentTasks) {
             // we can start another task, look for one
             if highPrioTasks.count > 0 {
                 highPrioTasks.removeFirst().enable()
@@ -102,6 +108,7 @@ public actor TaskMaster {
  }
  */
 public func runTask<Type>(at priority: TaskPriority = .medium,
+                          with taskMaster: TaskMaster = defaultTaskMaster,
                           _ closure: @escaping () async -> Type) async -> Task<Type,Never>
 {
     let enabler = TaskEnabler(priority: priority)
@@ -109,7 +116,7 @@ public func runTask<Type>(at priority: TaskPriority = .medium,
     await enabler.wait()
     return Task<Type,Never> {
         let ret = await closure() // run closure in separate task
-        await numberRunning.decrement()
+        await taskMaster.numberRunning.decrement()
         return ret
     }
 }
@@ -127,6 +134,7 @@ public func runTask<Type>(at priority: TaskPriority = .medium,
  }
  */
 public func runThrowingTask<Type>(at priority: TaskPriority,
+                                  with taskMaster: TaskMaster = defaultTaskMaster,
                                   _ closure: @escaping () async throws -> Type)
   async throws -> Task<Type,Error>
 {
@@ -136,10 +144,10 @@ public func runThrowingTask<Type>(at priority: TaskPriority,
     return Task<Type,Error> {
         do {
             let ret = try await closure() // run closure in separate task
-            await numberRunning.decrement()
+            await taskMaster.numberRunning.decrement()
             return ret
         } catch {
-            await numberRunning.decrement()
+            await taskMaster.numberRunning.decrement()
             throw error
         }
     }

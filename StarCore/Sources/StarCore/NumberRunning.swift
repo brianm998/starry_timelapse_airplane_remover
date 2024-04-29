@@ -22,7 +22,13 @@ public actor NumberRunning {
     }
     private var updateCallback: ((UInt)->Void)?
 
+    private weak var taskMaster: TaskMaster?
+    
     public init() { }
+
+    public func set(taskMaster: TaskMaster) {
+        self.taskMaster = taskMaster
+    }
     
     public func updateCallback(updateCallback: @escaping (UInt)->Void) {
         self.updateCallback = updateCallback
@@ -32,7 +38,7 @@ public actor NumberRunning {
     public func decrement() {
         if count > 0 {count -= 1} else { Log.e("cannot decrement past zero") }
         // let the task master know that it can maybe start a pending task
-        Task { await taskMaster.enableTask() }
+        Task { await taskMaster?.enableTask() }
     }
 
     public func currentValue() -> UInt { count }

@@ -22,13 +22,11 @@ public actor LimitedTaskGroup<T> {
     var iterator = 0
 
     let taskPriority: TaskPriority
-    let idlePercentage: Double
+    let taskMaster: TaskMaster
     
-    public init(at taskPriority: TaskPriority,
-                idlePercentage: Double = 20) // percentage of idle CPU needed before starting task
-    {
+    public init(at taskPriority: TaskPriority, with taskMaster: TaskMaster) {
         self.taskPriority = taskPriority
-        self.idlePercentage = idlePercentage
+        self.taskMaster = taskMaster
     }
 
     public func next() async ->  T? {
@@ -46,7 +44,7 @@ public actor LimitedTaskGroup<T> {
     }
 
     public func addTask(closure: @escaping () async -> T) async {
-        tasks.append(await runTask(at: taskPriority, closure))
+        tasks.append(await runTask(at: taskPriority, with: taskMaster, closure))
     }
 }
 
@@ -67,12 +65,12 @@ func example() async {
 public func withLimitedTaskGroup<ChildTaskResult, GroupResult>(
   of childTaskResultType: ChildTaskResult.Type,
   at taskPriority: TaskPriority = .high,
-  idle idlePercentage: Double = 20,
+  with taskMaster: TaskMaster = defaultTaskMaster,
   returning returnType: GroupResult.Type = GroupResult.self,
   body: (inout LimitedTaskGroup<ChildTaskResult>) async -> GroupResult
 ) async -> GroupResult where ChildTaskResult : Sendable
 {
     var limitedTaskGroup: LimitedTaskGroup<ChildTaskResult> =
-      LimitedTaskGroup(at: taskPriority, idlePercentage: idlePercentage)
+      LimitedTaskGroup(at: taskPriority, with: taskMaster)
     return await body(&limitedTaskGroup)
 }
