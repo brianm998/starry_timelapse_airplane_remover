@@ -148,9 +148,7 @@ extension FrameAirplaneRemover {
                                                      imageHeight: height,
                                                      pixelData: subtractionArray,
                                                      frameIndex: frameIndex,
-                                                     neighborType: .eight,//.fourCardinal,
-                                                     minIntensity: constants.blobberMinIntensity,
-                                                     minContrast: constants.blobberMinContrast)
+                                                     neighborType: .eight)//.fourCardinal
 
             // run the blobber
             blobber?.process()
@@ -181,7 +179,7 @@ extension FrameAirplaneRemover {
                                                                           height: height,
                                                                           frameIndex: frameIndex)
             
-            dimIsolatedBlobRemover_1?.process(scanSize: 20)
+            dimIsolatedBlobRemover_1?.process(scanSize: 20) // XXX constant
             
             guard let dimIsolatedBlobRemoverBlobs = dimIsolatedBlobRemover_1?.blobMap else {
                 Log.w("frame \(frameIndex) no blobs from blobber")
@@ -284,7 +282,7 @@ extension FrameAirplaneRemover {
 
 
   
-            finalIsolatedRemover.process(minNeighborSize: 5, scanSize: 12)
+            finalIsolatedRemover.process(minNeighborSize: 5, scanSize: 12) // XXX constants
 
             if config.writeOutlierGroupFiles {
                 // save filtered blobs image here
@@ -419,17 +417,6 @@ extension FrameAirplaneRemover {
         filteredLines.sort { $0.line.votes > $1.line.votes }
 
         log(elements: filteredLines)
-        
-        if false,               // XXX this seems to miss some lines that matter :(
-           filteredLines.count > 0 {
-            let medianIndex = filteredLines.count/2
-            let median = filteredLines[medianIndex]
-
-            let medianStripped = Array(filteredLines.prefix(medianIndex))
-            log(elements: medianStripped)
-            Log.i("frame \(frameIndex) has \(medianStripped.count) filtered lines")
-            return medianStripped
-        }
         
         Log.i("frame \(frameIndex) has \(filteredLines.count) filtered lines")
 

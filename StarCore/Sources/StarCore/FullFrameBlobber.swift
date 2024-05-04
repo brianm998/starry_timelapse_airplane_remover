@@ -45,18 +45,16 @@ public class FullFrameBlobber: AbstractBlobber {
                 imageHeight: Int,
                 pixelData: [UInt16],
                 frameIndex: Int,
-                neighborType: NeighborType,
-                minIntensity: UInt16,
-                minContrast: Double)
+                neighborType: NeighborType)
     {
-        self.minIntensity = minIntensity
+        self.minIntensity = constants.blobberMinPixelIntensity
         self.config = config
         super.init(imageWidth: imageWidth,
                    imageHeight: imageHeight,
                    pixelData: pixelData,
                    frameIndex: frameIndex,
                    neighborType: neighborType,
-                   minContrast: minContrast)
+                   minContrast: constants.blobberMinContrast)
     }
 
     public override func process() {
@@ -119,16 +117,14 @@ public class FullFrameBlobber: AbstractBlobber {
             }
 
             // these blobs are just too dim
-            if blob.medianIntensity < 2000 { // XXX constant
-                return false
-            }
+            if blob.medianIntensity < constants.blobberMinBlobIntensity { return false }
 
             // only keep smaller blobs if they are bright enough
-            if blob.size <= 20,
-               blob.medianIntensity < 3000 { return false }
+            if blob.size <= constants.blobberBrightSmallSize,
+               blob.medianIntensity < constants.blobberBrightMinIntensity { return false }
 
             // anything this small is noise
-            if blob.size <= 4 { return false }
+            if blob.size <= constants.blobberMinBlobSize { return false }
 
             // this blob has passed all checks, keep it 
             return true

@@ -33,7 +33,7 @@ public class Constants {
 
     // pixels with less changed intensity than this cannot start blobs
     // lower values give more blobs
-    public var blobberMinIntensity: UInt16 {
+    public var blobberMinPixelIntensity: UInt16 {
         switch self.processingState {
         case .fast:
             return 10000        
@@ -57,24 +57,80 @@ public class Constants {
             return 62
         }
     }
-    
-    public var khtMinLineVotes: Int {
+
+    // the size that blobs need to be smaller than for
+    // blobberBrightMinIntensity to apply
+    public var blobberBrightSmallSize: Int {
         switch self.processingState {
         case .fast:
-            return 10000        
+            return 50           // XXX test this
         case .normal:
-            return 4000         // XXX test this
+            return 30         // XXX test this
         case .slow:
-            return 800
+            return 20
         }
     }
 
+    // if a blob is smaller than blobberBrightSmallSize,
+    // then discard it if it's median intensity is less than this
+    public var blobberBrightMinIntensity: UInt16 {
+        switch self.processingState {
+        case .fast:
+            return 8000           // XXX test this
+        case .normal:
+            return 4000         // XXX test this
+        case .slow:
+            return 3000
+        }
+    }
+    
+    // blobs smaller than this are ignored by the blobber
+    // smaller values give more blobs
+    public var blobberMinBlobSize: Int {
+        switch self.processingState {
+        case .fast:
+            return 16           // XXX test this
+        case .normal:
+            return 8         // XXX test this
+        case .slow:
+            return 4
+        }
+    }
+
+    // blobs with less median intensity than this are ignored
+    public var blobberMinBlobIntensity: UInt16 {
+        switch self.processingState {
+        case .fast:
+            return 4000         // XXX test this
+        case .normal:
+            return 3000         // XXX test this
+        case .slow:
+            return 2000
+        }
+    }
+    
+    // lines generated from the subtraction frame
+    // that have fewer votes than this are ignored
+    // larger values speed up processing and
+    // decrease how many outlier groups are joined with lines
+    public var khtMinLineVotes: Int {
+        switch self.processingState {
+        case .fast:
+            return 6000        
+        case .normal:
+            return 3000         // XXX test this
+        case .slow:
+            return 2000
+        }
+    }
+
+    // how far off of the end of the line do we look when doing KHT processing?
     public var khtLineExtensionAmount: Int {
         switch self.processingState {
         case .fast:
-            return 64           
+            return 0           
         case .normal:
-            return 128         // XXX test this
+            return 64         // XXX test this
         case .slow:
             return 256
         }
