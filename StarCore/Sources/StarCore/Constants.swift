@@ -17,10 +17,13 @@ You should have received a copy of the GNU General Public License along with sta
 public let constants = Constants()
 
 
-public enum ProcessingState {
-    case fast                   // 2-4x faster than slow, finds fewer dimmer airplanes
-    case normal                 // a middle balance between speed and accuracy
-    case slow                   // takes much longer, finds a LOT more bad signal
+// how hard to we try to detect airplanes and such?
+// the harder we try, the longer it takes, but the more results we get.
+public enum DetectionType: String {
+    case easy       // 2-4x faster than excessive, finds fewer dimmer airplanes
+    case normal     // a balance between speed and accuracy
+    case hard       // tries to get more airplanes than normal and not take forever
+    case excessive  // takes much longer, finds a LOT more bad signals
 }
 
 public class Constants {
@@ -30,21 +33,23 @@ public class Constants {
     // XXX put it in the video filenames
     // XXX add this to dirs created with -w so re-running with
     //     a different state creates new interemediate states for outliers, etc.
-    var processingState: ProcessingState = .normal
+    var detectionType: DetectionType = .hard // XXX set from config if available
     
-    public func set(processingState: ProcessingState) {
-        self.processingState = processingState
+    public func set(detectionType: DetectionType) {
+        self.detectionType = detectionType
     }
 
     // pixels with less changed intensity than this cannot start blobs
     // lower values give more blobs
     public var blobberMinPixelIntensity: UInt16 {
-        switch self.processingState {
-        case .fast:
+        switch self.detectionType {
+        case .easy:
             return 8000        
         case .normal:
             return 5000
-        case .slow:
+        case .hard:
+            return 3000
+        case .excessive:
             return 2000
         }
     }
@@ -53,12 +58,14 @@ public class Constants {
     // darker than their seed pixel
     // larger values give more blobs
     public var blobberMinContrast: Double {
-        switch self.processingState {
-        case .fast:
+        switch self.detectionType {
+        case .easy:
             return 40         
         case .normal:
             return 50        
-        case .slow:
+        case .hard:
+            return 55
+        case .excessive:
             return 62
         }
     }
@@ -66,12 +73,14 @@ public class Constants {
     // the size that blobs need to be smaller than for
     // blobberBrightMinIntensity to apply
     public var blobberBrightSmallSize: Int {
-        switch self.processingState {
-        case .fast:
+        switch self.detectionType {
+        case .easy:
             return 40        
         case .normal:
             return 25        
-        case .slow:
+        case .hard:
+            return 22
+        case .excessive:
             return 20
         }
     }
@@ -79,12 +88,14 @@ public class Constants {
     // if a blob is smaller than blobberBrightSmallSize,
     // then discard it if it's median intensity is less than this
     public var blobberBrightMinIntensity: UInt16 {
-        switch self.processingState {
-        case .fast:
+        switch self.detectionType {
+        case .easy:
             return 4000      
         case .normal:
             return 3500      
-        case .slow:
+        case .hard:
+            return 3300
+        case .excessive:
             return 3000
         }
     }
@@ -92,12 +103,14 @@ public class Constants {
     // blobs smaller than this are ignored by the blobber
     // smaller values give more blobs
     public var blobberMinBlobSize: Int {
-        switch self.processingState {
-        case .fast:
+        switch self.detectionType {
+        case .easy:
             return 10        
         case .normal:
             return 8         
-        case .slow:
+        case .hard:
+            return 6
+        case .excessive:
             return 4
         }
     }
@@ -105,12 +118,14 @@ public class Constants {
     // blobs with less median intensity than this are ignored
     // lower values give more blobs
     public var blobberMinBlobIntensity: UInt16 {
-        switch self.processingState {
-        case .fast:
+        switch self.detectionType {
+        case .easy:
             return 3000      
         case .normal:
             return 2500      
-        case .slow:
+        case .hard:
+            return 2200
+        case .excessive:
             return 2000
         }
     }
@@ -120,12 +135,14 @@ public class Constants {
     // larger values speed up processing and
     // decrease how many outlier groups are joined with lines
     public var khtMinLineVotes: Int {
-        switch self.processingState {
-        case .fast:
+        switch self.detectionType {
+        case .easy:
             return 6000        
         case .normal:
             return 3000      
-        case .slow:
+        case .hard:
+            return 2500
+        case .excessive:
             return 2000
         }
     }
@@ -133,12 +150,14 @@ public class Constants {
     // how far off of the end of the line do we look when doing KHT processing?
     // larger values increase processing time
     public var khtLineExtensionAmount: Int {
-        switch self.processingState {
-        case .fast:
+        switch self.detectionType {
+        case .easy:
             return 0           
         case .normal:
             return 64
-        case .slow:
+        case .hard:
+            return 128
+        case .excessive:
             return 256
         }
     }
