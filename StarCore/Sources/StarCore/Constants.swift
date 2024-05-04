@@ -53,6 +53,7 @@ public class Constants {
 
     // the size that blobs need to be smaller than for
     // blobberBrightMinIntensity to apply
+    // larger size gives fewer blobs
     public var blobberBrightSmallSize: Int {
         switch self.detectionType {
         case .easy:
@@ -68,6 +69,7 @@ public class Constants {
 
     // if a blob is smaller than blobberBrightSmallSize,
     // then discard it if it's median intensity is less than this
+    // larger values give fewer blobs
     public var blobberBrightMinIntensity: UInt16 {
         switch self.detectionType {
         case .easy:
