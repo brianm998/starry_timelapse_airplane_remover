@@ -17,6 +17,7 @@ public struct Config: Codable {
 
     public init() {
         self.outputPath = "."
+        self.detectionType = .normal
         //self.numConcurrentRenders = 0
         self.imageSequenceDirname = ""
         self.imageSequencePath = ""
@@ -37,6 +38,7 @@ public struct Config: Codable {
     }
 
     public init(outputPath: String?,
+                detectionType: DetectionType = .normal,
                 imageSequenceName: String,
                 imageSequencePath: String,
                 writeOutlierGroupFiles: Bool,
@@ -49,6 +51,7 @@ public struct Config: Codable {
         } else {
             self.outputPath = "."
         }
+        self.detectionType = detectionType
         self.imageSequenceDirname = imageSequenceName
         self.imageSequencePath = imageSequencePath
         self.writeOutlierGroupFiles = writeOutlierGroupFiles
@@ -59,6 +62,8 @@ public struct Config: Codable {
 
     // the base dir under which to create dir(s) for output sequence(s)
     public var outputPath: String
+
+    public var detectionType: DetectionType
     
     // the name of the directory containing the input sequence
     public var imageSequenceDirname: String
@@ -154,6 +159,7 @@ public struct Config: Codable {
     // 0.6.2 added IsolatedBolbRemover, and BlobSmasher, tweaked lots of other blob stuff as well
     // 0.6.3 more cleanup, removed outlierMaxThreshold, changed how this is represented (/4 gone)
     // 0.6.4 attempted speed up, more blob filtering
+    // 0.6.5 re-worked blob detection again, added separate DetectionType 
     
     public var starVersion = "0.6.4" // XXX move this out
 
@@ -161,23 +167,22 @@ public struct Config: Codable {
         
             // write to config json
 
-            let encoder = JSONEncoder()
-            encoder.outputFormatting = [.prettyPrinted, .withoutEscapingSlashes]
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .withoutEscapingSlashes]
 
-            do {
-                let jsonData = try encoder.encode(self)
+        do {
+            let jsonData = try encoder.encode(self)
 
-                let fullPath = "\(self.outputPath)/\(filename)"
-                if fileManager.fileExists(atPath: fullPath) {
-                    Log.w("cannot write to \(fullPath), it already exists")
-                } else {
-                    Log.i("creating \(fullPath)")                      
-                    fileManager.createFile(atPath: fullPath, contents: jsonData, attributes: nil)
-                }
-            } catch {
-                Log.e("\(error)")
+            let fullPath = "\(self.outputPath)/\(filename)"
+            if fileManager.fileExists(atPath: fullPath) {
+                Log.w("cannot write to \(fullPath), it already exists")
+            } else {
+                Log.i("creating \(fullPath)")                      
+                fileManager.createFile(atPath: fullPath, contents: jsonData, attributes: nil)
             }
-
+        } catch {
+            Log.e("\(error)")
+        }
     }
 }
 

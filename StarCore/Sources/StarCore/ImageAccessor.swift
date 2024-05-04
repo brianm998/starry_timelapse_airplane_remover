@@ -78,7 +78,7 @@ struct ImageAccessor: ImageAccess {
     init(config: Config, imageSequence: ImageSequence, baseFileName: String) {
         // the dirname (not full path) of where the main output files will sit
         self.config = config
-        let _basename = "\(config.imageSequenceDirname)-star-v-\(config.starVersion)"
+        let _basename = "\(config.imageSequenceDirname)-star-v-\(config.starVersion)-\(config.detectionType.rawValue)"
         self.baseDirName = _basename.replacingOccurrences(of: ".", with: "_")
         self.baseFileName = baseFileName
         self.imageSequence = imageSequence

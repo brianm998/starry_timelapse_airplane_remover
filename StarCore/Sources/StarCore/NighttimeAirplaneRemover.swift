@@ -54,7 +54,8 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
         self.isGUI = isGUI     // XXX make this better
         self.writeOutputFiles = writeOutputFiles
 
-        let _basename = "\(config.imageSequenceDirname)-star-v-\(config.starVersion)"
+        // XXX duplicated in ImageAccessor :(
+        let _basename = "\(config.imageSequenceDirname)-star-v-\(config.starVersion)-\(config.detectionType.rawValue)"
         self.basename = _basename.replacingOccurrences(of: ".", with: "_")
         outlierOutputDirname = "\(config.outputPath)/\(basename)-outliers"
 
@@ -96,12 +97,12 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
         }
         
         finalProcessor = await FinalProcessor(with: config,
-                                          callbacks: callbacks,
-                                          publisher: publisher,
-                                          numberOfFrames: imageSequenceSize,
-                                          shouldProcess: shouldProcess,
-                                          imageSequence: imageSequence,
-                                          isGUI: isGUI || processExistingFiles)
+                                              callbacks: callbacks,
+                                              publisher: publisher,
+                                              numberOfFrames: imageSequenceSize,
+                                              shouldProcess: shouldProcess,
+                                              imageSequence: imageSequence,
+                                              isGUI: isGUI || processExistingFiles)
     }
 
     public override func run() async throws {
@@ -204,6 +205,7 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
                      imageBytesPerPixel: Int) async throws -> FrameAirplaneRemover
     {
         let loadOutliersFromFile: () async -> OutlierGroups? = {
+            Log.d("frame \(frameIndex) loading outliers from frame") 
             var outlierGroupsForThisFrame: OutlierGroups?
 
             let startTime = Date().timeIntervalSinceReferenceDate
@@ -214,6 +216,7 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
             if FileManager.default.fileExists(atPath: frame_outliers_new_binary_dirname) {
                 do {
                     startTime1 = Date().timeIntervalSinceReferenceDate
+                    Log.d("frame \(frameIndex) about to load outlier groups") 
                     outlierGroupsForThisFrame = try await OutlierGroups(at: frameIndex, from: frame_outliers_new_binary_dirname)
                     endTime1 = Date().timeIntervalSinceReferenceDate
                 } catch {
@@ -227,7 +230,7 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
             Log.i("TIMES \(startTime1 - startTime) - \(endTime1 - startTime1) - \(end_time - endTime1) reading outlier group data for frame \(frameIndex)")
             
             if let _ = outlierGroupsForThisFrame  {
-                Log.i("loading frame \(frameIndex) with outlier groups from file")
+                Log.i("loading frame \(frameIndex) with outlier groups from disk")
             } else {
                 Log.d("loading frame \(frameIndex)")
             }
@@ -235,18 +238,18 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
         }
         
         return try await FrameAirplaneRemover(with: config,
-                                          width: imageWidth,
-                                          height: imageHeight,
-                                          bytesPerPixel: imageBytesPerPixel,
-                                          callbacks: callbacks,
-                                          imageSequence: imageSequence,
-                                          atIndex: frameIndex,
-                                          outputFilename: outputFilename,
-                                          baseName: baseName,
-                                          outlierOutputDirname: outlierOutputDirname,
-                                          outlierGroupLoader: loadOutliersFromFile,
-                                          fullyProcess: fullyProcess,
-                                          writeOutputFiles: writeOutputFiles)
+                                              width: imageWidth,
+                                              height: imageHeight,
+                                              bytesPerPixel: imageBytesPerPixel,
+                                              callbacks: callbacks,
+                                              imageSequence: imageSequence,
+                                              atIndex: frameIndex,
+                                              outputFilename: outputFilename,
+                                              baseName: baseName,
+                                              outlierOutputDirname: outlierOutputDirname,
+                                              outlierGroupLoader: loadOutliersFromFile,
+                                              fullyProcess: fullyProcess,
+                                              writeOutputFiles: writeOutputFiles)
     }        
 }
               

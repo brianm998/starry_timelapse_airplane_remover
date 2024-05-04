@@ -13,32 +13,22 @@ You should have received a copy of the GNU General Public License along with sta
 
 */
 
-
+// public global
 public let constants = Constants()
-
 
 // how hard to we try to detect airplanes and such?
 // the harder we try, the longer it takes, but the more results we get.
-public enum DetectionType: String {
+public enum DetectionType: String, Codable, CaseIterable {
     case easy       // 2-4x faster than excessive, finds fewer dimmer airplanes
     case normal     // a balance between speed and accuracy
-    case hard       // tries to get more airplanes than normal and not take forever
+    case strong     // get more airplanes than normal and not take forever
     case excessive  // takes much longer, finds a LOT more bad signals
 }
 
 public class Constants {
 
-    // XXX make this a command line parameter
-    // XXX stick it in the config
-    // XXX put it in the video filenames
-    // XXX add this to dirs created with -w so re-running with
-    //     a different state creates new interemediate states for outliers, etc.
-    var detectionType: DetectionType = .hard // XXX set from config if available
+    var detectionType: DetectionType = .normal
     
-    public func set(detectionType: DetectionType) {
-        self.detectionType = detectionType
-    }
-
     // pixels with less changed intensity than this cannot start blobs
     // lower values give more blobs
     public var blobberMinPixelIntensity: UInt16 {
@@ -47,7 +37,7 @@ public class Constants {
             return 8000        
         case .normal:
             return 5000
-        case .hard:
+        case .strong:
             return 3000
         case .excessive:
             return 2000
@@ -63,7 +53,7 @@ public class Constants {
             return 40         
         case .normal:
             return 50        
-        case .hard:
+        case .strong:
             return 55
         case .excessive:
             return 62
@@ -78,7 +68,7 @@ public class Constants {
             return 40        
         case .normal:
             return 25        
-        case .hard:
+        case .strong:
             return 22
         case .excessive:
             return 20
@@ -93,7 +83,7 @@ public class Constants {
             return 4000      
         case .normal:
             return 3500      
-        case .hard:
+        case .strong:
             return 3300
         case .excessive:
             return 3000
@@ -108,7 +98,7 @@ public class Constants {
             return 10        
         case .normal:
             return 8         
-        case .hard:
+        case .strong:
             return 6
         case .excessive:
             return 4
@@ -123,7 +113,7 @@ public class Constants {
             return 3000      
         case .normal:
             return 2500      
-        case .hard:
+        case .strong:
             return 2200
         case .excessive:
             return 2000
@@ -140,7 +130,7 @@ public class Constants {
             return 6000        
         case .normal:
             return 3000      
-        case .hard:
+        case .strong:
             return 2500
         case .excessive:
             return 2000
@@ -155,7 +145,7 @@ public class Constants {
             return 0           
         case .normal:
             return 64
-        case .hard:
+        case .strong:
             return 128
         case .excessive:
             return 256

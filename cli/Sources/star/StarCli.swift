@@ -69,13 +69,18 @@ You should have received a copy of the GNU General Public License along with sta
        775 and close to it have some green airplanes
      - frame 786 has an enormous group that includes mountains and an airplane,
        and when they're not connected at all
- 
+
+   - after lots of changes:
+     - frame 72 middle lower left missed some bright spots.      
+     - frame 746 lost parts of airplane between asb and rect
+
+
+     
  - use brightness as a factor w/ size, i.e. allow for smaller really bright groups
  - make render this frame have a keyboard shortcut
  - change how gui frame saver works, sometimes it misses changes
  - have saved frames also render
  - make UI async images load with previews first
- 
 
  
  - try this for GPU, metal sucks:
@@ -227,6 +232,9 @@ struct StarCli: AsyncParsableCommand {
         May need to be reduced to a lower value if to consume less ram on some machines.
         """)
     var numConcurrentRenders: UInt = TaskRunner.maxConcurrentTasks
+
+    @Option(name: .shortAndLong, help: "Detection Types")
+    var detectionType: DetectionType = .normal
     
     @Option(name: .shortAndLong, help: """
         When set, outlier groups closer to the bottom of the screen than this are ignored.
@@ -318,6 +326,7 @@ struct StarCli: AsyncParsableCommand {
                 }
 
                 config = Config(outputPath: _outputPath,
+                                detectionType: detectionType,
                                 imageSequenceName: inputImageSequenceName,
                                 imageSequencePath: inputImageSequencePath,
                                 writeOutlierGroupFiles: shouldWriteOutlierGroupFiles,
@@ -417,5 +426,7 @@ struct StarCli: AsyncParsableCommand {
 // needs ArgumentParser, so it's here in cli land
 // allows the log level to be expressed on the command line as an argument
 extension Log.Level: ExpressibleByArgument { }
+
+extension DetectionType: ExpressibleByArgument { }
 
 fileprivate let fileManager = FileManager.default
