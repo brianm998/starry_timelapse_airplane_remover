@@ -148,6 +148,11 @@ extension FrameAirplaneRemover {
                                                      frameIndex: frameIndex,
                                                      neighborType: .eight)//.fourCardinal
 
+
+            self.state = .detectingOutliers2p2
+
+            blobber?.sortPixels()
+            
             self.state = .detectingOutliers2
             
             // run the blobber

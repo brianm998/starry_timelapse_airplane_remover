@@ -17,6 +17,7 @@ public protocol Blobber {
     var blobs: [Blob] { get }
     var blobMap: [String: Blob] { get } // keyed by blob id
 
+    func sortPixels()
     func process() 
 }
 

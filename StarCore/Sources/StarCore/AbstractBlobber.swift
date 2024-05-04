@@ -20,7 +20,10 @@ public class AbstractBlobber: Blobber {
         Log.w("abstract blobber does nothing")
     }
     
-
+    public func sortPixels() {
+        Log.w("abstract blobber does nothing")
+    }
+    
     public let imageWidth: Int
     public let imageHeight: Int
     public let pixelData: [UInt16]

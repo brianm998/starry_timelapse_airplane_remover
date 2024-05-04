@@ -62,12 +62,13 @@ public class FullFrameBlobber: AbstractBlobber {
                 }
             }
         }
-
-        Log.d("frame \(frameIndex) sorting pixel values")
-        
-        sortedPixels.sort { $0.intensity > $1.intensity }
     }
 
+    public override func sortPixels() {
+        Log.d("frame \(frameIndex) sorting pixel values")
+        sortedPixels.sort { $0.intensity > $1.intensity }
+    }
+    
     public override func process() {
         Log.d("frame \(frameIndex) detecting blobs")
 
