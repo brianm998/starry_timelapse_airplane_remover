@@ -161,11 +161,11 @@ public struct Config: Codable {
     // 0.6.4 attempted speed up, more blob filtering
     // 0.6.5 re-worked blob detection again, added separate DetectionType 
     
-    public var starVersion = "0.6.4" // XXX move this out
+    public var starVersion = "0.6.5" // XXX move this out
 
     public func writeJson(named filename: String) {
         
-            // write to config json
+        // write to config json
 
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .withoutEscapingSlashes]
