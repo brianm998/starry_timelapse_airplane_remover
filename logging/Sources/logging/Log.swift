@@ -132,8 +132,11 @@ public class Log {
 
      */
     public static func add(handler: LogHandler, for outputType: Log.Output) {
+        if handler.level < minimumLogLevel { minimumLogLevel = handler.level }
         Task { await gremlin.add(handler: handler, for: outputType) }
     }
+
+    private static var minimumLogLevel: Log.Level = .error
     
     public enum Output {
         case console
@@ -901,9 +904,12 @@ fileprivate extension Log {
                 }
             }
 
-            await gremlin.log(string, at: logLevel,
-                              logTime: logTime, extraData: extraData,
-                              file, function, line)
+            if logLevel > minimumLogLevel {
+                await gremlin.log(string, at: logLevel,
+                                  logTime: logTime, extraData: extraData,
+                                  file, function, line)
+
+            }
         }
     }
 
