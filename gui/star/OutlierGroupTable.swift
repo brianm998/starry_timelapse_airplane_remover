@@ -332,7 +332,7 @@ struct OutlierGroupTable: View {
                      closure: @escaping (OutlierGroupTableRow) -> Double) -> DTColumn
     {
         TableColumn(name, value: value) { (row: OutlierGroupTableRow) in
-            Text(String(format: "%.3g", closure(row)))
+            Text(String(format: "%.5g", closure(row)))
         }.width(min: 40, ideal: 60, max: 100)
     }
 
