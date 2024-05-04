@@ -18,16 +18,16 @@ public let constants = Constants()
 
 
 public enum ProcessingState {
-    case fast
-    case normal
-    case slow
+    case fast                   // 2-4x faster than slow, finds fewer dimmer airplanes
+    case normal                 // a middle balance between speed and accuracy
+    case slow                   // takes much longer, finds a LOT more bad signal
 }
 
 public class Constants {
 
     // XXX make this a command line parameter
     // XXX stick it in the config
-    // XXX put it in the video filenames if not normal
+    // XXX put it in the video filenames
     // XXX add this to dirs created with -w so re-running with
     //     a different state creates new interemediate states for outliers, etc.
     var processingState: ProcessingState = .normal
@@ -57,7 +57,7 @@ public class Constants {
         case .fast:
             return 40         
         case .normal:
-            return 50         // XXX test this
+            return 50        
         case .slow:
             return 62
         }
@@ -70,7 +70,7 @@ public class Constants {
         case .fast:
             return 40        
         case .normal:
-            return 30         // XXX test this
+            return 25        
         case .slow:
             return 20
         }
@@ -83,7 +83,7 @@ public class Constants {
         case .fast:
             return 4000      
         case .normal:
-            return 3500         // XXX test this
+            return 3500      
         case .slow:
             return 3000
         }
@@ -96,7 +96,7 @@ public class Constants {
         case .fast:
             return 10        
         case .normal:
-            return 8         // XXX test this
+            return 8         
         case .slow:
             return 4
         }
@@ -109,7 +109,7 @@ public class Constants {
         case .fast:
             return 3000      
         case .normal:
-            return 2500         // XXX test this
+            return 2500      
         case .slow:
             return 2000
         }
@@ -124,23 +124,22 @@ public class Constants {
         case .fast:
             return 6000        
         case .normal:
-            return 3000         // XXX test this
+            return 3000      
         case .slow:
             return 2000
         }
     }
 
     // how far off of the end of the line do we look when doing KHT processing?
+    // larger values increase processing time
     public var khtLineExtensionAmount: Int {
         switch self.processingState {
         case .fast:
             return 0           
         case .normal:
-            return 64         // XXX test this
+            return 64
         case .slow:
             return 256
         }
     }
-
-    
 }
