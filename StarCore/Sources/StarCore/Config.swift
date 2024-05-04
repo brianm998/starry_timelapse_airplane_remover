@@ -13,10 +13,6 @@ You should have received a copy of the GNU General Public License along with sta
 
 */
 
-func sixteenBitVersion(ofPercentage percentage: Double) -> UInt16 {
-    return UInt16((percentage/100)*Double(0xFFFF))
-}
-
 public struct Config: Codable {
 
     public init() {
@@ -28,9 +24,6 @@ public struct Config: Codable {
         self.writeFramePreviewFiles = false
         self.writeFrameProcessedPreviewFiles = false
         self.writeFrameThumbnailFiles = false
-
-        // XXX 16 bit hardcode
-        self.maxPixelDistance = sixteenBitVersion(ofPercentage: outlierMaxThreshold)
     }
 
     // returns a stored json config file
@@ -62,19 +55,10 @@ public struct Config: Codable {
         self.writeFramePreviewFiles = writeFramePreviewFiles
         self.writeFrameProcessedPreviewFiles = writeFrameProcessedPreviewFiles
         self.writeFrameThumbnailFiles = writeFrameThumbnailFiles
-
-        // XXX 16 bit hardcode
-        self.maxPixelDistance = sixteenBitVersion(ofPercentage: outlierMaxThreshold)
     }
 
     // the base dir under which to create dir(s) for output sequence(s)
     public var outputPath: String
-    
-    // percentage difference between same pixels on different frames to consider an outlier
-    public let outlierMaxThreshold: Double = 1
-
-    // computed over 16 bits per pixel from the value above
-    public var maxPixelDistance: UInt16
     
     // the name of the directory containing the input sequence
     public var imageSequenceDirname: String
