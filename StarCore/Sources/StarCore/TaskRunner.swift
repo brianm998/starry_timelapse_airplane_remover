@@ -76,9 +76,17 @@ public actor TaskMaster {
             }
         }
     }
+
+    private func pendingTaskCount() -> Int {
+        highPrioTasks.count + 
+        mediumPrioTasks.count + 
+        lowPrioTasks.count
+    }
     
     public func enableTask() async {
-        while await numberRunning.startOnIncrement(to: maxConcurrentTasks) {
+        while self.pendingTaskCount() > 0,
+              await self.numberRunning.startOnIncrement(to: maxConcurrentTasks)
+        {
             // we can start another task, look for one
             if highPrioTasks.count > 0 {
                 highPrioTasks.removeFirst().enable()
