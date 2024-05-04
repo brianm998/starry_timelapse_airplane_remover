@@ -22,6 +22,9 @@ class DimIsolatedBlobRemover: AbstractBlobAnalyzer {
     public func process(scanSize: Int = 12) // how far in each direction to look for neighbors
     {
         var filteredBlobs = Array(blobMap.values)
+
+        if filteredBlobs.count == 0 { return }
+
         filteredBlobs.sort { $0.medianIntensity < $1.medianIntensity }
         let midPoint = filteredBlobs.count/2
         let quarterPoint = filteredBlobs.count/4
