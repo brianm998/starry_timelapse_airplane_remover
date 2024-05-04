@@ -55,15 +55,13 @@ class BlobKHTAnalysis: AbstractBlobAnalyzer {
         Log.i("frame \(frameIndex) loaded subtraction image")
 
         for elementLine in houghLines {
-
-
             
             let element = elementLine.element
 
             // when theta is around 300 or more, then we get a bad line here :(
             let line = elementLine.originZeroLine
             
-            if line.votes < 800 { continue } // XXX constant XXX
+            if line.votes < constants.khtMinLineVotes { continue }
 
             //Log.i("frame \(frameIndex) matrix element [\(element.x), \(element.y)] -> [\(element.width), \(element.height)] processing line theta \(line.theta) rho \(line.rho) votes \(line.votes) blobsToProcess \(blobsToProcess.count)")
 
@@ -78,8 +76,8 @@ class BlobKHTAnalysis: AbstractBlobAnalyzer {
 
             var lastBlob = LastBlob()
             
-            // XXX yet another hardcoded constant :(
-            line.iterate(on: elementLine, withExtension: 256) { x, y, direction in
+            let extra = constants.khtLineExtensionAmount
+            line.iterate(on: elementLine, withExtension: extra) { x, y, direction in
                 if x < width,
                    y < height
                 {

@@ -23,19 +23,19 @@ You should have received a copy of the GNU General Public License along with sta
  based upon local maximums of brightness, and changes in contrast from that.
 
  All pixels are sorted by brightness, and iterated over from the brightest,
- down to minimumLocalMaximum.  All nearby pixels that fall within the contrastMin threshold
+ down to minIntensity.  All nearby pixels that fall within the minContrast threshold
  will be included in the blob.
 
  Directly adjcent blobs should be combined.
 
- Blobs dimmer on average than minimumLocalMaximum are discarded.
+ Blobs dimmer on average than minIntensity are discarded.
  */
 public class FullFrameBlobber: AbstractBlobber {
 
     private let config: Config
     
     // pixels that are local maximums, but have a value lower than this are ignored
-    let minimumLocalMaximum: UInt16
+    let minIntensity: UInt16
 
     // sorted by brightness
     public var sortedPixels: [SortablePixel] = []
@@ -46,17 +46,17 @@ public class FullFrameBlobber: AbstractBlobber {
                 pixelData: [UInt16],
                 frameIndex: Int,
                 neighborType: NeighborType,
-                minimumLocalMaximum: UInt16,
-                contrastMin: Double)
+                minIntensity: UInt16,
+                minContrast: Double)
     {
-        self.minimumLocalMaximum = minimumLocalMaximum
+        self.minIntensity = minIntensity
         self.config = config
         super.init(imageWidth: imageWidth,
                    imageHeight: imageHeight,
                    pixelData: pixelData,
                    frameIndex: frameIndex,
                    neighborType: neighborType,
-                   contrastMin: contrastMin)
+                   minContrast: minContrast)
     }
 
     public override func process() {
@@ -77,7 +77,7 @@ public class FullFrameBlobber: AbstractBlobber {
 
             if pixel.status != .unknown { continue }
             
-            if pixel.intensity > minimumLocalMaximum {
+            if pixel.intensity > minIntensity {
                 
                 //Log.d("examining pixel \(pixel.x) \(pixel.y) \(pixel.intensity)")
                 let allNeighbors = self.neighbors(of: pixel)

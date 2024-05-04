@@ -149,11 +149,8 @@ extension FrameAirplaneRemover {
                                                      pixelData: subtractionArray,
                                                      frameIndex: frameIndex,
                                                      neighborType: .eight,//.fourCardinal,
-                                                     minimumLocalMaximum: 655, // XXX constant
-                                                     // blobs can grow until the get this much
-                                                     // darker than their seed pixel
-                                                     // larger values give more blobs
-                                                     contrastMin: 62)      // XXX constant
+                                                     minIntensity: constants.blobberMinIntensity,
+                                                     minContrast: constants.blobberMinContrast)
 
             // run the blobber
             blobber?.process()
@@ -177,28 +174,6 @@ extension FrameAirplaneRemover {
             // run the hough transform on sub sections of the subtraction image
             let houghLines = houghLines(from: subtractionImage)
 
-            
-            /*
-
-             XXX bring this back, but with a larger initial max?
-
-             fx3 1599 has some missed spots if this is uncommented as is.
-             
-             // only allow this many of the brightest blobs to process farther
-            let initialMax = 6000
-            
-            var initialBlobs = blobberBlobs
-            if blobberBlobs.values.count > initialMax {
-                var filteredBlobs = Array(initialBlobs.values)
-                filteredBlobs.sort { $0.medianIntensity < $1.medianIntensity }
-                let breakPoint = filteredBlobs.count-initialMax // XXX constant
-                initialBlobs = [:]
-                for blob in Array(filteredBlobs[breakPoint...]) {
-                    initialBlobs[blob.id] = blob
-                }
-            }
-             */
-
             self.state = .detectingOutliers1a
             
             var dimIsolatedBlobRemover_1: DimIsolatedBlobRemover? = .init(blobMap: blobberBlobs,
@@ -213,7 +188,7 @@ extension FrameAirplaneRemover {
                 return 
             }
 
-            
+            dimIsolatedBlobRemover_1 = nil
 
             //Log.d("frame \(frameIndex) FullFrameBlobber returned \(initialBlobs.count) blobs")
 

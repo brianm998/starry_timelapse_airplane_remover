@@ -40,7 +40,7 @@ public class AbstractBlobber: Blobber {
     // zero means that only pixels of minimumLocalMaximum or higher will be in blobs
     // 50 means that all pixels half as bright or more than the maximum will be in a blob
     // 100 means that all pixels will be in a blob
-    let contrastMin: Double
+    let minContrast: Double
 
     // neighbor search policies
     public enum NeighborType {
@@ -66,14 +66,14 @@ public class AbstractBlobber: Blobber {
                 pixelData: [UInt16],
                 frameIndex: Int,
                 neighborType: NeighborType,
-                contrastMin: Double)
+                minContrast: Double)
     {
         self.imageWidth = imageWidth
         self.imageHeight = imageHeight
         self.pixelData = pixelData
         self.frameIndex = frameIndex
         self.neighborType = neighborType
-        self.contrastMin = contrastMin
+        self.minContrast = minContrast
 
         guard pixelData.count == imageWidth*imageHeight else {
             fatalError("pixelData.count \(pixelData.count) is not imageWidth*imageHeight \(imageWidth*imageHeight)")
@@ -248,7 +248,7 @@ public class AbstractBlobber: Blobber {
                 if neighbor.status == .unknown {
                     // if unknown status, check contrast with initial seed pixel
                     let firstSeedContrast = firstSeed.contrast(with: neighbor)
-                    if firstSeedContrast < contrastMin {
+                    if firstSeedContrast < minContrast {
                         //Log.v("contrast \(firstSeedContrast) seedPixel.intensity neighbor.intensity \(neighbor.intensity) firstSeed.intensity \(firstSeed.intensity)")
                         seedPixels.append(neighbor)
                     } else {

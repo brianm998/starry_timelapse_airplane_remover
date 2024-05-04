@@ -30,7 +30,7 @@ public class HoughLineBlobber: AbstractBlobber {
                 pixelData: [UInt16],
                 frameIndex: Int,
                 neighborType: NeighborType,
-                contrastMin: Double,
+                minContrast: Double,
                 houghLines: [MatrixElementLine])
     {
         self.houghLines = houghLines
@@ -40,7 +40,7 @@ public class HoughLineBlobber: AbstractBlobber {
                    pixelData: pixelData,
                    frameIndex: frameIndex,
                    neighborType: neighborType,
-                   contrastMin: contrastMin)
+                   minContrast: minContrast)
 
         // XXX need to actually blob here
 
