@@ -177,7 +177,24 @@ extension FrameAirplaneRemover {
                 try await saveImages(for: Array(blobberBlobs.values), as: .blobs)
             }
             
-            Log.d("frame \(frameIndex) FullFrameBlobber returned \(blobberBlobs.count) blobs")
+
+            // only allow this many of the brightest blobs to process farther
+            let initialMax = 6000
+            
+            var initialBlobs = blobberBlobs
+            if blobberBlobs.values.count > initialMax {
+                var filteredBlobs = Array(initialBlobs.values)
+                filteredBlobs.sort { $0.medianIntensity < $1.medianIntensity }
+                let breakPoint = filteredBlobs.count-initialMax // XXX constant
+                initialBlobs = [:]
+                for blob in Array(filteredBlobs[breakPoint...]) {
+                    initialBlobs[blob.id] = blob
+                }
+            }
+            
+
+
+            Log.d("frame \(frameIndex) FullFrameBlobber returned \(initialBlobs.count) blobs")
 
             /*
              Now that we have detected blobs in this frame, the next step is to
@@ -186,7 +203,7 @@ extension FrameAirplaneRemover {
              */
 
             self.state = .detectingOutliers2a
-            var isolatedRemover: IsolatedBlobRemover? = .init(blobMap: blobberBlobs,
+            var isolatedRemover: IsolatedBlobRemover? = .init(blobMap: initialBlobs,
                                                               width: width,
                                                               height: height,
                                                               frameIndex: frameIndex)
@@ -316,10 +333,12 @@ extension FrameAirplaneRemover {
 //            Log.d("frame \(frameIndex) fewer blobs returned \(fewerBlobs.count) blobs")
 
             // weed out blobs that are too small and not bright enough
+            // XXX this is killing blobs that we still want :(
+            /*
             let brighterBlobs: [String: Blob] = smasherBlobs.compactMapValues { blob in
                 if blob.size < 35, // XXX constant
                    blob.medianIntensity < 2000 // XXX constant
-                { 
+                {
                     return nil
                 } else if blob.size < 20, // XXX constant
                           blob.medianIntensity < 3000 // XXX constant
@@ -339,27 +358,37 @@ extension FrameAirplaneRemover {
                     return blob
                 }
             }
-
-            if config.writeOutlierGroupFiles {
-                // save filtered blobs image here
-                try await saveImages(for: Array(brighterBlobs.values), as: .rectified)
-            }
-
+*/
             /*
              Make sure all smaller blobs are close to another blob.  Weeds out a lot of noise.
              */
-            let finalIsolatedRemover = IsolatedBlobRemover(blobMap: brighterBlobs,
+            let finalIsolatedRemover = IsolatedBlobRemover(blobMap: smasherBlobs,
                                                            width: width,
                                                            height: height,
                                                            frameIndex: frameIndex)
 
-            finalIsolatedRemover.process(minNeighborSize: 10, scanSize: 6)
 
+  
+            finalIsolatedRemover.process(minNeighborSize: 5, scanSize: 12)
+
+            if config.writeOutlierGroupFiles {
+                // save filtered blobs image here
+                try await saveImages(for: Array(finalIsolatedRemover.blobMap.values), as: .rectified)
+            }
+
+            let dimIsolatedBlobRemover = DimIsolatedBlobRemover(blobMap: finalIsolatedRemover.blobMap,
+                                                                width: width,
+                                                                height: height,
+                                                                frameIndex: frameIndex)
+            
+            dimIsolatedBlobRemover.process(scanSize: 12)
+
+            
             Log.d("frame \(frameIndex) final isolated blob remover returned \(finalIsolatedRemover.blobMap.count) blobs")
 
             // blobs to promote to outlier groups
-            let filteredBlobs = Array(finalIsolatedRemover.blobMap.values)
-            
+            let filteredBlobs = Array(dimIsolatedBlobRemover.blobMap.values)
+
             Log.i("frame \(frameIndex) has \(filteredBlobs.count) filteredBlobs")
             self.state = .detectingOutliers3
 
