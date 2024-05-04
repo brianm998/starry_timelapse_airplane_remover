@@ -34,9 +34,6 @@ public class FullFrameBlobber: AbstractBlobber {
 
     private let config: Config
     
-    // pixels that are local maximums, but have a value lower than this are ignored
-    let minIntensity: UInt16
-
     // sorted by brightness
     public var sortedPixels: [SortablePixel] = []
 
@@ -47,7 +44,8 @@ public class FullFrameBlobber: AbstractBlobber {
                 frameIndex: Int,
                 neighborType: NeighborType)
     {
-        self.minIntensity = constants.blobberMinPixelIntensity
+        // pixels that are local maximums, but have a value lower than this are ignored
+        let minIntensity = constants.blobberMinPixelIntensity
         self.config = config
         super.init(imageWidth: imageWidth,
                    imageHeight: imageHeight,
@@ -55,10 +53,6 @@ public class FullFrameBlobber: AbstractBlobber {
                    frameIndex: frameIndex,
                    neighborType: neighborType,
                    minContrast: constants.blobberMinContrast)
-    }
-
-    public override func process() {
-        Log.d("frame \(frameIndex) detecting blobs")
 
         for x in 0..<imageWidth {
             for y in 0..<imageHeight {
@@ -72,7 +66,11 @@ public class FullFrameBlobber: AbstractBlobber {
         Log.d("frame \(frameIndex) sorting pixel values")
         
         sortedPixels.sort { $0.intensity > $1.intensity }
-        
+    }
+
+    public override func process() {
+        Log.d("frame \(frameIndex) detecting blobs")
+
         for pixel in sortedPixels {
 
             if pixel.status != .unknown { continue }

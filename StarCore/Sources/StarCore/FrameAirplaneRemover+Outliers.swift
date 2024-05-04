@@ -67,9 +67,7 @@ extension FrameAirplaneRemover {
           - detect blobs from subtracted frame
           - remove small isolated blobs
           - do KHT blob processing
-          - do blob absorbsion processing
-          - do blob extending
-          - do blob smashing
+          - remove more small dim blobs
           - final pass at more isolation removal
           - do more filtering before promoting blobs to outlier groups
           
@@ -137,7 +135,7 @@ extension FrameAirplaneRemover {
          */
         if let subtractionImage {
 
-            self.state = .detectingOutliers2
+            self.state = .detectingOutliers2p
 
             // detect blobs of difference in brightness in the subtraction array
             // airplanes show up as lines or does in a line
@@ -150,6 +148,8 @@ extension FrameAirplaneRemover {
                                                      frameIndex: frameIndex,
                                                      neighborType: .eight)//.fourCardinal
 
+            self.state = .detectingOutliers2
+            
             // run the blobber
             blobber?.process()
 

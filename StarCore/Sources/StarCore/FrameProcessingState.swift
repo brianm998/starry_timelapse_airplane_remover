@@ -30,6 +30,7 @@ public enum FrameProcessingState: Int, CaseIterable, Codable {
     case subtractingNeighbor
     case detectingOutliers1
     case detectingOutliers1a
+    case detectingOutliers2p
     case detectingOutliers2
     case detectingOutliers2a
     case detectingOutliers2aa
@@ -68,6 +69,8 @@ public enum FrameProcessingState: Int, CaseIterable, Codable {
             return "finding lines"
         case .detectingOutliers1a:
             return "dim blob removal"
+        case .detectingOutliers2p:
+            return "sorting pixels"
         case .detectingOutliers2:
             return "detecting blobs"
         case .detectingOutliers2a:
