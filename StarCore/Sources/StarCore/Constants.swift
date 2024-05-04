@@ -25,7 +25,12 @@ public enum ProcessingState {
 
 public class Constants {
 
-    var processingState: ProcessingState = .fast
+    // XXX make this a command line parameter
+    // XXX stick it in the config
+    // XXX put it in the video filenames if not normal
+    // XXX add this to dirs created with -w so re-running with
+    //     a different state creates new interemediate states for outliers, etc.
+    var processingState: ProcessingState = .normal
     
     public func set(processingState: ProcessingState) {
         self.processingState = processingState
@@ -36,7 +41,7 @@ public class Constants {
     public var blobberMinPixelIntensity: UInt16 {
         switch self.processingState {
         case .fast:
-            return 10000        
+            return 8000        
         case .normal:
             return 5000
         case .slow:
@@ -50,7 +55,7 @@ public class Constants {
     public var blobberMinContrast: Double {
         switch self.processingState {
         case .fast:
-            return 30         
+            return 40         
         case .normal:
             return 50         // XXX test this
         case .slow:
@@ -63,7 +68,7 @@ public class Constants {
     public var blobberBrightSmallSize: Int {
         switch self.processingState {
         case .fast:
-            return 50           // XXX test this
+            return 40        
         case .normal:
             return 30         // XXX test this
         case .slow:
@@ -76,9 +81,9 @@ public class Constants {
     public var blobberBrightMinIntensity: UInt16 {
         switch self.processingState {
         case .fast:
-            return 8000           // XXX test this
+            return 4000      
         case .normal:
-            return 4000         // XXX test this
+            return 3500         // XXX test this
         case .slow:
             return 3000
         }
@@ -89,7 +94,7 @@ public class Constants {
     public var blobberMinBlobSize: Int {
         switch self.processingState {
         case .fast:
-            return 16           // XXX test this
+            return 10        
         case .normal:
             return 8         // XXX test this
         case .slow:
@@ -98,12 +103,13 @@ public class Constants {
     }
 
     // blobs with less median intensity than this are ignored
+    // lower values give more blobs
     public var blobberMinBlobIntensity: UInt16 {
         switch self.processingState {
         case .fast:
-            return 4000         // XXX test this
+            return 3000      
         case .normal:
-            return 3000         // XXX test this
+            return 2500         // XXX test this
         case .slow:
             return 2000
         }
