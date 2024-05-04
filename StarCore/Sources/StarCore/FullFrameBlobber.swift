@@ -63,7 +63,9 @@ public class FullFrameBlobber: AbstractBlobber {
         for x in 0..<imageWidth {
             for y in 0..<imageHeight {
                 let pixel = pixels[x][y]
-                sortedPixels.append(pixel)
+                if pixel.intensity > minIntensity { 
+                    sortedPixels.append(pixel)
+                }
             }
         }
 
@@ -74,34 +76,29 @@ public class FullFrameBlobber: AbstractBlobber {
         for pixel in sortedPixels {
 
             if pixel.status != .unknown { continue }
-            
-            if pixel.intensity > minIntensity {
-                
-                //Log.d("examining pixel \(pixel.x) \(pixel.y) \(pixel.intensity)")
-                let allNeighbors = self.neighbors(of: pixel)
-                //let allNeighbors = self.allNeighbors(of: pixel, within: 4)
-                let higherNeighbors = allNeighbors.filter { $0.intensity > pixel.intensity } 
-                //Log.d("found \(higherNeighbors) higherNeighbors")
-                if higherNeighbors.count == 0 {
-                    // no higher neighbors
-                    // a local maximum, this pixel is a blob seed
-                    let newBlob = Blob(pixel, frameIndex: frameIndex)
-                    blobs.append(newBlob)
-                    
-                    //Log.d("expanding from seed pixel.intensity \(pixel.intensity)")
 
-                    // should not be necessary
-                    //newBlob.add(pixel: pixel)
-                    
-                    expand(blob: newBlob, seedPixel: pixel)
-                    
-                } else {
-                    // but only if it's bright enough
-                    pixel.status = .background
-                }                    
+            //Log.d("examining pixel \(pixel.x) \(pixel.y) \(pixel.intensity)")
+            let allNeighbors = self.neighbors(of: pixel)
+            //let allNeighbors = self.allNeighbors(of: pixel, within: 4)
+            let higherNeighbors = allNeighbors.filter { $0.intensity > pixel.intensity } 
+            //Log.d("found \(higherNeighbors) higherNeighbors")
+            if higherNeighbors.count == 0 {
+                // no higher neighbors
+                // a local maximum, this pixel is a blob seed
+                let newBlob = Blob(pixel, frameIndex: frameIndex)
+                blobs.append(newBlob)
+                
+                //Log.d("expanding from seed pixel.intensity \(pixel.intensity)")
+
+                // should not be necessary
+                //newBlob.add(pixel: pixel)
+                
+                expand(blob: newBlob, seedPixel: pixel)
+                
             } else {
+                // but only if it's bright enough
                 pixel.status = .background
-            }
+            }                    
         }
 
         Log.d("frame \(frameIndex) initially found \(blobs.count) blobs")
