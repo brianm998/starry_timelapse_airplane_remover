@@ -141,13 +141,12 @@ extension FrameAirplaneRemover {
             // airplanes show up as lines or does in a line
             // because the image subtracted from this frame had the sky aligned,
             // the ground may get moved, and therefore may contain blobs as well.
-            var blobber: Blobber? = FullFrameBlobber(config: config,
-                                                     imageWidth: width,
-                                                     imageHeight: height,
-                                                     pixelData: subtractionArray,
-                                                     frameIndex: frameIndex,
-                                                     neighborType: .eight)//.fourCardinal
-
+            var blobber: FullFrameBlobber? = .init(config: config,
+                                                   imageWidth: width,
+                                                   imageHeight: height,
+                                                   pixelData: subtractionArray,
+                                                   frameIndex: frameIndex,
+                                                   neighborType: .eight)//.fourCardinal
 
             self.state = .detectingOutliers2p2
 
