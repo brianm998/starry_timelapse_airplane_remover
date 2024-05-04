@@ -146,14 +146,18 @@ public actor UpdatableProgressMonitor {
             updates.append(update)
         }
         
-        if let update = progressLine(for: .detectingOutliers1) {
-            updates.append(update)
-        }
-        
         if let update = progressLine(for: .detectingOutliers2) {
             updates.append(update)
 
         }
+        if let update = progressLine(for: .detectingOutliers1) {
+            updates.append(update)
+        }
+        
+        if let update = progressLine(for: .detectingOutliers1a) {
+            updates.append(update)
+        }
+        
         if let update = progressLine(for: .detectingOutliers2a) {
             updates.append(update)
         }
@@ -175,6 +179,14 @@ public actor UpdatableProgressMonitor {
         }
         
         if let update = progressLine(for: .detectingOutliers2e) {
+            updates.append(update)
+        }
+        
+        if let update = progressLine(for: .detectingOutliers2f) {
+            updates.append(update)
+        }
+        
+        if let update = progressLine(for: .detectingOutliers2g) {
             updates.append(update)
         }
         

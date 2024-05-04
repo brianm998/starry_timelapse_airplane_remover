@@ -29,6 +29,7 @@ public enum FrameProcessingState: Int, CaseIterable, Codable {
     case loadingImages    
     case subtractingNeighbor
     case detectingOutliers1
+    case detectingOutliers1a
     case detectingOutliers2
     case detectingOutliers2a
     case detectingOutliers2aa
@@ -36,6 +37,8 @@ public enum FrameProcessingState: Int, CaseIterable, Codable {
     case detectingOutliers2c
     case detectingOutliers2d
     case detectingOutliers2e
+    case detectingOutliers2f
+    case detectingOutliers2g
     case detectingOutliers3
     case readyForInterFrameProcessing
     case interFrameProcessing
@@ -63,6 +66,8 @@ public enum FrameProcessingState: Int, CaseIterable, Codable {
             return "subtracting aligned neighbor frame"
         case .detectingOutliers1:
             return "finding lines"
+        case .detectingOutliers1a:
+            return "dim blob removal"
         case .detectingOutliers2:
             return "detecting blobs"
         case .detectingOutliers2a:
@@ -76,7 +81,11 @@ public enum FrameProcessingState: Int, CaseIterable, Codable {
         case .detectingOutliers2d:
             return "blob smasher"
         case .detectingOutliers2e:
+            return "small dim blob removal"
+        case .detectingOutliers2f:
             return "final isolated blob removal"
+        case .detectingOutliers2g:
+            return "final dim blob removal"
         case .detectingOutliers3:
             return "populating outlier groups"
         case .readyForInterFrameProcessing: // XXX not covered in progress monitor

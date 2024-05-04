@@ -137,11 +137,6 @@ extension FrameAirplaneRemover {
          */
         if let subtractionImage {
 
-            self.state = .detectingOutliers1
-
-            // run the hough transform on sub sections of the subtraction image
-            let houghLines = houghLines(from: subtractionImage)
-
             self.state = .detectingOutliers2
 
             // detect blobs of difference in brightness in the subtraction array
@@ -176,6 +171,12 @@ extension FrameAirplaneRemover {
                 // save blobs image 
                 try await saveImages(for: Array(blobberBlobs.values), as: .blobs)
             }
+
+            self.state = .detectingOutliers1
+
+            // run the hough transform on sub sections of the subtraction image
+            let houghLines = houghLines(from: subtractionImage)
+
             
             /*
 
@@ -198,6 +199,8 @@ extension FrameAirplaneRemover {
             }
              */
 
+            self.state = .detectingOutliers1a
+            
             var dimIsolatedBlobRemover_1: DimIsolatedBlobRemover? = .init(blobMap: blobberBlobs,
                                                                           width: width,
                                                                           height: height,
@@ -268,89 +271,12 @@ extension FrameAirplaneRemover {
             
             Log.d("frame \(frameIndex) kht analysis done")
 
-            /*
-            self.state = .detectingOutliers2b
-
-            /*
-             Run the Blob Absorber.  Finds blobs with lines and tries to iterate
-             over the line to absorb other nearby blobs.
-             */
-             
-            // this mofo is fast as lightning, and seems to mostly work now
-            var absorber: BlobAbsorberRewrite? = .init(blobMap: khtBlobs,
-                                                       width: width,
-                                                       height: height,
-                                                       frameIndex: frameIndex)
-            
-            absorber?.process()
-
-            guard let absorberBlobs = absorber?.blobMap else {
-                Log.w("frame \(frameIndex) no blobs from absorber")
-                return
-            }
-            
-            absorber = nil
-            
-            Log.d("frame \(frameIndex) blob absorber returned \(absorberBlobs.count) blobs")
-            
-            self.state = .detectingOutliers2c
-
-            // look for all blobs to promote,
-            // and see if we get a better line score if we combine with another 
-
-            // look for lines that we can extend 
-            var blobExtender: BlobLineExtender? = .init(pixelData: subtractionArray,
-                                                        blobMap: absorberBlobs,
-                                                        width: width,
-                                                        height: height,
-                                                        frameIndex: frameIndex)
-            blobExtender?.process()
-
-            guard let extenderBlobs = blobExtender?.blobMap else {
-                Log.w("frame \(frameIndex) no blobs from extender")
-                return
-            }
-            
-            blobExtender = nil
-
-            Log.d("frame \(frameIndex) blob extender returned \(extenderBlobs.count) blobs")
-*/
-
-            self.state = .detectingOutliers2d
-
          //   Log.d("frame \(frameIndex) no small blobs returned \(noSmallBlobs.count) blobs")
-            
-            // another pass at trying to unify nearby blobs that fit together
-            // drop all blobs 8 pixels or smaller before smashing
-            var blobSmasher: BlobSmasher? = .init(blobMap: khtBlobs,//isolatedRemoverBlobs,//extenderBlobs,
-                                                  width: width,
-                                                  height: height,
-                                                  frameIndex: frameIndex)
-
-            blobSmasher?.process()
-
-            guard let smasherBlobs = blobSmasher?.blobMap else {
-                Log.w("frame \(frameIndex) no blobs from smasher")
-                return
-            }
-            
-            blobSmasher = nil
-
-//            Log.d("frame \(frameIndex) blob smasher returned \(extenderBlobs.count) blobs")
             
             self.state = .detectingOutliers2e
 
-            if config.writeOutlierGroupFiles {
-                // save filtered blobs image here
-                try await saveImages(for: Array(smasherBlobs.values), as: .absorbed)
-            }
-
-            // filter out all small blobs here
-            //let fewerBlobs = self.reduce(smasherBlobs, withMinSize: 16) // XXX constant
-//            Log.d("frame \(frameIndex) fewer blobs returned \(fewerBlobs.count) blobs")
-
             // weed out blobs that are too small and not bright enough
-            let brighterBlobs: [String: Blob] = smasherBlobs.compactMapValues { blob in
+            let brighterBlobs: [String: Blob] = khtBlobs.compactMapValues { blob in
                 if blob.size < 6, // XXX constant
                    blob.medianIntensity < 6000 // XXX constant
                 {
@@ -365,6 +291,13 @@ extension FrameAirplaneRemover {
                     return blob
                 }
             }
+            
+            if config.writeOutlierGroupFiles {
+                // save filtered blobs image here
+                try await saveImages(for: Array(brighterBlobs.values), as: .absorbed)
+            }
+
+            self.state = .detectingOutliers2f
             
             /*
              Make sure all smaller blobs are close to another blob.  Weeds out a lot of noise.
@@ -382,6 +315,7 @@ extension FrameAirplaneRemover {
                 // save filtered blobs image here
                 try await saveImages(for: Array(finalIsolatedRemover.blobMap.values), as: .rectified)
             }
+            self.state = .detectingOutliers2g
 
             let dimIsolatedBlobRemover = DimIsolatedBlobRemover(blobMap: finalIsolatedRemover.blobMap,
                                                                 width: width,
