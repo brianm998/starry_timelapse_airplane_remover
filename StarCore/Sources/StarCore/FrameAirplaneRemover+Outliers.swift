@@ -177,8 +177,13 @@ extension FrameAirplaneRemover {
                 try await saveImages(for: Array(blobberBlobs.values), as: .blobs)
             }
             
+            /*
 
-            // only allow this many of the brightest blobs to process farther
+             XXX bring this back, but with a larger initial max?
+
+             fx3 1599 has some missed spots if this is uncommented as is.
+             
+             // only allow this many of the brightest blobs to process farther
             let initialMax = 6000
             
             var initialBlobs = blobberBlobs
@@ -191,10 +196,23 @@ extension FrameAirplaneRemover {
                     initialBlobs[blob.id] = blob
                 }
             }
+             */
+
+            var dimIsolatedBlobRemover_1: DimIsolatedBlobRemover? = .init(blobMap: blobberBlobs,
+                                                                          width: width,
+                                                                          height: height,
+                                                                          frameIndex: frameIndex)
+            
+            dimIsolatedBlobRemover_1?.process(scanSize: 20)
+            
+            guard let dimIsolatedBlobRemoverBlobs = dimIsolatedBlobRemover_1?.blobMap else {
+                Log.w("frame \(frameIndex) no blobs from blobber")
+                return 
+            }
+
             
 
-
-            Log.d("frame \(frameIndex) FullFrameBlobber returned \(initialBlobs.count) blobs")
+            //Log.d("frame \(frameIndex) FullFrameBlobber returned \(initialBlobs.count) blobs")
 
             /*
              Now that we have detected blobs in this frame, the next step is to
@@ -203,7 +221,7 @@ extension FrameAirplaneRemover {
              */
 
             self.state = .detectingOutliers2a
-            var isolatedRemover: IsolatedBlobRemover? = .init(blobMap: initialBlobs,
+            var isolatedRemover: IsolatedBlobRemover? = .init(blobMap: dimIsolatedBlobRemoverBlobs,
                                                               width: width,
                                                               height: height,
                                                               frameIndex: frameIndex)
@@ -329,27 +347,16 @@ extension FrameAirplaneRemover {
 
             // filter out all small blobs here
             //let fewerBlobs = self.reduce(smasherBlobs, withMinSize: 16) // XXX constant
-
 //            Log.d("frame \(frameIndex) fewer blobs returned \(fewerBlobs.count) blobs")
 
             // weed out blobs that are too small and not bright enough
-            // XXX this is killing blobs that we still want :(
-            /*
             let brighterBlobs: [String: Blob] = smasherBlobs.compactMapValues { blob in
-                if blob.size < 35, // XXX constant
-                   blob.medianIntensity < 2000 // XXX constant
+                if blob.size < 6, // XXX constant
+                   blob.medianIntensity < 6000 // XXX constant
                 {
                     return nil
-                } else if blob.size < 20, // XXX constant
-                          blob.medianIntensity < 3000 // XXX constant
-                {
-                    return nil
-                } else if blob.size < 10, // XXX constants 
-                          blob.medianIntensity < 10000
-                {
-                    return nil
-                } else if blob.size < 8,
-                          blob.medianIntensity < 20000 // XXX constants
+                } else if blob.size < 9, // XXX constant
+                          blob.medianIntensity < 4000 // XXX constant
                 {
                     return nil
                 } else {
@@ -358,11 +365,11 @@ extension FrameAirplaneRemover {
                     return blob
                 }
             }
-*/
+            
             /*
              Make sure all smaller blobs are close to another blob.  Weeds out a lot of noise.
              */
-            let finalIsolatedRemover = IsolatedBlobRemover(blobMap: smasherBlobs,
+            let finalIsolatedRemover = IsolatedBlobRemover(blobMap: brighterBlobs,
                                                            width: width,
                                                            height: height,
                                                            frameIndex: frameIndex)
