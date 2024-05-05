@@ -66,12 +66,13 @@ extension FrameAirplaneRemover {
           - identify lines on subtracted frame
           - sort pixels on subtracted frame by intensity
           - detect blobs from sorted pixels
-          - remove isloated dimmer blobs
+          - remove isolated dimmer blobs
           - remove small isolated blobs
           - do KHT blob processing
           - filter out small dim blobs
           - remove more small dim blobs
           - final pass at more isolation removal
+          - promote remaining blobs to outlier groups for further analysis
          */
         Log.d("frame \(frameIndex) finding outliers")
 
@@ -201,6 +202,8 @@ extension FrameAirplaneRemover {
             /*
              The next step is to collate blobs that are close to the
              lines and close to eachother into a single larger blob.
+
+             This is the slowest step here now.
              */
             var kht: BlobKHTAnalysis? = .init(houghLines: houghLines,
                                               blobMap: isolatedRemoverBlobs,
