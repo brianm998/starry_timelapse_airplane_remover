@@ -42,9 +42,7 @@ class DimIsolatedBlobRemover: AbstractBlobAnalyzer {
             }
             
             // only deal with dim blobs
-            if blob.medianIntensity > midBlob.medianIntensity {
-                return
-            }
+            if blob.medianIntensity > midBlob.medianIntensity { return }
 
             // each direction from center
 

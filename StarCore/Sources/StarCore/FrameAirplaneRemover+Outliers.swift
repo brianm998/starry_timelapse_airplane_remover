@@ -64,13 +64,14 @@ extension FrameAirplaneRemover {
           - align neighboring frame
           - subtract aligned frame from this frame
           - identify lines on subtracted frame
-          - detect blobs from subtracted frame
+          - sort pixels on subtracted frame by intensity
+          - detect blobs from sorted pixels
+          - remove isloated dimmer blobs
           - remove small isolated blobs
           - do KHT blob processing
+          - filter out small dim blobs
           - remove more small dim blobs
           - final pass at more isolation removal
-          - do more filtering before promoting blobs to outlier groups
-          
          */
         Log.d("frame \(frameIndex) finding outliers")
 
@@ -110,32 +111,10 @@ extension FrameAirplaneRemover {
             }
             Log.d("loaded subtractionArray with \(subtractionArray.count) items")
         }
-        /*
-
-         New outlier detection logic:
-
-         * do pretty radical initial full frame blob detection, get lots of small dim blobs
-         * filter out small isolated blobs first
-         * run kht to try to condense blobs along lines
-         * originally sort blobs by size, processing largest first
-         * if a blob can have a line detected from it,
-           search along the line by convolving a search area across it to find pixels
-           extend some amount past the known blob area on each side of the line
-         * if a blob has no line, search in a larger circular area centered on the blob
-         * each other nearby blob found is then subject to line analysis,
-           and if a fit, is absorbed into the original blob.
-           This can then expand the search area.
-         - after all possible line connections are made, 
-           be very picky and throw out a lot of blobs:
-            * too small
-            * no line
-            - line has too few votes
-            - averageLineVariance / lineLength calculations
-         - then promote them to outlier groups for further analysis
-         */
+        
         if let subtractionImage {
 
-            self.state = .detectingOutliers2p
+            self.state = .assemblingPixels
 
             // detect blobs of difference in brightness in the subtraction array
             // airplanes show up as lines or does in a line
@@ -148,11 +127,11 @@ extension FrameAirplaneRemover {
                                                    frameIndex: frameIndex,
                                                    neighborType: .eight)//.fourCardinal
 
-            self.state = .detectingOutliers2p2
+            self.state = .sortingPixels
 
             blobber?.sortPixels()
             
-            self.state = .detectingOutliers2
+            self.state = .detectingBlobs
             
             // run the blobber
             blobber?.process()
@@ -171,12 +150,12 @@ extension FrameAirplaneRemover {
                 try await saveImages(for: Array(blobberBlobs.values), as: .blobs)
             }
 
-            self.state = .detectingOutliers1
+            self.state = .findingLines
 
             // run the hough transform on sub sections of the subtraction image
             let houghLines = houghLines(from: subtractionImage)
 
-            self.state = .detectingOutliers1a
+            self.state = .initialDimIsolatedRemoval
             
             var dimIsolatedBlobRemover_1: DimIsolatedBlobRemover? = .init(blobMap: blobberBlobs,
                                                                           width: width,
@@ -200,7 +179,7 @@ extension FrameAirplaneRemover {
              if tuned well, doesn't skip anything important.
              */
 
-            self.state = .detectingOutliers2a
+            self.state = .isolatedBlobRemoval
             var isolatedRemover: IsolatedBlobRemover? = .init(blobMap: dimIsolatedBlobRemoverBlobs,
                                                               width: width,
                                                               height: height,
@@ -208,7 +187,7 @@ extension FrameAirplaneRemover {
 
             isolatedRemover?.process()            
 
-            self.state = .detectingOutliers2aa
+            self.state = .aligningBlobsWithLines
 
             guard let isolatedRemoverBlobs = isolatedRemover?.blobMap else {
                 Log.w("frame \(frameIndex) no blobs from isolated remover")
@@ -250,7 +229,7 @@ extension FrameAirplaneRemover {
 
          //   Log.d("frame \(frameIndex) no small blobs returned \(noSmallBlobs.count) blobs")
             
-            self.state = .detectingOutliers2e
+            self.state = .smallDimBlobRemobal
 
             // weed out blobs that are too small and not bright enough
             let brighterBlobs: [String: Blob] = khtBlobs.compactMapValues { blob in
@@ -274,41 +253,53 @@ extension FrameAirplaneRemover {
                 try await saveImages(for: Array(brighterBlobs.values), as: .absorbed)
             }
 
-            self.state = .detectingOutliers2f
+            self.state = .finalIsolatedBlobRemoval
             
             /*
              Make sure all smaller blobs are close to another blob.  Weeds out a lot of noise.
              */
-            let finalIsolatedRemover = IsolatedBlobRemover(blobMap: brighterBlobs,
-                                                           width: width,
-                                                           height: height,
-                                                           frameIndex: frameIndex)
+            var finalIsolatedRemover: IsolatedBlobRemover? = .init(blobMap: brighterBlobs,
+                                                                   width: width,
+                                                                   height: height,
+                                                                   frameIndex: frameIndex)
 
 
   
-            finalIsolatedRemover.process(minNeighborSize: 5, scanSize: 12) // XXX constants
+            finalIsolatedRemover?.process(minNeighborSize: 5, scanSize: 12) // XXX constants
 
+            guard let finalIsolatedBlobs = finalIsolatedRemover?.blobMap else {
+                Log.w("frame \(frameIndex) no blobs from finalIsolatedRemover")
+                return
+            } 
+
+            finalIsolatedRemover = nil
+            
             if config.writeOutlierGroupFiles {
                 // save filtered blobs image here
-                try await saveImages(for: Array(finalIsolatedRemover.blobMap.values), as: .rectified)
+                try await saveImages(for: Array(finalIsolatedBlobs.values), as: .rectified)
             }
-            self.state = .detectingOutliers2g
+            self.state = .finalDimBlobRemoval
 
-            let dimIsolatedBlobRemover = DimIsolatedBlobRemover(blobMap: finalIsolatedRemover.blobMap,
-                                                                width: width,
-                                                                height: height,
-                                                                frameIndex: frameIndex)
+            var dimIsolatedBlobRemover: DimIsolatedBlobRemover? = .init(blobMap: finalIsolatedBlobs,
+                                                                        width: width,
+                                                                        height: height,
+                                                                        frameIndex: frameIndex)
             
-            dimIsolatedBlobRemover.process(scanSize: 12)
+            dimIsolatedBlobRemover?.process(scanSize: 16) // XXX constant
 
-            
-            Log.d("frame \(frameIndex) final isolated blob remover returned \(finalIsolatedRemover.blobMap.count) blobs")
+
+            guard let dimIsolatedBlobs = dimIsolatedBlobRemover?.blobMap else {
+                Log.w("frame \(frameIndex) no blobs from kht")
+                return
+            }
+
+            dimIsolatedBlobRemover = nil
 
             // blobs to promote to outlier groups
-            let filteredBlobs = Array(dimIsolatedBlobRemover.blobMap.values)
+            let filteredBlobs = Array(dimIsolatedBlobs.values)
 
             Log.i("frame \(frameIndex) has \(filteredBlobs.count) filteredBlobs")
-            self.state = .detectingOutliers3
+            self.state = .populatingOutlierGroups
 
             // promote found blobs to outlier groups for further processing
             for blob in filteredBlobs {

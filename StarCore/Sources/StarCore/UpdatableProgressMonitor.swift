@@ -146,59 +146,47 @@ public actor UpdatableProgressMonitor {
             updates.append(update)
         }
         
-        if let update = progressLine(for: .detectingOutliers2p) {
+        if let update = progressLine(for: .assemblingPixels) {
             updates.append(update)
         }
 
-        if let update = progressLine(for: .detectingOutliers2p2) {
+        if let update = progressLine(for: .sortingPixels) {
             updates.append(update)
         }
 
-        if let update = progressLine(for: .detectingOutliers2) {
+        if let update = progressLine(for: .detectingBlobs) {
             updates.append(update)
         }
 
-        if let update = progressLine(for: .detectingOutliers1) {
+        if let update = progressLine(for: .findingLines) {
             updates.append(update)
         }
         
-        if let update = progressLine(for: .detectingOutliers1a) {
+        if let update = progressLine(for: .initialDimIsolatedRemoval) {
             updates.append(update)
         }
         
-        if let update = progressLine(for: .detectingOutliers2a) {
+        if let update = progressLine(for: .isolatedBlobRemoval) {
             updates.append(update)
         }
         
-        if let update = progressLine(for: .detectingOutliers2aa) {
+        if let update = progressLine(for: .aligningBlobsWithLines) {
             updates.append(update)
         }
         
-        if let update = progressLine(for: .detectingOutliers2b) {
+        if let update = progressLine(for: .smallDimBlobRemobal) {
             updates.append(update)
         }
         
-        if let update = progressLine(for: .detectingOutliers2c) {
+        if let update = progressLine(for: .finalIsolatedBlobRemoval) {
             updates.append(update)
         }
         
-        if let update = progressLine(for: .detectingOutliers2d) {
+        if let update = progressLine(for: .finalDimBlobRemoval) {
             updates.append(update)
         }
         
-        if let update = progressLine(for: .detectingOutliers2e) {
-            updates.append(update)
-        }
-        
-        if let update = progressLine(for: .detectingOutliers2f) {
-            updates.append(update)
-        }
-        
-        if let update = progressLine(for: .detectingOutliers2g) {
-            updates.append(update)
-        }
-        
-        if let update = progressLine(for: .detectingOutliers3) {
+        if let update = progressLine(for: .populatingOutlierGroups) {
             updates.append(update)
         }
         

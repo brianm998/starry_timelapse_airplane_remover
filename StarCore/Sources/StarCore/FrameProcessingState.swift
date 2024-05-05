@@ -28,20 +28,17 @@ public enum FrameProcessingState: Int, CaseIterable, Codable {
     case starAlignment    
     case loadingImages    
     case subtractingNeighbor
-    case detectingOutliers1
-    case detectingOutliers1a
-    case detectingOutliers2p
-    case detectingOutliers2p2
-    case detectingOutliers2
-    case detectingOutliers2a
-    case detectingOutliers2aa
-    case detectingOutliers2b
-    case detectingOutliers2c
-    case detectingOutliers2d
-    case detectingOutliers2e
-    case detectingOutliers2f
-    case detectingOutliers2g
-    case detectingOutliers3
+    case findingLines
+    case initialDimIsolatedRemoval
+    case assemblingPixels
+    case sortingPixels
+    case detectingBlobs
+    case isolatedBlobRemoval
+    case aligningBlobsWithLines
+    case smallDimBlobRemobal
+    case finalIsolatedBlobRemoval
+    case finalDimBlobRemoval
+    case populatingOutlierGroups
     case readyForInterFrameProcessing
     case interFrameProcessing
     case outlierProcessingComplete
@@ -66,33 +63,27 @@ public enum FrameProcessingState: Int, CaseIterable, Codable {
             return"loading images"
         case .subtractingNeighbor:
             return "subtracting aligned neighbor frame"
-        case .detectingOutliers1:
+        case .findingLines:
             return "finding lines"
-        case .detectingOutliers1a:
+        case .initialDimIsolatedRemoval:
             return "dim blob removal"
-        case .detectingOutliers2p:
+        case .assemblingPixels:
             return "assembling pixels"
-        case .detectingOutliers2p2:
+        case .sortingPixels:
             return "sorting pixels"
-        case .detectingOutliers2:
+        case .detectingBlobs:
             return "detecting blobs"
-        case .detectingOutliers2a:
+        case .isolatedBlobRemoval:
             return "initial isolated blob removal"
-        case .detectingOutliers2aa:
+        case .aligningBlobsWithLines:
             return "aligning blobs with lines"
-        case .detectingOutliers2b:
-            return "blob absorber"
-        case .detectingOutliers2c:
-            return "blob extender"
-        case .detectingOutliers2d:
-            return "blob smasher"
-        case .detectingOutliers2e:
+        case .smallDimBlobRemobal:
             return "small dim blob removal"
-        case .detectingOutliers2f:
+        case .finalIsolatedBlobRemoval:
             return "final isolated blob removal"
-        case .detectingOutliers2g:
+        case .finalDimBlobRemoval:
             return "final dim blob removal"
-        case .detectingOutliers3:
+        case .populatingOutlierGroups:
             return "populating outlier groups"
         case .readyForInterFrameProcessing: // XXX not covered in progress monitor
             return "ready for inter frame processing"
