@@ -27,7 +27,6 @@ extension FrameAirplaneRemover {
     internal func subtractAlignedImageFromFrame() async throws -> PixelatedImage {
         self.state = .loadingImages
         
-//        let image = try await imageSequence.getImage(withName: imageSequence.filenames[frameIndex]).image()
         if let image = await imageAccessor.load(type: .original, atSize: .original),
            let otherFrame = await imageAccessor.load(type: .aligned, atSize: .original)
         {
@@ -41,9 +40,9 @@ extension FrameAirplaneRemover {
                 // write out image of outlier amounts
                 do {
                     try await imageAccessor.save(subtractionImage, as: .subtracted,
-                                              atSize: .original, overwrite: false)
+                                                 atSize: .original, overwrite: false)
                     try await imageAccessor.save(subtractionImage, as: .subtracted,
-                                              atSize: .preview, overwrite: false)
+                                                 atSize: .preview, overwrite: false)
                 } catch {
                     Log.e("can't write subtraction image: \(error)")
                 }
