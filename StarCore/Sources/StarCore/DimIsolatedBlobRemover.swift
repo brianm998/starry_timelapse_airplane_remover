@@ -36,6 +36,11 @@ class DimIsolatedBlobRemover: AbstractBlobAnalyzer {
         let quarterBlob = filteredBlobs[quarterPoint]
         
         iterateOverAllBlobs() { _, blob in
+            // only deal with small blobs
+            if blob.size > 24 { // XXX constant XXX
+                return
+            }
+            
             // only deal with dim blobs
             if blob.medianIntensity > midBlob.medianIntensity {
                 return
