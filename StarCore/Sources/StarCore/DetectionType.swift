@@ -14,8 +14,7 @@ You should have received a copy of the GNU General Public License along with sta
 // how hard to we try to detect airplanes and such?
 // the harder we try, the longer it takes, but the more results we get.
 public enum DetectionType: String, Codable, CaseIterable {
-    case easy       // 2-4x faster than excessive, finds fewer dimmer airplanes
-    case normal     // a balance between speed and accuracy
+    case mild       // 2-4x faster than excessive, finds fewer dimmer airplanes
     case strong     // get more airplanes than normal and not take forever
     case excessive  // takes much longer, finds a LOT more bad signals
 }

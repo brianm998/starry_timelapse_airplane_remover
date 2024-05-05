@@ -17,7 +17,7 @@ public struct Config: Codable {
 
     public init() {
         self.outputPath = "."
-        self.detectionType = .normal
+        self.detectionType = .strong
         //self.numConcurrentRenders = 0
         self.imageSequenceDirname = ""
         self.imageSequencePath = ""
@@ -38,7 +38,7 @@ public struct Config: Codable {
     }
 
     public init(outputPath: String?,
-                detectionType: DetectionType = .normal,
+                detectionType: DetectionType = .strong,
                 imageSequenceName: String,
                 imageSequencePath: String,
                 writeOutlierGroupFiles: Bool,

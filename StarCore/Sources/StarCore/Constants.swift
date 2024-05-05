@@ -18,15 +18,13 @@ public let constants = Constants()
 
 public class Constants {
 
-    var detectionType: DetectionType = .normal
+    var detectionType: DetectionType = .mild
     
     // pixels with less changed intensity than this cannot start blobs
     // lower values give more blobs
     public var blobberMinPixelIntensity: UInt16 {
         switch self.detectionType {
-        case .easy:
-            return 8000        
-        case .normal:
+        case .mild:
             return 5000
         case .strong:
             return 3000
@@ -40,9 +38,7 @@ public class Constants {
     // larger values give more blobs
     public var blobberMinContrast: Double {
         switch self.detectionType {
-        case .easy:
-            return 40         
-        case .normal:
+        case .mild:
             return 50        
         case .strong:
             return 55
@@ -56,9 +52,7 @@ public class Constants {
     // larger size gives fewer blobs
     public var blobberBrightSmallSize: Int {
         switch self.detectionType {
-        case .easy:
-            return 40        
-        case .normal:
+        case .mild:
             return 25        
         case .strong:
             return 22
@@ -72,9 +66,7 @@ public class Constants {
     // larger values give fewer blobs
     public var blobberBrightMinIntensity: UInt16 {
         switch self.detectionType {
-        case .easy:
-            return 4000      
-        case .normal:
+        case .mild:
             return 3500      
         case .strong:
             return 3300
@@ -87,9 +79,7 @@ public class Constants {
     // smaller values give more blobs
     public var blobberMinBlobSize: Int {
         switch self.detectionType {
-        case .easy:
-            return 10        
-        case .normal:
+        case .mild:
             return 8         
         case .strong:
             return 6
@@ -102,9 +92,7 @@ public class Constants {
     // lower values give more blobs
     public var blobberMinBlobIntensity: UInt16 {
         switch self.detectionType {
-        case .easy:
-            return 3000      
-        case .normal:
+        case .mild:
             return 2500      
         case .strong:
             return 2200
@@ -119,9 +107,7 @@ public class Constants {
     // decrease how many outlier groups are joined with lines
     public var khtMinLineVotes: Int {
         switch self.detectionType {
-        case .easy:
-            return 6000        
-        case .normal:
+        case .mild:
             return 3000      
         case .strong:
             return 2500
@@ -134,9 +120,7 @@ public class Constants {
     // larger values increase processing time
     public var khtLineExtensionAmount: Int {
         switch self.detectionType {
-        case .easy:
-            return 0           
-        case .normal:
+        case .mild:
             return 64
         case .strong:
             return 128

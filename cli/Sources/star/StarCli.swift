@@ -234,7 +234,7 @@ struct StarCli: AsyncParsableCommand {
     var numConcurrentRenders: UInt = TaskRunner.maxConcurrentTasks
 
     @Option(name: .shortAndLong, help: "Detection Types")
-    var detectionType: DetectionType = .normal
+    var detectionType: DetectionType = .strong
     
     @Option(name: .shortAndLong, help: """
         When set, outlier groups closer to the bottom of the screen than this are ignored.
