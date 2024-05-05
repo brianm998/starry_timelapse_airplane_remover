@@ -1,6 +1,5 @@
 import Foundation
 import logging
-import Semaphore
 
 // an alternative to task groups, looking for thread stability
 
@@ -22,85 +21,6 @@ fileprivate func determineMax() -> UInt {
     numProcessors -= numProcessors/4
     if numProcessors < 2 { numProcessors = 2 }
     return UInt(numProcessors)
-}
-
-public class TaskEnabler {
-    public let priority: TaskPriority
-    private let semaphore = AsyncSemaphore(value: 0)
-    
-    public init(priority: TaskPriority) {
-        self.priority = priority
-    }
-
-    public func wait() async { await semaphore.wait() }
-    
-    public func enable() { semaphore.signal() }
-
-}
-
-public actor TaskMaster {
-
-    private var highPrioTasks: [TaskEnabler] = []
-    private var mediumPrioTasks: [TaskEnabler] = []
-    private var lowPrioTasks: [TaskEnabler] = []
-
-    public var numberRunning = NumberRunning()
-    private let maxConcurrentTasks: UInt
-    
-    public init(maxConcurrentTasks: UInt) {
-        self.maxConcurrentTasks = maxConcurrentTasks
-        Task { await self.numberRunning.set(taskMaster: self) }
-    }
-    
-    public func register(_ enabler: TaskEnabler) async {
-        if await numberRunning.startOnIncrement(to: maxConcurrentTasks) {
-            // let it run right now
-            enabler.enable()
-        } else {
-            // register to run it later
-            switch enabler.priority {
-            case .userInitiated:
-                highPrioTasks.append(enabler)
-            case .utility:
-                lowPrioTasks.append(enabler)
-            case .background:
-                lowPrioTasks.append(enabler)
-            case .high:
-                highPrioTasks.append(enabler)
-            case .medium:
-                mediumPrioTasks.append(enabler)
-            case .low:
-                lowPrioTasks.append(enabler)
-            default:
-                lowPrioTasks.append(enabler)
-            }
-        }
-    }
-
-    private func pendingTaskCount() -> Int {
-        highPrioTasks.count + 
-        mediumPrioTasks.count + 
-        lowPrioTasks.count
-    }
-    
-    public func enableTask() async {
-        while self.pendingTaskCount() > 0,
-              await self.numberRunning.startOnIncrement(to: maxConcurrentTasks)
-        {
-            // we can start another task, look for one
-            if highPrioTasks.count > 0 {
-                highPrioTasks.removeFirst().enable()
-            } else if mediumPrioTasks.count > 0 {
-                mediumPrioTasks.removeFirst().enable()
-            } else if lowPrioTasks.count > 0 {
-                lowPrioTasks.removeFirst().enable()
-            } else {
-                // no tasks found to run,
-                // decrement number running after increment above
-                await numberRunning.decrement()
-            }
-        }
-    }
 }
 
 /**
