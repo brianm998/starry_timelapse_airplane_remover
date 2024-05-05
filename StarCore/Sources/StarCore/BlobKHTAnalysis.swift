@@ -56,27 +56,25 @@ class BlobKHTAnalysis: AbstractBlobAnalyzer {
 
         for elementLine in houghLines {
             
-            let element = elementLine.element
-
+            if elementLine.line.votes < constants.khtMinLineVotes { continue }
+            
             // when theta is around 300 or more, then we get a bad line here :(
             let line = elementLine.originZeroLine
             
-            if line.votes < constants.khtMinLineVotes { continue }
-
-            //Log.i("frame \(frameIndex) matrix element [\(element.x), \(element.y)] -> [\(element.width), \(element.height)] processing line theta \(line.theta) rho \(line.rho) votes \(line.votes) blobsToProcess \(blobsToProcess.count)")
-
             var brightnessValue: UInt8 = 0xFF
 
             // calculate brightness to display line on kht image
-            if line.votes < maxVotes {
+            if config.writeOutlierGroupFiles,
+               line.votes < maxVotes
+            {
                 brightnessValue = UInt8(Double(line.votes)/Double(maxVotes) *
-                                          Double(0xFF - khtImageBase) +
-                                          Double(khtImageBase))
+                                        Double(0xFF - khtImageBase) +
+                                        Double(khtImageBase))
             }
 
             var lastBlob = LastBlob()
-            
             let extra = constants.khtLineExtensionAmount
+            
             line.iterate(on: elementLine, withExtension: extra) { x, y, direction in
                 if x < width,
                    y < height
