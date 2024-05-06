@@ -481,6 +481,7 @@ public final class ViewModel: ObservableObject {
         UserPreferences.shared.justOpened(filename: jsonConfigFilename)
         
         let config = try await Config.read(fromJsonFilename: jsonConfigFilename)
+        constants.detectionType = config.detectionType
         
         let callbacks = makeCallbacks()
         
@@ -539,6 +540,9 @@ public final class ViewModel: ObservableObject {
                             writeFramePreviewFiles: shouldWriteOutlierGroupFiles,
                             writeFrameProcessedPreviewFiles: shouldWriteOutlierGroupFiles,
                             writeFrameThumbnailFiles: shouldWriteOutlierGroupFiles)
+
+        // XXX always using default here, not set above in config constructor
+        constants.detectionType = config.detectionType
         
         let callbacks = self.makeCallbacks()
         Log.i("have config")

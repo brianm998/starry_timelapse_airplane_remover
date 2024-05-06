@@ -75,6 +75,9 @@ You should have received a copy of the GNU General Public License along with sta
      - frame 746 lost parts of airplane between asb and rect
 
 
+   - version 0.6.5:
+     - frame 622 missing part of plane :(     
+
      
  - use brightness as a factor w/ size, i.e. allow for smaller really bright groups
  - make render this frame have a keyboard shortcut
@@ -287,6 +290,7 @@ struct StarCli: AsyncParsableCommand {
 
                 do {
                     config = try await Config.read(fromJsonFilename: fuck)
+                    constants.detectionType = config.detectionType
                 } catch {
                     print("\(error)")
                 }
@@ -334,6 +338,7 @@ struct StarCli: AsyncParsableCommand {
                                 writeFramePreviewFiles: shouldWriteOutlierGroupFiles,
                                 writeFrameProcessedPreviewFiles: shouldWriteOutlierGroupFiles,
                                 writeFrameThumbnailFiles: shouldWriteOutlierGroupFiles)
+                constants.detectionType = config.detectionType
                 config.ignoreLowerPixels = ignoreLowerPixels
                 Log.nameSuffix = inputImageSequenceName
                 // no name suffix on json config path
