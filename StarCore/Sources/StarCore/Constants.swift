@@ -18,7 +18,7 @@ public let constants = Constants()
 
 public class Constants {
 
-    var detectionType: DetectionType = .mild
+    public var detectionType: DetectionType = .mild
     
     // pixels with less changed intensity than this cannot start blobs
     // lower values give more blobs
@@ -30,12 +30,15 @@ public class Constants {
             return 3000
         case .excessive:
             return 2000
+        case .exp:
+            return 6500
         }
     }
 
-    // blobs can grow until the get this much
-    // darker than their seed pixel
-    // larger values give more blobs
+    // blobs can grow until they get this
+    // percentage darker than their seed pixel
+    // larger values make any individiual blob bigger,
+    // and may increase the total number of blobs due to their size
     public var blobberMinContrast: Double {
         switch self.detectionType {
         case .mild:
@@ -44,6 +47,8 @@ public class Constants {
             return 55
         case .excessive:
             return 62
+        case .exp:
+            return 66 
         }
     }
 
@@ -58,6 +63,8 @@ public class Constants {
             return 22
         case .excessive:
             return 20
+        case .exp:
+            return 25
         }
     }
 
@@ -72,6 +79,8 @@ public class Constants {
             return 3300
         case .excessive:
             return 3000
+        case .exp:
+            return 3500
         }
     }
     
@@ -85,6 +94,8 @@ public class Constants {
             return 6
         case .excessive:
             return 4
+        case .exp:
+            return 5
         }
     }
 
@@ -98,6 +109,8 @@ public class Constants {
             return 2200
         case .excessive:
             return 2000
+        case .exp:
+            return 2500
         }
     }
     
@@ -113,6 +126,8 @@ public class Constants {
             return 2500
         case .excessive:
             return 2000
+        case .exp:
+            return 3000
         }
     }
 
@@ -126,6 +141,8 @@ public class Constants {
             return 128
         case .excessive:
             return 256
+        case .exp:
+            return 64
         }
     }
 }
