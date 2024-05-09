@@ -16,19 +16,13 @@ struct FilmstripImageView: View {
             }.frame(maxHeight: 10)
             if frameIndex >= 0 && frameIndex < viewModel.frames.count {
                 let frameView = viewModel.frames[frameIndex]
-                AsyncImage(url: frameView.thumbnailImage) { phase in
-                    if let image = phase.image {
-                        if viewModel.currentIndex == frameIndex {
-                            image
-                              .foregroundColor(.orange)
-                        } else {
-                            image
-                        }
-                    } else if phase.error != nil {
-                        Color.red // Indicates an error.
-                    } else {
-                        Color.blue // Acts as a placeholder.
-                    }
+                if viewModel.currentIndex == frameIndex {
+                    
+                    frameView.thumbnailImage
+                      .foregroundColor(.orange)
+                    
+                } else {
+                    frameView.thumbnailImage
                 }
             }
             Spacer().frame(maxHeight: 8)

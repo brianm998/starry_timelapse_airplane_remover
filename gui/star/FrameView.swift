@@ -13,7 +13,7 @@ public struct FrameView: View {
     @Binding private var showFullResolution: Bool
 
     public init(interactionMode: Binding<InteractionMode>,
-                showFullResolution: Binding<Bool>)
+               showFullResolution: Binding<Bool>)
     {
         _interactionMode = interactionMode
         _showFullResolution = showFullResolution
@@ -21,32 +21,18 @@ public struct FrameView: View {
     
     public var body: some View {
         ZStack {
-            if let imageURL = self.viewModel.currentFrameURL {
+            if let frame_image = self.viewModel.currentFrameImage {
                 switch self.interactionMode {
                 case .play:
                     // the current frame by itself for fast video playback and scrubbing 
-                    AsyncImage(url: imageURL) { phase in
-                        if let image = phase.image {
-                            image
-                              .resizable()
-                              .aspectRatio(contentMode: . fit)
-                              .padding([.top])
-                        } else if phase.error != nil {
-                            Color.red 
-                           //   .resizable()
-                              .aspectRatio(contentMode: . fit)
-                              .padding([.top])
-                        } else {
-                            Color.blue
-                           //   .resizable()
-                              .aspectRatio(contentMode: . fit)
-                              .padding([.top])
-                        }
-                    }
-                    
+                    frame_image
+                      .resizable()
+                      .aspectRatio(contentMode: . fit)
+                      .padding([.top])
+
                 case .edit: 
                     // the currently visible frame with outliers made visible
-                    FrameEditView(url: imageURL,
+                    FrameEditView(image: frame_image,
                                   interactionMode: self.$interactionMode,
                                   showFullResolution: self.$showFullResolution)
                 }
