@@ -267,7 +267,7 @@ struct StarCli: AsyncParsableCommand {
         TaskRunner.maxConcurrentTasks = numConcurrentRenders
 
         // gui should do this too
-        StarCore.currentClassifier = OutlierGroupClassifierForest_1e64a33a()
+        StarCore.currentClassifier = OutlierGroupForestClassifier_1e64a33a()
 
         if version {
             print("""
