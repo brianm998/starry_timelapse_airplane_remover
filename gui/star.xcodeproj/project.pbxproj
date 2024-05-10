@@ -8,7 +8,6 @@
 
 /* Begin PBXBuildFile section */
 		D3058E1B2AC0745C00C58F1D /* MultiSelectSheetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3058E1A2AC0745C00C58F1D /* MultiSelectSheetView.swift */; };
-		D310C6F429C8D8F40014FBA9 /* libStarDecisionTrees.a in Frameworks */ = {isa = PBXBuildFile; fileRef = D310C6F329C8D8F40014FBA9 /* libStarDecisionTrees.a */; };
 		D31F9FBF299736740001CD0C /* ViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D31F9FBC299736730001CD0C /* ViewModel.swift */; };
 		D31F9FC0299736740001CD0C /* FrameSaveQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = D31F9FBD299736730001CD0C /* FrameSaveQueue.swift */; };
 		D31F9FC1299736740001CD0C /* OutlierGroupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D31F9FBE299736730001CD0C /* OutlierGroupView.swift */; };
@@ -45,6 +44,7 @@
 		D386FA23298B617400878B56 /* starTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D386FA22298B617400878B56 /* starTests.swift */; };
 		D386FA2D298B617400878B56 /* starUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D386FA2C298B617400878B56 /* starUITests.swift */; };
 		D386FA2F298B617400878B56 /* starUITestsLaunchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D386FA2E298B617400878B56 /* starUITestsLaunchTests.swift */; };
+		D3936FCF2BEDBA8F005AEA3C /* StarDecisionTrees in Frameworks */ = {isa = PBXBuildFile; productRef = D3936FCE2BEDBA8F005AEA3C /* StarDecisionTrees */; };
 		D3A54A6F29AFAD2C00C50709 /* UserPreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3A54A6E29AFAD2C00C50709 /* UserPreferences.swift */; };
 		D3B29C9E2B2FE23F00754C10 /* StarCore in Frameworks */ = {isa = PBXBuildFile; productRef = D3B29C9D2B2FE23F00754C10 /* StarCore */; };
 		D3B29CA42B2FE31800754C10 /* KHTSwift in Frameworks */ = {isa = PBXBuildFile; productRef = D3B29CA32B2FE31800754C10 /* KHTSwift */; };
@@ -124,8 +124,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				D310C6F429C8D8F40014FBA9 /* libStarDecisionTrees.a in Frameworks */,
 				D3B29C9E2B2FE23F00754C10 /* StarCore in Frameworks */,
+				D3936FCF2BEDBA8F005AEA3C /* StarDecisionTrees in Frameworks */,
 				D3B29CB12B2FE5BE00754C10 /* StarCore in Frameworks */,
 				D3B29CA42B2FE31800754C10 /* KHTSwift in Frameworks */,
 				D3B29CB42B2FE5D900754C10 /* Zoomable in Frameworks */,
@@ -272,6 +272,7 @@
 				D3B29CA32B2FE31800754C10 /* KHTSwift */,
 				D3B29CB02B2FE5BE00754C10 /* StarCore */,
 				D3B29CB32B2FE5D900754C10 /* Zoomable */,
+				D3936FCE2BEDBA8F005AEA3C /* StarDecisionTrees */,
 			);
 			productName = Star;
 			productReference = D386FA0D298B617300878B56 /* Star.app */;
@@ -348,6 +349,7 @@
 			packageReferences = (
 				D3B29CAF2B2FE5BE00754C10 /* XCLocalSwiftPackageReference "../StarCore" */,
 				D3B29CB22B2FE5D900754C10 /* XCRemoteSwiftPackageReference "Zoomable" */,
+				D3936FCD2BEDBA8F005AEA3C /* XCLocalSwiftPackageReference "../StarDecisionTrees" */,
 			);
 			productRefGroup = D386FA0E298B617300878B56 /* Products */;
 			projectDirPath = "";
@@ -623,7 +625,7 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.star;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = macosx14.0;
+				SDKROOT = macosx;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 			};
@@ -664,7 +666,7 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.star;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = macosx14.0;
+				SDKROOT = macosx;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 			};
@@ -784,6 +786,10 @@
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
+		D3936FCD2BEDBA8F005AEA3C /* XCLocalSwiftPackageReference "../StarDecisionTrees" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../StarDecisionTrees;
+		};
 		D3B29C9C2B2FE23F00754C10 /* XCLocalSwiftPackageReference "../StarCore" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = ../StarCore;
@@ -818,6 +824,10 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		D3936FCE2BEDBA8F005AEA3C /* StarDecisionTrees */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = StarDecisionTrees;
+		};
 		D3B29C9D2B2FE23F00754C10 /* StarCore */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = StarCore;
