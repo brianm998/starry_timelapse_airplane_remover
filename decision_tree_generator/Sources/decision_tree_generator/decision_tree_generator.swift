@@ -1,6 +1,7 @@
 import Foundation
 import StarCore
 import ArgumentParser
+import logging
 import CryptoKit
 
 var startTime: Date = Date()
@@ -61,7 +62,7 @@ func cpuUsage() -> Double {
 }
 
 @main
-struct decision_tree_generator: ParsableCommand {
+struct decision_tree_generator: AsyncParsableCommand {
 
     @Flag(name: [.customShort("v"), .customLong("verify")],
           help:"""
@@ -129,7 +130,7 @@ struct decision_tree_generator: ParsableCommand {
             """)
     var inputFilenames: [String]
     
-    mutating func run() throws {
+    mutating func run() async throws {
         Log.name = "decision_tree_generator-log"
         Log.add(handler: ConsoleLogHandler(at: .verbose), for: .console)
         Log.add(handler: try FileLogHandler(at: .verbose), for: .file)  // XXX make this a command line parameter
@@ -144,21 +145,27 @@ struct decision_tree_generator: ParsableCommand {
         Log.i("train-data: \(inputFilenames)")
         Log.d("in debug mode")
         if verificationMode {
-            runVerification()
+            try await runVerification()
         } else {
             if let forestSize = forestSize {
                 // generate a forest of trees
                 // this ignores given test data,
                 // instead separating out the input data
                 // into train, validate and test segments
-                generateForestFromTrainingData(with: forestSize)                
+                try await generateForestFromTrainingData(with: forestSize)                
             } else {
                 // generate a single tree
                 // this prunes from the give test data
-                generateTreeFromTrainingData()
+                try await generateTreeFromTrainingData()
             }
         }
         Log.dispatchGroup.wait()
+
+        await TaskWaiter.shared.finish()
+
+        while(await logging.gremlin.pendingLogCount() > 0) {
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
+        }
     }
 
     func runVerification(basedUpon jsonConfigFileName: String) async throws -> TreeTestResults {
@@ -189,7 +196,6 @@ struct decision_tree_generator: ParsableCommand {
         callbacks.countOfFramesToCheck = { 1 }
 
         let eraser = try await NighttimeAirplaneRemover(with: config,
-                                                        numConcurrentRenders: numConcurrentRenders,
                                                         callbacks: callbacks,
                                                         processExistingFiles: true,
                                                         fullyProcess: false)
@@ -214,7 +220,7 @@ struct decision_tree_generator: ParsableCommand {
         
         // load the outliers in parallel
         for frame in frames {
-            let task = try await runThrowingTask() {
+            let task = try await runThrowingTaskOld() {
                 try await frame.loadOutliers()
             }
             outlierLoadingTasks.append(task)
@@ -228,7 +234,7 @@ struct decision_tree_generator: ParsableCommand {
         for frame in frames {
             // check all outlier groups
             
-            let task = await runTask() {
+            let task = await runTaskOld() {
                 var numberGood: [String: Int] = [:]
                 var numberBad: [String: Int] = [:]
                 for (treeKey, _) in decisionTrees {
@@ -286,44 +292,46 @@ struct decision_tree_generator: ParsableCommand {
                                numberBad: numDifferentOutlierGroups)
     }
 
-    func runVerification() {
-        let dispatchGroup = DispatchGroup()
-        dispatchGroup.enter()
-        Task {
-            let classifiedData = ClassifiedData()
-            for inputDirname in inputFilenames {
-                if fileManager.fileExists(atPath: inputDirname) {
-                    classifiedData += try await loadDataFrom(dirname: inputDirname)
-                }
+    func runVerification() async throws {
+        Log.d("runVerification start")
+        let classifiedData = ClassifiedData()
+        for inputDirname in inputFilenames {
+            Log.d("runVerification inputDirname \(inputDirname)")
+            if fileManager.fileExists(atPath: inputDirname) {
+                Log.d("runVerification inputDirname exists \(inputDirname)")
+                classifiedData += try await loadDataFrom(dirname: inputDirname)
+                Log.d("runVerification inputDirname loaded \(inputDirname)")
             }
-            // we've loaded all the classified data
-
-            var results = TreeTestResults()
-
-            let chunkedTestData = classifiedData.split(into: ProcessInfo.processInfo.activeProcessorCount)
-            
-            for (_, tree) in decisionTrees {
-                let (numGood, numBad) = await runTest(of: tree, onChunks: chunkedTestData)
-                results.numberGood[tree.name] = numGood
-                results.numberBad[tree.name] = numBad
-            }
-
-            var outputResults: [DecisionTreeResult] = []
-            for (treeKey, _) in decisionTrees {
-                let total = results.numberGood[treeKey]! + results.numberBad[treeKey]!
-                let percentageGood = Double(results.numberGood[treeKey]!)/Double(total)*100
-                let message = "For decision Tree \(treeKey) out of a total of \(total) outlier groups, \(percentageGood)% success good \(results.numberGood[treeKey]!) vs bad \(results.numberBad[treeKey]!)"
-                outputResults.append(DecisionTreeResult(score: percentageGood,
-                                                        message: message))
-            }
-            // sort these on output by percentageGood
-            for result in outputResults.sorted() {
-                Log.i(result.message)
-            }
-            
-            dispatchGroup.leave()
         }
-        dispatchGroup.wait()
+        // we've loaded all the classified data
+        Log.d("runVerification f1 WTF")
+
+        var results = TreeTestResults()
+
+        let chunkedTestData = classifiedData.split(into: ProcessInfo.processInfo.activeProcessorCount)
+        
+        for (_, tree) in decisionTrees {
+            Log.d("running test on tree \(tree)")
+            let (numGood, numBad) = await runTest(of: tree, onChunks: chunkedTestData)
+            results.numberGood[tree.name] = numGood
+            results.numberBad[tree.name] = numBad
+        }
+        Log.d("runVerification mid decisionTrees \(decisionTrees)")
+
+        var outputResults: [DecisionTreeResult] = []
+        for (treeKey, _) in decisionTrees {
+            let total = results.numberGood[treeKey]! + results.numberBad[treeKey]!
+            let percentageGood = Double(results.numberGood[treeKey]!)/Double(total)*100
+            let message = "For decision Tree \(treeKey) out of a total of \(total) outlier groups, \(percentageGood)% success good \(results.numberGood[treeKey]!) vs bad \(results.numberBad[treeKey]!)"
+            outputResults.append(DecisionTreeResult(score: percentageGood,
+                                                    message: message))
+            Log.d("output results: \(message)")
+        }
+        // sort these on output by percentageGood
+        for result in outputResults.sorted() {
+            Log.i(result.message)
+        }
+        Log.d("runVerification done")
     }
 
     // read outlier group values from a stored set of files listed by a config.json
@@ -353,7 +361,6 @@ struct decision_tree_generator: ParsableCommand {
         callbacks.countOfFramesToCheck = { 1 }
 
         let eraser = try await NighttimeAirplaneRemover(with: config,
-                                                        numConcurrentRenders: numConcurrentRenders,
                                                         callbacks: callbacks,
                                                         processExistingFiles: true,
                                                         fullyProcess: false)
@@ -381,7 +388,7 @@ struct decision_tree_generator: ParsableCommand {
         
         // load the outliers in parallel
         for frame in frames {
-            let task = try await runThrowingTask() {
+            let task = try await runThrowingTaskOld() {
                 try await frame.loadOutliers()
             }
             outlierLoadingTasks.append(task)
@@ -391,7 +398,7 @@ struct decision_tree_generator: ParsableCommand {
         var tasks: [Task<ClassifiedData,Never>] = []
         
         for frame in frames {
-            let task = await runTask() {
+            let task = await runTaskOld() {
                 
                 var localPositiveData: [OutlierFeatureData] = []
                 var localNegativeData: [OutlierFeatureData] = []
@@ -434,45 +441,36 @@ struct decision_tree_generator: ParsableCommand {
     }
 
     // actually generate a decision tree forest
-    func generateForestFromTrainingData(with forestSize: Int) {
+    func generateForestFromTrainingData(with forestSize: Int) async throws {
 
-        Log.d("generateForestFromTrainingData")
+        let generator = DecisionTreeGenerator(withTypes: OutlierGroup.Feature.allCases,
+                                              andSplitTypes: [.median],
+                                              pruneTree: !noPrune,
+                                              maxDepth: maxDepth)
+
         
-        let dispatchGroup = DispatchGroup()
-        dispatchGroup.enter()
-        Task {
+        let baseFilename = "../starDecisionTrees/Sources/starDecisionTrees/OutlierGroupDecisionTreeForest_"
 
-            let generator = DecisionTreeGenerator(withTypes: OutlierGroup.Feature.allCases,
-                                                  andSplitTypes: [.median],
-                                                  pruneTree: !noPrune,
-                                                  maxDepth: maxDepth)
+        // test data gathered from -t on command line
+        let testData = try await loadTestData().split(into: ProcessInfo.processInfo.activeProcessorCount)
+        
+        let forest =
+          try await generator.generateForest(withInputData: loadTrainingData(),
+                                             andTestData: testData,
+                                             inputFilenames: inputFilenames,
+                                             treeCount: forestSize,
+                                             baseFilename: baseFilename) 
 
-            
-            let baseFilename = "../starDecisionTrees/Sources/starDecisionTrees/OutlierGroupDecisionTreeForest_"
+        let forestBaseFilename = "../starDecisionTrees/Sources/starDecisionTrees/OutlierGroupForestClassifier_"
 
-            // test data gathered from -t on command line
-            let testData = try await loadTestData().split(into: ProcessInfo.processInfo.activeProcessorCount)
-            
-            let forest =
-              try await generator.generateForest(withInputData: loadTrainingData(),
-                                                 andTestData: testData,
-                                                 inputFilenames: inputFilenames,
-                                                 treeCount: forestSize,
-                                                 baseFilename: baseFilename) 
+        let classifier = try await generator.writeClassifier(with: forest, baseFilename: forestBaseFilename)
 
-            let forestBaseFilename = "../starDecisionTrees/Sources/starDecisionTrees/OutlierGroupForestClassifier_"
+        // test classifier and see how well it does on the test data
 
-            let classifier = try await generator.writeClassifier(with: forest, baseFilename: forestBaseFilename)
+        let (good, bad) = await runTest(of: classifier, onChunks: testData)
+        let score = Double(good)/Double(good + bad)
+        Log.i("final forest classifier got score \(score) on test data")
 
-            // test classifier and see how well it does on the test data
-
-            let (good, bad) = await runTest(of: classifier, onChunks: testData)
-            let score = Double(good)/Double(good + bad)
-            Log.i("final forest classifier got score \(score) on test data")
-
-            dispatchGroup.leave()
-        }
-        dispatchGroup.wait()
     }
 
     func loadTestData() async throws -> ClassifiedData {
@@ -524,75 +522,69 @@ struct decision_tree_generator: ParsableCommand {
     }
     
     // actually generate a decision tree
-    func generateTreeFromTrainingData() {
+    func generateTreeFromTrainingData() async throws {
         
-        let dispatchGroup = DispatchGroup()
-        dispatchGroup.enter()
-        Task {
-            var decisionTypes: [OutlierGroup.Feature] = []
+        var decisionTypes: [OutlierGroup.Feature] = []
 
-            Log.d("decisionTypesString \(decisionTypesString)")
-            
-            if decisionTypesString == "" {
-                // if not specfied, use all types
-                decisionTypes = OutlierGroup.Feature.allCases
-            } else {
-                // split out given types
-                let rawValues = decisionTypesString.components(separatedBy: ",")
-                for rawValue in rawValues {
-                    if let enumValue = OutlierGroup.Feature(rawValue: rawValue) {
-                        decisionTypes.append(enumValue)
-                    } else {
-                        Log.w("type \(rawValue) is not a member of OutlierGroup.Feature")
-                    }
-                }
-            }
-            
-            // training data gathered from all inputs
-            let trainingData = try await loadTrainingData()
-
-            Log.i("data loaded")
-
-            // test data gathered from -t on command line
-            let testData = try await loadTestData()
-            
-            do {
-                if produceAllTypeCombinations {
-                    let min = OutlierGroup.Feature.allCases.count-1 // XXX make a parameter
-                    let max = OutlierGroup.Feature.allCases.count
-                    let combinations = decisionTypes.combinations(ofCount: min..<max)
-                    Log.i("calculating \(combinations.count) different decision trees")
-
-                    var tasks: [Task<Void,Error>] = []
-                    
-                    for (index, types) in combinations.enumerated() {
-                        Log.i("calculating tree \(index) with \(types)")
-                        //let positiveData = trainingData.positiveData.map { $0 } // copy data for each tree generation
-                        //let negativeData = trainingData.negativeData.map { $0 }
-                        let _inputFilenames = inputFilenames
-                        let task = try await runThrowingTask() {
-                            _ = try await self.writeTree(withTypes: types,
-                                                         withTrainingData: trainingData,
-                                                         andTestData: testData,
-                                                         inputFilenames: _inputFilenames,
-                                                         maxDepth: maxDepth)
-                        }
-                        tasks.append(task)
-                    }
-                    for task in tasks { try await task.value }
+        Log.d("decisionTypesString \(decisionTypesString)")
+        
+        if decisionTypesString == "" {
+            // if not specfied, use all types
+            decisionTypes = OutlierGroup.Feature.allCases
+        } else {
+            // split out given types
+            let rawValues = decisionTypesString.components(separatedBy: ",")
+            for rawValue in rawValues {
+                if let enumValue = OutlierGroup.Feature(rawValue: rawValue) {
+                    decisionTypes.append(enumValue)
                 } else {
-                    _ = try await self.writeTree(withTypes: decisionTypes,
-                                                 withTrainingData: trainingData,
-                                                 andTestData: testData,
-                                                 inputFilenames: inputFilenames,
-                                                 maxDepth: maxDepth)
+                    Log.w("type \(rawValue) is not a member of OutlierGroup.Feature")
                 }
-            } catch {
-                Log.e("\(error)")
             }
-            dispatchGroup.leave()
         }
-        dispatchGroup.wait()
+        
+        // training data gathered from all inputs
+        let trainingData = try await loadTrainingData()
+
+        Log.i("data loaded")
+
+        // test data gathered from -t on command line
+        let testData = try await loadTestData()
+        
+        do {
+            if produceAllTypeCombinations {
+                let min = OutlierGroup.Feature.allCases.count-1 // XXX make a parameter
+                let max = OutlierGroup.Feature.allCases.count
+                let combinations = decisionTypes.combinations(ofCount: min..<max)
+                Log.i("calculating \(combinations.count) different decision trees")
+
+                var tasks: [Task<Void,Error>] = []
+                
+                for (index, types) in combinations.enumerated() {
+                    Log.i("calculating tree \(index) with \(types)")
+                    //let positiveData = trainingData.positiveData.map { $0 } // copy data for each tree generation
+                    //let negativeData = trainingData.negativeData.map { $0 }
+                    let _inputFilenames = inputFilenames
+                    let task = try await runThrowingTaskOld() {
+                        _ = try await self.writeTree(withTypes: types,
+                                                     withTrainingData: trainingData,
+                                                     andTestData: testData,
+                                                     inputFilenames: _inputFilenames,
+                                                     maxDepth: maxDepth)
+                    }
+                    tasks.append(task)
+                }
+                for task in tasks { try await task.value }
+            } else {
+                _ = try await self.writeTree(withTypes: decisionTypes,
+                                             withTrainingData: trainingData,
+                                             andTestData: testData,
+                                             inputFilenames: inputFilenames,
+                                             maxDepth: maxDepth)
+            }
+        } catch {
+            Log.e("\(error)")
+        }
     }
 
     func loadDataFrom(dirname: String) async throws -> ClassifiedData {

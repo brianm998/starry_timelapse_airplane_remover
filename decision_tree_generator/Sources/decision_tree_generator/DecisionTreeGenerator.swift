@@ -1,6 +1,7 @@
 import Foundation
 import StarCore
 import ArgumentParser
+import logging
 import CryptoKit
 
 // number of levels (groups of '    ') of indentation to start with 
@@ -78,6 +79,8 @@ actor DecisionTreeGenerator {
                                                            baseFilename: baseFilename,
                                                            treeIndex: validationIndex)
 
+                    Log.i("generated tree")
+                    
                     // save this generated swift code to a file
                     if fileManager.fileExists(atPath: tree.filename) {
                         Log.i("overwriting already existing filename \(tree.filename)")
@@ -331,7 +334,7 @@ actor DecisionTreeGenerator {
 
         decisionSplitTypeString += "\n    ]\n"
 
-        //Log.d("getting root")
+        Log.d("getting root")
 
         // the root tree node with all of the test data 
         var tree = await decisionTreeNode(withTrainingData: trainingData,
@@ -472,7 +475,7 @@ fileprivate func getValueDistributions(of values: [[Double]],
     // for each type, calculate a min/max/mean/median for both paint and not
     for type in decisionTypes {
         let allValues = values[type.sortOrder] 
-        let task = await runTask() {
+        let task = await runTaskOld() {
             var min =  Double.greatestFiniteMagnitude
             var max = -Double.greatestFiniteMagnitude
             var sum = 0.0
@@ -521,7 +524,7 @@ fileprivate func getValueDistributions(of values: [[Double]],
     var tasks: [Task<DecisionTypeValuesResult,Never>] = []
     
     for type in decisionTypes {
-        let task = await runTask() {
+        let task = await runTaskOld() {
             var list: [Double] = []
             let max = testData.count
             for idx in 0..<max {
@@ -601,7 +604,7 @@ fileprivate func recurseOn(result: DecisionResult, indent: Int,
         let greaterThanPositive = result.greaterThanPositive//.map { $0 }
         let greaterThanNegative = result.greaterThanNegative//.map { $0 }
         
-        let lessResponseTask = await runTask() {
+        let lessResponseTask = await runTaskOld() {
             /*
 
              XXX
@@ -771,13 +774,13 @@ fileprivate func decisionTreeNode(withTrainingData trainingData: ClassifiedData,
     // iterate ofer all decision tree types to pick the best one
     // that differentiates the test data
     
-    let positiveTask = await runTask() {
+    let positiveTask = await runTaskOld() {
         // indexed by outlierGroup.sortOrder
         let positiveValues = await transform(testData: trainingData.positiveData, on: decisionTypes)
         return await getValueDistributions(of: positiveValues, on: decisionTypes)
     }
     
-    let negativeTask = await runTask() {
+    let negativeTask = await runTaskOld() {
         // indexed by outlierGroup.sortOrder
         let negativeValues = await transform(testData: trainingData.negativeData, on: decisionTypes)
         return await getValueDistributions(of: negativeValues, on: decisionTypes)
@@ -799,7 +802,7 @@ fileprivate func decisionTreeNode(withTrainingData trainingData: ClassifiedData,
            let paintDist: ValueDistribution = paintDistFU,
            let notPaintDist: ValueDistribution = notPaintDistFU
         {
-            let task = await runTask() {
+            let task = await runTaskOld() {
                 if paintDist.max < notPaintDist.min {
                     // we have a linear split between all provided test data
                     // this is an end leaf node, both paths after decision lead to a result
