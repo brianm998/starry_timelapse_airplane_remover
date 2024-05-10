@@ -8,8 +8,14 @@ public class Blob: CustomStringConvertible {
     public let id: String
     public private(set) var pixels = Set<SortablePixel>()
     public let frameIndex: Int
-    
+
+    // actual size in number of pixels
     public var size: Int { pixels.count }
+
+    // adjusted size for frame
+    public var adjustedSize: Double {
+        Double(self.size)/(IMAGE_HEIGHT!*IMAGE_WIDTH!)
+    }
 
     public var impactCount: Int = 0
 

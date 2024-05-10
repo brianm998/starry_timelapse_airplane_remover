@@ -24,7 +24,7 @@ class IsolatedBlobRemover: AbstractBlobAnalyzer {
     {
         iterateOverAllBlobs() { _, blob in
             // only deal with small blobs
-            if blob.size > 24 { // XXX constant XXX
+            if blob.adjustedSize > fx3Size(for: 24) { // XXX constant XXX
                 return
             }
 
@@ -58,7 +58,7 @@ class IsolatedBlobRemover: AbstractBlobAnalyzer {
                        blobRef != blob.id,
                        let otherBlob = blobMap[blobRef]
                     {
-                        if otherBlob.size > minNeighborSize {
+                        if otherBlob.adjustedSize > fx3Size(for: minNeighborSize) {
                             otherBlobIsNearby = true
                             break
                         }

@@ -236,11 +236,11 @@ extension FrameAirplaneRemover {
 
             // weed out blobs that are too small and not bright enough
             let brighterBlobs: [String: Blob] = khtBlobs.compactMapValues { blob in
-                if blob.size < 6, // XXX constant
+                if blob.adjustedSize < fx3Size(for: 6), // XXX constant
                    blob.medianIntensity < 6000 // XXX constant
                 {
                     return nil
-                } else if blob.size < 9, // XXX constant
+                } else if blob.adjustedSize < fx3Size(for: 9), // XXX constant
                           blob.medianIntensity < 4000 // XXX constant
                 {
                     return nil
@@ -629,3 +629,7 @@ extension FrameAirplaneRemover {
     }
 }
 
+// XXX rename this
+func fx3Size(for size: Int) -> Double {
+    Double(size) / (4240 * 2832)
+}

@@ -156,6 +156,8 @@ public class FullFrameBlobber {
                 //Log.d("expanding from seed pixel.intensity \(pixel.intensity)")
 
                 expand(blob: newBlob, seedPixel: pixel)
+
+                Log.d("frame \(frameIndex) creating blob \(newBlob)")
                 
             } else {
                 // but only if it's bright enough
@@ -179,11 +181,11 @@ public class FullFrameBlobber {
             if blob.medianIntensity < constants.blobberMinBlobIntensity { return false }
 
             // only keep smaller blobs if they are bright enough
-            if blob.size <= constants.blobberBrightSmallSize,
+            if blob.adjustedSize <= fx3Size(for: constants.blobberBrightSmallSize),
                blob.medianIntensity < constants.blobberBrightMinIntensity { return false }
 
             // anything this small is noise
-            if blob.size <= constants.blobberMinBlobSize { return false }
+            if blob.adjustedSize <= fx3Size(for: constants.blobberMinBlobSize) { return false }
 
             // this blob has passed all checks, keep it 
             return true

@@ -19,6 +19,8 @@ You should have received a copy of the GNU General Public License along with sta
 // gets rid of dimmer blobs off by themselves 
 class DimIsolatedBlobRemover: AbstractBlobAnalyzer {
 
+    // XXX adjust scan size for image resolution?
+    
     public func process(scanSize: Int = 12) // how far in each direction to look for neighbors
     {
         var filteredBlobs = Array(blobMap.values)
@@ -37,7 +39,7 @@ class DimIsolatedBlobRemover: AbstractBlobAnalyzer {
         
         iterateOverAllBlobs() { _, blob in
             // only deal with small blobs
-            if blob.size > 24 { // XXX constant XXX
+            if blob.adjustedSize > fx3Size(for: 24) { // XXX constant XXX
                 return
             }
             
