@@ -46,7 +46,7 @@ public actor FinalProcessor {
 
     init(with config: Config,
          callbacks: Callbacks,
-         publisher: PassthroughSubject<FrameAirplaneRemover, Never>,
+         publisher: PassthroughSubject<FrameAirplaneRemover, Never>, // XXX erase to any publisher
          numberOfFrames frameCount: Int,
          shouldProcess: [Bool],
          imageSequence: ImageSequence,
@@ -277,21 +277,16 @@ public actor FinalProcessor {
                             await frameToFinish.clearOutlierGroupValueCaches()
                             await frameToFinish.maybeApplyOutlierGroupClassifier()
                             frameToFinish.set(state: .outlierProcessingComplete)
-                            try await taskGroup.addTask() { 
-                                //Log.v("FINAL THREAD frame \(indexToProcess) task running")
+
+                            // run as a deferred task so we never block here 
+                            try await taskGroup.addDeferredTask() {
                                 Log.v("FINAL THREAD frame \(indexToProcess) classified")
-
-//                                try await taskGroup.addTask() { 
-                                    // XXX VVV this is blocking other tasks
-
                                 do {
                                     try await self.finish(frame: frameToFinish)
                                 } catch {
                                     Log.e("FINAL THREAD frame \(indexToProcess) ERROR \(error)")
                                 }
                                 Log.v("FINAL THREAD frame \(indexToProcess) DONE")
-                                
-  //                              }
                             }
                         }
                         //Log.v("FINAL THREAD frame \(indexToProcess) done queueing into final queue")
@@ -324,7 +319,7 @@ public actor FinalProcessor {
                 Log.d("FINAL THREAD countOfFramesToCheck \(count)")
                 while(count > 0) {
                     //Log.d("FINAL THREAD sleeping with count \(count)")
-                    try await Task.sleep(nanoseconds: 100_000_000)
+                    try await Task.sleep(nanoseconds: 100_000_000) /// EXC_BAD_ACCESS ?  WTF
                     count = await countOfFramesToCheck()
                 }
             } else {

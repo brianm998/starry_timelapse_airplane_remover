@@ -61,7 +61,7 @@ public func runTask<Type>(at priority: TaskPriority = .medium,
  // handle each response
  }
  */
-public func runThrowingTask<Type>(at priority: TaskPriority,
+public func runThrowingTask<Type>(at priority: TaskPriority = .medium,
                                   with taskMaster: TaskMaster = defaultTaskMaster,
                                   _ closure: @escaping () async throws -> Type)
   async throws -> Task<Type,Error>
@@ -70,6 +70,27 @@ public func runThrowingTask<Type>(at priority: TaskPriority,
     await taskMaster.register(enabler)
     await enabler.wait()
     return Task<Type,Error> {
+        do {
+            let ret = try await closure() // run closure in separate task
+            await taskMaster.numberRunning.decrement()
+            return ret
+        } catch {
+            await taskMaster.numberRunning.decrement()
+            throw error
+        }
+    }
+}
+
+
+public func runDeferredThrowingTask<Type>(at priority: TaskPriority = .medium,
+                                          with taskMaster: TaskMaster = defaultTaskMaster,
+                                          _ closure: @escaping () async throws -> Type)
+  async throws -> Task<Type,Error>
+{
+    return Task<Type,Error> {
+        let enabler = TaskEnabler(priority: priority)
+        await taskMaster.register(enabler)
+        await enabler.wait()
         do {
             let ret = try await closure() // run closure in separate task
             await taskMaster.numberRunning.decrement()

@@ -40,6 +40,11 @@ public actor LimitedThrowingTaskGroup<T> {
     public func waitForAll() async throws {
         for task in tasks { _ = try await task.value }
     }
+
+
+    public func addDeferredTask(closure: @escaping () async throws -> T) async throws {
+        tasks.append(try await runDeferredThrowingTask(at: taskPriority, with: taskMaster, closure))
+    }
     
     public func addTask(closure: @escaping () async throws -> T) async throws {
         tasks.append(try await runThrowingTask(at: taskPriority, with: taskMaster, closure))
