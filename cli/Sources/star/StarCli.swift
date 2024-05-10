@@ -265,9 +265,10 @@ struct StarCli: AsyncParsableCommand {
     mutating func run() async throws {
 
         TaskRunner.maxConcurrentTasks = numConcurrentRenders
-        
-        StarCore.currentClassifier = OutlierGroupClassifierForest_a7624239()
-        
+
+        // gui should do this too
+        StarCore.currentClassifier = OutlierGroupClassifierForest_1e64a33a()
+
         if version {
             print("""
                   Nighttime Timelapse Airplane Remover (star) version \(config.starVersion)
