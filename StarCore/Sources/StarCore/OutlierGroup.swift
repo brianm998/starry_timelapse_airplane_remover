@@ -29,6 +29,7 @@ public protocol ClassifiableOutlierGroup {
 }
 
 // represents a single outler group in a frame
+// XXX make this an actor, seen crashes with multiple threads accessing at once
 public class OutlierGroup: CustomStringConvertible,
                            Hashable,
                            Equatable,
@@ -208,7 +209,7 @@ public class OutlierGroup: CustomStringConvertible,
         hasher.combine(frameIndex)
     }
     
-    public func shouldPaint(_ shouldPaint: PaintReason) async {
+    public func shouldPaint(_ shouldPaint: PaintReason) {
         //Log.d("\(self) should paint \(shouldPaint) self.frame \(self.frame)")
         self.shouldPaint = shouldPaint
 
