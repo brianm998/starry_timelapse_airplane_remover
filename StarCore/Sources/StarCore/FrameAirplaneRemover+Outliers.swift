@@ -473,8 +473,14 @@ extension FrameAirplaneRemover {
     public func outlierGroups(within distance: Double,
                               of group: OutlierGroup) -> [OutlierGroup]?
     {
-        if let outlierGroups {
-            return outlierGroups.groups(nearby: group, within: distance)
+        if let nearbyGroups = group.nearbyGroups {
+            var ret: [OutlierGroup] = []
+            for nearbyGroup in nearbyGroups {
+                if nearbyGroup.bounds.centerDistance(to: group.bounds) < distance {
+                    ret.append(nearbyGroup)
+                }
+            }
+            return ret
         }
         return nil
     }

@@ -216,6 +216,12 @@ public class OutlierGroup: CustomStringConvertible,
         // XXX update frame that it's different 
         self.frame?.markAsChanged()
     }
+
+    // a local cache of other nearby groups
+    lazy public var nearbyGroups: [OutlierGroup]? = {
+        // only run this only once, and only if needed, as it's not fast
+        self.frame?.outlierGroups?.groups(nearby: self, within: 80) // XXX hardcoded constant
+    }()
     
     private var cachedTestImage: CGImage? 
     
@@ -334,10 +340,10 @@ public class OutlierGroup: CustomStringConvertible,
         }
         var ret: [Double] = []
         for type in OutlierGroup.Feature.allCases {
-            let t0 = NSDate().timeIntervalSince1970
+            //let t0 = NSDate().timeIntervalSince1970
             ret.append(self.decisionTreeValue(for: type))
-            let t1 = NSDate().timeIntervalSince1970
-            Log.i("frame \(frameIndex) group \(self) took \(t1-t0) seconds to calculate value for \(type)")
+            //let t1 = NSDate().timeIntervalSince1970
+            //Log.i("frame \(frameIndex) group \(self) took \(t1-t0) seconds to calculate value for \(type)")
         }
         _decisionTreeValues = ret
         return ret
@@ -362,10 +368,10 @@ public class OutlierGroup: CustomStringConvertible,
      public var decisionTreeGroupValues: OutlierFeatureData {
          var rawValues = OutlierFeatureData.rawValues()
          for type in OutlierGroup.Feature.allCases {
-             let t0 = NSDate().timeIntervalSince1970
+             //let t0 = NSDate().timeIntervalSince1970
              let value = self.decisionTreeValue(for: type)
-             let t1 = NSDate().timeIntervalSince1970
-             Log.i("frame \(frameIndex) group \(self) took \(t1-t0) seconds to calculate value for \(type)")
+             //let t1 = NSDate().timeIntervalSince1970
+             //Log.i("frame \(frameIndex) group \(self) took \(t1-t0) seconds to calculate value for \(type)")
              rawValues[type.sortOrder] = value
              //Log.d("frame \(frameIndex) type \(type) value \(value)")
          }

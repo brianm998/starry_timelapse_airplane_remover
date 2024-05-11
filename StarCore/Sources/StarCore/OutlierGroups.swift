@@ -50,8 +50,7 @@ public class OutlierGroups {
                 if outlierId != 0,
                    outlierId != group.name,
                    !ret.keys.contains(outlierId),
-                   let outlier = members[outlierId],
-                   outlier.bounds.centerDistance(to: group.bounds) < searchDistance 
+                   let outlier = members[outlierId]
                 {
                     ret[outlierId] = outlier
                 }
