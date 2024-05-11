@@ -393,46 +393,47 @@ struct StarCli: AsyncParsableCommand {
             Log.i("looking for files to processes in \(inputImageSequenceDirname)")
             let writeOutputFiles = !skipOutputFiles
 
-            let task = Task {
-                do {
-                    let eraser = try await NighttimeAirplaneRemover(with: config,
-                                                                    callbacks: callbacks,
-                                                                    processExistingFiles: false,
-                                                                    maxResidentImages: 40, // XXX
-                                                                    writeOutputFiles: writeOutputFiles)
-                    
-                    if let _ = eraser.callbacks.updatable {
-                        // setup sequence monitor
-                        let updatableProgressMonitor =
-                          await UpdatableProgressMonitor(frameCount: eraser.imageSequence.filenames.count,
-                                                         numConcurrentRenders: 40, // xXX
-                                                         config: eraser.config,
-                                                         callbacks: callbacks)
-                        eraser.callbacks.frameStateChangeCallback = { frame, state in
-                            // XXX make sure to wait for this
-                            Task(priority: .userInitiated) {
-                                await updatableProgressMonitor.stateChange(for: frame, to: state)
-                            }
+            do {
+                let eraser = try await NighttimeAirplaneRemover(with: config,
+                                                                callbacks: callbacks,
+                                                                processExistingFiles: false,
+                                                                maxResidentImages: 40, // XXX
+                                                                writeOutputFiles: writeOutputFiles)
+                
+                if let _ = eraser.callbacks.updatable {
+                    // setup sequence monitor
+                    let updatableProgressMonitor =
+                      await UpdatableProgressMonitor(frameCount: eraser.imageSequence.filenames.count,
+                                                     numConcurrentRenders: 40, // xXX
+                                                     config: eraser.config,
+                                                     callbacks: callbacks)
+                    eraser.callbacks.frameStateChangeCallback = { frame, state in
+                        // XXX make sure to wait for this
+                        Task(priority: .userInitiated) {
+                            await updatableProgressMonitor.stateChange(for: frame, to: state)
                         }
                     }
-                    try await eraser.run()
-
-                    Log.i("done")
-
-                } catch {
-                    Log.e("\(error)")
                 }
+                try await eraser.run()
+
+                Log.i("done")
+
+            } catch {
+                Log.e("\(error)")
             }
-            _ = await task.value
+
         } else {
             throw ValidationError("need to provide input")
         }
         try? await Task.sleep(nanoseconds: 1_000_000_000)
+        Log.d("waiting for task waiter")
         await TaskWaiter.shared.finish()
-
+        Log.d("waiting for logging gremlin")
+        try? await Task.sleep(nanoseconds: 100_000_000)
         while(await logging.gremlin.pendingLogCount() > 0) {
             try? await Task.sleep(nanoseconds: 1_000_000_000)
         }
+        print("really finished")
     }
 }
 
