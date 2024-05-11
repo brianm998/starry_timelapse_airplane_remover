@@ -38,6 +38,7 @@ public enum FrameProcessingState: Int, CaseIterable, Codable {
     case smallDimBlobRemobal
     case finalIsolatedBlobRemoval
     case finalDimBlobRemoval
+    case savingOutlierImage
     case populatingOutlierGroups
     case readyForInterFrameProcessing
     case interFrameProcessing
@@ -83,6 +84,8 @@ public enum FrameProcessingState: Int, CaseIterable, Codable {
             return "final isolated blob removal"
         case .finalDimBlobRemoval:
             return "final dim blob removal"
+        case .savingOutlierImage:
+            return "saving outlier images"
         case .populatingOutlierGroups:
             return "populating outlier groups"
         case .readyForInterFrameProcessing: // XXX not covered in progress monitor

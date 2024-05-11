@@ -186,6 +186,10 @@ public actor UpdatableProgressMonitor {
             updates.append(update)
         }
         
+        if let update = progressLine(for: .savingOutlierImage) {
+            updates.append(update)
+        }
+        
         if let update = progressLine(for: .populatingOutlierGroups) {
             updates.append(update)
         }

@@ -298,7 +298,7 @@ extension FrameAirplaneRemover {
 
             dimIsolatedBlobRemover = nil
 
-            // XXX update state here ???
+            self.state = .savingOutlierImage
             
             // save blobs to blob image here
             var blobImageSaver: BlobImageSaver? = .init(blobMap: dimIsolatedBlobs,
@@ -474,32 +474,7 @@ extension FrameAirplaneRemover {
                               of group: OutlierGroup) -> [OutlierGroup]?
     {
         if let outlierGroups {
-            let groups = outlierGroups.groups(nearby: group)
-            var ret: [OutlierGroup] = []
-            for otherGroup in groups {
-                if otherGroup.bounds.centerDistance(to: group.bounds) < distance {
-                    ret.append(otherGroup)
-                }
-            }
-            return ret
-        }
-        return nil
-    }
-
-    // XXX old method
-    // XXX this MOFO is slow :(
-    public func outlierGroups(within distance: Double,
-                              of boundingBox: BoundingBox) -> [OutlierGroup]?
-    {
-        if let outlierGroups {
-            let groups = outlierGroups.members
-            var ret: [OutlierGroup] = []
-            for (_, group) in groups {
-                if group.bounds.centerDistance(to: boundingBox) < distance {
-                    ret.append(group)
-                }
-            }
-            return ret
+            return outlierGroups.groups(nearby: group, within: distance)
         }
         return nil
     }

@@ -24,37 +24,41 @@ public class OutlierGroups {
     
     public let frameIndex: Int
     public var members: [UInt16: OutlierGroup] // keyed by name
-    public var outlierImageData: [UInt16]          // row major outlier ids for frame
+    public var outlierImageData: [UInt16] // outlier ids for frame, row major indexed
 
-    public func groups(nearby group: OutlierGroup) -> [OutlierGroup] {
-        var ret: [OutlierGroup] = []
+    public func groups(nearby group: OutlierGroup,
+                       within searchDistance: Double) -> [OutlierGroup]
+    {
+        var ret: [UInt16: OutlierGroup] = [:]
 
-        /*
-
-         XXX REWRITE THIS
-         
-        let (XIndex, YIndex) = self.index(for: group)
-
-        var XStartIndex = XIndex - 1
-        var XEndIndex = XIndex + 1
+        let intSearchDistance = Int(searchDistance)
         
-        var YStartIndex = YIndex - 1
-        var YEndIndex = YIndex + 1
+        var minX = group.bounds.min.x - intSearchDistance
+        var minY = group.bounds.min.y - intSearchDistance
+        var maxX = group.bounds.max.x + intSearchDistance
+        var maxY = group.bounds.max.y + intSearchDistance
 
-        if XStartIndex < 0 { XStartIndex = 0 }
-        if YStartIndex < 0 { YStartIndex = 0 }
+        if minX < 0 { minX = 0 }
+        if minY < 0 { minY = 0 }
+        if maxX >= width { maxX = width - 1 }
+        if maxY >= height { maxY = height - 1 }
 
-        if XEndIndex >= self.spatialArr.count { XEndIndex = self.spatialArr.count - 1 }
-        if YEndIndex >= self.spatialArr[0].count { YEndIndex = self.spatialArr[0].count - 1 }
-
-        for x in XStartIndex...XEndIndex {
-            for y in YStartIndex...YEndIndex {
-                ret.append(contentsOf: self.spatialArr[x][y])
+        for x in minX...maxX {
+            for y in minY...maxY {
+                let index = y * width + x
+                let outlierId = outlierImageData[index]
+                if outlierId != 0,
+                   outlierId != group.name,
+                   !ret.keys.contains(outlierId),
+                   let outlier = members[outlierId],
+                   outlier.bounds.centerDistance(to: group.bounds) < searchDistance 
+                {
+                    ret[outlierId] = outlier
+                }
             }
         }
-         */
 
-        return ret
+        return Array(ret.values)
     }
     
     public init(frameIndex: Int,
