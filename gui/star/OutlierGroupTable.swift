@@ -66,7 +66,7 @@ struct OutlierGroupTableRow: Identifiable {
     let dt_lineLength: Double
 
     init(_ group: OutlierGroup) async {
-        name = group.name
+        name = group.id
         size = group.size
         let shouldPaint = group.shouldPaint
         if let shouldPaint = shouldPaint {
@@ -116,7 +116,7 @@ struct OutlierGroupTable: View {
     var closure: () -> Void
 
     var nameColumn: DTColumn {
-        TableColumn("name", value: \.name) { (row: OutlierGroupTableRow) in
+        TableColumn("id", value: \.id) { (row: OutlierGroupTableRow) in
             Text(String(row.name))
         }.width(min: 40, ideal: 60, max: 100)
     }

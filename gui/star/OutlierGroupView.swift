@@ -148,7 +148,7 @@ struct OutlierGroupView: View {
             // here we want to select just this outlier
 
             if self.groupViewModel.viewModel.outlierGroupTableRows.count == 1,
-               self.groupViewModel.viewModel.outlierGroupTableRows[0].name == self.groupViewModel.group.name
+               self.groupViewModel.viewModel.outlierGroupTableRows[0].name == self.groupViewModel.group.id
             {
                 // just toggle the selectablility of this one
                 // XXX need separate enums for selection does paint and selection does do info
@@ -156,11 +156,11 @@ struct OutlierGroupView: View {
                 // make this row the only selected one
                 let frame_view = self.groupViewModel.viewModel.frames[self.groupViewModel.group.frameIndex]
                 if let frame = frame_view.frame,
-                   let group = frame.outlierGroup(named: self.groupViewModel.group.name)
+                   let group = frame.outlierGroup(named: self.groupViewModel.group.id)
                 {
                     if let outlier_views = frame_view.outlierViews {
                         for outlier_view in outlier_views {
-                            if outlier_view.name != self.groupViewModel.group.name {
+                            if outlier_view.name != self.groupViewModel.group.id {
                                 outlier_view.isSelected = false
                             }
                         }
@@ -200,7 +200,7 @@ struct OutlierGroupView: View {
         Task {
             if let frame = self.groupViewModel.viewModel.currentFrame,
                let outlierGroups = frame.outlierGroups,
-               let outlier_group = outlierGroups.members[self.groupViewModel.group.name]
+               let outlier_group = outlierGroups.members[self.groupViewModel.group.id]
             {
                 // update the actor in the background
                 await outlier_group.shouldPaint(shouldPaint)

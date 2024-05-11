@@ -416,7 +416,7 @@ public final class ViewModel: ObservableObject {
                         
                         let groupView = await OutlierGroupViewModel(viewModel: self,
                                                                group: group,
-                                                               name: group.name,
+                                                               name: group.id,
                                                                bounds: group.bounds,
                                                                image: outlierImage)
                         newOutlierGroups.append(groupView)
