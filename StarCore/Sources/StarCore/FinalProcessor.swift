@@ -144,7 +144,7 @@ public actor FinalProcessor {
     func finishAll() async throws {
         Log.d("finishing all")
         try await withLimitedThrowingTaskGroup(of: Void.self,
-                                               at: .userInitiated) { taskGroup in
+                                               at: .medium) { taskGroup in
             for (_, frame) in frames.enumerated() {
                 if let frame {
                     Log.d("adding frame \(frame.frameIndex) to final queue")
@@ -193,7 +193,7 @@ public actor FinalProcessor {
         
         var done = false
         try await withLimitedThrowingTaskGroup(of: Void.self,
-                                               at: .userInitiated) { taskGroup in
+                                               at: .medium) { taskGroup in
             while(!done) {
                 //Log.v("FINAL THREAD running")
                 let (cfi, framesCount) = await (currentFrameIndex, frames.count)
@@ -272,14 +272,15 @@ public actor FinalProcessor {
                             await self.clearFrame(at: immutableStart - 1)
                             //Log.v("FINAL THREAD frame \(indexToProcess) adding task")
 
-
                             //Log.v("FINAL THREAD finishing sleeping")
                             await frameToFinish.clearOutlierGroupValueCaches()
+                            
                             await frameToFinish.maybeApplyOutlierGroupClassifier()
                             frameToFinish.set(state: .outlierProcessingComplete)
 
                             // run as a deferred task so we never block here 
                             try await taskGroup.addDeferredTask() {
+                                
                                 Log.v("FINAL THREAD frame \(indexToProcess) classified")
                                 do {
                                     try await self.finish(frame: frameToFinish)

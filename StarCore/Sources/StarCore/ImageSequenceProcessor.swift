@@ -150,7 +150,7 @@ public class ImageSequenceProcessor<T> {
         // each of these methods removes the airplanes from a particular frame
         Log.i("processing a total of \(await methodList.list.count) frames")
         
-        try await withLimitedThrowingTaskGroup(of: T.self, at: .medium) { group in
+        try await withLimitedThrowingTaskGroup(of: T.self, at: .low) { group in
             while(await methodList.list.count > 0) {
                 Log.d("we have \(await methodList.list.count) more frames to process")
                 Log.d("processing new frame")
