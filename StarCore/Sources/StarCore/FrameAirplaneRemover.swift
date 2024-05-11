@@ -194,14 +194,16 @@ public class FrameAirplaneRemover: Equatable, Hashable {
             // only overwrite the paint reason if it is there
             await self.writeOutliersBinary()
         }
-            
-        self.state = .writingOutlierValues
 
-        Log.d("frame \(self.frameIndex) finish 1")
-        // write out the classifier feature data for this data point
-        // XXX THIS MOFO IS SLOW
-        try await self.writeOutlierValuesCSV()
-            
+        if config.writeOutlierClassificationValues {
+            // THIS MOFO IS SLOW
+            self.state = .writingOutlierValues
+
+            Log.d("frame \(self.frameIndex) finish 1")
+            // write out the classifier feature data for this data point
+            try await self.writeOutlierValuesCSV()
+        }
+
         Log.d("frame \(self.frameIndex) finish 2")
         if !self.writeOutputFiles {
             self.state = .complete

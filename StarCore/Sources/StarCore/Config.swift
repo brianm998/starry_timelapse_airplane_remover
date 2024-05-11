@@ -74,6 +74,8 @@ public struct Config: Codable {
     // write out individual outlier group images
     public var writeOutlierGroupFiles: Bool
 
+    public var writeOutlierClassificationValues: Bool = false
+    
     // write out a preview file for each frame
     public var writeFramePreviewFiles: Bool
 

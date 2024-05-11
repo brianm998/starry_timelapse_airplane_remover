@@ -237,7 +237,7 @@ struct StarCli: AsyncParsableCommand {
     var numConcurrentRenders: UInt = TaskRunner.maxConcurrentTasks
 
     @Option(name: .shortAndLong, help: "Detection Types")
-    var detectionType: DetectionType = .strong
+    var detectionType: DetectionType = .exp // XXX rename these and make this the new default
     
     @Option(name: .shortAndLong, help: """
         When set, outlier groups closer to the bottom of the screen than this are ignored.
@@ -249,6 +249,10 @@ struct StarCli: AsyncParsableCommand {
     @Flag(name: [.customShort("w"), .customLong("write-outlier-group-files")],
           help:"Write individual outlier group image files")
     var shouldWriteOutlierGroupFiles = false
+
+    @Flag(name: [.customShort("W"), .customLong("write-outlier-classification-values")],
+          help:"Write individual outlier group classification values")
+    var shouldWriteOutlierClassificationValues = false
 
     @Flag(name: .shortAndLong, help:"Show version number")
     var version = false
@@ -266,7 +270,7 @@ struct StarCli: AsyncParsableCommand {
 
         TaskRunner.maxConcurrentTasks = numConcurrentRenders
 
-        // gui should do this too
+        // gui should do this too, if loadCurrentClassifiers() fails
         StarCore.currentClassifier = OutlierGroupForestClassifier_1e64a33a()
 
         if version {
@@ -291,6 +295,7 @@ struct StarCli: AsyncParsableCommand {
 
                 do {
                     config = try await Config.read(fromJsonFilename: fuck)
+                    config.writeOutlierClassificationValues = shouldWriteOutlierClassificationValues
                     constants.detectionType = config.detectionType
                 } catch {
                     print("\(error)")
@@ -339,6 +344,8 @@ struct StarCli: AsyncParsableCommand {
                                 writeFramePreviewFiles: shouldWriteOutlierGroupFiles,
                                 writeFrameProcessedPreviewFiles: shouldWriteOutlierGroupFiles,
                                 writeFrameThumbnailFiles: shouldWriteOutlierGroupFiles)
+
+                config.writeOutlierClassificationValues = shouldWriteOutlierClassificationValues
                 constants.detectionType = config.detectionType
                 config.ignoreLowerPixels = ignoreLowerPixels
                 Log.nameSuffix = inputImageSequenceName
