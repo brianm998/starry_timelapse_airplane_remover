@@ -491,7 +491,7 @@ public class Blob: CustomStringConvertible {
     
     public func outlierGroup(at frameIndex: Int) -> OutlierGroup {
         // XXX make this pass on the line, if there is one
-        OutlierGroup(name: self.id,
+        OutlierGroup(id: self.id,
                      size: UInt(self.pixels.count),
                      brightness: UInt(self.intensity),
                      bounds: self.boundingBox,

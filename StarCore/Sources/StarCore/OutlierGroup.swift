@@ -36,7 +36,7 @@ public class OutlierGroup: CustomStringConvertible,
                            Comparable,
                            ClassifiableOutlierGroup
 {
-    public let name: UInt16               // unique across a frame, non zero
+    public let id: UInt16               // unique across a frame, non zero
     public let size: UInt              // number of pixels in this outlier group
     public let bounds: BoundingBox     // a bounding box on the image that contains this group
     public let brightness: UInt        // the average amount per pixel of brightness over the limit 
@@ -75,14 +75,14 @@ public class OutlierGroup: CustomStringConvertible,
         return nil
     }
 
-    convenience init(name: UInt16,
+    convenience init(id: UInt16,
                      size: UInt,
                      brightness: UInt,      // average brightness
                      bounds: BoundingBox,
                      frame: FrameAirplaneRemover,
                      pixels: [UInt16]) 
     {
-        self.init(name: name,
+        self.init(id: id,
                   size: size,
                   brightness: brightness,
                   bounds: bounds,
@@ -91,14 +91,14 @@ public class OutlierGroup: CustomStringConvertible,
         self.frame = frame
     }
     
-    public init(name: UInt16,
+    public init(id: UInt16,
                 size: UInt,
                 brightness: UInt,      // average brightness
                 bounds: BoundingBox,
                 frameIndex: Int,
                 pixels: [UInt16]) 
     {
-        self.name = name
+        self.id = id
         self.size = size
         self.brightness = brightness
         self.bounds = bounds
@@ -193,19 +193,19 @@ public class OutlierGroup: CustomStringConvertible,
     }
 
     public static func == (lhs: OutlierGroup, rhs: OutlierGroup) -> Bool {
-        return lhs.name == rhs.name && lhs.frameIndex == rhs.frameIndex
+        return lhs.id == rhs.id && lhs.frameIndex == rhs.frameIndex
     }
     
     public static func < (lhs: OutlierGroup, rhs: OutlierGroup) -> Bool {
-        return lhs.name < rhs.name
+        return lhs.id < rhs.id
     }
     
     nonisolated public var description: String {
-        "outlier group \(frameIndex).\(name) size \(size) "
+        "outlier group \(frameIndex):\(id) size \(size) "
     }
     
     nonisolated public func hash(into hasher: inout Hasher) {
-        hasher.combine(name)
+        hasher.combine(id)
         hasher.combine(frameIndex)
     }
     
@@ -650,7 +650,7 @@ public class OutlierGroup: CustomStringConvertible,
             ret = self.lineLength
         }
         //let t1 = NSDate().timeIntervalSince1970
-        //Log.d("group \(name) @ frame \(frameIndex) decisionTreeValue(for: \(type)) = \(ret) after \(t1-t0)s")
+        //Log.d("group \(id) @ frame \(frameIndex) decisionTreeValue(for: \(type)) = \(ret) after \(t1-t0)s")
 
         featureValueCache[type] = ret
         return ret
@@ -908,7 +908,7 @@ public class OutlierGroup: CustomStringConvertible,
                 var ret = 0.0
                 var count = 0
                 for group in nearbyGroups {
-                    if group.name == self.name { continue }
+                    if group.id == self.id { continue }
                     let centerLineTheta = self.bounds.centerTheta(with: group.bounds)
                     let otherHisto = group.houghLineHistogram
                     let otherThetaScore = thetaScore(between: centerLineTheta, and: otherHisto.maxTheta)
@@ -1058,7 +1058,7 @@ public class OutlierGroup: CustomStringConvertible,
 
     /*
      func logDecisionTreeValues() {
-     var message = "decision tree values for \(self.name): "
+     var message = "decision tree values for \(self.id): "
      for type in /*OutlierGroup.*/Feature.allCases {
      message += "\(type) = \(self.decisionTreeValue(for: type)) " 
      }

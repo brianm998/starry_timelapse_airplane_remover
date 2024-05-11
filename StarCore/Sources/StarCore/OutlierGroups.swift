@@ -115,14 +115,14 @@ public class OutlierGroups {
                     if let _outlierGroupPaintData {
                         // the newer full frame json file
 
-                        if let shouldPaint = _outlierGroupPaintData[outlierGroup.name] {
+                        if let shouldPaint = _outlierGroupPaintData[outlierGroup.id] {
                             outlierGroup.shouldPaint(shouldPaint)
                         } else {
-                            Log.i("frame \(frameIndex) could not find outlier group info for group \(outlierGroup.name) in outlierGroupPaintData")
+                            Log.i("frame \(frameIndex) could not find outlier group info for group \(outlierGroup.id) in outlierGroupPaintData")
                         }
                     }
 
-                    self.members[outlierGroup.name] = outlierGroup
+                    self.members[outlierGroup.id] = outlierGroup
                 }
             }
         } else {
@@ -152,7 +152,7 @@ public class OutlierGroups {
                 let index = y * width + x
                 let outlierId = outlierImageData[index]
                 if outlierId != 0,
-                   outlierId != group.name,
+                   outlierId != group.id,
                    !ret.keys.contains(outlierId),
                    let outlier = members[outlierId]
                 {
@@ -177,7 +177,7 @@ public class OutlierGroups {
         for group in members.values {
             // collate paint reasons for each group
             if let shouldPaint = group.shouldPaint {
-                outlierGroupPaintData[group.name] = shouldPaint
+                outlierGroupPaintData[group.id] = shouldPaint
             }
         }
 
@@ -234,7 +234,7 @@ public class OutlierGroups {
                  baseData[y*Int(IMAGE_WIDTH!)+group.bounds.max.x] = 0x8F
                  }
                  */
-                //Log.d("group \(group.name) has bounds \(group.bounds)")
+                //Log.d("group \(group.id) has bounds \(group.bounds)")
 
                 for x in 0 ..< group.bounds.width {
                     for y in 0 ..< group.bounds.height {

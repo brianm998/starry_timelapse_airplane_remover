@@ -329,9 +329,9 @@ extension FrameAirplaneRemover {
                 // make outlier group from this blob
                 let outlierGroup = blob.outlierGroup(at: frameIndex)
 
-                Log.i("frame \(frameIndex) promoting \(blob) to outlier group \(outlierGroup.name) line \(String(describing: blob.line))")
+                Log.i("frame \(frameIndex) promoting \(blob) to outlier group \(outlierGroup.id) line \(String(describing: blob.line))")
                 outlierGroup.frame = self
-                outlierGroups?.members[outlierGroup.name] = outlierGroup
+                outlierGroups?.members[outlierGroup.id] = outlierGroup
             }
         } else {
             Log.e("frame \(frameIndex) has no subtraction image, no outliers produced")
@@ -588,7 +588,7 @@ extension FrameAirplaneRemover {
                             let validationIdx = validationY * width + validationX
 
                             if validationData[validationIdx] != 0 {
-                                Log.d("frame \(frameIndex) group \(group.name) is valid based upon validation image data")
+                                Log.d("frame \(frameIndex) group \(group.id) is valid based upon validation image data")
                                 groupIsValid = true
                                 break
                             }
