@@ -25,7 +25,6 @@ extension FrameAirplaneRemover {
     // returns a grayscale image pixel value array from subtracting the aligned frame
     // from the frame being processed.
     internal func subtractAlignedImageFromFrame() async throws -> PixelatedImage {
-        self.state = .loadingImages
         
         if let image = await imageAccessor.load(type: .original, atSize: .original),
            let otherFrame = await imageAccessor.load(type: .aligned, atSize: .original)

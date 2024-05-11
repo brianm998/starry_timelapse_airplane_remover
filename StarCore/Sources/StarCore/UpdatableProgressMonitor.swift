@@ -138,10 +138,6 @@ public actor UpdatableProgressMonitor {
             updates.append(update)
         }
         
-        if let update = progressLine(for: .loadingImages) {
-            updates.append(update)
-        }
-
         if let update = progressLine(for: .subtractingNeighbor) {
             updates.append(update)
         }
@@ -150,43 +146,11 @@ public actor UpdatableProgressMonitor {
             updates.append(update)
         }
 
-        if let update = progressLine(for: .sortingPixels) {
-            updates.append(update)
-        }
-
         if let update = progressLine(for: .detectingBlobs) {
             updates.append(update)
         }
 
-        if let update = progressLine(for: .findingLines) {
-            updates.append(update)
-        }
-        
-        if let update = progressLine(for: .initialDimIsolatedRemoval) {
-            updates.append(update)
-        }
-        
         if let update = progressLine(for: .isolatedBlobRemoval) {
-            updates.append(update)
-        }
-        
-        if let update = progressLine(for: .aligningBlobsWithLines) {
-            updates.append(update)
-        }
-        
-        if let update = progressLine(for: .smallDimBlobRemobal) {
-            updates.append(update)
-        }
-        
-        if let update = progressLine(for: .finalIsolatedBlobRemoval) {
-            updates.append(update)
-        }
-        
-        if let update = progressLine(for: .finalDimBlobRemoval) {
-            updates.append(update)
-        }
-        
-        if let update = progressLine(for: .savingOutlierImage) {
             updates.append(update)
         }
         
@@ -209,10 +173,6 @@ public actor UpdatableProgressMonitor {
         }
 
         if let update = progressLine(for: .writingOutlierValues) {
-            updates.append(update)
-        }
-        
-        if let update = progressLine(for: .reloadingImages) {
             updates.append(update)
         }
         

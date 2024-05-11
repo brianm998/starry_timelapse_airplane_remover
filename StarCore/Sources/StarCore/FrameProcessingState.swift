@@ -26,19 +26,11 @@ public enum LoopReturn {
 public enum FrameProcessingState: Int, CaseIterable, Codable {
     case unprocessed
     case starAlignment    
-    case loadingImages    
     case subtractingNeighbor
-    case findingLines
-    case initialDimIsolatedRemoval
     case assemblingPixels
     case sortingPixels
     case detectingBlobs
     case isolatedBlobRemoval
-    case aligningBlobsWithLines
-    case smallDimBlobRemobal
-    case finalIsolatedBlobRemoval
-    case finalDimBlobRemoval
-    case savingOutlierImage
     case populatingOutlierGroups
     case readyForInterFrameProcessing
     case interFrameProcessing
@@ -48,7 +40,6 @@ public enum FrameProcessingState: Int, CaseIterable, Codable {
     case writingBinaryOutliers
     case writingOutlierValues
     
-    case reloadingImages
     case painting
     case painting2
     case writingOutputFile
@@ -60,14 +51,8 @@ public enum FrameProcessingState: Int, CaseIterable, Codable {
             return ""
         case .starAlignment:
             return "aligning stars"
-        case .loadingImages:
-            return"loading images"
         case .subtractingNeighbor:
             return "subtracting aligned neighbor frame"
-        case .findingLines:
-            return "finding lines"
-        case .initialDimIsolatedRemoval:
-            return "dim blob removal"
         case .assemblingPixels:
             return "assembling pixels"
         case .sortingPixels:
@@ -76,16 +61,6 @@ public enum FrameProcessingState: Int, CaseIterable, Codable {
             return "detecting blobs"
         case .isolatedBlobRemoval:
             return "initial isolated blob removal"
-        case .aligningBlobsWithLines:
-            return "aligning blobs with lines"
-        case .smallDimBlobRemobal:
-            return "small dim blob removal"
-        case .finalIsolatedBlobRemoval:
-            return "final isolated blob removal"
-        case .finalDimBlobRemoval:
-            return "final dim blob removal"
-        case .savingOutlierImage:
-            return "saving outlier images"
         case .populatingOutlierGroups:
             return "populating outlier groups"
         case .readyForInterFrameProcessing: // XXX not covered in progress monitor
@@ -98,8 +73,6 @@ public enum FrameProcessingState: Int, CaseIterable, Codable {
             return "writing raw outlier data"
         case .writingOutlierValues:
             return "writing outlier classification values"
-        case .reloadingImages:
-            return "reloadingImages"
         case .painting:
             return "creating paint mask"
         case .painting2:

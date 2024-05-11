@@ -211,8 +211,6 @@ public class FrameAirplaneRemover: Equatable, Hashable {
             return
         }
         
-        self.state = .reloadingImages
-        
         Log.i("frame \(self.frameIndex) finishing")
 
         guard let image = await imageAccessor.load(type: .original, atSize: .original)

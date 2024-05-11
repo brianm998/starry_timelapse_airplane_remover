@@ -80,7 +80,6 @@ extension FrameAirplaneRemover {
         // and its aligned neighbor frame.  Indexed by y * width + x
         var subtractionArray: [UInt16] = []
         var subtractionImage: PixelatedImage?
-        self.state = .loadingImages
         do {
             // try to load the image subtraction from a pre-processed file
 
@@ -113,228 +112,174 @@ extension FrameAirplaneRemover {
             Log.d("loaded subtractionArray with \(subtractionArray.count) items")
         }
         
-        if let subtractionImage {
+        self.state = .assemblingPixels
 
-            self.state = .assemblingPixels
+        // detect blobs of difference in brightness in the subtraction array
+        // airplanes show up as lines or does in a line
+        // because the image subtracted from this frame had the sky aligned,
+        // the ground may get moved, and therefore may contain blobs as well.
+        var blobber: FullFrameBlobber? = .init(config: config,
+                                               imageWidth: width,
+                                               imageHeight: height,
+                                               pixelData: subtractionArray,
+                                               frameIndex: frameIndex,
+                                               neighborType: .eight)//.fourCardinal
 
-            // detect blobs of difference in brightness in the subtraction array
-            // airplanes show up as lines or does in a line
-            // because the image subtracted from this frame had the sky aligned,
-            // the ground may get moved, and therefore may contain blobs as well.
-            var blobber: FullFrameBlobber? = .init(config: config,
-                                                   imageWidth: width,
-                                                   imageHeight: height,
-                                                   pixelData: subtractionArray,
-                                                   frameIndex: frameIndex,
-                                                   neighborType: .eight)//.fourCardinal
+        blobber?.sortPixels()
+        
+        self.state = .detectingBlobs
+        
+        // run the blobber
+        blobber?.process()
 
-            self.state = .sortingPixels
+        // get the blobs out of the blobber
+        guard let blobberBlobs = blobber?.blobMap else {
+            Log.w("frame \(frameIndex) no blobs from blobber")
+            return 
+        }
 
-            blobber?.sortPixels()
-            
-            self.state = .detectingBlobs
-            
-            // run the blobber
-            blobber?.process()
+        // nil out the blobber to try to save memory
+        blobber = nil
 
-            // get the blobs out of the blobber
-            guard let blobberBlobs = blobber?.blobMap else {
-                Log.w("frame \(frameIndex) no blobs from blobber")
-                return 
+        if config.writeOutlierGroupFiles {
+            // save blobs image 
+            try await saveImages(for: Array(blobberBlobs.values), as: .blobs)
+        }
+
+        var dimIsolatedBlobRemover_1: DimIsolatedBlobRemover? = .init(blobMap: blobberBlobs,
+                                                                      width: width,
+                                                                      height: height,
+                                                                      frameIndex: frameIndex)
+        
+        dimIsolatedBlobRemover_1?.process(scanSize: 20) // XXX constant
+        
+        guard let dimIsolatedBlobRemoverBlobs = dimIsolatedBlobRemover_1?.blobMap else {
+            Log.w("frame \(frameIndex) no blobs from blobber")
+            return 
+        }
+
+        dimIsolatedBlobRemover_1 = nil
+
+        //Log.d("frame \(frameIndex) FullFrameBlobber returned \(initialBlobs.count) blobs")
+
+        /*
+         Now that we have detected blobs in this frame, the next step is to
+         weed out small, isolated blobs.  This helps speed things up, and
+         if tuned well, doesn't skip anything important.
+         */
+
+        self.state = .isolatedBlobRemoval
+        var isolatedRemover: IsolatedBlobRemover? = .init(blobMap: dimIsolatedBlobRemoverBlobs,
+                                                          width: width,
+                                                          height: height,
+                                                          frameIndex: frameIndex)
+
+        isolatedRemover?.process()            
+
+        guard let isolatedRemoverBlobs = isolatedRemover?.blobMap else {
+            Log.w("frame \(frameIndex) no blobs from isolated remover")
+            return
+        }
+
+        Log.d("frame \(frameIndex) first isolated remover returned \(isolatedRemoverBlobs.count) blobs")
+        
+        isolatedRemover = nil
+        
+        Log.d("frame \(frameIndex) kht analysis done")
+
+        // weed out blobs that are too small and not bright enough
+        let brighterBlobs: [UInt16: Blob] = isolatedRemoverBlobs/*khtBlobs*/.compactMapValues { blob in
+            if blob.adjustedSize < fx3Size(for: 6), // XXX constant
+               blob.medianIntensity < 6000 // XXX constant
+            {
+                return nil
+            } else if blob.adjustedSize < fx3Size(for: 9), // XXX constant
+                      blob.medianIntensity < 4000 // XXX constant
+            {
+                return nil
+            } else {
+                // this blob is either bigger than the largest size tested for above,
+                // or brighter than the medianIntensity set for its size group
+                return blob
             }
+        }
+        
+        if config.writeOutlierGroupFiles {
+            // save filtered blobs image here
+            try await saveImages(for: Array(brighterBlobs.values), as: .absorbed)
+        }
 
-            // nil out the blobber to try to save memory
-            blobber = nil
-
-            if config.writeOutlierGroupFiles {
-                // save blobs image 
-                try await saveImages(for: Array(blobberBlobs.values), as: .blobs)
-            }
-
-            self.state = .findingLines
-
-            // run the hough transform on sub sections of the subtraction image
-            let houghLines = houghLines(from: subtractionImage)
-
-            self.state = .initialDimIsolatedRemoval
-            
-            var dimIsolatedBlobRemover_1: DimIsolatedBlobRemover? = .init(blobMap: blobberBlobs,
-                                                                          width: width,
-                                                                          height: height,
-                                                                          frameIndex: frameIndex)
-            
-            dimIsolatedBlobRemover_1?.process(scanSize: 20) // XXX constant
-            
-            guard let dimIsolatedBlobRemoverBlobs = dimIsolatedBlobRemover_1?.blobMap else {
-                Log.w("frame \(frameIndex) no blobs from blobber")
-                return 
-            }
-
-            dimIsolatedBlobRemover_1 = nil
-
-            //Log.d("frame \(frameIndex) FullFrameBlobber returned \(initialBlobs.count) blobs")
-
-            /*
-             Now that we have detected blobs in this frame, the next step is to
-             weed out small, isolated blobs.  This helps speed things up, and
-             if tuned well, doesn't skip anything important.
-             */
-
-            self.state = .isolatedBlobRemoval
-            var isolatedRemover: IsolatedBlobRemover? = .init(blobMap: dimIsolatedBlobRemoverBlobs,
-                                                              width: width,
-                                                              height: height,
-                                                              frameIndex: frameIndex)
-
-            isolatedRemover?.process()            
-
-            self.state = .aligningBlobsWithLines
-
-            guard let isolatedRemoverBlobs = isolatedRemover?.blobMap else {
-                Log.w("frame \(frameIndex) no blobs from isolated remover")
-                return
-            }
-
-            Log.d("frame \(frameIndex) first isolated remover returned \(isolatedRemoverBlobs.count) blobs")
-            
-            isolatedRemover = nil
-            
-            /*
-             The next step is to collate blobs that are close to the
-             lines and close to eachother into a single larger blob.
-
-             This is the slowest step here now.
-             */
-            var kht: BlobKHTAnalysis? = .init(houghLines: houghLines,
-                                              blobMap: isolatedRemoverBlobs,
-                                              config: config,
-                                              width: width,
-                                              height: height,
-                                              frameIndex: frameIndex,
-                                              imageAccessor: imageAccessor)
-            
-            try await kht?.process()
-
-            guard let khtBlobs = kht?.blobMap else {
-                Log.w("frame \(frameIndex) no blobs from kht")
-                return
-            }
-
-            kht = nil
-            Log.d("frame \(frameIndex) blob kht analysis returned \(khtBlobs.count) blobs")
-            
-            if config.writeOutlierGroupFiles {
-                // save khtBlobs image here
-                try await saveImages(for: Array(khtBlobs.values), as: .khtb)
-            }
-            
-            Log.d("frame \(frameIndex) kht analysis done")
-
-         //   Log.d("frame \(frameIndex) no small blobs returned \(noSmallBlobs.count) blobs")
-            
-            self.state = .smallDimBlobRemobal
-
-            // weed out blobs that are too small and not bright enough
-            let brighterBlobs: [UInt16: Blob] = khtBlobs.compactMapValues { blob in
-                if blob.adjustedSize < fx3Size(for: 6), // XXX constant
-                   blob.medianIntensity < 6000 // XXX constant
-                {
-                    return nil
-                } else if blob.adjustedSize < fx3Size(for: 9), // XXX constant
-                          blob.medianIntensity < 4000 // XXX constant
-                {
-                    return nil
-                } else {
-                    // this blob is either bigger than the largest size tested for above,
-                    // or brighter than the medianIntensity set for its size group
-                    return blob
-                }
-            }
-            
-            if config.writeOutlierGroupFiles {
-                // save filtered blobs image here
-                try await saveImages(for: Array(brighterBlobs.values), as: .absorbed)
-            }
-
-            self.state = .finalIsolatedBlobRemoval
-            
-            /*
-             Make sure all smaller blobs are close to another blob.  Weeds out a lot of noise.
-             */
-            var finalIsolatedRemover: IsolatedBlobRemover? = .init(blobMap: brighterBlobs,
-                                                                   width: width,
-                                                                   height: height,
-                                                                   frameIndex: frameIndex)
+        /*
+         Make sure all smaller blobs are close to another blob.  Weeds out a lot of noise.
+         */
+        var finalIsolatedRemover: IsolatedBlobRemover? = .init(blobMap: brighterBlobs,
+                                                               width: width,
+                                                               height: height,
+                                                               frameIndex: frameIndex)
 
 
-  
-            finalIsolatedRemover?.process(minNeighborSize: 5, scanSize: 12) // XXX constants
+        
+        finalIsolatedRemover?.process(minNeighborSize: 5, scanSize: 12) // XXX constants
 
-            guard let finalIsolatedBlobs = finalIsolatedRemover?.blobMap else {
-                Log.w("frame \(frameIndex) no blobs from finalIsolatedRemover")
-                return
-            } 
+        guard let finalIsolatedBlobs = finalIsolatedRemover?.blobMap else {
+            Log.w("frame \(frameIndex) no blobs from finalIsolatedRemover")
+            return
+        } 
 
-            finalIsolatedRemover = nil
-            
-            if config.writeOutlierGroupFiles {
-                // save filtered blobs image here
-                try await saveImages(for: Array(finalIsolatedBlobs.values), as: .rectified)
-            }
-            self.state = .finalDimBlobRemoval
+        finalIsolatedRemover = nil
+        
+        if config.writeOutlierGroupFiles {
+            // save filtered blobs image here
+            try await saveImages(for: Array(finalIsolatedBlobs.values), as: .rectified)
+        }
 
-            var dimIsolatedBlobRemover: DimIsolatedBlobRemover? = .init(blobMap: finalIsolatedBlobs,
-                                                                        width: width,
-                                                                        height: height,
-                                                                        frameIndex: frameIndex)
-            
-            dimIsolatedBlobRemover?.process(scanSize: 16) // XXX constant
+        var dimIsolatedBlobRemover: DimIsolatedBlobRemover? = .init(blobMap: finalIsolatedBlobs,
+                                                                    width: width,
+                                                                    height: height,
+                                                                    frameIndex: frameIndex)
+        
+        dimIsolatedBlobRemover?.process(scanSize: 16) // XXX constant
 
 
-            guard let dimIsolatedBlobs = dimIsolatedBlobRemover?.blobMap else {
-                Log.w("frame \(frameIndex) no blobs from kht")
-                return
-            }
+        guard let dimIsolatedBlobs = dimIsolatedBlobRemover?.blobMap else {
+            Log.w("frame \(frameIndex) no blobs from kht")
+            return
+        }
 
-            dimIsolatedBlobRemover = nil
+        dimIsolatedBlobRemover = nil
 
-            self.state = .savingOutlierImage
-            
-            // save blobs to blob image here
-            var blobImageSaver: BlobImageSaver? = .init(blobMap: dimIsolatedBlobs,
-                                                        width: width,
-                                                        height: height,
-                                                        frameIndex: frameIndex)
+        // save blobs to blob image here
+        var blobImageSaver: BlobImageSaver? = .init(blobMap: dimIsolatedBlobs,
+                                                    width: width,
+                                                    height: height,
+                                                    frameIndex: frameIndex)
 
-            if let blobImageSaver {
-                // keep the blobRefs from this for later analysis of nearby outliers
-                outlierGroups?.outlierImageData = blobImageSaver.blobRefs
-            }
-            
-            let frame_outliers_dirname = "\(self.outlierOutputDirname)/\(frameIndex)"
+        if let blobImageSaver {
+            // keep the blobRefs from this for later analysis of nearby outliers
+            outlierGroups?.outlierImageData = blobImageSaver.blobRefs
+        }
+        
+        let frame_outliers_dirname = "\(self.outlierOutputDirname)/\(frameIndex)"
 
-            mkdir(frame_outliers_dirname)
-            
-            blobImageSaver?.save(to: "\(frame_outliers_dirname)/outliers.tif")
-            blobImageSaver = nil
+        mkdir(frame_outliers_dirname)
+        
+        blobImageSaver?.save(to: "\(frame_outliers_dirname)/outliers.tif")
+        blobImageSaver = nil
 
-            // blobs to promote to outlier groups
-            let filteredBlobs = Array(dimIsolatedBlobs.values)
+        // blobs to promote to outlier groups
+        let filteredBlobs = Array(dimIsolatedBlobs.values)
 
-            Log.i("frame \(frameIndex) has \(filteredBlobs.count) filteredBlobs")
-            self.state = .populatingOutlierGroups
+        Log.i("frame \(frameIndex) has \(filteredBlobs.count) filteredBlobs")
+        self.state = .populatingOutlierGroups
 
-            // promote found blobs to outlier groups for further processing
-            for blob in filteredBlobs {
-                // make outlier group from this blob
-                let outlierGroup = blob.outlierGroup(at: frameIndex)
+        // promote found blobs to outlier groups for further processing
+        for blob in filteredBlobs {
+            // make outlier group from this blob
+            let outlierGroup = blob.outlierGroup(at: frameIndex)
 
-                Log.i("frame \(frameIndex) promoting \(blob) to outlier group \(outlierGroup.id) line \(String(describing: blob.line))")
-                outlierGroup.frame = self
-                outlierGroups?.members[outlierGroup.id] = outlierGroup
-            }
-        } else {
-            Log.e("frame \(frameIndex) has no subtraction image, no outliers produced")
+            Log.i("frame \(frameIndex) promoting \(blob) to outlier group \(outlierGroup.id) line \(String(describing: blob.line))")
+            outlierGroup.frame = self
+            outlierGroups?.members[outlierGroup.id] = outlierGroup
         }
         self.state = .readyForInterFrameProcessing
     }

@@ -87,7 +87,7 @@ class AbstractBlobAnalyzer {
                             
         // XXX calculate this differently based upon the theta of the line
         // a 45 degree line needs more extension to have the same distance covered
-        var searchDistanceEachDirection = 16 // XXX constant
+        var searchDistanceEachDirection = 8 // XXX constant
 
         var startX = sourceX
         var startY = sourceY

@@ -425,7 +425,7 @@ public class OutlierGroup: CustomStringConvertible,
         case longerHistogramStreakDetection
         case neighboringInterFrameOutlierThetaScore
         case maxOverlapTimesThetaHisto
-        
+
         /*
          XXX add:
            - A new feature that accounts for empty space along the line
@@ -474,9 +474,9 @@ public class OutlierGroup: CustomStringConvertible,
                 return true
             case .neighboringInterFrameOutlierThetaScore:
                 return true
-            case .maxOverlap:
-                return true
             case .maxOverlapTimesThetaHisto:
+                return true
+            case .maxOverlap:
                 return true
             default:
                 return false
@@ -537,16 +537,16 @@ public class OutlierGroup: CustomStringConvertible,
                 return 24
             case .longerHistogramStreakDetection:
                 return 25
+            case .neighboringInterFrameOutlierThetaScore:
+                return 28
+            case .maxOverlapTimesThetaHisto:
+                return 30
             case .maxHoughTransformCount:
                 return 26
             case .maxHoughTheta:
                 return 27
-            case .neighboringInterFrameOutlierThetaScore:
-                return 28
             case .maxOverlap:
                 return 29
-            case .maxOverlapTimesThetaHisto:
-                return 30
             case .pixelBorderAmount:
                 return 31
             case .averageLineVariance:
@@ -638,10 +638,10 @@ public class OutlierGroup: CustomStringConvertible,
             ret = self.longerHistogramStreakDetection
         case .neighboringInterFrameOutlierThetaScore:
             ret = self.neighboringInterFrameOutlierThetaScore
-        case .maxOverlap:
-            ret = self.maxOverlap
         case .maxOverlapTimesThetaHisto:
             ret = self.maxOverlapTimesThetaHisto
+        case .maxOverlap:
+            ret = self.maxOverlap
         case .pixelBorderAmount:
             ret = self.pixelBorderAmount
         case .averageLineVariance:
