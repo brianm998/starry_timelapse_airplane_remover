@@ -24,86 +24,16 @@ public class OutlierGroups {
     
     public let frameIndex: Int
     public var members: [UInt16: OutlierGroup] // keyed by name
+
+    // image data from an image with non zero pixels set with an outlier id
     public var outlierImageData: [UInt16] // outlier ids for frame, row major indexed
 
-    public func groups(nearby group: OutlierGroup,
-                       within searchDistance: Double) -> [OutlierGroup]
-    {
-        var ret: [UInt16: OutlierGroup] = [:]
-
-        let intSearchDistance = Int(searchDistance)
-        
-        var minX = group.bounds.min.x - intSearchDistance
-        var minY = group.bounds.min.y - intSearchDistance
-        var maxX = group.bounds.max.x + intSearchDistance
-        var maxY = group.bounds.max.y + intSearchDistance
-
-        if minX < 0 { minX = 0 }
-        if minY < 0 { minY = 0 }
-        if maxX >= width { maxX = width - 1 }
-        if maxY >= height { maxY = height - 1 }
-
-        for x in minX...maxX {
-            for y in minY...maxY {
-                let index = y * width + x
-                let outlierId = outlierImageData[index]
-                if outlierId != 0,
-                   outlierId != group.name,
-                   !ret.keys.contains(outlierId),
-                   let outlier = members[outlierId]
-                {
-                    ret[outlierId] = outlier
-                }
-            }
-        }
-
-        return Array(ret.values)
-    }
-    
     public init(frameIndex: Int,
                 members: [UInt16: OutlierGroup])
     {
         self.frameIndex = frameIndex
         self.members = members
         self.outlierImageData = [UInt16](repeating: 0, count: 0) // XXX ???
-    }
-
-    // only writes the paint reasons now, outlier image is written elsewhere
-    public func write(to dir: String) async throws {
-        Log.d("writing  \(self.members.count) outlier groups for frame \(self.frameIndex) to binary file")
-        let frameDir = "\(dir)/\(frameIndex)"
-        
-        mkdir(frameDir)
-
-        // data to save for paint reasons for all outliers in this frame
-        var outlierGroupPaintData: [UInt16:PaintReason] = [:]
-        
-        for group in members.values {
-            // collate paint reasons for each group
-            if let shouldPaint = group.shouldPaint {
-                outlierGroupPaintData[group.name] = shouldPaint
-            }
-        }
-
-        // write outlier paint reason json here 
-        
-        let outlierGroupPaintDataFilename = "\(frameDir)/OutlierGroupPaintData.json"
-
-        let encoder = JSONEncoder()
-//            encoder.outputFormatting = [.prettyPrinted, .withoutEscapingSlashes]
-        encoder.nonConformingFloatEncodingStrategy = .convertToString(
-          positiveInfinity: "inf",
-          negativeInfinity: "-inf",
-          nan: "nan")
-
-        if fileManager.fileExists(atPath: outlierGroupPaintDataFilename) {
-            try fileManager.removeItem(atPath: outlierGroupPaintDataFilename)
-        } 
-        fileManager.createFile(atPath: outlierGroupPaintDataFilename,
-                               contents: try encoder.encode(outlierGroupPaintData),
-                               attributes: nil)
-        
-        Log.d("wrote  \(self.members.count) outlier groups for frame \(self.frameIndex) to binary file")
     }
 
     public init?(at frameIndex: Int,
@@ -198,6 +128,78 @@ public class OutlierGroups {
         } else {
             return nil
         }
+    }
+
+    public func groups(nearby group: OutlierGroup,
+                       within searchDistance: Double) -> [OutlierGroup]
+    {
+        var ret: [UInt16: OutlierGroup] = [:]
+
+        let intSearchDistance = Int(searchDistance)
+        
+        var minX = group.bounds.min.x - intSearchDistance
+        var minY = group.bounds.min.y - intSearchDistance
+        var maxX = group.bounds.max.x + intSearchDistance
+        var maxY = group.bounds.max.y + intSearchDistance
+
+        if minX < 0 { minX = 0 }
+        if minY < 0 { minY = 0 }
+        if maxX >= width { maxX = width - 1 }
+        if maxY >= height { maxY = height - 1 }
+
+        for x in minX...maxX {
+            for y in minY...maxY {
+                let index = y * width + x
+                let outlierId = outlierImageData[index]
+                if outlierId != 0,
+                   outlierId != group.name,
+                   !ret.keys.contains(outlierId),
+                   let outlier = members[outlierId]
+                {
+                    ret[outlierId] = outlier
+                }
+            }
+        }
+
+        return Array(ret.values)
+    }
+    
+    // only writes the paint reasons now, outlier image is written elsewhere
+    public func write(to dir: String) async throws {
+        Log.d("writing  \(self.members.count) outlier groups for frame \(self.frameIndex) to binary file")
+        let frameDir = "\(dir)/\(frameIndex)"
+        
+        mkdir(frameDir)
+
+        // data to save for paint reasons for all outliers in this frame
+        var outlierGroupPaintData: [UInt16:PaintReason] = [:]
+        
+        for group in members.values {
+            // collate paint reasons for each group
+            if let shouldPaint = group.shouldPaint {
+                outlierGroupPaintData[group.name] = shouldPaint
+            }
+        }
+
+        // write outlier paint reason json here 
+        
+        let outlierGroupPaintDataFilename = "\(frameDir)/OutlierGroupPaintData.json"
+
+        let encoder = JSONEncoder()
+//            encoder.outputFormatting = [.prettyPrinted, .withoutEscapingSlashes]
+        encoder.nonConformingFloatEncodingStrategy = .convertToString(
+          positiveInfinity: "inf",
+          negativeInfinity: "-inf",
+          nan: "nan")
+
+        if fileManager.fileExists(atPath: outlierGroupPaintDataFilename) {
+            try fileManager.removeItem(atPath: outlierGroupPaintDataFilename)
+        } 
+        fileManager.createFile(atPath: outlierGroupPaintDataFilename,
+                               contents: try encoder.encode(outlierGroupPaintData),
+                               attributes: nil)
+        
+        Log.d("wrote  \(self.members.count) outlier groups for frame \(self.frameIndex) to binary file")
     }
 
     // outputs an 8 bit monochrome image that contains a white
