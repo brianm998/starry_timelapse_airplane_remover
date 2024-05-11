@@ -160,7 +160,7 @@ public class FullFrameBlobber {
 
                 expand(blob: newBlob, seedPixel: pixel)
 
-                Log.d("frame \(frameIndex) creating blob \(newBlob)")
+                //Log.d("frame \(frameIndex) creating blob \(newBlob)")
                 
             } else {
                 // but only if it's bright enough
