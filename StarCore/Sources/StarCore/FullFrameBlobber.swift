@@ -58,6 +58,8 @@ public class FullFrameBlobber {
     // 100 means that all pixels will be in a blob
     let minContrast: Double
 
+    private var newBlobId: UInt16 = 0
+    
     // neighbor search policies
     public enum NeighborType {
         case fourCardinal       // up and down, left and right, no corners
@@ -150,7 +152,8 @@ public class FullFrameBlobber {
             if higherNeighbors.count == 0 {
                 // no higher neighbors
                 // a local maximum, this pixel is a blob seed
-                let newBlob = Blob(pixel, frameIndex: frameIndex)
+                newBlobId += 1
+                let newBlob = Blob(pixel, id: newBlobId, frameIndex: frameIndex)
                 blobs.append(newBlob)
                 
                 //Log.d("expanding from seed pixel.intensity \(pixel.intensity)")
@@ -192,8 +195,8 @@ public class FullFrameBlobber {
         }         
         Log.i("frame \(frameIndex) found \(blobs.count) blobs")
     }
-    public var blobMap: [String: Blob] {
-        var ret: [String: Blob] = [:]
+    public var blobMap: [UInt16: Blob] {
+        var ret: [UInt16: Blob] = [:]
         for blob in self.blobs { ret[blob.id] = blob }
         return ret
     }

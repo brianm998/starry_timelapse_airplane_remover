@@ -16,7 +16,7 @@ enum WillPaintType: Comparable {
 struct OutlierGroupTableRow: Identifiable {
     let id = UUID()
     
-    let name: String
+    let name: UInt16
     let size: UInt
 //    let shouldPaint: PaintReason?
     let willPaint: Bool?
@@ -116,8 +116,9 @@ struct OutlierGroupTable: View {
     var closure: () -> Void
 
     var nameColumn: DTColumn {
-        TableColumn("name", value: \.name)
-          .width(min: 30, ideal: 80, max: 120)
+        TableColumn("name", value: \.name) { (row: OutlierGroupTableRow) in
+            Text(String(row.name))
+        }.width(min: 40, ideal: 60, max: 100)
     }
     
     var sizeColumn: DTColumn {

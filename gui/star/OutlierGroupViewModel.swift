@@ -7,7 +7,7 @@ class OutlierGroupViewModel: ObservableObject {
 
     init (viewModel: ViewModel,
           group: OutlierGroup,
-          name: String,
+          name: UInt16,
           bounds: BoundingBox,
           image: NSImage)
     {
@@ -25,7 +25,7 @@ class OutlierGroupViewModel: ObservableObject {
     @Published var isSelected = false // selected for the details view
 
     let group: OutlierGroup
-    let name: String
+    let name: UInt16
     let bounds: BoundingBox
     let image: NSImage
 

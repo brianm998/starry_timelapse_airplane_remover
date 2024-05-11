@@ -25,7 +25,7 @@ class LastBlob {
 class AbstractBlobAnalyzer {
 
     // map of all known blobs keyed by blob id
-    var blobMap: [String: Blob]
+    var blobMap: [UInt16: Blob]
 
     // width of the frame
     internal let width: Int
@@ -37,12 +37,13 @@ class AbstractBlobAnalyzer {
     internal let frameIndex: Int
 
     // a reference for each pixel for each blob it might belong to
-    internal var blobRefs: [String?]
+    // non zero values reference a blob
+    internal var blobRefs: [UInt16]
 
     // keep track of absorbed blobs so we don't reference them again accidentally
-    internal var absorbedBlobs = Set<String>()
+    internal var absorbedBlobs = Set<UInt16>()
     
-    init(blobMap: [String: Blob],
+    init(blobMap: [UInt16: Blob],
          width: Int,
          height: Int,
          frameIndex: Int)
@@ -53,7 +54,7 @@ class AbstractBlobAnalyzer {
         self.height = height
         self.frameIndex = frameIndex
 
-        self.blobRefs = [String?](repeating: nil, count: width*height)
+        self.blobRefs = [UInt16](repeating: 0, count: width*height)
 
         for (key, blob) in blobMap {
             for pixel in blob.pixels {
@@ -131,9 +132,15 @@ class AbstractBlobAnalyzer {
                                 on line: Line,
                                 lastBlob: inout LastBlob) 
     {
-        if y < height,
-           x < width,
-           let blobId = blobRefs[y*width+x],
+        let index = y*width+x
+        guard y < height,
+              x < width,
+              index >= 0,
+              index < blobRefs.count
+        else { return }
+        
+        let blobId = blobRefs[index]
+        if blobId != 0,
            let blob = blobMap[blobId]
         {
             // lines are invalid for this blob

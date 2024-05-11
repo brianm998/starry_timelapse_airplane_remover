@@ -64,7 +64,8 @@ class DimIsolatedBlobRemover: AbstractBlobAnalyzer {
             
             for x in (startX ... endX) {
                 for y in (startY ... endY) {
-                    if let blobRef = blobRefs[y*width+x],
+                    let blobRef = blobRefs[y*width+x]
+                    if blobRef != 0,
                        blobRef != blob.id,
                        let otherBlob = blobMap[blobRef]
                     {

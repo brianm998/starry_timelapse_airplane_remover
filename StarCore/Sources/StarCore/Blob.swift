@@ -5,7 +5,7 @@ import logging
 // blobs created by the blobber
                    
 public class Blob: CustomStringConvertible {
-    public let id: String
+    public let id: UInt16
     public private(set) var pixels = Set<SortablePixel>()
     public let frameIndex: Int
 
@@ -126,7 +126,7 @@ public class Blob: CustomStringConvertible {
             var newPixels = Set<SortablePixel>()
             
             let standardLine = line.standardLine
-            let (average, median, max) = averageMedianMaxDistance(from: line)
+            let (_, median, _) = averageMedianMaxDistance(from: line)
 
             for pixel in pixels {
 
@@ -249,7 +249,7 @@ public class Blob: CustomStringConvertible {
             var newPixels = Set<SortablePixel>()
             
             let standardLine = line.standardLine
-            let (average, median, max) = averageMedianMaxDistance(from: line)
+            let (_, median, max) = averageMedianMaxDistance(from: line)
             //let maxDistanceFromLine = (average+median)/2 // guess
             let maxDistanceFromLine = (median+max)/2 // guess
 
@@ -373,25 +373,14 @@ public class Blob: CustomStringConvertible {
         self.frameIndex = other.frameIndex
         //Log.d("frame \(frameIndex) blob \(self.id) alloc")
     }
-    
-    public init(_ pixel: SortablePixel, frameIndex: Int) {
+
+    public init(_ pixel: SortablePixel, id: UInt16, frameIndex: Int) {
         self.pixels = [pixel]
-        self.id = "\(pixel.x) x \(pixel.y)"
+        self.id = id
         self.frameIndex = frameIndex
         //Log.d("frame \(frameIndex) blob \(self.id) alloc")
     }
 
-    public init(frameIndex: Int) {
-        self.pixels = []
-        self.id = "empty"
-        self.frameIndex = frameIndex
-        //Log.d("frame \(frameIndex) blob \(self.id) alloc")
-    }
-
-//    deinit {
-//        Log.d("frame \(frameIndex) blob \(self.id) dealloc")
-//    }
-    
     public func makeBackground() {
         for pixel in pixels {
             pixel.status = .background

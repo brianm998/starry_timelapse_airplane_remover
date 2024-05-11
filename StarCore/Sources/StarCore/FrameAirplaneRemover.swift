@@ -44,10 +44,10 @@ public class FrameAirplaneRemover: Equatable, Hashable {
     public let bytesPerRow: Int
     public let frameIndex: Int
 
-    public let outlierOutputDirname: String?
+    public let outlierOutputDirname: String
     
     // populated by pruning
-    public var outlierGroups: OutlierGroups?
+    public var outlierGroups: OutlierGroups? 
 
     private var didChange = false
 
@@ -67,7 +67,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
     // did we load our outliers from a file?
     internal var outliersLoadedFromFile = false
 
-    let outlierGroupLoader: () async -> OutlierGroups?
+    let outlierGroupLoader: (FrameAirplaneRemover) async -> OutlierGroups?
 
     // doubly linked list
     var previousFrame: FrameAirplaneRemover?
@@ -97,8 +97,8 @@ public class FrameAirplaneRemover: Equatable, Hashable {
          atIndex frameIndex: Int,
          outputFilename: String,
          baseName: String,       // source filename without path
-         outlierOutputDirname: String?,
-         outlierGroupLoader: @escaping () async -> OutlierGroups?,
+         outlierOutputDirname: String,
+         outlierGroupLoader: @escaping (FrameAirplaneRemover) async -> OutlierGroups?,
          fullyProcess: Bool = true,
          writeOutputFiles: Bool = true) async throws
     {

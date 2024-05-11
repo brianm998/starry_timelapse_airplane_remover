@@ -19,31 +19,20 @@ import logging
 
 public class OutlierGroups {
 
-    let height = IMAGE_HEIGHT!
-    let width = IMAGE_WIDTH!
+    let height = Int(IMAGE_HEIGHT!)
+    let width = Int(IMAGE_WIDTH!)
     
-    // how many spatial groups in the X direction
-    fileprivate var spatialXCount: Int
-
-    // how many spatial groups in the Y direction
-    fileprivate var spatialYCount: Int
-
     public let frameIndex: Int
-    public var members: [String: OutlierGroup] // keyed by name
-
-    // this is an x, y index of nearby groups
-    private var spatialArr: [[[OutlierGroup]]]
-
-    private func index(for group: OutlierGroup) -> (Int, Int) {
-        let centerCoord = group.bounds.center
-
-        return (Int(Double(centerCoord.x) / width) % spatialXCount,
-                Int(Double(centerCoord.y) / height) % spatialYCount)
-    }
+    public var members: [UInt16: OutlierGroup] // keyed by name
+    public var outlierImageData: [UInt16]          // row major outlier ids for frame
 
     public func groups(nearby group: OutlierGroup) -> [OutlierGroup] {
         var ret: [OutlierGroup] = []
 
+        /*
+
+         XXX REWRITE THIS
+         
         let (XIndex, YIndex) = self.index(for: group)
 
         var XStartIndex = XIndex - 1
@@ -63,33 +52,20 @@ public class OutlierGroups {
                 ret.append(contentsOf: self.spatialArr[x][y])
             }
         }
+         */
 
         return ret
     }
-    /*
-
-     need spatial 2d array of members
-     function to assign x,y indices to any OutlierGroup
-     function to return only indices within some range
-     
-     */
     
     public init(frameIndex: Int,
-                members: [String: OutlierGroup])
+                members: [UInt16: OutlierGroup])
     {
         self.frameIndex = frameIndex
         self.members = members
-        self.spatialXCount = Int(width/OutlierGroup.maxNearbyGroupDistance)
-        self.spatialYCount = Int(height/OutlierGroup.maxNearbyGroupDistance)
-        self.spatialArr = [[[OutlierGroup]]](repeating: [[OutlierGroup]](repeating: [], count: spatialYCount), count: spatialXCount)
-        // configure 2d spatial map here
-        for group in members.values {
-            let (XIndex, YIndex) = self.index(for: group)
-            spatialArr[XIndex][YIndex].append(group)
-        }
-        Log.i("spatialXCount \(self.spatialXCount) spatialYCount \(self.spatialYCount) width \(width) height \(height) OutlierGroup.maxNearbyGroupDistance \(OutlierGroup.maxNearbyGroupDistance)")
+        self.outlierImageData = [UInt16](repeating: 0, count: 0) // XXX ???
     }
-    
+
+    // only writes the paint reasons now, outlier image is written elsewhere
     public func write(to dir: String) async throws {
         Log.d("writing  \(self.members.count) outlier groups for frame \(self.frameIndex) to binary file")
         let frameDir = "\(dir)/\(frameIndex)"
@@ -97,19 +73,18 @@ public class OutlierGroups {
         mkdir(frameDir)
 
         // data to save for paint reasons for all outliers in this frame
-        var outlierGroupPaintData: [String:PaintReason] = [:]
+        var outlierGroupPaintData: [UInt16:PaintReason] = [:]
         
         for group in members.values {
             // collate paint reasons for each group
             if let shouldPaint = group.shouldPaint {
                 outlierGroupPaintData[group.name] = shouldPaint
             }
-            try await group.writeToFile(in: frameDir) // XXX don't write paint reason here anymore
         }
 
         // write outlier paint reason json here 
         
-        let outlierGroupPaintDataFilename = "\(dir)/\(frameIndex)/OutlierGroupPaintData.json"
+        let outlierGroupPaintDataFilename = "\(frameDir)/OutlierGroupPaintData.json"
 
         let encoder = JSONEncoder()
 //            encoder.outputFormatting = [.prettyPrinted, .withoutEscapingSlashes]
@@ -127,27 +102,16 @@ public class OutlierGroups {
         
         Log.d("wrote  \(self.members.count) outlier groups for frame \(self.frameIndex) to binary file")
     }
-    
-    public init(at frameIndex: Int,
-                from dir: String) async throws
+
+    public init?(at frameIndex: Int,
+                 withSubtractionArr subtractionArr: [UInt16],
+                 fromOutlierDir outlierDir: String) async throws
     {
-        let startTime = NSDate().timeIntervalSince1970
-        Log.d("frame \(frameIndex) loading outlier groups from \(dir)")
         self.frameIndex = frameIndex
+        let outlierGroupPaintDataFilename = "\(outlierDir)/OutlierGroupPaintData.json"
+        let imageFilename = "\(outlierDir)/outliers.tif"
 
-        var dataBinFiles: [String] = []
-        
-        let contents = try fileManager.contentsOfDirectory(atPath: dir)
-        contents.forEach { file in
-            if file.hasSuffix(OutlierGroup.dataBinSuffix) {
-                dataBinFiles.append(file)
-            }
-        }
-
-        let outlierGroupPaintDataFilename = "\(dir)/OutlierGroupPaintData.json"
-
-        var outlierGroupPaintData: [String:PaintReason]?
-        
+        var outlierGroupPaintData: [UInt16:PaintReason]?
 
         if fileManager.fileExists(atPath: outlierGroupPaintDataFilename) {
 
@@ -164,62 +128,73 @@ public class OutlierGroups {
 
             let (paintData, _) = try await URLSession.shared.data(for: URLRequest(url: paintfileurl as URL))
                         
-            outlierGroupPaintData = try decoder.decode([String:PaintReason].self, from: paintData)
+            outlierGroupPaintData = try decoder.decode([UInt16:PaintReason].self, from: paintData)
         }
 
         let _outlierGroupPaintData = outlierGroupPaintData
 
-        let taskMaster = TaskMaster(maxConcurrentTasks: 2) // XXX guess
-        
-        self.members = try await withLimitedThrowingTaskGroup(of: OutlierGroup.self,
-                                                              with: taskMaster) { taskGroup in
-          var groups: [String: OutlierGroup] = [:]
-            for file in dataBinFiles {
-                // load file into data
-                try await taskGroup.addTask() {
-                    //Log.d("frame \(frameIndex) trying to load outlier group from \(dir)/\(file)")
-                    let fileurl = NSURL(fileURLWithPath: "\(dir)/\(file)", isDirectory: false)
- 
-                    let (groupData, _) = try await URLSession.shared.data(for: URLRequest(url: fileurl as URL))
-                    let fu: String = file
-                    let fuck = String(fu.dropLast(OutlierGroup.dataBinSuffix.count+1))
-                    //Log.d("frame \(frameIndex) trying to load group \(fuck)")
-                    let group = OutlierGroup(withName: fuck,
-                                             frameIndex: frameIndex,
-                                             with:groupData)
+        self.members = [:]
 
-                    let paintFilename = String(file.dropLast(OutlierGroup.dataBinSuffix.count) + OutlierGroup.paintJsonSuffix)
+        if FileManager.default.fileExists(atPath: imageFilename),
+           let outlierImage = try await PixelatedImage(fromFile: imageFilename)
+        {
+            guard outlierImage.width == width, // make sure the image is of the right size
+                  outlierImage.height == height
+            else { fatalError("outlierImage from \(imageFilename) of size [\(outlierImage.width), \(outlierImage.width)] doesn't match frame size [\(width), \(height)") }
+            
+            switch outlierImage.imageData {
+            case .eightBit(_):
+                Log.w("cannot process eight bit outlier image \(imageFilename)")
+                return nil
+
+            case .sixteenBit(let imageArr):
+
+                self.outlierImageData = imageArr
+                var blobMap: [UInt16: Blob] = [:]
+
+                // load blobs from image
+                for x in 0 ..< outlierImage.width {
+                    for y in 0 ..< outlierImage.height {
+                        let index = y*outlierImage.width + x
+                        let blobId = imageArr[index]
+                        if blobId != 0 {
+                            let pixelValue = subtractionArr[index]
+                            let pixel = SortablePixel(x: x, y: y, intensity: pixelValue)
+                            if let blob = blobMap[blobId] {
+                                // add this pixel to existing blob
+                                blob.add(pixel: pixel)
+                            } else {
+                                // start a new blob with this pixel
+                                let blob = Blob(pixel, id: blobId, frameIndex: frameIndex)
+                                blobMap[blobId] = blob
+                            }
+                        }
+                    }
+                }
+
+                // promote found blobs to outlier groups for further processing
+                // apply should paint if loaded
+                
+                for blob in blobMap.values {
+                    // make outlier group from this blob
+                    let outlierGroup = blob.outlierGroup(at: frameIndex)
 
                     if let _outlierGroupPaintData {
                         // the newer full frame json file
 
-                        if let shouldPaint = _outlierGroupPaintData[group.name] {
-                            await group.shouldPaint(shouldPaint)
+                        if let shouldPaint = _outlierGroupPaintData[outlierGroup.name] {
+                            outlierGroup.shouldPaint(shouldPaint)
                         } else {
-                            Log.i("frame \(frameIndex) could not find outlier group info for group \(group.name) in outlierGroupPaintData")
+                            Log.i("frame \(frameIndex) could not find outlier group info for group \(outlierGroup.name) in outlierGroupPaintData")
                         }
                     }
-                    
-                    return group
+
+                    self.members[outlierGroup.name] = outlierGroup
                 }
             }
-            try await taskGroup.forEach() { group in
-                groups[group.name] = group
-            }
-            return groups
+        } else {
+            return nil
         }
-        self.spatialXCount = Int(width/OutlierGroup.maxNearbyGroupDistance)
-        self.spatialYCount = Int(height/OutlierGroup.maxNearbyGroupDistance)
-        self.spatialArr = [[[OutlierGroup]]](repeating: [[OutlierGroup]](repeating: [], count: spatialYCount), count: spatialXCount)
-        // configure 2d spatial map here
-        for group in members.values {
-            let (XIndex, YIndex) = self.index(for: group)
-            spatialArr[XIndex][YIndex].append(group)
-        }
-        let endTime = NSDate().timeIntervalSince1970
-
-        Log.d("frame \(frameIndex) loaded \(self.members.count) outlier groups from file \(dir) in \(endTime-startTime) seconds")
-        //Log.i("spatialXCount \(self.spatialXCount) spatialYCount \(self.spatialYCount)")
     }
 
     // outputs an 8 bit monochrome image that contains a white

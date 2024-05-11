@@ -111,7 +111,7 @@ extension FrameAirplaneRemover {
             for x in 0 ..< width {
                 for y in 0 ..< height {
                     let index = y*width+x
-                    var alpha = alphaLevels[index]
+                    let alpha = alphaLevels[index]
                     if alpha > 0 {
                         var value = Int(alpha*Double(0xFF))
                         if value > 0xFF { value = 0xFF }
@@ -122,10 +122,10 @@ extension FrameAirplaneRemover {
 
             let paintMaskImage = PixelatedImage(width: width, height: height,
                                                 grayscale8BitImageData: paintMaskImageData)
-            await (try imageAccessor.save(paintMaskImage, as: .paintMask,
-                                          atSize: .original, overwrite: true),
-                   try imageAccessor.save(paintMaskImage, as: .paintMask,
-                                          atSize: .preview, overwrite: true))
+            let (_,_) = await (try imageAccessor.save(paintMaskImage, as: .paintMask,
+                                                      atSize: .original, overwrite: true),
+                               try imageAccessor.save(paintMaskImage, as: .paintMask,
+                                                      atSize: .preview, overwrite: true))
         }
         
         self.state = .painting2

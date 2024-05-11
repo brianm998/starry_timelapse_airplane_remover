@@ -30,7 +30,7 @@ class BlobKHTAnalysis: AbstractBlobAnalyzer {
     let config: Config
     
     init(houghLines: [MatrixElementLine],
-         blobMap: [String: Blob],
+         blobMap: [UInt16: Blob],
          config: Config,
          width: Int,
          height: Int,

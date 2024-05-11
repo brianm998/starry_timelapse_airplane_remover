@@ -204,37 +204,36 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
                      imageHeight: Int,
                      imageBytesPerPixel: Int) async throws -> FrameAirplaneRemover
     {
-        let loadOutliersFromFile: () async -> OutlierGroups? = {
-            Log.d("frame \(frameIndex) loading outliers from frame") 
+        let loadOutliersFromFile: (FrameAirplaneRemover) async -> OutlierGroups? = { frameAirplaneRemover in
             var outlierGroupsForThisFrame: OutlierGroups?
-
             let startTime = Date().timeIntervalSinceReferenceDate
-            var endTime1: Double = 0
-            var startTime1: Double = 0
 
-            let frame_outliers_new_binary_dirname = "\(self.outlierOutputDirname)/\(frameIndex)"
-            if FileManager.default.fileExists(atPath: frame_outliers_new_binary_dirname) {
-                do {
-                    startTime1 = Date().timeIntervalSinceReferenceDate
-                    Log.d("frame \(frameIndex) about to load outlier groups") 
-                    outlierGroupsForThisFrame = try await OutlierGroups(at: frameIndex, from: frame_outliers_new_binary_dirname)
-                    endTime1 = Date().timeIntervalSinceReferenceDate
-                } catch {
-                    Log.e("frame \(frameIndex) error decoding file \(frame_outliers_new_binary_dirname): \(error)")
-                }
-                Log.i("frame \(frameIndex) loaded from new binary dir")
-                
-            } 
-            let end_time = Date().timeIntervalSinceReferenceDate
-            Log.d("took \(end_time - startTime) seconds to load outlier group data for frame \(frameIndex)")
-            Log.i("TIMES \(startTime1 - startTime) - \(endTime1 - startTime1) - \(end_time - endTime1) reading outlier group data for frame \(frameIndex)")
-            
-            if let _ = outlierGroupsForThisFrame  {
-                Log.i("loading frame \(frameIndex) with outlier groups from disk")
-            } else {
-                Log.d("loading frame \(frameIndex)")
+            guard let subtractionImage = await frameAirplaneRemover.imageAccessor.load(type: .subtracted, atSize: .original)
+            else {
+                Log.i("couldn't load subtraction image for loading outliers")
+                return nil
             }
-            return outlierGroupsForThisFrame
+
+            switch subtractionImage.imageData {
+            case .eightBit(_):
+                Log.w("cannot process eight bit subtraction image")
+                return nil
+
+            case .sixteenBit(let subtractionArr):
+                do {
+                    if let groups = try await OutlierGroups(at: frameIndex,
+                                                            withSubtractionArr: subtractionArr,
+                                                            fromOutlierDir: "\(self.outlierOutputDirname)/\(frameIndex)")
+                    {
+                        let endTime = Date().timeIntervalSinceReferenceDate
+                        Log.i("frame \(frameIndex) loaded \(groups.members.count) outliers in \(endTime-startTime) seconds")
+                        return groups
+                    }
+                } catch {
+                    Log.e("frame \(frameIndex) cannot load outlier groups: \(error)")
+                }
+            }
+            return nil
         }
         
         return try await FrameAirplaneRemover(with: config,

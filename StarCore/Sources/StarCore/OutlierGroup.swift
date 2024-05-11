@@ -36,7 +36,7 @@ public class OutlierGroup: CustomStringConvertible,
                            Comparable,
                            ClassifiableOutlierGroup
 {
-    public let name: String
+    public let name: UInt16               // unique across a frame, non zero
     public let size: UInt              // number of pixels in this outlier group
     public let bounds: BoundingBox     // a bounding box on the image that contains this group
     public let brightness: UInt        // the average amount per pixel of brightness over the limit 
@@ -75,7 +75,7 @@ public class OutlierGroup: CustomStringConvertible,
         return nil
     }
 
-    convenience init(name: String,
+    convenience init(name: UInt16,
                      size: UInt,
                      brightness: UInt,      // average brightness
                      bounds: BoundingBox,
@@ -91,7 +91,7 @@ public class OutlierGroup: CustomStringConvertible,
         self.frame = frame
     }
     
-    public init(name: String,
+    public init(name: UInt16,
                 size: UInt,
                 brightness: UInt,      // average brightness
                 bounds: BoundingBox,
@@ -334,7 +334,10 @@ public class OutlierGroup: CustomStringConvertible,
         }
         var ret: [Double] = []
         for type in OutlierGroup.Feature.allCases {
+            let t0 = NSDate().timeIntervalSince1970
             ret.append(self.decisionTreeValue(for: type))
+            let t1 = NSDate().timeIntervalSince1970
+            Log.i("frame \(frameIndex) group \(self) took \(t1-t0) seconds to calculate value for \(type)")
         }
         _decisionTreeValues = ret
         return ret
@@ -359,7 +362,10 @@ public class OutlierGroup: CustomStringConvertible,
      public var decisionTreeGroupValues: OutlierFeatureData {
          var rawValues = OutlierFeatureData.rawValues()
          for type in OutlierGroup.Feature.allCases {
+             let t0 = NSDate().timeIntervalSince1970
              let value = self.decisionTreeValue(for: type)
+             let t1 = NSDate().timeIntervalSince1970
+             Log.i("frame \(frameIndex) group \(self) took \(t1-t0) seconds to calculate value for \(type)")
              rawValues[type.sortOrder] = value
              //Log.d("frame \(frameIndex) type \(type) value \(value)")
          }
@@ -401,16 +407,18 @@ public class OutlierGroup: CustomStringConvertible,
         case maxRhoDiffOfAllHoughLines
         case numberOfNearbyOutliersInSameFrame
         case adjecentFrameNeighboringOutliersBestTheta
-        case histogramStreakDetection
-        case longerHistogramStreakDetection
         case maxHoughTransformCount
         case maxHoughTheta
-        case neighboringInterFrameOutlierThetaScore
         case maxOverlap
-        case maxOverlapTimesThetaHisto
         case pixelBorderAmount
         case averageLineVariance
         case lineLength
+
+        // XXX these four account for more than 99% of the time to calculate these values
+        case histogramStreakDetection
+        case longerHistogramStreakDetection
+        case neighboringInterFrameOutlierThetaScore
+        case maxOverlapTimesThetaHisto
         
         /*
          XXX add:
@@ -1085,272 +1093,6 @@ public class OutlierGroup: CustomStringConvertible,
                                           existingValue: score)
         } else {
             return score
-        }
-    }
-
-    /*
-
-     persistent data rewrite:
-
-     instead of keeping a separate binary file for each outlier group,
-     keep only a single image for each frame, with the index of the outlier
-     group present at each location as the value of the pixel.
-     star group numbers higher than zero, something like 1000 or morex
-
-     outlier groups will be named by number, not min of bounds
-
-     grabbing outlier data from file:
-
-     - iterate over every pixel of frame outlier image
-     - each non-zero pixel is part of the outlier group with that name
-     - keep track of all pixels for all outlier groups while iterating on image
-     - after image iteration, create outlier groups from each group of pixels found,
-       named by the key in the assembled pixel map
-       - calculate bounds, brightness, size, hough lines from pixels
-       - use lazy computed properties for these
-
-     - special case where there are no outliers?  don't write image and set some flag? 
-     */
-
-    
-    public var persistentDataSizeBytes: Int {
-
-        var size = 0
-
-        //size: UInt           (64 bits)
-        size += 8
-
-        //bounds: BoundingBox  (four 64 bit Ints)
-        size += 8 * 4
-
-        //brightness: UInt     (64 bits)
-        size += 8
-
-        //number_lines:        (64 bits)
-        size += 8
-
-        //lines: [Line]        [three 64 bit values]
-        size += lines.count * 8 * 3
-
-        //number_pixels        (64 bits)
-        size += 8
-        
-        //pixels: [UInt16]
-        size += pixels.count * 2
-        
-        //was, maxPixelDistance: UInt16 NO LONGER USEDx
-        size += 2
-        
-        //surfaceAreaToSizeRatio: Double (64 bits)
-        size += 8
-
-        return size
-    }
-
-    public init(withName name: String,
-                frameIndex: Int,
-                with persitentData: Data)
-    {
-        var index: Int = 0
-
-        self.name = name
-        self.frameIndex = frameIndex
-        
-        let sizeData = persitentData.subdata(in: index..<index+8)
-        self.size = sizeData.withUnsafeBytes { $0.load(as: UInt.self).bigEndian }
-        index += 8
-
-        //Log.d("\(self.name) read size \(self.size)")
-        
-        let bbMinXData = persitentData.subdata(in: index..<index+8)
-        let bbMinX = bbMinXData.withUnsafeBytes { $0.load(as: Int.self).bigEndian }
-        index += 8
-
-        let bbMinYData = persitentData.subdata(in: index..<index+8)
-        let bbMinY = bbMinYData.withUnsafeBytes { $0.load(as: Int.self).bigEndian }
-        index += 8
-
-        let bbMaxXData = persitentData.subdata(in: index..<index+8)
-        let bbMaxX = bbMaxXData.withUnsafeBytes { $0.load(as: Int.self).bigEndian }
-        index += 8
-
-        let bbMaxYData = persitentData.subdata(in: index..<index+8)
-        let bbMaxY = bbMaxYData.withUnsafeBytes { $0.load(as: Int.self).bigEndian }
-        index += 8
-
-        self.bounds = BoundingBox(min: Coord(x: bbMinX, y: bbMinY),
-                                  max: Coord(x: bbMaxX, y: bbMaxY))
-
-        let brightnessData = persitentData.subdata(in: index..<index+8)
-        self.brightness = brightnessData.withUnsafeBytes { $0.load(as: UInt.self).bigEndian }
-        index += 8
-
-        let linesCountData = persitentData.subdata(in: index..<index+8)
-        let linesCount = linesCountData.withUnsafeBytes { $0.load(as: Int.self).bigEndian }
-        index += 8
-
-        //Log.d("linesCount \(linesCount) index \(index) persitentData.count \(persitentData.count)")
-        
-        var _lines: [Line] = []
-        
-        for _ in 0..<linesCount {
-            let thetaData = persitentData.subdata(in: index..<index+8)
-            let theta = thetaData.withUnsafeBytes { $0.load(as: Double.self) }
-            index += 8
-
-            let rhoData = persitentData.subdata(in: index..<index+8)
-            let rho = rhoData.withUnsafeBytes { $0.load(as: Double.self) }
-            index += 8
-            
-            let countData = persitentData.subdata(in: index..<index+8)
-            let count = countData.withUnsafeBytes { $0.load(as: Int.self) }
-            index += 8
-            
-            _lines.append(Line(theta: theta, rho: rho, votes: count))
-        }
-        self.lines = _lines
-
-        let pixelsCountData = persitentData.subdata(in: index..<index+8)
-        let pixelsCount = pixelsCountData.withUnsafeBytes { $0.load(as: Int.self).bigEndian }
-        index += 8
-
-        var pixels: [UInt16] = []
-
-        //Log.d("pixelsCount \(pixelsCount) index \(index) persitentData.count \(persitentData.count)")
-        
-        for _ in 0..<pixelsCount {
-            let pixelData = persitentData.subdata(in: index..<index+2)
-            index += 2
-            let pixel = pixelData.withUnsafeBytes { $0.load(as: UInt16.self).bigEndian }
-            pixels.append(pixel)
-        }
-        self.pixels = pixels
-        
-        let mpdd = persitentData.subdata(in: index..<index+2)
-        // XXX no longer used
-        //self.maxPixelDistance = mpdd.withUnsafeBytes { $0.load(as: UInt16.self).bigEndian }
-        index += 2
-
-        let satsrd = persitentData.subdata(in: index..<index+8)
-        self.surfaceAreaToSizeRatio = satsrd.withUnsafeBytes { $0.load(as: Double.self) }
-        index += 8
-        
-        // surfaceAreaToSizeRatio
-
-        if lines.count > 0 {
-            (self.averageLineVariance, self.lineLength) =
-              OutlierGroup.averageDistance(for: pixels,
-                                           from: lines[0],
-                                           with: bounds)
-        } else {
-            self.averageLineVariance = 0xFFFFFFFF
-            self.lineLength = 0
-        }
-        
-        
-        _ = self.houghLineHistogram
-    }
-    
-    public var persistentData: Data {
-
-        let size = self.persistentDataSizeBytes
-        var data = Data(repeating: 0, count: size)
-
-        Log.d("\(self.name) creating persistent data of size \(size)")
-
-        var index: Int = 0
-
-        let sizeData = withUnsafeBytes(of: self.size.bigEndian) { Data($0) }
-        data.replaceSubrange(index..<index+8, with: sizeData)
-        index += 8
-        
-        Log.d("\(self.name) size \(self.size)")
-
-        let bbMinX = self.bounds.min.x
-        let bbMinXData = withUnsafeBytes(of: bbMinX.bigEndian) { Data($0) }
-        data.replaceSubrange(index..<index+8, with: bbMinXData)
-        index += 8
-        
-        let bbMinY = self.bounds.min.y
-        let bbMinYData = withUnsafeBytes(of: bbMinY.bigEndian) { Data($0) }
-        data.replaceSubrange(index..<index+8, with: bbMinYData)
-        index += 8
-        
-        let bbMaxX = self.bounds.max.x
-        let bbMaxXData = withUnsafeBytes(of: bbMaxX.bigEndian) { Data($0) }
-        data.replaceSubrange(index..<index+8, with: bbMaxXData)
-        index += 8
-
-        let bbMaxY = self.bounds.max.y
-        let bbMaxYData = withUnsafeBytes(of: bbMaxY.bigEndian) { Data($0) }
-        data.replaceSubrange(index..<index+8, with: bbMaxYData)
-        index += 8
-
-        let brightnessData = withUnsafeBytes(of: self.brightness.bigEndian) { Data($0) }
-        data.replaceSubrange(index..<index+8, with: brightnessData)
-        index += 8
-
-        let numLines = self.lines.count
-        let numLinesData = withUnsafeBytes(of: numLines.bigEndian) { Data($0) }
-        data.replaceSubrange(index..<index+8, with: numLinesData)
-        index += 8
-
-        //Log.d("\(self.name) self.lines.count \(self.lines.count)")
-
-        for line in self.lines {
-            let thetaData = withUnsafeBytes(of: line.theta) { Data($0) }
-            data.replaceSubrange(index..<index+8, with: thetaData)
-            index += 8
-            let rhoData = withUnsafeBytes(of: line.rho) { Data($0) }
-            data.replaceSubrange(index..<index+8, with: rhoData)
-            index += 8
-            let votesData = withUnsafeBytes(of: line.votes.bigEndian) { Data($0) }
-            data.replaceSubrange(index..<index+8, with: votesData)
-            index += 8
-        }
-
-        let numPixels = self.pixels.count
-        
-        //Log.d("\(self.name) self.pixels.count \(self.pixels.count)")
-
-        let numPixelsData = withUnsafeBytes(of: numPixels.bigEndian) { Data($0) }
-        data.replaceSubrange(index..<index+8, with: numPixelsData)
-        index += 8
-
-        for i in 0..<numPixels {
-            let pixelData = withUnsafeBytes(of: self.pixels[i].bigEndian) { Data($0) }
-            data.replaceSubrange(index..<index+2, with: pixelData)
-            index += 2
-        }
-
-        // XXX no longer used (EMPTY SPACE)
-        //let mpdd = withUnsafeBytes(of: self.maxPixelDistance.bigEndian) { Data($0) }
-        //data.replaceSubrange(index..<index+2, with: mpdd)
-        index += 2
-
-        data.replaceSubrange(index..<index+8,
-                             with: withUnsafeBytes(of: self.surfaceAreaToSizeRatio) { Data($0) })
-        index += 8
-
-        return data        
-    }
-
-    // the suffix on the custom binary file we save each outlier group into
-    static let dataBinSuffix = "outlier-data.bin"
-
-    // the suffix of the paint reason json sidecar file for each outlier group
-    static let paintJsonSuffix = "paint.json"
-
-    public func writeToFile(in dir: String) async throws {
-        let filename = "\(dir)/\(self.name)-\(OutlierGroup.dataBinSuffix)"
-
-        if fileManager.fileExists(atPath: filename) {
-            // we don't modify this outlier data, so not point in persisting it again
-            //Log.i("not overwriting already existing filename \(filename)")
-        } else {
-            fileManager.createFile(atPath: filename,
-                                   contents: self.persistentData,
-                                   attributes: nil)
         }
     }
 }

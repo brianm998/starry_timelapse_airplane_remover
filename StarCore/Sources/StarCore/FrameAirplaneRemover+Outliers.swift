@@ -27,7 +27,7 @@ extension FrameAirplaneRemover {
     public func loadOutliers() async throws {
         if self.outlierGroups == nil {
             Log.d("frame \(frameIndex) loading outliers")
-            if let outlierGroups = await outlierGroupLoader() {
+            if let outlierGroups = await outlierGroupLoader(self) {
                 Log.d("frame \(frameIndex) loading outliers from file")
                 for outlier in outlierGroups.members.values {
                     outlier.setFrame(self) 
@@ -235,7 +235,7 @@ extension FrameAirplaneRemover {
             self.state = .smallDimBlobRemobal
 
             // weed out blobs that are too small and not bright enough
-            let brighterBlobs: [String: Blob] = khtBlobs.compactMapValues { blob in
+            let brighterBlobs: [UInt16: Blob] = khtBlobs.compactMapValues { blob in
                 if blob.adjustedSize < fx3Size(for: 6), // XXX constant
                    blob.medianIntensity < 6000 // XXX constant
                 {
@@ -298,6 +298,26 @@ extension FrameAirplaneRemover {
 
             dimIsolatedBlobRemover = nil
 
+            // XXX update state here ???
+            
+            // save blobs to blob image here
+            var blobImageSaver: BlobImageSaver? = .init(blobMap: dimIsolatedBlobs,
+                                                        width: width,
+                                                        height: height,
+                                                        frameIndex: frameIndex)
+
+            if let blobImageSaver {
+                // keep the blobRefs from this for later analysis of nearby outliers
+                outlierGroups?.outlierImageData = blobImageSaver.blobRefs
+            }
+            
+            let frame_outliers_dirname = "\(self.outlierOutputDirname)/\(frameIndex)"
+
+            mkdir(frame_outliers_dirname)
+            
+            blobImageSaver?.save(to: "\(frame_outliers_dirname)/outliers.tif")
+            blobImageSaver = nil
+
             // blobs to promote to outlier groups
             let filteredBlobs = Array(dimIsolatedBlobs.values)
 
@@ -309,7 +329,7 @@ extension FrameAirplaneRemover {
                 // make outlier group from this blob
                 let outlierGroup = blob.outlierGroup(at: frameIndex)
 
-                Log.i("frame \(frameIndex) promoting \(blob) to outlier group \(outlierGroup.name) line \(blob.line)")
+                Log.i("frame \(frameIndex) promoting \(blob) to outlier group \(outlierGroup.name) line \(String(describing: blob.line))")
                 outlierGroup.frame = self
                 outlierGroups?.members[outlierGroup.name] = outlierGroup
             }
@@ -440,7 +460,7 @@ extension FrameAirplaneRemover {
         }
     }
     
-    public func foreachOutlierGroup(_ closure: (OutlierGroup)async->LoopReturn) async {
+    public func foreachOutlierGroup(_ closure: (OutlierGroup) async -> LoopReturn) async {
         if let outlierGroups = self.outlierGroups {
             for (_, group) in outlierGroups.members {
                 let result = await closure(group)
@@ -484,13 +504,13 @@ extension FrameAirplaneRemover {
         return nil
     }
 
-    public func outlierGroup(named outlierName: String) -> OutlierGroup? {
+    public func outlierGroup(named outlierName: UInt16) -> OutlierGroup? {
         return outlierGroups?.members[outlierName]
     }
     
     public func foreachOutlierGroup(between startLocation: CGPoint,
                                     and endLocation: CGPoint,
-                                    _ closure: (OutlierGroup)async->LoopReturn) async
+                                    _ closure: (OutlierGroup) async -> LoopReturn) async
     {
         // first get bounding box from start and end location
         var minX: CGFloat = CGFLOAT_MAX
@@ -595,7 +615,7 @@ extension FrameAirplaneRemover {
                     }
                     if groupIsValid { break }
                 }
-                Log.d("group \(group) shouldPaint \(group.shouldPaint)")
+                Log.d("group \(group) shouldPaint \(String(describing: group.shouldPaint))")
                 group.shouldPaint = .userSelected(groupIsValid)
             }
         } else {
@@ -621,11 +641,11 @@ extension FrameAirplaneRemover {
         }
         let blobImage = PixelatedImage(width: width, height: height,
                                        grayscale8BitImageData: blobImageData)
-        await (try imageAccessor.save(blobImage, as: frameImageType,
-                                      atSize: .original, overwrite: true),
-               try imageAccessor.save(blobImage, as: frameImageType,
-                                      atSize: .preview, overwrite: true))
-
+        let (_, _) = await (try imageAccessor.save(blobImage, as: frameImageType,
+                                                   atSize: .original, overwrite: true),
+                            try imageAccessor.save(blobImage, as: frameImageType,
+                                                   atSize: .preview, overwrite: true))
+        
     }
 }
 

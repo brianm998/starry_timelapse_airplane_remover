@@ -27,13 +27,11 @@ extension FrameAirplaneRemover {
     public func writeOutlierValuesCSV() async throws {
 
         Log.d("frame \(self.frameIndex) writeOutlierValuesCSV")
-        if config.writeOutlierGroupFiles,
-           let outputDirname = self.outlierOutputDirname
-        {
+        if config.writeOutlierGroupFiles {
             // write out the decision tree value matrix too
             Log.d("frame \(self.frameIndex) writeOutlierValuesCSV 1")
 
-            let frameOutlierDir = "\(outputDirname)/\(self.frameIndex)"
+            let frameOutlierDir = "\(self.outlierOutputDirname)/\(self.frameIndex)"
             let positiveFilename = "\(frameOutlierDir)/\(OutlierGroupValueMatrix.positiveDataFilename)"
             let negativeFilename = "\(frameOutlierDir)/\(OutlierGroupValueMatrix.negativeDataFilename)"
 
@@ -46,14 +44,14 @@ extension FrameAirplaneRemover {
                 
                 if let outliers = self.outlierGroupList() {
                     Log.d("frame \(self.frameIndex) writeOutlierValuesCSV 1a \(outliers.count) outliers")
-                    let startTime = NSDate().timeIntervalSince1970
+                    //let startTime = NSDate().timeIntervalSince1970
                     // XXX start time
                     
                     for (index, outlier) in outliers.enumerated() {
-                        if index % 10 == 0 {
-                            let duration = NSDate().timeIntervalSince1970 - startTime
+//                        if index % 10 == 0 {
+//                            let duration = NSDate().timeIntervalSince1970 - startTime
                             //Log.d("frame \(self.frameIndex) writeOutlierValuesCSV 1b \(index) after \(duration) seconds")
-                        }
+//                        }
                         await valueMatrix.append(outlierGroup: outlier)
                     }
                 }
@@ -70,11 +68,9 @@ extension FrameAirplaneRemover {
     // for each outlier in this frame
     // large, still not fast, but lots of data
     public func writeOutliersBinary() async {
-        if config.writeOutlierGroupFiles,
-           let outputDirname = self.outlierOutputDirname
-        {
+        if config.writeOutlierGroupFiles {
             do {
-                try await self.outlierGroups?.write(to: outputDirname)
+                try await self.outlierGroups?.write(to: self.outlierOutputDirname)
             } catch {
                 Log.e("error \(error)")
             }                
