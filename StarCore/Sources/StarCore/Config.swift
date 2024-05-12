@@ -97,7 +97,7 @@ public struct Config: Codable {
 //    public var memorySizeGigs = ProcessInfo.processInfo.physicalMemory/(1024*1024*1024)
 
     // used by updatable log
-    public var progressBarLength = 50
+    public var progressBarLength = 35
 
     public var previewWidth: Int = defaultPreviewWidth
     public var previewHeight: Int = defaultPreviewHeight

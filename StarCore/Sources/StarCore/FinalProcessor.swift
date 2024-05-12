@@ -93,7 +93,7 @@ public actor FinalProcessor {
             // show what frames are in place to be processed
            TaskWaiter.shared.task(priority: .userInitiated) {
                var padding = ""
-               let numConcurrentRenders = 40 // XXX
+               let numConcurrentRenders = 30 // XXX
                if numConcurrentRenders < self.config.progressBarLength {
                    padding = String(repeating: " ", count: (self.config.progressBarLength - numConcurrentRenders))
                }

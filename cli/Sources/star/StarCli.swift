@@ -404,7 +404,7 @@ struct StarCli: AsyncParsableCommand {
                     // setup sequence monitor
                     let updatableProgressMonitor =
                       await UpdatableProgressMonitor(frameCount: eraser.imageSequence.filenames.count,
-                                                     numConcurrentRenders: 40, // xXX
+                                                     numConcurrentRenders: 30, // xXX
                                                      config: eraser.config,
                                                      callbacks: callbacks)
                     eraser.callbacks.frameStateChangeCallback = { frame, state in
