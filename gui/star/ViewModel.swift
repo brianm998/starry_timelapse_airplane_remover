@@ -589,15 +589,6 @@ public final class ViewModel: ObservableObject {
             self.set(numberOfFrames: imageSequenceSize)
         }
         
-        // count numbers here for max running
-        // XXX this method is obsolete
-        callbacks.countOfFramesToCheck = {
-//            let count = await self.framesToCheck.count()
-            //Log.i("XXX count \(count)")
-            return 1//count
-        }
-
-        
         callbacks.frameStateChangeCallback = { frame, state in
             // XXX do something here
             Log.d("frame \(frame.frameIndex) changed to state \(state)")

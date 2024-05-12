@@ -270,9 +270,7 @@ public actor FinalProcessor {
                         //Log.v("FINAL THREAD frame \(indexToProcess) queueing into final queue")
                         if let frameToFinish = await self.frame(at: immutableStart - 1) {
                             await self.clearFrame(at: immutableStart - 1)
-                            //Log.v("FINAL THREAD frame \(indexToProcess) adding task")
 
-                            //Log.v("FINAL THREAD finishing sleeping")
                             await frameToFinish.clearOutlierGroupValueCaches()
                             
                             await frameToFinish.maybeApplyOutlierGroupClassifier()
@@ -305,30 +303,6 @@ public actor FinalProcessor {
         Log.i("FINAL THREAD finishing all remaining frames")
         try await self.finishAll() 
         Log.i("FINAL THREAD done finishing all remaining frames")
-
-        if let _ = callbacks.frameCheckClosure {
-            //Log.d("FINAL THREAD check closure")
-
-            // XXX look for method to call here
-            
-            // XXX need to await here for the frame check if it's happening
-
-            // XXX use semaphore instead of sleeping
-            
-            if let countOfFramesToCheck = callbacks.countOfFramesToCheck {
-                var count = await countOfFramesToCheck()
-                Log.d("FINAL THREAD countOfFramesToCheck \(count)")
-                while(count > 0) {
-                    //Log.d("FINAL THREAD sleeping with count \(count)")
-                    try await Task.sleep(nanoseconds: 100_000_000) /// EXC_BAD_ACCESS ?  WTF
-                    count = await countOfFramesToCheck()
-                }
-            } else {
-                Log.e("must set both frameCheckClosure and countOfFramesToCheck")
-                fatalError("must set both frameCheckClosure and countOfFramesToCheck")
-            }
-        }
-        Log.d("FINAL THREAD done")
     }
 }    
 

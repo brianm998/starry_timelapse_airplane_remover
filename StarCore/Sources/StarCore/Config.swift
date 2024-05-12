@@ -198,9 +198,6 @@ public class Callbacks {
     // called for the user to see a frame
     public var frameCheckClosure: ((FrameAirplaneRemover) async -> ())?
 
-    // called by the final processor to keep running when user is checking frames
-    public var countOfFramesToCheck: (() async -> Int)?
-
     // returns the total full size of the image sequence
     public var imageSequenceSizeClosure: ((Int) -> Void)?
 
