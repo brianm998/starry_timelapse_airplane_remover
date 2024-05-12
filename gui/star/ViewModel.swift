@@ -14,10 +14,9 @@ public enum FrameViewMode: String, Equatable, CaseIterable {
     case original
     case subtraction
     case blobs
-    case khtBlobs
+//    case khtBlobs
     case absorbedBlobs
     case rectifiedBlobs
-    case houghLines
     case validation
     case paintMask
     case processed
@@ -34,16 +33,12 @@ public enum FrameViewMode: String, Equatable, CaseIterable {
             return "subt"
         case .blobs:
             return "blob"
-        case .khtBlobs:
-            return "khtb"
         case .absorbedBlobs:
             return "asb"
         case .rectifiedBlobs:
             return "rect"
         case .paintMask:
             return "pmask"
-        case .houghLines:
-            return "kht"
         case .validation:
             return "valid"
         case .processed:
@@ -59,16 +54,12 @@ public enum FrameViewMode: String, Equatable, CaseIterable {
             return "subtracted frame"
         case .blobs:
             return "initially detected blobs"
-        case .khtBlobs:
-            return "blobs that match lines"
         case .absorbedBlobs:
             return "blobs after the absorber"
         case .rectifiedBlobs:
             return "rectified blobs"
         case .paintMask:
             return "computed paint mask"
-        case .houghLines:
-            return "lines from kernel hough transform"
         case .validation:
             return "validation data"
         case .processed:
@@ -308,13 +299,6 @@ public final class ViewModel: ObservableObject {
             self.frames[frame.frameIndex].blobsPreviewImage = viewImage
         }
 
-
-        if let image = await frame.imageAccessor.loadNSImage(type: .khtb, atSize: .preview) {
-            Log.d("loaded kht blobs preview for self.frames[\(frame.frameIndex)] from jpeg")
-            let viewImage = Image(nsImage: image).resizable()
-            self.frames[frame.frameIndex].khtbPreviewImage = viewImage
-        }
-
         if let image = await frame.imageAccessor.loadNSImage(type: .absorbed, atSize: .preview) {
             Log.d("loaded absorbed blobs preview for self.frames[\(frame.frameIndex)] from jpeg")
             let viewImage = Image(nsImage: image).resizable()
@@ -331,12 +315,6 @@ public final class ViewModel: ObservableObject {
             Log.d("loaded paint mask preview for self.frames[\(frame.frameIndex)] from jpeg")
             let viewImage = Image(nsImage: image).resizable()
             self.frames[frame.frameIndex].paintMaskPreviewImage = viewImage
-        }
-
-        if let image = await frame.imageAccessor.loadNSImage(type: .houghLines, atSize: .preview) {
-            Log.d("loaded houghLinesrr preview for self.frames[\(frame.frameIndex)] from jpeg")
-            let viewImage = Image(nsImage: image).resizable()
-            self.frames[frame.frameIndex].houghLinesPreviewImage = viewImage
         }
 
         if let image = await frame.imageAccessor.loadNSImage(type: .processed, atSize: .preview) {
@@ -811,16 +789,12 @@ public extension ViewModel {
                     self.currentFrameImage = newFrameView.subtractionPreviewImage
                 case .blobs:
                     self.currentFrameImage = newFrameView.blobsPreviewImage
-                case .khtBlobs:
-                    self.currentFrameImage = newFrameView.khtbPreviewImage
                 case .absorbedBlobs:
                     self.currentFrameImage = newFrameView.absorbedPreviewImage
                 case .rectifiedBlobs:
                     self.currentFrameImage = newFrameView.rectifiedPreviewImage
                 case .paintMask:
                     self.currentFrameImage = newFrameView.paintMaskPreviewImage
-                case .houghLines:
-                    self.currentFrameImage = newFrameView.houghLinesPreviewImage
                 case .validation:
                     self.currentFrameImage = newFrameView.validationPreviewImage
                 case .processed:
@@ -854,13 +828,6 @@ public extension ViewModel {
                                     self.currentFrameImage = Image(nsImage: baseImage)
                                 }
                             }
-
-                        case .khtBlobs:
-                            if let baseImage = await nextFrame.imageAccessor.loadNSImage(type: .khtb, atSize: .original) {
-                                if nextFrame.frameIndex == self.currentIndex {
-                                    self.currentFrameImage = Image(nsImage: baseImage)
-                                }
-                            }
                         case .absorbedBlobs:
                             if let baseImage = await nextFrame.imageAccessor.loadNSImage(type: .absorbed, atSize: .original) {
                                 if nextFrame.frameIndex == self.currentIndex {
@@ -880,12 +847,6 @@ public extension ViewModel {
                                 }
                             }
 
-                        case .houghLines:
-                            if let baseImage = await nextFrame.imageAccessor.loadNSImage(type: .houghLines, atSize: .original) {
-                                if nextFrame.frameIndex == self.currentIndex {
-                                    self.currentFrameImage = Image(nsImage: baseImage)
-                                }
-                            }
                         case .validation:
                             if let baseImage = await nextFrame.imageAccessor.loadNSImage(type: .validated, atSize: .original) {
                                 if nextFrame.frameIndex == self.currentIndex {
@@ -1067,10 +1028,6 @@ public extension ViewModel {
                         self.currentFrameImage =
                           self.frames[currentIdx].blobsPreviewImage
 
-                    case .khtBlobs: 
-                        self.currentFrameImage =
-                          self.frames[currentIdx].khtbPreviewImage
-
                     case .absorbedBlobs: 
                         self.currentFrameImage =
                           self.frames[currentIdx].absorbedPreviewImage
@@ -1082,10 +1039,6 @@ public extension ViewModel {
                     case .paintMask: 
                         self.currentFrameImage =
                           self.frames[currentIdx].paintMaskPreviewImage
-
-                    case .houghLines: 
-                        self.currentFrameImage =
-                          self.frames[currentIdx].houghLinesPreviewImage
 
                     case .validation:
                         self.currentFrameImage =

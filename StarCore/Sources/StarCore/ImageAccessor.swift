@@ -28,8 +28,6 @@ public enum FrameImageType {
     case aligned        // aligned neighbor frame
     case subtracted     // result of subtracting the aligned neighbor from original frame
     case blobs          // full results of the initial blog detection
-    case khtb           // blobs that passed the BlobKHTAnalysis
-    case houghLines     // hough lines used for kht analysis
     case absorbed       // blobs that passed the BlobAbsorber
     case rectified      // blobs that passed the BlobRectifier
     case validated      // outlier group validation image
@@ -109,11 +107,9 @@ struct ImageAccessor: ImageAccess {
         mkdir(ofType: .aligned)
         mkdir(ofType: .subtracted)
         mkdir(ofType: .blobs)
-        mkdir(ofType: .khtb)
         mkdir(ofType: .absorbed)
         mkdir(ofType: .rectified)
         mkdir(ofType: .paintMask)
-        mkdir(ofType: .houghLines)
         mkdir(ofType: .validated)
         mkdir(ofType: .processed)
         
@@ -123,11 +119,9 @@ struct ImageAccessor: ImageAccess {
             mkdir(ofType: .subtracted, andSize: .preview)
             mkdir(ofType: .validated, andSize: .preview)
             mkdir(ofType: .blobs, andSize: .preview)
-            mkdir(ofType: .khtb, andSize: .preview)
             mkdir(ofType: .absorbed, andSize: .preview)
             mkdir(ofType: .rectified, andSize: .preview)
             mkdir(ofType: .paintMask, andSize: .preview)
-            mkdir(ofType: .houghLines, andSize: .preview)
         }
         if config.writeFrameThumbnailFiles {
             mkdir(ofType: .original, andSize: .thumbnail)
@@ -286,15 +280,6 @@ struct ImageAccessor: ImageAccess {
             case .thumbnail:
                 return nil
             }
-        case .khtb:
-            switch size {
-            case .original:
-                return "\(config.outputPath)/\(baseDirName)-khtb"
-            case .preview:
-                return "\(config.outputPath)/\(baseDirName)-khtb-preview"
-            case .thumbnail:
-                return nil
-            }
         case .absorbed:
             switch size {
             case .original:
@@ -319,15 +304,6 @@ struct ImageAccessor: ImageAccess {
                 return "\(config.outputPath)/\(baseDirName)-paintMask"
             case .preview:
                 return "\(config.outputPath)/\(baseDirName)-paintMask-preview"
-            case .thumbnail:
-                return nil
-            }
-        case .houghLines:
-            switch size {
-            case .original:
-                return "\(config.outputPath)/\(baseDirName)-kht"
-            case .preview:
-                return "\(config.outputPath)/\(baseDirName)-kht-preview"
             case .thumbnail:
                 return nil
             }

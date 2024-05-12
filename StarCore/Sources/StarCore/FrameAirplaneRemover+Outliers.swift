@@ -260,11 +260,6 @@ extension FrameAirplaneRemover {
 
         finalIsolatedRemover = nil
         
-        if config.writeOutlierGroupFiles {
-            // save filtered blobs image here
-            try await saveImages(for: Array(finalIsolatedBlobs.values), as: .rectified)
-        }
-
         var dimIsolatedBlobRemover: DimIsolatedBlobRemover? = .init(blobMap: finalIsolatedBlobs,
                                                                     width: width,
                                                                     height: height,
@@ -280,6 +275,11 @@ extension FrameAirplaneRemover {
 
         dimIsolatedBlobRemover = nil
 
+        if config.writeOutlierGroupFiles {
+            // save filtered blobs image here
+            try await saveImages(for: Array(dimIsolatedBlobs.values), as: .rectified)
+        }
+        
         // save blobs to blob image here
         var blobImageSaver: BlobImageSaver? = .init(blobMap: dimIsolatedBlobs,
                                                     width: width,
