@@ -204,38 +204,6 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
                      imageHeight: Int,
                      imageBytesPerPixel: Int) async throws -> FrameAirplaneRemover
     {
-        let loadOutliersFromFile: (FrameAirplaneRemover) async -> OutlierGroups? = { frameAirplaneRemover in
-            var outlierGroupsForThisFrame: OutlierGroups?
-            let startTime = Date().timeIntervalSinceReferenceDate
-
-            guard let subtractionImage = await frameAirplaneRemover.imageAccessor.load(type: .subtracted, atSize: .original)
-            else {
-                Log.i("couldn't load subtraction image for loading outliers")
-                return nil
-            }
-
-            switch subtractionImage.imageData {
-            case .eightBit(_):
-                Log.w("cannot process eight bit subtraction image")
-                return nil
-
-            case .sixteenBit(let subtractionArr):
-                do {
-                    if let groups = try await OutlierGroups(at: frameIndex,
-                                                            withSubtractionArr: subtractionArr,
-                                                            fromOutlierDir: "\(self.outlierOutputDirname)/\(frameIndex)")
-                    {
-                        let endTime = Date().timeIntervalSinceReferenceDate
-                        Log.i("frame \(frameIndex) loaded \(groups.members.count) outliers in \(endTime-startTime) seconds")
-                        return groups
-                    }
-                } catch {
-                    Log.e("frame \(frameIndex) cannot load outlier groups: \(error)")
-                }
-            }
-            return nil
-        }
-        
         return try await FrameAirplaneRemover(with: config,
                                               width: imageWidth,
                                               height: imageHeight,
@@ -246,7 +214,6 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
                                               outputFilename: outputFilename,
                                               baseName: baseName,
                                               outlierOutputDirname: outlierOutputDirname,
-                                              outlierGroupLoader: loadOutliersFromFile,
                                               fullyProcess: fullyProcess,
                                               writeOutputFiles: writeOutputFiles)
     }        

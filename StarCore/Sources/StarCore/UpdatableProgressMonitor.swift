@@ -168,10 +168,6 @@ public actor UpdatableProgressMonitor {
             updates.append(update)
         }
 
-        if let update = progressLine(for: .writingBinaryOutliers) {
-            updates.append(update)
-        }
-
         if let update = progressLine(for: .writingOutlierValues) {
             updates.append(update)
         }

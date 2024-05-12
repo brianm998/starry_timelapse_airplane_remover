@@ -67,8 +67,6 @@ public class FrameAirplaneRemover: Equatable, Hashable {
     // did we load our outliers from a file?
     internal var outliersLoadedFromFile = false
 
-    let outlierGroupLoader: (FrameAirplaneRemover) async -> OutlierGroups?
-
     // doubly linked list
     var previousFrame: FrameAirplaneRemover?
     var nextFrame: FrameAirplaneRemover?
@@ -98,7 +96,6 @@ public class FrameAirplaneRemover: Equatable, Hashable {
          outputFilename: String,
          baseName: String,       // source filename without path
          outlierOutputDirname: String,
-         outlierGroupLoader: @escaping (FrameAirplaneRemover) async -> OutlierGroups?,
          fullyProcess: Bool = true,
          writeOutputFiles: Bool = true) async throws
     {
@@ -110,7 +107,6 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         self.config = config
         self.baseName = baseName
         self.callbacks = callbacks
-        self.outlierGroupLoader = outlierGroupLoader
         self.frameIndex = frameIndex // frame index in the image sequence
         self.outputFilename = outputFilename
         self.outlierOutputDirname = outlierOutputDirname
@@ -188,8 +184,6 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         Log.d("frame \(self.frameIndex) starting to finish")
 
         if didChange {
-            self.state = .writingBinaryOutliers
-
             // write out the outliers binary if it is not there
             // only overwrite the paint reason if it is there
             await self.writeOutliersBinary()

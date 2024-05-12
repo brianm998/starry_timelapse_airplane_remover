@@ -24,10 +24,43 @@ You should have received a copy of the GNU General Public License along with sta
  */
 extension FrameAirplaneRemover {
 
+    // loads outliers from a combination of the outliers.tiff image and the subtraction image,
+    // if they are present
+    public func loadOutliersFromFile() async -> OutlierGroups? {
+        let startTime = Date().timeIntervalSinceReferenceDate
+
+        guard let subtractionImage = await self.imageAccessor.load(type: .subtracted, atSize: .original)
+        else {
+            Log.i("couldn't load subtraction image for loading outliers")
+            return nil
+        }
+
+        switch subtractionImage.imageData {
+        case .eightBit(_):
+            Log.w("cannot process eight bit subtraction image")
+            return nil
+
+        case .sixteenBit(let subtractionArr):
+            do {
+                if let groups = try await OutlierGroups(at: frameIndex,
+                                                        withSubtractionArr: subtractionArr,
+                                                        fromOutlierDir: "\(self.outlierOutputDirname)/\(frameIndex)")
+                {
+                    let endTime = Date().timeIntervalSinceReferenceDate
+                    Log.i("frame \(frameIndex) loaded \(groups.members.count) outliers in \(endTime-startTime) seconds")
+                    return groups
+                }
+            } catch {
+                Log.e("frame \(frameIndex) cannot load outlier groups: \(error)")
+            }
+        }
+        return nil
+    }
+    
     public func loadOutliers() async throws {
         if self.outlierGroups == nil {
             Log.d("frame \(frameIndex) loading outliers")
-            if let outlierGroups = await outlierGroupLoader(self) {
+            if let outlierGroups = await loadOutliersFromFile() {
                 Log.d("frame \(frameIndex) loading outliers from file")
                 for outlier in outlierGroups.members.values {
                     outlier.setFrame(self) 
@@ -63,15 +96,14 @@ extension FrameAirplaneRemover {
 
           - align neighboring frame
           - subtract aligned frame from this frame
-          - identify lines on subtracted frame
           - sort pixels on subtracted frame by intensity
           - detect blobs from sorted pixels
           - remove isolated dimmer blobs
           - remove small isolated blobs
-          - do KHT blob processing
           - filter out small dim blobs
           - remove more small dim blobs
           - final pass at more isolation removal
+          - save image of final blobs before promotion to outlier groups
           - promote remaining blobs to outlier groups for further analysis
          */
         Log.d("frame \(frameIndex) finding outliers")
@@ -146,19 +178,19 @@ extension FrameAirplaneRemover {
             try await saveImages(for: Array(blobberBlobs.values), as: .blobs)
         }
 
-        var dimIsolatedBlobRemover_1: DimIsolatedBlobRemover? = .init(blobMap: blobberBlobs,
-                                                                      width: width,
-                                                                      height: height,
-                                                                      frameIndex: frameIndex)
+        var idibr: DimIsolatedBlobRemover? = .init(blobMap: blobberBlobs,
+                                                   width: width,
+                                                   height: height,
+                                                   frameIndex: frameIndex)
         
-        dimIsolatedBlobRemover_1?.process(scanSize: 20) // XXX constant
+        idibr?.process(scanSize: 20) // XXX constant
         
-        guard let dimIsolatedBlobRemoverBlobs = dimIsolatedBlobRemover_1?.blobMap else {
+        guard let dimIsolatedBlobRemoverBlobs = idibr?.blobMap else {
             Log.w("frame \(frameIndex) no blobs from blobber")
             return 
         }
 
-        dimIsolatedBlobRemover_1 = nil
+        idibr = nil
 
         //Log.d("frame \(frameIndex) FullFrameBlobber returned \(initialBlobs.count) blobs")
 

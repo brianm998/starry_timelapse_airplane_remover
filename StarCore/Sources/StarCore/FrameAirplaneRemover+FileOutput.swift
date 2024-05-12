@@ -47,7 +47,7 @@ extension FrameAirplaneRemover {
                     //let startTime = NSDate().timeIntervalSince1970
                     // XXX start time
                     
-                    for (index, outlier) in outliers.enumerated() {
+                    for (_, outlier) in outliers.enumerated() {
 //                        if index % 10 == 0 {
 //                            let duration = NSDate().timeIntervalSince1970 - startTime
                             //Log.d("frame \(self.frameIndex) writeOutlierValuesCSV 1b \(index) after \(duration) seconds")

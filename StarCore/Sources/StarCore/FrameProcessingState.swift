@@ -37,7 +37,6 @@ public enum FrameProcessingState: Int, CaseIterable, Codable {
     case outlierProcessingComplete
     // XXX add gui check step?
 
-    case writingBinaryOutliers
     case writingOutlierValues
     
     case painting
@@ -60,7 +59,7 @@ public enum FrameProcessingState: Int, CaseIterable, Codable {
         case .detectingBlobs:
             return "detecting blobs"
         case .isolatedBlobRemoval:
-            return "initial isolated blob removal"
+            return "isolated blob removal"
         case .populatingOutlierGroups:
             return "populating outlier groups"
         case .readyForInterFrameProcessing: // XXX not covered in progress monitor
@@ -69,8 +68,6 @@ public enum FrameProcessingState: Int, CaseIterable, Codable {
             return "classifing outlier groups"
         case .outlierProcessingComplete:
             return "ready to finish"
-        case .writingBinaryOutliers:
-            return "writing raw outlier data"
         case .writingOutlierValues:
             return "writing outlier classification values"
         case .painting:
