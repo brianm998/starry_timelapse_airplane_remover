@@ -1,6 +1,5 @@
 import Foundation
 import CoreGraphics
-import Combine
 import logging
 import Cocoa
 
@@ -39,8 +38,6 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
     
     public let basename: String
     
-    let publisher = PassthroughSubject<FrameAirplaneRemover, Never>()
-
     public init(with config: Config,
                 callbacks: Callbacks,
                 processExistingFiles: Bool,
@@ -98,7 +95,6 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
         
         finalProcessor = await FinalProcessor(with: config,
                                               callbacks: callbacks,
-                                              publisher: publisher,
                                               numberOfFrames: imageSequenceSize,
                                               shouldProcess: shouldProcess,
                                               imageSequence: imageSequence,
@@ -189,7 +185,7 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
 
         // send this frame to the final processor
         
-        publisher.send(result)
+        await finalProcessor?.add(frame: result)
     }
 
     // called async, check for access to shared data

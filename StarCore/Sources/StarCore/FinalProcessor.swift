@@ -15,7 +15,6 @@ import CoreGraphics
 import logging
 import Cocoa
 import Semaphore
-import Combine
 
 // this class handles the final processing of every frame
 // it observes its frames array, and is tasked with finishing each frame.   
@@ -37,16 +36,11 @@ public actor FinalProcessor {
 
     private let semaphore = AsyncSemaphore(value: 0)
     
-    // this is kept around to keep the subscription active
-    // will be canceled upon de-init
-    var publishCancellable: AnyCancellable?
-
     // are we running on the gui?
     public let isGUI: Bool
 
     init(with config: Config,
          callbacks: Callbacks,
-         publisher: PassthroughSubject<FrameAirplaneRemover, Never>, // XXX erase to any publisher
          numberOfFrames frameCount: Int,
          shouldProcess: [Bool],
          imageSequence: ImageSequence,
@@ -59,24 +53,22 @@ public actor FinalProcessor {
         self.frameCount = frameCount
         self.imageSequence = imageSequence
         self.shouldProcess = shouldProcess
-
-        // this is called when frames are published for us
-        publishCancellable = publisher.sink { frame in
-
-            let index = frame.frameIndex
-            if index > self.maxAddedIndex {
-                self.maxAddedIndex = index
-            }
-
-            Log.d("frame \(index) added for final inter-frame analysis \(self.maxAddedIndex)")
-            self.frames[index] = frame
-
-            self.semaphore.signal()
-            
-            self.log()
-        }
     }
 
+    func add(frame: FrameAirplaneRemover) {
+        let index = frame.frameIndex
+        if index > self.maxAddedIndex {
+            self.maxAddedIndex = index
+        }
+
+        Log.d("frame \(index) added for final inter-frame analysis \(self.maxAddedIndex)")
+        self.frames[index] = frame
+
+        self.semaphore.signal()
+        
+        self.log()
+    }
+    
     func clearFrame(at index: Int) {
         frames[index] = nil //SIGABRT after reloading a different sequence
     }

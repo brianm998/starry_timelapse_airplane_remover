@@ -38,6 +38,8 @@ public class ImageSequenceProcessor<T> {
     // if this is true, outliers are detected, inter-frame processing is done
     // if false, frames are handed back without outliers detected
     let fullyProcess: Bool
+
+    let processExistingFiles: Bool
     
     init(imageSequenceDirname: String,
          outputDirname: String,
@@ -47,6 +49,7 @@ public class ImageSequenceProcessor<T> {
          maxImages: Int? = nil,
          fullyProcess: Bool = true) throws
     {
+        self.processExistingFiles = processExistingFiles
         self.imageSequenceDirname = imageSequenceDirname
         self.outputDirname = outputDirname
         self.numberFinalProcessingNeighborsNeeded = numberFinalProcessingNeighborsNeeded
