@@ -59,10 +59,14 @@ extension FrameAirplaneRemover {
         // the alpha mask that we will convolve across all paintable pixels
         let paintMask = self.paintMask
         let paintMaskIntRadius = Int(paintMask.radius)
+
+        // only paint when we have found at least one positive outlier group
+        var shouldPaint = false
         
         for (_, group) in outlierGroups.members {
             if let reason = group.shouldPaint {
                 if reason.willPaint {
+                    shouldPaint = true
                     Log.d("frame \(frameIndex) painting over group \(group) for reason \(reason)")
                     for x in 0..<group.bounds.width {
                         for y in 0..<group.bounds.height {
@@ -127,35 +131,37 @@ extension FrameAirplaneRemover {
                                try imageAccessor.save(paintMaskImage, as: .paintMask,
                                                       atSize: .preview, overwrite: true))
         }
-        
-        self.state = .painting2
-        
-        // then actually paint each non zero alpha pizel
-        for x in 0 ..< width {
-            for y in 0 ..< height {
-                var alpha = alphaLevels[y*width+x]
-                if alpha > 0 {
-                    if alpha > 1 { alpha = 1 }
 
-                    paint(x: x, y: y,
-                          alpha: alpha,
-                          toData: &data,
-                          image: image,
-                          otherFrame: otherFrame)
+        if shouldPaint {
+            self.state = .painting2
+            
+            // then actually paint each non zero alpha pizel
+            for x in 0 ..< width {
+                for y in 0 ..< height {
+                    var alpha = alphaLevels[y*width+x]
+                    if alpha > 0 {
+                        if alpha > 1 { alpha = 1 }
 
-                    /*
+                        paint(x: x, y: y,
+                              alpha: alpha,
+                              toData: &data,
+                              image: image,
+                              otherFrame: otherFrame)
 
-                     // test paint the expected alpha levels as colors
-                     
-                                        var paintPixel = Pixel()
-                                        paintPixel.blue = 0xFFFF
-                                        paintPixel.green = UInt16(Double(0xFFFF)*alpha)
-                                        paint(x: x, y: y, why: reason, alpha: alpha,
-                                              toData: &data,
-                                              image: image,
-                                              paintPixel: paintPixel)
-                     */
+                        /*
 
+                         // test paint the expected alpha levels as colors
+                         
+                         var paintPixel = Pixel()
+                         paintPixel.blue = 0xFFFF
+                         paintPixel.green = UInt16(Double(0xFFFF)*alpha)
+                         paint(x: x, y: y, why: reason, alpha: alpha,
+                         toData: &data,
+                         image: image,
+                         paintPixel: paintPixel)
+                         */
+
+                    }
                 }
             }
         }
