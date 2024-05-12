@@ -193,8 +193,6 @@ struct decision_tree_generator: AsyncParsableCommand {
             Log.d("frameCheckClosure for frame \(newFrame.frameIndex)")
         }
         
-        callbacks.countOfFramesToCheck = { 1 }
-
         let eraser = try await NighttimeAirplaneRemover(with: config,
                                                         callbacks: callbacks,
                                                         processExistingFiles: true,
@@ -358,8 +356,6 @@ struct decision_tree_generator: AsyncParsableCommand {
             endClosure()
         }
         
-        callbacks.countOfFramesToCheck = { 1 }
-
         let eraser = try await NighttimeAirplaneRemover(with: config,
                                                         callbacks: callbacks,
                                                         processExistingFiles: true,
@@ -404,7 +400,7 @@ struct decision_tree_generator: AsyncParsableCommand {
                 var localNegativeData: [OutlierFeatureData] = []
                 if let outlierGroups = frame.outlierGroupList() {
                     for outlierGroup in outlierGroups {
-                        let name = outlierGroup.name
+                        let name = outlierGroup.id
                         if let shouldPaint = outlierGroup.shouldPaint {
                             let willPaint = shouldPaint.willPaint
                             
