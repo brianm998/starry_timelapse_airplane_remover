@@ -165,16 +165,19 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
                                outputFilename: String,
                                baseName: String) async throws -> FrameAirplaneRemover
     {
-        // the other frames that we use to detect outliers and repaint from
-        let framePlaneRemover =
-          try await self.createFrame(atIndex: index,
-                                     outputFilename: "\(self.outputDirname)/\(baseName)",
-                                     baseName: baseName,
-                                     imageWidth: imageWidth!,
-                                     imageHeight: imageHeight!,
-                                     imageBytesPerPixel: imageBytesPerPixel!)
+        try await FrameAirplaneRemover(with: config,
+                                       width: imageWidth!,
+                                       height: imageHeight!,
+                                       bytesPerPixel: imageBytesPerPixel!,
+                                       callbacks: callbacks,
+                                       imageSequence: imageSequence,
+                                       atIndex: index,
+                                       outputFilename: outputFilename,
+                                       baseName: baseName,
+                                       outlierOutputDirname: outlierOutputDirname,
+                                       fullyProcess: fullyProcess,
+                                       writeOutputFiles: writeOutputFiles)
 
-        return framePlaneRemover
     }
 
     public var imageWidth: Int?
@@ -187,32 +190,6 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
         
         await finalProcessor?.add(frame: result)
     }
-
-    // called async, check for access to shared data
-    // this method does the first step of processing on each frame.
-    // outlier pixel detection, outlier group detection and analysis
-    // after running this method, each frame will have a good idea
-    // of what outliers is has, and whether or not should paint over them.
-    func createFrame(atIndex frameIndex: Int,
-                     outputFilename: String, // full path
-                     baseName: String,       // just filename
-                     imageWidth: Int,
-                     imageHeight: Int,
-                     imageBytesPerPixel: Int) async throws -> FrameAirplaneRemover
-    {
-        return try await FrameAirplaneRemover(with: config,
-                                              width: imageWidth,
-                                              height: imageHeight,
-                                              bytesPerPixel: imageBytesPerPixel,
-                                              callbacks: callbacks,
-                                              imageSequence: imageSequence,
-                                              atIndex: frameIndex,
-                                              outputFilename: outputFilename,
-                                              baseName: baseName,
-                                              outlierOutputDirname: outlierOutputDirname,
-                                              fullyProcess: fullyProcess,
-                                              writeOutputFiles: writeOutputFiles)
-    }        
 }
               
               
