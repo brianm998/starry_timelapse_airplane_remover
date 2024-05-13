@@ -94,13 +94,11 @@ public class FrameViewModel: ObservableObject {
             for view in views { view.objectWillChange.send() }
         }
     }
-    
-    // this does a view layer only translation so that we don't have
-    // to wait for the longer running background process to update the view
-    public func userSelectAllOutliers(toShouldPaint shouldPaint: Bool,
-                                      between startLocation: CGPoint,
-                                      and endLocation: CGPoint) 
+
+    fileprivate func boundsFromGesture(between startLocation: CGPoint,
+                                  and endLocation: CGPoint) -> BoundingBox
     {
+
         // first get bounding box from start and end location
         var minX: CGFloat = CGFLOAT_MAX
         var maxX: CGFloat = 0
@@ -117,8 +115,18 @@ public class FrameViewModel: ObservableObject {
         if endLocation.y < minY { minY = endLocation.y }
         if endLocation.y > maxY { maxY = endLocation.y }
 
-        let gestureBounds = BoundingBox(min: Coord(x: Int(minX), y: Int(minY)),
-                                        max: Coord(x: Int(maxX), y: Int(maxY)))
+        return BoundingBox(min: Coord(x: Int(minX), y: Int(minY)),
+                           max: Coord(x: Int(maxX), y: Int(maxY)))
+        
+    }
+    
+    // this does a view layer only translation so that we don't have
+    // to wait for the longer running background process to update the view
+    public func userSelectAllOutliers(toShouldPaint shouldPaint: Bool,
+                                      between startLocation: CGPoint,
+                                      and endLocation: CGPoint) 
+    {
+        let gestureBounds = boundsFromGesture(between: startLocation, and: endLocation)
         
         outlierViews?.forEach() { group in
             if gestureBounds.contains(other: group.bounds) {
@@ -129,6 +137,23 @@ public class FrameViewModel: ObservableObject {
             }
             
         }
+    }
+
+    public func deleteOutliers(between drag_start: CGPoint,
+                               and end_location: CGPoint) -> BoundingBox
+    {
+        let gestureBounds = boundsFromGesture(between: drag_start, and: end_location)
+
+        var newOutlierViews: [OutlierGroupViewModel] = []
+        
+        outlierViews?.forEach() { group in
+            if !gestureBounds.contains(other: group.bounds) {
+                newOutlierViews.append(group)
+            }
+        }
+        self.outlierViews = newOutlierViews
+
+        return gestureBounds
     }
 }
 

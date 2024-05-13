@@ -143,6 +143,12 @@ struct FrameEditView: View {
                   case .clear:
                       update(frame: frameView, shouldPaint: false,
                              between: drag_start, and: end_location)
+                  case .delete:
+                      let _ = Log.d("DELETE")
+                      deleteOutliers(frame: frameView,
+                                     between: drag_start,
+                                     and: end_location)
+
                   case .details:
                       let _ = Log.d("DETAILS")
 
@@ -183,6 +189,21 @@ struct FrameEditView: View {
                   viewModel.drag_end = nil
               }
           }
+    }
+
+
+    private func deleteOutliers(frame frameView: FrameViewModel,
+                                between drag_start: CGPoint,
+                                and end_location: CGPoint)
+    {
+        let gestureBounds = frameView.deleteOutliers(between: drag_start, and: end_location)
+        frameView.update()
+        if let frame = frameView.frame {
+            Task.detached(priority: .userInitiated) {
+                try frame.deleteOutliers(in: gestureBounds) // XXX errors not handled
+                await MainActor.run { viewModel.update() }
+            }
+        }
     }
 
     private func update(frame frameView: FrameViewModel,

@@ -17,6 +17,7 @@ public enum MultiSelectionType: String, Equatable, CaseIterable {
 public enum MultiSelectionPaintType: String, Equatable, CaseIterable {
     case paint
     case clear
+    case delete
 
     var localizedName: LocalizedStringKey {
         LocalizedStringKey(rawValue)
@@ -37,6 +38,8 @@ struct MultiSelectSheetView: View {
         case .paint:
             return true
         case .clear:
+            return false
+        case .delete:
             return false
         }
     }
@@ -71,6 +74,8 @@ struct MultiSelectSheetView: View {
                     Text("Paint outliers in this area in all \(frames.count) frames")
                 case .clear:
                     Text("Clear outliers in this area in all \(frames.count) frames")
+                case .delete:
+                    Text("Remove outliers in this area in all \(frames.count) frames")
                 }
                 
             case .allAfter:
@@ -80,6 +85,8 @@ struct MultiSelectSheetView: View {
                     Text("Paint outliers in this area in \(numFrames) frames from frame \(currentIndex) to the end")
                 case .clear:
                     Text("Clear outliers in this area in \(numFrames) frames from frame \(currentIndex) to the end")
+                case .delete:
+                    Text("Remove outliers in this area in \(numFrames) frames from frame \(currentIndex) to the end")
                 }
                     
             case .allBefore:
@@ -89,6 +96,8 @@ struct MultiSelectSheetView: View {
                     Text("Paint outliers in this area in \(numFrames) frames from the start ending at frame \(currentIndex)")
                 case .clear:
                     Text("Clear outliers in this area in \(numFrames) frames from the start ending at frame \(currentIndex)")
+                case .delete:
+                    Text("Remove outliers in this area in \(numFrames) frames from the start ending at frame \(currentIndex)")
                 }
 
            case .someAfter:
@@ -104,29 +113,71 @@ struct MultiSelectSheetView: View {
                 switch multiSelectionType {
                 case .all:
                     Button("Modify") {
-                        self.updateFrames(shouldPaint: self.shouldPaint)
+                        switch multiSelectionPaintType {
+                        case .paint:
+                            self.updateFrames(shouldPaint: true)
+                        case .clear:
+                            self.updateFrames(shouldPaint: false)
+                        case .delete:
+                            self.deleteFromFrames()
+                        }
                         self.isVisible = false
                     }
 
                 case .allAfter:
                     Button("Modify") {
-                        self.updateFrames(shouldPaint: self.shouldPaint, startIndex: currentIndex)
+
+                        switch multiSelectionPaintType {
+                        case .paint:
+                            self.updateFrames(shouldPaint: true,
+                                              startIndex: currentIndex)
+                        case .clear:
+                            self.updateFrames(shouldPaint: false,
+                                              startIndex: currentIndex)
+                        case .delete:
+                            self.deleteFromFrames(startIndex: currentIndex)
+                        }
                         self.isVisible = false
                     }
                     
                 case .allBefore:
                     Button("Modify") {
-                        self.updateFrames(shouldPaint: self.shouldPaint,
-                                          startIndex: 0,
-                                          endIndex: currentIndex)
+
+                        switch multiSelectionPaintType {
+                        case .paint:
+                            self.updateFrames(shouldPaint: true,
+                                              startIndex: 0,
+                                              endIndex: currentIndex)
+                        case .clear:
+                            self.updateFrames(shouldPaint: false,
+                                              startIndex: 0,
+                                              endIndex: currentIndex)
+                        case .delete:
+                            self.deleteFromFrames(startIndex: 0,
+                                                  endIndex: currentIndex)
+                        }
+
                         self.isVisible = false
                     }
                 case .someAfter:
                     HStack {
                         Button("Modify") {
-                            self.updateFrames(shouldPaint: self.shouldPaint,
-                                              startIndex: currentIndex,
-                                              endIndex: currentIndex + number_of_frames)
+
+
+                            switch multiSelectionPaintType {
+                            case .paint:
+                                self.updateFrames(shouldPaint: true,
+                                                  startIndex: currentIndex,
+                                                  endIndex: currentIndex + number_of_frames)
+                            case .clear:
+                                self.updateFrames(shouldPaint: false,
+                                                  startIndex: currentIndex,
+                                                  endIndex: currentIndex + number_of_frames)
+                            case .delete:
+                                self.deleteFromFrames(startIndex: currentIndex,
+                                                      endIndex: currentIndex + number_of_frames)
+                            }
+                            
                             self.isVisible = false
                         }
                         Text("the next")
@@ -137,9 +188,23 @@ struct MultiSelectSheetView: View {
                 case .someBefore:
                     HStack {
                         Button("Modify") {
-                            self.updateFrames(shouldPaint: self.shouldPaint,
-                                              startIndex: currentIndex - number_of_frames,
-                                              endIndex: currentIndex)
+
+
+                            switch multiSelectionPaintType {
+                            case .paint:
+                                self.updateFrames(shouldPaint: true,
+                                                  startIndex: currentIndex - number_of_frames,
+                                                  endIndex: currentIndex)
+
+                            case .clear:
+                                self.updateFrames(shouldPaint: false,
+                                                  startIndex: currentIndex - number_of_frames,
+                                                  endIndex: currentIndex)
+                            case .delete:
+                                self.deleteFromFrames(startIndex: currentIndex - number_of_frames,
+                                                      endIndex: currentIndex)
+                            }
+                            
                             self.isVisible = false
                         }
                         Text("the previous")
@@ -151,6 +216,26 @@ struct MultiSelectSheetView: View {
             }
             Spacer()
         }.frame(minWidth: 300, idealWidth: 450, maxWidth: 800)
+    }
+
+    private func deleteFromFrames(startIndex: Int = 0, endIndex: Int? = nil) {
+        Log.w("updateFrames(shouldPaint: \(shouldPaint), startIndex: \(startIndex), endIndex: \(endIndex)")
+        let end = endIndex ?? frames.count
+        if let drag_start = drag_start,
+           let drag_end = drag_end
+        {
+            for frame in frames {
+                if frame.frameIndex >= startIndex,
+                   frame.frameIndex <= end
+                {
+                    deleteFrom(frame: frame,
+                               between: drag_start,
+                               and: drag_end)
+                }
+            }
+        }
+        drag_start = nil
+        drag_end = nil
     }
 
     private func updateFrames(shouldPaint: Bool,
@@ -177,6 +262,21 @@ struct MultiSelectSheetView: View {
         drag_end = nil
     }
     
+    private func deleteFrom(frame frameView: FrameViewModel,
+                            between drag_start: CGPoint,
+                            and end_location: CGPoint)
+    {
+        let gestureBounds = frameView.deleteOutliers(between: drag_start, and: end_location)
+        frameView.update()
+
+        if let frame = frameView.frame {
+            Task.detached(priority: .userInitiated) {
+                try frame.deleteOutliers(in: gestureBounds) // XXX errors not handled
+                //await MainActor.run { viewModel.update() }
+            }
+        }
+    }
+
     private func update(frame frameView: FrameViewModel,
                         shouldPaint: Bool,
                         between drag_start: CGPoint,

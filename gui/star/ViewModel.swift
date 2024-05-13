@@ -71,6 +71,7 @@ public enum FrameViewMode: String, Equatable, CaseIterable {
 public enum SelectionMode: String, Equatable, CaseIterable {
     case paint
     case clear
+    case delete
     case multi
     case details
     
@@ -161,6 +162,8 @@ public final class ViewModel: ObservableObject {
             return .red
         case .clear:
             return .green
+        case .delete:
+            return .orange
         case .details:
             return .blue
         case .multi:

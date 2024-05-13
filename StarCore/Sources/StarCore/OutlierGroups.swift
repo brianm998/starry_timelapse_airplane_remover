@@ -164,6 +164,36 @@ public class OutlierGroups {
         return Array(ret.values)
     }
     
+    public func deleteOutliers(in gestureBounds: BoundingBox) {
+        for (key, group) in members {
+            if gestureBounds.contains(group.bounds) {
+                members.removeValue(forKey: key)
+            }
+        }
+    }
+
+    public func writeOutliersImage(to filename: String) throws {
+        var outlierRefs = [UInt16](repeating: 0, count: width*height)
+
+        for outlier in members.values {
+            for x in 0..<outlier.bounds.width {
+                for y in 0..<outlier.bounds.height {
+                    let index = y*outlier.bounds.width + x
+                    if outlier.pixels[index] != 0 {
+                        let outerX = outlier.bounds.min.x + x
+                        let outerY = outlier.bounds.min.y + y
+                        let outerIndex = outerY*width + outerX
+                        outlierRefs[outerIndex] = outlier.id
+                    }
+                }
+            }
+        }
+
+        let outlierImage = PixelatedImage(width: width, height: height,
+                                          grayscale16BitImageData: outlierRefs)
+        try outlierImage.writeTIFFEncoding(toFilename: filename)
+    }
+    
     // only writes the paint reasons now, outlier image is written elsewhere
     public func write(to dir: String) async throws {
         Log.d("writing  \(self.members.count) outlier groups for frame \(self.frameIndex) to binary file")

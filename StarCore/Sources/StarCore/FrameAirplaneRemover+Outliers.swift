@@ -605,6 +605,15 @@ extension FrameAirplaneRemover {
                                                    atSize: .preview, overwrite: true))
         
     }
+
+    public func deleteOutliers(in boundingBox: BoundingBox) throws {
+        outlierGroups?.deleteOutliers(in: boundingBox)
+
+        let frame_outliers_dirname = "\(self.outlierOutputDirname)/\(frameIndex)"
+//        mkdir(frame_outliers_dirname)
+        try outlierGroups?.writeOutliersImage(to: "\(frame_outliers_dirname)/outliers.tif")
+    }
+
 }
 
 // XXX rename this
