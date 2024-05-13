@@ -421,11 +421,10 @@ public class OutlierGroup: CustomStringConvertible,
         case lineLength
 
         // XXX these four account for more than 99% of the time to calculate these values
-        case histogramStreakDetection
-        case longerHistogramStreakDetection
-        case neighboringInterFrameOutlierThetaScore
-        case maxOverlapTimesThetaHisto
-
+        case histogramStreakDetection // XXX
+        case longerHistogramStreakDetection // XXX
+        case neighboringInterFrameOutlierThetaScore // XXX
+        case maxOverlapTimesThetaHisto // XXX
         /*
          XXX add:
            - A new feature that accounts for empty space along the line
@@ -533,25 +532,27 @@ public class OutlierGroup: CustomStringConvertible,
                 return 22
             case .adjecentFrameNeighboringOutliersBestTheta:
                 return 23
-            case .histogramStreakDetection:
-                return 24
-            case .longerHistogramStreakDetection:
-                return 25
-            case .neighboringInterFrameOutlierThetaScore:
-                return 28
-            case .maxOverlapTimesThetaHisto:
-                return 30
             case .maxHoughTransformCount:
-                return 26
+                return 24
             case .maxHoughTheta:
-                return 27
+                return 25
             case .maxOverlap:
-                return 29
+                return 26
             case .pixelBorderAmount:
-                return 31
+                return 27
             case .averageLineVariance:
-                return 32
+                return 28
             case .lineLength:
+                return 29
+
+            case .histogramStreakDetection:
+                return 30
+                
+            case .longerHistogramStreakDetection:
+                return 31
+            case .neighboringInterFrameOutlierThetaScore:
+                return 32
+            case .maxOverlapTimesThetaHisto:
                 return 33
             }
         }
