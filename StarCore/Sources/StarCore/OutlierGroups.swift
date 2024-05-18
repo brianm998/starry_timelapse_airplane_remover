@@ -117,8 +117,12 @@ public class OutlierGroups {
 
                         if let shouldPaint = _outlierGroupPaintData[outlierGroup.id] {
                             outlierGroup.shouldPaint(shouldPaint)
+                        } else if let currentClassifier {
+                            // we have a classifier, use it
+                            let score = currentClassifier.classification(of: outlierGroup)
+                            outlierGroup.shouldPaint(.fromClassifier(score))
                         } else {
-                            Log.i("frame \(frameIndex) could not find outlier group info for group \(outlierGroup.id) in outlierGroupPaintData")
+                            Log.i("frame \(frameIndex) could not find outlier group info for group \(outlierGroup.id) in outlierGroupPaintData, and we have no classifier")
                         }
                     }
 
