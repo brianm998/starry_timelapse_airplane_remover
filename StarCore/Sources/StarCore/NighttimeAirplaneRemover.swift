@@ -21,11 +21,22 @@ You should have received a copy of the GNU General Public License along with sta
 // delegating each frame to an instance of FrameAirplaneRemover
 // and then using a FinalProcessor to finish processing
 
+public actor NumberLeft {
+    private var numberLeft: Int = 0
+
+    public func increment() { numberLeft += 1 }
+    public func decrement() { numberLeft -= 1 }
+    public func isDone() -> Bool { numberLeft <= 0 }
+    public func hasMore() -> Bool { numberLeft > 0 }
+}
+
 public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemover> {
 
     public var config: Config
     public var callbacks: Callbacks
 
+    public var numberLeft = NumberLeft()
+    
     // the name of the directory to create when writing outlier group files
     let outlierOutputDirname: String
 
@@ -116,6 +127,21 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
         }
 
         try await super.run()
+
+        while(await numberLeft.hasMore()) {
+            // XXX use semaphore
+            try await Task.sleep(nanoseconds: 1_000_000_000)
+        }
+        
+        // XXX add semaphore here to track final progress?
+
+        /*
+
+         app can exit early, if there is nothing in the final queue
+         and the input sequence no longer waiting to progress
+
+         */
+        
         _ = try await finalProcessorTask.value
     }
 
@@ -165,19 +191,26 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
                                outputFilename: String,
                                baseName: String) async throws -> FrameAirplaneRemover
     {
-        try await FrameAirplaneRemover(with: config,
-                                       width: imageWidth!,
-                                       height: imageHeight!,
-                                       bytesPerPixel: imageBytesPerPixel!,
-                                       callbacks: callbacks,
-                                       imageSequence: imageSequence,
-                                       atIndex: index,
-                                       outputFilename: outputFilename,
-                                       baseName: baseName,
-                                       outlierOutputDirname: outlierOutputDirname,
-                                       fullyProcess: fullyProcess,
-                                       writeOutputFiles: writeOutputFiles)
+        await numberLeft.increment() // XXX move here VVV
+        let frame = try await FrameAirplaneRemover(with: config,
+                                                   width: imageWidth!,
+                                                   height: imageHeight!,
+                                                   bytesPerPixel: imageBytesPerPixel!,
+                                                   callbacks: callbacks,
+                                                   imageSequence: imageSequence,
+                                                   atIndex: index,
+                                                   outputFilename: outputFilename,
+                                                   baseName: baseName,
+                                                   outlierOutputDirname: outlierOutputDirname,
+                                                   fullyProcess: fullyProcess,
+                                                   writeOutputFiles: writeOutputFiles,
+                                                   numberLeft: numberLeft)
 
+        // run separately from init for better state logging
+        await frame.setupAlignment()
+        try await frame.setupOutliers()
+        
+        return frame
     }
 
     public var imageWidth: Int?

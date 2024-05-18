@@ -36,7 +36,10 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         hasher.combine(frameIndex)
     }
     
-    func set(state: FrameProcessingState) { self.state = state }
+    func set(state: FrameProcessingState) {
+        Log.i("frame \(frameIndex) transitioning to state \(state)")
+        self.state = state
+    }
     
     public let width: Int
     public let height: Int
@@ -85,6 +88,8 @@ public class FrameAirplaneRemover: Equatable, Hashable {
     let writeOutputFiles: Bool
 
     public let imageAccessor: ImageAccess
+
+    private var numberLeft: NumberLeft
     
     init(with config: Config,
          width: Int,
@@ -97,8 +102,10 @@ public class FrameAirplaneRemover: Equatable, Hashable {
          baseName: String,       // source filename without path
          outlierOutputDirname: String,
          fullyProcess: Bool = true,
-         writeOutputFiles: Bool = true) async throws
+         writeOutputFiles: Bool = true,
+         numberLeft: NumberLeft) async throws
     {
+        self.numberLeft = numberLeft
         self.imageAccessor = ImageAccessor(config: config,
                                            imageSequence: imageSequence,
                                            baseFileName: baseName)
@@ -124,16 +131,9 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         self.bytesPerPixel = bytesPerPixel
         self.bytesPerRow = width*bytesPerPixel
 
-        // align a neighboring frame for detection
-
         // call directly in init becuase didSet() isn't called from here :P
-        if let frameStateChangeCallback = callbacks.frameStateChangeCallback {
-            frameStateChangeCallback(self, self.state)
-        }
-        
-        Log.i("frame \(frameIndex) doing star alignment")
-        let baseFilename = imageSequence.filenames[frameIndex]
-        var otherFilename: String = ""
+       
+        self.baseFilename = imageSequence.filenames[frameIndex]
         if frameIndex == imageSequence.filenames.count-1 {
             // if we're at the end, take the previous frame
             otherFilename = imageSequence.filenames[imageSequence.filenames.count-2]
@@ -142,17 +142,54 @@ public class FrameAirplaneRemover: Equatable, Hashable {
             otherFilename = imageSequence.filenames[frameIndex+1]
         }
 
+        if let frameStateChangeCallback = callbacks.frameStateChangeCallback {
+            frameStateChangeCallback(self, self.state)
+        }
+    }
+
+    private var otherFilename: String = ""
+    private let baseFilename: String
+
+    public func setupAlignment() async {
+        Log.i("frame \(frameIndex) doing star alignment")
+
+        // align a neighboring frame for detection
         let alignmentFilename = otherFilename
 
-        if !imageAccessor.imageExists(ofType: .aligned, atSize: .original),
-           let dirname = imageAccessor.dirForImage(ofType: .aligned, atSize: .original)
-        {
-            self.state = .starAlignment
-            _ = StarAlignment.align(alignmentFilename,
-                                    to: baseFilename,
-                                    inDir: dirname)
-        }
+        let alignedFrame = await imageAccessor.load(type: .aligned, atSize: .original)
 
+        if alignedFrame == nil {
+            Log.d("frame \(frameIndex) creating aligned frame")
+            if let dirname = imageAccessor.dirForImage(ofType: .aligned, atSize: .original) {
+                Log.d("frame \(frameIndex) creating aligned frame in \(dirname)")
+                self.state = .starAlignment
+
+                // call directly in init becuase didSet() isn't called from here :P
+//                if let frameStateChangeCallback = callbacks.frameStateChangeCallback {
+//                    frameStateChangeCallback(self, self.state)
+//                }
+                Log.d("frame \(frameIndex) alignedFilename start")
+                
+                let alignedFilename = StarAlignment.align(alignmentFilename,
+                                                          to: baseFilename,
+                                                          inDir: dirname)
+
+                Log.d("frame \(frameIndex) alignedFilename \(alignedFilename)")
+                if let alignedFilename {
+                    Log.d("frame \(frameIndex) got aligned filename \(alignedFilename)")
+                } else {
+                    Log.e("frame \(frameIndex) COULD NOT ALIGN FRAME")
+                }
+            } else {
+                Log.w("frame \(frameIndex) no dirname for aligned original images")
+            }
+        } else {
+            Log.d("frame \(frameIndex) loaded existing aligned frame")
+        }
+        Log.i("frame \(frameIndex) DONE with star alignment")
+    }
+    
+    public func setupOutliers() async throws {
         // this takes a long time, and the gui does it later
         if fullyProcess {
             try await loadOutliers()
@@ -200,8 +237,9 @@ public class FrameAirplaneRemover: Equatable, Hashable {
 
         Log.d("frame \(self.frameIndex) finish 2")
         if !self.writeOutputFiles {
-            self.state = .complete
             Log.d("frame \(self.frameIndex) not writing output files")
+            self.state = .complete
+            await numberLeft.decrement()
             return
         }
         
@@ -247,6 +285,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
             }
         }
         self.state = .complete
+        await numberLeft.decrement()
 
         Log.i("frame \(self.frameIndex) complete")
     }
