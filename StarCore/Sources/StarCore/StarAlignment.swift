@@ -89,26 +89,26 @@ public class StarAlignment {
                 return outputFilename
             } catch {
 
-                // ok, the ln failed, try to just cp instead
-                
                 if let error = error as? ShellOutError {
                     Log.e("STDERR: \(error.message)") // log STDERR
                     Log.e("STDOUT: \(error.output)")  // log STDOUT
-
-                    do {
-                        try ObjC.catchException {
-                            try shellOut(to: "cp", arguments: [referenceImageName, outputFilename])
-                        }
-                        return outputFilename
-                    } catch {
-                        if let error = error as? ShellOutError {
-                            Log.e("STDERR: \(error.message)") // log STDERR
-                            Log.e("STDOUT: \(error.output)")  // log STDOUT
-
-                        }
-                    }
                 } else {
                     Log.e("\(error)")
+                }
+                
+                // ok, the ln failed, try to just cp instead
+                
+                do {
+                    try ObjC.catchException {
+                        try shellOut(to: "cp", arguments: [referenceImageName, outputFilename])
+                    }
+                    return outputFilename
+                } catch {
+                    if let error = error as? ShellOutError {
+                        Log.e("STDERR: \(error.message)") // log STDERR
+                        Log.e("STDOUT: \(error.output)")  // log STDOUT
+
+                    }
                 }
             }
         }
