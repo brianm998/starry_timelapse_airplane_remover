@@ -53,6 +53,9 @@ public class OutlierGroup: CustomStringConvertible,
     // otherwise it's the amount brighter this pixel was than those in the adjecent frames 
     public let pixels: [UInt16]        // indexed by y * bounds.width + x
 
+    // a set of the pixels in this outlier 
+    public let pixelSet: Set<SortablePixel>
+    
     public let surfaceAreaToSizeRatio: Double
 
     // after init, shouldPaint is usually set to a base value based upon different statistics 
@@ -80,14 +83,16 @@ public class OutlierGroup: CustomStringConvertible,
                      brightness: UInt,      // average brightness
                      bounds: BoundingBox,
                      frame: FrameAirplaneRemover,
-                     pixels: [UInt16]) 
+                     pixels: [UInt16],
+                     pixelSet: Set<SortablePixel>) 
     {
         self.init(id: id,
                   size: size,
                   brightness: brightness,
                   bounds: bounds,
                   frameIndex: frame.frameIndex,
-                  pixels: pixels)
+                  pixels: pixels,
+                  pixelSet: pixelSet)
         self.frame = frame
     }
     
@@ -96,7 +101,8 @@ public class OutlierGroup: CustomStringConvertible,
                 brightness: UInt,      // average brightness
                 bounds: BoundingBox,
                 frameIndex: Int,
-                pixels: [UInt16]) 
+                pixels: [UInt16],
+                pixelSet: Set<SortablePixel>)
     {
         self.id = id
         self.size = size
@@ -104,6 +110,7 @@ public class OutlierGroup: CustomStringConvertible,
         self.bounds = bounds
         self.frameIndex = frameIndex
         self.pixels = pixels
+        self.pixelSet = pixelSet
         self.surfaceAreaToSizeRatio = ratioOfSurfaceAreaToSize(of: pixels,
                                                                width: bounds.width,
                                                                height: bounds.height)
@@ -421,11 +428,13 @@ public class OutlierGroup: CustomStringConvertible,
         case lineLength
 
         // XXX these four account for more than 99% of the time to calculate these values
+        // XXX maybe render them obsolete ??
+
         case histogramStreakDetection // XXX
         case longerHistogramStreakDetection // XXX
         case neighboringInterFrameOutlierThetaScore // XXX
         case maxOverlapTimesThetaHisto // XXX
-        /*
+/*
          XXX add:
            - A new feature that accounts for empty space along the line
              given a line for the outlier group, what percentage of the pixels
@@ -437,7 +446,13 @@ public class OutlierGroup: CustomStringConvertible,
            - config stuff:
              - outlierMaxThreshold
              - minGroupSize
-         
+
+           - a new feature that sees, for each outlier group,
+             how many pixels on each neighboring frame are also part of some outlier group
+             give a double between 0 and 1, where 1 is all pixels are also covered
+
+           - expand the above to look within the entire bouding box as well,
+             to produce another feature
          */
         
         /*
@@ -547,13 +562,13 @@ public class OutlierGroup: CustomStringConvertible,
 
             case .histogramStreakDetection:
                 return 30
-                
             case .longerHistogramStreakDetection:
                 return 31
             case .neighboringInterFrameOutlierThetaScore:
                 return 32
             case .maxOverlapTimesThetaHisto:
                 return 33
+
             }
         }
 
@@ -633,6 +648,7 @@ public class OutlierGroup: CustomStringConvertible,
             ret = self.numberOfNearbyOutliersInSameFrame
         case .adjecentFrameNeighboringOutliersBestTheta:
             ret = self.adjecentFrameNeighboringOutliersBestTheta
+
         case .histogramStreakDetection:
             ret = self.histogramStreakDetection
         case .longerHistogramStreakDetection:
@@ -641,6 +657,7 @@ public class OutlierGroup: CustomStringConvertible,
             ret = self.neighboringInterFrameOutlierThetaScore
         case .maxOverlapTimesThetaHisto:
             ret = self.maxOverlapTimesThetaHisto
+
         case .maxOverlap:
             ret = self.maxOverlap
         case .pixelBorderAmount:
@@ -737,6 +754,47 @@ public class OutlierGroup: CustomStringConvertible,
         if oppositeDifference > 360 { oppositeDifference -= 360 }
 
         return oppositeDifference / 180.0
+    }
+
+    // 1.0 if all pixels in this group overlap all pixels of outliers in all neibhoring frames
+    // 0 if none of the pixels overlap
+    // XXX hook this up to a feature XXX
+    fileprivate var nearbyDirectOverlapScore: Double {
+        if let frame {
+            let pixelCount = self.pixelSet.count
+            var matchCount = 0
+            let previousFrame = frame.previousFrame 
+            let nextFrame = frame.nextFrame
+
+            for pixel in pixelSet {
+                let index = pixel.y * Int(IMAGE_WIDTH!) + pixel.x
+                if let previousFrame,
+                   let previousOutlierGroups = previousFrame.outlierGroups,
+                   previousOutlierGroups.outlierImageData[index] != 0
+                {
+                    matchCount += 1
+                }
+
+                if let nextFrame,
+                   let nextOutlierGroups = nextFrame.outlierGroups,
+                   nextOutlierGroups.outlierImageData[index] != 0
+                {
+                    matchCount += 1
+                }
+            }
+
+            var numberFrames = 0
+            if previousFrame != nil {
+                numberFrames += 1
+            }
+            if nextFrame != nil {
+                numberFrames += 1
+            }
+            if numberFrames == 0 { return 0 }
+            return Double(matchCount)/(Double(numberFrames)*Double(pixelCount))
+        } else {
+            fatalError("NO FRAME for nearbyDirectOverlapScore @ index \(frameIndex)")
+        }
     }
     
     // tries to find a streak with hough line histograms
@@ -1102,6 +1160,10 @@ public class OutlierGroup: CustomStringConvertible,
             return score
         }
     }
+
+    lazy var blob: Blob = {
+        Blob(pixelSet, id: id, frameIndex: frameIndex)
+    }()
 }
 
 public func ratioOfSurfaceAreaToSize(of pixels: [UInt16], width: Int, height: Int) -> Double {

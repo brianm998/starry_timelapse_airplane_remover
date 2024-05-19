@@ -205,34 +205,25 @@ public class OutlierGroups {
     }
 
     public func writeOutliersImage(to dirname: String) throws {
-        let filename = "\(dirname)/\(BlobImageSaver.outlierTiffFilename)"
-        let yAxisfilename = "\(dirname)/\(BlobImageSaver.outlierYAxisTiffFilename)"
-        
-        var outlierRefs = [UInt16](repeating: 0, count: width*height)
-        var yAxis = [UInt8](repeating: 0, count: height)
+
+        var blobMap: [UInt16: Blob] = [:]
 
         for outlier in members.values {
-            for x in 0..<outlier.bounds.width {
-                for y in 0..<outlier.bounds.height {
-                    let index = y*outlier.bounds.width + x
-                    if outlier.pixels[index] != 0 {
-                        let outerX = outlier.bounds.min.x + x
-                        let outerY = outlier.bounds.min.y + y
-                        let outerIndex = outerY*width + outerX
-                        outlierRefs[outerIndex] = outlier.id
-                        yAxis[outerY] = 0xFF
-                    }
-                }
-            }
+            let blob = outlier.blob
+            blobMap[blob.id] = blob
         }
 
-        let outlierImage = PixelatedImage(width: width, height: height,
-                                          grayscale16BitImageData: outlierRefs)
-        try outlierImage.writeTIFFEncoding(toFilename: filename)
+        var blobImageSaver: BlobImageSaver = .init(blobMap: blobMap,
+                                                   width: width,
+                                                   height: height,
+                                                   frameIndex: frameIndex)
 
-        let yAxisImage = PixelatedImage(width: 1, height: height,
-                                        grayscale8BitImageData: yAxis)
-        try outlierImage.writeTIFFEncoding(toFilename: yAxisfilename)
+        self.outlierImageData = blobImageSaver.blobRefs
+        self.outlierYAxisImageData = blobImageSaver.yAxis
+
+        mkdir(dirname)
+        
+        blobImageSaver.save(to: dirname)
     }
     
     // only writes the paint reasons now, outlier image is written elsewhere

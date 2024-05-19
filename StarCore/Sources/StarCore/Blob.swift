@@ -381,6 +381,12 @@ public class Blob: CustomStringConvertible {
         //Log.d("frame \(frameIndex) blob \(self.id) alloc")
     }
 
+    public init(_ pixels: Set<SortablePixel>, id: UInt16, frameIndex: Int) {
+        self.pixels = pixels
+        self.id = id
+        self.frameIndex = frameIndex
+    }
+
     public func makeBackground() {
         for pixel in pixels {
             pixel.status = .background
@@ -496,7 +502,8 @@ public class Blob: CustomStringConvertible {
                      brightness: UInt(self.intensity),
                      bounds: self.boundingBox,
                      frameIndex: frameIndex,
-                     pixels: self.pixelValues)
+                     pixels: self.pixelValues,
+                     pixelSet: self.pixels)
     }
 
     // returns minimum distance found 
