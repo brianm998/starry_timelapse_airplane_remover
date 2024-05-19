@@ -42,10 +42,11 @@ public class OutlierGroups {
                  withSubtractionArr subtractionArr: [UInt16],
                  fromOutlierDir outlierDir: String) async throws
     {
+        Log.d("start")
         self.frameIndex = frameIndex
         let outlierGroupPaintDataFilename = "\(outlierDir)/OutlierGroupPaintData.json"
         let imageFilename = "\(outlierDir)/\(BlobImageSaver.outlierTiffFilename)"
-        let yAxisImageFilename = "\(outlierDir)/\(BlobImageSaver.outlierYAxisTiffFilename)"
+        let yAxisImageFilename = "\(outlierDir)/\(BlobImageSaver.outlierYAxisBinaryFilename)"
         // XXX pick up y-axis if it exists
         var outlierGroupPaintData: [UInt16:PaintReason]?
 
@@ -71,23 +72,20 @@ public class OutlierGroups {
 
         self.members = [:]
 
-        if FileManager.default.fileExists(atPath: yAxisImageFilename),
-           let yAxisOutlierImage = try await PixelatedImage(fromFile: yAxisImageFilename)
-        {
-            guard yAxisOutlierImage.width == 1, // make sure the image is of the right size
-                  yAxisOutlierImage.height == height
-            else { fatalError("outlierImage yAxis from \(yAxisImageFilename) of size [\(yAxisOutlierImage.width), \(yAxisOutlierImage.width)] doesn't match frame size [1, \(height)") }
-            
-            switch yAxisOutlierImage.imageData {
-            case .eightBit(let imageArr):
-                self.outlierYAxisImageData = imageArr
+        Log.d("check 1")
 
-            case .sixteenBit(_):
-                Log.w("cannot process 16 bit outlier yaxis image \(imageFilename)")
-                break
-            }
+        if FileManager.default.fileExists(atPath: yAxisImageFilename) {
+
+            let fileurl = NSURL(fileURLWithPath: yAxisImageFilename, isDirectory: false)
+
+            let (groupData, _) = try await URLSession.shared.data(for: URLRequest(url: fileurl as URL))
+            self.outlierYAxisImageData = groupData.uInt8Array
+            
+        } else {
+            Log.w("no y axis :(")
         }
         
+        Log.d("check 2")
         if FileManager.default.fileExists(atPath: imageFilename),
            let outlierImage = try await PixelatedImage(fromFile: imageFilename)
         {
@@ -101,14 +99,21 @@ public class OutlierGroups {
                 return nil
 
             case .sixteenBit(let imageArr):
+                Log.d("check 3 outlierYAxisImageData \(outlierYAxisImageData)")
 
                 self.outlierImageData = imageArr
                 var blobMap: [UInt16: Blob] = [:]
 
+                var coutinueCount = 0
+                
                 // load blobs from image
                 for y in 0 ..< outlierImage.height {
                     if let outlierYAxisImageData,
-                       outlierYAxisImageData[y] == 0 { continue }
+                       outlierYAxisImageData[y] == 0
+                    {
+                        coutinueCount += 1
+                        continue
+                    }
 
                     for x in 0 ..< outlierImage.width {
                         let index = y*outlierImage.width + x
@@ -128,6 +133,7 @@ public class OutlierGroups {
                     }
                 }
 
+                Log.d("check 4 coutinueCount \(coutinueCount)")
                 // promote found blobs to outlier groups for further processing
                 // apply should paint if loaded
                 
@@ -140,12 +146,6 @@ public class OutlierGroups {
 
                         if let shouldPaint = _outlierGroupPaintData[outlierGroup.id] {
                             outlierGroup.shouldPaint(shouldPaint)
-                        } else if let currentClassifier {
-                            // we have a classifier, use it
-                            // XXX maybe delay this until final processor
-                            // we may not have adjacent frames here
-                            let score = currentClassifier.classification(of: outlierGroup)
-                            outlierGroup.shouldPaint(.fromClassifier(score))
                         } else {
                             Log.i("frame \(frameIndex) could not find outlier group info for group \(outlierGroup.id) in outlierGroupPaintData, and we have no classifier")
                         }
@@ -153,8 +153,10 @@ public class OutlierGroups {
 
                     self.members[outlierGroup.id] = outlierGroup
                 }
+                Log.d("check 5")
             }
         } else {
+            Log.d("FUCKED \(imageFilename)")
             return nil
         }
     }
@@ -213,7 +215,7 @@ public class OutlierGroups {
             blobMap[blob.id] = blob
         }
 
-        var blobImageSaver: BlobImageSaver = .init(blobMap: blobMap,
+        let blobImageSaver: BlobImageSaver = .init(blobMap: blobMap,
                                                    width: width,
                                                    height: height,
                                                    frameIndex: frameIndex)

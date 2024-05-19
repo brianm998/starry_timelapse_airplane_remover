@@ -64,7 +64,6 @@ public struct PixelatedImage {
     }
 
     public init?(fromFile filename: String) async throws {
-        //Log.d("Loading image from \(filename)")
         if let nsImage = try await loadImage(fromFile: filename) {
             if let cgImage = nsImage.cgImage(forProposedRect: nil, context: nil, hints: nil) {
                 self.init(cgImage)
@@ -493,15 +492,15 @@ extension ContiguousBytes {
     func objects<T>() -> [T] { withUnsafeBytes { .init($0.bindMemory(to: T.self)) } }
 
     // convert Data to [UInt16]
-    var uInt16Array: [UInt16] { objects() }
+    public var uInt16Array: [UInt16] { objects() }
 
     // convert Data to [UInt8]
-    var uInt8Array: [UInt8] { objects() }
+    public var uInt8Array: [UInt8] { objects() }
 }
 
 // convert a [UInt16] array to Data
 extension Array<UInt16> {
-    var data: Data {
+    public var data: Data {
         let data = self.withUnsafeBufferPointer { Data(buffer: $0) }
         return data
     }
@@ -509,7 +508,7 @@ extension Array<UInt16> {
 
 // convert a [UInt8] array to Data
 extension Array<UInt8> {
-    var data: Data {
+    public var data: Data {
         let data = self.withUnsafeBufferPointer { Data(buffer: $0) }
         return data
     }

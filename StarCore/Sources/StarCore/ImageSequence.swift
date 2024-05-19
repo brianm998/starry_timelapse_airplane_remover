@@ -23,7 +23,7 @@ public actor ImageLoader {
         self.filename = filename
     }
 
-    func image() async throws -> PixelatedImage {
+    public func image() async throws -> PixelatedImage {
         if let image = _image { return image }
         if let image = try await PixelatedImage(fromFile: filename) {
             _image = image
@@ -36,9 +36,9 @@ public actor ImageLoader {
 // allows loading and caching of frames of an image sequence
 public actor ImageSequence {
 
-    init(dirname: String,
-         supportedImageFileTypes: [String],
-         maxImages: Int? = nil) throws
+    public init(dirname: String,
+                supportedImageFileTypes: [String],
+                maxImages: Int? = nil) throws
     {
         self.maxImages = maxImages
         var imageFiles: [String] = []
@@ -83,7 +83,7 @@ public actor ImageSequence {
 
     private var maxImages: Int? // XXX set this low for gui, eating more ram than necessary
     
-    func getImage(withName filename: String) -> ImageLoader {
+    public func getImage(withName filename: String) -> ImageLoader {
         Log.d("getImage(withName: \(filename))")
         if let image = images[filename] {
             Log.d("image was cached")

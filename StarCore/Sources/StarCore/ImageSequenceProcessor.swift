@@ -54,8 +54,8 @@ public class ImageSequenceProcessor<T> {
         self.outputDirname = outputDirname
         self.numberFinalProcessingNeighborsNeeded = numberFinalProcessingNeighborsNeeded
         self.imageSequence = try ImageSequence(dirname: imageSequenceDirname,
-                                                supportedImageFileTypes: supportedImageFileTypes,
-                                                maxImages: maxImages)
+                                               supportedImageFileTypes: supportedImageFileTypes,
+                                               maxImages: maxImages)
         self.shouldProcess = [Bool](repeating: processExistingFiles, count: imageSequence.filenames.count)
         self.existingOutputFiles = [Bool](repeating: false, count: imageSequence.filenames.count)
         self.fullyProcess = fullyProcess
@@ -164,6 +164,7 @@ public class ImageSequenceProcessor<T> {
                 {
                     await methodList.removeValue(forKey: nextMethodKey)
                     try await group.addTask() {
+                        // XXX are errors thrown here handled?
                         let ret = try await nextMethod()
                         await self.resultHook(with: ret)
                         return ret
@@ -184,7 +185,7 @@ public class ImageSequenceProcessor<T> {
 }
 
 // removes path from filename
-func removePath(fromString string: String) -> String {
+public func removePath(fromString string: String) -> String {
     let components = string.components(separatedBy: "/")
     let ret = components[components.count-1]
     return ret

@@ -42,7 +42,7 @@ public class BlobImageSaver {
     internal var yAxis: [UInt8]
 
     public static let outlierTiffFilename = "outliers.tif"
-    public static let outlierYAxisTiffFilename = "outliers-y-axis.tif"
+    public static let outlierYAxisBinaryFilename = "outliers-y-axis.bin"
     
     init(blobMap: [UInt16: Blob],
          width: Int,
@@ -80,17 +80,14 @@ public class BlobImageSaver {
         }
         Log.d("frame \(frameIndex) REALLY done saving image to \(filename)")
 
-        let yAxisFilename = "\(dirname)/\(BlobImageSaver.outlierYAxisTiffFilename)"
-        do {
-            Log.d("frame \(frameIndex) saving image to \(yAxisFilename)")
-            let blobImage = PixelatedImage(width: 1, height: height,
-                                           grayscale8BitImageData: yAxis)
-            try blobImage.writeTIFFEncoding(toFilename: yAxisFilename)
-            Log.d("frame \(frameIndex) done saving image to \(yAxisFilename)")
-        } catch {
-            Log.e("frame \(frameIndex) error saving image \(yAxisFilename): \(error)")
+        let yAxisFilename = "\(dirname)/\(BlobImageSaver.outlierYAxisBinaryFilename)"
+        if fileManager.fileExists(atPath: yAxisFilename) {
+            fileManager.removeItem(atPath: yAxisFilename) 
         }
-
-        Log.d("frame \(frameIndex) REALLY done saving y axis image to \(yAxisFilename)")
+        fileManager.createFile(atPath: yAxisFilename,
+                               contents: yAxis.data,
+                               attributes: nil)
     }
 }
+
+fileprivate let fileManager = FileManager.default

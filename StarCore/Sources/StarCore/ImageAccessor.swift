@@ -67,13 +67,13 @@ public protocol ImageAccess {
 }
 
 // read and write access to different image types for a given frame
-struct ImageAccessor: ImageAccess {
+public struct ImageAccessor: ImageAccess {
     let config: Config
     let baseDirName: String
     let baseFileName: String
     let imageSequence: ImageSequence
 
-    init(config: Config, imageSequence: ImageSequence, baseFileName: String) {
+    public init(config: Config, imageSequence: ImageSequence, baseFileName: String) {
         // the dirname (not full path) of where the main output files will sit
         self.config = config
         let _basename = "\(config.imageSequenceDirname)-star-v-\(config.starVersion)-\(config.detectionType.rawValue)"
@@ -103,7 +103,7 @@ struct ImageAccessor: ImageAccess {
         }
     }
     
-    func mkdirs() {
+    public func mkdirs() {
         mkdir(ofType: .aligned)
         mkdir(ofType: .subtracted)
         mkdir(ofType: .blobs)
@@ -131,8 +131,8 @@ struct ImageAccessor: ImageAccess {
         }
     }
 
-    func loadNSImage(type imageType: FrameImageType,
-                     atSize size: ImageDisplaySize) -> NSImage?
+    public func loadNSImage(type imageType: FrameImageType,
+                            atSize size: ImageDisplaySize) -> NSImage?
     {
         if let url = urlForImage(ofType: imageType, atSize: size),
            let image = NSImage(contentsOf: url)
@@ -142,8 +142,8 @@ struct ImageAccessor: ImageAccess {
         return nil
     }
 
-    func urlForImage(ofType imageType: FrameImageType,
-                     atSize size: ImageDisplaySize) -> URL?
+    public func urlForImage(ofType imageType: FrameImageType,
+                            atSize size: ImageDisplaySize) -> URL?
     {
         if let filename = nameForImage(ofType: imageType, atSize: size),
            fileManager.fileExists(atPath: filename)
@@ -153,8 +153,8 @@ struct ImageAccessor: ImageAccess {
         return nil
     }
 
-    func load(type imageType: FrameImageType,
-              atSize size: ImageDisplaySize) async -> PixelatedImage?
+    public func load(type imageType: FrameImageType,
+                     atSize size: ImageDisplaySize) async -> PixelatedImage?
     {
         var numRetries = 4
 
@@ -199,10 +199,10 @@ struct ImageAccessor: ImageAccess {
         return nil
     }
 
-    func save(_ image: PixelatedImage,
-             as type: FrameImageType,
-             atSize size: ImageDisplaySize,
-             overwrite: Bool) async throws
+    public func save(_ image: PixelatedImage,
+                     as type: FrameImageType,
+                     atSize size: ImageDisplaySize,
+                     overwrite: Bool) async throws
     {
         if let filename = nameForImage(ofType: type, atSize: size) {
             var dataToSave: Data? = nil
