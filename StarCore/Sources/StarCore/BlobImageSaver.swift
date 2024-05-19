@@ -18,7 +18,7 @@ You should have received a copy of the GNU General Public License along with sta
 
 // saves the given set of blobs as a 16 bit grayscale image,
 // pixel values come from blob id number
-class BlobImageSaver {
+public class BlobImageSaver {
 
     // map of all known blobs keyed by blob id
     private var blobMap: [UInt16: Blob]
