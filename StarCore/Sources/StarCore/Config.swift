@@ -163,8 +163,9 @@ public struct Config: Codable {
     // 0.6.4 attempted speed up, more blob filtering
     // 0.6.5 re-worked blob detection again, added separate DetectionType
     // 0.6.6 re-wrote outlier saving, using one image per frame for outlier data now
+    // 0.6.7 y-axis outlier images, two new classfication features
     
-    public var starVersion = "0.6.6" // XXX move this out
+    public var starVersion = "0.6.7" // XXX move this out
 
     public func writeJson(named filename: String) {
         

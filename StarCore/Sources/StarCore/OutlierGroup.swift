@@ -434,6 +434,9 @@ public class OutlierGroup: CustomStringConvertible,
         case longerHistogramStreakDetection // XXX
         case neighboringInterFrameOutlierThetaScore // XXX
         case maxOverlapTimesThetaHisto // XXX
+
+        case nearbyDirectOverlapScore
+        case boundingBoxOverlapScore
 /*
          XXX add:
            - A new feature that accounts for empty space along the line
@@ -569,6 +572,11 @@ public class OutlierGroup: CustomStringConvertible,
             case .maxOverlapTimesThetaHisto:
                 return 33
 
+            case .nearbyDirectOverlapScore:
+                return 34
+            case .boundingBoxOverlapScore:
+                return 35
+
             }
         }
 
@@ -658,6 +666,11 @@ public class OutlierGroup: CustomStringConvertible,
         case .maxOverlapTimesThetaHisto:
             ret = self.maxOverlapTimesThetaHisto
 
+        case .nearbyDirectOverlapScore:
+            ret = self.nearbyDirectOverlapScore
+        case .boundingBoxOverlapScore:
+            ret = self.boundingBoxOverlapScore
+            
         case .maxOverlap:
             ret = self.maxOverlap
         case .pixelBorderAmount:
@@ -756,9 +769,52 @@ public class OutlierGroup: CustomStringConvertible,
         return oppositeDifference / 180.0
     }
 
-    // 1.0 if all pixels in this group overlap all pixels of outliers in all neibhoring frames
+    // 0 if no pixels are found withing the bounding box in neighboring frames
+    // 1 if all pixels withing the bounding box in neighboring frames are filled
+    fileprivate var boundingBoxOverlapScore: Double {
+        if let frame {
+            let pixelCount = self.pixelSet.count
+            var matchCount = 0
+            var numberFrames = 0
+
+            if let previousFrame = frame.previousFrame,
+               let previousOutlierGroups = previousFrame.outlierGroups
+            {
+                numberFrames += 1
+                for x in bounds.min.x...bounds.max.x {
+                    for y in bounds.min.y...bounds.max.y {
+                        let index = y*Int(IMAGE_WIDTH!) + x
+                        if previousOutlierGroups.outlierImageData[index] != 0 {
+                            // there is an outlier here
+                            matchCount += 1
+                        }
+                    }
+                }
+            }
+            if let nextFrame = frame.nextFrame,
+               let nextOutlierGroups = nextFrame.outlierGroups
+            {
+                numberFrames += 1
+                for x in bounds.min.x...bounds.max.x {
+                    for y in bounds.min.y...bounds.max.y {
+                        let index = y*Int(IMAGE_WIDTH!) + x
+                        if nextOutlierGroups.outlierImageData[index] != 0 {
+                            // there is an outlier here
+                            matchCount += 1
+                        }
+                    }
+                }
+            }
+
+            if numberFrames == 0 { return 0 }
+            return Double(matchCount)/(Double(numberFrames)*Double(bounds.width*bounds.height))
+        } else {
+            fatalError("NO FRAME for boundingBoxOverlapScore @ index \(frameIndex)")
+        }
+    }
+    
+    // 1.0 if all pixels in this group overlap all pixels of outliers in all neighboring frames
     // 0 if none of the pixels overlap
-    // XXX hook this up to a feature XXX
     fileprivate var nearbyDirectOverlapScore: Double {
         if let frame {
             let pixelCount = self.pixelSet.count
