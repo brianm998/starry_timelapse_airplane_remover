@@ -781,8 +781,11 @@ public class OutlierGroup: CustomStringConvertible,
                let previousOutlierGroups = previousFrame.outlierGroups
             {
                 numberFrames += 1
-                for x in bounds.min.x...bounds.max.x {
-                    for y in bounds.min.y...bounds.max.y {
+                for y in bounds.min.y...bounds.max.y {
+                    if let yAxis = previousOutlierGroups.outlierYAxisImageData,
+                       yAxis[y] == 0 { continue }
+                    
+                    for x in bounds.min.x...bounds.max.x {
                         let index = y*Int(IMAGE_WIDTH!) + x
                         if previousOutlierGroups.outlierImageData[index] != 0 {
                             // there is an outlier here
@@ -795,8 +798,11 @@ public class OutlierGroup: CustomStringConvertible,
                let nextOutlierGroups = nextFrame.outlierGroups
             {
                 numberFrames += 1
-                for x in bounds.min.x...bounds.max.x {
-                    for y in bounds.min.y...bounds.max.y {
+                for y in bounds.min.y...bounds.max.y {
+                    if let yAxis = nextOutlierGroups.outlierYAxisImageData,
+                       yAxis[y] == 0 { continue }
+                    
+                    for x in bounds.min.x...bounds.max.x {
                         let index = y*Int(IMAGE_WIDTH!) + x
                         if nextOutlierGroups.outlierImageData[index] != 0 {
                             // there is an outlier here
