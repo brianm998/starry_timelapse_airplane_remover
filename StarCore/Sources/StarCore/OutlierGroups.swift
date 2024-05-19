@@ -176,8 +176,11 @@ public class OutlierGroups {
         if maxX >= width { maxX = width - 1 }
         if maxY >= height { maxY = height - 1 }
 
-        for x in minX...maxX {
-            for y in minY...maxY {
+        for y in minY...maxY {
+            if let outlierYAxisImageData,
+               outlierYAxisImageData[y] == 0 { continue }
+            
+            for x in minX...maxX {
                 let index = y * width + x
                 let outlierId = outlierImageData[index]
                 if outlierId != 0,
