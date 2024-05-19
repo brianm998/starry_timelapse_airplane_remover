@@ -27,13 +27,15 @@ public class OutlierGroups {
 
     // image data from an image with non zero pixels set with an outlier id
     public var outlierImageData: [UInt16] // outlier ids for frame, row major indexed
-
+    public var outlierYAxisImageData: [UInt8]? // y axis of the outlierImage data
+    
     public init(frameIndex: Int,
                 members: [UInt16: OutlierGroup])
     {
         self.frameIndex = frameIndex
         self.members = members
         self.outlierImageData = [UInt16](repeating: 0, count: 0) // XXX ???
+        self.outlierYAxisImageData = [UInt8](repeating: 0, count: 0) // XXX
     }
 
     public init?(at frameIndex: Int,
@@ -42,8 +44,9 @@ public class OutlierGroups {
     {
         self.frameIndex = frameIndex
         let outlierGroupPaintDataFilename = "\(outlierDir)/OutlierGroupPaintData.json"
-        let imageFilename = "\(outlierDir)/outliers.tif"
-
+        let imageFilename = "\(outlierDir)/\(BlobImageSaver.outlierTiffFilename)"
+        let yAxisImageFilename = "\(outlierDir)/\(BlobImageSaver.outlierYAxisTiffFilename)"
+        // XXX pick up y-axis if it exists
         var outlierGroupPaintData: [UInt16:PaintReason]?
 
         if fileManager.fileExists(atPath: outlierGroupPaintDataFilename) {
@@ -68,6 +71,23 @@ public class OutlierGroups {
 
         self.members = [:]
 
+        if FileManager.default.fileExists(atPath: yAxisImageFilename),
+           let yAxisOutlierImage = try await PixelatedImage(fromFile: yAxisImageFilename)
+        {
+            guard yAxisOutlierImage.width == 1, // make sure the image is of the right size
+                  yAxisOutlierImage.height == height
+            else { fatalError("outlierImage yAxis from \(yAxisImageFilename) of size [\(yAxisOutlierImage.width), \(yAxisOutlierImage.width)] doesn't match frame size [1, \(height)") }
+            
+            switch yAxisOutlierImage.imageData {
+            case .eightBit(let imageArr):
+                self.outlierYAxisImageData = imageArr
+
+            case .sixteenBit(_):
+                Log.w("cannot process 16 bit outlier yaxis image \(imageFilename)")
+                break
+            }
+        }
+        
         if FileManager.default.fileExists(atPath: imageFilename),
            let outlierImage = try await PixelatedImage(fromFile: imageFilename)
         {
@@ -86,8 +106,11 @@ public class OutlierGroups {
                 var blobMap: [UInt16: Blob] = [:]
 
                 // load blobs from image
-                for x in 0 ..< outlierImage.width {
-                    for y in 0 ..< outlierImage.height {
+                for y in 0 ..< outlierImage.height {
+                    if let outlierYAxisImageData,
+                       outlierYAxisImageData[y] == 0 { continue }
+
+                    for x in 0 ..< outlierImage.width {
                         let index = y*outlierImage.width + x
                         let blobId = imageArr[index]
                         if blobId != 0 {
@@ -119,6 +142,8 @@ public class OutlierGroups {
                             outlierGroup.shouldPaint(shouldPaint)
                         } else if let currentClassifier {
                             // we have a classifier, use it
+                            // XXX maybe delay this until final processor
+                            // we may not have adjacent frames here
                             let score = currentClassifier.classification(of: outlierGroup)
                             outlierGroup.shouldPaint(.fromClassifier(score))
                         } else {
@@ -176,8 +201,12 @@ public class OutlierGroups {
         }
     }
 
-    public func writeOutliersImage(to filename: String) throws {
+    public func writeOutliersImage(to dirname: String) throws {
+        let filename = "\(dirname)/\(BlobImageSaver.outlierTiffFilename)"
+        let yAxisfilename = "\(dirname)/\(BlobImageSaver.outlierYAxisTiffFilename)"
+        
         var outlierRefs = [UInt16](repeating: 0, count: width*height)
+        var yAxis = [UInt8](repeating: 0, count: height)
 
         for outlier in members.values {
             for x in 0..<outlier.bounds.width {
@@ -188,6 +217,7 @@ public class OutlierGroups {
                         let outerY = outlier.bounds.min.y + y
                         let outerIndex = outerY*width + outerX
                         outlierRefs[outerIndex] = outlier.id
+                        yAxis[outerY] = 0xFF
                     }
                 }
             }
@@ -196,6 +226,10 @@ public class OutlierGroups {
         let outlierImage = PixelatedImage(width: width, height: height,
                                           grayscale16BitImageData: outlierRefs)
         try outlierImage.writeTIFFEncoding(toFilename: filename)
+
+        let yAxisImage = PixelatedImage(width: 1, height: height,
+                                        grayscale8BitImageData: yAxis)
+        try outlierImage.writeTIFFEncoding(toFilename: yAxisfilename)
     }
     
     // only writes the paint reasons now, outlier image is written elsewhere
@@ -296,7 +330,7 @@ public class OutlierGroups {
         }
         return baseData
     }
-}
+        }
 
 fileprivate let fileManager = FileManager.default
 

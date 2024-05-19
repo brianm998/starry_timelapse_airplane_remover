@@ -116,24 +116,29 @@ extension FrameAirplaneRemover {
             // try to load the image subtraction from a pre-processed file
 
             if let image = await imageAccessor.load(type: .subtracted, atSize: .original) {
+                Log.d("frame \(frameIndex) loaded subtraction image")
                 subtractionImage = image
                 switch image.imageData {
                 case .sixteenBit(let array):
                     subtractionArray = array
                 case .eightBit(_):
-                    Log.e("eight bit images not supported here yet")
+                    Log.e("frame \(frameIndex) eight bit images not supported here yet")
                 }
                 Log.d("frame \(frameIndex) loaded outlier amounts from subtraction image")
 
                 try await imageAccessor.save(image, as: .subtracted,
                                              atSize: .preview, overwrite: false)
+                Log.d("frame \(frameIndex) saved subtraction image preview") 
             }
         } catch {
             Log.i("frame \(frameIndex) couldn't load outlier amounts from subtraction image")
             // do the image subtraction here instead
         }
+        Log.d("frame \(frameIndex)")
         if subtractionImage == nil {        
+            Log.d("frame \(frameIndex) creating subtraction image") 
             let image = try await self.subtractAlignedImageFromFrame()
+            Log.d("frame \(frameIndex) created subtraction image") 
             subtractionImage = image
             switch image.imageData {
             case .eightBit(_):
@@ -141,11 +146,13 @@ extension FrameAirplaneRemover {
             case .sixteenBit(let origImagePixels):
                 subtractionArray = origImagePixels
             }
-            Log.d("loaded subtractionArray with \(subtractionArray.count) items")
+            Log.d("frame \(frameIndex) loaded subtractionArray with \(subtractionArray.count) items")
         }
         
         self.state = .assemblingPixels
 
+        Log.d("frame \(frameIndex) running blobber")
+                
         // detect blobs of difference in brightness in the subtraction array
         // airplanes show up as lines or does in a line
         // because the image subtracted from this frame had the sky aligned,
@@ -164,6 +171,8 @@ extension FrameAirplaneRemover {
         // run the blobber
         blobber?.process()
 
+        Log.d("frame \(frameIndex) blobber done")
+        
         // get the blobs out of the blobber
         guard let blobberBlobs = blobber?.blobMap else {
             Log.w("frame \(frameIndex) no blobs from blobber")
@@ -177,6 +186,8 @@ extension FrameAirplaneRemover {
             // save blobs image 
             try await saveImages(for: Array(blobberBlobs.values), as: .blobs)
         }
+
+        Log.d("frame \(frameIndex) running DimIsolatedBlobRemover")
 
         var idibr: DimIsolatedBlobRemover? = .init(blobMap: blobberBlobs,
                                                    width: width,
@@ -199,6 +210,8 @@ extension FrameAirplaneRemover {
          weed out small, isolated blobs.  This helps speed things up, and
          if tuned well, doesn't skip anything important.
          */
+
+        Log.d("frame \(frameIndex) running IsolatedBlobRemover")
 
         self.state = .isolatedBlobRemoval
         var isolatedRemover: IsolatedBlobRemover? = .init(blobMap: dimIsolatedBlobRemoverBlobs,
@@ -289,13 +302,16 @@ extension FrameAirplaneRemover {
         if let blobImageSaver {
             // keep the blobRefs from this for later analysis of nearby outliers
             outlierGroups?.outlierImageData = blobImageSaver.blobRefs
+            outlierGroups?.outlierYAxisImageData = blobImageSaver.yAxis
+            // XXX keep the y-axis too?
         }
         
         let frame_outliers_dirname = "\(self.outlierOutputDirname)/\(frameIndex)"
 
         mkdir(frame_outliers_dirname)
         
-        blobImageSaver?.save(to: "\(frame_outliers_dirname)/outliers.tif")
+        blobImageSaver?.save(to: frame_outliers_dirname)
+
         blobImageSaver = nil
 
         // blobs to promote to outlier groups
@@ -611,7 +627,8 @@ extension FrameAirplaneRemover {
 
         let frame_outliers_dirname = "\(self.outlierOutputDirname)/\(frameIndex)"
 //        mkdir(frame_outliers_dirname)
-        try outlierGroups?.writeOutliersImage(to: "\(frame_outliers_dirname)/outliers.tif")
+        try outlierGroups?.writeOutliersImage(to: frame_outliers_dirname)
+        // XXX add y-axis here too
     }
 
 }

@@ -18,10 +18,57 @@ You should have received a copy of the GNU General Public License along with sta
 
 // saves the given set of blobs as a 16 bit grayscale image,
 // pixel values come from blob id number
-class BlobImageSaver: AbstractBlobAnalyzer {
+class BlobImageSaver {
 
-    public func save(to filename: String) {
+    // map of all known blobs keyed by blob id
+    private var blobMap: [UInt16: Blob]
+
+    // width of the frame
+    private let width: Int
+
+    // height of the frame
+    private let height: Int
+
+    // what frame in the sequence we're processing
+    private let frameIndex: Int
+
+    // a reference for each pixel for each blob it might belong to
+    // non zero values reference a blob
+    internal var blobRefs: [UInt16]
+
+    // data condensed along the y axis
+    // i.e. does any value at y value have an outlier?
+    // if so, then yAxis[yValue] != 0
+    internal var yAxis: [UInt8]
+
+    public static let outlierTiffFilename = "outliers.tif"
+    public static let outlierYAxisTiffFilename = "outliers-y-axis.tif"
+    
+    init(blobMap: [UInt16: Blob],
+         width: Int,
+         height: Int,
+         frameIndex: Int)
+    {
+        self.blobMap = blobMap
+        self.width = width
+        self.height = height
+        self.frameIndex = frameIndex
+
+        self.blobRefs = [UInt16](repeating: 0, count: width*height)
+        self.yAxis = [UInt8](repeating: 0, count: height)
+
+        for blob in blobMap.values {
+            for pixel in blob.pixels {
+                let blobRefIndex = pixel.y*width+pixel.x
+                blobRefs[blobRefIndex] = blob.id
+                yAxis[pixel.y] = 0xFF
+            }
+        }
+    }
+
+    public func save(to dirname: String) {
         // save the blob refs as an image here
+        let filename = "\(dirname)/\(BlobImageSaver.outlierTiffFilename)"
         do {
             Log.d("frame \(frameIndex) saving image to \(filename)")
             let blobImage = PixelatedImage(width: width, height: height,
@@ -32,5 +79,18 @@ class BlobImageSaver: AbstractBlobAnalyzer {
             Log.e("frame \(frameIndex) error saving image \(filename): \(error)")
         }
         Log.d("frame \(frameIndex) REALLY done saving image to \(filename)")
+
+        let yAxisFilename = "\(dirname)/\(BlobImageSaver.outlierYAxisTiffFilename)"
+        do {
+            Log.d("frame \(frameIndex) saving image to \(yAxisFilename)")
+            let blobImage = PixelatedImage(width: 1, height: height,
+                                           grayscale8BitImageData: yAxis)
+            try blobImage.writeTIFFEncoding(toFilename: yAxisFilename)
+            Log.d("frame \(frameIndex) done saving image to \(yAxisFilename)")
+        } catch {
+            Log.e("frame \(frameIndex) error saving image \(yAxisFilename): \(error)")
+        }
+
+        Log.d("frame \(frameIndex) REALLY done saving y axis image to \(yAxisFilename)")
     }
 }
