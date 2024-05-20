@@ -221,6 +221,8 @@ public final class ViewModel: ObservableObject {
     // number of frames in the sequence we're processing
     var imageSequenceSize: Int = 0
 
+    @Published var inTransition = false
+    
     var outlierLoadingProgress: Double {
         if imageSequenceSize == 0 { return 0 }
         return Double(numberOfFramesWithOutliersLoaded)/Double(imageSequenceSize)
@@ -715,6 +717,8 @@ public extension ViewModel {
                     from oldFrame: FrameAirplaneRemover?,
                     withScroll scroller: ScrollViewProxy? = nil)
     {
+        if inTransition { return }
+        inTransition = true
         Log.d("transition from \(String(describing: self.currentFrame))")
         let startTime = Date().timeIntervalSinceReferenceDate
 
@@ -758,6 +762,7 @@ public extension ViewModel {
         }
         
         refreshCurrentFrame()
+        
 
         let endTime = Date().timeIntervalSinceReferenceDate
         Log.d("transition to frame \(newFrameView.frameIndex) took \(endTime - startTime) seconds")
@@ -816,51 +821,67 @@ public extension ViewModel {
                         case .original:
                             if let baseImage = await nextFrame.imageAccessor.loadNSImage(type: .original, atSize: .original) {
                                 if nextFrame.frameIndex == self.currentIndex {
-                                    self.currentFrameImage = Image(nsImage: baseImage)
+                                    await MainActor.run {
+                                        self.currentFrameImage = Image(nsImage: baseImage)
+                                    }
                                 }
                             }
                         case .subtraction:
                             if let baseImage = await nextFrame.imageAccessor.loadNSImage(type: .subtracted, atSize: .original) {
                                 if nextFrame.frameIndex == self.currentIndex {
-                                    self.currentFrameImage = Image(nsImage: baseImage)
+                                    await MainActor.run {
+                                        self.currentFrameImage = Image(nsImage: baseImage)
+                                    }
                                 }
                             }
                         case .blobs:
                             if let baseImage = await nextFrame.imageAccessor.loadNSImage(type: .blobs, atSize: .original) {
                                 if nextFrame.frameIndex == self.currentIndex {
-                                    self.currentFrameImage = Image(nsImage: baseImage)
+                                    await MainActor.run {
+                                        self.currentFrameImage = Image(nsImage: baseImage)
+                                    }
                                 }
                             }
                         case .absorbedBlobs:
                             if let baseImage = await nextFrame.imageAccessor.loadNSImage(type: .absorbed, atSize: .original) {
                                 if nextFrame.frameIndex == self.currentIndex {
-                                    self.currentFrameImage = Image(nsImage: baseImage)
+                                    await MainActor.run {
+                                        self.currentFrameImage = Image(nsImage: baseImage)
+                                    }
                                 }
                             }
                         case .rectifiedBlobs:
                             if let baseImage = await nextFrame.imageAccessor.loadNSImage(type: .rectified, atSize: .original) {
                                 if nextFrame.frameIndex == self.currentIndex {
-                                    self.currentFrameImage = Image(nsImage: baseImage)
+                                    await MainActor.run {
+                                        self.currentFrameImage = Image(nsImage: baseImage)
+                                    }
                                 }
                             }
                         case .paintMask:
                             if let baseImage = await nextFrame.imageAccessor.loadNSImage(type: .paintMask, atSize: .original) {
                                 if nextFrame.frameIndex == self.currentIndex {
-                                    self.currentFrameImage = Image(nsImage: baseImage)
+                                    await MainActor.run {
+                                        self.currentFrameImage = Image(nsImage: baseImage)
+                                    }
                                 }
                             }
 
                         case .validation:
                             if let baseImage = await nextFrame.imageAccessor.loadNSImage(type: .validated, atSize: .original) {
                                 if nextFrame.frameIndex == self.currentIndex {
-                                    self.currentFrameImage = Image(nsImage: baseImage)
+                                    await MainActor.run {
+                                        self.currentFrameImage = Image(nsImage: baseImage)
+                                    }
                                 }
                             }
                             
                         case .processed:
                             if let baseImage = await nextFrame.imageAccessor.loadNSImage(type: .processed, atSize: .original) {
                                 if nextFrame.frameIndex == self.currentIndex {
-                                    self.currentFrameImage = Image(nsImage: baseImage)
+                                    await MainActor.run {
+                                        self.currentFrameImage = Image(nsImage: baseImage)
+                                    }
                                 }
                             }
                         }
@@ -878,15 +899,22 @@ public extension ViewModel {
                     self.loadingOutliers = true
                     Task.detached(priority: .userInitiated) {
                         let _ = try await nextFrame.loadOutliers()
-                        _ = await MainActor.run {
-                            Task {
-                                await self.setOutlierGroups(forFrame: nextFrame)
-                                frameView.loadingOutlierViews = false
-                                self.loadingOutliers = self.loadingOutlierGroups
-                                self.update()
-                            }
+                        await self.setOutlierGroups(forFrame: nextFrame)
+                        Task { @MainActor in
+                            frameView.loadingOutlierViews = false
+                            self.loadingOutliers = self.loadingOutlierGroups
+                            self.update()
+                            self.inTransition = false
                         }
                     }
+                } else {
+                    Task { @MainActor in
+                        self.inTransition = false
+                    }
+                }
+            } else {
+                Task { @MainActor in
+                    self.inTransition = false
                 }
             }
         } else {
