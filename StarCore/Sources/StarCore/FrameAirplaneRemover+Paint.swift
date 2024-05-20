@@ -50,6 +50,7 @@ extension FrameAirplaneRemover {
         // this is esentially a layer mask for the frame, 
         // with the adjusted neighbor frame underneath
         var alphaLevels = [Double](repeating: 0, count: width*height)
+        var alphaYAxis = [UInt8](repeating: 0, count: height)
 
         // first go through the outlier groups and determine what alpha
         // level to apply to each pixel in this frame.
@@ -96,6 +97,7 @@ extension FrameAirplaneRemover {
                                             let maskAlpha = paintMask.pixels[maskIndex]
                                             if maskAlpha > frameAlpha {
                                                 alphaLevels[frameIndex] = maskAlpha
+                                                alphaYAxis[frameY] = 0xFF
                                             }
                                         }
                                     }
@@ -112,8 +114,9 @@ extension FrameAirplaneRemover {
         if config.writeOutlierGroupFiles { // XXX this config value is very much overloaded
             var paintMaskImageData = [UInt8](repeating: 0, count: width*height)
 
-            for x in 0 ..< width {
-                for y in 0 ..< height {
+            for y in 0 ..< height {
+                if alphaYAxis[y] == 0 { continue }
+                for x in 0 ..< width {
                     let index = y*width+x
                     let alpha = alphaLevels[index]
                     if alpha > 0 {
@@ -136,8 +139,9 @@ extension FrameAirplaneRemover {
             self.state = .painting2
             
             // then actually paint each non zero alpha pizel
-            for x in 0 ..< width {
-                for y in 0 ..< height {
+            for y in 0 ..< height {
+                if alphaYAxis[y] == 0 { continue }
+                for x in 0 ..< width {
                     var alpha = alphaLevels[y*width+x]
                     if alpha > 0 {
                         if alpha > 1 { alpha = 1 }
