@@ -75,18 +75,19 @@ public class BlobImageSaver {
                                            grayscale16BitImageData: blobRefs)
             try blobImage.writeTIFFEncoding(toFilename: filename)
             Log.d("frame \(frameIndex) done saving image to \(filename)")
+            
+            Log.d("frame \(frameIndex) REALLY done saving image to \(filename)")
+
+            let yAxisFilename = "\(dirname)/\(BlobImageSaver.outlierYAxisBinaryFilename)"
+            if fileManager.fileExists(atPath: yAxisFilename) {
+                try fileManager.removeItem(atPath: yAxisFilename) 
+            }
+            fileManager.createFile(atPath: yAxisFilename,
+                                   contents: yAxis.data,
+                                   attributes: nil)
         } catch {
             Log.e("frame \(frameIndex) error saving image \(filename): \(error)")
         }
-        Log.d("frame \(frameIndex) REALLY done saving image to \(filename)")
-
-        let yAxisFilename = "\(dirname)/\(BlobImageSaver.outlierYAxisBinaryFilename)"
-        if fileManager.fileExists(atPath: yAxisFilename) {
-            fileManager.removeItem(atPath: yAxisFilename) 
-        }
-        fileManager.createFile(atPath: yAxisFilename,
-                               contents: yAxis.data,
-                               attributes: nil)
     }
 }
 
