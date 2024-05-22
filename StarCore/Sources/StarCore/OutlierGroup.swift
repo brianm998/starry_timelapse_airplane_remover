@@ -346,6 +346,7 @@ public class OutlierGroup: CustomStringConvertible,
             return _decisionTreeValues
         }
         var ret: [Double] = []
+        ret.append(Double(self.id))
         for type in OutlierGroup.Feature.allCases {
             //let t0 = NSDate().timeIntervalSince1970
             ret.append(self.decisionTreeValue(for: type))
@@ -771,6 +772,7 @@ public class OutlierGroup: CustomStringConvertible,
 
     // 0 if no pixels are found withing the bounding box in neighboring frames
     // 1 if all pixels withing the bounding box in neighboring frames are filled
+    // airplane streaks typically do not overlap the same pixels on neighboring frames
     fileprivate var boundingBoxOverlapScore: Double {
         if let frame {
             let pixelCount = self.pixelSet.count
@@ -821,6 +823,7 @@ public class OutlierGroup: CustomStringConvertible,
     
     // 1.0 if all pixels in this group overlap all pixels of outliers in all neighboring frames
     // 0 if none of the pixels overlap
+    // airplane streaks typically do not overlap the same pixels on neighboring frames
     fileprivate var nearbyDirectOverlapScore: Double {
         if let frame {
             let pixelCount = self.pixelSet.count

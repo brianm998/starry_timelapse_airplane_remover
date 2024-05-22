@@ -32,15 +32,13 @@ extension FrameAirplaneRemover {
             Log.d("frame \(self.frameIndex) writeOutlierValuesCSV 1")
 
             let frameOutlierDir = "\(self.outlierOutputDirname)/\(self.frameIndex)"
-            let positiveFilename = "\(frameOutlierDir)/\(OutlierGroupValueMatrix.positiveDataFilename)"
-            let negativeFilename = "\(frameOutlierDir)/\(OutlierGroupValueMatrix.negativeDataFilename)"
+            let csvFilename = "\(frameOutlierDir)/\(CondensedOutlierGroupValueMatrix.outlierDataFilename)"
 
             // check to see if both of these files exist already
-            if fileManager.fileExists(atPath: positiveFilename),
-               fileManager.fileExists(atPath: negativeFilename) {
+            if fileManager.fileExists(atPath: csvFilename) {
                 Log.i("frame \(self.frameIndex) not recalculating outlier values with existing files")
             } else {
-                let valueMatrix = OutlierGroupValueMatrix()
+                let valueMatrix = CondensedOutlierGroupValueMatrix()
                 
                 if let outliers = self.outlierGroupList() {
                     Log.d("frame \(self.frameIndex) writeOutlierValuesCSV 1a \(outliers.count) outliers")

@@ -16,14 +16,42 @@ then
     exit 1
 fi
 
+
+
+
+#
+# rewrite of outlier classification data:
+#   * write just to a single outlier_data.csv, with first column the outlier id
+#   - use OutlierGroupPaintData.json to determine paintability 
+#   - condense into paint vs not paint
+#   - decision tree generator gets same input as before
+#   - figure out why it's so fricking slow 
+#
+
+
+
 # re-generate the outlier values from the outlier groups themselves
-#./regen_outlier_values.pl
+# this step can take a long time, and only needs to be re-run when
+# the OutlierGroup classification features are updated, to either
+# give different values for existing features, or to add or remove features.
+
+./regen_outlier_values.pl
+
+# apply outlier group classification to the raw outlier feature data
+# to sort them into positive_data.csv and negative_data.csv files
+# this needs to be run whenever the classification of outliers changes,
+# or if there are changes from regenerating the outlier values above
+
+cd ../outlier_feature_data_classifier
+swift run outlier_feature_data_classifier -v ../decision_tree_generator/validated_sequences.json
+cd ../decision_tree_generator
 
 # condense the csv files into a single spot
-#./condense_outlier_csv_files.pl /qp/star_validated/$1
+./condense_outlier_csv_files.pl /qp/star_validated/$1
+
 
 # split them for test/train
-#./outlier_csv_split.pl /qp/star_validated/$1
+./outlier_csv_split.pl /qp/star_validated/$1
 
 # build trees
 .build/debug/decision_tree_generator --forest 8 --no-prune -n 24 -t /qp/star_validated/$1-test /qp/star_validated/$1-train

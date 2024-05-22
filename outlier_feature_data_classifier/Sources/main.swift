@@ -58,47 +58,54 @@ struct Main: AsyncParsableCommand {
     }
 
     func process(frame dirname: String) async throws {
-        print("processing \(dirname)")
+        print("categorizing feature data in \(dirname)")
 
         let paintDataJsonFilename = "\(dirname)/\(OutlierGroups.outlierGroupPaintJsonFilename)"
-        let outlierDataCSVFilename = "\(dirname)/\(OutlierGroupValueMatrix.outlierDataFilename)"
+        let outlierDataCSVFilename = "\(dirname)/\(CondensedOutlierGroupValueMatrix.outlierDataFilename)"
         let positiveOutlierDataCSVFilename = "\(dirname)/positive_data.csv"
         let negativeOutlierDataCSVFilename = "\(dirname)/negative_data.csv"
-        
-        if fileManager.fileExists(atPath: paintDataJsonFilename) {
-            let paintReasonMap: [UInt16:PaintReason] =
-              try await read(fromJsonFilename: paintDataJsonFilename)
-            if fileManager.fileExists(atPath: outlierDataCSVFilename) {
 
-                let allCSVData = try await readCSV(from: outlierDataCSVFilename)
+        try await withLimitedThrowingTaskGroup(of: Void.self) { group in
+            
+            if fileManager.fileExists(atPath: paintDataJsonFilename) {
+                let paintReasonMap: [UInt16:PaintReason] =
+                  try await read(fromJsonFilename: paintDataJsonFilename)
+                if fileManager.fileExists(atPath: outlierDataCSVFilename) {
 
-                var positiveRows: [[Double]] = []
-                var negativeRows: [[Double]] = []
-                
-                for csvRow in allCSVData {
-                    // here we need to get the outlier id from the first double in the row
-                    if let outlierIdDouble = csvRow.first {
-                        let outlierFeatureData = Array(csvRow.dropFirst())
-                        let outlierId = UInt16(outlierIdDouble)
-                        if let paintReason = paintReasonMap[outlierId] {
-                            if paintReason.willPaint {
-                                positiveRows.append(outlierFeatureData)
-                            } else {
-                                negativeRows.append(outlierFeatureData)
+                    try await group.addTask() {
+                        
+                        let allCSVData = try await readCSV(from: outlierDataCSVFilename)
+
+                        var positiveRows: [[Double]] = []
+                        var negativeRows: [[Double]] = []
+                        
+                        for csvRow in allCSVData {
+                            // here we need to get the outlier id from the first double in the row
+                            if let outlierIdDouble = csvRow.first {
+                                let outlierFeatureData = Array(csvRow.dropFirst())
+                                let outlierId = UInt16(outlierIdDouble)
+                                if let paintReason = paintReasonMap[outlierId] {
+                                    if paintReason.willPaint {
+                                        positiveRows.append(outlierFeatureData)
+                                    } else {
+                                        negativeRows.append(outlierFeatureData)
+                                    }
+                                } else {
+                                    // XXX gets ignored with no paint reason
+                                }
                             }
-                        } else {
-                            // XXX gets ignored with no paint reason
                         }
-                    }
-                }
 
-                try writeCSV(positiveRows, to: positiveOutlierDataCSVFilename)
-                try writeCSV(negativeRows, to: negativeOutlierDataCSVFilename)
+                        try writeCSV(positiveRows, to: positiveOutlierDataCSVFilename)
+                        try writeCSV(negativeRows, to: negativeOutlierDataCSVFilename)
+                    }
+                } else {
+                    print("cannot proceed: no file exists at \(outlierDataCSVFilename)")
+                }
             } else {
-                print("cannot proceed: no file exists at \(outlierDataCSVFilename)")
+                print("cannot proceed: no file exists at \(paintDataJsonFilename)")
             }
-        } else {
-            print("cannot proceed: no file exists at \(paintDataJsonFilename)")
+            try await group.waitForAll()
         }
     }
 
