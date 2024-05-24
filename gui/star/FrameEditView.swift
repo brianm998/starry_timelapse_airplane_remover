@@ -130,7 +130,6 @@ struct FrameEditView: View {
           .onEnded { gesture in
               isDragging = false
               let end_location = gesture.location
-              var clearEnds = true
               if let drag_start = viewModel.drag_start {
                   Log.v("end location \(end_location) drag start \(drag_start)")
                   
@@ -147,7 +146,7 @@ struct FrameEditView: View {
                       let _ = Log.d("DELETE")
                       deleteOutliers(frame: frameView,
                                      between: drag_start,
-                                     and: end_location)
+                                     and: end_location) 
 
                   case .details:
                       let _ = Log.d("DETAILS")
@@ -173,6 +172,9 @@ struct FrameEditView: View {
                                   if self.viewModel.shouldShowOutlierGroupTableWindow() {
                                       openWindow(id: "foobar") 
                                   }
+
+                                  viewModel.drag_start = nil
+                                  viewModel.drag_end = nil
                               }
                           }
                       } 
@@ -181,12 +183,7 @@ struct FrameEditView: View {
                       self.viewModel.multiSelectSheetShowing = true
                       //self.viewModel.drag_start = $viewModel.drag_start
                       self.viewModel.drag_end = end_location
-                      clearEnds = false
                   }
-              }
-              if clearEnds {
-                  viewModel.drag_start = nil
-                  viewModel.drag_end = nil
               }
           }
     }
@@ -196,12 +193,18 @@ struct FrameEditView: View {
                                 between drag_start: CGPoint,
                                 and end_location: CGPoint)
     {
+        // update the view on the main thread
         let gestureBounds = frameView.deleteOutliers(between: drag_start, and: end_location)
         frameView.update()
         if let frame = frameView.frame {
             Task.detached(priority: .userInitiated) {
+                // update the frame in the background
                 try frame.deleteOutliers(in: gestureBounds) // XXX errors not handled
-                await MainActor.run { viewModel.update() }
+                await MainActor.run {
+                    viewModel.drag_start = nil
+                    viewModel.drag_end = nil
+                    viewModel.update()
+                }
             }
         }
     }
@@ -214,6 +217,11 @@ struct FrameEditView: View {
         frameView.userSelectAllOutliers(toShouldPaint: shouldPaint,
                                         between: drag_start,
                                         and: end_location)
+        {
+            viewModel.drag_start = nil
+            viewModel.drag_end = nil
+        }
+
         //update the view layer
         frameView.update()
         if let frame = frameView.frame {

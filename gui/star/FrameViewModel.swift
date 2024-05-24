@@ -90,6 +90,9 @@ public class FrameViewModel: ObservableObject {
 
     public func update() {
         self.objectWillChange.send()
+    }
+    
+    public func updateAllOutlierViews() {
         if let views = self.outlierViews {
             for view in views { view.objectWillChange.send() }
         }
@@ -124,18 +127,36 @@ public class FrameViewModel: ObservableObject {
     // to wait for the longer running background process to update the view
     public func userSelectAllOutliers(toShouldPaint shouldPaint: Bool,
                                       between startLocation: CGPoint,
-                                      and endLocation: CGPoint) 
+                                      and endLocation: CGPoint,
+                                      closure: @escaping () -> Void) 
     {
-        let gestureBounds = boundsFromGesture(between: startLocation, and: endLocation)
-        
-        outlierViews?.forEach() { group in
-            if gestureBounds.contains(other: group.bounds) {
-                // check to make sure this outlier's bounding box is fully contained
-                // otherwise don't change paint status
+        Task.detached(priority: .userInitiated) {
 
-                group.group.shouldPaint = .userSelected(shouldPaint)
-            }
+            var mutableGroupsToUpdate: [OutlierGroupViewModel] = []
             
+            let gestureBounds = self.boundsFromGesture(between: startLocation, and: endLocation)
+            
+            self.outlierViews?.forEach() { group in
+                if gestureBounds.contains(other: group.bounds) {
+                    // check to make sure this outlier's bounding box is fully contained
+                    // otherwise don't change paint status
+
+
+                    mutableGroupsToUpdate.append(group)
+                    
+                }
+                
+            }
+
+            let groupsToUpdate =  mutableGroupsToUpdate
+            
+            await MainActor.run {
+                for group in groupsToUpdate {
+                    group.group.shouldPaint = .userSelected(shouldPaint)
+                    group.objectWillChange.send()
+                }
+                closure()
+            }
         }
     }
 

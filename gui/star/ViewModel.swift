@@ -650,7 +650,7 @@ public final class ViewModel: ObservableObject {
 // methods used in image sequence view
 public extension ViewModel {
     func setAllCurrentFrameOutliers(to shouldPaint: Bool,
-                                renderImmediately: Bool = true)
+                                    renderImmediately: Bool = true)
     {
         let currentFrameView = self.currentFrameView
         setAllFrameOutliers(in: currentFrameView,
@@ -659,8 +659,8 @@ public extension ViewModel {
     }
     
     func setAllFrameOutliers(in frameView: FrameViewModel,
-                          to shouldPaint: Bool,
-                          renderImmediately: Bool = true)
+                             to shouldPaint: Bool,
+                             renderImmediately: Bool = true)
     {
         Log.d("setAllFrameOutliers in frame \(frameView.frameIndex) to should paint \(shouldPaint)")
         let reason = PaintReason.userSelected(shouldPaint)
@@ -670,6 +670,11 @@ public extension ViewModel {
             outlierViews.forEach { outlierView in
                 outlierView.group.shouldPaint = reason
             }
+        }
+
+        if frameView.frameIndex == self.currentIndex {
+            self.refreshCurrentFrame() 
+            frameView.updateAllOutlierViews()
         }
 
         if let frame = frameView.frame {
@@ -682,17 +687,8 @@ public extension ViewModel {
                     await render(frame: frame) {
                         Task {
                             await self.refresh(frame: frame)
-                            if frame.frameIndex == self.currentIndex {
-                                self.refreshCurrentFrame() // XXX not always current
-                            }
-                            self.update()
                         }
                     }
-                } else {
-                    if frame.frameIndex == self.currentIndex {
-                        self.refreshCurrentFrame() // XXX not always current
-                    }
-                    self.update()
                 }
             }
         } else {

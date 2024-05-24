@@ -33,17 +33,7 @@ struct MultiSelectSheetView: View {
     @Binding var drag_start: CGPoint?
     @Binding var drag_end: CGPoint?
     @Binding var number_of_frames: Int
-    var shouldPaint: Bool {
-        switch multiSelectionPaintType {
-        case .paint:
-            return true
-        case .clear:
-            return false
-        case .delete:
-            return false
-        }
-    }
-    
+
     var body: some View {
         VStack {
             Spacer()
@@ -195,7 +185,6 @@ struct MultiSelectSheetView: View {
                                 self.updateFrames(shouldPaint: true,
                                                   startIndex: currentIndex - number_of_frames,
                                                   endIndex: currentIndex)
-
                             case .clear:
                                 self.updateFrames(shouldPaint: false,
                                                   startIndex: currentIndex - number_of_frames,
@@ -219,60 +208,77 @@ struct MultiSelectSheetView: View {
     }
 
     private func deleteFromFrames(startIndex: Int = 0, endIndex: Int? = nil) {
-        Log.w("updateFrames(shouldPaint: \(shouldPaint), startIndex: \(startIndex), endIndex: \(endIndex)")
-        let end = endIndex ?? frames.count
-        if let drag_start = drag_start,
-           let drag_end = drag_end
-        {
-            for frame in frames {
-                if frame.frameIndex >= startIndex,
-                   frame.frameIndex <= end
-                {
-                    deleteFrom(frame: frame,
-                               between: drag_start,
-                               and: drag_end)
+        Task.detached(priority: .userInitiated) {
+            Log.w("deleteFromFrames(startIndex: \(startIndex), endIndex: \(endIndex)")
+            let end = endIndex ?? frames.count
+            if let drag_start = drag_start,
+               let drag_end = drag_end
+            {
+                for frame in frames {
+                    if frame.frameIndex >= startIndex,
+                       frame.frameIndex <= end
+                    {
+                        deleteFrom(frame: frame,
+                                   between: drag_start,
+                                   and: drag_end) {
+                            if currentIndex == frame.frameIndex {
+                                self.drag_start = nil
+                                self.drag_end = nil
+                            }
+                        }
+                    }
                 }
             }
         }
-        drag_start = nil
-        drag_end = nil
     }
 
     private func updateFrames(shouldPaint: Bool,
                               startIndex: Int = 0,
                               endIndex: Int? = nil)
     {
-        Log.w("updateFrames(shouldPaint: \(shouldPaint), startIndex: \(startIndex), endIndex: \(endIndex)")
-        let end = endIndex ?? frames.count
-        if let drag_start = drag_start,
-           let drag_end = drag_end
-        {
-            for frame in frames {
-                if frame.frameIndex >= startIndex,
-                   frame.frameIndex <= end
-                {
-                    update(frame: frame,
-                           shouldPaint: shouldPaint,
-                           between: drag_start,
-                           and: drag_end)
+        Task.detached(priority: .userInitiated) {
+            Log.w("updateFrames(shouldPaint: \(shouldPaint), startIndex: \(startIndex), endIndex: \(endIndex)")
+            let end = endIndex ?? frames.count
+            if let drag_start = drag_start,
+               let drag_end = drag_end
+            {
+                for frame in frames {
+                    if frame.frameIndex >= startIndex,
+                       frame.frameIndex <= end
+                    {
+                        update(frame: frame,
+                               shouldPaint: shouldPaint,
+                               between: drag_start,
+                               and: drag_end)
+                        {
+                            if currentIndex == frame.frameIndex {
+                                self.drag_start = nil
+                                self.drag_end = nil
+                            }
+                        }
+                    }
                 }
             }
         }
-        drag_start = nil        // XXX doesn't clear in view model
-        drag_end = nil
     }
     
     private func deleteFrom(frame frameView: FrameViewModel,
                             between drag_start: CGPoint,
-                            and end_location: CGPoint)
+                            and end_location: CGPoint,
+                            closure: @escaping () -> Void)
     {
-        let gestureBounds = frameView.deleteOutliers(between: drag_start, and: end_location)
-        frameView.update()
-
-        if let frame = frameView.frame {
+        Task<Void,Never> { @MainActor in
+            let gestureBounds = frameView.deleteOutliers(between: drag_start, and: end_location)
             Task.detached(priority: .userInitiated) {
-                try frame.deleteOutliers(in: gestureBounds) // XXX errors not handled
-                //await MainActor.run { viewModel.update() }
+
+                if let frame = frameView.frame {
+                    do {
+                        try frame.deleteOutliers(in: gestureBounds)
+                    } catch {
+                        // XXX handle errors here better
+                        Log.e("failed to delete outliers: \(error)")
+                    }
+                }
             }
         }
     }
@@ -280,20 +286,21 @@ struct MultiSelectSheetView: View {
     private func update(frame frameView: FrameViewModel,
                         shouldPaint: Bool,
                         between drag_start: CGPoint,
-                        and end_location: CGPoint)
+                        and end_location: CGPoint,
+                        closure: @escaping () -> Void)
     {
-        frameView.userSelectAllOutliers(toShouldPaint: shouldPaint,
-                                        between: drag_start,
-                                        and: end_location)
-        //update the view layer
-        frameView.update()
+        Task<Void,Never> { @MainActor in
+            frameView.userSelectAllOutliers(toShouldPaint: shouldPaint,
+                                            between: drag_start,
+                                            and: end_location,
+                                            closure: closure) 
+        }
         if let frame = frameView.frame {
             let new_value = shouldPaint
             Task.detached(priority: .userInitiated) {
                 await frame.userSelectAllOutliers(toShouldPaint: new_value,
                                                   between: drag_start,
                                                   and: end_location)
-                //await MainActor.run { viewModel.update() }
             }
         }
     }
