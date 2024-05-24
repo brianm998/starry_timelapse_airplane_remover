@@ -70,13 +70,9 @@ public class BlobImageSaver {
         // save the blob refs as an image here
         let filename = "\(dirname)/\(BlobImageSaver.outlierTiffFilename)"
         do {
-            Log.d("frame \(frameIndex) saving image to \(filename)")
             let blobImage = PixelatedImage(width: width, height: height,
                                            grayscale16BitImageData: blobRefs)
             try blobImage.writeTIFFEncoding(toFilename: filename)
-            Log.d("frame \(frameIndex) done saving image to \(filename)")
-            
-            Log.d("frame \(frameIndex) REALLY done saving image to \(filename)")
 
             let yAxisFilename = "\(dirname)/\(BlobImageSaver.outlierYAxisBinaryFilename)"
             if fileManager.fileExists(atPath: yAxisFilename) {
