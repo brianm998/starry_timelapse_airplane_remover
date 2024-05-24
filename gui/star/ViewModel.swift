@@ -286,68 +286,70 @@ public final class ViewModel: ObservableObject {
         // load the view frames from the main image
         
         // look for saved versions of these
-        if let image = await frame.imageAccessor.loadNSImage(type: .validated, atSize: .preview) {
-            Log.d("loaded validation preview for self.frames[\(frame.frameIndex)] from jpeg")
-            let viewImage = Image(nsImage: image).resizable()
-            self.frames[frame.frameIndex].validationPreviewImage = viewImage  // died here index out of range
-        }
-        
-        if let image = await frame.imageAccessor.loadNSImage(type: .subtracted, atSize: .preview) {
-            Log.d("loaded subtraction preview for self.frames[\(frame.frameIndex)] from jpeg")
-            let viewImage = Image(nsImage: image).resizable()
-            self.frames[frame.frameIndex].subtractionPreviewImage = viewImage
-        }
 
-        if let image = await frame.imageAccessor.loadNSImage(type: .blobs, atSize: .preview) {
-            Log.d("loaded blobs preview for self.frames[\(frame.frameIndex)] from jpeg")
-            let viewImage = Image(nsImage: image).resizable()
-            self.frames[frame.frameIndex].blobsPreviewImage = viewImage
-        }
-
-        if let image = await frame.imageAccessor.loadNSImage(type: .absorbed, atSize: .preview) {
-            Log.d("loaded absorbed blobs preview for self.frames[\(frame.frameIndex)] from jpeg")
-            let viewImage = Image(nsImage: image).resizable()
-            self.frames[frame.frameIndex].absorbedPreviewImage = viewImage
-        }
-
-        if let image = await frame.imageAccessor.loadNSImage(type: .rectified, atSize: .preview) {
-            Log.d("loaded rectified blobs preview for self.frames[\(frame.frameIndex)] from jpeg")
-            let viewImage = Image(nsImage: image).resizable()
-            self.frames[frame.frameIndex].rectifiedPreviewImage = viewImage
-        }
-
-        if let image = await frame.imageAccessor.loadNSImage(type: .paintMask, atSize: .preview) {
-            Log.d("loaded paint mask preview for self.frames[\(frame.frameIndex)] from jpeg")
-            let viewImage = Image(nsImage: image).resizable()
-            self.frames[frame.frameIndex].paintMaskPreviewImage = viewImage
-        }
-
-        if let image = await frame.imageAccessor.loadNSImage(type: .processed, atSize: .preview) {
-            
-            Log.d("loaded processed preview for self.frames[\(frame.frameIndex)] from jpeg")
-            let viewImage = Image(nsImage: image).resizable()
-            self.frames[frame.frameIndex].processedPreviewImage = viewImage
-        }
-        
-        if let image = await frame.imageAccessor.loadNSImage(type: .original, atSize: .preview) {
-            Log.d("loaded preview for self.frames[\(frame.frameIndex)] from jpeg")
-            let viewImage = Image(nsImage: image).resizable()
-            self.frames[frame.frameIndex].previewImage = viewImage
-        } 
-        
-        if let image = await frame.imageAccessor.loadNSImage(type: .original, atSize: .thumbnail) {
-            Log.d("loaded thumbnail for self.frames[\(frame.frameIndex)] from jpeg")
-            self.frames[frame.frameIndex].thumbnailImage = Image(nsImage: image)
-        }
+        var outlierTask: Task<Void,Never>?
 
         if self.frames[frame.frameIndex].outlierViews == nil {
-            await self.setOutlierGroups(forFrame: frame)
-
-            // refresh ui 
-            await MainActor.run {
-                self.objectWillChange.send()
-
+            outlierTask = Task {
+                await self.setOutlierGroups(forFrame: frame)
             }
+        }
+        
+        let acc = frame.imageAccessor
+
+        let vpTask = Task { acc.loadImage(type: .validated,  atSize: .preview) }
+        let spTask = Task { acc.loadImage(type: .subtracted, atSize: .preview) }
+        let bpTask = Task { acc.loadImage(type: .blobs,      atSize: .preview) }
+        let apTask = Task { acc.loadImage(type: .absorbed,   atSize: .preview) }
+        let rpTask = Task { acc.loadImage(type: .rectified,  atSize: .preview) }
+        let ppTask = Task { acc.loadImage(type: .paintMask,  atSize: .preview) }
+        let prTask = Task { acc.loadImage(type: .processed,  atSize: .preview) }
+        let opTask = Task { acc.loadImage(type: .original,   atSize: .preview) }
+        let otTask = Task { acc.loadImage(type: .original,   atSize: .thumbnail) }
+
+        if let image = await vpTask.value {
+            self.frames[frame.frameIndex].validationPreviewImage = image.resizable()
+        }
+
+        if let image = await spTask.value {
+            self.frames[frame.frameIndex].subtractionPreviewImage = image.resizable()
+        }
+
+        if let image = await bpTask.value {
+            self.frames[frame.frameIndex].blobsPreviewImage = image.resizable()
+        }
+
+        if let image = await apTask.value {
+            self.frames[frame.frameIndex].absorbedPreviewImage = image.resizable()
+        }
+
+        if let image = await rpTask.value {
+            self.frames[frame.frameIndex].rectifiedPreviewImage = image.resizable()
+        }
+
+        if let image = await ppTask.value {
+            self.frames[frame.frameIndex].paintMaskPreviewImage = image.resizable()
+        }
+
+        if let image = await prTask.value {
+            self.frames[frame.frameIndex].processedPreviewImage = image.resizable()
+        }
+        
+        if let image = await opTask.value {
+            self.frames[frame.frameIndex].previewImage = image.resizable()
+        } 
+        
+        if let image = await otTask.value {
+            self.frames[frame.frameIndex].thumbnailImage = image
+        }
+
+        if let outlierTask {
+            await outlierTask.value
+        }
+
+        // refresh ui 
+        await MainActor.run {
+            self.objectWillChange.send()
         }
     }
 
@@ -626,11 +628,11 @@ public final class ViewModel: ObservableObject {
             // XXX not getting preview here
 
 
-            if let baseImage = await newFrame.imageAccessor.loadNSImage(type: .original, atSize: .original) {
+            if let baseImage = await newFrame.imageAccessor.loadImage(type: .original, atSize: .original) {
                 if self.currentIndex == newFrame.frameIndex {
                     _ = await MainActor.run {
                         Task {
-                            self.currentFrameImage = Image(nsImage: baseImage)
+                            self.currentFrameImage = baseImage
                             self.update()
                         }
                     }
@@ -815,68 +817,68 @@ public extension ViewModel {
                         
                         switch self.frameViewMode {
                         case .original:
-                            if let baseImage = await nextFrame.imageAccessor.loadNSImage(type: .original, atSize: .original) {
+                            if let baseImage = await nextFrame.imageAccessor.loadImage(type: .original, atSize: .original) {
                                 if nextFrame.frameIndex == self.currentIndex {
                                     await MainActor.run {
-                                        self.currentFrameImage = Image(nsImage: baseImage)
+                                        self.currentFrameImage = baseImage
                                     }
                                 }
                             }
                         case .subtraction:
-                            if let baseImage = await nextFrame.imageAccessor.loadNSImage(type: .subtracted, atSize: .original) {
+                            if let baseImage = await nextFrame.imageAccessor.loadImage(type: .subtracted, atSize: .original) {
                                 if nextFrame.frameIndex == self.currentIndex {
                                     await MainActor.run {
-                                        self.currentFrameImage = Image(nsImage: baseImage)
+                                        self.currentFrameImage = baseImage
                                     }
                                 }
                             }
                         case .blobs:
-                            if let baseImage = await nextFrame.imageAccessor.loadNSImage(type: .blobs, atSize: .original) {
+                            if let baseImage = await nextFrame.imageAccessor.loadImage(type: .blobs, atSize: .original) {
                                 if nextFrame.frameIndex == self.currentIndex {
                                     await MainActor.run {
-                                        self.currentFrameImage = Image(nsImage: baseImage)
+                                        self.currentFrameImage = baseImage
                                     }
                                 }
                             }
                         case .absorbedBlobs:
-                            if let baseImage = await nextFrame.imageAccessor.loadNSImage(type: .absorbed, atSize: .original) {
+                            if let baseImage = await nextFrame.imageAccessor.loadImage(type: .absorbed, atSize: .original) {
                                 if nextFrame.frameIndex == self.currentIndex {
                                     await MainActor.run {
-                                        self.currentFrameImage = Image(nsImage: baseImage)
+                                        self.currentFrameImage = baseImage
                                     }
                                 }
                             }
                         case .rectifiedBlobs:
-                            if let baseImage = await nextFrame.imageAccessor.loadNSImage(type: .rectified, atSize: .original) {
+                            if let baseImage = await nextFrame.imageAccessor.loadImage(type: .rectified, atSize: .original) {
                                 if nextFrame.frameIndex == self.currentIndex {
                                     await MainActor.run {
-                                        self.currentFrameImage = Image(nsImage: baseImage)
+                                        self.currentFrameImage = baseImage
                                     }
                                 }
                             }
                         case .paintMask:
-                            if let baseImage = await nextFrame.imageAccessor.loadNSImage(type: .paintMask, atSize: .original) {
+                            if let baseImage = await nextFrame.imageAccessor.loadImage(type: .paintMask, atSize: .original) {
                                 if nextFrame.frameIndex == self.currentIndex {
                                     await MainActor.run {
-                                        self.currentFrameImage = Image(nsImage: baseImage)
+                                        self.currentFrameImage = baseImage
                                     }
                                 }
                             }
 
                         case .validation:
-                            if let baseImage = await nextFrame.imageAccessor.loadNSImage(type: .validated, atSize: .original) {
+                            if let baseImage = await nextFrame.imageAccessor.loadImage(type: .validated, atSize: .original) {
                                 if nextFrame.frameIndex == self.currentIndex {
                                     await MainActor.run {
-                                        self.currentFrameImage = Image(nsImage: baseImage)
+                                        self.currentFrameImage = baseImage
                                     }
                                 }
                             }
                             
                         case .processed:
-                            if let baseImage = await nextFrame.imageAccessor.loadNSImage(type: .processed, atSize: .original) {
+                            if let baseImage = await nextFrame.imageAccessor.loadImage(type: .processed, atSize: .original) {
                                 if nextFrame.frameIndex == self.currentIndex {
                                     await MainActor.run {
-                                        self.currentFrameImage = Image(nsImage: baseImage)
+                                        self.currentFrameImage = baseImage
                                     }
                                 }
                             }
