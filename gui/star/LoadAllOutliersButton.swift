@@ -7,8 +7,6 @@ enum OutlierLodingType {
     case fromCurrentFrame
 }
 
-fileprivate let taskMaster = TaskMaster(maxConcurrentTasks: 2) // XXX guess
-
 struct LoadAllOutliersButton: View {
     @EnvironmentObject var viewModel: ViewModel
     let loadingType: OutlierLodingType
@@ -18,8 +16,7 @@ struct LoadAllOutliersButton: View {
             Task {
                 do {
                     let startTime = Date().timeIntervalSinceReferenceDate
-                    Log.d("starting load with task mster \(taskMaster)")
-                    try await withLimitedThrowingTaskGroup(of: Void.self, with: taskMaster) { taskGroup in
+                    try await withLimitedThrowingTaskGroup(of: Void.self) { taskGroup in
                         let max_concurrent = ProcessInfo.processInfo.activeProcessorCount
                         // this gets "Too many open files" with more than 2000 images :(
                         viewModel.loadingAllOutliers = true
