@@ -280,80 +280,71 @@ public final class ViewModel: ObservableObject {
         self.objectWillChange.send()
     }
 
-    func refresh(frame: FrameAirplaneRemover) async {
-        Log.d("refreshing frame \(frame.frameIndex)")
-        
-        // load the view frames from the main image
-        
-        // look for saved versions of these
+    func refresh(frame: FrameAirplaneRemover) {
+        Task {
+            Log.d("refreshing frame \(frame.frameIndex)")
+            
+            // load the view frames from the main image
+            
+            // look for saved versions of these
 
-        var outlierTask: Task<Void,Never>?
+            var outlierTask: Task<Void,Never>?
 
-        if self.frames[frame.frameIndex].outlierViews == nil {
-            outlierTask = Task {
-                await self.setOutlierGroups(forFrame: frame)
+            if self.frames[frame.frameIndex].outlierViews == nil {
+                outlierTask = Task { await self.setOutlierGroups(forFrame: frame) }
             }
-        }
-        
-        let acc = frame.imageAccessor
+            
+            let acc = frame.imageAccessor
 
-        let vpTask = Task { acc.loadImage(type: .validated,  atSize: .preview) }
-        let spTask = Task { acc.loadImage(type: .subtracted, atSize: .preview) }
-        let bpTask = Task { acc.loadImage(type: .blobs,      atSize: .preview) }
-        let apTask = Task { acc.loadImage(type: .absorbed,   atSize: .preview) }
-        let rpTask = Task { acc.loadImage(type: .rectified,  atSize: .preview) }
-        let ppTask = Task { acc.loadImage(type: .paintMask,  atSize: .preview) }
-        let prTask = Task { acc.loadImage(type: .processed,  atSize: .preview) }
-        let opTask = Task { acc.loadImage(type: .original,   atSize: .preview) }
-        let otTask = Task { acc.loadImage(type: .original,   atSize: .thumbnail) }
+            let vpTask = Task { acc.loadImage(type: .validated,  atSize: .preview)?.resizable() }
+            let spTask = Task { acc.loadImage(type: .subtracted, atSize: .preview)?.resizable() }
+            let bpTask = Task { acc.loadImage(type: .blobs,      atSize: .preview)?.resizable() }
+            let apTask = Task { acc.loadImage(type: .absorbed,   atSize: .preview)?.resizable() }
+            let rpTask = Task { acc.loadImage(type: .rectified,  atSize: .preview)?.resizable() }
+            let ppTask = Task { acc.loadImage(type: .paintMask,  atSize: .preview)?.resizable() }
+            let prTask = Task { acc.loadImage(type: .processed,  atSize: .preview)?.resizable() }
+            let opTask = Task { acc.loadImage(type: .original,   atSize: .preview)?.resizable() }
+            let otTask = Task { acc.loadImage(type: .original,   atSize: .thumbnail) }
 
-        if let image = await vpTask.value {
-            self.frames[frame.frameIndex].validationPreviewImage = image.resizable()
-        }
+            if let image = await vpTask.value {
+                self.frames[frame.frameIndex].validationPreviewImage = image
+            }
+            if let image = await spTask.value  {
+                self.frames[frame.frameIndex].subtractionPreviewImage = image
+            }
+            if let image = await bpTask.value {
+                self.frames[frame.frameIndex].blobsPreviewImage = image
+            }
+            if let image = await apTask.value {
+                self.frames[frame.frameIndex].absorbedPreviewImage = image
+            }
+            if let image = await rpTask.value {
+                self.frames[frame.frameIndex].rectifiedPreviewImage = image
+            }
+            if let image = await ppTask.value {
+                self.frames[frame.frameIndex].paintMaskPreviewImage = image
+            }
+            if let image = await prTask.value {
+                self.frames[frame.frameIndex].processedPreviewImage = image
+            }
+            if let image = await opTask.value {
+                self.frames[frame.frameIndex].previewImage = image
+            }
+            if let image = await otTask.value {
+                self.frames[frame.frameIndex].thumbnailImage = image
+            }
 
-        if let image = await spTask.value {
-            self.frames[frame.frameIndex].subtractionPreviewImage = image.resizable()
-        }
+            if let outlierTask { await outlierTask.value }
 
-        if let image = await bpTask.value {
-            self.frames[frame.frameIndex].blobsPreviewImage = image.resizable()
-        }
+            if self.currentIndex == frame.frameIndex {
 
-        if let image = await apTask.value {
-            self.frames[frame.frameIndex].absorbedPreviewImage = image.resizable()
-        }
-
-        if let image = await rpTask.value {
-            self.frames[frame.frameIndex].rectifiedPreviewImage = image.resizable()
-        }
-
-        if let image = await ppTask.value {
-            self.frames[frame.frameIndex].paintMaskPreviewImage = image.resizable()
-        }
-
-        if let image = await prTask.value {
-            self.frames[frame.frameIndex].processedPreviewImage = image.resizable()
-        }
-        
-        if let image = await opTask.value {
-            self.frames[frame.frameIndex].previewImage = image.resizable()
-        } 
-        
-        if let image = await otTask.value {
-            self.frames[frame.frameIndex].thumbnailImage = image
-        }
-
-        if let outlierTask {
-            await outlierTask.value
-        }
-
-        // refresh ui 
-        await MainActor.run {
-            self.objectWillChange.send()
+                // refresh ui 
+                await MainActor.run { self.refreshCurrentFrame() }
+            }
         }
     }
 
-    func append(frame: FrameAirplaneRemover) async {
+    func append(frame: FrameAirplaneRemover) {
         Log.d("appending frame \(frame.frameIndex)")
 
         guard frame.frameIndex >= 0,
@@ -376,14 +367,14 @@ public final class ViewModel: ObservableObject {
             }
             if haveAll {
                 Log.d("WE HAVE THEM ALL")
-                await MainActor.run {
+//                await MainActor.run {
                     self.initialLoadInProgress = false
-                }
+//                }
             }
         }
         Log.d("set self.frames[\(frame.frameIndex)].frame")
 
-        await refresh(frame: frame)
+        refresh(frame: frame)
     }
 
     func setOutlierGroups(forFrame frame: FrameAirplaneRemover) async {
@@ -589,17 +580,13 @@ public final class ViewModel: ObservableObject {
         callbacks.frameCheckClosure = { newFrame in
             Log.d("frameCheckClosure for frame \(newFrame.frameIndex)")
 
-            // XXX we may need to introduce some kind of queue here to avoid hitting
-            // too many open files on larger sequences :(
-            Task {
-                await self.addToViewModel(frame: newFrame)
-            }
+            self.addToViewModel(frame: newFrame)
         }
         
         return callbacks
     }
 
-    @MainActor func addToViewModel(frame newFrame: FrameAirplaneRemover) async {
+    @MainActor func addToViewModel(frame newFrame: FrameAirplaneRemover) {
         Log.d("addToViewModel(frame: \(newFrame.frameIndex))")
 
         if self.config == nil {
@@ -609,43 +596,17 @@ public final class ViewModel: ObservableObject {
             Log.e("FUCK, config is nil")
         }
         if self.frameWidth != CGFloat(newFrame.width) ||
-           self.frameHeight != CGFloat(newFrame.height)
+             self.frameHeight != CGFloat(newFrame.height)
         {
             // grab frame size from first frame
             self.frameWidth = CGFloat(newFrame.width)
             self.frameHeight = CGFloat(newFrame.height)
         }
-        await self.append(frame: newFrame)
-
-       // Log.d("addToViewModel self.frame \(self.frame)")
-
-        // is this the currently selected frame?
-        if self.currentIndex == newFrame.frameIndex {
-            self.labelText = "frame \(newFrame.frameIndex)"
-
-            Log.i("got frame index \(newFrame.frameIndex)")
-
-            // XXX not getting preview here
-
-
-            if let baseImage = await newFrame.imageAccessor.loadImage(type: .original, atSize: .original) {
-                if self.currentIndex == newFrame.frameIndex {
-                    _ = await MainActor.run {
-                        Task {
-                            self.currentFrameImage = baseImage
-                            self.update()
-                        }
-                    }
-                }
-            }
-
-            // Perform UI updates
-            self.update()
-        } else {
-            await MainActor.run {
-                self.objectWillChange.send()
-            }
-        }
+        self.append(frame: newFrame)
+        
+        // Log.d("addToViewModel self.frame \(self.frame)")
+        
+        refresh(frame: newFrame)
     }
 }
 
@@ -687,9 +648,7 @@ public extension ViewModel {
                 if renderImmediately {
                     // XXX make render here an option in settings
                     await render(frame: frame) {
-                        Task {
-                            await self.refresh(frame: frame)
-                        }
+                        self.refresh(frame: frame)
                     }
                 }
             }
@@ -703,7 +662,7 @@ public extension ViewModel {
         {
             self.renderingCurrentFrame = true // XXX might not be right anymore
             frameSaveQueue.saveNow(frame: frame) {
-                await self.refresh(frame: frame)
+                self.refresh(frame: frame)
                 self.refreshCurrentFrame()
                 self.renderingCurrentFrame = false
                 closure?()
@@ -711,12 +670,13 @@ public extension ViewModel {
         }
     }
 
+    // next frame point
     func transition(toFrame newFrameView: FrameViewModel,
                     from oldFrame: FrameAirplaneRemover?,
                     withScroll scroller: ScrollViewProxy? = nil)
     {
         if inTransition { return }
-        inTransition = true
+//        inTransition = true
         Log.d("transition from \(String(describing: self.currentFrame))")
         let startTime = Date().timeIntervalSinceReferenceDate
 
@@ -729,38 +689,33 @@ public extension ViewModel {
         self.currentIndex = newFrameView.frameIndex
         self.sliderValue = Double(self.currentIndex)
         
-        if interactionMode == .edit,
-           let scroller = scroller
-        {
-            scroller.scrollTo(self.currentIndex, anchor: .center)
+        if interactionMode == .edit {
+            if let scroller {
+                scroller.scrollTo(self.currentIndex, anchor: .center)
+            }
 
             //self.labelText = "frame \(newFrameView.frameIndex)"
 
             // only save frame when we are also scrolling (i.e. not scrubbing)
             if let frameToSave = oldFrame {
-                Task {
-                    let frameChanged = frameToSave.hasChanges()
+                let frameChanged = frameToSave.hasChanges()
 
-                    // only save changes to frames that have been changed
-                    if frameChanged {
+                // only save changes to frames that have been changed
+                if frameChanged {
+                    Task {
                         self.saveToFile(frame: frameToSave) {
                             Log.d("completion closure called for frame \(frameToSave.frameIndex)")
-                            Task {
-                                await self.refresh(frame: frameToSave)
-                                self.update()
-                            }
+                            self.refresh(frame: frameToSave)
+                            //self.update()
                         }
                     }
                 }
             } else {
-                Log.w("no old frame to save")
+                Log.w("no old frame with changes to save")
             }
-        } else {
-            Log.d("no scroller")
         }
         
         refreshCurrentFrame()
-        
 
         let endTime = Date().timeIntervalSinceReferenceDate
         Log.d("transition to frame \(newFrameView.frameIndex) took \(endTime - startTime) seconds")
@@ -917,11 +872,13 @@ public extension ViewModel {
             }
         } else {
             Log.d("WTF for frame \(self.currentIndex)")
-            self.update()
+            Task { @MainActor in
+                self.update()
+            }
         }
     }
 
-
+    // next frame entry point
     func transition(numberOfFrames: Int,
                     withScroll scroller: ScrollViewProxy? = nil)
     {

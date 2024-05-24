@@ -197,7 +197,7 @@ public class Callbacks {
 
     public var frameStateChangeCallback: ((FrameAirplaneRemover, FrameProcessingState) -> ())?
     // called for the user to see a frame
-    public var frameCheckClosure: ((FrameAirplaneRemover) async -> ())?
+    public var frameCheckClosure: ((FrameAirplaneRemover) -> ())?
 
     // returns the total full size of the image sequence
     public var imageSequenceSizeClosure: ((Int) -> Void)?

@@ -31,7 +31,7 @@ public actor FinalProcessor {
     let imageSequence: ImageSequence
 
     let config: Config
-    let callbacks: Callbacks
+    let callbacks: Callbacks 
     let shouldProcess: [Bool]
 
     private let semaphore = AsyncSemaphore(value: 0)
@@ -156,16 +156,19 @@ public actor FinalProcessor {
     nonisolated func finish(frame: FrameAirplaneRemover) async throws {
         // here is where the gui and cli paths diverge
         // if we have a frame check closure, we allow the user to check the frame here
-        // but only if there are some outliers to check, otherwise just finish it.
 
         Log.d("finish frame \(frame.frameIndex)")
         
         if let frameCheckClosure = callbacks.frameCheckClosure
         {
             // gui
-            Log.d("calling frameCheckClosure for frame \(frame.frameIndex)")
-            await frameCheckClosure(frame)
-            return
+            await MainActor.run {
+                Log.d("calling frameCheckClosure for frame \(frame.frameIndex)")
+                let t0 = NSDate().timeIntervalSince1970
+                frameCheckClosure(frame)
+                let t1 = NSDate().timeIntervalSince1970
+                Log.i("frame \(frame.frameIndex) took \(t1-t0) seconds on frame check closure")
+            }
         }            
 
         // cli and not checked frames go to the finish queue
@@ -206,7 +209,9 @@ public actor FinalProcessor {
                     if let frameCheckClosure = callbacks.frameCheckClosure {
                         if let frame = await self.frame(at: indexToProcess) {
                             //Log.d("calling frameCheckClosure for frame \(frame.frameIndex)")
-                            await frameCheckClosure(frame)
+                            await MainActor.run {
+                                frameCheckClosure(frame)
+                            }
                         } else {
                             //Log.d("NOT calling frameCheckClosure for frame \(indexToProcess)")
                         }
