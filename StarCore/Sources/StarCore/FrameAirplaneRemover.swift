@@ -186,7 +186,6 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         } else {
             Log.d("frame \(frameIndex) loaded existing aligned frame")
         }
-        Log.i("frame \(frameIndex) DONE with star alignment")
     }
     
     public func setupOutliers() async throws {
