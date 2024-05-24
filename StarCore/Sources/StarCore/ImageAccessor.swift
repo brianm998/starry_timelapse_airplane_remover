@@ -2,6 +2,7 @@ import Foundation
 import CoreGraphics
 import logging
 import Cocoa
+import SwiftUI
 
 /*
 
@@ -52,6 +53,10 @@ public protocol ImageAccess {
     // load an image of some type and size
     func loadNSImage(type imageType: FrameImageType,
                      atSize size: ImageDisplaySize) -> NSImage?
+    
+    // load an image of some type and size
+    func loadImage(type imageType: FrameImageType,
+                   atSize size: ImageDisplaySize) -> Image?
     
     // where to load or save this type of image from
     func dirForImage(ofType type: FrameImageType,
@@ -129,6 +134,17 @@ public struct ImageAccessor: ImageAccess {
         if config.writeFrameProcessedPreviewFiles {
             mkdir(ofType: .processed, andSize: .preview)
         }
+    }
+
+    public func loadImage(type imageType: FrameImageType,
+                          atSize size: ImageDisplaySize) -> Image?
+    {
+        if let url = urlForImage(ofType: imageType, atSize: size),
+           let image = NSImage(contentsOf: url)
+        {
+            return Image(nsImage: image)
+        }
+        return nil
     }
 
     public func loadNSImage(type imageType: FrameImageType,
