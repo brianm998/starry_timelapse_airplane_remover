@@ -32,27 +32,19 @@ class AbstractBlobAnalyzer {
 
     // height of the frame
     internal let height: Int
-
-    // what frame in the sequence we're processing
-    internal let frameIndex: Int
-
+    
     // a reference for each pixel for each blob it might belong to
     // non zero values reference a blob
     internal var blobRefs: [UInt16]
 
-    // keep track of absorbed blobs so we don't reference them again accidentally
-    internal var absorbedBlobs = Set<UInt16>()
-    
     init(blobMap: [UInt16: Blob],
          width: Int,
-         height: Int,
-         frameIndex: Int)
+         height: Int)
     {
 
         self.blobMap =  blobMap
         self.width = width
         self.height = height
-        self.frameIndex = frameIndex
 
         self.blobRefs = [UInt16](repeating: 0, count: width*height)
 
@@ -69,9 +61,7 @@ class AbstractBlobAnalyzer {
         // iterate over largest blobs first
         let allBlobs = blobMap.values.sorted() { $0.size > $1.size }
         for (index, blob) in allBlobs.enumerated() {
-            if !absorbedBlobs.contains(blob.id) {
-                closure(index, blob)
-            }
+            closure(index, blob)
         }
     }
 }

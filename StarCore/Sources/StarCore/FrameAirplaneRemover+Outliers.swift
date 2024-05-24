@@ -191,8 +191,7 @@ extension FrameAirplaneRemover {
 
         var idibr: DimIsolatedBlobRemover? = .init(blobMap: blobberBlobs,
                                                    width: width,
-                                                   height: height,
-                                                   frameIndex: frameIndex)
+                                                   height: height)
         
         idibr?.process(scanSize: 20) // XXX constant
         
@@ -216,8 +215,7 @@ extension FrameAirplaneRemover {
         self.state = .isolatedBlobRemoval
         var isolatedRemover: IsolatedBlobRemover? = .init(blobMap: dimIsolatedBlobRemoverBlobs,
                                                           width: width,
-                                                          height: height,
-                                                          frameIndex: frameIndex)
+                                                          height: height)
 
         isolatedRemover?.process()            
 
@@ -259,8 +257,7 @@ extension FrameAirplaneRemover {
          */
         var finalIsolatedRemover: IsolatedBlobRemover? = .init(blobMap: brighterBlobs,
                                                                width: width,
-                                                               height: height,
-                                                               frameIndex: frameIndex)
+                                                               height: height)
 
 
         
@@ -275,8 +272,7 @@ extension FrameAirplaneRemover {
         
         var dimIsolatedBlobRemover: DimIsolatedBlobRemover? = .init(blobMap: finalIsolatedBlobs,
                                                                     width: width,
-                                                                    height: height,
-                                                                    frameIndex: frameIndex)
+                                                                    height: height)
         
         dimIsolatedBlobRemover?.process(scanSize: 16) // XXX constant
 
