@@ -58,9 +58,15 @@ public class OutlierGroup: CustomStringConvertible,
     
     public let surfaceAreaToSizeRatio: Double
 
+    public var shouldPaintDidChange: ((OutlierGroup, PaintReason?) -> Void)?
+    
     // after init, shouldPaint is usually set to a base value based upon different statistics 
-    public var shouldPaint: PaintReason? // should we paint this group, and why?
-
+    public var shouldPaint: PaintReason? { // should we paint this group, and why?
+        didSet {
+            //Log.d("shouldPaint did change callback \(shouldPaintDidChange)")
+        }
+    }
+    
     public let frameIndex: Int
 
     // has to be optional so we can read OuterlierGroups as codable
@@ -222,6 +228,14 @@ public class OutlierGroup: CustomStringConvertible,
 
         // XXX update frame that it's different 
         self.frame?.markAsChanged()
+
+        if let shouldPaintDidChange {
+            //Log.d("shouldPaint did change 1")
+            Task { @MainActor in
+                //Log.d("shouldPaint did change 2")
+                shouldPaintDidChange(self, shouldPaint)
+            }
+        }
     }
 
     // a local cache of other nearby groups
@@ -376,10 +390,10 @@ public class OutlierGroup: CustomStringConvertible,
      public var decisionTreeGroupValues: OutlierFeatureData {
          var rawValues = OutlierFeatureData.rawValues()
          for type in OutlierGroup.Feature.allCases {
-             //let t0 = NSDate().timeIntervalSince1970
+             let t0 = NSDate().timeIntervalSince1970
              let value = self.decisionTreeValue(for: type)
-             //let t1 = NSDate().timeIntervalSince1970
-             //Log.i("frame \(frameIndex) group \(self) took \(t1-t0) seconds to calculate value for \(type)")
+             let t1 = NSDate().timeIntervalSince1970
+             Log.i("frame \(frameIndex) group \(self) took \(t1-t0) seconds to calculate value for \(type)")
              rawValues[type.sortOrder] = value
              //Log.d("frame \(frameIndex) type \(type) value \(value)")
          }
@@ -654,16 +668,16 @@ public class OutlierGroup: CustomStringConvertible,
         case .maxHoughTheta:
             ret = self.maxHoughTheta
         case .numberOfNearbyOutliersInSameFrame:
-            ret = self.numberOfNearbyOutliersInSameFrame
+            ret = 0//self.numberOfNearbyOutliersInSameFrame
         case .adjecentFrameNeighboringOutliersBestTheta:
             ret = self.adjecentFrameNeighboringOutliersBestTheta
 
         case .histogramStreakDetection:
             ret = self.histogramStreakDetection
         case .longerHistogramStreakDetection:
-            ret = self.longerHistogramStreakDetection
+            ret = 0//self.longerHistogramStreakDetection
         case .neighboringInterFrameOutlierThetaScore:
-            ret = self.neighboringInterFrameOutlierThetaScore
+            ret = 0//self.neighboringInterFrameOutlierThetaScore
         case .maxOverlapTimesThetaHisto:
             ret = self.maxOverlapTimesThetaHisto
 
@@ -675,7 +689,7 @@ public class OutlierGroup: CustomStringConvertible,
         case .maxOverlap:
             ret = self.maxOverlap
         case .pixelBorderAmount:
-            ret = self.pixelBorderAmount
+            ret = 0//self.pixelBorderAmount
         case .averageLineVariance:
             ret = self.averageLineVariance
         case .lineLength:

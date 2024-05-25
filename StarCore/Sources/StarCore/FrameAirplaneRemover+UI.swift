@@ -22,9 +22,9 @@ You should have received a copy of the GNU General Public License along with sta
 extension FrameAirplaneRemover {
     public func userSelectAllOutliers(toShouldPaint shouldPaint: Bool,
                                       between startLocation: CGPoint,
-                                      and endLocation: CGPoint) async
+                                      and endLocation: CGPoint)
     {
-        await foreachOutlierGroup(between: startLocation, and: endLocation) { group in
+        foreachOutlierGroup(between: startLocation, and: endLocation) { group in
             group.shouldPaint(.userSelected(shouldPaint))
             return .continue
         }
@@ -80,8 +80,8 @@ extension FrameAirplaneRemover {
         Log.d("frame \(self.frameIndex) DONE applyDecisionTreeToAllOutliers")
     }
     
-    public func userSelectAllOutliers(toShouldPaint shouldPaint: Bool) async {
-        await foreachOutlierGroup() { group in
+    public func userSelectAllOutliers(toShouldPaint shouldPaint: Bool) {
+        foreachOutlierGroup() { group in
             group.shouldPaint(.userSelected(shouldPaint))
             return .continue
         }

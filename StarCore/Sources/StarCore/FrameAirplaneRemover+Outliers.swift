@@ -449,10 +449,10 @@ extension FrameAirplaneRemover {
         }
     }
     
-    public func foreachOutlierGroup(_ closure: (OutlierGroup) async -> LoopReturn) async {
+    public func foreachOutlierGroup(_ closure: (OutlierGroup) -> LoopReturn) {
         if let outlierGroups = self.outlierGroups {
             for (_, group) in outlierGroups.members {
-                let result = await closure(group)
+                let result = closure(group)
                 if result == .break { break }
             }
         } 
@@ -480,7 +480,7 @@ extension FrameAirplaneRemover {
     
     public func foreachOutlierGroup(between startLocation: CGPoint,
                                     and endLocation: CGPoint,
-                                    _ closure: (OutlierGroup) async -> LoopReturn) async
+                                    _ closure: (OutlierGroup) -> LoopReturn) 
     {
         // first get bounding box from start and end location
         var minX: CGFloat = CGFLOAT_MAX
@@ -501,11 +501,11 @@ extension FrameAirplaneRemover {
         let gestureBounds = BoundingBox(min: Coord(x: Int(minX), y: Int(minY)),
                                         max: Coord(x: Int(maxX), y: Int(maxY)))
 
-        await foreachOutlierGroup() { group in
+        foreachOutlierGroup() { group in
             if gestureBounds.contains(other: group.bounds) {
                 // check to make sure this outlier's bounding box is fully contained
                 // otherwise don't change paint status
-                return await closure(group)
+                return closure(group)
             } else {
                 return .continue
             }
