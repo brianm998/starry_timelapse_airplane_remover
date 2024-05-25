@@ -220,10 +220,15 @@ struct MultiSelectSheetView: View {
                     {
                         deleteFrom(frame: frame,
                                    between: selectionStart,
-                                   and: selectionEnd) {
+                                   and: selectionEnd)
+                        {
                             if currentIndex == frame.frameIndex {
-                                self.selectionStart = nil
-                                self.selectionEnd = nil
+                                Task {
+                                await MainActor.run {
+                                    self.selectionStart = nil
+                                    self.selectionEnd = nil
+                                }
+                                }
                             }
                         }
                     }
