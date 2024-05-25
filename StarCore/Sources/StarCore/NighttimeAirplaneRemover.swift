@@ -37,9 +37,6 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
 
     public var numberLeft = NumberLeft()
     
-    // the name of the directory to create when writing outlier group files
-    let outlierOutputDirname: String
-
     public var finalProcessor: FinalProcessor?    
 
     // are we running on the gui?
@@ -62,10 +59,7 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
         self.isGUI = isGUI     // XXX make this better
         self.writeOutputFiles = writeOutputFiles
 
-        // XXX duplicated in ImageAccessor :(
-        let _basename = "\(config.imageSequenceDirname)-star-v-\(config.starVersion)-\(config.detectionType.rawValue)"
-        self.basename = _basename.replacingOccurrences(of: ".", with: "_")
-        outlierOutputDirname = "\(config.outputPath)/\(basename)-outliers"
+        self.basename = config.basename
 
         try super.init(imageSequenceDirname: "\(config.imageSequencePath)/\(config.imageSequenceDirname)",
                        outputDirname: "\(config.outputPath)/\(basename)",
@@ -154,16 +148,17 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
         {
             Log.d("loading first frame to get sizes")
             do {
-                let testImage = try await imageSequence.getImage(withName: imageSequence.filenames[0]).image()
-                imageWidth = testImage.width
-                imageHeight = testImage.height
+                let imageInfo = try await imageSequence.getImageInfo()
+                imageWidth = imageInfo.imageWidth
+                imageHeight = imageInfo.imageHeight
+                imageBytesPerPixel = imageInfo.imageBytesPerPixel
 
                 // in OutlierGroup.swift
-                IMAGE_WIDTH = Double(testImage.width)
-                IMAGE_HEIGHT = Double(testImage.height)
+                IMAGE_WIDTH = Double(imageInfo.imageWidth)
+                IMAGE_HEIGHT = Double(imageInfo.imageHeight)
 
-                imageBytesPerPixel = testImage.bytesPerPixel
                 Log.d("first frame to get sizes: imageWidth \(String(describing: imageWidth)) imageHeight \(String(describing: imageHeight)) imageBytesPerPixel \(String(describing: imageBytesPerPixel))")
+                
             } catch {
                 Log.e("first frame to get size: \(error)")
                 throw("Could not load first image to get sequence resolution")
@@ -173,7 +168,7 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
 
         if config.writeOutlierGroupFiles {
             // doesn't do mkdir -p, if a base dir is missing it just hangs :(
-            mkdir(outlierOutputDirname) // XXX this can fail silently and pause the whole process :(
+            mkdir(config.outlierOutputDirname) // XXX this can fail silently and pause the whole process :(
         }
 
         if config.writeOutlierGroupFiles          ||
@@ -201,7 +196,7 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
                                                    atIndex: index,
                                                    outputFilename: outputFilename,
                                                    baseName: baseName,
-                                                   outlierOutputDirname: outlierOutputDirname,
+                                                   outlierOutputDirname: config.outlierOutputDirname,
                                                    fullyProcess: fullyProcess,
                                                    writeOutputFiles: writeOutputFiles)
         {

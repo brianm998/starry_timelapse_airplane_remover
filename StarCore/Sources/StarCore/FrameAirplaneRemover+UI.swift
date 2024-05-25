@@ -32,7 +32,7 @@ extension FrameAirplaneRemover {
 
     public func applyDecisionTreeToAutoSelectedOutliers() async {
         if let classifier = currentClassifier {
-            await foreachOutlierGroup() { group in
+            foreachOutlierGroup() { group in
                 var apply = true
                 if let shouldPaint = group.shouldPaint {
                     switch shouldPaint {
@@ -55,7 +55,7 @@ extension FrameAirplaneRemover {
     }
 
     public func clearOutlierGroupValueCaches() async {
-        await foreachOutlierGroup() { group in
+        foreachOutlierGroup() { group in
             group.clearFeatureValueCache()
             return .continue
         }
@@ -65,7 +65,7 @@ extension FrameAirplaneRemover {
         Log.d("frame \(self.frameIndex) applyDecisionTreeToAll \(self.outlierGroups?.members.count ?? 0) Outliers")
         if let classifier = currentClassifier {
             let startTime = NSDate().timeIntervalSince1970
-            await foreachOutlierGroup() { group in
+            foreachOutlierGroup() { group in
                 if group.shouldPaint == nil {
                     // only apply classifier when no other classification is otherwise present
                     group.shouldPaint(.fromClassifier(classifier.classification(of: group)))

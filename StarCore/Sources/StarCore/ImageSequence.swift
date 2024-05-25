@@ -33,9 +33,22 @@ public actor ImageLoader {
     }
 }
 
+public struct ImageInfo {
+    public let imageWidth: Int
+    public let imageHeight: Int
+    public let imageBytesPerPixel: Int // XXX bad name
+}
+
 // allows loading and caching of frames of an image sequence
 public actor ImageSequence {
 
+    public func getImageInfo() async throws -> ImageInfo {
+        let testImage = try await self.getImage(withName: self.filenames[0]).image()
+        return ImageInfo(imageWidth: testImage.width,
+                         imageHeight: testImage.height,
+                         imageBytesPerPixel: testImage.bytesPerPixel)
+    }
+    
     public init(dirname: String,
                 supportedImageFileTypes: [String],
                 maxImages: Int? = nil) throws

@@ -81,8 +81,7 @@ public struct ImageAccessor: ImageAccess {
     public init(config: Config, imageSequence: ImageSequence, baseFileName: String) {
         // the dirname (not full path) of where the main output files will sit
         self.config = config
-        let _basename = "\(config.imageSequenceDirname)-star-v-\(config.starVersion)-\(config.detectionType.rawValue)"
-        self.baseDirName = _basename.replacingOccurrences(of: ".", with: "_")
+        self.baseDirName = config.basename
         self.baseFileName = baseFileName
         self.imageSequence = imageSequence
         mkdirs()
@@ -139,10 +138,14 @@ public struct ImageAccessor: ImageAccess {
     public func loadImage(type imageType: FrameImageType,
                           atSize size: ImageDisplaySize) -> Image?
     {
-        if let url = urlForImage(ofType: imageType, atSize: size),
-           let image = NSImage(contentsOf: url)
-        {
-            return Image(nsImage: image)
+        if let url = urlForImage(ofType: imageType, atSize: size) {
+            if let image = NSImage(contentsOf: url) {
+                return Image(nsImage: image)
+            } else {
+                Log.w("cannot create image from url \(url)")
+            }
+        } else {
+            Log.w("cannot get url for image")
         }
         return nil
     }
@@ -161,10 +164,14 @@ public struct ImageAccessor: ImageAccess {
     public func urlForImage(ofType imageType: FrameImageType,
                             atSize size: ImageDisplaySize) -> URL?
     {
-        if let filename = nameForImage(ofType: imageType, atSize: size),
-           fileManager.fileExists(atPath: filename)
-        {
-            return URL(fileURLWithPath: filename)
+        if let filename = nameForImage(ofType: imageType, atSize: size) {
+            if fileManager.fileExists(atPath: filename) {
+                return URL(fileURLWithPath: filename)
+            } else {
+                Log.w("file does not exist at \(filename)")
+            }
+        } else {
+            Log.w("no filename for type \(imageType) at size \(size)")
         }
         return nil
     }

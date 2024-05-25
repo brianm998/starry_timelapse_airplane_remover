@@ -167,6 +167,15 @@ public struct Config: Codable {
     
     public var starVersion = "0.6.7" // XXX move this out
 
+    public var basename: String {
+        let _basename = "\(self.imageSequenceDirname)-star-v-\(self.starVersion)-\(self.detectionType.rawValue)"
+        return _basename.replacingOccurrences(of: ".", with: "_")
+    }
+
+    public var outlierOutputDirname: String {
+        "\(self.outputPath)/\(self.basename)-outliers"
+    }
+    
     public func writeJson(named filename: String) {
         
         // write to config json

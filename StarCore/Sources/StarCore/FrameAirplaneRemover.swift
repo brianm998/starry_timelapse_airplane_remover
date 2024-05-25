@@ -91,19 +91,19 @@ public class FrameAirplaneRemover: Equatable, Hashable {
 
     private let completion: (() async -> Void)?
     
-    init(with config: Config,
-         width: Int,
-         height: Int,
-         bytesPerPixel: Int,
-         callbacks: Callbacks,
-         imageSequence: ImageSequence,
-         atIndex frameIndex: Int,
-         outputFilename: String,
-         baseName: String,       // source filename without path
-         outlierOutputDirname: String,
-         fullyProcess: Bool = true,
-         writeOutputFiles: Bool = true,
-         completion: (() async -> Void)? = nil) async throws
+    public init(with config: Config,
+                width: Int,
+                height: Int,
+                bytesPerPixel: Int,
+                callbacks: Callbacks,
+                imageSequence: ImageSequence,
+                atIndex frameIndex: Int,
+                outputFilename: String,
+                baseName: String,       // source filename without path
+                outlierOutputDirname: String,
+                fullyProcess: Bool = true,
+                writeOutputFiles: Bool = true,
+                completion: (() async -> Void)? = nil) async throws
     {
         self.imageAccessor = ImageAccessor(config: config,
                                            imageSequence: imageSequence,
