@@ -119,43 +119,6 @@ public class FrameViewModel: ObservableObject {
         
     }
     
-    // this does a view layer only translation so that we don't have
-    // to wait for the longer running background process to update the view
-    public func userSelectAllOutliers(toShouldPaint shouldPaint: Bool,
-                                      between startLocation: CGPoint,
-                                      and endLocation: CGPoint,
-                                      closure: @escaping () -> Void) 
-    {
-        Task.detached(priority: .userInitiated) {
-
-            var mutableGroupsToUpdate: [OutlierGroupViewModel] = []
-            
-            let gestureBounds = self.boundsFromGesture(between: startLocation, and: endLocation)
-            
-            self.outlierViews?.forEach() { group in
-                if gestureBounds.contains(other: group.bounds) {
-                    // check to make sure this outlier's bounding box is fully contained
-                    // otherwise don't change paint status
-
-
-                    mutableGroupsToUpdate.append(group)
-                    
-                }
-                
-            }
-
-            let groupsToUpdate =  mutableGroupsToUpdate
-            
-            await MainActor.run {
-                for group in groupsToUpdate {
-                    group.group.shouldPaint = .userSelected(shouldPaint)
-                    group.objectWillChange.send()
-                }
-                closure()
-            }
-        }
-    }
-
     public func deleteOutliers(between drag_start: CGPoint,
                                and end_location: CGPoint) -> BoundingBox
     {

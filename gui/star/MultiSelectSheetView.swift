@@ -289,19 +289,18 @@ struct MultiSelectSheetView: View {
                         and end_location: CGPoint,
                         closure: @escaping () -> Void)
     {
-        Task<Void,Never> { @MainActor in
-            frameView.userSelectAllOutliers(toShouldPaint: shouldPaint,
-                                            between: drag_start,
-                                            and: end_location,
-                                            closure: closure) 
-        }
         if let frame = frameView.frame {
             let new_value = shouldPaint
             Task.detached(priority: .userInitiated) {
                 await frame.userSelectAllOutliers(toShouldPaint: new_value,
                                                   between: drag_start,
                                                   and: end_location)
+                await MainActor.run {
+                    closure()
+                }
             }
+        } else {
+            closure()
         }
     }
 }

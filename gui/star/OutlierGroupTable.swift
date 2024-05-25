@@ -64,7 +64,7 @@ struct OutlierGroupTableRow: Identifiable {
     let dt_averageLineVariance: Double
     let dt_lineLength: Double
 
-    init(_ group: OutlierGroup) async {
+    init(_ group: OutlierGroup) {
         name = group.id
         size = group.size
         let shouldPaint = group.shouldPaint

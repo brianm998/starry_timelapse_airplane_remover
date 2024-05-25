@@ -13,8 +13,6 @@ struct FrameEditView: View {
     @Binding private var interactionMode: InteractionMode
     @Binding private var showFullResolution: Bool
 
-    @State private var isDragging = false
-
     public init(image: Image,
                interactionMode: Binding<InteractionMode>,
                showFullResolution: Binding<Bool>)
@@ -69,8 +67,7 @@ struct FrameEditView: View {
             }
 
             // this is the selection overlay
-            if isDragging,// || viewModel.multiSelectSheetShowing,
-               let drag_start = viewModel.drag_start,
+            if let drag_start = viewModel.drag_start,
                let drag_end = viewModel.drag_end
             {
                 let width = abs(drag_start.x-drag_end.x)
@@ -100,8 +97,6 @@ struct FrameEditView: View {
     var selectionDragGesture: some Gesture {
         DragGesture()
           .onChanged { gesture in
-              let _ = Log.d("isDragging")
-              isDragging = true
               let location = gesture.location
               if viewModel.drag_start != nil {
                   // updating during drag is too slow
@@ -112,7 +107,6 @@ struct FrameEditView: View {
               Log.v("location \(location)")
           }
           .onEnded { gesture in
-              isDragging = false
               let end_location = gesture.location
               if let drag_start = viewModel.drag_start {
                   Log.v("end location \(end_location) drag start \(drag_start)")
@@ -127,32 +121,29 @@ struct FrameEditView: View {
                       update(frame: frameView, shouldPaint: false,
                              between: drag_start, and: end_location)
                   case .delete:
-                      let _ = Log.d("DELETE")
+                      //let _ = Log.d("DELETE")
                       deleteOutliers(frame: frameView,
                                      between: drag_start,
                                      and: end_location) 
 
                   case .details:
-                      let _ = Log.d("DETAILS")
+                      //let _ = Log.d("DETAILS")
 
                       if let frame = frameView.frame {
                           Task {
                               //var new_outlier_info: [OutlierGroup] = []
                               var _outlierGroupTableRows: [OutlierGroupTableRow] = []
                               
-                              await frame.foreachOutlierGroup(between: drag_start,
-                                                              and: end_location) { group in
-                                  Log.d("group \(group)")
-                                  //new_outlier_info.append(group)
-
-                                  let new_row = await OutlierGroupTableRow(group)
+                              frame.foreachOutlierGroup(between: drag_start,
+                                                        and: end_location) { group in
+                                  let new_row = OutlierGroupTableRow(group)
                                   _outlierGroupTableRows.append(new_row)
                                   return .continue
                               }
                               await MainActor.run {
                                   self.viewModel.outlierGroupWindowFrame = frame
                                   self.viewModel.outlierGroupTableRows = _outlierGroupTableRows
-                                  Log.d("outlierGroupTableRows \(viewModel.outlierGroupTableRows.count)")
+                                  //Log.d("outlierGroupTableRows \(viewModel.outlierGroupTableRows.count)")
                                   if self.viewModel.shouldShowOutlierGroupTableWindow() {
                                       openWindow(id: "foobar") 
                                   }
@@ -165,11 +156,9 @@ struct FrameEditView: View {
 
                   case .multi:
                       self.viewModel.multiSelectSheetShowing = true
-                      //self.viewModel.drag_start = $viewModel.drag_start
-                      self.viewModel.drag_end = end_location
                   }
               }
-          }
+         }
     }
 
 
@@ -187,9 +176,11 @@ struct FrameEditView: View {
                 await MainActor.run {
                     viewModel.drag_start = nil
                     viewModel.drag_end = nil
-                   
                 }
             }
+        } else {
+            viewModel.drag_start = nil
+            viewModel.drag_end = nil
         }
     }
 
@@ -198,25 +189,20 @@ struct FrameEditView: View {
                         between drag_start: CGPoint,
                         and end_location: CGPoint)
     {
-        frameView.userSelectAllOutliers(toShouldPaint: shouldPaint,
-                                        between: drag_start,
-                                        and: end_location)
-        {
-            viewModel.drag_start = nil
-            viewModel.drag_end = nil
-        }
-
-      
-       
         if let frame = frameView.frame {
             let new_value = shouldPaint
             Task.detached(priority: .userInitiated) {
-                await frame.userSelectAllOutliers(toShouldPaint: new_value,
-                                                  between: drag_start,
-                                                  and: end_location)
-               
+                frame.userSelectAllOutliers(toShouldPaint: new_value,
+                                            between: drag_start,
+                                            and: end_location)
+                await MainActor.run {
+                    viewModel.drag_start = nil
+                    viewModel.drag_end = nil
+                }
             }
+        } else {
+            viewModel.drag_start = nil
+            viewModel.drag_end = nil
         }
-
     }
 }

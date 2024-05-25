@@ -198,19 +198,14 @@ public final class ViewModel: ObservableObject {
     @Published var settingsSheetShowing = false
     @Published var paintSheetShowing = false
 
-    @Published var multiSelectSheetShowing = false {
-        didSet(oldValue) {
-            if !multiSelectSheetShowing {
-                drag_start = nil
-                drag_end = nil
-            }
-        }
-    }
+    @Published var multiSelectSheetShowing = false
+    
     @Published var multiSelectionType: MultiSelectionType = .all
     @Published var multiSelectionPaintType: MultiSelectionPaintType = .clear
     
-    @Published var drag_start: CGPoint?
+    @Published var drag_start: CGPoint? 
     @Published var drag_end: CGPoint?
+    
     @Published var number_of_frames: Int = 50
     
     // the frame number of the frame we're currently showing
