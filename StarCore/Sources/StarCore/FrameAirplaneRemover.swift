@@ -218,8 +218,6 @@ public class FrameAirplaneRemover: Equatable, Hashable {
     public func finish() async throws {
         Log.d("frame \(self.frameIndex) starting to finish")
 
-        guard fullyProcess else { return }
-        
         if didChange {
             // write out the outliers binary if it is not there
             // only overwrite the paint reason if it is there

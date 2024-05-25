@@ -304,7 +304,7 @@ public actor FinalProcessor {
 }    
 
 
-fileprivate func doublyLink(frames: [FrameAirplaneRemover]) {
+public func doublyLink(frames: [FrameAirplaneRemover]) {
     // doubly link frames here so that the decision tree can have acess to other frames
     for (i, frame) in frames.enumerated() {
         if frames[i].previousFrame == nil,
