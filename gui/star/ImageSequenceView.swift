@@ -17,10 +17,6 @@ struct ImageSequenceView: View {
                   viewModel.renderingAllFrames
 
                 
-
-
-
-
                 // selected frame 
                 ZStack {
                     FrameView(interactionMode: self.$viewModel.interactionMode,

@@ -145,7 +145,7 @@ public final class ViewModel: ObservableObject {
     @Published var loadingOutliers = false
     
     @Published var numberOfFramesWithOutliersLoaded = 0
-
+    
     @Published var numberOfFramesLoaded = 0
 
     @Published var outlierGroupTableRows: [OutlierGroupTableRow] = []
@@ -325,9 +325,12 @@ public final class ViewModel: ObservableObject {
             if let outlierTask { await outlierTask.value }
 
             if self.currentIndex == frame.frameIndex {
-
+                Log.d("CRAPPY CURRENT FRAME")
                 // refresh ui 
-                await MainActor.run { self.refreshCurrentFrame() }
+                await MainActor.run {
+                    Log.d("CRAPPY CURRENT FRAME MAIN THREAD")
+                    self.refreshCurrentFrame()
+                }
             }
         }
     }
@@ -463,28 +466,100 @@ public final class ViewModel: ObservableObject {
         Log.d("outlier_json_startup with \(jsonConfigFilename)")
         // first read config from json
 
-        UserPreferences.shared.justOpened(filename: jsonConfigFilename)
-        
-        let config = try await Config.read(fromJsonFilename: jsonConfigFilename)
-        constants.detectionType = config.detectionType
-        
-        let callbacks = makeCallbacks()
-        
-        let eraser = try await NighttimeAirplaneRemover(with: config,
-                                                        callbacks: callbacks,
-                                                        processExistingFiles: true,
-                                                        fullyProcess: false,
-                                                        isGUI: true)
-        
-        await MainActor.run {
-            self.eraser = eraser // XXX rename this crap
-            self.config = config
-            self.frameSaveQueue = FrameSaveQueue()
+        /*
+
+         re-write this
+
+         ditch the NighttimeAirplaneRemover, it's for the cli, slow as F for the gui
+
+         instead, create the list of FrameAirplaneRemover for each frame without
+         loading much at all.
+
+         then call back into the UI with each frame
+
+         can display processing state on the flimstrip
+
+         if no previews are loaded, create them.
+         
+         allow individual frames to be processed by calling frame.finish()
+         
+         */
+
+        Task {
+
+            try await withLimitedThrowingTaskGroup(of: Void.self) { taskGroup in
+
+                UserPreferences.shared.justOpened(filename: jsonConfigFilename)
+                
+                let config = try await Config.read(fromJsonFilename: jsonConfigFilename)
+                constants.detectionType = config.detectionType
+
+                Log.d("loaded config \(config.imageSequenceDirname)")
+                
+                let imageSequence = try ImageSequence(dirname: "\(config.imageSequencePath)/\(config.imageSequenceDirname)",
+                                                      supportedImageFileTypes: config.supportedImageFileTypes)
+
+                
+                Log.d("loaded image sequence")
+                let callbacks = makeCallbacks()
+
+                if let imageSequenceSizeClosure = callbacks.imageSequenceSizeClosure {
+                    let imageSequenceSize = await imageSequence.filenames.count
+                    imageSequenceSizeClosure(imageSequenceSize)
+                }
+                
+                let imageInfo = try await imageSequence.getImageInfo()
+
+                IMAGE_WIDTH = Double(imageInfo.imageWidth)
+                IMAGE_HEIGHT = Double(imageInfo.imageHeight)
+                
+                Log.d("loaded imageInfo \(imageInfo)")
+
+                await MainActor.run {
+                    self.config = config
+                    self.frameSaveQueue = FrameSaveQueue()
+                }
+                
+                for (frameIndex, filename) in await imageSequence.filenames.enumerated() {
+
+                    try await taskGroup.addTask() {
+                        let basename = removePath(fromString: filename)
+                        let frame = try await FrameAirplaneRemover(with: config,
+                                                                   width: imageInfo.imageWidth,
+                                                                   height: imageInfo.imageHeight,
+                                                                   bytesPerPixel: imageInfo.imageBytesPerPixel,
+                                                                   callbacks: callbacks,
+                                                                   imageSequence: imageSequence,
+                                                                   atIndex: frameIndex,
+                                                                   outputFilename: "\(config.outputPath)/\(config.basename)",
+                                                                   baseName: basename,
+                                                                   outlierOutputDirname: config.outlierOutputDirname,
+                                                                   fullyProcess: false,
+                                                                   writeOutputFiles: false)
+                        
+                        if let callback = callbacks.frameCheckClosure {
+                            await MainActor.run {
+                                callback(frame)
+                            }
+                        }
+                    }
+                }
+
+                try await taskGroup.waitForAll()
+            }
         }
     }
     
     @MainActor func startup(withNewImageSequence imageSequenceDirname: String) async throws {
 
+        /*
+
+         rewrite this path too, starting without a config
+
+         
+         
+         */
+        
         let numConcurrentRenders: Int = ProcessInfo.processInfo.activeProcessorCount
         let shouldWriteOutlierGroupFiles = true // XXX see what happens
         
@@ -555,13 +630,13 @@ public final class ViewModel: ObservableObject {
         
         callbacks.frameStateChangeCallback = { frame, state in
             // XXX do something here
-            Log.d("frame \(frame.frameIndex) changed to state \(state)")
-            Task {
-                await MainActor.run {
-                    //self.frame_states[frame.frameIndex] = state
-                    self.objectWillChange.send()
-                }
-            }
+//            Log.d("frame \(frame.frameIndex) changed to state \(state)")
+//            Task {
+//                await MainActor.run {
+//                    //self.frame_states[frame.frameIndex] = state
+//                    self.objectWillChange.send()
+//                }
+//            }
         }
 
         // called when we should check a frame
@@ -593,8 +668,6 @@ public final class ViewModel: ObservableObject {
         self.append(frame: newFrame)
         
         // Log.d("addToViewModel self.frame \(self.frame)")
-
-        //refresh(frame: newFrame)
     }
 }
 
@@ -712,7 +785,10 @@ public extension ViewModel {
         // XXX maybe don't wait for frame?
         Log.d("refreshCurrentFrame \(self.currentIndex)")
         let newFrameView = self.frames[self.currentIndex]
+        Log.d("newFrameView \(newFrameView)")
         if let nextFrame = newFrameView.frame {
+
+            Log.d("nextFrame \(nextFrame)")
 
             // usually stick the preview image in there first if we have it
             var showPreview = true
@@ -724,6 +800,8 @@ public extension ViewModel {
                 // showing the preview in this case causes flickering
                 showPreview = false
             }
+
+            Log.d("showPreview \(showPreview) self.frameViewMode \(self.frameViewMode)")
                  
             if showPreview {
                 self.currentFrameImageIndex = newFrameView.frameIndex
@@ -732,6 +810,7 @@ public extension ViewModel {
 
                 switch self.frameViewMode {
                 case .original:
+                    Log.d("FUCK NUTS \(newFrameView.previewImage)")
                     self.currentFrameImage = newFrameView.previewImage
                 case .subtraction:
                     self.currentFrameImage = newFrameView.subtractionPreviewImage
@@ -746,6 +825,7 @@ public extension ViewModel {
                 case .validation:
                     self.currentFrameImage = newFrameView.validationPreviewImage
                 case .processed:
+                    Log.d("FUCK NUTS \(newFrameView.processedPreviewImage)")
                     self.currentFrameImage = newFrameView.processedPreviewImage
                 }
             }
@@ -856,6 +936,8 @@ public extension ViewModel {
                     self.inTransition = false
                 }
             }
+
+            self.objectWillChange.send()            
         } else {
             Log.d("WTF for frame \(self.currentIndex)")
            
