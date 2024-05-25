@@ -23,7 +23,7 @@ public struct FrameView: View {
         ZStack {
             if let frame_image = self.viewModel.currentFrameImage {
                 switch self.interactionMode {
-                case .play:
+                case .scrub:
                     // the current frame by itself for fast video playback and scrubbing 
                     frame_image
                       .resizable()

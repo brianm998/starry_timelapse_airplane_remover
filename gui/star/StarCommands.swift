@@ -15,6 +15,9 @@ struct StarCommands: Commands {
             ClearAllButton()
               .environmentObject(viewModel)
               .keyboardShortcut("c", modifiers: [])
+            ClearUndecidedButton()
+              .environmentObject(viewModel)
+              .keyboardShortcut("k", modifiers: [])
             /*
             contentView.outlierInfoButton()
              */

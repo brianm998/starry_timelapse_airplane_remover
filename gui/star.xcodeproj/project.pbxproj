@@ -45,6 +45,7 @@
 		D386FA2D298B617400878B56 /* starUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D386FA2C298B617400878B56 /* starUITests.swift */; };
 		D386FA2F298B617400878B56 /* starUITestsLaunchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D386FA2E298B617400878B56 /* starUITestsLaunchTests.swift */; };
 		D3936FCF2BEDBA8F005AEA3C /* StarDecisionTrees in Frameworks */ = {isa = PBXBuildFile; productRef = D3936FCE2BEDBA8F005AEA3C /* StarDecisionTrees */; };
+		D39EEDF42C027AD800DD5BC4 /* ClearUndecidedButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = D39EEDF32C027AD700DD5BC4 /* ClearUndecidedButton.swift */; };
 		D3A54A6F29AFAD2C00C50709 /* UserPreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3A54A6E29AFAD2C00C50709 /* UserPreferences.swift */; };
 		D3B29C9E2B2FE23F00754C10 /* StarCore in Frameworks */ = {isa = PBXBuildFile; productRef = D3B29C9D2B2FE23F00754C10 /* StarCore */; };
 		D3B29CA42B2FE31800754C10 /* KHTSwift in Frameworks */ = {isa = PBXBuildFile; productRef = D3B29CA32B2FE31800754C10 /* KHTSwift */; };
@@ -114,6 +115,7 @@
 		D386FA28298B617400878B56 /* starUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = starUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		D386FA2C298B617400878B56 /* starUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = starUITests.swift; sourceTree = "<group>"; };
 		D386FA2E298B617400878B56 /* starUITestsLaunchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = starUITestsLaunchTests.swift; sourceTree = "<group>"; };
+		D39EEDF32C027AD700DD5BC4 /* ClearUndecidedButton.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ClearUndecidedButton.swift; sourceTree = "<group>"; };
 		D3A54A6E29AFAD2C00C50709 /* UserPreferences.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = UserPreferences.swift; sourceTree = "<group>"; };
 		D3B886AC29B830BE003590A1 /* OutlierGroupTable.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = OutlierGroupTable.swift; sourceTree = "<group>"; };
 		D3D7F0FB2A2BE10D00658862 /* StarCommands.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = StarCommands.swift; sourceTree = "<group>"; };
@@ -180,7 +182,7 @@
 		D386FA0F298B617300878B56 /* star */ = {
 			isa = PBXGroup;
 			children = (
-				D366BB392AF84766004C9125 /* Info.plist */,
+				D39EEDF32C027AD700DD5BC4 /* ClearUndecidedButton.swift */,
 				D32F6DB72A4E6FCE00704870 /* BottomLeftView.swift */,
 				D32F6DB82A4E6FCE00704870 /* BottomRightView.swift */,
 				D32F6DB52A4D330C00704870 /* StarApp.swift */,
@@ -215,6 +217,7 @@
 				D31F9FBD299736730001CD0C /* FrameSaveQueue.swift */,
 				D31F9FBE299736730001CD0C /* OutlierGroupView.swift */,
 				D31F9FBC299736730001CD0C /* ViewModel.swift */,
+				D366BB392AF84766004C9125 /* Info.plist */,
 				D310C6F329C8D8F40014FBA9 /* libStarDecisionTrees.a */,
 				D386FA14298B617400878B56 /* Assets.xcassets */,
 				D386FA19298B617400878B56 /* star.entitlements */,
@@ -421,6 +424,7 @@
 				D33FFC202A2D3BCD00F38194 /* FrameViewModel.swift in Sources */,
 				D33FFC242A2D48F300F38194 /* FrameEditView.swift in Sources */,
 				D32F6DAE2A4D1C0100704870 /* RenderAllFramesButton.swift in Sources */,
+				D39EEDF42C027AD800DD5BC4 /* ClearUndecidedButton.swift in Sources */,
 				D32F6DAC2A4D1A6E00704870 /* BottomControls.swift in Sources */,
 				D31F9FC0299736740001CD0C /* FrameSaveQueue.swift in Sources */,
 				D33FFC182A2D007800F38194 /* PaintAllButton.swift in Sources */,

@@ -86,4 +86,13 @@ extension FrameAirplaneRemover {
             return .continue
         }
     }
+
+    public func userSelectUndecidedOutliers(toShouldPaint shouldPaint: Bool) {
+        foreachOutlierGroup() { group in
+            if group.shouldPaint == nil {
+                group.shouldPaint(.userSelected(shouldPaint))
+            }
+            return .continue
+        }
+    }
 }

@@ -86,7 +86,7 @@ struct BottomControls: View {
                 }
             }
 
-        case .play:
+        case .scrub:
             if (totalWidth - self.playbackButtonWidth)/2 >= self.leftViewWidth {
                 self.layout = .fullyHorizontal
             } else {

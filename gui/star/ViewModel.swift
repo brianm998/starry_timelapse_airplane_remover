@@ -82,7 +82,7 @@ public enum SelectionMode: String, Equatable, CaseIterable {
 
 public enum InteractionMode: String, Equatable, CaseIterable {
     case edit
-    case play
+    case scrub
 
     var localizedName: LocalizedStringKey {
         LocalizedStringKey(rawValue)
@@ -175,9 +175,9 @@ public final class ViewModel: ObservableObject {
 
     @Published var sliderValue = 0.0
 
-    @Published var interactionMode: InteractionMode = .play
+    @Published var interactionMode: InteractionMode = .scrub
 
-    @Published var previousInteractionMode: InteractionMode = .play
+    @Published var previousInteractionMode: InteractionMode = .scrub
 
     // enum for how we show each frame
     @Published var frameViewMode = FrameViewMode.processed
@@ -487,7 +487,7 @@ public final class ViewModel: ObservableObject {
 
         Task {
 
-            try await withThrowingTaskGroup(of: Void.self) { taskGroup in
+            try await withThrowingTaskGroup(of: FrameAirplaneRemover.self) { taskGroup in
 
                 UserPreferences.shared.justOpened(filename: jsonConfigFilename)
                 
@@ -501,7 +501,7 @@ public final class ViewModel: ObservableObject {
 
                 
                 Log.d("loaded image sequence")
-                let callbacks = makeCallbacks()
+                let callbacks = self.makeCallbacks()
 
                 if let imageSequenceSizeClosure = callbacks.imageSequenceSizeClosure {
                     let imageSequenceSize = await imageSequence.filenames.count
@@ -519,7 +519,7 @@ public final class ViewModel: ObservableObject {
                     self.config = config
                     self.frameSaveQueue = FrameSaveQueue()
                 }
-                
+
                 for (frameIndex, filename) in await imageSequence.filenames.enumerated() {
 
                     taskGroup.addTask() {
@@ -535,17 +535,34 @@ public final class ViewModel: ObservableObject {
                                                                    baseName: basename,
                                                                    outlierOutputDirname: config.outlierOutputDirname,
                                                                    fullyProcess: false,
-                                                                   writeOutputFiles: false)
+                                                                   writeOutputFiles: true)
                         
                         if let callback = callbacks.frameCheckClosure {
                             await MainActor.run {
                                 callback(frame)
                             }
                         }
+                        return frame
                     }
                 }
 
-                try await taskGroup.waitForAll()
+                var incomingFrames = await [FrameAirplaneRemover?](repeating: nil, count: imageSequence.filenames.count)
+                for try await frame in taskGroup {
+                    incomingFrames[frame.frameIndex] = frame
+                }
+
+                var frames: [FrameAirplaneRemover] = []
+
+                for frame in incomingFrames {
+                    if let frame {
+                        frames.append(frame)
+                    } else {
+                        fatalError("FUCK")
+                    }
+                }
+                
+                // doubly link them here
+                doublyLink(frames: frames)
             }
         }
     }
@@ -681,6 +698,39 @@ public extension ViewModel {
                             to: shouldPaint,
                             renderImmediately: renderImmediately)
     }
+
+
+    func setUndecidedFrameOutliers(to shouldPaint: Bool,
+                                   renderImmediately: Bool = true)
+    {
+        let currentFrameView = self.currentFrameView
+        setUndecidedFrameOutliers(in: currentFrameView,
+                                  to: shouldPaint,
+                                  renderImmediately: renderImmediately)
+    }
+    
+    func setUndecidedFrameOutliers(in frameView: FrameViewModel,
+                                   to shouldPaint: Bool,
+                                   renderImmediately: Bool = true)
+    {
+        let reason = PaintReason.userSelected(shouldPaint)
+        
+        if let frame = frameView.frame {
+            // update the real actor in the background
+            Task {
+                await frame.userSelectUndecidedOutliers(toShouldPaint: shouldPaint)
+
+                if renderImmediately {
+                    // XXX make render here an option in settings
+                    await render(frame: frame) {
+                        self.refresh(frame: frame)
+                    }
+                }
+            }
+        } else {
+            Log.w("frame \(frameView.frameIndex) has no frame")
+        }
+    }
     
     func setAllFrameOutliers(in frameView: FrameViewModel,
                              to shouldPaint: Bool,
@@ -688,18 +738,6 @@ public extension ViewModel {
     {
         Log.d("setAllFrameOutliers in frame \(frameView.frameIndex) to should paint \(shouldPaint)")
         let reason = PaintReason.userSelected(shouldPaint)
-        
-        // update the view model first
-        if let outlierViews = frameView.outlierViews {
-            outlierViews.forEach { outlierView in
-                outlierView.group.shouldPaint = reason
-            }
-        }
-
-        if frameView.frameIndex == self.currentIndex {
-            self.refreshCurrentFrame() 
-            frameView.updateAllOutlierViews()
-        }
 
         if let frame = frameView.frame {
             // update the real actor in the background
@@ -719,8 +757,7 @@ public extension ViewModel {
     }
 
     func render(frame: FrameAirplaneRemover, closure: (() -> Void)? = nil) async {
-        if let frameSaveQueue = self.frameSaveQueue
-        {
+        if let frameSaveQueue = self.frameSaveQueue {
             self.renderingCurrentFrame = true // XXX might not be right anymore
             frameSaveQueue.saveNow(frame: frame) {
                 self.refresh(frame: frame)
@@ -782,10 +819,7 @@ public extension ViewModel {
     }
 
     func refreshCurrentFrame() {
-        // XXX maybe don't wait for frame?
-        Log.d("refreshCurrentFrame \(self.currentIndex)")
         let newFrameView = self.frames[self.currentIndex]
-        Log.d("newFrameView \(newFrameView)")
         if let nextFrame = newFrameView.frame {
 
             Log.d("nextFrame \(nextFrame)")
@@ -801,8 +835,6 @@ public extension ViewModel {
                 showPreview = false
             }
 
-            Log.d("showPreview \(showPreview) self.frameViewMode \(self.frameViewMode)")
-                 
             if showPreview {
                 self.currentFrameImageIndex = newFrameView.frameIndex
                 self.currentFrameImageWasPreview = true
@@ -810,7 +842,6 @@ public extension ViewModel {
 
                 switch self.frameViewMode {
                 case .original:
-                    Log.d("FUCK NUTS \(newFrameView.previewImage)")
                     self.currentFrameImage = newFrameView.previewImage
                 case .subtraction:
                     self.currentFrameImage = newFrameView.subtractionPreviewImage
@@ -825,7 +856,6 @@ public extension ViewModel {
                 case .validation:
                     self.currentFrameImage = newFrameView.validationPreviewImage
                 case .processed:
-                    Log.d("FUCK NUTS \(newFrameView.processedPreviewImage)")
                     self.currentFrameImage = newFrameView.processedPreviewImage
                 }
             }
@@ -1052,7 +1082,7 @@ public extension ViewModel {
         if self.videoPlaying {
 
             self.previousInteractionMode = self.interactionMode
-            self.interactionMode = .play
+            self.interactionMode = .scrub
 
             Log.d("playing @ \(self.videoPlaybackFramerate) fps")
             currentVideoFrame = self.currentIndex

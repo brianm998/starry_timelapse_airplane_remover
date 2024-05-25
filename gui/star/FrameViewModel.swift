@@ -88,14 +88,8 @@ public class FrameViewModel: ObservableObject {
     @Published var houghLinesPreviewImage: Image = initialImage
     @Published var validationPreviewImage: Image = initialImage
 
-    public func updateAllOutlierViews() {
-        if let views = self.outlierViews {
-            for view in views { view.objectWillChange.send() }
-        }
-    }
-
     fileprivate func boundsFromGesture(between startLocation: CGPoint,
-                                  and endLocation: CGPoint) -> BoundingBox
+                                       and endLocation: CGPoint) -> BoundingBox
     {
 
         // first get bounding box from start and end location
@@ -124,7 +118,12 @@ public class FrameViewModel: ObservableObject {
     {
         let gestureBounds = boundsFromGesture(between: selectionStart, and: end_location)
 
+        Log.d("deleteOutliers with gestureBounds \(gestureBounds)")
+        
         var newOutlierViews: [OutlierGroupViewModel] = []
+
+        // XXX bug here where no outliers get appended,
+        // and they all dissapear from the view :(
         
         outlierViews?.forEach() { group in
             if !gestureBounds.contains(other: group.bounds) {

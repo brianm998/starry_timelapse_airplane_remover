@@ -24,7 +24,7 @@ struct BottomLeftView: View {
                           .keyboardShortcut("e", modifiers: [])
                         
                         Button("") {
-                            self.viewModel.interactionMode = .play
+                            self.viewModel.interactionMode = .scrub
                         }
                           .opacity(0)
                           .keyboardShortcut("s", modifiers: [])
@@ -45,7 +45,7 @@ struct BottomLeftView: View {
                               case .edit:
                                   viewModel.refreshCurrentFrame()
                                   
-                              case .play:
+                              case .scrub:
                                   break
                               }
                           }
