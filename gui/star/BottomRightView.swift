@@ -79,8 +79,8 @@ struct BottomRightView: View {
                                        multiSelectionPaintType: $viewModel.multiSelectionPaintType,
                                        frames: $viewModel.frames,
                                        currentIndex: $viewModel.currentIndex,
-                                       drag_start: $viewModel.drag_start,
-                                       drag_end: $viewModel.drag_end,
+                                       selectionStart: $viewModel.selectionStart,
+                                       selectionEnd: $viewModel.selectionEnd,
                                        number_of_frames: $viewModel.number_of_frames)
               }
               .sheet(isPresented: $viewModel.paintSheetShowing) {

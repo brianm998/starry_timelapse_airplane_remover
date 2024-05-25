@@ -203,8 +203,8 @@ public final class ViewModel: ObservableObject {
     @Published var multiSelectionType: MultiSelectionType = .all
     @Published var multiSelectionPaintType: MultiSelectionPaintType = .clear
     
-    @Published var drag_start: CGPoint? 
-    @Published var drag_end: CGPoint?
+    @Published var selectionStart: CGPoint? 
+    @Published var selectionEnd: CGPoint?
     
     @Published var number_of_frames: Int = 50
     

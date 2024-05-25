@@ -67,16 +67,16 @@ struct FrameEditView: View {
             }
 
             // this is the selection overlay
-            if let drag_start = viewModel.drag_start,
-               let drag_end = viewModel.drag_end
+            if let selectionStart = viewModel.selectionStart,
+               let selectionEnd = viewModel.selectionEnd
             {
-                let width = abs(drag_start.x-drag_end.x)
-                let height = abs(drag_start.y-drag_end.y)
+                let width = abs(selectionStart.x-selectionEnd.x)
+                let height = abs(selectionStart.y-selectionEnd.y)
 
-                //let _ = Log.v("drag_start \(drag_start) drag_end \(drag_end) width \(width) height \(height)")
+                //let _ = Log.v("selectionStart \(selectionStart) selectionEnd \(selectionEnd) width \(width) height \(height)")
 
-                let drag_x_offset = drag_end.x > drag_start.x ? drag_start.x : drag_end.x
-                let drag_y_offset = drag_end.y > drag_start.y ?  drag_start.y : drag_end.y
+                let drag_x_offset = selectionEnd.x > selectionStart.x ? selectionStart.x : selectionEnd.x
+                let drag_y_offset = selectionEnd.y > selectionStart.y ?  selectionStart.y : selectionEnd.y
 
                 Rectangle()
                   .fill(viewModel.selectionColor.opacity(0.2))
@@ -98,32 +98,32 @@ struct FrameEditView: View {
         DragGesture()
           .onChanged { gesture in
               let location = gesture.location
-              if viewModel.drag_start != nil {
+              if viewModel.selectionStart != nil {
                   // updating during drag is too slow
-                  viewModel.drag_end = location
+                  viewModel.selectionEnd = location
               } else {
-                  viewModel.drag_start = gesture.startLocation
+                  viewModel.selectionStart = gesture.startLocation
               }
               Log.v("location \(location)")
           }
           .onEnded { gesture in
               let end_location = gesture.location
-              if let drag_start = viewModel.drag_start {
-                  Log.v("end location \(end_location) drag start \(drag_start)")
+              if let selectionStart = viewModel.selectionStart {
+                  Log.v("end location \(end_location) drag start \(selectionStart)")
                   
                   let frameView = viewModel.currentFrameView
                   
                   switch viewModel.selectionMode {
                   case .paint:
                       update(frame: frameView, shouldPaint: true,
-                             between: drag_start, and: end_location)
+                             between: selectionStart, and: end_location)
                   case .clear:
                       update(frame: frameView, shouldPaint: false,
-                             between: drag_start, and: end_location)
+                             between: selectionStart, and: end_location)
                   case .delete:
                       //let _ = Log.d("DELETE")
                       deleteOutliers(frame: frameView,
-                                     between: drag_start,
+                                     between: selectionStart,
                                      and: end_location) 
 
                   case .details:
@@ -134,7 +134,7 @@ struct FrameEditView: View {
                               //var new_outlier_info: [OutlierGroup] = []
                               var _outlierGroupTableRows: [OutlierGroupTableRow] = []
                               
-                              frame.foreachOutlierGroup(between: drag_start,
+                              frame.foreachOutlierGroup(between: selectionStart,
                                                         and: end_location) { group in
                                   let new_row = OutlierGroupTableRow(group)
                                   _outlierGroupTableRows.append(new_row)
@@ -148,8 +148,8 @@ struct FrameEditView: View {
                                       openWindow(id: "foobar") 
                                   }
 
-                                  viewModel.drag_start = nil
-                                  viewModel.drag_end = nil
+                                  viewModel.selectionStart = nil
+                                  viewModel.selectionEnd = nil
                               }
                           }
                       } 
@@ -163,46 +163,46 @@ struct FrameEditView: View {
 
 
     private func deleteOutliers(frame frameView: FrameViewModel,
-                                between drag_start: CGPoint,
+                                between selectionStart: CGPoint,
                                 and end_location: CGPoint)
     {
         // update the view on the main thread
-        let gestureBounds = frameView.deleteOutliers(between: drag_start, and: end_location)
+        let gestureBounds = frameView.deleteOutliers(between: selectionStart, and: end_location)
         
         if let frame = frameView.frame {
             Task.detached(priority: .userInitiated) {
                 // update the frame in the background
                 try frame.deleteOutliers(in: gestureBounds) // XXX errors not handled
                 await MainActor.run {
-                    viewModel.drag_start = nil
-                    viewModel.drag_end = nil
+                    viewModel.selectionStart = nil
+                    viewModel.selectionEnd = nil
                 }
             }
         } else {
-            viewModel.drag_start = nil
-            viewModel.drag_end = nil
+            viewModel.selectionStart = nil
+            viewModel.selectionEnd = nil
         }
     }
 
     private func update(frame frameView: FrameViewModel,
                         shouldPaint: Bool,
-                        between drag_start: CGPoint,
+                        between selectionStart: CGPoint,
                         and end_location: CGPoint)
     {
         if let frame = frameView.frame {
             let new_value = shouldPaint
             Task.detached(priority: .userInitiated) {
                 frame.userSelectAllOutliers(toShouldPaint: new_value,
-                                            between: drag_start,
+                                            between: selectionStart,
                                             and: end_location)
                 await MainActor.run {
-                    viewModel.drag_start = nil
-                    viewModel.drag_end = nil
+                    viewModel.selectionStart = nil
+                    viewModel.selectionEnd = nil
                 }
             }
         } else {
-            viewModel.drag_start = nil
-            viewModel.drag_end = nil
+            viewModel.selectionStart = nil
+            viewModel.selectionEnd = nil
         }
     }
 }

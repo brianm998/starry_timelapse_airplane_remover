@@ -119,10 +119,10 @@ public class FrameViewModel: ObservableObject {
         
     }
     
-    public func deleteOutliers(between drag_start: CGPoint,
+    public func deleteOutliers(between selectionStart: CGPoint,
                                and end_location: CGPoint) -> BoundingBox
     {
-        let gestureBounds = boundsFromGesture(between: drag_start, and: end_location)
+        let gestureBounds = boundsFromGesture(between: selectionStart, and: end_location)
 
         var newOutlierViews: [OutlierGroupViewModel] = []
         
