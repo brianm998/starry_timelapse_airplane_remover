@@ -68,33 +68,15 @@ struct FrameEditView: View {
                 }.opacity(viewModel.outlierOpacity)
             }
 
-            /*
-             this is a transparent rectangle at the bottom left of the screen
-             which is necessary to avoid a bug in onHover { } for the outlier groups
-
-             this bug appears when a user hovers close to the natural placement in the
-             parent view for an outlier group, even when that view has been offset to a
-             different location.  This bug then fires onHover { } for two locations for each
-             outlier group, with most of them clustered in the default placement, which
-             here is dictated by alignment: .bottomLeading
-             both in the ZStack above and in the outlier group views inside
-             */
-            Rectangle()
-              .foregroundColor(.clear)
-              .frame(width: 1200, height: 800) // XXX arbitrary constants, could use screen size?
-              .onHover { _ in }
-
-
-
             // this is the selection overlay
-            if isDragging || viewModel.multiSelectSheetShowing,
+            if isDragging,// || viewModel.multiSelectSheetShowing,
                let drag_start = viewModel.drag_start,
                let drag_end = viewModel.drag_end
             {
                 let width = abs(drag_start.x-drag_end.x)
                 let height = abs(drag_start.y-drag_end.y)
 
-                let _ = Log.v("drag_start \(drag_start) drag_end \(drag_end) width \(width) height \(height)")
+                //let _ = Log.v("drag_start \(drag_start) drag_end \(drag_end) width \(width) height \(height)")
 
                 let drag_x_offset = drag_end.x > drag_start.x ? drag_start.x : drag_end.x
                 let drag_y_offset = drag_end.y > drag_start.y ?  drag_start.y : drag_end.y
