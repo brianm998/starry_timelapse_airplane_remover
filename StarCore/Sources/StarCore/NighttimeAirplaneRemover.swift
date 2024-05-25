@@ -191,7 +191,7 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
                                outputFilename: String,
                                baseName: String) async throws -> FrameAirplaneRemover
     {
-        await numberLeft.increment() // XXX move here VVV
+        await numberLeft.increment()
         let frame = try await FrameAirplaneRemover(with: config,
                                                    width: imageWidth!,
                                                    height: imageHeight!,
@@ -203,8 +203,11 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
                                                    baseName: baseName,
                                                    outlierOutputDirname: outlierOutputDirname,
                                                    fullyProcess: fullyProcess,
-                                                   writeOutputFiles: writeOutputFiles,
-                                                   numberLeft: numberLeft)
+                                                   writeOutputFiles: writeOutputFiles)
+        {
+            // run when frame has completed processing
+            await self.numberLeft.decrement()
+        }
 
         // run separately from init for better state logging
         await frame.setupAlignment()

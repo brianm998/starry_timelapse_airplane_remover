@@ -89,7 +89,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
 
     public let imageAccessor: ImageAccess
 
-    private var numberLeft: NumberLeft
+    private let completion: (() async -> Void)?
     
     init(with config: Config,
          width: Int,
@@ -103,9 +103,8 @@ public class FrameAirplaneRemover: Equatable, Hashable {
          outlierOutputDirname: String,
          fullyProcess: Bool = true,
          writeOutputFiles: Bool = true,
-         numberLeft: NumberLeft) async throws
+         completion: (() async -> Void)? = nil) async throws
     {
-        self.numberLeft = numberLeft
         self.imageAccessor = ImageAccessor(config: config,
                                            imageSequence: imageSequence,
                                            baseFileName: baseName)
@@ -117,7 +116,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         self.frameIndex = frameIndex // frame index in the image sequence
         self.outputFilename = outputFilename
         self.outlierOutputDirname = outlierOutputDirname
-        
+        self.completion = completion
         self.width = width
         self.height = height
 
@@ -150,8 +149,8 @@ public class FrameAirplaneRemover: Equatable, Hashable {
     private var otherFilename: String = ""
     private let baseFilename: String
 
+    // XXX make this a lazy property 
     public func setupAlignment() async {
-        Log.i("frame \(frameIndex) doing star alignment")
 
         // align a neighboring frame for detection
         let alignmentFilename = otherFilename
@@ -219,6 +218,8 @@ public class FrameAirplaneRemover: Equatable, Hashable {
     public func finish() async throws {
         Log.d("frame \(self.frameIndex) starting to finish")
 
+        guard fullyProcess else { return }
+        
         if didChange {
             // write out the outliers binary if it is not there
             // only overwrite the paint reason if it is there
@@ -238,7 +239,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         if !self.writeOutputFiles {
             Log.d("frame \(self.frameIndex) not writing output files")
             self.state = .complete
-            await numberLeft.decrement()
+            if let completion { await completion() }
             return
         }
         
@@ -284,8 +285,9 @@ public class FrameAirplaneRemover: Equatable, Hashable {
             }
         }
         self.state = .complete
-        await numberLeft.decrement()
+        if let completion { await completion() }
 
+        
         Log.i("frame \(self.frameIndex) complete")
     }
     
