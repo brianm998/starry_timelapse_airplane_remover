@@ -103,19 +103,18 @@ struct OutlierGroupView: View {
                     // underlay for when this outlier group is hovered over
                     Rectangle() // fill that is transparent
                       .foregroundColor(paint_color)
-                      .opacity(groupViewModel.viewModel.outlierOpacitySliderValue/8)
+                      .opacity(1.0/8)
                     Rectangle() // a border that's not transparent
                       .stroke(style: StrokeStyle(lineWidth: 4))
                       .foregroundColor(paint_color)
                       .blendMode(.difference)
-                      .opacity(groupViewModel.viewModel.outlierOpacitySliderValue/2)
+                      .opacity(0.5)
                 }
                 // the actual outlier group image
                 Image(nsImage: self.groupViewModel.image)
                   .renderingMode(.template) // makes this VV color work
                   .foregroundColor(paint_color)
                   .blendMode(.hardLight)
-                  .opacity(groupViewModel.viewModel.outlierOpacitySliderValue)
             }
               .offset(x: CGFloat(bounds.min.x),
                       y: CGFloat(bounds.min.y) - frameHeight + CGFloat(bounds.height))
@@ -213,7 +212,6 @@ struct OutlierGroupView: View {
         Image(systemName: imageName)
           .resizable()
           .foregroundColor(self.groupViewModel.arrowColor)
-          .opacity(groupViewModel.viewModel.outlierOpacitySliderValue)
           .onHover { self.groupViewModel.selectArrow($0) }
           .onTapGesture {
               togglePaintReason(self.groupViewModel.group.shouldPaint)
@@ -224,7 +222,7 @@ struct OutlierGroupView: View {
         Rectangle()
           .foregroundColor(self.groupViewModel.arrowColor)
           .blendMode(.difference)
-          .opacity(groupViewModel.viewModel.outlierOpacitySliderValue/2)
+          .opacity(0.5)
     }
     
     private var arrowLength: CGFloat {
