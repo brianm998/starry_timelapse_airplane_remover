@@ -487,7 +487,7 @@ public final class ViewModel: ObservableObject {
 
         Task {
 
-            try await withLimitedThrowingTaskGroup(of: Void.self) { taskGroup in
+            try await withThrowingTaskGroup(of: Void.self) { taskGroup in
 
                 UserPreferences.shared.justOpened(filename: jsonConfigFilename)
                 
@@ -522,7 +522,7 @@ public final class ViewModel: ObservableObject {
                 
                 for (frameIndex, filename) in await imageSequence.filenames.enumerated() {
 
-                    try await taskGroup.addTask() {
+                    taskGroup.addTask() {
                         let basename = removePath(fromString: filename)
                         let frame = try await FrameAirplaneRemover(with: config,
                                                                    width: imageInfo.imageWidth,
