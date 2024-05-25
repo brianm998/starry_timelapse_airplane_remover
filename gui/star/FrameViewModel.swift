@@ -88,10 +88,6 @@ public class FrameViewModel: ObservableObject {
     @Published var houghLinesPreviewImage: Image = initialImage
     @Published var validationPreviewImage: Image = initialImage
 
-    public func update() {
-        self.objectWillChange.send()
-    }
-    
     public func updateAllOutlierViews() {
         if let views = self.outlierViews {
             for view in views { view.objectWillChange.send() }

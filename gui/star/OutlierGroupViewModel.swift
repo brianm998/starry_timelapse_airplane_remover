@@ -16,13 +16,35 @@ class OutlierGroupViewModel: ObservableObject {
         self.name = name
         self.bounds = bounds
         self.image = image
+
+        self.group.shouldPaintDidChange = { [weak self] group, paintReason in
+            if let self {
+                self.setWillPaint(from: paintReason)
+            }
+        }
+
+        self.setWillPaint(from: group.shouldPaint)
     }
 
+    fileprivate func setWillPaint(from paintReason: PaintReason?) {
+        if let paintReason {
+            self.willPaint = paintReason.willPaint
+        } else {
+            self.willPaint = nil
+        }
+    }
+    
+    deinit {
+        self.group.shouldPaintDidChange = nil
+    }
+    
     @ObservedObject var viewModel: ViewModel
     
     @Published var arrowSelected = false // hovered over on frame view
 
     @Published var isSelected = false // selected for the details view
+
+    @Published var willPaint: Bool?
 
     let group: OutlierGroup
     let name: UInt16
@@ -76,8 +98,6 @@ class OutlierGroupViewModel: ObservableObject {
             return .orange
         }
     }
-
-    var willPaint: Bool? { group.shouldPaint?.willPaint }
 
     var view: some View {
         return OutlierGroupView(groupViewModel: self)

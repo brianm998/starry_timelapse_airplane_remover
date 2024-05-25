@@ -48,22 +48,24 @@ struct FrameEditView: View {
     }
     
     var imageView: some View {
-        // alignment is .bottomLeading because of the bug outlied below
+        // alignment is .bottomLeading because of the bug outlined below
         ZStack(alignment: .bottomLeading) {
             // the main image shown
             image
               .frame(width: viewModel.frameWidth, height: viewModel.frameHeight)
             if interactionMode == .edit {
-                // in edit mode, show outliers groups 
-                let current_frame_view = viewModel.currentFrameView
-                if let outlierViews = current_frame_view.outlierViews {
-                    ForEach(0 ..< outlierViews.count, id: \.self) { idx in
-                        if idx < outlierViews.count {
-                            // the actual outlier view
-                            outlierViews[idx].view
+                Group {
+                    // in edit mode, show outliers groups 
+                    let current_frame_view = viewModel.currentFrameView
+                    if let outlierViews = current_frame_view.outlierViews {
+                        ForEach(0 ..< outlierViews.count, id: \.self) { idx in
+                            if idx < outlierViews.count {
+                                // the actual outlier view
+                                outlierViews[idx].view
+                            }
                         }
                     }
-                }
+                }.opacity(viewModel.outlierOpacitySliderValue)
             }
 
             /*
@@ -195,7 +197,7 @@ struct FrameEditView: View {
     {
         // update the view on the main thread
         let gestureBounds = frameView.deleteOutliers(between: drag_start, and: end_location)
-        frameView.update()
+        
         if let frame = frameView.frame {
             Task.detached(priority: .userInitiated) {
                 // update the frame in the background
@@ -203,7 +205,7 @@ struct FrameEditView: View {
                 await MainActor.run {
                     viewModel.drag_start = nil
                     viewModel.drag_end = nil
-                    viewModel.update()
+                   
                 }
             }
         }
@@ -222,15 +224,15 @@ struct FrameEditView: View {
             viewModel.drag_end = nil
         }
 
-        //update the view layer
-        frameView.update()
+      
+       
         if let frame = frameView.frame {
             let new_value = shouldPaint
             Task.detached(priority: .userInitiated) {
                 await frame.userSelectAllOutliers(toShouldPaint: new_value,
                                                   between: drag_start,
                                                   and: end_location)
-                await MainActor.run { viewModel.update() }
+               
             }
         }
 

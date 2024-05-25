@@ -175,8 +175,6 @@ struct OutlierGroupView: View {
                         if self.groupViewModel.viewModel.shouldShowOutlierGroupTableWindow() {
                             openWindow(id: "foobar") 
                         }
-
-                        self.groupViewModel.viewModel.update()
                     }
                 } else {
                     Log.w("couldn't find frame")
@@ -202,9 +200,8 @@ struct OutlierGroupView: View {
                let outlierGroups = frame.outlierGroups,
                let outlier_group = outlierGroups.members[self.groupViewModel.group.id]
             {
-                // update the actor in the background
+                // update the outlier group in the background
                 await outlier_group.shouldPaint(shouldPaint)
-                self.groupViewModel.viewModel.update()
             } else {
                 Log.e("HOLY FUCK")
             }

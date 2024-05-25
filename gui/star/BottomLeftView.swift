@@ -91,9 +91,7 @@ struct BottomLeftView: View {
                 VStack {
                     Text("Outlier Group Opacity")
                     
-                    Slider(value: $viewModel.outlierOpacitySliderValue, in : 0...1) { _ in
-                        viewModel.update()
-                    }
+                    Slider(value: $viewModel.outlierOpacitySliderValue, in : 0...1)
                       .frame(maxWidth: 140, alignment: .bottom)
                 }
             }

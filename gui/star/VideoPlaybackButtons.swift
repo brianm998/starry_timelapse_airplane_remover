@@ -110,7 +110,7 @@ struct VideoPlaybackButtons : View {
                               """)
                 {
                     viewModel.transition(numberOfFrames: 1,
-                                    withScroll: scroller)
+                                         withScroll: scroller)
                 }
                 
                 // fast next button

@@ -17,7 +17,7 @@ struct ApplyDecisionTreeButton: View {
                                     viewModel.refreshCurrentFrame() // XXX not always still current
                                 }
                                 await viewModel.setOutlierGroups(forFrame: frame)
-                                viewModel.update()
+                              
                             }
                         }
                     }

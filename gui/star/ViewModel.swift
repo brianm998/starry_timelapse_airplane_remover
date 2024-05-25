@@ -275,11 +275,6 @@ public final class ViewModel: ObservableObject {
         }
     }
     
-    @MainActor func update() {
-        self.currentFrameView.update()
-        self.objectWillChange.send()
-    }
-
     func refresh(frame: FrameAirplaneRemover) {
         Task {
             Log.d("refreshing frame \(frame.frameIndex)")
@@ -605,8 +600,8 @@ public final class ViewModel: ObservableObject {
         self.append(frame: newFrame)
         
         // Log.d("addToViewModel self.frame \(self.frame)")
-        
-        refresh(frame: newFrame)
+
+        //refresh(frame: newFrame)
     }
 }
 
@@ -706,7 +701,6 @@ public extension ViewModel {
                         self.saveToFile(frame: frameToSave) {
                             Log.d("completion closure called for frame \(frameToSave.frameIndex)")
                             self.refresh(frame: frameToSave)
-                            //self.update()
                         }
                     }
                 }
@@ -856,7 +850,6 @@ public extension ViewModel {
                         Task { @MainActor in
                             frameView.loadingOutlierViews = false
                             self.loadingOutliers = self.loadingOutlierGroups
-                            self.update()
                             self.inTransition = false
                         }
                     }
@@ -872,9 +865,7 @@ public extension ViewModel {
             }
         } else {
             Log.d("WTF for frame \(self.currentIndex)")
-            Task { @MainActor in
-                self.update()
-            }
+           
         }
     }
 

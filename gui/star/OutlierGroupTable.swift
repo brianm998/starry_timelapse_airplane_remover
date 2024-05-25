@@ -18,7 +18,6 @@ struct OutlierGroupTableRow: Identifiable {
     
     let name: UInt16
     let size: UInt
-//    let shouldPaint: PaintReason?
     let willPaint: Bool?
 
     var willPaintType: WillPaintType {
@@ -427,8 +426,6 @@ struct OutlierGroupTable: View {
                                     }
                                 }
                             }
-                            self.viewModel.update()
-                            
                         } else {
                             Log.w("no frame")
                         }
@@ -444,7 +441,6 @@ struct OutlierGroupTable: View {
                                 outlierView.isSelected = false
                             }
                         }
-                        self.viewModel.update()
                     }
                 }
                 
