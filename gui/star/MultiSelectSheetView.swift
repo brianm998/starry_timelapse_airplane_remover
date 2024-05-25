@@ -278,6 +278,8 @@ struct MultiSelectSheetView: View {
                         // XXX handle errors here better
                         Log.e("failed to delete outliers: \(error)")
                     }
+
+                    closure()
                 }
             }
         }
