@@ -171,9 +171,7 @@ public final class ViewModel: ObservableObject {
         }
     }
 
-    @Published var outlierOpacitySliderValue = 1.0
-
-    @Published var savedOutlierOpacitySliderValue = 1.0
+    @Published var outlierOpacity = 1.0
 
     @Published var sliderValue = 0.0
 

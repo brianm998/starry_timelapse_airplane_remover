@@ -65,7 +65,7 @@ struct FrameEditView: View {
                             }
                         }
                     }
-                }.opacity(viewModel.outlierOpacitySliderValue)
+                }.opacity(viewModel.outlierOpacity)
             }
 
             /*
