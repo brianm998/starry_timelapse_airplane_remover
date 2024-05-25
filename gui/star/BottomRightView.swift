@@ -100,8 +100,14 @@ struct BottomRightView: View {
             } else {
                 Spacer()
                   .border(.purple)
-                Text("")
-                  .border(.yellow)
+
+                // show current frame number on the side
+                // but not when animating
+                if viewModel.videoPlaying {
+                    Text("")
+                } else {
+                    Text("frame \(viewModel.currentIndex)")
+                }
             }
         }
     }
@@ -119,7 +125,7 @@ struct BottomRightView: View {
                       clear   - they will be marked for not painting
                       details - they will be shown in the info window
                       """)
-              .frame(maxWidth: 280)
+              .frame(maxWidth: 320)
               .pickerStyle(.segmented)
 
             HStack {
