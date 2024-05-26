@@ -25,6 +25,27 @@ public enum FrameViewMode: String, Equatable, CaseIterable {
         LocalizedStringKey(rawValue)
     }
 
+    var frameImageType: FrameImageType {
+        switch self {
+        case .original:
+            return .original
+        case .subtraction:
+            return .subtracted
+        case .blobs:
+            return .blobs
+        case .absorbedBlobs:
+            return .absorbed
+        case .rectifiedBlobs:
+            return .rectified
+        case .paintMask:
+            return .paintMask
+        case .validation:
+            return .validated
+        case .processed:
+            return .processed
+        }
+    }
+    
     var shortName: String {
         switch self {
         case .original:

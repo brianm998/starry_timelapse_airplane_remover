@@ -1,7 +1,7 @@
 import SwiftUI
 import StarCore
 
-// displays a single frame as an image
+// displays a single frame as an image, of one of many different types
 
 public struct FrameImageView: View {
     @EnvironmentObject var viewModel: ViewModel
@@ -15,165 +15,73 @@ public struct FrameImageView: View {
         _showFullResolution = showFullResolution
     }
 
-    public var body: some View {
+    private var fullResolutionImage: some View {
         Group {
             let frameView = self.viewModel.frames[self.viewModel.currentIndex]
 
-            if let nextFrame = frameView.frame {
-
-                if showFullResolution {
-
-                    switch viewModel.frameViewMode {
-                    case .original:
-                        if let url = nextFrame.imageAccessor.urlForImage(ofType: .original, atSize: .original) {
-                            AsyncImage(url: url) { phase in
-                                if let image = phase.image {
-                                    image
-                                } else {
-                                    frameView.previewImage
-                                }
-                            }
-                        } else {
-                            Text("no url for image :(") // XXX make this better
-                        }
-
-                        
-                    case .subtraction:
-                        if let url = nextFrame.imageAccessor.urlForImage(ofType: .subtracted, atSize: .original) {
-                            AsyncImage(url: url) { phase in
-                                if let image = phase.image {
-                                    image
-                                } else {
-                                    frameView.subtractionPreviewImage
-                                }
-                            }
-                        } else {
-                            Text("no url for image :(") // XXX make this better
-                        }
-
-                                
-                    case .blobs:
-                        if let url = nextFrame.imageAccessor.urlForImage(ofType: .blobs, atSize: .original) {
-                            AsyncImage(url: url) { phase in
-                                if let image = phase.image {
-                                    image
-                                } else {
-                                    frameView.blobsPreviewImage
-                                }
-                            }
-                        } else {
-                            Text("no url for image :(") // XXX make this better
-                        }
-                        
-                        
-                    case .absorbedBlobs:
-                        if let url = nextFrame.imageAccessor.urlForImage(ofType: .absorbed, atSize: .original) {
-                            AsyncImage(url: url) { phase in
-                                if let image = phase.image {
-                                    image
-                                } else {
-                                    frameView.absorbedPreviewImage
-                                }
-                            }
-                        } else {
-                            Text("no url for image :(") // XXX make this better
-                        }
-
-                                
-                    case .rectifiedBlobs:
-                        if let url = nextFrame.imageAccessor.urlForImage(ofType: .rectified, atSize: .original) {
-                            AsyncImage(url: url) { phase in
-                                if let image = phase.image {
-                                    image
-                                } else {
-                                    frameView.rectifiedPreviewImage
-                                }
-                            }
-                        } else {
-                            Text("no url for image :(") // XXX make this better
-                        }
-
-                                
-                    case .paintMask:
-                        if let url = nextFrame.imageAccessor.urlForImage(ofType: .paintMask, atSize: .original) {
-                            AsyncImage(url: url) { phase in
-                                if let image = phase.image {
-                                    image
-                                } else {
-                                    frameView.paintMaskPreviewImage
-                                }
-                            }
-                        } else {
-                            Text("no url for image :(") // XXX make this better
-                        }
-
-                                
-                    case .validation:
-                        if let url = nextFrame.imageAccessor.urlForImage(ofType: .validated, atSize: .original) {
-                            AsyncImage(url: url) { phase in
-                                if let image = phase.image {
-                                    image
-                                } else {
-                                    frameView.validationPreviewImage
-                                }
-                            }
-                        } else {
-                            Text("no url for image :(") // XXX make this better
-                        }
-
-                                
-                    case .processed:
-                        if let url = nextFrame.imageAccessor.urlForImage(ofType: .processed, atSize: .original) {
-                            AsyncImage(url: url) { phase in
-                                if let image = phase.image {
-                                    image
-                                } else {
-                                    frameView.processedPreviewImage
-                                }
-                            }
-                        } else {
-                            Text("no url for image :(") // XXX make this better
-                        }
-                    }
-                    
-                } else {
-                    switch viewModel.frameViewMode {
-                    case .original:
-                        frameView.previewImage
-                    case .subtraction:
-                        frameView.subtractionPreviewImage
-                    case .blobs:
-                        frameView.blobsPreviewImage
-                    case .absorbedBlobs:
-                        frameView.absorbedPreviewImage
-                    case .rectifiedBlobs:
-                        frameView.rectifiedPreviewImage
-                    case .paintMask:
-                        frameView.paintMaskPreviewImage
-                    case .validation:
-                        frameView.validationPreviewImage
-                    case .processed:
-                        frameView.processedPreviewImage
+            if let nextFrame = frameView.frame,
+               let url = nextFrame.imageAccessor.urlForImage(ofType: viewModel.frameViewMode.frameImageType,
+                                                             atSize: .original)
+            {
+                AsyncImage(url: url) { phase in
+                    if let image = phase.image {
+                        image
+                    } else {
+                        self.previewImage
                     }
                 }
-
-                var showOutliers = true
-                if showOutliers {
-                    if interactionMode == .edit {
-                        ZStack() {
-                            // in edit mode, show outliers groups 
-                            if let outlierViews = frameView.outlierViews {
-                                ForEach(0 ..< outlierViews.count, id: \.self) { idx in
-                                    if idx < outlierViews.count {
-                                        // the actual outlier view
-                                        outlierViews[idx].view
-                                    }
-                                }
-                            }
-                        }.opacity(viewModel.outlierOpacity)
-                    }
-                }
+            } else {
+                Text("no url for image :(") // XXX make this better
             }
+        }
+    }
+
+    private var previewImage: some View {
+        let frameView = self.viewModel.frames[self.viewModel.currentIndex]
+        switch viewModel.frameViewMode {
+        case .original:
+            return frameView.previewImage
+        case .subtraction:
+            return frameView.subtractionPreviewImage
+        case .blobs:
+            return frameView.blobsPreviewImage
+        case .absorbedBlobs:
+            return frameView.absorbedPreviewImage
+        case .rectifiedBlobs:
+            return frameView.rectifiedPreviewImage
+        case .paintMask:
+            return frameView.paintMaskPreviewImage
+        case .validation:
+            return frameView.validationPreviewImage
+        case .processed:
+            return frameView.processedPreviewImage
+        }
+    }
+    
+    public var body: some View {
+        Group {
+
+            if showFullResolution {
+                self.fullResolutionImage
+            } else {
+                self.previewImage
+            }
+
+            if interactionMode == .edit {
+                let frameView = self.viewModel.frames[self.viewModel.currentIndex]
+                ZStack() {
+                    // in edit mode, show outliers groups 
+                    if let outlierViews = frameView.outlierViews {
+                        ForEach(0 ..< outlierViews.count, id: \.self) { idx in
+                            if idx < outlierViews.count {
+                                // the actual outlier view
+                                outlierViews[idx].view
+                            }
+                        }
+                    }
+                }.opacity(viewModel.outlierOpacity)
+            }
+
         }.onAppear {
             // XXX this only works the first time the ui shows, not when we transition frames :(
             if interactionMode == .edit {
