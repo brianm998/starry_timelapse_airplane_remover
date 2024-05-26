@@ -53,6 +53,7 @@
 		D3B29CB42B2FE5D900754C10 /* Zoomable in Frameworks */ = {isa = PBXBuildFile; productRef = D3B29CB32B2FE5D900754C10 /* Zoomable */; };
 		D3B886AD29B830BE003590A1 /* OutlierGroupTable.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3B886AC29B830BE003590A1 /* OutlierGroupTable.swift */; };
 		D3D7F0FC2A2BE10D00658862 /* StarCommands.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3D7F0FB2A2BE10D00658862 /* StarCommands.swift */; };
+		D3F0BFFE2C0390BA0061420D /* FrameImageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3F0BFFD2C0390BA0061420D /* FrameImageView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -119,6 +120,7 @@
 		D3A54A6E29AFAD2C00C50709 /* UserPreferences.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = UserPreferences.swift; sourceTree = "<group>"; };
 		D3B886AC29B830BE003590A1 /* OutlierGroupTable.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = OutlierGroupTable.swift; sourceTree = "<group>"; };
 		D3D7F0FB2A2BE10D00658862 /* StarCommands.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = StarCommands.swift; sourceTree = "<group>"; };
+		D3F0BFFD2C0390BA0061420D /* FrameImageView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = FrameImageView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -182,6 +184,7 @@
 		D386FA0F298B617300878B56 /* star */ = {
 			isa = PBXGroup;
 			children = (
+				D3F0BFFD2C0390BA0061420D /* FrameImageView.swift */,
 				D39EEDF32C027AD700DD5BC4 /* ClearUndecidedButton.swift */,
 				D32F6DB72A4E6FCE00704870 /* BottomLeftView.swift */,
 				D32F6DB82A4E6FCE00704870 /* BottomRightView.swift */,
@@ -397,6 +400,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D3F0BFFE2C0390BA0061420D /* FrameImageView.swift in Sources */,
 				D33FFC112A2CF92900F38194 /* SystemButton.swift in Sources */,
 				D32F6DB42A4D2BF800704870 /* ApplyDecisionTreeButton.swift in Sources */,
 				D332F6FF29B63DA2009E2796 /* InitialView.swift in Sources */,
