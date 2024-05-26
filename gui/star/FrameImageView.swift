@@ -84,7 +84,9 @@ public struct FrameImageView: View {
     public var body: some View {
         Group {
 
-            if showFullResolution {
+            if interactionMode == .edit,
+               showFullResolution
+            {
                 self.fullResolutionImage
             } else {
                 self.previewImage
