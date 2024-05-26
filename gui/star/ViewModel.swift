@@ -128,15 +128,6 @@ public final class ViewModel: ObservableObject {
     // view class for each frame in the sequence in order
     @Published var frames: [FrameViewModel] = [FrameViewModel(0)]
 
-    // the image we're showing to the user right now
-    @Published var currentFrameImage: Image?
-
-    // the frame index of the image that produced the currentFrameImage
-    @Published var currentFrameImageIndex: Int = 0
-
-    // the frame index of the image that produced the currentFrameImage
-    var currentFrameImageWasPreview = false
-
     // the view mode that we set this image with
 
     @Published var initialLoadInProgress = false
@@ -323,13 +314,9 @@ public final class ViewModel: ObservableObject {
 
             if let outlierTask { await outlierTask.value }
 
-            if self.currentIndex == frame.frameIndex {
-                Log.d("CRAPPY CURRENT FRAME")
-                // refresh ui 
-                await MainActor.run {
-                    Log.d("CRAPPY CURRENT FRAME MAIN THREAD")
-                    self.refreshCurrentFrame()
-                }
+            // refresh if this is the current index
+            if frame.frameIndex == self.currentIndex {
+                 self.objectWillChange.send()
             }
         }
     }
@@ -381,10 +368,10 @@ public final class ViewModel: ObservableObject {
                         let outlierImage = NSImage(cgImage: cgImage, size: size)
                         
                         let groupView = await OutlierGroupViewModel(viewModel: self,
-                                                               group: group,
-                                                               name: group.id,
-                                                               bounds: group.bounds,
-                                                               image: outlierImage)
+                                                                    group: group,
+                                                                    name: group.id,
+                                                                    bounds: group.bounds,
+                                                                    image: outlierImage)
                         newOutlierGroups.append(groupView)
                     } else {
                         Log.e("frame \(frame.frameIndex) outlier group no image")
@@ -433,8 +420,6 @@ public final class ViewModel: ObservableObject {
         }
         self.sequenceLoaded = false
         self.frames = [FrameViewModel(0)]
-        self.currentFrameImage = nil
-        self.currentFrameImageIndex = 0
         self.initialLoadInProgress = false
         self.loadingAllOutliers = false
         self.numberOfFramesWithOutliersLoaded = 0
@@ -760,7 +745,6 @@ public extension ViewModel {
             self.renderingCurrentFrame = true // XXX might not be right anymore
             frameSaveQueue.saveNow(frame: frame) {
                 self.refresh(frame: frame)
-                self.refreshCurrentFrame()
                 self.renderingCurrentFrame = false
                 closure?()
             }
@@ -811,13 +795,11 @@ public extension ViewModel {
             }
         }
         
-        refreshCurrentFrame()
-
         let endTime = Date().timeIntervalSinceReferenceDate
         Log.d("transition to frame \(newFrameView.frameIndex) took \(endTime - startTime) seconds")
     }
-
-    func refreshCurrentFrame() { // XXX move this to view code
+/*
+    func refreshCurrentFrame_OLD() { // XXX move this to view code
         let newFrameView = self.frames[self.currentIndex]
         if let nextFrame = newFrameView.frame {
 
@@ -970,7 +952,7 @@ public extension ViewModel {
            
         }
     }
-
+*/
     // next frame entry point
     func transition(numberOfFrames: Int,
                     withScroll scroller: ScrollViewProxy? = nil)
@@ -1082,66 +1064,31 @@ public extension ViewModel {
             self.interactionMode = .scrub
 
             Log.d("playing @ \(self.videoPlaybackFramerate) fps")
-            currentVideoFrame = self.currentIndex
 
             videoPlayTimer = Timer.scheduledTimer(withTimeInterval: 1/Double(self.videoPlaybackFramerate),
                                                   repeats: true) { timer in
-                let currentIdx = currentVideoFrame
-                // play each frame of the video in sequence
-                if currentIdx >= self.frames.count ||
-                     currentIdx < 0
-                {
-                    self.stopVideo(scroller)
-                } else {
-                    // play each frame of the video in sequence
-                    switch self.frameViewMode {
-                    case .original:
-                        self.currentFrameImage =
-                          self.frames[currentIdx].previewImage
-                        
-                    case .subtraction:
-                        self.currentFrameImage =
-                          self.frames[currentIdx].subtractionPreviewImage
 
-                    case .blobs: 
-                        self.currentFrameImage =
-                          self.frames[currentIdx].blobsPreviewImage
-
-                    case .absorbedBlobs: 
-                        self.currentFrameImage =
-                          self.frames[currentIdx].absorbedPreviewImage
-
-                    case .rectifiedBlobs: 
-                        self.currentFrameImage =
-                          self.frames[currentIdx].rectifiedPreviewImage
-
-                    case .paintMask: 
-                        self.currentFrameImage =
-                          self.frames[currentIdx].paintMaskPreviewImage
-
-                    case .validation:
-                        self.currentFrameImage =
-                          self.frames[currentIdx].validationPreviewImage
-                        
-                    case .processed:
-                        self.currentFrameImage =
-                          self.frames[currentIdx].processedPreviewImage
-                    }
+                var nextVideoFrame: Int = 0
+                
+                switch self.videoPlayMode {
+                case .forward:
+                    nextVideoFrame = self.currentIndex + 1
                     
-                    switch self.videoPlayMode {
-                    case .forward:
-                        currentVideoFrame = currentIdx + 1
-                        
-                    case .reverse:
-                        currentVideoFrame = currentIdx - 1
-                    }
-                    
-                    if currentVideoFrame >= self.frames.count {
-                        self.stopVideo(scroller)
-                    } else {
-                        self.sliderValue = Double(currentIdx)
-                    }
+                case .reverse:
+                    nextVideoFrame = self.currentIndex - 1
                 }
+                
+                if nextVideoFrame >= self.frames.count {
+                    self.stopVideo(scroller)
+                    self.currentIndex = self.frames.count - 1
+                } else if nextVideoFrame < 0 {
+                    self.stopVideo(scroller)
+                    self.currentIndex = 0
+                } else {
+                    self.self.currentIndex = nextVideoFrame
+                    self.sliderValue = Double(self.currentIndex)
+                }
+
             }
         } else {
             stopVideo(scroller)
@@ -1152,16 +1099,6 @@ public extension ViewModel {
         videoPlayTimer?.invalidate()
 
         self.interactionMode = self.previousInteractionMode
-        
-        if currentVideoFrame >= 0,
-           currentVideoFrame < self.frames.count
-        {
-            self.currentIndex = currentVideoFrame
-            self.sliderValue = Double(self.currentIndex)
-        } else {
-            self.currentIndex = 0
-            self.sliderValue = Double(self.currentIndex)
-        }
         
         self.videoPlaying = false
         self.backgroundColor = .gray
@@ -1222,5 +1159,4 @@ public extension ViewModel {
 // XXX Fing global :(
 fileprivate var videoPlayTimer: Timer?
 
-fileprivate var currentVideoFrame = 0
 

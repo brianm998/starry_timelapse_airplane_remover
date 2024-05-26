@@ -21,11 +21,7 @@ struct ApplyAllDecisionTreeButton: View {
                             Log.d("doh")
                             Task {
                                 await viewModel.refresh(frame: frame)
-                                if frame.frameIndex == viewModel.currentIndex {
-                                    viewModel.refreshCurrentFrame() // XXX not always still current
-                                }
                                 await viewModel.setOutlierGroups(forFrame: frame)
-                               
                             }
                         }
                     } else {

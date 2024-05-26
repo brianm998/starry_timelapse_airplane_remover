@@ -39,16 +39,6 @@ struct BottomLeftView: View {
                                   and editing an individual frame.
                                   """)
                           .disabled(viewModel.videoPlaying)
-                          .onChange(of: viewModel.interactionMode) { mode in
-                              Log.d("interactionMode change \(mode)")
-                              switch mode {
-                              case .edit:
-                                  viewModel.refreshCurrentFrame()
-                                  
-                              case .scrub:
-                                  break
-                              }
-                          }
                           .frame(width: pickerWidth)
                           .pickerStyle(.segmented)
                     }
@@ -75,10 +65,6 @@ struct BottomLeftView: View {
                               """)
                       .frame(width: 450)
                       .help("show original or processed frame")
-                      .onChange(of: viewModel.frameViewMode) { pick in
-                          Log.d("pick \(pick)")
-                          viewModel.refreshCurrentFrame()
-                      }
                       .pickerStyle(.segmented)
                     Spacer().frame(maxWidth: 6, maxHeight: 10)
                     Text("frames")

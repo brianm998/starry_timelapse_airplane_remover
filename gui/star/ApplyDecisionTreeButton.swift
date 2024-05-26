@@ -13,11 +13,7 @@ struct ApplyDecisionTreeButton: View {
                         await viewModel.render(frame: frame) {
                             Task {
                                 await viewModel.refresh(frame: frame)
-                                if frame.frameIndex == viewModel.currentIndex {
-                                    viewModel.refreshCurrentFrame() // XXX not always still current
-                                }
                                 await viewModel.setOutlierGroups(forFrame: frame)
-                              
                             }
                         }
                     }

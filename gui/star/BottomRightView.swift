@@ -130,9 +130,6 @@ struct BottomRightView: View {
 
             HStack {
                 Toggle("full resolution", isOn: $viewModel.showFullResolution)
-                  .onChange(of: viewModel.showFullResolution) { modeOn in
-                      viewModel.refreshCurrentFrame()
-                  }
                 Toggle("show filmstip", isOn: $viewModel.showFilmstrip)
             }
         }

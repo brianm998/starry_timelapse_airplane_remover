@@ -9,15 +9,12 @@ struct FrameEditView: View {
     @EnvironmentObject var viewModel: ViewModel
     @Environment(\.openWindow) private var openWindow
 
-    let image: Image
     @Binding private var interactionMode: InteractionMode
     @Binding private var showFullResolution: Bool
 
-    public init(image: Image,
-               interactionMode: Binding<InteractionMode>,
+    public init(interactionMode: Binding<InteractionMode>,
                showFullResolution: Binding<Bool>)
     {
-        self.image = image
         _interactionMode = interactionMode
         _showFullResolution = showFullResolution
     }
@@ -47,10 +44,13 @@ struct FrameEditView: View {
     
     var imageView: some View {
         // alignment is .bottomLeading because of the bug outlined below
-        ZStack(alignment: .bottomLeading) {
+        ZStack(/*alignment: .bottomLeading*/) {
             // the main image shown
-            image
+
+            FrameImageView(interactionMode: self.$interactionMode,
+                           showFullResolution: self.$showFullResolution)
               .frame(width: viewModel.frameWidth, height: viewModel.frameHeight)
+            /*
             if interactionMode == .edit {
                 Group {
                     // in edit mode, show outliers groups 
@@ -65,7 +65,7 @@ struct FrameEditView: View {
                     }
                 }.opacity(viewModel.outlierOpacity)
             }
-
+*/
             // this is the selection overlay
             if let selectionStart = viewModel.selectionStart,
                let selectionEnd = viewModel.selectionEnd

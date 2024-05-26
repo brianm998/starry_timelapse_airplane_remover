@@ -15,7 +15,7 @@ struct OutlierGroupView: View {
     var body: some View {
         // .bottomLeading alignment is used to avoid a bug in .onHover and onTap
         // which is described in more detail in FrameEditView
-        ZStack(alignment: .bottomLeading) {
+        ZStack(/*alignment: .bottomLeading*/) {
             let frameWidth = self.groupViewModel.viewModel.frameWidth
             let frameHeight = self.groupViewModel.viewModel.frameHeight
             let bounds = self.groupViewModel.bounds
@@ -28,45 +28,45 @@ struct OutlierGroupView: View {
             let center_x = CGFloat(bounds.center.x)
             let center_y = CGFloat(bounds.center.y)
 
-            // this centers the arrows on the lines
-            let fiddle = arrow_height/2 - line_width/2
-            
             if self.groupViewModel.arrowSelected || will_paint || unknown_paint {
                 // arrow indicators on the side of the image
 
                 // arrow on left side
                 arrowImage(named: "arrow.right")
                   .frame(width: arrow_length, height: arrow_height)
-                  .offset(x: -arrow_length,
-                          y: center_y - frameHeight + fiddle)
+                  .offset(x: -arrow_length/2 - frameWidth/2,
+                          y: center_y - frameHeight/2 + CGFloat(bounds.height/2))
 
                 // arrow on top
                 arrowImage(named: "arrow.down")
                   .frame(width: arrow_height, height: arrow_length)
-                  .offset(x: center_x - fiddle,
-                          y: -frameHeight)
+                  .offset(x: center_x - frameWidth/2 - CGFloat(bounds.width/2),
+                          y: -frameHeight/2 - arrow_length/2)
 
                 // arrow on right side
                 arrowImage(named: "arrow.left")
                   .frame(width: arrow_length, height: arrow_height)
-                  .offset(x: frameWidth,
-                          y: center_y - frameHeight + fiddle)
+                  .offset(x: frameWidth/2 + arrow_length/2,
+                          y: center_y - frameHeight/2 + CGFloat(bounds.height/2))
 
                 // arrow on bottom 
                 arrowImage(named: "arrow.up")
                   .frame(width: arrow_height, height: arrow_length)
-                  .offset(x: center_x - fiddle, y: arrow_length)
+                  .offset(x: center_x - frameWidth/2 - CGFloat(bounds.width/2),
+                          y: arrow_length/2 + frameHeight/2)
             }
             
             if self.groupViewModel.arrowSelected {
+
+                let _ = Log.d("CRAPPY bounds \(bounds) frameWidth \(groupViewModel.viewModel.frameWidth) frameHeight \(groupViewModel.viewModel.frameHeight)")
                 
                 // lines across the frame between the arrows and outlier group bounds
-                let left_line_width = CGFloat(bounds.center.x - bounds.width/2)
+                let left_line_width = CGFloat(bounds.min.x - bounds.width/2)
 
                 let right_line_width = groupViewModel.viewModel.frameWidth -
                   left_line_width - CGFloat(bounds.width)
 
-                let top_line_height = CGFloat(bounds.center.y - bounds.height/2)
+                let top_line_height = CGFloat(bounds.min.y + bounds.height/2)
 
                 let bottom_line_height = groupViewModel.viewModel.frameHeight -
                   top_line_height - CGFloat(bounds.height)
@@ -75,30 +75,33 @@ struct OutlierGroupView: View {
                 outlierFrameLine()
                   .frame(width: left_line_width,
                          height: line_width)
-                  .offset(x: 0, y: CGFloat(bounds.center.y) - frameHeight)
+                  .offset(x: -frameWidth / 2 + left_line_width / 2,
+                          y: CGFloat(bounds.center.y) - frameHeight/2 + CGFloat(bounds.height/2))
 
                 // top line 
                 outlierFrameLine()
                   .frame(width: line_width,
                          height: top_line_height)
-                  .offset(x: CGFloat(bounds.center.x),
-                          y: CGFloat(bounds.min.y)-frameHeight)
+                  .offset(x: CGFloat(bounds.center.x)-frameWidth / 2 - CGFloat(bounds.width/2),
+                          y: -frameHeight / 2 + top_line_height / 2)
 
                 // right line
                 outlierFrameLine()
                   .frame(width: right_line_width,
                          height: line_width)
-                  .offset(x: CGFloat(bounds.max.x),
-                          y: CGFloat(bounds.center.y) - frameHeight)
+                  .offset(x: CGFloat(bounds.center.x)-frameWidth/2 + right_line_width / 2,
+                          y: CGFloat(bounds.center.y) - frameHeight / 2 + CGFloat(bounds.height/2))
+
 
                 // bottom line
                 outlierFrameLine()
                   .frame(width: line_width,
                          height: bottom_line_height)
-                  .offset(x: CGFloat(bounds.center.x), y: 0)
+                  .offset(x: CGFloat(bounds.center.x) - frameWidth / 2 - CGFloat(bounds.width/2),
+                          y: CGFloat(bounds.center.y)-frameHeight/2 + bottom_line_height / 2 + CGFloat(bounds.height))
             }
             
-            ZStack(alignment: .bottomLeading) {
+            ZStack(/*alignment: .bottomLeading*/) {
                 if self.groupViewModel.arrowSelected {
                     // underlay for when this outlier group is hovered over
                     Rectangle() // fill that is transparent
@@ -116,8 +119,8 @@ struct OutlierGroupView: View {
                   .foregroundColor(paint_color)
                   .blendMode(.hardLight)
             }
-              .offset(x: CGFloat(bounds.min.x),
-                      y: CGFloat(bounds.min.y) - frameHeight + CGFloat(bounds.height))
+              .offset(x: CGFloat(bounds.min.x) - frameWidth/2,
+                      y: CGFloat(bounds.min.y) - frameHeight/2 + CGFloat(bounds.height))
               .frame(width: CGFloat(bounds.width),
                      height: CGFloat(bounds.height))
               .onHover { self.groupViewModel.selectArrow($0) }
