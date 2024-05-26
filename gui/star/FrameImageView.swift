@@ -20,9 +20,122 @@ public struct FrameImageView: View {
             let frameView = self.viewModel.frames[self.viewModel.currentIndex]
 
             if let nextFrame = frameView.frame {
-                
+
                 if showFullResolution {
-                    // XXX do this
+
+                    switch viewModel.frameViewMode {
+                    case .original:
+                        if let url = nextFrame.imageAccessor.urlForImage(ofType: .original, atSize: .original) {
+                            AsyncImage(url: url) { phase in
+                                if let image = phase.image {
+                                    image
+                                } else {
+                                    frameView.previewImage
+                                }
+                            }
+                        } else {
+                            Text("no url for image :(") // XXX make this better
+                        }
+
+                        
+                    case .subtraction:
+                        if let url = nextFrame.imageAccessor.urlForImage(ofType: .subtracted, atSize: .original) {
+                            AsyncImage(url: url) { phase in
+                                if let image = phase.image {
+                                    image
+                                } else {
+                                    frameView.subtractionPreviewImage
+                                }
+                            }
+                        } else {
+                            Text("no url for image :(") // XXX make this better
+                        }
+
+                                
+                    case .blobs:
+                        if let url = nextFrame.imageAccessor.urlForImage(ofType: .blobs, atSize: .original) {
+                            AsyncImage(url: url) { phase in
+                                if let image = phase.image {
+                                    image
+                                } else {
+                                    frameView.blobsPreviewImage
+                                }
+                            }
+                        } else {
+                            Text("no url for image :(") // XXX make this better
+                        }
+                        
+                        
+                    case .absorbedBlobs:
+                        if let url = nextFrame.imageAccessor.urlForImage(ofType: .absorbed, atSize: .original) {
+                            AsyncImage(url: url) { phase in
+                                if let image = phase.image {
+                                    image
+                                } else {
+                                    frameView.absorbedPreviewImage
+                                }
+                            }
+                        } else {
+                            Text("no url for image :(") // XXX make this better
+                        }
+
+                                
+                    case .rectifiedBlobs:
+                        if let url = nextFrame.imageAccessor.urlForImage(ofType: .rectified, atSize: .original) {
+                            AsyncImage(url: url) { phase in
+                                if let image = phase.image {
+                                    image
+                                } else {
+                                    frameView.rectifiedPreviewImage
+                                }
+                            }
+                        } else {
+                            Text("no url for image :(") // XXX make this better
+                        }
+
+                                
+                    case .paintMask:
+                        if let url = nextFrame.imageAccessor.urlForImage(ofType: .paintMask, atSize: .original) {
+                            AsyncImage(url: url) { phase in
+                                if let image = phase.image {
+                                    image
+                                } else {
+                                    frameView.paintMaskPreviewImage
+                                }
+                            }
+                        } else {
+                            Text("no url for image :(") // XXX make this better
+                        }
+
+                                
+                    case .validation:
+                        if let url = nextFrame.imageAccessor.urlForImage(ofType: .validated, atSize: .original) {
+                            AsyncImage(url: url) { phase in
+                                if let image = phase.image {
+                                    image
+                                } else {
+                                    frameView.validationPreviewImage
+                                }
+                            }
+                        } else {
+                            Text("no url for image :(") // XXX make this better
+                        }
+
+                                
+                    case .processed:
+                        if let url = nextFrame.imageAccessor.urlForImage(ofType: .processed, atSize: .original) {
+                            AsyncImage(url: url) { phase in
+                                if let image = phase.image {
+                                    image
+                                } else {
+                                    frameView.processedPreviewImage
+                                }
+                            }
+                        } else {
+                            Text("no url for image :(") // XXX make this better
+                        }
+                    }
+                    
                 } else {
                     switch viewModel.frameViewMode {
                     case .original:
