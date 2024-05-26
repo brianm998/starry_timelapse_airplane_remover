@@ -138,7 +138,6 @@ public final class ViewModel: ObservableObject {
     var currentFrameImageWasPreview = false
 
     // the view mode that we set this image with
-    var currentFrameImageViewMode: FrameViewMode = .original // XXX really orig?
 
     @Published var initialLoadInProgress = false
     @Published var loadingAllOutliers = false
@@ -818,7 +817,7 @@ public extension ViewModel {
         Log.d("transition to frame \(newFrameView.frameIndex) took \(endTime - startTime) seconds")
     }
 
-    func refreshCurrentFrame() {
+    func refreshCurrentFrame() { // XXX move this to view code
         let newFrameView = self.frames[self.currentIndex]
         if let nextFrame = newFrameView.frame {
 
@@ -838,7 +837,6 @@ public extension ViewModel {
             if showPreview {
                 self.currentFrameImageIndex = newFrameView.frameIndex
                 self.currentFrameImageWasPreview = true
-                self.currentFrameImageViewMode = self.frameViewMode
 
                 switch self.frameViewMode {
                 case .original:
@@ -865,7 +863,6 @@ public extension ViewModel {
 
                         self.currentFrameImageIndex = newFrameView.frameIndex
                         self.currentFrameImageWasPreview = false
-                        self.currentFrameImageViewMode = self.frameViewMode
                         
                         switch self.frameViewMode {
                         case .original:
