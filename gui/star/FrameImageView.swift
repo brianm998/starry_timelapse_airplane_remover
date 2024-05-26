@@ -61,23 +61,21 @@ public struct FrameImageView: View {
     }
 
     private func maybeLoadOutliers() {
-        if interactionMode == .edit {
-            // try loading outliers if there aren't any present
-            let frameView = self.viewModel.frames[self.viewModel.currentIndex]
+        // try loading outliers if there aren't any present
+        let frameView = self.viewModel.frames[self.viewModel.currentIndex]
 
-            if frameView.outlierViews == nil,
-               !frameView.loadingOutlierViews,
-               let frame = frameView.frame
-            {
-                frameView.loadingOutlierViews = true
-                viewModel.loadingOutliers = true
-                Task.detached(priority: .userInitiated) {
-                    let _ = try await frame.loadOutliers()
-                    await self.viewModel.setOutlierGroups(forFrame: frame)
-                    Task { @MainActor in
-                        frameView.loadingOutlierViews = false
-                        self.viewModel.loadingOutliers = self.viewModel.loadingOutlierGroups
-                    }
+        if frameView.outlierViews == nil,
+           !frameView.loadingOutlierViews,
+           let frame = frameView.frame
+        {
+            frameView.loadingOutlierViews = true
+            viewModel.loadingOutliers = true
+            Task.detached(priority: .userInitiated) {
+                let _ = try await frame.loadOutliers()
+                await self.viewModel.setOutlierGroups(forFrame: frame)
+                Task { @MainActor in
+                    frameView.loadingOutlierViews = false
+                    self.viewModel.loadingOutliers = self.viewModel.loadingOutlierGroups
                 }
             }
         } 
@@ -108,7 +106,9 @@ public struct FrameImageView: View {
             }
 
         }.onChange(of: viewModel.currentIndex, initial: true) {
-            maybeLoadOutliers()
+            if interactionMode == .edit {
+                maybeLoadOutliers()
+            }
         }
     }
 }
