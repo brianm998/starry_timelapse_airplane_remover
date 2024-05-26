@@ -13,7 +13,7 @@ struct FrameEditView: View {
     @Binding private var showFullResolution: Bool
 
     public init(interactionMode: Binding<InteractionMode>,
-               showFullResolution: Binding<Bool>)
+                showFullResolution: Binding<Bool>)
     {
         _interactionMode = interactionMode
         _showFullResolution = showFullResolution
@@ -43,37 +43,19 @@ struct FrameEditView: View {
     }
     
     var imageView: some View {
-        // alignment is .bottomLeading because of the bug outlined below
-        ZStack(/*alignment: .bottomLeading*/) {
+        ZStack() {
             // the main image shown
 
             FrameImageView(interactionMode: self.$interactionMode,
                            showFullResolution: self.$showFullResolution)
               .frame(width: viewModel.frameWidth, height: viewModel.frameHeight)
-            /*
-            if interactionMode == .edit {
-                Group {
-                    // in edit mode, show outliers groups 
-                    let current_frame_view = viewModel.currentFrameView
-                    if let outlierViews = current_frame_view.outlierViews {
-                        ForEach(0 ..< outlierViews.count, id: \.self) { idx in
-                            if idx < outlierViews.count {
-                                // the actual outlier view
-                                outlierViews[idx].view
-                            }
-                        }
-                    }
-                }.opacity(viewModel.outlierOpacity)
-            }
-*/
+            
             // this is the selection overlay
             if let selectionStart = viewModel.selectionStart,
                let selectionEnd = viewModel.selectionEnd
             {
                 let width = abs(selectionStart.x-selectionEnd.x)
                 let height = abs(selectionStart.y-selectionEnd.y)
-
-                //let _ = Log.v("selectionStart \(selectionStart) selectionEnd \(selectionEnd) width \(width) height \(height)")
 
                 let drag_x_offset = selectionEnd.x > selectionStart.x ? selectionStart.x : selectionEnd.x
                 let drag_y_offset = selectionEnd.y > selectionStart.y ?  selectionStart.y : selectionEnd.y
@@ -86,8 +68,8 @@ struct FrameEditView: View {
                       .foregroundColor(viewModel.selectionColor.opacity(0.8))
                   )                
                   .frame(width: width, height: height)
-                  .offset(x: drag_x_offset,
-                          y: CGFloat(-viewModel.frameHeight) + drag_y_offset + height)
+                  .offset(x: drag_x_offset - CGFloat(viewModel.frameWidth/2) + width/2,
+                          y: drag_y_offset - CGFloat(viewModel.frameHeight/2) + height/2)
             }
         }
         // XXX selecting and zooming conflict with eachother
