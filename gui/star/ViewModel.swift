@@ -398,9 +398,12 @@ public final class ViewModel: ObservableObject {
                         Log.e("frame \(frame.frameIndex) outlier group no image")
                     }
                 }
-                await self.frames[frame.frameIndex].outlierViews = newOutlierGroups
-
-                await MainActor.run { self.objectWillChange.send() }
+                
+                let foo = newOutlierGroups
+                await MainActor.run {
+                    self.frames[frame.frameIndex].outlierViews = foo
+                    self.objectWillChange.send()
+                }
             }
         }
     }
