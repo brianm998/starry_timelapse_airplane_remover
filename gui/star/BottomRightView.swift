@@ -90,7 +90,11 @@ struct BottomRightView: View {
                       
                       for idx in startIndex ... endIndex {
                           // XXX use a task group?
-                          viewModel.setAllFrameOutliers(in: viewModel.frames[idx], to: shouldPaint)
+                          if idx >= 0,
+                             idx < viewModel.frames.count
+                          {
+                              viewModel.setAllFrameOutliers(in: viewModel.frames[idx], to: shouldPaint)
+                          }
                       }
                       viewModel.updatingFrameBatch = false
                       
