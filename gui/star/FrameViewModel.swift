@@ -136,4 +136,5 @@ public class FrameViewModel: ObservableObject {
     }
 }
 
-fileprivate let initialImage = Image(systemName: "rectangle.fill").resizable()
+// XXX make this a loading view
+fileprivate let initialImage = Image(systemName: "clock.circle.fill").resizable()
