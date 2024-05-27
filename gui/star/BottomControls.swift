@@ -11,7 +11,6 @@ enum BottomControlLayout {
 
 struct BottomControls: View {
     @EnvironmentObject var viewModel: ViewModel
-    let scroller: ScrollViewProxy
 
     @State private var layout: BottomControlLayout = .fullyHorizontal
 
@@ -107,7 +106,7 @@ struct BottomControls: View {
 
     // the video playback buttons in the middle
     func buttonsView() -> some View {
-        VideoPlaybackButtons(scroller: scroller)
+        VideoPlaybackButtons()
           .frame(height: 40, alignment: .center)
           .fixedSize()
           .readSize {

@@ -777,8 +777,7 @@ public extension ViewModel {
 
     // next frame point
     func transition(toFrame newFrameView: FrameViewModel,
-                    from oldFrame: FrameAirplaneRemover?,
-                    withScroll scroller: ScrollViewProxy? = nil)
+                    from oldFrame: FrameAirplaneRemover?)
     {
         if inTransition { return }
 //        inTransition = true
@@ -795,9 +794,6 @@ public extension ViewModel {
         self.sliderValue = Double(self.currentIndex)
         
         if interactionMode == .edit {
-            if let scroller {
-                scroller.scrollTo(self.currentIndex, anchor: .center)
-            }
 
             //self.labelText = "frame \(newFrameView.frameIndex)"
 
@@ -824,8 +820,7 @@ public extension ViewModel {
     }
 
     // next frame entry point
-    func transition(numberOfFrames: Int,
-                    withScroll scroller: ScrollViewProxy? = nil)
+    func transition(numberOfFrames: Int)
     {
         let currentFrame = self.currentFrame
 
@@ -837,15 +832,13 @@ public extension ViewModel {
         let newFrameView = self.frames[newIndex]
         
         self.transition(toFrame: newFrameView,
-                        from: currentFrame,
-                        withScroll: scroller)
+                        from: currentFrame)
     }
 
     func transition(until fastAdvancementType: FastAdvancementType,
                   from frame: FrameAirplaneRemover,
                   forwards: Bool,
-                  currentIndex: Int? = nil,
-                  withScroll scroller: ScrollViewProxy? = nil)
+                  currentIndex: Int? = nil)
     {
         var frameIndex: Int = 0
         if let currentIndex = currentIndex {
@@ -859,8 +852,7 @@ public extension ViewModel {
         {
             if frameIndex != frame.frameIndex {
                 self.transition(toFrame: self.frames[frameIndex],
-                                from: frame,
-                                withScroll: scroller)
+                                from: frame)
             }
             return
         }
@@ -905,12 +897,10 @@ public extension ViewModel {
             self.transition(until: fastAdvancementType,
                             from: frame,
                             forwards: forwards,
-                            currentIndex: nextFrameIndex,
-                            withScroll: scroller)
+                            currentIndex: nextFrameIndex)
         } else {
             self.transition(toFrame: nextFrameView,
-                            from: frame,
-                            withScroll: scroller)
+                            from: frame)
         }
     }
 
@@ -926,7 +916,7 @@ public extension ViewModel {
     }
 
     // starts or stops video from playing
-    func togglePlay(_ scroller: ScrollViewProxy? = nil) {
+    func togglePlay() {
         self.videoPlaying = !self.videoPlaying
         if self.videoPlaying {
 
@@ -949,10 +939,10 @@ public extension ViewModel {
                 }
                 
                 if nextVideoFrame >= self.frames.count {
-                    self.stopVideo(scroller)
+                    self.stopVideo()
                     self.currentIndex = self.frames.count - 1
                 } else if nextVideoFrame < 0 {
-                    self.stopVideo(scroller)
+                    self.stopVideo()
                     self.currentIndex = 0
                 } else {
                     self.self.currentIndex = nextVideoFrame
@@ -961,66 +951,49 @@ public extension ViewModel {
 
             }
         } else {
-            stopVideo(scroller)
+            stopVideo()
         }
     }
 
-    func stopVideo(_ scroller: ScrollViewProxy? = nil) {
+    func stopVideo() {
         videoPlayTimer?.invalidate()
 
         self.interactionMode = self.previousInteractionMode
         
         self.videoPlaying = false
         self.backgroundColor = .gray
-        
-        if let scroller = scroller {
-            // delay the scroller a little bit to allow the view to adjust
-            // otherwise the call to scrollTo() happens when it's not visible
-            // and is ignored, leaving the scroll view unmoved.
-            Task {
-                await MainActor.run {
-                    scroller.scrollTo(self.currentIndex, anchor: .center)
-                }
-            }
-        }
     }
 
-    func goToFirstFrameButtonAction(withScroll scroller: ScrollViewProxy? = nil) {
+    func goToFirstFrameButtonAction() {
         self.transition(toFrame: self.frames[0],
-                        from: self.currentFrame,
-                        withScroll: scroller)
+                        from: self.currentFrame)
 
     }
 
-    func goToLastFrameButtonAction(withScroll scroller: ScrollViewProxy? = nil) {
+    func goToLastFrameButtonAction() {
         self.transition(toFrame: self.frames[self.frames.count-1],
-                        from: self.currentFrame,
-                        withScroll: scroller)
+                        from: self.currentFrame)
 
     }
 
-    func fastPreviousButtonAction(withScroll scroller: ScrollViewProxy? = nil) {
+    func fastPreviousButtonAction() {
         if self.fastAdvancementType == .normal {
-            self.transition(numberOfFrames: -self.fastSkipAmount,
-                            withScroll: scroller)
+            self.transition(numberOfFrames: -self.fastSkipAmount)
         } else if let currentFrame = self.currentFrame {
             self.transition(until: self.fastAdvancementType,
                             from: currentFrame,
-                            forwards: false,
-                            withScroll: scroller)
+                            forwards: false)
         }
     }
 
-    func fastForwardButtonAction(withScroll scroller: ScrollViewProxy? = nil) {
+    func fastForwardButtonAction() {
 
         if self.fastAdvancementType == .normal {
-            self.transition(numberOfFrames: self.fastSkipAmount,
-                            withScroll: scroller)
+            self.transition(numberOfFrames: self.fastSkipAmount)
         } else if let currentFrame = self.currentFrame {
             self.transition(until: self.fastAdvancementType,
                             from: currentFrame,
-                            forwards: true,
-                            withScroll: scroller)
+                            forwards: true)
         }
     }
 

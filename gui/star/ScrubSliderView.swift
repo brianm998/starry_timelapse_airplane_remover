@@ -5,7 +5,6 @@ import logging
 // slider at the bottom that scrubs the frame position
 struct ScrubSliderView: View {
     @EnvironmentObject var viewModel: ViewModel
-    let scroller: ScrollViewProxy
     
     var body: some View {
         if viewModel.interactionMode == .edit {
@@ -29,8 +28,7 @@ struct ScrubSliderView: View {
               let newFrameView = viewModel.frames[newFrameIndex]
               let currentFrame = viewModel.currentFrame
               self.viewModel.transition(toFrame: newFrameView,
-                                        from: currentFrame,
-                                        withScroll: scroller)
+                                        from: currentFrame)
           }
     }
 }

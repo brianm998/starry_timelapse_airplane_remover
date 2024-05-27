@@ -5,7 +5,6 @@ import StarCore
 struct FilmstripImageView: View {
     @EnvironmentObject var viewModel: ViewModel
     let frameIndex: Int
-    let scroller: ScrollViewProxy
 
     var body: some View {
         return VStack(alignment: .leading) {
@@ -40,8 +39,7 @@ struct FilmstripImageView: View {
               
               let currentFrame = viewModel.currentFrame
               viewModel.transition(toFrame: frameView,
-                                   from: currentFrame,
-                                   withScroll: scroller)
+                                   from: currentFrame)
           }
     }
 }

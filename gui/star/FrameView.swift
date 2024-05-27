@@ -4,8 +4,6 @@ import StarCore
     
 // shows either an editable view of the current frame or
 // just the frame itself for scrubbing and video playback
-// falling back to a place holder when we have no image for
-// the current frame yet
 
 public struct FrameView: View {
     @EnvironmentObject var viewModel: ViewModel
