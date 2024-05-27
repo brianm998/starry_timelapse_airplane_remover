@@ -65,48 +65,39 @@ extension FrameAirplaneRemover {
         var shouldPaint = false
         
         for (_, group) in outlierGroups.members {
-            if let reason = group.shouldPaint {
-                if reason.willPaint {
-                    shouldPaint = true
-                    Log.d("frame \(frameIndex) painting over group \(group) for reason \(reason)")
-                    for x in 0..<group.bounds.width {
-                        for y in 0..<group.bounds.height {
-                            if group.pixels[y*group.bounds.width + x] > 0 {
-                                // center of paint mask in frame coords
-                                let maskCenterX = x + group.bounds.min.x
-                                let maskCenterY = y + group.bounds.min.y
+            if let reason = group.shouldPaint,
+               reason.willPaint
+            {
+                shouldPaint = true
+                Log.d("frame \(frameIndex) painting over group \(group) for reason \(reason)")
 
-                                // start in frame coords
-                                let maskStartX = maskCenterX - paintMaskIntRadius
-                                let maskStartY = maskCenterY - paintMaskIntRadius
+                for pixel in group.pixelSet {
+                    // start in frame coords
+                    let maskStartX = pixel.x - paintMaskIntRadius
+                    let maskStartY = pixel.y - paintMaskIntRadius
 
-                                for maskX in 0..<paintMask.size {
-                                    for maskY in 0..<paintMask.size {
-                                        let frameX = maskX + maskStartX
-                                        let frameY = maskY + maskStartY
+                    for maskX in 0..<paintMask.size {
+                        for maskY in 0..<paintMask.size {
+                            let frameX = maskX + maskStartX
+                            let frameY = maskY + maskStartY
 
-                                        if frameX >= 0,
-                                           frameX < width,
-                                           frameY >= 0,
-                                           frameY < height
-                                        {
-                                            let frameIndex = frameY*width+frameX
-                                            let maskIndex = maskY*paintMask.size+maskX
-                                        
-                                            let frameAlpha = alphaLevels[frameIndex]
-                                            let maskAlpha = paintMask.pixels[maskIndex]
-                                            if maskAlpha > frameAlpha {
-                                                alphaLevels[frameIndex] = maskAlpha
-                                                alphaYAxis[frameY] = 0xFF
-                                            }
-                                        }
-                                    }
+                            if frameX >= 0,
+                               frameX < width,
+                               frameY >= 0,
+                               frameY < height
+                            {
+                                let frameIndex = frameY*width+frameX
+                                let maskIndex = maskY*paintMask.size+maskX
+                                
+                                let frameAlpha = alphaLevels[frameIndex]
+                                let maskAlpha = paintMask.pixels[maskIndex]
+                                if maskAlpha > frameAlpha {
+                                    alphaLevels[frameIndex] = maskAlpha
+                                    alphaYAxis[frameY] = 0xFF
                                 }
                             }
                         }
                     }
-                } else {
-                    //Log.v("frame \(frameIndex) NOT painting over group \(group) for reason \(reason)")
                 }
             }
         }
