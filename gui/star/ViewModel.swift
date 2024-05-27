@@ -226,6 +226,9 @@ public final class ViewModel: ObservableObject {
     var imageSequenceSize: Int = 0
 
     @Published var inTransition = false
+
+
+    fileprivate var videoPlaybackTask: Task<Void,Never>?
     
     var outlierLoadingProgress: Double {
         if imageSequenceSize == 0 { return 0 }
@@ -781,8 +784,8 @@ public extension ViewModel {
     {
         if inTransition { return }
 //        inTransition = true
-        Log.d("transition from \(String(describing: self.currentFrame))")
-        let startTime = Date().timeIntervalSinceReferenceDate
+        //Log.d("transition from \(String(describing: self.currentFrame))")
+        //let startTime = Date().timeIntervalSinceReferenceDate
 
         if self.currentIndex >= 0,
            self.currentIndex < self.frames.count
@@ -815,13 +818,12 @@ public extension ViewModel {
             }
         }
         
-        let endTime = Date().timeIntervalSinceReferenceDate
-        Log.d("transition to frame \(newFrameView.frameIndex) took \(endTime - startTime) seconds")
+        //let endTime = Date().timeIntervalSinceReferenceDate
+        //Log.d("transition to frame \(newFrameView.frameIndex) took \(endTime - startTime) seconds")
     }
 
     // next frame entry point
-    func transition(numberOfFrames: Int)
-    {
+    func transition(numberOfFrames: Int) {
         let currentFrame = self.currentFrame
 
         var newIndex = self.currentIndex + numberOfFrames
@@ -836,9 +838,9 @@ public extension ViewModel {
     }
 
     func transition(until fastAdvancementType: FastAdvancementType,
-                  from frame: FrameAirplaneRemover,
-                  forwards: Bool,
-                  currentIndex: Int? = nil)
+                    from frame: FrameAirplaneRemover,
+                    forwards: Bool,
+                    currentIndex: Int? = nil)
     {
         var frameIndex: Int = 0
         if let currentIndex = currentIndex {
@@ -921,34 +923,44 @@ public extension ViewModel {
         if self.videoPlaying {
 
             self.previousInteractionMode = self.interactionMode
+            // cannot edit while playing video
             self.interactionMode = .scrub
 
             Log.d("playing @ \(self.videoPlaybackFramerate) fps")
 
-            videoPlayTimer = Timer.scheduledTimer(withTimeInterval: 1/Double(self.videoPlaybackFramerate),
-                                                  repeats: true) { timer in
+            let interval = 1/Double(self.videoPlaybackFramerate)
+            
+            videoPlaybackTask = Task {
+                while(!Task.isCancelled) {
 
-                var nextVideoFrame: Int = 0
-                
-                switch self.videoPlayMode {
-                case .forward:
-                    nextVideoFrame = self.currentIndex + 1
+                    let startTime = NSDate().timeIntervalSince1970
                     
-                case .reverse:
-                    nextVideoFrame = self.currentIndex - 1
-                }
-                
-                if nextVideoFrame >= self.frames.count {
-                    self.stopVideo()
-                    self.currentIndex = self.frames.count - 1
-                } else if nextVideoFrame < 0 {
-                    self.stopVideo()
-                    self.currentIndex = 0
-                } else {
-                    self.self.currentIndex = nextVideoFrame
-                    self.sliderValue = Double(self.currentIndex)
-                }
+                    var nextVideoFrame: Int = 0
+                    
+                    switch self.videoPlayMode {
+                    case .forward:
+                        nextVideoFrame = self.currentIndex + 1
+                        
+                    case .reverse:
+                        nextVideoFrame = self.currentIndex - 1
+                    }
+                    
+                    if nextVideoFrame >= self.frames.count {
+                        self.stopVideo()
+                        self.currentIndex = self.frames.count - 1
+                    } else if nextVideoFrame < 0 {
+                        self.stopVideo()
+                        self.currentIndex = 0
+                    } else {
+                        self.self.currentIndex = nextVideoFrame
+                        self.sliderValue = Double(self.currentIndex)
+                    }
 
+                    let secondsLeft = interval - (NSDate().timeIntervalSince1970 - startTime)
+                    if(secondsLeft > 0) {
+                        try? await Task.sleep(nanoseconds: UInt64(secondsLeft*1_000_000_000))
+                    }
+                }
             }
         } else {
             stopVideo()
@@ -956,7 +968,7 @@ public extension ViewModel {
     }
 
     func stopVideo() {
-        videoPlayTimer?.invalidate()
+        videoPlaybackTask?.cancel()
 
         self.interactionMode = self.previousInteractionMode
         
@@ -998,8 +1010,5 @@ public extension ViewModel {
     }
 
 }
-
-// XXX Fing global :(
-fileprivate var videoPlayTimer: Timer?
 
 
