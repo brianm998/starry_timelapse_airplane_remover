@@ -84,24 +84,6 @@ public class OutlierGroup: CustomStringConvertible,
         return nil
     }
 
-    convenience init(id: UInt16,
-                     size: UInt,
-                     brightness: UInt,      // average brightness
-                     bounds: BoundingBox,
-                     frame: FrameAirplaneRemover,
-                     pixels: [UInt16],
-                     pixelSet: Set<SortablePixel>) 
-    {
-        self.init(id: id,
-                  size: size,
-                  brightness: brightness,
-                  bounds: bounds,
-                  frameIndex: frame.frameIndex,
-                  pixels: pixels,
-                  pixelSet: pixelSet)
-        self.frame = frame
-    }
-    
     public init(id: UInt16,
                 size: UInt,
                 brightness: UInt,      // average brightness
