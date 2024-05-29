@@ -68,7 +68,7 @@ public final class ViewModel: ObservableObject {
     var labelText: String = "Started"
 
     // view class for each frame in the sequence in order
-    @Published var frames: [FrameViewModel] = [FrameViewModel(0)]
+    var frames: [FrameViewModel] = [FrameViewModel(0)]
 
     // the view mode that we set this image with
 

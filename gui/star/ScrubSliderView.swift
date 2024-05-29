@@ -24,8 +24,8 @@ struct ScrubSliderView: View {
               let frameIndex = Int(sliderValue)
               var newFrameIndex = Int(sliderValue)
               if newFrameIndex < 0 { newFrameIndex = 0 }
-              if newFrameIndex >= viewModel.frames.count {
-                  newFrameIndex = viewModel.frames.count - 1
+              if newFrameIndex >= viewModel.imageSequenceSize {
+                  newFrameIndex = viewModel.imageSequenceSize - 1
               }
               viewModel.currentIndex = newFrameIndex
           }

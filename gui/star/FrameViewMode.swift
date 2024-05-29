@@ -1,4 +1,6 @@
 import Foundation
+import SwiftUI
+import StarCore
 
 // different ways that an individual frame from a sequence can be displayed
 public enum FrameViewMode: String, Equatable, CaseIterable {

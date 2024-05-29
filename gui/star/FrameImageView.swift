@@ -19,7 +19,7 @@ public struct FrameImageView: View {
 
     private var fullResolutionImage: some View {
         Group {
-            let frameView = self.viewModel.frames[self.viewModel.currentIndex]
+            let frameView = self.viewModel.currentFrameView
 
             if let nextFrame = frameView.frame,
                let url = nextFrame.imageAccessor.urlForImage(ofType: viewModel.frameViewMode.frameImageType,

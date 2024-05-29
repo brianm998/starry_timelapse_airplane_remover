@@ -92,7 +92,7 @@ struct BottomRightView: View {
                       for idx in startIndex ... endIndex {
                           // XXX use a task group?
                           if idx >= 0,
-                             idx < viewModel.frames.count
+                             idx < viewModel.imageSequenceSize
                           {
                               viewModel.setAllFrameOutliers(in: viewModel.frames[idx], to: shouldPaint)
                           }
