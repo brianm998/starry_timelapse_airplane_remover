@@ -124,7 +124,7 @@ actor DecisionTreeGenerator {
 
             treesDeclarationString += "    let tree_\(name) = OutlierGroupDecisionTree_\(name)()\n"
             treesClassificationString1 += "        total += self.tree_\(name).classification(of: group) * \(score)\n"
-            treesClassificationString2 += "        total += self.tree_\(name).classification(of: features, and: values) * \(score)\n"
+            treesClassificationString2 += "        total += self.tree_\(name).classification(of: featureData) * \(score)\n"
             treesNameListString += " \"\(name)\","
 
             treesTypeString += "   \(tree.tree.type)\n\n"
@@ -202,6 +202,8 @@ actor DecisionTreeGenerator {
                  ) -> Double
                  {
                      var total: Double = 0.0
+                     
+                     let featureData = OutlierGroupFeatureData(features: features, values: values)
                      
              \(treesClassificationString2)
                      return total / \(forest.count)
@@ -429,7 +431,8 @@ actor DecisionTreeGenerator {
                  and values: [Double]                 // arrays
                 ) -> Double
               {
-                return classification(of: OutlierGroupFeatureData(features: features, values: values))
+                  let featureData = OutlierGroupFeatureData(features: features, values: values)
+                  return classification(of: featureData)
               }
 
               // the actual tree resides here
