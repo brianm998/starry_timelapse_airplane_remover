@@ -23,6 +23,7 @@ struct FilmstripView: View {
                             }
                         }
                     }
+                      .defaultScrollAnchor(.center)
                       .onChange(of: viewModel.currentIndex, initial: true) {
                           scroller.scrollTo(viewModel.currentIndex)
                       }
