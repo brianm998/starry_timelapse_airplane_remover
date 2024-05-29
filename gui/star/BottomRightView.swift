@@ -1,6 +1,7 @@
 import SwiftUI
 import StarCore
 import logging
+import Combine
 
 // controls on the bottom right of the screen,
 // below the image frame and above the filmstrip and scrub bar
@@ -25,7 +26,7 @@ struct BottomRightView: View {
                     }
                 }
                 VStack {
-                    Text("frame \(viewModel.currentIndex)")
+                    EditableFrameNumberView()
                     if let _ = frameView.outlierViews {
                         if let numPositive = frameView.numberOfPositiveOutliers {
                             Text("\(numPositive) will paint")
@@ -110,7 +111,7 @@ struct BottomRightView: View {
                 if viewModel.videoPlaying {
                     Text("")
                 } else {
-                    Text("frame \(viewModel.currentIndex)")
+                    EditableFrameNumberView()
                 }
             }
         }
@@ -136,6 +137,42 @@ struct BottomRightView: View {
                 Toggle("full resolution", isOn: $viewModel.showFullResolution)
                 Toggle("show filmstip", isOn: $viewModel.showFilmstrip)
             }
+        }
+    }
+}
+
+// a view that shows the current frame number being shown,
+// and on double tap, allows editing of what number to show
+struct EditableFrameNumberView: View {
+    @EnvironmentObject var viewModel: ViewModel
+
+    @State private var editFrameNumberMode = false
+    @State private var editFrameNumberModeString = ""
+    
+    var body: some View {
+        if self.editFrameNumberMode {
+            HStack {
+                Text("frame")
+                TextField("\(viewModel.currentIndex)",
+                          text: $editFrameNumberModeString)
+                  .frame(maxWidth: 38)
+                  .onSubmit {
+                      let filtered = editFrameNumberModeString.filter { "0123456789".contains($0) }
+                      if let newIntValue = Int(filtered),
+                         newIntValue >= 0,
+                         newIntValue < self.viewModel.imageSequenceSize
+                      {
+                          self.viewModel.currentIndex = newIntValue
+                          self.editFrameNumberMode = false
+                          self.editFrameNumberModeString = ""
+                      }
+                  }
+            }
+        } else {
+            Text("frame \(viewModel.currentIndex)")
+              .onTapGesture(count: 2) {
+                  self.editFrameNumberMode = true
+              }
         }
     }
 }

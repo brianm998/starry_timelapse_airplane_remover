@@ -184,8 +184,6 @@ public final class ViewModel: ObservableObject {
 
     @Published var outlierOpacity = 1.0
 
-    @Published var sliderValue = 0.0
-
     @Published var interactionMode: InteractionMode = .scrub
 
     @Published var previousInteractionMode: InteractionMode = .scrub
@@ -794,7 +792,6 @@ public extension ViewModel {
         }
         self.frames[newFrameView.frameIndex].isCurrentFrame = true
         self.currentIndex = newFrameView.frameIndex
-        self.sliderValue = Double(self.currentIndex)
         
         if interactionMode == .edit {
 
@@ -953,7 +950,6 @@ public extension ViewModel {
                         self.currentIndex = 0
                     } else {
                         self.self.currentIndex = nextVideoFrame
-                        self.sliderValue = Double(self.currentIndex)
                     }
 
                     let secondsLeft = interval - (NSDate().timeIntervalSince1970 - startTime)
