@@ -2,8 +2,17 @@ import Foundation
 import KHTSwift
 import logging
 
-// blobs created by the blobber
-                   
+/*
+ blobs are created by the blobber
+
+ blobs are the first step in finding pixels that we may want to replace.
+
+ once filtered and refined a bunch, eacn blob is promoted to an OutlierGroup,
+ for further processing and classification.
+
+ blobs can grow in size, and be combined with other blobs.
+ */
+
 public class Blob: CustomStringConvertible {
     public let id: UInt16
     public private(set) var pixels = Set<SortablePixel>()
@@ -16,8 +25,6 @@ public class Blob: CustomStringConvertible {
     public var adjustedSize: Double {
         Double(self.size)/(IMAGE_HEIGHT!*IMAGE_WIDTH!)
     }
-
-    public var impactCount: Int = 0
 
     public var description: String  { "Blob id: \(id) size \(size)" }
     
@@ -40,7 +47,8 @@ public class Blob: CustomStringConvertible {
     private var _boundingBox: BoundingBox?
     private var _blobImageData: [UInt16]?
     private var _blobLine: Line?
-
+    private var _pixelValues: [UInt16]?
+    private var _outlierGroup: OutlierGroup?
 
     // it seems that the kernel hough transform works better on really small images
     // if they're padded a bit on the sides. 
@@ -82,7 +90,7 @@ public class Blob: CustomStringConvertible {
     }
     
     public var blobImageData: [UInt16] {
-        if let blobImageData = _blobImageData { return blobImageData }
+        if let _blobImageData { return _blobImageData }
         
         var blobImageData = [UInt16](repeating: 0,
                                      count: (self.boundingBox.width+blobImageDataBorderSize*2) *
@@ -106,8 +114,8 @@ public class Blob: CustomStringConvertible {
     private var _averageDistanceFromIdealLine: Double? 
     
     public var averageDistanceFromIdealLine: Double {
-        if let averageDistanceFromIdealLine = _averageDistanceFromIdealLine {
-            return averageDistanceFromIdealLine
+        if let _averageDistanceFromIdealLine {
+            return _averageDistanceFromIdealLine
         }
         if let line = self.originZeroLine {
             let ret = averageDistance(from: line)
@@ -166,6 +174,8 @@ public class Blob: CustomStringConvertible {
         _intensity = nil
         _medianIntensity = nil
         _boundingBox = nil
+        _pixelValues = nil
+        _outlierGroup = nil
         _blobImageData = nil
         _blobLine = nil
         _averageDistanceFromIdealLine = nil
@@ -450,12 +460,17 @@ public class Blob: CustomStringConvertible {
         return ret
     }
 
+    // XXX replace this with passing in the full outlier image
+    // to each outlier, and having them deal with it directly
+    // will hopefully speed things up by reducing memory allocations
     public var pixelValues: [UInt16] {
+        if let _pixelValues { return _pixelValues }
         let boundingBox = self.boundingBox
         var ret = [UInt16](repeating: 0, count: boundingBox.size)
         for pixel in pixels {
             ret[(pixel.y-boundingBox.min.y)*boundingBox.width+(pixel.x-boundingBox.min.x)] = pixel.intensity
         }
+        _pixelValues = ret
         return ret
     }
 
@@ -496,14 +511,16 @@ public class Blob: CustomStringConvertible {
     }
     
     public func outlierGroup(at frameIndex: Int) -> OutlierGroup {
-        // XXX make this pass on the line, if there is one
-        OutlierGroup(id: self.id,
-                     size: UInt(self.pixels.count),
-                     brightness: UInt(self.intensity),
-                     bounds: self.boundingBox,
-                     frameIndex: frameIndex,
-                     pixels: self.pixelValues,
-                     pixelSet: self.pixels)
+        if let _outlierGroup { return _outlierGroup }
+        let group = OutlierGroup(id: self.id,
+                                 size: UInt(self.pixels.count),
+                                 brightness: UInt(self.intensity),
+                                 bounds: self.boundingBox,
+                                 frameIndex: frameIndex,
+                                 pixels: self.pixelValues,
+                                 pixelSet: self.pixels)
+        _outlierGroup = group
+        return group
     }
 
     // returns minimum distance found 
