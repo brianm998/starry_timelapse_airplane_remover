@@ -53,6 +53,7 @@
 		D3B29CB42B2FE5D900754C10 /* Zoomable in Frameworks */ = {isa = PBXBuildFile; productRef = D3B29CB32B2FE5D900754C10 /* Zoomable */; };
 		D3B886AD29B830BE003590A1 /* OutlierGroupTable.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3B886AC29B830BE003590A1 /* OutlierGroupTable.swift */; };
 		D3D7F0FC2A2BE10D00658862 /* StarCommands.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3D7F0FB2A2BE10D00658862 /* StarCommands.swift */; };
+		D3DC07FC2C077DEB0031A3AE /* EditableFrameNumberView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3DC07FB2C077DEA0031A3AE /* EditableFrameNumberView.swift */; };
 		D3F0BFFE2C0390BA0061420D /* FrameImageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3F0BFFD2C0390BA0061420D /* FrameImageView.swift */; };
 /* End PBXBuildFile section */
 
@@ -120,6 +121,7 @@
 		D3A54A6E29AFAD2C00C50709 /* UserPreferences.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = UserPreferences.swift; sourceTree = "<group>"; };
 		D3B886AC29B830BE003590A1 /* OutlierGroupTable.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = OutlierGroupTable.swift; sourceTree = "<group>"; };
 		D3D7F0FB2A2BE10D00658862 /* StarCommands.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = StarCommands.swift; sourceTree = "<group>"; };
+		D3DC07FB2C077DEA0031A3AE /* EditableFrameNumberView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = EditableFrameNumberView.swift; sourceTree = "<group>"; };
 		D3F0BFFD2C0390BA0061420D /* FrameImageView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = FrameImageView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -184,6 +186,7 @@
 		D386FA0F298B617300878B56 /* star */ = {
 			isa = PBXGroup;
 			children = (
+				D3DC07FB2C077DEA0031A3AE /* EditableFrameNumberView.swift */,
 				D3F0BFFD2C0390BA0061420D /* FrameImageView.swift */,
 				D39EEDF32C027AD700DD5BC4 /* ClearUndecidedButton.swift */,
 				D32F6DB72A4E6FCE00704870 /* BottomLeftView.swift */,
@@ -428,6 +431,7 @@
 				D33FFC202A2D3BCD00F38194 /* FrameViewModel.swift in Sources */,
 				D33FFC242A2D48F300F38194 /* FrameEditView.swift in Sources */,
 				D32F6DAE2A4D1C0100704870 /* RenderAllFramesButton.swift in Sources */,
+				D3DC07FC2C077DEB0031A3AE /* EditableFrameNumberView.swift in Sources */,
 				D39EEDF42C027AD800DD5BC4 /* ClearUndecidedButton.swift in Sources */,
 				D32F6DAC2A4D1A6E00704870 /* BottomControls.swift in Sources */,
 				D31F9FC0299736740001CD0C /* FrameSaveQueue.swift in Sources */,
