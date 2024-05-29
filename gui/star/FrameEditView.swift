@@ -38,7 +38,20 @@ struct FrameEditView: View {
                 // the currently visible frame
                 self.imageView
             }
-              //.transition(.moveAndFade)
+              .onChange(of: viewModel.currentIndex) { oldValue, _ in
+                  // add any changes the user may have made to the save queue 
+                  let frameView = self.viewModel.frames[oldValue]
+                  if let frameToSave = frameView.frame,
+                     frameToSave.hasChanges()
+                  {
+                      Task {
+                          self.viewModel.saveToFile(frame: frameToSave) {
+                              Log.d("saving frame \(frameToSave.frameIndex)")
+                              self.viewModel.refresh(frame: frameToSave)
+                          }
+                      }
+                  }
+              }
         }
     }
     

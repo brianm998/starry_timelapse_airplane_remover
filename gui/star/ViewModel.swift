@@ -776,49 +776,6 @@ public extension ViewModel {
         }
     }
 
-    // next frame point
-    func transition(toFrame newFrameView: FrameViewModel,
-                    from oldFrame: FrameAirplaneRemover?)
-    {
-        if inTransition { return }
-//        inTransition = true
-        //Log.d("transition from \(String(describing: self.currentFrame))")
-        //let startTime = Date().timeIntervalSinceReferenceDate
-
-        if self.currentIndex >= 0,
-           self.currentIndex < self.frames.count
-        {
-            self.frames[self.currentIndex].isCurrentFrame = false
-        }
-        self.frames[newFrameView.frameIndex].isCurrentFrame = true
-        self.currentIndex = newFrameView.frameIndex
-        
-        if interactionMode == .edit {
-
-            //self.labelText = "frame \(newFrameView.frameIndex)"
-
-            // only save frame when we are also scrolling (i.e. not scrubbing)
-            if let frameToSave = oldFrame {
-                let frameChanged = frameToSave.hasChanges()
-
-                // only save changes to frames that have been changed
-                if frameChanged {
-                    Task {
-                        self.saveToFile(frame: frameToSave) {
-                            Log.d("completion closure called for frame \(frameToSave.frameIndex)")
-                            self.refresh(frame: frameToSave)
-                        }
-                    }
-                }
-            } else {
-                Log.w("no old frame with changes to save")
-            }
-        }
-        
-        //let endTime = Date().timeIntervalSinceReferenceDate
-        //Log.d("transition to frame \(newFrameView.frameIndex) took \(endTime - startTime) seconds")
-    }
-
     // next frame entry point
     func transition(numberOfFrames: Int) {
         let currentFrame = self.currentFrame
@@ -828,10 +785,7 @@ public extension ViewModel {
         if newIndex >= self.frames.count {
             newIndex = self.frames.count-1
         }
-        let newFrameView = self.frames[newIndex]
-        
-        self.transition(toFrame: newFrameView,
-                        from: currentFrame)
+        self.currentIndex = newIndex
     }
 
     func transition(until fastAdvancementType: FastAdvancementType,
@@ -850,8 +804,7 @@ public extension ViewModel {
            (forwards && frameIndex >= self.frames.count - 1)
         {
             if frameIndex != frame.frameIndex {
-                self.transition(toFrame: self.frames[frameIndex],
-                                from: frame)
+                self.currentIndex = frameIndex
             }
             return
         }
@@ -898,8 +851,7 @@ public extension ViewModel {
                             forwards: forwards,
                             currentIndex: nextFrameIndex)
         } else {
-            self.transition(toFrame: nextFrameView,
-                            from: frame)
+            self.currentIndex = nextFrameView.frameIndex
         }
     }
 
@@ -973,15 +925,11 @@ public extension ViewModel {
     }
 
     func goToFirstFrameButtonAction() {
-        self.transition(toFrame: self.frames[0],
-                        from: self.currentFrame)
-
+        self.currentIndex = 0
     }
 
     func goToLastFrameButtonAction() {
-        self.transition(toFrame: self.frames[self.frames.count-1],
-                        from: self.currentFrame)
-
+        self.currentIndex = self.frames.count-1
     }
 
     func fastPreviousButtonAction() {
@@ -995,7 +943,6 @@ public extension ViewModel {
     }
 
     func fastForwardButtonAction() {
-
         if self.fastAdvancementType == .normal {
             self.transition(numberOfFrames: self.fastSkipAmount)
         } else if let currentFrame = self.currentFrame {

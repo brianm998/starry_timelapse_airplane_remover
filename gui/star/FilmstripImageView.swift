@@ -31,15 +31,7 @@ struct FilmstripImageView: View {
         // highlight the selected frame
           .background(viewModel.currentIndex == frameIndex ? Color(white: 0.45) : Color(white: 0.22))
           .onTapGesture {
-              // XXX move this out 
-              //viewModel.labelText = "loading..."
-              // XXX set loading image here
-              // grab frame and try to show it
-              let frameView = viewModel.frames[frameIndex]
-              
-              let currentFrame = viewModel.currentFrame
-              viewModel.transition(toFrame: frameView,
-                                   from: currentFrame)
+              viewModel.currentIndex = frameIndex
           }
     }
 }
