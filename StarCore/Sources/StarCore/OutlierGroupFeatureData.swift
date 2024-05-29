@@ -2,25 +2,27 @@ import Foundation
 
 // a class that holds raw outlier group features for classification
 public class OutlierGroupFeatureData: ClassifiableOutlierGroup {
-    let map: [OutlierGroup.Feature:Double]
-
+    let values: [Double]
+    
     public init(features: [OutlierGroup.Feature],
                 values: [Double])
 
     {
-        var _map: [OutlierGroup.Feature:Double] = [:]
+        var _values = [Double](repeating: 0, count: features.count)
         for (index, type) in features.enumerated() {
-            let value = values[index]
-            _map[type] = value
+            _values[type.sortOrder] = values[index]
         }
-        self.map = _map
+        self.values = _values
     }
 
     public func decisionTreeValue(for type: OutlierGroup.Feature) -> Double  {
-        if let ret = map[type] {
-            return ret 
+        let index = type.sortOrder
+        if index >= 0,
+           index < values.count
+        {
+            return values[index]
         } else {
-            fatalError("no decision tree value for type \(type)")
+            return 0
         }
     }
 }
