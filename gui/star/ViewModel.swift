@@ -789,7 +789,7 @@ public extension ViewModel {
     }
 
     func transition(until fastAdvancementType: FastAdvancementType,
-                    from frame: FrameAirplaneRemover,
+                    from frame: FrameViewModel,
                     forwards: Bool,
                     currentIndex: Int? = nil)
     {
@@ -935,9 +935,9 @@ public extension ViewModel {
     func fastPreviousButtonAction() {
         if self.fastAdvancementType == .normal {
             self.transition(numberOfFrames: -self.fastSkipAmount)
-        } else if let currentFrame = self.currentFrame {
+        } else {
             self.transition(until: self.fastAdvancementType,
-                            from: currentFrame,
+                            from: self.currentFrameView,
                             forwards: false)
         }
     }
@@ -945,9 +945,9 @@ public extension ViewModel {
     func fastForwardButtonAction() {
         if self.fastAdvancementType == .normal {
             self.transition(numberOfFrames: self.fastSkipAmount)
-        } else if let currentFrame = self.currentFrame {
+        } else {
             self.transition(until: self.fastAdvancementType,
-                            from: currentFrame,
+                            from: self.currentFrameView,
                             forwards: true)
         }
     }
