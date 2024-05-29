@@ -150,10 +150,11 @@ struct EditableFrameNumberView: View {
     @State private var editFrameNumberModeString = ""
     
     var body: some View {
+        let frameNumberString = String(format: "%d", viewModel.currentIndex)
         if self.editFrameNumberMode {
             HStack {
                 Text("frame")
-                TextField("\(viewModel.currentIndex)",
+                TextField("\(frameNumberString)",
                           text: $editFrameNumberModeString)
                   .frame(maxWidth: 38)
                   .onSubmit {
@@ -169,7 +170,7 @@ struct EditableFrameNumberView: View {
                   }
             }
         } else {
-            Text("frame \(viewModel.currentIndex)")
+            Text("frame \(frameNumberString)")
               .onTapGesture(count: 2) {
                   self.editFrameNumberMode = true
               }
