@@ -14,11 +14,11 @@ cd StarDecisionTrees
 rm -rf .build
 
 # build for x86
-swift build --configuration release --arch x86_64 -Xswiftc -emit-module -Xswiftc -emit-library -Xswiftc -static
+swift build --configuration release --arch x86_64 -Xswiftc -emit-module -Xswiftc -emit-library -Xswiftc -static -Xswiftc -O
 mv *.a .build/x86_64-apple-macosx
 
 # build for arm64
-swift build --configuration release --arch arm64  -Xswiftc -emit-module -Xswiftc -emit-library -Xswiftc -static
+swift build --configuration release --arch arm64  -Xswiftc -emit-module -Xswiftc -emit-library -Xswiftc -static -Xswiftc -O 
 mv *.a .build/arm64-apple-macosx
 
 # lipo them together into a universal .a file for both archs
