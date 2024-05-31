@@ -11,6 +11,7 @@ You should have received a copy of the GNU General Public License along with sta
 */
 
 import Foundation
+import Semaphore
 
 /*
 
@@ -132,7 +133,10 @@ public class Log {
 
      */
     public static func add(handler: LogHandler, for outputType: Log.Output) {
-        if handler.level < minimumLogLevel { minimumLogLevel = handler.level }
+        if handler.level < minimumLogLevel {
+            minimumLogLevel = handler.level
+            print("minimumLogLevel set to \(minimumLogLevel)")
+        }
         Task { await gremlin.add(handler: handler, for: outputType) }
     }
 
@@ -928,10 +932,18 @@ public let gremlin = LogGremlin()
 // this little guy just sits around and keeps the logs orderly by handling one log line at at time
 public actor LogGremlin {
 
+    private var semaphore: AsyncSemaphore?
+
+    public func finishLogging() async -> AsyncSemaphore {
+        let ret = AsyncSemaphore(value: 0)
+        semaphore = ret
+        return ret
+    }
+    
     public init() {
         Task {
-            let foo = true
-            while(foo) {
+            var shouldRun = true
+            while(shouldRun) {
                 if let log = await gremlin.nextLog() {
                     for handler in await gremlin.getHandlers().values {
                         if log.logLevel <= handler.level {
@@ -941,6 +953,12 @@ public actor LogGremlin {
                                         at: log.logLevel,
                                         logTime: log.logTime)
                         }
+                    }
+                    if let semaphore = await semaphore,
+                       await pendingLogs.count == 0
+                    {
+                        semaphore.signal()
+                        shouldRun = false
                     }
                 } else {
                     try? await Task.sleep(nanoseconds: 1_000_000_000)
@@ -959,7 +977,10 @@ public actor LogGremlin {
     
     func add(handler: LogHandler, for outputType: Log.Output) {
         handlers[outputType] = handler
-        if handler.level < minimumLogLevel { minimumLogLevel = handler.level }
+        if handler.level < minimumLogLevel {
+            print("using minimum log level \(minimumLogLevel)")
+            minimumLogLevel = handler.level
+        }
     }
 
     public func pendingLogCount() -> Int { pendingLogs.count }

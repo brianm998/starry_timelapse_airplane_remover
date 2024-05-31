@@ -24,67 +24,12 @@ You should have received a copy of the GNU General Public License along with sta
 /*
  todo:
 
- - outlier detection gets missing parts now, but:
-   - gets way too many small oultiers
-   - sometimes combines outlier groups that it shouldn't
-   - planes which record as dots in a line are not properly grouped
-   - load all outliers seems busted for large amounts
- 
+ - loading outliers is still painfully slow
+ - UI crashes sometimes and brings down the system
 
- - 03_16_2024-fx3 test:
-   - frame 221 is where mountains move :(
-   
-   - corrected frames
-     1483 - top middle
-     1242-1245 - top middle missed
-     944-968 - bright lower left airplane missed a lot - mostly fixed
-     1633
-     1576 - top right - no group found here
-     1570 - lower left, really dim streak
-     1630 - lower left by mountains
-     1631 - lower left by mountains
-     1632 - on right, missed entirely
-     1693 - two low mid streaks on either side
-
-   - frames that 0.6.1 got
-     1625 - top mid right WTF? large group not found WTF
-     1524 - lower left - previous star trail painted with due to extended group
-     1686 - upper right - end of airplane missed engirely
-     
-   - frames that need star software update:
-     833-870 - lots of missed low hanging airplanes - need to tweak bright small groups
-
-   - check again
-     
-   - found bad frames:
-
-     732 and before need re-do
-   
-     745 += 10-20 frames
-     - 740 is a good test case, 782 as well
-       - need better outlier detection analysis
-       - some outlier groups include large groups of sky :(
-       - some outlier groups like dots in a line are not grouped rights
-
-       775 and close to it have some green airplanes
-     - frame 786 has an enormous group that includes mountains and an airplane,
-       and when they're not connected at all
-
-   - after lots of changes:
-     - frame 72 middle lower left missed some bright spots.      
-     - frame 746 lost parts of airplane between asb and rect
-
-
-   - version 0.6.5:
-     - frame 622 missing part of plane :(     
-
-     
- - use brightness as a factor w/ size, i.e. allow for smaller really bright groups
  - make render this frame have a keyboard shortcut
  - change how gui frame saver works, sometimes it misses changes
  - have saved frames also render
- - make UI async images load with previews first
-
  
  - try this for GPU, metal sucks:
    https://github.com/philipturner/swift-opencl
@@ -363,7 +308,7 @@ struct StarCli: AsyncParsableCommand {
                 callbacks.updatable = UpdatableLog()
 
                 if let updatable = callbacks.updatable {
-                    Log.add(handler:  UpdatableLogHandler(updatable),
+                    Log.add(handler: UpdatableLogHandler(updatable),
                             for: .console)
                     let name = inputImageSequenceName
                     let path = inputImageSequencePath
@@ -419,21 +364,17 @@ struct StarCli: AsyncParsableCommand {
                 Log.i("done")
 
             } catch {
+                print("DOH! \(error)")
                 Log.e("\(error)")
             }
 
         } else {
             throw ValidationError("need to provide input")
         }
-        try? await Task.sleep(nanoseconds: 1_000_000_000)
-        Log.d("waiting for task waiter")
+        
         await TaskWaiter.shared.finish()
-        Log.d("waiting for logging gremlin")
-        try? await Task.sleep(nanoseconds: 100_000_000)
-        while(await logging.gremlin.pendingLogCount() > 0) {
-            try? await Task.sleep(nanoseconds: 1_000_000_000)
-        }
-        print("really finished")
+        let loggingSemaphore = await logging.gremlin.finishLogging()
+        await loggingSemaphore.wait()
     }
 }
 

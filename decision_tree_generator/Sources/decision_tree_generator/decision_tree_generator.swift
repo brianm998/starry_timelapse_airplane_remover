@@ -159,13 +159,10 @@ struct decision_tree_generator: AsyncParsableCommand {
                 try await generateTreeFromTrainingData()
             }
         }
-        Log.dispatchGroup.wait()
-
+        
         await TaskWaiter.shared.finish()
-
-        while(await logging.gremlin.pendingLogCount() > 0) {
-            try? await Task.sleep(nanoseconds: 1_000_000_000)
-        }
+        let loggingSemaphore = await logging.gremlin.finishLogging()
+        await loggingSemaphore.wait()
     }
 
     func runVerification(basedUpon jsonConfigFileName: String) async throws -> TreeTestResults {
