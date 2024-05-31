@@ -321,7 +321,7 @@ extension FrameAirplaneRemover {
             // make outlier group from this blob
             let outlierGroup = blob.outlierGroup(at: frameIndex)
 
-            Log.i("frame \(frameIndex) promoting \(blob) to outlier group \(outlierGroup.id) line \(String(describing: blob.line))")
+            //Log.i("frame \(frameIndex) promoting \(blob) to outlier group \(outlierGroup.id) line \(String(describing: blob.line))")
             outlierGroup.frame = self
             outlierGroups?.members[outlierGroup.id] = outlierGroup
         }
