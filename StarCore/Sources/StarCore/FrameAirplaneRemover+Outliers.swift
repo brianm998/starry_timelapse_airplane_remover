@@ -577,7 +577,7 @@ extension FrameAirplaneRemover {
                             let validationIdx = validationY * width + validationX
 
                             if validationData[validationIdx] != 0 {
-                                Log.d("frame \(frameIndex) group \(group.id) is valid based upon validation image data")
+                                //Log.d("frame \(frameIndex) group \(group.id) is valid based upon validation image data")
                                 groupIsValid = true
                                 break
                             }
@@ -585,7 +585,7 @@ extension FrameAirplaneRemover {
                     }
                     if groupIsValid { break }
                 }
-                Log.d("group \(group) shouldPaint \(String(describing: group.shouldPaint))")
+                //Log.d("group \(group) shouldPaint \(String(describing: group.shouldPaint))")
                 group.shouldPaint = .userSelected(groupIsValid)
             }
         } else {
