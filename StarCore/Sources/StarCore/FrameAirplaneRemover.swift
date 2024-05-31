@@ -58,7 +58,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
     
     public func markAsChanged() { didChange = true }
 
-    public func hasChanges() -> Bool { return didChange }
+    public func hasChanges() -> Bool { didChange }
 
     public let outputFilename: String
 
