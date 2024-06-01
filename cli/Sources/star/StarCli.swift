@@ -1,11 +1,9 @@
-import Foundation
 import ArgumentParser
 import CoreGraphics
 import Cocoa
 import StarCore
 import ShellOut
 import logging
-
 import StarDecisionTrees
 
 /*
@@ -215,8 +213,8 @@ struct StarCli: AsyncParsableCommand {
 
         TaskRunner.maxConcurrentTasks = numConcurrentRenders
 
-        // gui should do this too, if loadCurrentClassifiers() fails
-        StarCore.currentClassifier = OutlierGroupForestClassifier_1e64a33a()
+        // gui should do this too
+        StarCore.currentClassifier = OutlierGroupDecisionTree_aa134949()
 
         if version {
             print("""
@@ -385,3 +383,4 @@ extension Log.Level: ExpressibleByArgument { }
 extension DetectionType: ExpressibleByArgument { }
 
 fileprivate let fileManager = FileManager.default
+

@@ -25,8 +25,23 @@ let package = Package(
               .product(name: "StarCore", package: "StarCore"),
               .product(name: "StarDecisionTrees", package: "StarDecisionTrees"),
             ],
+            swiftSettings: [
+              .unsafeFlags([
+                             // import libStarDecisionTrees.a for references at compile time
+                             "-l", "StarDecisionTrees",
+                             "-I", "../StarDecisionTrees/.build/debug"
+                           ]),
+            ],
             linkerSettings: [
-              .unsafeFlags([ "-Xlinker", "-ld_classic" ]),
+              .unsafeFlags([
+                             // use old, slower linker for now to avoid so many linker warnings
+                             "-Xlinker", "-ld_classic",
+                             
+                             // link in pre compiled .a file for the decision trees 
+                             "-L../StarDecisionTrees",
+                             "-Xlinker", "../StarDecisionTrees/libStarDecisionTrees.a"
+                           ]),
+              .linkedLibrary("StarDecisionTrees")
             ]),
         .testTarget(
             name: "decision_tree_generatorTests",
