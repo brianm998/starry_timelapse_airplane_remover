@@ -8,6 +8,7 @@
 import SwiftUI
 import StarCore
 import logging
+import StarDecisionTrees
 
 /*
 
@@ -103,6 +104,9 @@ class StarApp: App {
                 }
             }
         }
+
+        // maybe move this elsewhere
+        StarCore.currentClassifier = OutlierGroupDecisionTree_aa134949()
         
         Log.add(handler: ConsoleLogHandler(at: .debug), for: .console)
         Log.i("Starting Up")
