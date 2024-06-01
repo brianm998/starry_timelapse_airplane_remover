@@ -448,24 +448,26 @@ actor DecisionTreeGenerator {
           }
           """
 
+        let type: ClassifierType =
+          .tree(DecisionTreeParams(name: hashPrefix,
+                                   inputSequences: inputFilenames,
+                                   positiveTrainingSize: trainingData.positiveData.count,
+                                   negativeTrainingSize: trainingData.negativeData.count,
+                                   decisionTypes: decisionTypes,
+                                   decisionSplitTypes: decisionSplitTypes,
+                                   maxDepth: maxDepth,
+                                   pruned: pruneTree))
+        
         return DecisionTreeStruct(name: hashPrefix,
-                               swiftCode: swiftString,
-                               tree: tree,
-                               filename: filename,
-                               sha256: treeHashString,
-                               generationSecondsSince1970: generationDateSince1970,
-                               inputSequences: inputFilenames,
-                               decisionTypes: decisionTypes,
-                               type: .tree(DecisionTreeParams(name: hashPrefix,
-                                                          inputSequences: inputFilenames,
-                                                          positiveTrainingSize: trainingData.positiveData.count,
-                                                          negativeTrainingSize: trainingData.negativeData.count,
-                                                          decisionTypes: decisionTypes,
-                                                          decisionSplitTypes: decisionSplitTypes,
-                                                          maxDepth: maxDepth,
-                                                          pruned: pruneTree)))
+                                  swiftCode: swiftString,
+                                  tree: tree,
+                                  filename: filename,
+                                  sha256: treeHashString,
+                                  generationSecondsSince1970: generationDateSince1970,
+                                  inputSequences: inputFilenames,
+                                  decisionTypes: decisionTypes,
+                                  type: type)
     }
-
 }
 
 // XXX document what this does
