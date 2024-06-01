@@ -90,7 +90,7 @@ fileprivate class HoughTransformer {
                                      minResults: Int,
                                      maxResults: Int) -> [ImageMatrixElement]
     {
-        var ret = elements
+        let ret = elements
         for element in ret {
             if let image = element.image {
                 element.lines = 

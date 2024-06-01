@@ -18,7 +18,7 @@ public struct Line: Codable {
 
     // average them together using votes
     public func combine(with other: Line) -> Line {
-        var maxVotes = self.votes + other.votes
+        let maxVotes = self.votes + other.votes
         let selfAmt = Double(self.votes)/Double(maxVotes)
         let otherAmt = Double(other.votes)/Double(maxVotes)
         

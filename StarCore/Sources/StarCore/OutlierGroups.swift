@@ -71,7 +71,7 @@ public class OutlierGroups {
         let imageFilename = "\(outlierDir)/\(BlobImageSaver.outlierTiffFilename)"
         // XXX pick up y-axis if it exists
         let yAxisImageFilename = "\(outlierDir)/\(BlobImageSaver.outlierYAxisBinaryFilename)"
-        var outlierGroupPaintData = try await OutlierGroups.loadOutlierGroupPaintData(from: outlierGroupPaintDataFilename)
+        let outlierGroupPaintData = try await OutlierGroups.loadOutlierGroupPaintData(from: outlierGroupPaintDataFilename)
 
         // XXX
         

@@ -173,7 +173,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                                                           to: baseFilename,
                                                           inDir: dirname)
 
-                Log.d("frame \(frameIndex) alignedFilename \(alignedFilename)")
+                Log.d("frame \(frameIndex) alignedFilename \(String(describing: alignedFilename))")
                 if let alignedFilename {
                     Log.d("frame \(frameIndex) got aligned filename \(alignedFilename)")
                 } else {
