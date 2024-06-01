@@ -3,6 +3,7 @@ import StarCore
 import ArgumentParser
 import logging
 import CryptoKit
+import StarDecisionTrees
 
 var startTime: Date = Date()
 
@@ -301,7 +302,7 @@ struct decision_tree_generator: AsyncParsableCommand {
         // we've loaded all the classified data
         Log.d("runVerification f1 WTF")
 
-        var results = TreeTestResults()
+        let results = TreeTestResults()
 
         let chunkedTestData = classifiedData.split(into: ProcessInfo.processInfo.activeProcessorCount)
         
@@ -401,7 +402,7 @@ struct decision_tree_generator: AsyncParsableCommand {
                         if let shouldPaint = outlierGroup.shouldPaint {
                             let willPaint = shouldPaint.willPaint
                             
-                            let values = await outlierGroup.decisionTreeGroupValues
+                            let values = outlierGroup.decisionTreeGroupValues
                             
                             if willPaint {
                                 localPositiveData.append(values)

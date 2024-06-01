@@ -23,7 +23,6 @@ let package = Package(
             dependencies: [
               .product(name: "ArgumentParser", package: "swift-argument-parser"),
               .product(name: "StarCore", package: "StarCore"),
-              .product(name: "StarDecisionTrees", package: "StarDecisionTrees"),
             ],
             swiftSettings: [
               .unsafeFlags([
