@@ -15,3 +15,5 @@ swift build --arch `uname -m` -Xswiftc -emit-module -Xswiftc -emit-library -Xswi
 
 # can't properly build against this with these still here
 rm -rf .build/debug/*.build
+
+./makeList.pl
