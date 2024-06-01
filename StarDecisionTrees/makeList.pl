@@ -19,8 +19,9 @@ closedir $dir;
 
 open OUTPUT, ">Sources/StarDecisionTrees/StarDecisionTrees.swift";
 
-print OUTPUT "import Foundation\n\n";
-print OUTPUT "public let decisionTrees = [\n";
+print OUTPUT "import Foundation\n";
+print OUTPUT "import StarCore\n\n";
+print OUTPUT "public let decisionTrees: [String: NamedOutlierGroupClassifier] = [\n";
 foreach my $hash (keys %$trees) {
   print OUTPUT "    \"$hash\": $trees->{$hash}(),\n";
 }
