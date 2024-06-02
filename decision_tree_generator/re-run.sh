@@ -57,7 +57,7 @@ cd ../decision_tree_generator
 
 # re-compile trees
 cd ../StarDecisionTrees
-./build_lib.sh
+./build_debug_lib.sh
 
 # test them
 cd ../decision_tree_generator
