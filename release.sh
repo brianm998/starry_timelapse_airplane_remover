@@ -8,25 +8,14 @@ set -e
 
 ####
 # first build the decision tree code into a static, universal library (.a file)
-# this can be large, and is linked into both the gui and cli apps
+# this can be large, and is linked into the gui, cli and decision tree generator apps
 ####
 cd StarDecisionTrees
-rm -rf .build
-
-# build for x86
-swift build --configuration release --arch x86_64 -Xswiftc -emit-module -Xswiftc -emit-library -Xswiftc -static -Xswiftc -O
-mv *.a .build/x86_64-apple-macosx
-
-# build for arm64
-swift build --configuration release --arch arm64  -Xswiftc -emit-module -Xswiftc -emit-library -Xswiftc -static -Xswiftc -O 
-mv *.a .build/arm64-apple-macosx
-
-# lipo them together into a universal .a file for both archs
-lipo .build/arm64-apple-macosx/libStarDecisionTrees.a \
-     .build/x86_64-apple-macosx/libStarDecisionTrees.a \
-     -create -output libStarDecisionTrees.a
-
+./release.sh
 cd ..
+
+# result ends up here:
+# StarDecisionTrees/libStarDecisionTrees.a
 
 ####
 # next build a universal (all arch) binary for the cli     
