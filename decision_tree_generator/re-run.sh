@@ -20,11 +20,6 @@ fi
 
 
 #
-# rewrite of outlier classification data:
-#   * write just to a single outlier_data.csv, with first column the outlier id
-#   - use OutlierGroupPaintData.json to determine paintability 
-#   - condense into paint vs not paint
-#   - decision tree generator gets same input as before
 #   - figure out why it's so fricking slow 
 #
 
@@ -43,7 +38,7 @@ fi
 # or if there are changes from regenerating the outlier values above
 
 cd ../outlier_feature_data_classifier
-swift run outlier_feature_data_classifier -v ../decision_tree_generator/validated_sequences.json
+swift run -Xswiftc -O  outlier_feature_data_classifier -v ../decision_tree_generator/validated_sequences.json
 cd ../decision_tree_generator
 
 # condense the csv files into a single spot
@@ -54,7 +49,7 @@ cd ../decision_tree_generator
 ./outlier_csv_split.pl /qp/star_validated/$1
 
 # build trees
-.build/debug/decision_tree_generator --forest 8 --no-prune -n 24 -t /qp/star_validated/$1-test /qp/star_validated/$1-train
+.build/debug/decision_tree_generator --forest 8 --no-prune -t /qp/star_validated/$1-test /qp/star_validated/$1-train
 #.build/debug/decision_tree_generator --forest 12 --no-prune -n 28 -t /qp/star_validated/$1-test /qp/star_validated/$1-train
 #.build/debug/decision_tree_generator --forest 16 --no-prune -n 28 -t /qp/star_validated/$1-test /qp/star_validated/$1-train
 #.build/debug/decision_tree_generator --forest 24 --no-prune -n 28 -t /qp/star_validated/$1-test /qp/star_validated/$1-train
@@ -69,9 +64,9 @@ cd ../decision_tree_generator
 
 # without a clean here the recompiled .a file from above gets missed
 rm -rf .build
-swift build
 
-swift run decision_tree_generator -v /qp/star_validated/$1-test
+swift run -Xswiftc -O  decision_tree_generator -v /qp/star_validated/$1-test
+
 date
 
 
