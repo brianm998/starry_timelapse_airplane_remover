@@ -267,14 +267,14 @@ public actor FinalProcessor {
                         //Log.v("FINAL THREAD frame \(indexToProcess) queueing into final queue")
                         if let frameToFinish = await self.frame(at: immutableStart - 1) {
                             await self.clearFrame(at: immutableStart - 1)
-
-                            await frameToFinish.clearOutlierGroupValueCaches()
                             
-                            await frameToFinish.maybeApplyOutlierGroupClassifier()
-                            frameToFinish.set(state: .outlierProcessingComplete)
-
                             // run as a deferred task so we never block here 
                             try await taskGroup.addDeferredTask() {
+
+                                await frameToFinish.clearOutlierGroupValueCaches()
+
+                                await frameToFinish.maybeApplyOutlierGroupClassifier()
+                                frameToFinish.set(state: .outlierProcessingComplete)
                                 
                                 Log.v("FINAL THREAD frame \(indexToProcess) classified")
                                 do {
