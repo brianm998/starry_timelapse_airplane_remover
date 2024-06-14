@@ -152,15 +152,23 @@ public class FullFrameBlobber {
             if higherNeighbors.count == 0 {
                 // no higher neighbors
                 // a local maximum, this pixel is a blob seed
-                newBlobId += 1
-                let newBlob = Blob(pixel, id: newBlobId, frameIndex: frameIndex)
-                blobs.append(newBlob)
-                
-                //Log.d("expanding from seed pixel.intensity \(pixel.intensity)")
 
-                expand(blob: newBlob, seedPixel: pixel)
+                if newBlobId < UInt16.max {
+                    newBlobId += 1
+                    let newBlob = Blob(pixel, id: newBlobId, frameIndex: frameIndex)
+                    blobs.append(newBlob)
+                    
+                    //Log.d("expanding from seed pixel.intensity \(pixel.intensity)")
 
-                //Log.d("frame \(frameIndex) creating blob \(newBlob)")
+                    expand(blob: newBlob, seedPixel: pixel)
+                    //Log.d("frame \(frameIndex) creating blob \(newBlob)")
+
+                } else {
+                    // we've got more than UInt16.max blob seeds, that's a lot
+                    // don't create more blobs
+                    break
+                }
+
                 
             } else {
                 // but only if it's bright enough

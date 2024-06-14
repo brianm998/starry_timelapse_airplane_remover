@@ -3,15 +3,15 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 56;
+	objectVersion = 60;
 	objects = {
 
 /* Begin PBXBuildFile section */
 		D32F6DBC2A4F044300704870 /* StarCli.swift in Sources */ = {isa = PBXBuildFile; fileRef = D32F6DBB2A4F044300704870 /* StarCli.swift */; };
-		D33185A729F1DE10004DBB62 /* ArgumentParser in Frameworks */ = {isa = PBXBuildFile; productRef = D33185A629F1DE10004DBB62 /* ArgumentParser */; };
-		D33185AE29F1E007004DBB62 /* StarCore in Frameworks */ = {isa = PBXBuildFile; productRef = D33185AD29F1E007004DBB62 /* StarCore */; };
 		D33185B229F1E2C4004DBB62 /* libStarDecisionTrees.a in Frameworks */ = {isa = PBXBuildFile; fileRef = D33185B129F1E2C4004DBB62 /* libStarDecisionTrees.a */; };
 		D33185B429F1E67A004DBB62 /* libswift_Concurrency.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = D33185B329F1E67A004DBB62 /* libswift_Concurrency.tbd */; };
+		D37A962C2C0C1B01002A87C6 /* ArgumentParser in Frameworks */ = {isa = PBXBuildFile; productRef = D37A962B2C0C1B01002A87C6 /* ArgumentParser */; };
+		D37A962E2C0C1B07002A87C6 /* StarCore in Frameworks */ = {isa = PBXBuildFile; productRef = D37A962D2C0C1B07002A87C6 /* StarCore */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -29,7 +29,6 @@
 /* Begin PBXFileReference section */
 		D32F6DBB2A4F044300704870 /* StarCli.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; name = StarCli.swift; path = Sources/star/StarCli.swift; sourceTree = SOURCE_ROOT; };
 		D331859629F1D685004DBB62 /* star */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = star; sourceTree = BUILT_PRODUCTS_DIR; };
-		D33185AB29F1DF5E004DBB62 /* StarCore */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = StarCore; path = ../StarCore; sourceTree = "<group>"; };
 		D33185B129F1E2C4004DBB62 /* libStarDecisionTrees.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libStarDecisionTrees.a; path = ../StarDecisionTrees/libStarDecisionTrees.a; sourceTree = "<group>"; };
 		D33185B329F1E67A004DBB62 /* libswift_Concurrency.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libswift_Concurrency.tbd; path = usr/lib/swift/libswift_Concurrency.tbd; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
@@ -39,10 +38,10 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D37A962C2C0C1B01002A87C6 /* ArgumentParser in Frameworks */,
 				D33185B429F1E67A004DBB62 /* libswift_Concurrency.tbd in Frameworks */,
 				D33185B229F1E2C4004DBB62 /* libStarDecisionTrees.a in Frameworks */,
-				D33185A729F1DE10004DBB62 /* ArgumentParser in Frameworks */,
-				D33185AE29F1E007004DBB62 /* StarCore in Frameworks */,
+				D37A962E2C0C1B07002A87C6 /* StarCore in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -52,7 +51,6 @@
 		D331858D29F1D685004DBB62 = {
 			isa = PBXGroup;
 			children = (
-				D33185AA29F1DF5E004DBB62 /* Packages */,
 				D331859829F1D685004DBB62 /* star */,
 				D331859729F1D685004DBB62 /* Products */,
 				D33185AC29F1E007004DBB62 /* Frameworks */,
@@ -73,14 +71,6 @@
 				D32F6DBB2A4F044300704870 /* StarCli.swift */,
 			);
 			path = star;
-			sourceTree = "<group>";
-		};
-		D33185AA29F1DF5E004DBB62 /* Packages */ = {
-			isa = PBXGroup;
-			children = (
-				D33185AB29F1DF5E004DBB62 /* StarCore */,
-			);
-			name = Packages;
 			sourceTree = "<group>";
 		};
 		D33185AC29F1E007004DBB62 /* Frameworks */ = {
@@ -106,11 +96,13 @@
 			buildRules = (
 			);
 			dependencies = (
+				D37A96302C0C1B97002A87C6 /* PBXTargetDependency */,
+				D37A96322C0C1B97002A87C6 /* PBXTargetDependency */,
 			);
 			name = star;
 			packageProductDependencies = (
-				D33185A629F1DE10004DBB62 /* ArgumentParser */,
-				D33185AD29F1E007004DBB62 /* StarCore */,
+				D37A962B2C0C1B01002A87C6 /* ArgumentParser */,
+				D37A962D2C0C1B07002A87C6 /* StarCore */,
 			);
 			productName = star;
 			productReference = D331859629F1D685004DBB62 /* star */;
@@ -143,6 +135,7 @@
 			mainGroup = D331858D29F1D685004DBB62;
 			packageReferences = (
 				D33185A529F1DE10004DBB62 /* XCRemoteSwiftPackageReference "swift-argument-parser" */,
+				D37308BE2C0C010E00BD62DB /* XCLocalSwiftPackageReference "../StarCore" */,
 			);
 			productRefGroup = D331859729F1D685004DBB62 /* Products */;
 			projectDirPath = "";
@@ -163,6 +156,17 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		D37A96302C0C1B97002A87C6 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			productRef = D37A962F2C0C1B97002A87C6 /* ArgumentParser */;
+		};
+		D37A96322C0C1B97002A87C6 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			productRef = D37A96312C0C1B97002A87C6 /* StarCore */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		D331859B29F1D685004DBB62 /* Debug */ = {
@@ -305,7 +309,8 @@
 					"$(inherited)",
 					"$(SDKROOT)/usr/lib/swift",
 				);
-				MACOSX_DEPLOYMENT_TARGET = 10.15;
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				ONLY_ACTIVE_ARCH = NO;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-Xlinker",
@@ -313,6 +318,7 @@
 					"-Xlinker",
 					"-all_load",
 				);
+				OTHER_SWIFT_FLAGS = "-l StarDecisionTrees -I ../StarDecisionTrees/.build/debug";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
@@ -333,7 +339,8 @@
 					"$(inherited)",
 					"$(SDKROOT)/usr/lib/swift",
 				);
-				MACOSX_DEPLOYMENT_TARGET = 10.15;
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				ONLY_ACTIVE_ARCH = NO;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-Xlinker",
@@ -341,6 +348,7 @@
 					"-Xlinker",
 					"-all_load",
 				);
+				OTHER_SWIFT_FLAGS = "-l StarDecisionTrees -I ../StarDecisionTrees/.build/debug";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_VERSION = 5.0;
@@ -370,25 +378,43 @@
 		};
 /* End XCConfigurationList section */
 
+/* Begin XCLocalSwiftPackageReference section */
+		D37308BE2C0C010E00BD62DB /* XCLocalSwiftPackageReference "../StarCore" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../StarCore;
+		};
+/* End XCLocalSwiftPackageReference section */
+
 /* Begin XCRemoteSwiftPackageReference section */
 		D33185A529F1DE10004DBB62 /* XCRemoteSwiftPackageReference "swift-argument-parser" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/apple/swift-argument-parser.git";
 			requirement = {
 				kind = upToNextMajorVersion;
-				minimumVersion = 1.0.0;
+				minimumVersion = 1.3.0;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		D33185A629F1DE10004DBB62 /* ArgumentParser */ = {
+		D37A962B2C0C1B01002A87C6 /* ArgumentParser */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = D33185A529F1DE10004DBB62 /* XCRemoteSwiftPackageReference "swift-argument-parser" */;
 			productName = ArgumentParser;
 		};
-		D33185AD29F1E007004DBB62 /* StarCore */ = {
+		D37A962D2C0C1B07002A87C6 /* StarCore */ = {
 			isa = XCSwiftPackageProductDependency;
+			package = D37308BE2C0C010E00BD62DB /* XCLocalSwiftPackageReference "../StarCore" */;
+			productName = StarCore;
+		};
+		D37A962F2C0C1B97002A87C6 /* ArgumentParser */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = D33185A529F1DE10004DBB62 /* XCRemoteSwiftPackageReference "swift-argument-parser" */;
+			productName = ArgumentParser;
+		};
+		D37A96312C0C1B97002A87C6 /* StarCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = D37308BE2C0C010E00BD62DB /* XCLocalSwiftPackageReference "../StarCore" */;
 			productName = StarCore;
 		};
 /* End XCSwiftPackageProductDependency section */
