@@ -15,11 +15,13 @@ let package = Package(
             targets: ["logging"]),
     ],
     dependencies: [
+      .package(url: "https://github.com/groue/Semaphore.git", from: "0.0.8"),
     ],
     targets: [
         .target(
             name: "logging",
             dependencies: [
+              .product(name: "Semaphore", package: "Semaphore"),
             ]
         )
     ]
