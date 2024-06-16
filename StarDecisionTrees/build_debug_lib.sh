@@ -13,6 +13,6 @@ rm -rf .build
 # build for current arch (development)
 swift build || swift build --arch `uname -m` -Xswiftc -emit-module -Xswiftc -emit-library -Xswiftc -static -Xswiftc -O
 
-# can't properly build against this with these still here
-rm -rf .build/debug/*.build
-
+# move swift module definitions to include dir
+mkdir .build/debug/include
+cp -r .build/debug/StarDecisionTrees* .build/debug/include

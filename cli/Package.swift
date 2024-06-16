@@ -26,7 +26,7 @@ let package = Package(
               .unsafeFlags([
                              // import libStarDecisionTrees.a for references at compile time
                              "-l", "StarDecisionTrees",
-                             "-I", "../StarDecisionTrees/.build/debug"
+                             "-I", "../StarDecisionTrees/.build/debug/include"
                            ]),
             ],
             linkerSettings: [
