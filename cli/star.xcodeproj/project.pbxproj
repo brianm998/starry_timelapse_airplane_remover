@@ -8,7 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		D32F6DBC2A4F044300704870 /* StarCli.swift in Sources */ = {isa = PBXBuildFile; fileRef = D32F6DBB2A4F044300704870 /* StarCli.swift */; };
-		D33185B229F1E2C4004DBB62 /* libStarDecisionTrees.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = D33185B129F1E2C4004DBB62 /* libStarDecisionTrees.dylib */; };
+		D33185B229F1E2C4004DBB62 /* libStarDecisionTrees.a in Frameworks */ = {isa = PBXBuildFile; fileRef = D33185B129F1E2C4004DBB62 /* libStarDecisionTrees.a */; };
 		D33185B429F1E67A004DBB62 /* libswift_Concurrency.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = D33185B329F1E67A004DBB62 /* libswift_Concurrency.tbd */; };
 		D37A962C2C0C1B01002A87C6 /* ArgumentParser in Frameworks */ = {isa = PBXBuildFile; productRef = D37A962B2C0C1B01002A87C6 /* ArgumentParser */; };
 		D37A962E2C0C1B07002A87C6 /* StarCore in Frameworks */ = {isa = PBXBuildFile; productRef = D37A962D2C0C1B07002A87C6 /* StarCore */; };
@@ -29,7 +29,7 @@
 /* Begin PBXFileReference section */
 		D32F6DBB2A4F044300704870 /* StarCli.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; name = StarCli.swift; path = Sources/star/StarCli.swift; sourceTree = SOURCE_ROOT; };
 		D331859629F1D685004DBB62 /* star */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = star; sourceTree = BUILT_PRODUCTS_DIR; };
-		D33185B129F1E2C4004DBB62 /* libStarDecisionTrees.dylib */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libStarDecisionTrees.dylib; path = ../StarDecisionTrees/lib/release/libStarDecisionTrees.dylib; sourceTree = "<group>"; };
+		D33185B129F1E2C4004DBB62 /* libStarDecisionTrees.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libStarDecisionTrees.a; path = ../StarDecisionTrees/lib/debug/libStarDecisionTrees.a; sourceTree = "<group>"; };
 		D33185B329F1E67A004DBB62 /* libswift_Concurrency.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libswift_Concurrency.tbd; path = usr/lib/swift/libswift_Concurrency.tbd; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
 
@@ -40,7 +40,7 @@
 			files = (
 				D37A962C2C0C1B01002A87C6 /* ArgumentParser in Frameworks */,
 				D33185B429F1E67A004DBB62 /* libswift_Concurrency.tbd in Frameworks */,
-				D33185B229F1E2C4004DBB62 /* libStarDecisionTrees.dylib in Frameworks */,
+				D33185B229F1E2C4004DBB62 /* libStarDecisionTrees.a in Frameworks */,
 				D37A962E2C0C1B07002A87C6 /* StarCore in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -77,7 +77,7 @@
 			isa = PBXGroup;
 			children = (
 				D33185B329F1E67A004DBB62 /* libswift_Concurrency.tbd */,
-				D33185B129F1E2C4004DBB62 /* libStarDecisionTrees.dylib */,
+				D33185B129F1E2C4004DBB62 /* libStarDecisionTrees.a */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -228,7 +228,7 @@
 					"-Xlinker",
 					"-L../StarDecisionTrees/lib/debug",
 					"-Xlinker",
-					../StarDecisionTrees/lib/debug/libStarDecisionTrees.dylib,
+					../StarDecisionTrees/lib/debug/libStarDecisionTrees.a,
 					"-Xlinker",
 					"-ld_classic",
 				);
@@ -291,7 +291,7 @@
 					"-Xlinker",
 					"-L../StarDecisionTrees/lib/release",
 					"-Xlinker",
-					../StarDecisionTrees/lib/release/libStarDecisionTrees.dylib,
+					../StarDecisionTrees/lib/release/libStarDecisionTrees.a,
 					"-Xlinker",
 					"-ld_classic",
 				);
@@ -316,13 +316,13 @@
 					"$(SDKROOT)/usr/lib/swift",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
-				ONLY_ACTIVE_ARCH = NO;
+				ONLY_ACTIVE_ARCH = YES;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-Xlinker",
 					"-L../StarDecisionTrees/lib/debug",
 					"-Xlinker",
-					../StarDecisionTrees/lib/debug/libStarDecisionTrees.dylib,
+					../StarDecisionTrees/lib/debug/libStarDecisionTrees.a,
 					"-Xlinker",
 					"-ld_classic",
 				);
@@ -354,7 +354,7 @@
 					"-Xlinker",
 					"-L../StarDecisionTrees/lib/release",
 					"-Xlinker",
-					../StarDecisionTrees/lib/release/libStarDecisionTrees.dylib,
+					../StarDecisionTrees/lib/release/libStarDecisionTrees.a,
 					"-Xlinker",
 					"-ld_classic",
 				);

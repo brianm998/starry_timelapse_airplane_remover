@@ -24,7 +24,7 @@ let package = Package(
             ],
             swiftSettings: [
               .unsafeFlags([
-                             // import libStarDecisionTrees.a for references at compile time
+                             // import StarDecisionTrees swift module
                              "-l", "StarDecisionTrees",
                              "-I", "../StarDecisionTrees/include/debug"
                            ]),
@@ -36,7 +36,7 @@ let package = Package(
                              
                              // link in pre compiled .a file for the decision trees 
                              "-L../StarDecisionTrees/lib/debug",
-                             "-Xlinker", "../StarDecisionTrees/lib/debug/libStarDecisionTrees.dylib"
+                             "-Xlinker", "../StarDecisionTrees/lib/debug/libStarDecisionTrees.a"
                            ]),
               .linkedLibrary("StarDecisionTrees")
             ]),

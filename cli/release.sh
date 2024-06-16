@@ -6,6 +6,7 @@ STAR_VERSION=`cd ../StarCore ; perl version.pl`
 PKG_NAME=".build/star_cli_${STAR_VERSION}.pkg"
 
 rm -rf .build
+rm -rf DerivedData
 mkdir .build
 
 # make sure the flag to build for all archs is set (should be, but just make sure)
