@@ -10,42 +10,36 @@ set -e
 
 # clear out any previous build
 rm -rf .build
-rm -rf lib
-rm -rf include
+rm -rf lib/release
+rm -rf include/release
 
 # generate current list of all decision trees in StarDecisionTrees.swift
 ./makeList.pl
 
-BUILD_COMMAND="swift build --configuration release"
-BUILD_ARGS="-Xswiftc -emit-module -Xswiftc -emit-library -Xswiftc -static -Xswiftc -O"
-STATIC_X86_BUILD="$BUILD_COMMAND --arch x86_64 $BUILD_ARGS"
-STATIC_ARM_BUILD="$BUILD_COMMAND --arch arm64 $BUILD_ARGS"
+# build static, universal, speed optimized lib 
 
-# build static, speed optimized lib for x86
-
-# run it like this incase the first one dies because of missing objc header 
-$STATIC_X86_BUILD || $STATIC_X86_BUILD
-
-mv *.a .build/x86_64-apple-macosx
-
-# build static, speed optimized lib for arm64
-$STATIC_ARM_BUILD || $STATIC_ARM_BUILD
-
-mv *.a .build/arm64-apple-macosx
-
+# create output dirs
 mkdir -p lib/release
-
-# lipo them together into a universal .a file for both archs
-lipo .build/arm64-apple-macosx/libStarDecisionTrees.a \
-     .build/x86_64-apple-macosx/libStarDecisionTrees.a \
-     -create -output lib/release/libStarDecisionTrees.a
-
-# move swift module definitions to include dir
-mkdir -p include/debug
-cp -r .build/debug/StarDecisionTrees* include/debug
-
 mkdir -p include/release
-cp -r .build/release/StarDecisionTrees* include/release
+
+# this only produces the swift module for both arches (which we need),
+# and a .o file, which is useless
+swift build --configuration release -Xswiftc -O  --arch x86_64 --arch arm64
+
+mv .build/apple/Products/Release/StarDecisionTrees.swiftmodule include/release
+
+# build the real .a file
+
+# first for x86
+swift build --configuration release -Xswiftc -O --arch x86_64
+
+# next for arm
+swift build --configuration release -Xswiftc -O --arch arm64
+
+# then lipo them together
+lipo .build/arm64-apple-macosx/release/libStarDecisionTrees.a \
+     .build/x86_64-apple-macosx/release/libStarDecisionTrees.a \
+      -create -output lib/release/libStarDecisionTrees.a
 
 
 

@@ -9,15 +9,14 @@ rm -rf include/debug
 # generate current list of all decision trees in StarDecisionTrees.swift
 ./makeList.pl
 
-# first run after cleaning build file dies on error about missing objc bridging header for semaphore
-# re - run it without deleting the build file, and it works.
+# build without optimization, for the current arch only
+swift build --arch `uname -m`
 
-# build for current arch (development)
-swift build || swift build --arch `uname -m` -Xswiftc -emit-module -Xswiftc -emit-library -Xswiftc -static -Xswiftc -O
-
+# create output dirs
 mkdir -p lib/debug
-cp libStarDecisionTrees.a lib
-
-# move swift module definitions to include dir
 mkdir -p include/debug
-cp -r .build/debug/StarDecisionTrees* include/debug
+
+# copy output dylib and swiftmodule to output dirs
+mv .build/debug/libStarDecisionTrees.a lib/debug
+mv .build/debug/StarDecisionTrees.swiftmodule include/debug
+

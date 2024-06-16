@@ -36,7 +36,7 @@ let package = Package(
                              
                              // link in pre compiled .a file for the decision trees 
                              "-L../StarDecisionTrees/lib/debug",
-                             "-Xlinker", "../StarDecisionTrees/lib/debug/libStarDecisionTrees.a"
+                             "-Xlinker", "../StarDecisionTrees/lib/debug/libStarDecisionTrees.dylib"
                            ]),
               .linkedLibrary("StarDecisionTrees")
             ]),
