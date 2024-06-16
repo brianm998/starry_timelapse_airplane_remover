@@ -37,6 +37,7 @@
 		D33FFC262A2D4E8600F38194 /* FilmstripImageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D33FFC252A2D4E8600F38194 /* FilmstripImageView.swift */; };
 		D33FFC282A2D4F7E00F38194 /* FilmstripView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D33FFC272A2D4F7E00F38194 /* FilmstripView.swift */; };
 		D33FFC2A2A2E1A8900F38194 /* OutlierGroupViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D33FFC292A2E1A8900F38194 /* OutlierGroupViewModel.swift */; };
+		D364FD7F2C1F4357006FB43A /* libStarDecisionTrees.a in Frameworks */ = {isa = PBXBuildFile; fileRef = D310C6F329C8D8F40014FBA9 /* libStarDecisionTrees.a */; };
 		D366BB3A2AF84766004C9125 /* Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = D366BB392AF84766004C9125 /* Info.plist */; };
 		D386FA13298B617300878B56 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D386FA12298B617300878B56 /* ContentView.swift */; };
 		D386FA15298B617400878B56 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = D386FA14298B617400878B56 /* Assets.xcassets */; };
@@ -76,7 +77,7 @@
 
 /* Begin PBXFileReference section */
 		D3058E1A2AC0745C00C58F1D /* MultiSelectSheetView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = MultiSelectSheetView.swift; sourceTree = "<group>"; };
-		D310C6F329C8D8F40014FBA9 /* libStarDecisionTrees.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libStarDecisionTrees.a; path = ../../StarDecisionTrees/libStarDecisionTrees.a; sourceTree = "<group>"; };
+		D310C6F329C8D8F40014FBA9 /* libStarDecisionTrees.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libStarDecisionTrees.a; path = ../../StarDecisionTrees/lib/release/libStarDecisionTrees.a; sourceTree = "<group>"; };
 		D31F9FBC299736730001CD0C /* ViewModel.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ViewModel.swift; sourceTree = "<group>"; };
 		D31F9FBD299736730001CD0C /* FrameSaveQueue.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = FrameSaveQueue.swift; sourceTree = "<group>"; };
 		D31F9FBE299736730001CD0C /* OutlierGroupView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = OutlierGroupView.swift; sourceTree = "<group>"; };
@@ -131,6 +132,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D364FD7F2C1F4357006FB43A /* libStarDecisionTrees.a in Frameworks */,
 				D3B29C9E2B2FE23F00754C10 /* StarCore in Frameworks */,
 				D3B29CB12B2FE5BE00754C10 /* StarCore in Frameworks */,
 				D3B29CA42B2FE31800754C10 /* KHTSwift in Frameworks */,
@@ -632,13 +634,11 @@
 					"-weak_framework",
 					"\"SwiftUI\"",
 					"-Xlinker",
-					"-L../StarDecisionTrees",
+					"-L../StarDecisionTrees/lib/debug",
 					"-Xlinker",
-					../StarDecisionTrees/libStarDecisionTrees.a,
-					"-Xlinker",
-					"-ld_classic",
+					../StarDecisionTrees/lib/debug/libStarDecisionTrees.a,
 				);
-				"OTHER_SWIFT_FLAGS[arch=*]" = "-l StarDecisionTrees -I ../StarDecisionTrees/.build/debug/include";
+				"OTHER_SWIFT_FLAGS[arch=*]" = "-l StarDecisionTrees -I ../StarDecisionTrees/include/debug";
 				PRODUCT_BUNDLE_IDENTIFIER = com.star;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
@@ -677,13 +677,11 @@
 					"-weak_framework",
 					"\"SwiftUI\"",
 					"-Xlinker",
-					"-L../StarDecisionTrees",
+					"-L../StarDecisionTrees/lib/release",
 					"-Xlinker",
-					../StarDecisionTrees/libStarDecisionTrees.a,
-					"-Xlinker",
-					"-ld_classic",
+					../StarDecisionTrees/lib/release/libStarDecisionTrees.a,
 				);
-				"OTHER_SWIFT_FLAGS[arch=*]" = "-l StarDecisionTrees -I ../StarDecisionTrees/.build/release/include";
+				"OTHER_SWIFT_FLAGS[arch=*]" = "-l StarDecisionTrees -I ../StarDecisionTrees/include/release";
 				PRODUCT_BUNDLE_IDENTIFIER = com.star;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
