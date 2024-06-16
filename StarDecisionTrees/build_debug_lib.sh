@@ -3,6 +3,8 @@
 
 # clean previous builds
 rm -rf .build
+rm -rf lib/debug
+rm -rf include/debug
 
 # generate current list of all decision trees in StarDecisionTrees.swift
 ./makeList.pl
@@ -13,6 +15,9 @@ rm -rf .build
 # build for current arch (development)
 swift build || swift build --arch `uname -m` -Xswiftc -emit-module -Xswiftc -emit-library -Xswiftc -static -Xswiftc -O
 
+mkdir -p lib/debug
+cp libStarDecisionTrees.a lib
+
 # move swift module definitions to include dir
-mkdir .build/debug/include
-cp -r .build/debug/StarDecisionTrees* .build/debug/include
+mkdir -p include/debug
+cp -r .build/debug/StarDecisionTrees* include/debug

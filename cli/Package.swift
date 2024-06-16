@@ -26,7 +26,7 @@ let package = Package(
               .unsafeFlags([
                              // import libStarDecisionTrees.a for references at compile time
                              "-l", "StarDecisionTrees",
-                             "-I", "../StarDecisionTrees/.build/debug/include"
+                             "-I", "../StarDecisionTrees/include/debug"
                            ]),
             ],
             linkerSettings: [
@@ -35,8 +35,8 @@ let package = Package(
                              "-Xlinker", "-ld_classic",
                              
                              // link in pre compiled .a file for the decision trees 
-                             "-L../StarDecisionTrees",
-                             "-Xlinker", "../StarDecisionTrees/libStarDecisionTrees.a"
+                             "-L../StarDecisionTrees/lib/debug",
+                             "-Xlinker", "../StarDecisionTrees/lib/debug/libStarDecisionTrees.a"
                            ]),
               .linkedLibrary("StarDecisionTrees")
             ]),

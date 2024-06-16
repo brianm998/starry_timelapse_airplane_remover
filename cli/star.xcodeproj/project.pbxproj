@@ -29,7 +29,7 @@
 /* Begin PBXFileReference section */
 		D32F6DBB2A4F044300704870 /* StarCli.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; name = StarCli.swift; path = Sources/star/StarCli.swift; sourceTree = SOURCE_ROOT; };
 		D331859629F1D685004DBB62 /* star */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = star; sourceTree = BUILT_PRODUCTS_DIR; };
-		D33185B129F1E2C4004DBB62 /* libStarDecisionTrees.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libStarDecisionTrees.a; path = ../StarDecisionTrees/libStarDecisionTrees.a; sourceTree = "<group>"; };
+		D33185B129F1E2C4004DBB62 /* libStarDecisionTrees.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libStarDecisionTrees.a; path = ../StarDecisionTrees/lib/libStarDecisionTrees.a; sourceTree = "<group>"; };
 		D33185B329F1E67A004DBB62 /* libswift_Concurrency.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libswift_Concurrency.tbd; path = usr/lib/swift/libswift_Concurrency.tbd; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
 
@@ -226,13 +226,13 @@
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-Xlinker",
-					"-L../StarDecisionTrees",
+					"-L../StarDecisionTrees/lib/debug",
 					"-Xlinker",
-					../StarDecisionTrees/libStarDecisionTrees.a,
+					../StarDecisionTrees/lib/debug/libStarDecisionTrees.a,
 					"-Xlinker",
 					"-ld_classic",
 				);
-				"OTHER_SWIFT_FLAGS[arch=*]" = "-l StarDecisionTrees -I ../StarDecisionTrees/.build/debug/include";
+				"OTHER_SWIFT_FLAGS[arch=*]" = "-l StarDecisionTrees -I ../StarDecisionTrees/include/debug";
 				SDKROOT = macosx;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
@@ -289,13 +289,13 @@
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-Xlinker",
-					"-L../StarDecisionTrees",
+					"-L../StarDecisionTrees/lib/release",
 					"-Xlinker",
-					../StarDecisionTrees/libStarDecisionTrees.a,
+					../StarDecisionTrees/lib/release/libStarDecisionTrees.a,
 					"-Xlinker",
 					"-ld_classic",
 				);
-				"OTHER_SWIFT_FLAGS[arch=*]" = "-l StarDecisionTrees -I ../StarDecisionTrees/.build/release/include";
+				"OTHER_SWIFT_FLAGS[arch=*]" = "-l StarDecisionTrees -I ../StarDecisionTrees/include/release";
 				SDKROOT = macosx;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
@@ -320,13 +320,13 @@
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-Xlinker",
-					"-L../StarDecisionTrees",
+					"-L../StarDecisionTrees/lib/debug",
 					"-Xlinker",
-					../StarDecisionTrees/libStarDecisionTrees.a,
+					../StarDecisionTrees/lib/debug/libStarDecisionTrees.a,
 					"-Xlinker",
 					"-ld_classic",
 				);
-				"OTHER_SWIFT_FLAGS[arch=*]" = "-l StarDecisionTrees -I ../StarDecisionTrees/.build/debug/include";
+				"OTHER_SWIFT_FLAGS[arch=*]" = "-l StarDecisionTrees -I ../StarDecisionTrees/include/debug";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
@@ -352,13 +352,13 @@
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-Xlinker",
-					"-L../StarDecisionTrees",
+					"-L../StarDecisionTrees/lib/release",
 					"-Xlinker",
-					../StarDecisionTrees/libStarDecisionTrees.a,
+					../StarDecisionTrees/lib/release/libStarDecisionTrees.a,
 					"-Xlinker",
 					"-ld_classic",
 				);
-				"OTHER_SWIFT_FLAGS[arch=*]" = "-l StarDecisionTrees -I ../StarDecisionTrees/.build/release/include";
+				"OTHER_SWIFT_FLAGS[arch=*]" = "-l StarDecisionTrees -I ../StarDecisionTrees/include/release";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_VERSION = 5.0;

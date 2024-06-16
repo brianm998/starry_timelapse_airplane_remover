@@ -10,6 +10,8 @@ set -e
 
 # clear out any previous build
 rm -rf .build
+rm -rf lib
+rm -rf include
 
 # generate current list of all decision trees in StarDecisionTrees.swift
 ./makeList.pl
@@ -31,17 +33,19 @@ $STATIC_ARM_BUILD || $STATIC_ARM_BUILD
 
 mv *.a .build/arm64-apple-macosx
 
+mkdir -p lib/release
+
 # lipo them together into a universal .a file for both archs
 lipo .build/arm64-apple-macosx/libStarDecisionTrees.a \
      .build/x86_64-apple-macosx/libStarDecisionTrees.a \
-     -create -output libStarDecisionTrees.a
+     -create -output lib/release/libStarDecisionTrees.a
 
 # move swift module definitions to include dir
-mkdir .build/debug/include
-cp -r .build/debug/StarDecisionTrees* .build/debug/include
+mkdir -p include/debug
+cp -r .build/debug/StarDecisionTrees* include/debug
 
-mkdir .build/release/include
-cp -r .build/release/StarDecisionTrees* .build/release/include
+mkdir -p include/release
+cp -r .build/release/StarDecisionTrees* include/release
 
 
 
