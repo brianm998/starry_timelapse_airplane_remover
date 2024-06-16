@@ -106,7 +106,7 @@ class StarApp: App {
         }
 
         // maybe move this elsewhere
-        StarCore.currentClassifier = OutlierGroupDecisionTree_aa134949()
+        StarCore.currentClassifier = OutlierGroupForestClassifier_d411a00d()
         
         Log.add(handler: ConsoleLogHandler(at: .debug), for: .console)
         Log.i("Starting Up")
