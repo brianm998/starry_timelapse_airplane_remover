@@ -10,7 +10,7 @@ rm -rf include/debug
 ./makeList.pl
 
 # build without optimization, for the current arch only
-swift build --arch `uname -m`
+swift build --arch `uname -m` -Xswiftc -O
 
 # create output dirs
 mkdir -p lib/debug
