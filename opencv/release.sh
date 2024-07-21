@@ -36,9 +36,10 @@ mv FRAMEWORK_BUILD/opencv2.framework ..
 cd ..
 cd include
 mkdir opencv2
+cd opencv2
 
 # link in header files for proper compilation
-ln -s ../../opencv2.framework/Headers/*
+ln -s ../../opencv2.framework/Headers/* .
 
 
 
