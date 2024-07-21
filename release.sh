@@ -7,15 +7,29 @@
 set -e
 
 ####
-# first build the decision tree code into a static, universal library (.a file)
+# first build opencv2 into a static, universal library (.a file)
+# this is a large c++ library that is used by the kernel hough transform 
+####
+
+cd opencv
+./release.sh
+cd ..
+
+# results end up here:
+# opencv/lib
+# opencv/include
+
+####
+# next build the decision tree code into a static, universal library (.a file)
 # this can be large, and is linked into the gui, cli and decision tree generator apps
 ####
 cd StarDecisionTrees
 ./release.sh
 cd ..
 
-# result ends up here:
-# StarDecisionTrees/libStarDecisionTrees.a
+# results end up here:
+# StarDecisionTrees/lib
+# StarDecisionTrees/include
 
 ####
 # next build a universal (all arch) binary for the cli     

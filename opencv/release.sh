@@ -1,3 +1,14 @@
+#!/bin/bash
+
+# this script builds opencv2 so we can use it.
+#
+# it has to be a static .a file so we don't have to sign it.
+# apple's signing of frameworks included in apps is hard to get around.
+# having opencv as a .a file gets it linked directly into the star binary,
+# making separate signing of opencv2 unnecessary.
+
+set -e
+
 # clean any prior build
 rm -rf lib
 rm -rf include
@@ -10,7 +21,8 @@ mkdir include
 git clone https://github.com/opencv/opencv.git
 cd opencv
 
-# maybe choose tag?
+# checkout release tag
+git checkout 4.10.0
 
 # build opencv2 framework for osx, both x86 and arm
 time python3 platforms/osx/build_framework.py --out FRAMEWORK_BUILD --macos_archs x86_64,arm64 --without objc --build_only_specified_archs True
