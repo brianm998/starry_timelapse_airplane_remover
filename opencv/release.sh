@@ -13,6 +13,7 @@ set -e
 rm -rf lib
 rm -rf include
 rm -rf opencv
+rm -rf opencv2.framework
 
 mkdir lib
 mkdir include
