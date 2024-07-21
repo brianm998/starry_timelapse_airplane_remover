@@ -3,6 +3,7 @@
 
 import PackageDescription
 
+// this package exposes the kernel hough transform to swift, which needs the c++ opencv2 lib
 let package = Package(
     name: "KHTSwift",
     platforms: [
@@ -15,15 +16,34 @@ let package = Package(
             targets: ["KHTSwift"])
     ],
     dependencies: [
-      .package(name: "OpenCV", path: "../../opencv-spm"),
-// XXX this ^^^ works, but this VVV doesn't, the opencv-spm name isn't the package name :(
-//      .package(url: "https://github.com/yeatse/opencv-spm.git", from: "4.8.1"),
       .package(name: "logging", path: "../logging"),
     ],
-    targets: [
-      .target(name: "kht", dependencies: ["OpenCV"]),        // C++
-      .target(name: "kht_bridge", dependencies: ["kht"]),    // Objective C
-      .target(name: "KHTSwift",                              // Swift
+    targets: [                  // C++
+      .target(name: "kht",
+              linkerSettings: [
+                .linkedFramework("AVFoundation"),
+                .linkedFramework("CoreImage"),
+                .linkedFramework("CoreMedia"),
+                .linkedFramework("Accelerate"),
+                .linkedFramework("OpenCL"),
+                .unsafeFlags([
+                               // use old, slower linker for now to avoid so many linker warnings
+                               //"-Xlinker", "-ld_classic",
+                               
+                               // link in pre compiled .a file for opencv2 
+                               "-L../opencv/lib/",
+                               "-Xlinker", "../opencv/lib/libopencv2.a"
+                             ]
+                ),
+                .linkedLibrary("opencv2")
+              ]
+
+      ),      
+      .target(name: "kht_bridge", // Objective C
+              dependencies: ["kht"],
+              cxxSettings: [ .unsafeFlags([ "-I", "../opencv/include" ])]
+      ),   
+      .target(name: "KHTSwift", // Swift
               dependencies: [
                 "kht_bridge", 
                 .product(name: "logging", package: "logging")

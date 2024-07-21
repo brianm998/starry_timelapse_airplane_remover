@@ -22,14 +22,6 @@ time xcodebuild \
      -archivePath .build/star \
      archive
 
-# could probably build this without xcode (swift directly) if we code sign it afterwards
-# with the 'Developer ID Application' identity after compilation and before pkgbuild below
-
-echo "code signing opencv2"
-
-codesign -s "Developer ID Application: Brian Martin (G3L75S65V9)" \
-	 .build/star.xcarchive/Products/usr/local/bin/Frameworks/opencv2.framework/opencv2
-
 echo "packaging it up"
 
 # package it up for distribution
