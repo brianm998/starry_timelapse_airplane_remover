@@ -40,17 +40,17 @@ The purpose of Star is to remove airplane and satellite streaks from overnight t
 
 Be aware that meteor trails will be removed as well, these can be re-added later with the gui front end, but flash on a single frame usually.  I've considered adding a meteor enhancing feature to spread out selected meteors over a few frames, but have yet to do so.
 
-Latest versions of Star use align_image_stack from Hugin to align stars.  Currently this needs to be installed separately from Star itself to take advantage of this feature.
+Latest versions of Star use `align_image_stack` from Hugin to align stars.  Currently this needs to be installed separately from Star itself to take advantage of this feature.
 
 Download and install Hugin for free:
 
 https://hugin.sourceforge.io/download/
 
-Star needs the align_image_stack utility from Hugin
+Star needs the `align_image_stack` utility from Hugin
 
 /Applications/Hugin/Hugin.app/Contents/MacOS/align_image_stack
 
-Star will still work without align_image_stack, but the results will be that the layer masks will reveal a slightly diferent part of the sky vs the aligned image.
+Star will still work without `align_image_stack`, but the results will be that the layer masks will reveal a slightly diferent part of the sky vs the aligned image.
 
 ## Software
 
@@ -71,15 +71,15 @@ At a high level, Star operates in a number of steps for each frame:
 2. subtract the image from step #1 from the frame being processed
 3. detect bright groups of pixels in the image from step #2
 4. apply some heuristics to filter out a lot of the groups from step #3
-5. classify these groups using machine learning to decide which ones to derive layer masks from
+5. classify groups left after step #4 using machine learning to decide which ones to derive layer masks from
 6. create a layer mask for this frame using the classified groups from step #5
 7. use the layer mask from step #6 and the star-aligned neighbor frame from step #1 to generate the output image for this frame
 
-As of Star v 0.4.0, detection is done via star-aligned images.  Each frame has a neighboring frame mapped to it via hugin's align_image_stack utility.  This makes the stars show up in close to the same spot in both images, while things like the earth are moved.  The effect of this is that, with proper alignment, the area of a frame that is covered by the streak of an airplane will be replace with a closer part of the sky from the neighboring frame.
+As of Star v 0.4.0, detection is done via star-aligned images.  Each frame has a neighboring frame mapped to it via hugin's `align_image_stack` utility.  This makes the stars show up in close to the same spot in both images, while things like the earth are moved.  The effect of this is that, with proper alignment, the area of a frame that is covered by the streak of an airplane will be replace with a closer part of the sky from the neighboring frame.
 
 Having mapped a comparison image makes detection a lot more capable, i.e. smaller differences between the images can be found, with fewer false positives.
 
-The heuristics from step #4 can be controlled on the command line with the --detectionType argument.  Really wide lenses like 12mm can result in a less accurate star alignment, which can give a noiser subtraction image.  Shorter lenses like 20mm or narrower can result in much closer star alignment and a much cleaner subtration image.
+The heuristics from step #4 can be controlled on the command line with the `--detectionType` argument.  Really wide lenses like 12mm can result in a less accurate star alignment, which can give a noiser subtraction image.  Shorter lenses like 20mm or narrower can result in much closer star alignment and a much cleaner subtration image.
 
 The machine learning is implemented with a trained decision tree.  Star contains logic to build forests of decision trees from validated image sequences.  
 
@@ -166,7 +166,7 @@ As of Star 0.3.3, the brightest part of this will be detected.  However, after r
 
 As of Star 0.6.7, detection has improved a lot, but is not perfect.
 
-This includes airplanes that appear as a sequence of small bright dots without changed pixels inbetween them.  The closer the changed pixels look like a line the more likely they will be detected.  Bumping up the --detectionType argument on the cli to exp can result in more detection of these.
+This includes airplanes that appear as a sequence of small bright dots without changed pixels inbetween them.  The closer the changed pixels look like a line the more likely they will be detected.  Bumping up the `--detectionType` argument on the cli to exp can result in more detection of these.
 
 Also usually not detected are really slow moving satellites.  
 
@@ -180,7 +180,7 @@ Earlier versions of Star were prone to crashing under high load.  Star 0.6.7 is 
 
 ### Slow
 
-Processing of large sequences of high resolution images can be slow.  While Star 0.6.7 is a lot faster than earlier iterations, processing an image sequence of 1000 images at 12 megapixels can take more than an hour.  42 megapixel image sequences generally finish overnight.  The --detectionType command line argument effects the processing speed.
+Processing of large sequences of high resolution images can be slow.  While Star 0.6.7 is a lot faster than earlier iterations, processing an image sequence of 1000 images at 12 megapixels can take more than an hour.  42 megapixel image sequences generally finish overnight.  The `--detectionType` command line argument effects the processing speed.
 
 This slowness is one reason I leave much of the processing to the command line and come back later when it's complete.
 
