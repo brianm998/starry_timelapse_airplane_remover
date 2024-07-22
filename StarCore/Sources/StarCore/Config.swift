@@ -168,8 +168,9 @@ public struct Config: Codable {
     // 0.6.5 re-worked blob detection again, added separate DetectionType
     // 0.6.6 re-wrote outlier saving, using one image per frame for outlier data now
     // 0.6.7 y-axis outlier images, two new classfication features
+    // 0.6.8 no new features yet
     
-    public var starVersion = "0.6.7" // XXX move this out
+    public var starVersion = "0.6.8" // XXX move this out
 
     public var basename: String {
         let _basename = "\(self.imageSequenceDirname)-star-v-\(self.starVersion)-\(self.detectionType.rawValue)"
