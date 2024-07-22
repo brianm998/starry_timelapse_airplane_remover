@@ -36,7 +36,7 @@ public class OutlierGroup: CustomStringConvertible,
                            Comparable,
                            ClassifiableOutlierGroup
 {
-    public let id: UInt16               // unique across a frame, non zero
+    public let id: UInt16              // unique across a frame, non zero
     public let size: UInt              // number of pixels in this outlier group
     public let bounds: BoundingBox     // a bounding box on the image that contains this group
     public let brightness: UInt        // the average amount per pixel of brightness over the limit 
@@ -149,7 +149,7 @@ public class OutlierGroup: CustomStringConvertible,
         var minY = bounds.width
         var maxX = 0
         var maxY = 0
-        
+
         for x in 0..<bounds.width {
             for y in 0..<bounds.height {
                 // calculate how close each pixel is to this line
@@ -242,7 +242,7 @@ public class OutlierGroup: CustomStringConvertible,
             for y in 0 ..< self.bounds.height {
                 let pixelIndex = y*self.bounds.width + x
                 var pixel = Pixel()
-                if self.pixels[pixelIndex] != 0 {
+                if self.pixels[pixelIndex] != 0 { // XXX use pixelSet
                     // the real color is set in the view layer 
                     pixel.red = 0xFFFF
                     pixel.green = 0xFFFF
@@ -388,10 +388,10 @@ public class OutlierGroup: CustomStringConvertible,
     // decision tree generator will use it after recompile
     // all existing outlier value files will need to be regenerated to include it
     public enum Feature: String,
-                       CaseIterable,
-                       Hashable,
-                       Codable,
-                       Comparable
+                         CaseIterable,
+                         Hashable,
+                         Codable,
+                         Comparable
     {
         case size
         case width
@@ -649,28 +649,28 @@ public class OutlierGroup: CustomStringConvertible,
             ret = self.maxHoughTransformCount
         case .maxHoughTheta:
             ret = self.maxHoughTheta
-        case .numberOfNearbyOutliersInSameFrame:
+        case .numberOfNearbyOutliersInSameFrame: // keep out
             ret = 0//self.numberOfNearbyOutliersInSameFrame
         case .adjecentFrameNeighboringOutliersBestTheta:
             ret = self.adjecentFrameNeighboringOutliersBestTheta
 
         case .histogramStreakDetection:
             ret = self.histogramStreakDetection
-        case .longerHistogramStreakDetection:
+        case .longerHistogramStreakDetection: // keep out
             ret = 0//self.longerHistogramStreakDetection
-        case .neighboringInterFrameOutlierThetaScore:
+        case .neighboringInterFrameOutlierThetaScore: // keep out
             ret = 0//self.neighboringInterFrameOutlierThetaScore
-        case .maxOverlapTimesThetaHisto:
-            ret = self.maxOverlapTimesThetaHisto
+        case .maxOverlapTimesThetaHisto: // keep out
+            ret = 0// self.maxOverlapTimesThetaHisto
 
         case .nearbyDirectOverlapScore:
             ret = self.nearbyDirectOverlapScore
         case .boundingBoxOverlapScore:
-            ret = self.boundingBoxOverlapScore
+            ret = 0//self.boundingBoxOverlapScore
             
-        case .maxOverlap:
-            ret = self.maxOverlap
-        case .pixelBorderAmount:
+        case .maxOverlap:       // keep out
+            ret = 0//self.maxOverlap
+        case .pixelBorderAmount: // keep out
             ret = 0//self.pixelBorderAmount
         case .averageLineVariance:
             ret = self.averageLineVariance
@@ -686,7 +686,7 @@ public class OutlierGroup: CustomStringConvertible,
 
     fileprivate var maxBrightness: Double {
         var max: UInt16 = 0
-        for pixel in pixels {
+        for pixel in pixels {   // XXX use pixelSet
             if pixel > max { max = pixel }
         }
         return Double(max)
@@ -694,7 +694,7 @@ public class OutlierGroup: CustomStringConvertible,
     
     fileprivate var medianBrightness: Double {
         var values: [UInt16] = []
-        for pixel in pixels {
+        for pixel in pixels {   // // XXX use pixelSet
             if pixel > 0 {
                 values.append(pixel)
             }
@@ -770,22 +770,27 @@ public class OutlierGroup: CustomStringConvertible,
     // 1 if all pixels withing the bounding box in neighboring frames are filled
     // airplane streaks typically do not overlap the same pixels on neighboring frames
     fileprivate var boundingBoxOverlapScore: Double {
+
+        if bounds.max.y - bounds.min.y < 2 { return 0 }
+        
         if let frame {
-            let pixelCount = self.pixelSet.count
             var matchCount = 0
             var numberFrames = 0
 
             if let previousFrame = frame.previousFrame,
                let previousOutlierGroups = previousFrame.outlierGroups
             {
+                let previousOutlierGroupsOutlierYAxisImageData = previousOutlierGroups.outlierYAxisImageData
+                let previousOutlierGroupsOutlierImageData = previousOutlierGroups.outlierImageData
                 numberFrames += 1
+                //print("FUCK 1 bounds \(bounds)")
                 for y in bounds.min.y...bounds.max.y {
-                    if let yAxis = previousOutlierGroups.outlierYAxisImageData,
+                    if let yAxis = previousOutlierGroupsOutlierYAxisImageData,
                        yAxis[y] == 0 { continue }
                     
                     for x in bounds.min.x...bounds.max.x {
                         let index = y*Int(IMAGE_WIDTH!) + x
-                        if previousOutlierGroups.outlierImageData[index] != 0 {
+                        if previousOutlierGroupsOutlierImageData[index] != 0 {
                             // there is an outlier here
                             matchCount += 1
                         }
@@ -795,14 +800,17 @@ public class OutlierGroup: CustomStringConvertible,
             if let nextFrame = frame.nextFrame,
                let nextOutlierGroups = nextFrame.outlierGroups
             {
+                let nextOutlierGroupsOutlierYAxisImageData = nextOutlierGroups.outlierYAxisImageData
+                let nextOutlierGroupsOutlierImageData = nextOutlierGroups.outlierImageData
                 numberFrames += 1
+                //print("FUCK 2 bounds \(bounds)")
                 for y in bounds.min.y...bounds.max.y {
-                    if let yAxis = nextOutlierGroups.outlierYAxisImageData,
+                    if let yAxis = nextOutlierGroupsOutlierYAxisImageData,
                        yAxis[y] == 0 { continue }
                     
                     for x in bounds.min.x...bounds.max.x {
                         let index = y*Int(IMAGE_WIDTH!) + x
-                        if nextOutlierGroups.outlierImageData[index] != 0 {
+                        if nextOutlierGroupsOutlierImageData[index] != 0 {
                             // there is an outlier here
                             matchCount += 1
                         }
@@ -918,6 +926,7 @@ public class OutlierGroup: CustomStringConvertible,
         }
     }
 
+    // XXX this appears to always be zero, and is obsolete now with other features
     fileprivate var maxOverlap: Double {
         get {
             var maxOverlap = 0.0
@@ -982,6 +991,8 @@ public class OutlierGroup: CustomStringConvertible,
     // how many neighors does each of the pixels in this outlier group have?
     // higher numbers mean they are packed closer together
     // lower numbers mean they are more of a disparate cloud
+
+    // XXX use pixelSet
     fileprivate var pixelBorderAmount: Double {
         var totalNeighbors: Double = 0.0
         var totalSize: Int = 0
@@ -1227,6 +1238,8 @@ public class OutlierGroup: CustomStringConvertible,
     }()
 }
 
+// XXX use pixelSet
+// and outliers.tiff
 public func ratioOfSurfaceAreaToSize(of pixels: [UInt16], width: Int, height: Int) -> Double {
     var size: Int = 0
     var surfaceArea: Int = 0

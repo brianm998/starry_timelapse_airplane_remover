@@ -25,7 +25,41 @@ public class StarAlignment {
     // hg clone http://hugin.hg.sourceforge.net:8000/hgroot/hugin/hugin hugin
     // https://wiki.panotools.org/Hugin_Compiling_OSX
     
-    public static let pathToBinary = "/Applications/Hugin/Hugin.app/Contents/MacOS"
+//    public static let pathToBinary = "/Applications/Hugin/Hugin.app/Contents/MacOS"
+    /*
+
+     https://groups.google.com/g/hugin-ptx/c/cAzcl7HaQs4
+
+     Added Intel version now. Needs testing.
+
+2023 builds for mac arm64 architecture and Intel users.
+
+Hugin-2023.0.0_Intel.dmg
+https://bitbucket.org/Dannephoto/hugin/downloads/Hugin-2023.0.0_Intel.dmg
+
+Unofficial build with a provided gpu fix in here:
+https://bitbucket.org/Dannephoto/hugin/downloads/Hugin-2023.0.0_GPUFIX.dmg
+
+The gpu fix is addressed here:
+https://bitbucket.org/Dannephoto/hugin/src/master/src/hugin_base/vigra_ext/ImageTransformsGPU.cpp#lines-468
+
+Build with official 2023 code here(without gpu fix):
+https://bitbucket.org/Dannephoto/hugin/downloads/Hugin-2023.0.0.dmg
+
+Sources and documentation:
+https://bitbucket.org/Dannephoto/hugin/src/master/
+
+I had quite a few users reaching out regarding this gpu issue so good to provide it as an unofficial build. It´s been heavily tested though in a few specific scenarios. Please let me know if things are breaking again when using the Hugin-2023.0.0_GPUFIX.dmg build.
+
+Sandboxing issues. Do not forget to quarantine Hugin after install and before first usage or your mac will tell you the app is broken.
+
+In terminal:
+xattr -cr drag/Hugin/folder/here
+push enter
+
+     
+     */
+    public static let pathToBinary = "/Users/brian/git/nighttime_timelapse_airplane_remover/align-image-stack/bin"
     public static let binaryName = "align_image_stack"
 
     // write an output file with the same name as the reference image to the outputDirname

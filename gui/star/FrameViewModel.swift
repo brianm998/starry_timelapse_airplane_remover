@@ -1,4 +1,3 @@
-
 import Foundation
 import SwiftUI
 import Cocoa
@@ -21,7 +20,11 @@ public class FrameViewModel: ObservableObject {
         }
     }
 
+    // XXX turn these into properties that are updated when the paintability changes
+    // have the FrameAirplaneRemover be able to both knows these values,
+    // and transmit changes to the UI with a callback that updates view state
     var numberOfPositiveOutliers: Int? {
+        // XXX this is likley show
         if let outlierViews = outlierViews {
             var total: Int = 0
             for outlierView in outlierViews {
@@ -37,6 +40,7 @@ public class FrameViewModel: ObservableObject {
     }
 
     var numberOfNegativeOutliers: Int? {
+        // XXX this is likley show
         Log.d("numberOfNegativeOutliers \(String(describing: outlierViews?.count))")
 
         if let outlierViews = outlierViews {
@@ -58,6 +62,7 @@ public class FrameViewModel: ObservableObject {
     }
     
     var numberOfUndecidedOutliers: Int? {
+        // XXX this is likley show
         if let outlierViews = outlierViews {
             var total: Int = 0
             for outlierView in outlierViews {

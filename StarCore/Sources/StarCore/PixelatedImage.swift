@@ -44,7 +44,8 @@ public struct PixelatedImage {
         // the number of bits per pixel, not per component
         case eightBit([UInt8])
         case sixteenBit([UInt16])
-
+        // XXX add another for more bit depth
+        
         init(from array: [UInt8]) {
             self = .eightBit(array)
         }

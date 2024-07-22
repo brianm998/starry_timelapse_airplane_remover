@@ -45,7 +45,7 @@ class FrameSaveQueue: ObservableObject {
         if self.saving[frame.frameIndex] != nil {
             // another save is in progress
             Log.i("setting frame \(frame.frameIndex) to readyToSave because already saving frame \(frame.frameIndex)")
-            self.readyToSave(frame: frame, waitTime: 5, completionClosure: completionClosure)
+            //self.readyToSave(frame: frame, waitTime: 5, completionClosure: completionClosure)
         } else {
             Log.i("actually saving frame \(frame.frameIndex)")
             self.saving[frame.frameIndex] = frame

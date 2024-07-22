@@ -50,6 +50,9 @@ public class ClassifiedData {
     public func split(into number_of_groups: Int) -> [ClassifiedData] {
         // chunk the positive and negative data
 
+        Log.d("positiveData.count \(positiveData.count)")
+        Log.d("negativeData.count \(negativeData.count)")
+        
         var real_number_of_groups = number_of_groups
         
         if positiveData.count < real_number_of_groups {
@@ -61,6 +64,9 @@ public class ClassifiedData {
         }
 
         Log.i("splitting into \(real_number_of_groups) groups")
+
+        if real_number_of_groups == 0 { real_number_of_groups = 1 }
+        
         let positive_chunks = positiveData.chunks(of: positiveData.count/real_number_of_groups)
         let negative_chunks = negativeData.chunks(of: negativeData.count/real_number_of_groups)
 

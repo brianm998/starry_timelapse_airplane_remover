@@ -270,12 +270,12 @@ public actor FinalProcessor {
                             
                             // run as a deferred task so we never block here 
                             try await taskGroup.addDeferredTask() {
-
+                                
                                 await frameToFinish.clearOutlierGroupValueCaches()
 
                                 await frameToFinish.maybeApplyOutlierGroupClassifier()
                                 frameToFinish.set(state: .outlierProcessingComplete)
-                                
+
                                 Log.v("FINAL THREAD frame \(indexToProcess) classified")
                                 do {
                                     try await self.finish(frame: frameToFinish)
