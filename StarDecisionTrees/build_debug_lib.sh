@@ -1,6 +1,8 @@
 # re-build the categorizers as static .a files to avoid recompiling them
 # similar to release.sh, however builds on one arch and in debug mode, but still speed optimized
 
+set -e
+
 # clean previous builds
 rm -rf .build
 rm -rf lib/debug
