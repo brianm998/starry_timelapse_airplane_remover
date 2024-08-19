@@ -169,7 +169,7 @@ extension FrameAirplaneRemover {
                         image: PixelatedImage,
                         otherFrame: PixelatedImage)
     {
-        var paintPixel = otherFrame.readPixel(atX: x, andY: y)
+        let paintPixel = otherFrame.readPixel(atX: x, andY: y)
 
         if otherFrame.componentsPerPixel == 4, // has alpha channel
            paintPixel.alpha != 0xFFFF   // alpha is not fully opaque
@@ -179,28 +179,11 @@ extension FrameAirplaneRemover {
             return
         }
 
-        if alpha < 1 {
-            let op = image.readPixel(atX: x, andY: y)
-            paintPixel = Pixel(merging: paintPixel, with: op, atAlpha: alpha)
-        }
-
-        // the is the place in the image data to write to
-        let offset = (Int(y) * bytesPerRow/2) + (Int(x) * bytesPerPixel/2)
-
-        // actually paint over that airplane like thing in the image data
-        if self.bytesPerPixel == 2 {
-            data.replaceSubrange(offset ..< offset+self.bytesPerPixel/2,
-                              with: [paintPixel.red])
-        } else if self.bytesPerPixel == 6 {
-            data.replaceSubrange(offset ..< offset+self.bytesPerPixel/2,
-                              with: [paintPixel.red, paintPixel.green, paintPixel.blue])
-        } else if self.bytesPerPixel == 8 {
-            data.replaceSubrange(offset ..< offset+self.bytesPerPixel/2,
-                               with: [paintPixel.red,
-                                      paintPixel.green,
-                                      paintPixel.blue,
-                                      paintPixel.alpha])
-        }
+        self.paint(x: x, y: y,
+                   alpha: alpha,
+                   toData: &data,
+                   image: image,
+                   paintPixel: paintPixel)
     }
 
 
@@ -230,9 +213,9 @@ extension FrameAirplaneRemover {
         } else if self.bytesPerPixel == 8 {
             data.replaceSubrange(offset ..< offset+self.bytesPerPixel/2,
                                  with: [paintPixel.red,
-                                       paintPixel.green,
-                                       paintPixel.blue,
-                                       paintPixel.alpha])
+                                        paintPixel.green,
+                                        paintPixel.blue,
+                                        0xFFFF])
         }
     }
 }
