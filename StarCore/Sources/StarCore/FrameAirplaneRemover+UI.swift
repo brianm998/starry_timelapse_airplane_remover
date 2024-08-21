@@ -20,6 +20,17 @@ You should have received a copy of the GNU General Public License along with sta
  UI related methods
  */
 extension FrameAirplaneRemover {
+    
+    public func userSelectAllOutliers(toShouldPaint shouldPaint: Bool,
+                                      overlapping group: OutlierGroup)
+    {
+        guard let outlierGroups else { return }
+
+        for group in outlierGroups.groups(overlapping: group) {
+            group.shouldPaint(.userSelected(shouldPaint))
+        }
+    }
+    
     public func userSelectAllOutliers(toShouldPaint shouldPaint: Bool,
                                       between startLocation: CGPoint,
                                       and endLocation: CGPoint)

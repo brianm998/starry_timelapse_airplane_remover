@@ -137,16 +137,16 @@ public struct PixelatedImage {
 
     public func updated(with imageData: [UInt16]) -> PixelatedImage {
         return PixelatedImage(width: self.width,
-                           height: self.height,
-                           imageData: .sixteenBit(imageData),
-                           bitsPerPixel: self.bitsPerPixel,
-                           bytesPerRow: self.bytesPerRow,
-                           bitsPerComponent: self.bitsPerComponent,
-                           bytesPerPixel: self.bytesPerPixel,
-                           bitmapInfo: self.bitmapInfo,
-                           componentsPerPixel: self.componentsPerPixel,
-                           colorSpace: self.colorSpace,
-                           ciFormat: self.ciFormat)
+                              height: self.height,
+                              imageData: .sixteenBit(imageData),
+                              bitsPerPixel: self.bitsPerPixel,
+                              bytesPerRow: self.bytesPerRow,
+                              bitsPerComponent: self.bitsPerComponent,
+                              bytesPerPixel: self.bytesPerPixel,
+                              bitmapInfo: self.bitmapInfo,
+                              componentsPerPixel: self.componentsPerPixel,
+                              colorSpace: self.colorSpace,
+                              ciFormat: self.ciFormat)
     }
     
     init?(_ image: CGImage) {

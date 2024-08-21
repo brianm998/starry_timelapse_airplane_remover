@@ -74,6 +74,17 @@ struct BottomRightView: View {
                                     videoPlaybackFramerate: self.$viewModel.videoPlaybackFramerate,
                                     fastAdvancementType: $viewModel.fastAdvancementType)
               }
+              .sheet(isPresented: $viewModel.multiChoiceSheetShowing) {
+                  if let multiChoiceOutlierView = viewModel.multiChoiceOutlierView {
+                      MultiChoiceSheetView(isVisible: self.$viewModel.multiChoiceSheetShowing,
+                                           multiChoicePaintType: self.$viewModel.multiChoicePaintType,
+                                           multiChoiceType: self.$viewModel.multiChoiceType,
+                                           frames: $viewModel.frames,
+                                           currentIndex: $viewModel.currentIndex,
+                                           number_of_frames: $viewModel.number_of_frames,
+                                           multiChoiceOutlierView: multiChoiceOutlierView)
+                  }
+              }
               .sheet(isPresented: $viewModel.multiSelectSheetShowing) {
                   MultiSelectSheetView(isVisible: self.$viewModel.multiSelectSheetShowing,
                                        multiSelectionType: $viewModel.multiSelectionType,
@@ -136,6 +147,7 @@ struct BottomRightView: View {
             HStack {
                 Toggle("full resolution", isOn: $viewModel.showFullResolution)
                 Toggle("show filmstip", isOn: $viewModel.showFilmstrip)
+                Toggle("multi choice", isOn: $viewModel.multiChoice)
             }
         }
     }

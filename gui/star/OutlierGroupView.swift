@@ -145,6 +145,8 @@ struct OutlierGroupView: View {
                       // set it to user selected opposite previous value
                       if self.groupViewModel.viewModel.selectionMode == .details {
                           handleDetailsMode()
+                      } else if self.groupViewModel.viewModel.multiChoice {
+                          openMultiChoiceSheet()
                       } else {
                           togglePaintReason(origShouldPaint)
                       }
@@ -198,6 +200,24 @@ struct OutlierGroupView: View {
         }
     }
 
+    func openMultiChoiceSheet() {
+        // show a dialog like the multi selection dialog
+        // which allows changing any outlier groups in other
+        // frames which have any pixels in the same spot
+        self.groupViewModel.viewModel.multiChoiceSheetShowing = true
+        self.groupViewModel.viewModel.multiChoiceOutlierView = self
+        if let shouldPaint = self.groupViewModel.group.shouldPaint {
+            if shouldPaint.willPaint {
+                self.groupViewModel.viewModel.multiChoicePaintType = .clear
+            } else {
+                self.groupViewModel.viewModel.multiChoicePaintType = .paint
+            }
+        } else {
+            // this is aguess
+            self.groupViewModel.viewModel.multiChoicePaintType = .clear
+        }
+    }
+    
     // used when user selects an outlier group outisde of details selection mode 
     func togglePaintReason(_ origShouldPaint: PaintReason? = nil) {
         var will_paint = true

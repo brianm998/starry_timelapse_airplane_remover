@@ -118,6 +118,9 @@ public final class ViewModel: ObservableObject {
 
     @Published var showFilmstrip = true
 
+    // causes tapping an outlier to open a dialog with multiple choices
+    @Published var multiChoice = false
+
     @Published var backgroundColor: Color = .gray
 
     @Published var renderingAllFrames = false
@@ -129,9 +132,16 @@ public final class ViewModel: ObservableObject {
     @Published var paintSheetShowing = false
 
     @Published var multiSelectSheetShowing = false
-    
+
     @Published var multiSelectionType: MultiSelectionType = .all
     @Published var multiSelectionPaintType: MultiSelectionPaintType = .clear
+
+    @Published var multiChoiceSheetShowing = false
+    @Published var multiChoicePaintType: MultiChoicePaintType = .clear
+    @Published var multiChoiceType: MultiSelectionType = .all
+
+    // the outlier grop we're starting a multi choice from
+    var multiChoiceOutlierView: OutlierGroupView?
     
     @Published var selectionStart: CGPoint? 
     @Published var selectionEnd: CGPoint?

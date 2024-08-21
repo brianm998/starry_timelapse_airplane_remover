@@ -178,8 +178,6 @@ struct MultiSelectSheetView: View {
                 case .someBefore:
                     HStack {
                         Button("Modify") {
-
-
                             switch multiSelectionPaintType {
                             case .paint:
                                 self.updateFrames(shouldPaint: true,
@@ -224,10 +222,10 @@ struct MultiSelectSheetView: View {
                         {
                             if currentIndex == frame.frameIndex {
                                 Task {
-                                await MainActor.run {
-                                    self.selectionStart = nil
-                                    self.selectionEnd = nil
-                                }
+                                    await MainActor.run {
+                                        self.selectionStart = nil
+                                        self.selectionEnd = nil
+                                    }
                                 }
                             }
                         }

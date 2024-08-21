@@ -28,7 +28,7 @@ public class OutlierGroups {
     // image data from an image with non zero pixels set with an outlier id
     public var outlierImageData: [UInt16] // outlier ids for frame, row major indexed
     public var outlierYAxisImageData: [UInt8]? // y axis of the outlierImage data
-    
+
     public init(frameIndex: Int,
                 members: [UInt16: OutlierGroup])
     {
@@ -166,6 +166,22 @@ public class OutlierGroups {
             Log.d("FUCKED \(imageFilename)")
             return nil
         }
+    }
+
+    // returns outlier groups from this frame that overlap with the given group from another frame
+    public func groups(overlapping group: OutlierGroup) -> [OutlierGroup]
+    {
+        var ret: [UInt16: OutlierGroup] = [:]
+
+        for pixel in group.pixelSet {
+            let index = pixel.y * width + pixel.x
+            let outlierId = outlierImageData[index]
+            if outlierId != 0 {
+                ret[outlierId] = members[outlierId]
+            }
+        }
+
+        return Array(ret.values)
     }
 
     public func groups(nearby group: OutlierGroup,

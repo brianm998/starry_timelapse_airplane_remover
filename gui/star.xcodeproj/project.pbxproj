@@ -56,6 +56,7 @@
 		D3DC07FC2C077DEB0031A3AE /* EditableFrameNumberView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3DC07FB2C077DEA0031A3AE /* EditableFrameNumberView.swift */; };
 		D3DC07FE2C07AA6A0031A3AE /* FrameViewMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3DC07FD2C07AA690031A3AE /* FrameViewMode.swift */; };
 		D3F0BFFE2C0390BA0061420D /* FrameImageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3F0BFFD2C0390BA0061420D /* FrameImageView.swift */; };
+		D3FF93DF2C75745C00A98088 /* MultiChoiceSheetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3FF93DE2C75745C00A98088 /* MultiChoiceSheetView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -125,6 +126,7 @@
 		D3DC07FB2C077DEA0031A3AE /* EditableFrameNumberView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = EditableFrameNumberView.swift; sourceTree = "<group>"; };
 		D3DC07FD2C07AA690031A3AE /* FrameViewMode.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = FrameViewMode.swift; sourceTree = "<group>"; };
 		D3F0BFFD2C0390BA0061420D /* FrameImageView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = FrameImageView.swift; sourceTree = "<group>"; };
+		D3FF93DE2C75745C00A98088 /* MultiChoiceSheetView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = MultiChoiceSheetView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -188,6 +190,7 @@
 		D386FA0F298B617300878B56 /* star */ = {
 			isa = PBXGroup;
 			children = (
+				D3FF93DE2C75745C00A98088 /* MultiChoiceSheetView.swift */,
 				D3DC07FD2C07AA690031A3AE /* FrameViewMode.swift */,
 				D3DC07FB2C077DEA0031A3AE /* EditableFrameNumberView.swift */,
 				D3F0BFFD2C0390BA0061420D /* FrameImageView.swift */,
@@ -412,6 +415,7 @@
 				D3DC07FE2C07AA6A0031A3AE /* FrameViewMode.swift in Sources */,
 				D33FFC282A2D4F7E00F38194 /* FilmstripView.swift in Sources */,
 				D33FFC262A2D4E8600F38194 /* FilmstripImageView.swift in Sources */,
+				D3FF93DF2C75745C00A98088 /* MultiChoiceSheetView.swift in Sources */,
 				D3058E1B2AC0745C00C58F1D /* MultiSelectSheetView.swift in Sources */,
 				D3A54A6F29AFAD2C00C50709 /* UserPreferences.swift in Sources */,
 				D33FFC122A2CF92900F38194 /* VideoPlaybackButtons.swift in Sources */,
@@ -625,7 +629,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 0.6.7;
+				MARKETING_VERSION = 0.6.8;
 				ONLY_ACTIVE_ARCH = YES;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
@@ -668,7 +672,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 0.6.7;
+				MARKETING_VERSION = 0.6.8;
 				ONLY_ACTIVE_ARCH = YES;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
@@ -700,7 +704,7 @@
 				DEVELOPMENT_TEAM = G3L75S65V9;
 				GENERATE_INFOPLIST_FILE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 12.5;
-				MARKETING_VERSION = 0.6.7;
+				MARKETING_VERSION = 0.6.8;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.star-guiTests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
@@ -719,7 +723,7 @@
 				DEVELOPMENT_TEAM = G3L75S65V9;
 				GENERATE_INFOPLIST_FILE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 12.5;
-				MARKETING_VERSION = 0.6.7;
+				MARKETING_VERSION = 0.6.8;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.star-guiTests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
@@ -736,7 +740,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = G3L75S65V9;
 				GENERATE_INFOPLIST_FILE = YES;
-				MARKETING_VERSION = 0.6.7;
+				MARKETING_VERSION = 0.6.8;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.star-guiUITests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
@@ -753,7 +757,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = G3L75S65V9;
 				GENERATE_INFOPLIST_FILE = YES;
-				MARKETING_VERSION = 0.6.7;
+				MARKETING_VERSION = 0.6.8;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.star-guiUITests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;

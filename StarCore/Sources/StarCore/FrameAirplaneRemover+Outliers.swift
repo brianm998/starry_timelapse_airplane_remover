@@ -300,7 +300,11 @@ extension FrameAirplaneRemover {
             outlierGroups?.outlierImageData = blobImageSaver.blobRefs
             outlierGroups?.outlierYAxisImageData = blobImageSaver.yAxis
             // XXX keep the y-axis too?
+
+            // make sure the OutlierGroups object we created before has this data
+            self.outlierGroups?.outlierImageData = blobImageSaver.blobRefs
         }
+
         
         let frame_outliers_dirname = "\(self.outlierOutputDirname)/\(frameIndex)"
 

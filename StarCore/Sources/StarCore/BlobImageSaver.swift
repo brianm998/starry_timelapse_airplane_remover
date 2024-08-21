@@ -34,7 +34,7 @@ public class BlobImageSaver {
 
     // a reference for each pixel for each blob it might belong to
     // non zero values reference a blob
-    internal var blobRefs: [UInt16]
+    public var blobRefs: [UInt16]
 
     // data condensed along the y axis
     // i.e. does any value at y value have an outlier?
