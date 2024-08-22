@@ -462,6 +462,15 @@ extension FrameAirplaneRemover {
         } 
     }
 
+    public func foreachOutlierGroupAsync(_ closure: (OutlierGroup) async -> LoopReturn) async {
+        if let outlierGroups = self.outlierGroups {
+            for (_, group) in outlierGroups.members {
+                let result = await closure(group)
+                if result == .break { break }
+            }
+        } 
+    }
+
     // uses spatial 2d array for search
     public func outlierGroups(within distance: Double,
                               of group: OutlierGroup) -> [OutlierGroup]?
@@ -510,6 +519,40 @@ extension FrameAirplaneRemover {
                 // check to make sure this outlier's bounding box is fully contained
                 // otherwise don't change paint status
                 return closure(group)
+            } else {
+                return .continue
+            }
+        }
+    }
+
+    public func foreachOutlierGroupAsync(between startLocation: CGPoint,
+                                         and endLocation: CGPoint,
+                                         _ closure: (OutlierGroup) async -> LoopReturn) async
+    {
+        // first get bounding box from start and end location
+        var minX: CGFloat = CGFLOAT_MAX
+        var maxX: CGFloat = 0
+        var minY: CGFloat = CGFLOAT_MAX
+        var maxY: CGFloat = 0
+
+        if startLocation.x < minX { minX = startLocation.x }
+        if startLocation.x > maxX { maxX = startLocation.x }
+        if startLocation.y < minY { minY = startLocation.y }
+        if startLocation.y > maxY { maxY = startLocation.y }
+        
+        if endLocation.x < minX { minX = endLocation.x }
+        if endLocation.x > maxX { maxX = endLocation.x }
+        if endLocation.y < minY { minY = endLocation.y }
+        if endLocation.y > maxY { maxY = endLocation.y }
+
+        let gestureBounds = BoundingBox(min: Coord(x: Int(minX), y: Int(minY)),
+                                        max: Coord(x: Int(maxX), y: Int(maxY)))
+
+        await foreachOutlierGroupAsync() { group in
+            if gestureBounds.contains(other: group.bounds) {
+                // check to make sure this outlier's bounding box is fully contained
+                // otherwise don't change paint status
+                return await closure(group)
             } else {
                 return .continue
             }

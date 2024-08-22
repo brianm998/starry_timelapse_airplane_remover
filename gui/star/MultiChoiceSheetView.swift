@@ -215,6 +215,8 @@ struct MultiChoiceSheetView: View {
                    frame.frameIndex <= end
                 {
                     await self.update(frame: frame, shouldPaint: shouldPaint)
+                    // save outlier paintability changes here
+                    await frame.writeOutliersBinary()
                 }
             }
         }

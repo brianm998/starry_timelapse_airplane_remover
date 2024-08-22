@@ -21,26 +21,6 @@ You should have received a copy of the GNU General Public License along with sta
  */
 extension FrameAirplaneRemover {
     
-    public func userSelectAllOutliers(toShouldPaint shouldPaint: Bool,
-                                      overlapping group: OutlierGroup)
-    {
-        guard let outlierGroups else { return }
-
-        for group in outlierGroups.groups(overlapping: group) {
-            group.shouldPaint(.userSelected(shouldPaint))
-        }
-    }
-    
-    public func userSelectAllOutliers(toShouldPaint shouldPaint: Bool,
-                                      between startLocation: CGPoint,
-                                      and endLocation: CGPoint)
-    {
-        foreachOutlierGroup(between: startLocation, and: endLocation) { group in
-            group.shouldPaint(.userSelected(shouldPaint))
-            return .continue
-        }
-    }
-
     public func applyDecisionTreeToAutoSelectedOutliers() async {
         if let classifier = currentClassifier {
             foreachOutlierGroup() { group in
@@ -103,6 +83,26 @@ extension FrameAirplaneRemover {
             if group.shouldPaint == nil {
                 group.shouldPaint(.userSelected(shouldPaint))
             }
+            return .continue
+        }
+    }
+
+    public func userSelectAllOutliers(toShouldPaint shouldPaint: Bool,
+                                      overlapping group: OutlierGroup)
+    {
+        guard let outlierGroups else { return }
+
+        for group in outlierGroups.groups(overlapping: group) {
+            group.shouldPaint(.userSelected(shouldPaint))
+        }
+    }
+    
+    public func userSelectAllOutliers(toShouldPaint shouldPaint: Bool,
+                                      between startLocation: CGPoint,
+                                      and endLocation: CGPoint)
+    {
+        foreachOutlierGroup(between: startLocation, and: endLocation) { group in
+            group.shouldPaint(.userSelected(shouldPaint))
             return .continue
         }
     }
