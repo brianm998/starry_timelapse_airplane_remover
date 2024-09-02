@@ -19,7 +19,7 @@ You should have received a copy of the GNU General Public License along with sta
 // gets rid of small blobs by themselves in nowhere
 class IsolatedBlobRemover: AbstractBlobAnalyzer {
 
-    public func process(minNeighborSize: Int = 0, // how big does a neighbor need to be to count?
+    public func process(minNeighborSize: Double = 0, // how big does a neighbor need to be to count?
                         scanSize: Int = 12) // how far in each direction to look for neighbors
     {
         iterateOverAllBlobs() { _, blob in
@@ -32,12 +32,12 @@ class IsolatedBlobRemover: AbstractBlobAnalyzer {
             
             // XXX constant XXX
                // each direction from center
-
+/*
             if blob.medianIntensity > 8000 { // XXX constant XXX 
                 // scan farther from brighter blobs
                 scanSize = scanSize * 2   // XXX constant XXX
             }
-            
+ */          
             var startX = blob.boundingBox.min.x - scanSize
             var startY = blob.boundingBox.min.y - scanSize
             

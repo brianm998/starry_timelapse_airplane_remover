@@ -7,7 +7,7 @@ import logging
 
  blobs are the first step in finding pixels that we may want to replace.
 
- once filtered and refined a bunch, eacn blob is promoted to an OutlierGroup,
+ once filtered and refined a bunch, each blob is promoted to an OutlierGroup,
  for further processing and classification.
 
  blobs can grow in size, and be combined with other blobs.

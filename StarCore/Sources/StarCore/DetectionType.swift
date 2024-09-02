@@ -18,4 +18,5 @@ public enum DetectionType: String, Codable, CaseIterable {
     case strong     // get more airplanes than normal and not take forever
     case excessive  // takes much longer, finds a LOT more bad signals
     case exp        // experimental
+    case radical    // WTF?
 }

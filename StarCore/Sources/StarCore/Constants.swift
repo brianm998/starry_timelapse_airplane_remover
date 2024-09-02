@@ -32,6 +32,8 @@ public class Constants {
             return 2000
         case .exp:
             return 6500
+        case .radical:
+            return 6000
         }
     }
 
@@ -49,13 +51,15 @@ public class Constants {
             return 62
         case .exp:
             return 66 
+        case .radical:
+            return 60 
         }
     }
 
     // the size that blobs need to be smaller than for
     // blobberBrightMinIntensity to apply
     // larger size gives fewer blobs
-    public var blobberBrightSmallSize: Int {
+    public var blobberBrightSmallSize: Double {
         switch self.detectionType {
         case .mild:
             return 25        
@@ -65,6 +69,8 @@ public class Constants {
             return 20
         case .exp:
             return 25
+        case .radical:
+            return 5
         }
     }
 
@@ -81,12 +87,14 @@ public class Constants {
             return 3000
         case .exp:
             return 3500
+        case .radical:
+            return 3500
         }
     }
     
     // blobs smaller than this are ignored by the blobber
     // smaller values give more blobs
-    public var blobberMinBlobSize: Int {
+    public var blobberMinBlobSize: Double {
         switch self.detectionType {
         case .mild:
             return 8         
@@ -96,6 +104,10 @@ public class Constants {
             return 4
         case .exp:
             return 5
+        case .radical:
+            //return 1.8            // XXX this is the problem ATM
+            return 1.85
+            //return 3            // XXX this is the problem ATM
         }
     }
 
@@ -111,6 +123,8 @@ public class Constants {
             return 2000
         case .exp:
             return 2500
+        case .radical:
+            return 1500
         }
     }
     
@@ -128,6 +142,8 @@ public class Constants {
             return 2000
         case .exp:
             return 3000
+        case .radical:
+            return 1000
         }
     }
 
@@ -143,6 +159,8 @@ public class Constants {
             return 256
         case .exp:
             return 64
+        case .radical:
+            return 4
         }
     }
 }

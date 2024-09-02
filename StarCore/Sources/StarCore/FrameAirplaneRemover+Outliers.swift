@@ -111,6 +111,7 @@ extension FrameAirplaneRemover {
         // contains the difference in brightness between the frame being processed
         // and its aligned neighbor frame.  Indexed by y * width + x
         var subtractionArray: [UInt16] = []
+        var originalImageArray: [UInt16] = []
         var subtractionImage: PixelatedImage?
         do {
             // try to load the image subtraction from a pre-processed file
@@ -148,6 +149,16 @@ extension FrameAirplaneRemover {
             }
             Log.d("frame \(frameIndex) loaded subtractionArray with \(subtractionArray.count) items")
         }
+
+        guard let originalImage = await imageAccessor.load(type: .original, atSize: .original)
+        else { throw "couldn't load original file for finishing" }
+
+        switch originalImage.imageData {
+        case .sixteenBit(let array):
+            originalImageArray = array
+        case .eightBit(_):
+            throw "8 bit images are not currently supported by Star, only 16 bit images"
+        }
         
         self.state = .assemblingPixels
 
@@ -160,7 +171,10 @@ extension FrameAirplaneRemover {
         var blobber: FullFrameBlobber? = .init(config: config,
                                                imageWidth: width,
                                                imageHeight: height,
-                                               pixelData: subtractionArray,
+                                               subtractionPixelData: subtractionArray,
+                                               originalPixelData: originalImageArray,
+                                               originalBytesPerRow: originalImage.bytesPerRow,
+                                               originalBytesPerPixel: originalImage.bytesPerPixel,
                                                frameIndex: frameIndex,
                                                neighborType: .eight)//.fourCardinal
 
@@ -217,7 +231,7 @@ extension FrameAirplaneRemover {
                                                           width: width,
                                                           height: height)
 
-        isolatedRemover?.process()            
+        isolatedRemover?.process(minNeighborSize: 0.4, scanSize: 24)            
 
         guard let isolatedRemoverBlobs = isolatedRemover?.blobMap else {
             Log.w("frame \(frameIndex) no blobs from isolated remover")
@@ -231,15 +245,16 @@ extension FrameAirplaneRemover {
         Log.d("frame \(frameIndex) kht analysis done")
 
         // weed out blobs that are too small and not bright enough
+        // XXX this is eating a lot of blobs we want :(
         let brighterBlobs: [UInt16: Blob] = isolatedRemoverBlobs/*khtBlobs*/.compactMapValues { blob in
-            if blob.adjustedSize < fx3Size(for: 6), // XXX constant
-               blob.medianIntensity < 6000 // XXX constant
+            if blob.adjustedSize < fx3Size(for: 1.14), // XXX constant
+               blob.medianIntensity < 2000 // XXX constant
             {
-                return nil
-            } else if blob.adjustedSize < fx3Size(for: 9), // XXX constant
-                      blob.medianIntensity < 4000 // XXX constant
+                return blob
+            } else if blob.adjustedSize < fx3Size(for: 3.1415926535987), // XXX constant
+                      blob.medianIntensity < 1000 // XXX constant
             {
-                return nil
+                return blob 
             } else {
                 // this blob is either bigger than the largest size tested for above,
                 // or brighter than the medianIntensity set for its size group
@@ -259,10 +274,25 @@ extension FrameAirplaneRemover {
                                                                width: width,
                                                                height: height)
 
+        if // false,
+           let finalIsolatedRemover {
+            // XXX does this kill a lot of the outliers we want?
+            // XXX UNFORTUNALETY it does :(
 
+            var lastCount = finalIsolatedRemover.blobMap.count
+            var shouldContinue = true
+            let max = 8
+            var count = 0
+            while shouldContinue {
+                finalIsolatedRemover.process(minNeighborSize: 0.4, scanSize: 24) // XXX constants
+                let thisCount = finalIsolatedRemover.blobMap.count
+                if lastCount == thisCount { shouldContinue = false }
+                lastCount = thisCount
+                count += 1
+                if count > max { shouldContinue = false }
+            }
+        }
         
-        finalIsolatedRemover?.process(minNeighborSize: 5, scanSize: 12) // XXX constants
-
         guard let finalIsolatedBlobs = finalIsolatedRemover?.blobMap else {
             Log.w("frame \(frameIndex) no blobs from finalIsolatedRemover")
             return
@@ -273,9 +303,26 @@ extension FrameAirplaneRemover {
         var dimIsolatedBlobRemover: DimIsolatedBlobRemover? = .init(blobMap: finalIsolatedBlobs,
                                                                     width: width,
                                                                     height: height)
-        
-        dimIsolatedBlobRemover?.process(scanSize: 16) // XXX constant
 
+        if //false,
+          let dimIsolatedBlobRemover {
+            // XXX how about this one, how much does it suck?
+            // not that much :)
+
+            var lastCount = dimIsolatedBlobRemover.blobMap.count
+            var shouldContinue = true
+            let max = 8
+            var count = 0
+
+            while shouldContinue {
+                dimIsolatedBlobRemover.process(scanSize: 16) // XXX constant
+                let thisCount = dimIsolatedBlobRemover.blobMap.count
+                if lastCount == thisCount { shouldContinue = false }
+                lastCount = thisCount
+                count += 1
+                if count > max { shouldContinue = false }
+            }
+        }
 
         guard let dimIsolatedBlobs = dimIsolatedBlobRemover?.blobMap else {
             Log.w("frame \(frameIndex) no blobs from kht")
@@ -677,6 +724,6 @@ extension FrameAirplaneRemover {
 }
 
 // XXX rename this
-func fx3Size(for size: Int) -> Double {
-    Double(size) / (4240 * 2832)
+func fx3Size(for size: Double) -> Double {
+    size / (4240 * 2832)
 }

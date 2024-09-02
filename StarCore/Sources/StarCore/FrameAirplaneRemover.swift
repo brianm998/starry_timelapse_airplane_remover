@@ -266,21 +266,32 @@ public class FrameAirplaneRemover: Equatable, Hashable {
             Log.d("frame \(self.frameIndex) writing output files")
             self.state = .writingOutputFile
 
-            Log.d("frame \(self.frameIndex) writing processed preview")
+            Log.d("frame \(self.frameIndex) updating image")
             let processedImage = image.updated(with: outputData)
             // write frame out as processed versions
-            try await imageAccessor.save(processedImage, as: .processed,
-                                      atSize: .original, overwrite: true)
-            try await imageAccessor.save(processedImage, as: .processed,
-                                      atSize: .preview, overwrite: true)
+            do {
+                Log.d("frame \(self.frameIndex) processed file")
+                try await imageAccessor.save(processedImage, as: .processed,
+                                             atSize: .original, overwrite: true)
+                Log.d("frame \(self.frameIndex) writing processed preview")
+                try await imageAccessor.save(processedImage, as: .processed,
+                                             atSize: .preview, overwrite: true)
+            } catch {
+                // XXX for some reason this error gets missed if we don't catch it here :(
+                Log.d("frame \(self.frameIndex) ERROR \(error)")
 
-            if let outlierGroups {
-                let validationImage = outlierGroups.validationImage
-                try await imageAccessor.save(validationImage, as: .validated,
-                                         atSize: .original, overwrite: false)
-                try await imageAccessor.save(validationImage, as: .validated,
-                                         atSize: .preview, overwrite: false)
             }
+            if let outlierGroups {
+                Log.d("frame \(self.frameIndex) getting validating image")
+                let validationImage = outlierGroups.validationImage
+                Log.d("frame \(self.frameIndex) writing validated image")
+                try await imageAccessor.save(validationImage, as: .validated,
+                                             atSize: .original, overwrite: false)
+                Log.d("frame \(self.frameIndex) writing validated preview")
+                try await imageAccessor.save(validationImage, as: .validated,
+                                             atSize: .preview, overwrite: false)
+            }
+            Log.d("frame \(self.frameIndex) done writing toutut files")
         }
         self.state = .complete
         if let completion { await completion() }
