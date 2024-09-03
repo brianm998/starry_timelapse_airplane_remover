@@ -22,6 +22,7 @@ You should have received a copy of the GNU General Public License along with sta
  Logic that loads, and finds outliers in a frame.
  
  */
+
 extension FrameAirplaneRemover {
 
     // loads outliers from a combination of the outliers.tiff image and the subtraction image,
@@ -89,27 +90,9 @@ extension FrameAirplaneRemover {
             }
         }
     }
-    
-    func findOutliers() async throws {
-        /*
-         Outlier Detection Logic:
 
-          - align neighboring frame
-          - subtract aligned frame from this frame
-          - sort pixels on subtracted frame by intensity
-          - detect blobs from sorted pixels
-          - remove isolated dimmer blobs
-          - remove small isolated blobs
-          - filter out small dim blobs
-          - remove more small dim blobs
-          - final pass at more isolation removal
-          - save image of final blobs before promotion to outlier groups
-          - promote remaining blobs to outlier groups for further analysis
-         */
-        Log.d("frame \(frameIndex) finding outliers")
-
-        // contains the difference in brightness between the frame being processed
-        // and its aligned neighbor frame.  Indexed by y * width + x
+    // use the subtraction and original image for this frame to find an initial set of blobs
+    fileprivate func findBlobs() async throws -> [UInt16: Blob] {
         var subtractionArray: [UInt16] = []
         var originalImageArray: [UInt16] = []
         var subtractionImage: PixelatedImage?
@@ -168,34 +151,51 @@ extension FrameAirplaneRemover {
         // airplanes show up as lines or does in a line
         // because the image subtracted from this frame had the sky aligned,
         // the ground may get moved, and therefore may contain blobs as well.
-        var blobber: FullFrameBlobber? = .init(config: config,
-                                               imageWidth: width,
-                                               imageHeight: height,
-                                               subtractionPixelData: subtractionArray,
-                                               originalPixelData: originalImageArray,
-                                               originalBytesPerRow: originalImage.bytesPerRow,
-                                               originalBytesPerPixel: originalImage.bytesPerPixel,
-                                               frameIndex: frameIndex,
-                                               neighborType: .eight)//.fourCardinal
+        let blobber: FullFrameBlobber = .init(config: config,
+                                              imageWidth: width,
+                                              imageHeight: height,
+                                              subtractionPixelData: subtractionArray,
+                                              originalPixelData: originalImageArray,
+                                              originalBytesPerRow: originalImage.bytesPerRow,
+                                              originalBytesPerPixel: originalImage.bytesPerPixel,
+                                              frameIndex: frameIndex,
+                                              neighborType: .eight)//.fourCardinal
 
-        blobber?.sortPixels()
+        blobber.sortPixels()
         
         self.state = .detectingBlobs
         
         // run the blobber
-        blobber?.process()
+        blobber.process()
 
         Log.d("frame \(frameIndex) blobber done")
+
+        return blobber.blobMap
+    }
+    
+    func findOutliers() async throws {
+        /*
+         Outlier Detection Logic:
+
+          - align neighboring frame
+          - subtract aligned frame from this frame
+          - sort pixels on subtracted frame by intensity
+          - detect blobs from sorted pixels
+          - remove isolated dimmer blobs
+          - remove small isolated blobs
+          - filter out small dim blobs
+          - remove more small dim blobs
+          - final pass at more isolation removal
+          - save image of final blobs before promotion to outlier groups
+          - promote remaining blobs to outlier groups for further analysis
+         */
+        Log.d("frame \(frameIndex) finding outliers")
+
+        // contains the difference in brightness between the frame being processed
+        // and its aligned neighbor frame.  Indexed by y * width + x
+
+        let blobberBlobs = try await findBlobs()
         
-        // get the blobs out of the blobber
-        guard let blobberBlobs = blobber?.blobMap else {
-            Log.w("frame \(frameIndex) no blobs from blobber")
-            return 
-        }
-
-        // nil out the blobber to try to save memory
-        blobber = nil
-
         if config.writeOutlierGroupFiles {
             // save blobs image 
             try await saveImages(for: Array(blobberBlobs.values), as: .blobs)
