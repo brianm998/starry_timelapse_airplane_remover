@@ -16,33 +16,41 @@ You should have received a copy of the GNU General Public License along with sta
 
 */
 
-// gets rid of small blobs by themselves in nowhere
+// recurse on finding nearby blobs to isolate groups of neighbors as a set
+// use the size of the neighbor set to determine if we keep a blob or not
 class DisconnectedBlobRemover: AbstractBlobAnalyzer {
 
     var scanSize: Int = 28
     var processedBlobs: Set<UInt16> = []
     
     public func process(scanSize: Int = 28,    // how far in each direction to look for neighbors
+                        blobsSmallerThan: Int = 24, // ignore blobs larger than this
                         requiredNeighbors: Int = 4) // how many neighbors do we need?
     {
         self.scanSize = scanSize
         
         iterateOverAllBlobs() { id, blob in
-            if processedBlobs.contains(blob.id) { return }
+            if processedBlobs.contains(id) { return }
             processedBlobs.insert(id)
             
             // only deal with small blobs
-            if blob.size > 24 { // XXX constant XXX
+            if blob.size >= blobsSmallerThan {
                 return
             }
 
             // recursive find all neighbors 
-            let neighborSet = neighbors(of: blob)
+            let neighborSet = neighborSet(of: blob)
                                                           
             if neighborSet.count < requiredNeighbors {
+                Log.i("blob of size \(blob.size) only has \(neighborSet.count) neighbors")
+                // remove the blob we're iterating over
+                blobMap.removeValue(forKey: blob.id)
+                // and remove all of its (few) neighbors as well
                 for blob in neighborSet {
                     blobMap.removeValue(forKey: blob.id)
                 }
+            } else {
+                Log.i("blob of size \(blob.size) has \(neighborSet.count) neighbors")
             }
         }
     }

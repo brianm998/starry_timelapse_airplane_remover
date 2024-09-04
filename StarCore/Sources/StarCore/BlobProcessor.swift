@@ -50,14 +50,15 @@ public class BlobProcessor {
           .create(findBlobs),
           .save(.blobs),
           .frameState(.isolatedBlobRemoval),
-//          .process(firstIsolatedDimProcess),
-//          .process(firstIsolatedProcess),
+          .process(firstIsolatedDimProcess),
+          .process(firstIsolatedProcess),
 //          .process(funkyCompactMap),
 
           .process(finalIsolatedRemover),
           .process(finalDimIsolatedRemover),
           .save(.absorbed),
-          .process(disconnectedBlobRemover),
+          .process(smallerDisconnectedBlobRemover),
+          .process(largerDisconnectedBlobRemover),
           .save(.rectified),
         ]
     }
@@ -277,14 +278,30 @@ public class BlobProcessor {
         }
     }
 
-    fileprivate func disconnectedBlobRemover(blobs: BlobMap) async throws -> BlobMap {
+    fileprivate func smallerDisconnectedBlobRemover(blobs: BlobMap) async throws -> BlobMap {
         guard let frame else { return [:] }
 
-        let remover = DimIsolatedBlobRemover(blobMap: blobs,
-                                             width: frame.width,
-                                             height: frame.height)
+        let remover = DisconnectedBlobRemover(blobMap: blobs,
+                                              width: frame.width,
+                                              height: frame.height)
 
-        remover.process(scanSize: 30, requiredNeighbors: 8)
+        remover.process(scanSize: 18,
+                        blobsSmallerThan: 18
+                        requiredNeighbors: 8)
+
+        return remover.blobMap
+    }
+
+    fileprivate func largerDisconnectedBlobRemover(blobs: BlobMap) async throws -> BlobMap {
+        guard let frame else { return [:] }
+
+        let remover = DisconnectedBlobRemover(blobMap: blobs,
+                                              width: frame.width,
+                                              height: frame.height)
+
+        remover.process(scanSize: 25,
+                        blobsSmallerThan: 50,
+                        requiredNeighbors: 2)
 
         return remover.blobMap
     }
