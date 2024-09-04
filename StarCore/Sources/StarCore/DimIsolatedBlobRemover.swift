@@ -21,7 +21,8 @@ class DimIsolatedBlobRemover: AbstractBlobAnalyzer {
 
     // XXX adjust scan size for image resolution?
     
-    public func process(scanSize: Int = 12) // how far in each direction to look for neighbors
+    public func process(scanSize: Int = 12, // how far in each direction to look for neighbors
+                        requiredNeighbors: Int = 1) // how many neighbors do we need to find
     {
         var filteredBlobs = Array(blobMap.values)
 
@@ -48,37 +49,13 @@ class DimIsolatedBlobRemover: AbstractBlobAnalyzer {
 
             // each direction from center
 
-            var startX = blob.boundingBox.min.x - scanSize
-            var startY = blob.boundingBox.min.y - scanSize
-            
-            if startX < 0 { startX = 0 }
-            if startY < 0 { startY = 0 }
-
-            var endX = blob.boundingBox.max.x + scanSize
-            var endY = blob.boundingBox.max.y + scanSize
-
-            if endX >= width { endX = width - 1 }
-            if endY >= height { endY = height - 1 }
-            
-            var otherBlobIsNearby = false
-            
-            for x in (startX ... endX) {
-                for y in (startY ... endY) {
-                    let blobRef = blobRefs[y*width+x]
-                    if blobRef != 0,
-                       blobRef != blob.id,
-                       let otherBlob = blobMap[blobRef]
-                    {
-                        if otherBlob.medianIntensity > quarterBlob.medianIntensity {
-                            otherBlobIsNearby = true
-                            break
-                        }
-                    }
-                }
-                if otherBlobIsNearby { break }
+            let otherBlobsNearby = self.neighbors(of: blob, scanSize: scanSize,
+                                                  requiredNeighbors: requiredNeighbors)
+            { otherBlob in
+                otherBlob.medianIntensity > quarterBlob.medianIntensity
             }
-
-            if !otherBlobIsNearby {
+                                                          
+            if otherBlobsNearby.count < requiredNeighbors {
                 blobMap.removeValue(forKey: blob.id)
             }
         }
