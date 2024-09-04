@@ -40,7 +40,7 @@ struct FrameEditView: View {
             }
               .onChange(of: viewModel.currentIndex) { oldValue, _ in
                   // add any changes the user may have made to the save queue 
-                  let frameView = self.viewModel.frames[oldValue]
+                  let frameView = self.viewModel.frames[oldValue] /// need safe: access here
                   if let frameToSave = frameView.frame,
                      frameToSave.hasChanges()
                   {

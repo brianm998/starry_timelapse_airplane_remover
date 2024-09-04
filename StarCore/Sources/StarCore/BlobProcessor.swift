@@ -53,13 +53,13 @@ public class BlobProcessor {
           .process(firstIsolatedDimProcess),
           .process(firstIsolatedProcess),
 //          .process(funkyCompactMap),
-
           .process(finalIsolatedRemover),
           .process(finalDimIsolatedRemover),
-          .save(.absorbed),
+          .save(.filter1),
           .process(smallerDisconnectedBlobRemover),
+          .save(.filter2),
           .process(largerDisconnectedBlobRemover),
-          .save(.rectified),
+          .save(.filter3),
         ]
     }
 
@@ -285,8 +285,8 @@ public class BlobProcessor {
                                               width: frame.width,
                                               height: frame.height)
 
-        remover.process(scanSize: 18,
-                        blobsSmallerThan: 18
+        remover.process(scanSize: 25,
+                        blobsSmallerThan: 18,
                         requiredNeighbors: 8)
 
         return remover.blobMap

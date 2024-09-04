@@ -29,8 +29,9 @@ public enum FrameImageType {
     case aligned        // aligned neighbor frame
     case subtracted     // result of subtracting the aligned neighbor from original frame
     case blobs          // full results of the initial blog detection
-    case absorbed       // blobs that passed the BlobAbsorber
-    case rectified      // blobs that passed the BlobRectifier
+    case filter1        // 
+    case filter2        // 
+    case filter3        // 
     case validated      // outlier group validation image
     case paintMask      // layer mask used in painting
     case processed      // final processed image
@@ -111,8 +112,9 @@ public struct ImageAccessor: ImageAccess {
         mkdir(ofType: .aligned)
         mkdir(ofType: .subtracted)
         mkdir(ofType: .blobs)
-        mkdir(ofType: .absorbed)
-        mkdir(ofType: .rectified)
+        mkdir(ofType: .filter1)
+        mkdir(ofType: .filter2)
+        mkdir(ofType: .filter3)
         mkdir(ofType: .paintMask)
         mkdir(ofType: .validated)
         mkdir(ofType: .processed)
@@ -123,8 +125,9 @@ public struct ImageAccessor: ImageAccess {
             mkdir(ofType: .subtracted, andSize: .preview)
             mkdir(ofType: .validated, andSize: .preview)
             mkdir(ofType: .blobs, andSize: .preview)
-            mkdir(ofType: .absorbed, andSize: .preview)
-            mkdir(ofType: .rectified, andSize: .preview)
+            mkdir(ofType: .filter1, andSize: .preview)
+            mkdir(ofType: .filter2, andSize: .preview)
+            mkdir(ofType: .filter3, andSize: .preview)
             mkdir(ofType: .paintMask, andSize: .preview)
         }
         if config.writeFrameThumbnailFiles {
@@ -303,21 +306,30 @@ public struct ImageAccessor: ImageAccess {
             case .thumbnail:
                 return nil
             }
-        case .absorbed:
+        case .filter1:
             switch size {
             case .original:
-                return "\(config.outputPath)/\(baseDirName)-blobs-absorbed"
+                return "\(config.outputPath)/\(baseDirName)-blobs-filter1"
             case .preview:
-                return "\(config.outputPath)/\(baseDirName)-blobs-absorbed-preview"
+                return "\(config.outputPath)/\(baseDirName)-blobs-filter1-preview"
             case .thumbnail:
                 return nil
             }
-        case .rectified:
+        case .filter2:
             switch size {
             case .original:
-                return "\(config.outputPath)/\(baseDirName)-blobs-rectified"
+                return "\(config.outputPath)/\(baseDirName)-blobs-filter2"
             case .preview:
-                return "\(config.outputPath)/\(baseDirName)-blobs-rectified-preview"
+                return "\(config.outputPath)/\(baseDirName)-blobs-filter2-preview"
+            case .thumbnail:
+                return nil
+            }
+        case .filter3:
+            switch size {
+            case .original:
+                return "\(config.outputPath)/\(baseDirName)-blobs-filter3"
+            case .preview:
+                return "\(config.outputPath)/\(baseDirName)-blobs-filter3-preview"
             case .thumbnail:
                 return nil
             }

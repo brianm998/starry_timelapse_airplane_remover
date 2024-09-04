@@ -230,8 +230,9 @@ public final class ViewModel: ObservableObject {
             let vpTask = Task { acc.loadImage(type: .validated,  atSize: .preview)?.resizable() }
             let spTask = Task { acc.loadImage(type: .subtracted, atSize: .preview)?.resizable() }
             let bpTask = Task { acc.loadImage(type: .blobs,      atSize: .preview)?.resizable() }
-            let apTask = Task { acc.loadImage(type: .absorbed,   atSize: .preview)?.resizable() }
-            let rpTask = Task { acc.loadImage(type: .rectified,  atSize: .preview)?.resizable() }
+            let f1Task = Task { acc.loadImage(type: .filter1,    atSize: .preview)?.resizable() }
+            let f2Task = Task { acc.loadImage(type: .filter2,    atSize: .preview)?.resizable() }
+            let f3Task = Task { acc.loadImage(type: .filter3,    atSize: .preview)?.resizable() }
             let ppTask = Task { acc.loadImage(type: .paintMask,  atSize: .preview)?.resizable() }
             let prTask = Task { acc.loadImage(type: .processed,  atSize: .preview)?.resizable() }
             let opTask = Task { acc.loadImage(type: .original,   atSize: .preview)?.resizable() }
@@ -246,11 +247,14 @@ public final class ViewModel: ObservableObject {
             if let image = await bpTask.value {
                 self.frames[frame.frameIndex].blobsPreviewImage = image
             }
-            if let image = await apTask.value {
-                self.frames[frame.frameIndex].absorbedPreviewImage = image
+            if let image = await f1Task.value {
+                self.frames[frame.frameIndex].filter1PreviewImage = image
             }
-            if let image = await rpTask.value {
-                self.frames[frame.frameIndex].rectifiedPreviewImage = image
+            if let image = await f2Task.value {
+                self.frames[frame.frameIndex].filter2PreviewImage = image
+            }
+            if let image = await f3Task.value {
+                self.frames[frame.frameIndex].filter3PreviewImage = image
             }
             if let image = await ppTask.value {
                 self.frames[frame.frameIndex].paintMaskPreviewImage = image

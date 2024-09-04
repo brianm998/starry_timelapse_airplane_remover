@@ -47,10 +47,12 @@ public struct FrameImageView: View {
             return frameView.subtractionPreviewImage
         case .blobs:
             return frameView.blobsPreviewImage
-        case .absorbedBlobs:
-            return frameView.absorbedPreviewImage
-        case .rectifiedBlobs:
-            return frameView.rectifiedPreviewImage
+        case .filter1:
+            return frameView.filter1PreviewImage
+        case .filter2:
+            return frameView.filter2PreviewImage
+        case .filter3:
+            return frameView.filter3PreviewImage
         case .paintMask:
             return frameView.paintMaskPreviewImage
         case .validation:

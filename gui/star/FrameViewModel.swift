@@ -87,8 +87,9 @@ public class FrameViewModel: ObservableObject {
     @Published var subtractionPreviewImage: Image = initialImage
     @Published var blobsPreviewImage: Image = initialImage
     @Published var khtbPreviewImage: Image = initialImage
-    @Published var absorbedPreviewImage: Image = initialImage
-    @Published var rectifiedPreviewImage: Image = initialImage
+    @Published var filter1PreviewImage: Image = initialImage
+    @Published var filter2PreviewImage: Image = initialImage
+    @Published var filter3PreviewImage: Image = initialImage
     @Published var paintMaskPreviewImage: Image = initialImage
     @Published var houghLinesPreviewImage: Image = initialImage
     @Published var validationPreviewImage: Image = initialImage
