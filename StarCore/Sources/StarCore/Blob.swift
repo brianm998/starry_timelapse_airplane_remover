@@ -13,7 +13,7 @@ import logging
  blobs can grow in size, and be combined with other blobs.
  */
 
-public class Blob: CustomStringConvertible {
+public class Blob: CustomStringConvertible, Hashable {
     public let id: UInt16
     public private(set) var pixels = Set<SortablePixel>()
     public let frameIndex: Int
@@ -542,5 +542,13 @@ public class Blob: CustomStringConvertible {
             if distance < min { min = distance }
         }
         return min
+    }
+    
+    public static func == (lhs: Blob, rhs: Blob) -> Bool {
+        return lhs.id == rhs.id
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
     }
 }
