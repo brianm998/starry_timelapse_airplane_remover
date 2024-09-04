@@ -57,12 +57,51 @@ class AbstractBlobAnalyzer {
     }
 
     // skips blobs that are absorbed during iteration
-    internal func iterateOverAllBlobs(closure: (Int, Blob) -> Void) {
+    internal func iterateOverAllBlobs(closure: (UInt16, Blob) -> Void) {
         // iterate over largest blobs first
         let allBlobs = blobMap.values.sorted() { $0.size > $1.size }
         for (index, blob) in allBlobs.enumerated() {
-            closure(index, blob)
+            closure(blob.id, blob)
         }
+    }
+
+    internal func neighbors(of blob: Blob,
+                            scanSize: Int = 12,
+                            requiredNeighbors: Int? = nil,
+                            blobMattersClosure: ((Blob) -> Bool)? = nil) -> [Blob]
+    {
+        var startX = blob.boundingBox.min.x - scanSize
+        var startY = blob.boundingBox.min.y - scanSize
+        
+        if startX < 0 { startX = 0 }
+        if startY < 0 { startY = 0 }
+
+        var endX = blob.boundingBox.max.x + scanSize
+        var endY = blob.boundingBox.max.y + scanSize
+
+        if endX >= width { endX = width - 1 }
+        if endY >= height { endY = height - 1 }
+        
+        var otherBlobsNearby: [Blob] = []
+        
+        for x in (startX ... endX) {
+            for y in (startY ... endY) {
+                let blobRef = blobRefs[y*width+x]
+                if blobRef != 0,
+                   blobRef != blob.id,
+                   let otherBlob = blobMap[blobRef]
+                {
+                    if blobMattersClosure?(otherBlob) ?? true {
+                        otherBlobsNearby.append(otherBlob)
+                        if let requiredNeighbors,
+                           otherBlobsNearby.count >= requiredNeighbors { break }
+                    }
+                }
+            }
+            if let requiredNeighbors,
+               otherBlobsNearby.count >= requiredNeighbors { break }
+        }
+        return otherBlobsNearby
     }
 }
     
