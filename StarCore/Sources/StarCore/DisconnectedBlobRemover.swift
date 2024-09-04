@@ -25,6 +25,7 @@ class DisconnectedBlobRemover: AbstractBlobAnalyzer {
     
     public func process(scanSize: Int = 28,    // how far in each direction to look for neighbors
                         blobsSmallerThan: Int = 24, // ignore blobs larger than this
+                        blobsLargerThan: Int = 0,  // ignore blobs smaller than this
                         requiredNeighbors: Int = 4) // how many neighbors do we need?
     {
         self.scanSize = scanSize
@@ -33,8 +34,10 @@ class DisconnectedBlobRemover: AbstractBlobAnalyzer {
             if processedBlobs.contains(id) { return }
             processedBlobs.insert(id)
             
-            // only deal with small blobs
-            if blob.size >= blobsSmallerThan {
+            // only deal with blobs in a certain size range
+            if blob.size >= blobsSmallerThan || 
+               blob.size < blobsLargerThan
+            {
                 return
             }
 

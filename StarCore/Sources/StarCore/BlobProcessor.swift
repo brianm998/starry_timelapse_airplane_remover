@@ -299,8 +299,9 @@ public class BlobProcessor {
                                               width: frame.width,
                                               height: frame.height)
 
-        remover.process(scanSize: 25,
+        remover.process(scanSize: 60,
                         blobsSmallerThan: 50,
+                        blobsLargerThan: 18,
                         requiredNeighbors: 2)
 
         return remover.blobMap
