@@ -1,12 +1,18 @@
 import Foundation
 
 // a monochrome pixel that is used by the blobber
-public class SortablePixel: Hashable, CustomStringConvertible {
+public class SortablePixel: Hashable, CustomStringConvertible, Codable {
     public let x: Int
     public let y: Int
     public let intensity: UInt16
     public var status = Status.unknown
 
+    enum CodingKeys: String, CodingKey {
+        case x
+        case y
+        case intensity
+    }
+    
     public static func == (lhs: SortablePixel, rhs: SortablePixel) -> Bool {
         return lhs.x == rhs.x && lhs.y == rhs.y
     }
@@ -80,5 +86,18 @@ public class SortablePixel: Hashable, CustomStringConvertible {
         
         return diff / max * 100
     }
-}
 
+    public required init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        x = try values.decode(Int.self, forKey: .x)
+        y = try values.decode(Int.self, forKey: .y)
+        intensity = try values.decode(UInt16.self, forKey: .intensity)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(x, forKey: .x)
+        try container.encode(y, forKey: .y)
+        try container.encode(intensity, forKey: .intensity)
+    }
+}

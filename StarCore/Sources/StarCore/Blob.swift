@@ -13,7 +13,7 @@ import logging
  blobs can grow in size, and be combined with other blobs.
  */
 
-public class Blob: CustomStringConvertible, Hashable {
+public class Blob: CustomStringConvertible, Hashable, Codable {
     public let id: UInt16
     public private(set) var pixels = Set<SortablePixel>()
     public let frameIndex: Int
@@ -27,6 +27,12 @@ public class Blob: CustomStringConvertible, Hashable {
     }
 
     public var description: String  { "Blob id: \(id) size \(size)" }
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case pixels
+        case frameIndex
+    }
     
     public func add(pixels newPixels: Set<SortablePixel>) {
         for pixel in pixels {
@@ -88,7 +94,8 @@ public class Blob: CustomStringConvertible, Hashable {
         }
         return nil
     }
-    
+
+    // XXX is this right?
     public var blobImageData: [UInt16] {
         if let _blobImageData { return _blobImageData }
         
@@ -384,6 +391,11 @@ public class Blob: CustomStringConvertible, Hashable {
         //Log.d("frame \(frameIndex) blob \(self.id) alloc")
     }
 
+    public init(id: UInt16, frameIndex: Int) {
+        self.id = id
+        self.frameIndex = frameIndex
+    }
+    
     public init(_ pixel: SortablePixel, id: UInt16, frameIndex: Int) {
         self.pixels = [pixel]
         self.id = id
@@ -405,8 +417,8 @@ public class Blob: CustomStringConvertible, Hashable {
         reset()
     }
 
-    public func absorb(_ otherBlob: Blob) -> Bool {
-        if self.id != otherBlob.id {
+    public func absorb(_ otherBlob: Blob, always: Bool = false) -> Bool {
+        if always || self.id != otherBlob.id {
 
             //let selfBeforeSize = self.size
             
@@ -550,5 +562,19 @@ public class Blob: CustomStringConvertible, Hashable {
 
     public func hash(into hasher: inout Hasher) {
         hasher.combine(id)
+    }
+
+    public required init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        pixels = try values.decode(Set<SortablePixel>.self, forKey: .pixels)
+        id = try values.decode(UInt16.self, forKey: .id)
+        frameIndex = try values.decode(Int.self, forKey: .frameIndex)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(pixels, forKey: .pixels)
+        try container.encode(id, forKey: .id)
+        try container.encode(frameIndex, forKey: .frameIndex)
     }
 }
