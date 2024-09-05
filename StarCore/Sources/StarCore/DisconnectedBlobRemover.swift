@@ -20,16 +20,12 @@ You should have received a copy of the GNU General Public License along with sta
 // use the size of the neighbor set to determine if we keep a blob or not
 class DisconnectedBlobRemover: AbstractBlobAnalyzer {
 
-    var scanSize: Int = 28
-    var processedBlobs: Set<UInt16> = []
-    
     public func process(scanSize: Int = 28,    // how far in each direction to look for neighbors
                         blobsSmallerThan: Int = 24, // ignore blobs larger than this
                         blobsLargerThan: Int = 0,  // ignore blobs smaller than this
                         requiredNeighbors: Int = 4) // how many neighbors do we need?
     {
-        self.scanSize = scanSize
-        
+        var processedBlobs: Set<UInt16> = []
         iterateOverAllBlobs() { id, blob in
             if processedBlobs.contains(id) { return }
             processedBlobs.insert(id)
@@ -42,32 +38,29 @@ class DisconnectedBlobRemover: AbstractBlobAnalyzer {
             }
 
             // recursive find all neighbors 
-            let neighborSet = neighborSet(of: blob)
-                                                          
-            if neighborSet.count < requiredNeighbors {
-                Log.i("blob of size \(blob.size) only has \(neighborSet.count) neighbors")
+            let (recursiveNeighbors, newProcessedBlobs) =
+              recursiveNeighbors(of: blob,
+                                 scanSize: scanSize,
+                                 processedBlobs: processedBlobs)
+
+            processedBlobs = processedBlobs.union(newProcessedBlobs)
+
+            let totalBlobSize = recursiveNeighbors.map { $0.size }.reduce(0, +) + blob.size
+            let averageBlobSize = Double(totalBlobSize)/Double(recursiveNeighbors.count+1)
+            
+            if recursiveNeighbors.count < requiredNeighbors,
+               averageBlobSize < Double(blobsSmallerThan)
+            {
+                Log.i("blob of size \(blob.size) only has \(recursiveNeighbors.count) neighbors")
                 // remove the blob we're iterating over
                 blobMap.removeValue(forKey: blob.id)
                 // and remove all of its (few) neighbors as well
-                for blob in neighborSet {
+                for blob in recursiveNeighbors {
                     blobMap.removeValue(forKey: blob.id)
                 }
             } else {
-                Log.i("blob of size \(blob.size) has \(neighborSet.count) neighbors")
+                Log.i("blob of size \(blob.size) has \(recursiveNeighbors.count) neighbors")
             }
         }
-    }
-
-    private func neighborSet(of blob: Blob) -> Set<Blob> {
-        let otherBlobsNearby = self.neighbors(of: blob, scanSize: scanSize)
-        var ret: Set<Blob> = []
-        for otherBlob in otherBlobsNearby {
-            if !processedBlobs.contains(otherBlob.id) {
-                processedBlobs.insert(otherBlob.id)
-                ret.insert(otherBlob)
-                ret = ret.union(self.neighborSet(of: otherBlob))
-            }
-        }
-        return ret
     }
 }

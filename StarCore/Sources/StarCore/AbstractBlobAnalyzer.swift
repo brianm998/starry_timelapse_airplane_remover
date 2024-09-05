@@ -65,10 +65,13 @@ class AbstractBlobAnalyzer {
         }
     }
 
-    internal func neighbors(of blob: Blob,
-                            scanSize: Int = 12,
-                            requiredNeighbors: Int? = nil,
-                            blobMattersClosure: ((Blob) -> Bool)? = nil) -> [Blob]
+    // returns a set of blobs that are directly within scanSize of blob's bounding box
+    // certain neighbors can be excluded with the blobMattersClosure returning false
+    // if requiredNeighbors is set, no more than that number of neighbors will be returned.
+    internal func directNeighbors(of blob: Blob,
+                                  scanSize: Int = 12,
+                                  requiredNeighbors: Int? = nil,
+                                  blobMattersClosure: ((Blob) -> Bool)? = nil) -> Set<Blob>
     {
         var startX = blob.boundingBox.min.x - scanSize
         var startY = blob.boundingBox.min.y - scanSize
@@ -82,7 +85,7 @@ class AbstractBlobAnalyzer {
         if endX >= width { endX = width - 1 }
         if endY >= height { endY = height - 1 }
         
-        var otherBlobsNearby: [Blob] = []
+        var otherBlobsNearby: Set<Blob> = []
         
         for x in (startX ... endX) {
             for y in (startY ... endY) {
@@ -92,7 +95,7 @@ class AbstractBlobAnalyzer {
                    let otherBlob = blobMap[blobRef]
                 {
                     if blobMattersClosure?(otherBlob) ?? true {
-                        otherBlobsNearby.append(otherBlob)
+                        otherBlobsNearby.insert(otherBlob)
                         if let requiredNeighbors,
                            otherBlobsNearby.count >= requiredNeighbors { break }
                     }
@@ -102,6 +105,31 @@ class AbstractBlobAnalyzer {
                otherBlobsNearby.count >= requiredNeighbors { break }
         }
         return otherBlobsNearby
+    }
+
+    // returns a set of neighbors, and a set of blob ids that have been processed already.
+    // recursively finds them, so that all members of this neighbor set are within scanSize
+    // pixels of some other member of the set.
+    internal func recursiveNeighbors(of blob: Blob,
+                                     scanSize: Int = 12,
+                                     processedBlobs: Set<UInt16> = []) -> (Set<Blob>, Set<UInt16>)
+    {
+        var processedBlobs = processedBlobs
+        let otherBlobsNearby = self.directNeighbors(of: blob, scanSize: scanSize)
+        var ret: Set<Blob> = []
+        for otherBlob in otherBlobsNearby {
+            if !processedBlobs.contains(otherBlob.id) {
+                processedBlobs.insert(otherBlob.id)
+                ret.insert(otherBlob)
+                let (newRet, newProcessedBlobs) =
+                  self.recursiveNeighbors(of: otherBlob,
+                                          scanSize: scanSize,
+                                          processedBlobs: processedBlobs)
+                ret = ret.union(newRet)
+                processedBlobs = processedBlobs.union(newProcessedBlobs)
+            }
+        }
+        return (ret, processedBlobs)
     }
 }
     

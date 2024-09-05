@@ -49,8 +49,8 @@ class DimIsolatedBlobRemover: AbstractBlobAnalyzer {
 
             // each direction from center
 
-            let otherBlobsNearby = self.neighbors(of: blob, scanSize: scanSize,
-                                                  requiredNeighbors: requiredNeighbors)
+            let otherBlobsNearby = self.directNeighbors(of: blob, scanSize: scanSize,
+                                                        requiredNeighbors: requiredNeighbors)
             { otherBlob in
                 otherBlob.medianIntensity > quarterBlob.medianIntensity
             }
