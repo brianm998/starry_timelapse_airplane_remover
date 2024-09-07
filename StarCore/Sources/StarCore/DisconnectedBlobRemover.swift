@@ -37,29 +37,29 @@ class DisconnectedBlobRemover: AbstractBlobAnalyzer {
                 return
             }
 
-            // recursive find all neighbors 
-            let (recursiveNeighbors, newProcessedBlobs) =
-              recursiveNeighbors(of: blob,
-                                 scanSize: scanSize,
-                                 processedBlobs: processedBlobs)
+            // find a cloud of neighbors 
+            let (neighborCloud, newProcessedBlobs) =
+              neighborCloud(of: blob,
+                            scanSize: scanSize,
+                            processedBlobs: processedBlobs)
 
             processedBlobs = processedBlobs.union(newProcessedBlobs)
 
-            let totalBlobSize = recursiveNeighbors.map { $0.size }.reduce(0, +) + blob.size
-            let averageBlobSize = Double(totalBlobSize)/Double(recursiveNeighbors.count+1)
+            let totalBlobSize = neighborCloud.map { $0.size }.reduce(0, +) + blob.size
+            let averageBlobSize = Double(totalBlobSize)/Double(neighborCloud.count+1)
             
-            if recursiveNeighbors.count < requiredNeighbors,
+            if neighborCloud.count < requiredNeighbors,
                averageBlobSize < Double(blobsSmallerThan)
             {
-                Log.i("blob of size \(blob.size) only has \(recursiveNeighbors.count) neighbors")
+                Log.i("blob of size \(blob.size) only has \(neighborCloud.count) neighbors")
                 // remove the blob we're iterating over
                 blobMap.removeValue(forKey: blob.id)
                 // and remove all of its (few) neighbors as well
-                for blob in recursiveNeighbors {
+                for blob in neighborCloud {
                     blobMap.removeValue(forKey: blob.id)
                 }
             } else {
-                Log.i("blob of size \(blob.size) has \(recursiveNeighbors.count) neighbors")
+                Log.i("blob of size \(blob.size) has \(neighborCloud.count) neighbors")
             }
         }
     }

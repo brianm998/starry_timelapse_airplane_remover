@@ -86,7 +86,7 @@ class AbstractBlobAnalyzer {
         if endY >= height { endY = height - 1 }
         
         var otherBlobsNearby: Set<Blob> = []
-        
+
         for x in (startX ... endX) {
             for y in (startY ... endY) {
                 let blobRef = blobRefs[y*width+x]
@@ -108,25 +108,25 @@ class AbstractBlobAnalyzer {
     }
 
     // returns a set of neighbors, and a set of blob ids that have been processed already.
-    // recursively finds them, so that all members of this neighbor set are within scanSize
+    // repeats the direct neighbor scan for all found neighbors,
+    // so that all members of this neighbor set are within scanSize
     // pixels of some other member of the set.
-    internal func recursiveNeighbors(of blob: Blob,
-                                     scanSize: Int = 12,
-                                     processedBlobs: Set<UInt16> = []) -> (Set<Blob>, Set<UInt16>)
+    internal func neighborCloud(of blob: Blob,
+                                scanSize: Int = 12,
+                                processedBlobs: Set<UInt16> = []) -> (Set<Blob>, Set<UInt16>)
     {
-        var processedBlobs = processedBlobs
-        let otherBlobsNearby = self.directNeighbors(of: blob, scanSize: scanSize)
+        var blobsToProcess = [blob]
         var ret: Set<Blob> = []
-        for otherBlob in otherBlobsNearby {
-            if !processedBlobs.contains(otherBlob.id) {
-                processedBlobs.insert(otherBlob.id)
-                ret.insert(otherBlob)
-                let (newRet, newProcessedBlobs) =
-                  self.recursiveNeighbors(of: otherBlob,
-                                          scanSize: scanSize,
-                                          processedBlobs: processedBlobs)
-                ret = ret.union(newRet)
-                processedBlobs = processedBlobs.union(newProcessedBlobs)
+        var processedBlobs = processedBlobs
+
+        while blobsToProcess.count > 0 {
+            let blobToProcess = blobsToProcess.removeFirst()
+            for otherBlob in self.directNeighbors(of: blobToProcess, scanSize: scanSize) {
+                if !processedBlobs.contains(otherBlob.id) {
+                    processedBlobs.insert(otherBlob.id)
+                    ret.insert(otherBlob)
+                    blobsToProcess.append(otherBlob)
+                }
             }
         }
         return (ret, processedBlobs)

@@ -40,23 +40,23 @@ class LinearBlobConnector: AbstractBlobAnalyzer {
             Log.d("iterating over blob \(id)")
 
             // recursively find all neighbors 
-            let (recursiveNeighbors, newProcessedBlobs) =
-              recursiveNeighbors(of: blob,
-                                 scanSize: scanSize,
-                                 processedBlobs: processedBlobs)
+            let (neighborCloud, newProcessedBlobs) =
+              neighborCloud(of: blob,
+                            scanSize: scanSize,
+                            processedBlobs: processedBlobs)
 
             processedBlobs = processedBlobs.union(newProcessedBlobs)
 
-            if recursiveNeighbors.count == 0 { return }
+            if neighborCloud.count == 0 { return }
             
-            Log.d("blob \(id) has \(recursiveNeighbors.count) neighbors")
+            Log.d("blob \(id) has \(neighborCloud.count) neighbors")
 
-            let frameIndex = recursiveNeighbors.first?.frameIndex ?? -1
-            let id = recursiveNeighbors.first?.id ?? 0
+            let frameIndex = neighborCloud.first?.frameIndex ?? -1
+            let id = neighborCloud.first?.id ?? 0
             
             // first create a temporary blob that combines all of the nearby blobs
             let fullBlob = Blob(id: id, frameIndex: frameIndex) // values not used
-            for blob in recursiveNeighbors { _ = fullBlob.absorb(blob, always: true) }
+            for blob in neighborCloud { _ = fullBlob.absorb(blob, always: true) }
 
             // here we have combined all of the nearby blobs within our given scanSize
             // to eachother.  This may be enormous, if we have lots of small blobs close together.
@@ -129,11 +129,12 @@ class LinearBlobConnector: AbstractBlobAnalyzer {
                         }
                     }
 
-                    if linearBlobIds.count > 1 {
-                        Log.d("blob \(id) found \(linearBlobIds.count) linear blobs")
+                    var linearBlobSet = linearBlobIds.compactMap { blobMap[$0] }
+                    Log.d("blob \(id) found \(linearBlobIds.count) linear blobs")
+                    
+                    if linearBlobSet.count > 1 {
                         
                         // we found more than one blob alone the line
-                        var linearBlobSet = linearBlobIds.compactMap { blobMap[$0] }
 
                         // the first blob in the set will absorb the others and survive
                         let firstBlob = linearBlobSet.removeFirst() 
