@@ -12,44 +12,33 @@
 
 @implementation KHTBridge
 
-+(NSArray *) translate:(NSImage*)image
-	clusterMinSize:(int)clusterMinSize
-   clusterMinDeviation:(double)clusterMinDeviation
-		 delta:(double)delta
-       kernelMinHeight:(double)kernelMinHeight
-	       nSigmas:(double)nSigmas
-{
++(NSArray *) translate:(NSImage*)image {
+  // return value for run_kht below
   kht::ListOfLines lineList = kht::ListOfLines();
 
-  cv::Mat im, bw, eightBit;
+  cv::Mat im, eightBit, canny;
 
+  // convert for processing
   NSImageToMat(image, im);
 
-  // XXX add a check on type to make sure this is necessary
+  std::int32_t height = im.rows, width = im.cols;
+
+  // convert to eight bit
   im.convertTo(eightBit,CV_8U);
+ 
+  // run canny edge detection
+  cv::Canny(eightBit, canny, 80, 200);
 
-  // canny edge detection
-  cv::Canny(eightBit, bw, 80, 200);
-  
-  // run the c++ Kernel Hough Transform code, results in lineList
-  kht::run_kht(lineList,
-	       bw.ptr(),
-	       image.size.width,
-	       image.size.height,
-	       clusterMinSize,
-	       clusterMinDeviation,
-	       delta, 
-	       kernelMinHeight,
-	       nSigmas);
+  // run the c++ Kernel Hough Transform code, with results in lineList
+  kht::run_kht(lineList, canny.ptr(), width, height);
 
+  // translate the KHT line list into ObjC land
   NSMutableArray * ret = [[NSMutableArray alloc] init];
-  
   for(int i = 0 ; i < lineList.size() ; i++) {
     kht::Line line = lineList[i];
 
     double rho = line.rho;
     double theta = line.theta;
-
     // make all rho positive
     if(rho < 0) {
       // if negative, flip rho and theta to make it positive

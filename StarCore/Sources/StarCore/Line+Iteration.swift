@@ -79,6 +79,7 @@ extension Line {
     
     public func iterate(between coord1: DoubleCoord,
                         and coord2: DoubleCoord,
+                        numberOfAdjecentPixels: Int = 0, // iterate in the parallel direction this many pixels
                         closure: (Int, Int, IterationOrientation) -> Void)
     {
         let standardLine = self.standardLine
@@ -98,7 +99,17 @@ extension Line {
                 if x >= 0,
                    y >= 0
                 {
-                    closure(x, y, .horizontal)
+                    if numberOfAdjecentPixels > 0 {
+                        // cover some number of pixels on the perpendicular direction 
+                        for sideY in y-numberOfAdjecentPixels...y+numberOfAdjecentPixels {
+                            if sideY >= 0 {
+                                closure(x, sideY, .horizontal)
+                            }
+                        }
+                    } else {
+                        // only cover one pixel per iteration
+                        closure(x, y, .horizontal)
+                    }
                 }
             }
             
@@ -114,7 +125,17 @@ extension Line {
                 if x >= 0,
                    y >= 0
                 {
-                    closure(x, y, .vertical)
+                    if numberOfAdjecentPixels > 0 {
+                        // cover some number of pixels on the perpendicular direction 
+                        for sideX in x-numberOfAdjecentPixels...x+numberOfAdjecentPixels {
+                            if sideX >= 0 {
+                                closure(sideX, y, .vertical)
+                            }
+                        }
+                    } else {
+                        // only cover one pixel per iteration
+                        closure(x, y, .vertical)
+                    }
                 }
             }
         }

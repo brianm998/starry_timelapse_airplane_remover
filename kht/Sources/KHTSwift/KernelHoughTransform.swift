@@ -13,11 +13,6 @@ public let RADIANS_TO_DEGREES = 45 / atan(1.0)
 // these default parameter values need more documentation.  All but the last
 // four were taken from main.cpp from the kht implementation.
 public func kernelHoughTransform(image: NSImage,
-                                 clusterMinSize: Int32 = 10,
-                                 clusterMinDeviation: Double = 2.0,
-                                 delta: Double = 0.5,
-                                 kernelMinHeight: Double = 0.002,
-                                 nSigmas: Double = 2.0,
                                  
                                  // discard lines with fewer votes than this
                                  minVotes: Int = 20,
@@ -30,22 +25,12 @@ public func kernelHoughTransform(image: NSImage,
                                  maxResults: Int = 10) -> [Line]
 {
     transformer.kernelHoughTransform(image: image,
-                                     clusterMinSize: clusterMinSize,
-                                     clusterMinDeviation: clusterMinDeviation,
-                                     delta: delta,
-                                     kernelMinHeight: kernelMinHeight,
-                                     nSigmas: nSigmas,
                                      minVotes: minVotes,
                                      minResults: minResults,
                                      maxResults: maxResults)
 }
 
 public func kernelHoughTransform(elements: [ImageMatrixElement],
-                                 clusterMinSize: Int32 = 10,
-                                 clusterMinDeviation: Double = 2.0,
-                                 delta: Double = 0.5,
-                                 kernelMinHeight: Double = 0.002,
-                                 nSigmas: Double = 2.0,
 
                                  // discard lines with fewer votes than this
                                  minVotes: Int = 20,
@@ -58,11 +43,6 @@ public func kernelHoughTransform(elements: [ImageMatrixElement],
                                  maxResults: Int = 10) -> [ImageMatrixElement]
 {
     transformer.kernelHoughTransform(elements: elements,
-                                     clusterMinSize: clusterMinSize,
-                                     clusterMinDeviation: clusterMinDeviation,
-                                     delta: delta,
-                                     kernelMinHeight: kernelMinHeight,
-                                     nSigmas: nSigmas,
                                      minVotes: minVotes,
                                      minResults: minResults,
                                      maxResults: maxResults)
@@ -81,11 +61,6 @@ fileprivate let transformer = HoughTransformer()
 fileprivate class HoughTransformer {
 
     public func kernelHoughTransform(elements: [ImageMatrixElement],
-                                     clusterMinSize: Int32,
-                                     clusterMinDeviation: Double,
-                                     delta: Double,
-                                     kernelMinHeight: Double,
-                                     nSigmas: Double,
                                      minVotes: Int,
                                      minResults: Int,
                                      maxResults: Int) -> [ImageMatrixElement]
@@ -95,11 +70,6 @@ fileprivate class HoughTransformer {
             if let image = element.image {
                 element.lines = 
                   kernelHoughTransform(image: image,
-                                       clusterMinSize: clusterMinSize,
-                                       clusterMinDeviation: clusterMinDeviation,
-                                       delta: delta,
-                                       kernelMinHeight: kernelMinHeight,
-                                       nSigmas: nSigmas,
                                        minVotes: minVotes,
                                        minResults: minResults,
                                        maxResults: maxResults)
@@ -111,11 +81,6 @@ fileprivate class HoughTransformer {
 
     
     public func kernelHoughTransform(image: NSImage,
-                                     clusterMinSize: Int32,
-                                     clusterMinDeviation: Double,
-                                     delta: Double,
-                                     kernelMinHeight: Double,
-                                     nSigmas: Double,
                                      minVotes: Int,
                                      minResults: Int,
                                      maxResults: Int) -> [Line]
@@ -123,20 +88,13 @@ fileprivate class HoughTransformer {
         var ret: [Line] = []
 
         // first get a list of lines from the kernel based hough transform
-        if let lines = KHTBridge.translate(image,
-                                           clusterMinSize: clusterMinSize,
-                                           clusterMinDeviation: clusterMinDeviation,
-	                                   delta: delta,
-                                           kernelMinHeight: kernelMinHeight,
-                                           nSigmas: nSigmas)
-        {
+        if let lines = KHTBridge.translate(image) {
             //Log.d("got \(lines.count) lines")
 
             var lastVotes: Int = 0
             
             for line in lines {
                 if let line = line as? KHTBridgeLine {
-
                     if ret.count >= maxResults { return ret }
                     
                     // change how each line is represented

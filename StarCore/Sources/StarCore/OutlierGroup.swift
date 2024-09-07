@@ -72,14 +72,52 @@ public class OutlierGroup: CustomStringConvertible,
     // has to be optional so we can read OuterlierGroups as codable
     public var frame: FrameAirplaneRemover?
 
+    // how many of the hough lines to we consider when
+    // trying to figure out which one is best
+    public static let numberOfLinesToConsider = 10 // XXX constant
+    
     public func setFrame(_ frame: FrameAirplaneRemover) {
         self.frame = frame
     }
     
-    // returns the first, most likely line, if any
+    // returns the best line, if any
+
+    fileprivate var _firstLine: Line?
+    
     var firstLine: Line? {
+        if let _firstLine { return _firstLine }
+        _firstLine = OutlierGroup.findBestLine(for: pixels,
+                                               from: self.lines,
+                                               with: bounds)
+        return _firstLine
+    }
+
+    fileprivate static func findBestLine(for pixels: [UInt16],
+                                         from lines: [Line],
+                                         with bounds: BoundingBox) -> Line?
+    {
         if lines.count > 0 {
-            return lines[0]
+            var linesToConsider = OutlierGroup.numberOfLinesToConsider
+            if linesToConsider > lines.count { linesToConsider = lines.count }
+
+            var closestDistance: Double = 9999999999
+            var bestLineIndex = 0
+            
+            for i in 0..<linesToConsider {
+                let (distance, _) = 
+                  OutlierGroup.averageDistance(for: pixels,
+                                               from: lines[i],
+                                               with: bounds)
+
+                Log.d("line \(i) theta \(lines[i].theta) distance \(distance)")
+                if distance < closestDistance {
+                    Log.d("line \(i) is best")
+                    closestDistance = distance
+                    bestLineIndex = i
+                }
+            }
+
+            return lines[bestLineIndex]
         }
         return nil
     }
@@ -111,16 +149,25 @@ public class OutlierGroup: CustomStringConvertible,
         // XXX apply some edge border here like with the blobs?
         
         if let image = pixelImage.nsImage {
-            self.lines = kernelHoughTransform(image: image,
-                                              clusterMinSize: 4)
+            self.lines = kernelHoughTransform(image: image)
         } else {
             self.lines = []     // XXX
         }
 
-        if lines.count > 0 {
+        // apply same logic as the Blob class does, to not
+        // just choose the first line that we get,
+        // but instead look at the first N (10?) and choose the one
+        // which has the closest average distance for the pixels in
+        // this outlier group
+
+        _firstLine = OutlierGroup.findBestLine(for: pixels,
+                                               from: self.lines,
+                                               with: bounds)
+        
+        if let line = _firstLine {
             (self.averageLineVariance, self.lineLength) = 
               OutlierGroup.averageDistance(for: pixels,
-                                           from: lines[0],
+                                           from: line,
                                            with: bounds)
         } else {
             self.averageLineVariance = 0xFFFFFFFF

@@ -42,6 +42,7 @@ public class BlobProcessor {
           - filter out small dim blobs
           - remove more small dim blobs
           - final pass at more isolation removal
+          - absorb linear blobs together
           - save image of final blobs before promotion to outlier groups
           - promote remaining blobs to outlier groups for further analysis
          */
@@ -57,8 +58,9 @@ public class BlobProcessor {
           .process(finalDimIsolatedRemover),
           .save(.filter1),
           .process(smallerDisconnectedBlobRemover),
-          .save(.filter2),
           .process(largerDisconnectedBlobRemover),
+          .save(.filter2),
+          .process(linearBlobConnector),
           .save(.filter3),
         ]
     }
@@ -305,5 +307,18 @@ public class BlobProcessor {
                         requiredNeighbors: 2)
 
         return remover.blobMap
+    }
+
+    fileprivate func linearBlobConnector(blobs: BlobMap) async throws -> BlobMap {
+        guard let frame else { return [:] }
+
+        let connector = LinearBlobConnector(blobMap: blobs,
+                                            width: frame.width,
+                                            height: frame.height)
+
+        connector.process(scanSize: 25,
+                          blobsSmallerThan: 18)
+
+        return connector.blobMap
     }
 }

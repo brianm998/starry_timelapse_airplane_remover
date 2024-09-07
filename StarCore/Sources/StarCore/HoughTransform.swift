@@ -43,8 +43,8 @@ public class HoughTransform {
 
     public convenience init(dataWidth: Int, dataHeight: Int) {
         self.init(dataWidth: dataWidth,
-                 dataHeight: dataHeight,
-                 inputData: [UInt16](repeating: 0, count: dataWidth*dataHeight))
+                  dataHeight: dataHeight,
+                  inputData: [UInt16](repeating: 0, count: dataWidth*dataHeight))
     }
 
     public init(dataWidth: Int,

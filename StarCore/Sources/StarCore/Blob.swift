@@ -22,7 +22,7 @@ public class Blob: CustomStringConvertible, Hashable, Codable {
     public var size: Int { pixels.count }
 
     // adjusted size for frame
-    public var adjustedSize: Double {
+    public var adjustedSize: Double { // not sure this is a good idea
         Double(self.size)/(IMAGE_HEIGHT!*IMAGE_WIDTH!)
     }
 
@@ -51,67 +51,97 @@ public class Blob: CustomStringConvertible, Hashable, Codable {
     private var _intensity: UInt16?
     private var _medianIntensity: UInt16?
     private var _boundingBox: BoundingBox?
-    private var _blobImageData: [UInt16]?
+    private var _blobImageData: [UInt8]?
     private var _blobLine: Line?
     private var _pixelValues: [UInt16]?
     private var _outlierGroup: OutlierGroup?
 
     // it seems that the kernel hough transform works better on really small images
     // if they're padded a bit on the sides. 
-    let blobImageDataBorderSize = 8
+    fileprivate let blobImageDataBorderSize = 0
     
     // a line computed from the pixels,
     // origin is relative to the bounding box + blobImageDataBorderSize on each side
+
+    // the best fitting line we have, if any
     public var line: Line? {
         if let _blobLine { return _blobLine }
         
-        //Log.d("frame \(frameIndex) blob \(self) calculating line")
+        Log.d("frame \(frameIndex) blob \(self) calculating line")
                 
         let blobImageData = self.blobImageData
         
-        let pixelImage = PixelatedImage(width: self.boundingBox.width + blobImageDataBorderSize * 2,
-                                        height: self.boundingBox.height + blobImageDataBorderSize * 2,
-                                        grayscale16BitImageData: blobImageData)
+        let pixelImage = PixelatedImage(width: self.blobImageDataWidth,
+                                        height: self.blobImageDataHeight,
+                                        grayscale8BitImageData: blobImageData)
 
-
-        //Log.d("frame \(frameIndex) blob \(self) created image")
+        Log.d("frame \(frameIndex) blob \(self) created image")
 
         // XXX XXX XXX
         // write out an image for every blob, slow, but helpful for debugging blob stuff
-        //try? pixelImage.writeTIFFEncoding(toFilename: "/tmp/Blob_frame_\(frameIndex)_\(self).png")
+        //try? pixelImage.writeTIFFEncoding(toFilename: "/tmp/Blob_frame_\(frameIndex)_\(self).tiff")
         // XXX XXX XXX
         
         if let image = pixelImage.nsImage {
-            //Log.d("frame \(frameIndex) blob \(self) created ns image")
-            let lines = kernelHoughTransform(image: image, clusterMinSize: 4)
-            if lines.count > 0,
-               lines[0].votes > 500 // XXX hardcode to ignore lines without much data behind them
-            {
-                //Log.d("frame \(frameIndex) blob \(self) got \(lines.count) lines from KHT returning \(lines[0]) [\(self.boundingBox.width), \(self.boundingBox.height)]")
-                _blobLine = lines[0]
-                return lines[0]
+            Log.d("frame \(frameIndex) blob \(self) created ns image")
+            let lines = kernelHoughTransform(image: image)
+            for (index, line) in lines.enumerated() {
+                Log.d("line \(index): \(line)")
+            }
+
+            /*
+                - look at the first N lines (10?)
+                - calculate the average distance from the line for each of them.
+                - choose the best one
+             */
+
+            if lines.count > 0 {
+                var linesToConsider = OutlierGroup.numberOfLinesToConsider
+                if linesToConsider > lines.count { linesToConsider = lines.count }
+
+                var closestDistance: Double = 9999999999
+                var bestLineIndex = 0
+                
+                for i in 0..<linesToConsider {
+                    let originZeroLine = self.originZeroLine(from: lines[i])
+                    let distance = self.averageDistance(from: originZeroLine)
+                    Log.d("line \(i) theta \(lines[i].theta) distance \(distance)")
+                    if distance < closestDistance {
+                        Log.d("line \(i) is best")
+                        closestDistance = distance
+                        bestLineIndex = i
+                    }
+                }
+
+                _blobLine = lines[bestLineIndex]
+                return _blobLine
             }
         }
         return nil
     }
 
-    // XXX is this right?
-    public var blobImageData: [UInt16] {
+    public var blobImageDataWidth: Int {
+        self.boundingBox.width+blobImageDataBorderSize*2
+    }
+
+    public var blobImageDataHeight: Int {
+        self.boundingBox.height+blobImageDataBorderSize*2
+    }
+
+    public var blobImageData: [UInt8] {
         if let _blobImageData { return _blobImageData }
-        
-        var blobImageData = [UInt16](repeating: 0,
-                                     count: (self.boundingBox.width+blobImageDataBorderSize*2) *
-                                            (self.boundingBox.height+blobImageDataBorderSize*2))
+
+        var blobImageData = [UInt8](repeating: 0, count: blobImageDataWidth * blobImageDataHeight)
         
         //Log.d("frame \(frameIndex) blob image data with \(pixels.count) pixels")
         
         let minX = self.boundingBox.min.x
         let minY = self.boundingBox.min.y
         for pixel in pixels {
-            let imageIndex = (pixel.y - minY + blobImageDataBorderSize)*self.boundingBox.width +
+            let imageIndex = (pixel.y - minY + blobImageDataBorderSize)*blobImageDataWidth + 
                              (pixel.x - minX + blobImageDataBorderSize)
             //blobImageData[imageIndex] = pixel.intensity
-            blobImageData[imageIndex] = 0xFFFF
+            blobImageData[imageIndex] = 0xFF
         }
 
         _blobImageData = blobImageData
@@ -342,20 +372,22 @@ public class Blob: CustomStringConvertible, Hashable, Codable {
             return (average, median, max)
         }
     }
-    
-    // a line calculated from the pixels in this blob, if possible
+
+    // a line with (0,0) origin calculated from the pixels in this blob, if possible
     public var originZeroLine: Line? {
-        if let line = self.line {
-            let minX = self.boundingBox.min.x - blobImageDataBorderSize
-            let minY = self.boundingBox.min.y - blobImageDataBorderSize
-            let (ap1, ap2) = line.twoPoints
-            return Line(point1: DoubleCoord(x: ap1.x+Double(minX),
-                                            y: ap1.y+Double(minY)),
-                        point2: DoubleCoord(x: ap2.x+Double(minX),
-                                            y: ap2.y+Double(minY)),
-                        votes: 0)
-        }
+        if let line { return originZeroLine(from: line) }
         return nil
+    }
+
+    public func originZeroLine(from line: Line) -> Line {
+        let minX = self.boundingBox.min.x - blobImageDataBorderSize
+        let minY = self.boundingBox.min.y - blobImageDataBorderSize
+        let (ap1, ap2) = line.twoPoints
+        return Line(point1: DoubleCoord(x: ap1.x+Double(minX),
+                                        y: ap1.y+Double(minY)),
+                    point2: DoubleCoord(x: ap2.x+Double(minX),
+                                        y: ap2.y+Double(minY)),
+                    votes: 0)
     }
     
     public var intensity: UInt16 { // mean intensity
