@@ -16,17 +16,6 @@ You should have received a copy of the GNU General Public License along with sta
 
 */
 
-/*
-
- next step is to change the LinearBlobConnector as such:
-   - iterate over first 5-10 lines returned
-   * look to a few pixels on each side 
-   - count how many pixels (total of all blobs) are found along each line
-   - use the line with the most found pixels to connect the blobs
-
- */
-
-
 // recurse on finding nearby blobs to find groups of neighbors in a set
 // use the KHT to try to combine some of them into a line (if we get a good enough line)
 class LinearBlobConnector: AbstractBlobAnalyzer {
@@ -76,23 +65,6 @@ class LinearBlobConnector: AbstractBlobAnalyzer {
 
             Log.d("blob \(id) fullBlob has \(fullBlob.pixels.count) pixels boundingBox \(fullBlob.boundingBox) line \(fullBlob.line)")
 
-
-            /*
-
-             XXX for some reason this line almost always has
-             theta 0.50000000000xxx or theta 0.499999999999xxx
-
-             and we don't get may linear blobs (RELATED?)
-
-             the written out blob images look funky.
-
-             now that Blob is Codable, we can write out blobs as json,
-             and write a small cli test
-
-             also check now many pixels are in each blob, the images have a lot in them
-
-             
-             */
             
             // render a KHT on this full blob
             if let blobLine = fullBlob.originZeroLine {
