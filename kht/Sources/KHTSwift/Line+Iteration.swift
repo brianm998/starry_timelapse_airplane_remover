@@ -1,5 +1,4 @@
 import Foundation
-import KHTSwift
 
 public enum IterationOrientation {
     case vertical
