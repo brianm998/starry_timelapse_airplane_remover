@@ -60,6 +60,7 @@ public class BlobProcessor {
           .process(smallerDisconnectedBlobRemover),
           .process(largerDisconnectedBlobRemover),
           .save(.filter2),
+          .frameState(.linearBlobAbsorbtion),
           .process(linearBlobConnector),
           .save(.filter3),
         ]
