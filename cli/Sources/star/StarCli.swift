@@ -22,6 +22,32 @@ You should have received a copy of the GNU General Public License along with sta
 /*
  todo:
 
+ - redo the initial blob detection, it can miss pretty bright lines of dots
+
+ 1. add a layer of processing in the blob detection, that pays attention
+    to the difference between the processed frame and its subtraction image.
+    starting at the brighest part of a blob, attempt to do blob detection
+    for that spot on the processed frame (as compared to the blob, which
+    came from the subtration frame).  If we are able to get a bigger blob
+    with a lot of bright spots on it, then discard the blob.
+    Allow fuck tons of more blobs originally so that we can get dim airplanes
+    Should allow for better airplane detection with fewer false positives.
+    
+ - add three new classification criteria:
+ 
+ 1. use the mask created by an outlier group to look at the difference in
+    brightness between the pixels in the mask and the pixels outside it
+    (need to make some kind of bound for cheking outside the mask)
+    return value is the ratio of the average of the brightness of each
+ 2. for each outlier group, look at the difference in brightness between
+    the pixels that are in the group in the frame being processed,
+    and within the aligned reference frame we would paint from.
+    return value is the brightness of pixels
+    within the frame being modified / within the reference frame
+ 3. within the outlier groups bounding box, return the average brightess
+    of all pixels not in the outlier group.
+
+ 
  - loading outliers is still painfully slow
  - UI crashes sometimes and brings down the system
 
@@ -218,7 +244,7 @@ struct StarCli: AsyncParsableCommand {
 
         if version {
             print("""
-                  Nighttime Timelapse Airplane Remover (star) version \(config.starVersion)
+                  Starry Timelapse Airplane Remover (star) version \(config.starVersion)
                   """)
             return
         }
