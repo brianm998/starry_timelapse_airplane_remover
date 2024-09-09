@@ -58,7 +58,7 @@ public class Blob: CustomStringConvertible, Hashable, Codable {
 
     // it seems that the kernel hough transform works better on really small images
     // if they're padded a bit on the sides. 
-    fileprivate let blobImageDataBorderSize = 0
+    fileprivate let blobImageDataBorderSize = 80
     
     // a line computed from the pixels,
     // origin is relative to the bounding box + blobImageDataBorderSize on each side
@@ -84,7 +84,8 @@ public class Blob: CustomStringConvertible, Hashable, Codable {
         
         if let image = pixelImage.nsImage {
             Log.d("frame \(frameIndex) blob \(self) created ns image")
-            let lines = kernelHoughTransform(image: image)
+            let lines = kernelHoughTransform(image: image,
+                                             maxResults: OutlierGroup.numberOfLinesToReturn)
             for (index, line) in lines.enumerated() {
                 Log.d("line \(index): \(line)")
             }
@@ -104,11 +105,15 @@ public class Blob: CustomStringConvertible, Hashable, Codable {
                 
                 for i in 0..<linesToConsider {
                     let originZeroLine = self.originZeroLine(from: lines[i])
-                    let distance = self.averageDistance(from: originZeroLine)
-                    Log.d("line \(i) theta \(lines[i].theta) distance \(distance)")
-                    if distance < closestDistance {
+
+
+
+                    let (avg, median, max) = self.averageMedianMaxDistance(from: originZeroLine)
+                    
+                    Log.d("line \(i) theta \(lines[i].theta) avg median max \(avg) \(median) \(max)")
+                    if median < closestDistance {
                         Log.d("line \(i) is best")
-                        closestDistance = distance
+                        closestDistance = median
                         bestLineIndex = i
                     }
                 }
@@ -121,11 +126,11 @@ public class Blob: CustomStringConvertible, Hashable, Codable {
     }
 
     public var blobImageDataWidth: Int {
-        self.boundingBox.width+blobImageDataBorderSize*2
+        self.boundingBox.width+blobImageDataBorderSize*6
     }
 
     public var blobImageDataHeight: Int {
-        self.boundingBox.height+blobImageDataBorderSize*2
+        self.boundingBox.height+blobImageDataBorderSize*6
     }
 
     public var blobImageData: [UInt8] {
