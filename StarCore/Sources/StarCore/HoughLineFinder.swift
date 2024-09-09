@@ -89,14 +89,14 @@ public struct HoughLineFinder {
         return imageData
     }
 
-    public var line: Line? {
+    public var lines: [Line] {
         let imageData = self.imageData
         let pixelImage = PixelatedImage(width: self.imageDataWidth,
                                         height: self.imageDataHeight,
                                         grayscale8BitImageData: imageData)
 
         if let image = pixelImage.nsImage {
-            let lines = kernelHoughTransform(image: image,
+            var lines = kernelHoughTransform(image: image,
                                              maxResults: OutlierGroup.numberOfLinesToReturn) // XXX move this constant here
             for (index, line) in lines.enumerated() {
                 Log.d("line \(index): \(line)")
@@ -128,10 +128,28 @@ public struct HoughLineFinder {
                     }
                 }
 
-                return lines[bestLineIndex]
+                if bestLineIndex != 0 {
+                    // put the best line at the front of the list
+                    // by swapping it with the previous head of the list
+                    // XXX sort by median distance instead XXX
+                    let oldZero = lines[0]
+                    let best = lines[bestLineIndex]
+                    lines[0] = best
+                    lines[bestLineIndex] = oldZero
+                }
             }
+            
+            return lines
         }
-        return nil
+        return []
+    }
+    
+    public var line: Line? {
+        if lines.count == 0 {
+            return nil
+        } else {
+            return lines[0]
+        }
     }
 
     public func averageMedianMaxDistance(from line: Line) -> (Double, Double, Double) {

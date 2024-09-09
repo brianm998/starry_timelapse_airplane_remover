@@ -92,37 +92,6 @@ public class OutlierGroup: CustomStringConvertible,
         return _firstLine
     }
 
-    fileprivate static func findBestLine(for pixels: [UInt16],
-                                         from lines: [Line],
-                                         with bounds: BoundingBox) -> Line?
-    {
-        if lines.count > 0 {
-            var linesToConsider = OutlierGroup.numberOfLinesToConsider
-            if linesToConsider > lines.count { linesToConsider = lines.count }
-
-            var closestDistance: Double = 9999999999
-            var bestLineIndex = 0
-
-            Log.d("lines.count \(lines.count)")
-            
-            for i in 0..<linesToConsider {
-                let (distance, _) = 
-                  OutlierGroup.averageDistance(for: pixels,
-                                               from: lines[i],
-                                               with: bounds)
-
-                Log.d("line \(i) theta \(lines[i].theta) distance \(distance)")
-                if distance < closestDistance {
-                    Log.d("line \(i) is best")
-                    closestDistance = distance
-                    bestLineIndex = i
-                }
-            }
-
-            return lines[bestLineIndex]
-        }
-        return nil
-    }
 
     public init(id: UInt16,
                 size: UInt,
@@ -144,31 +113,12 @@ public class OutlierGroup: CustomStringConvertible,
                                                                height: bounds.height)
         // do a hough transform on just this outlier group
 
-        let pixelImage = PixelatedImage(width: bounds.width,
-                                        height: bounds.height,
-                                        grayscale16BitImageData: pixels)
-        
-        // XXX apply some edge border here like with the blobs
-        // having the line go through the center on a small image gives bad results
-        // giving some border and not centering the pixels helps
-        
-        if let image = pixelImage.nsImage {
-            self.lines = kernelHoughTransform(image: image,
-                                              maxResults: OutlierGroup.numberOfLinesToReturn)
-            Log.d("FUCKING \(lines.count) lines")
-        } else {
-            self.lines = []     // XXX
+        let lines = HoughLineFinder(pixels: pixels, bounds: bounds).lines
+        self.lines = lines
+
+        if(lines.count > 0) {
+            _firstLine = lines[0]
         }
-
-        // apply same logic as the Blob class does, to not
-        // just choose the first line that we get,
-        // but instead look at the first N (10?) and choose the one
-        // which has the closest average distance for the pixels in
-        // this outlier group
-
-        _firstLine = OutlierGroup.findBestLine(for: pixels,
-                                               from: self.lines,
-                                               with: bounds)
         
         if let line = _firstLine {
             (self.averageLineVariance, self.lineLength) = 
