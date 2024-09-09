@@ -57,6 +57,7 @@ public class BlobProcessor {
           .process(finalIsolatedRemover),
           .process(finalDimIsolatedRemover),
           .save(.filter1),
+          .frameState(.isolatedBlobRemoval2),
           .process(smallerDisconnectedBlobRemover),
           .process(largerDisconnectedBlobRemover),
           .save(.filter2),
@@ -288,7 +289,7 @@ public class BlobProcessor {
                                               width: frame.width,
                                               height: frame.height)
 
-        remover.process(scanSize: 25,
+        remover.process(scanSize: 40,
                         blobsSmallerThan: 18,
                         requiredNeighbors: 8)
 

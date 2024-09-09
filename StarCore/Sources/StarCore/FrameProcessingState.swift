@@ -31,6 +31,7 @@ public enum FrameProcessingState: Int, CaseIterable, Codable {
     case sortingPixels
     case detectingBlobs
     case isolatedBlobRemoval
+    case isolatedBlobRemoval2
     case linearBlobAbsorbtion
     case populatingOutlierGroups
     case readyForInterFrameProcessing
@@ -61,6 +62,8 @@ public enum FrameProcessingState: Int, CaseIterable, Codable {
             return "detecting blobs"
         case .isolatedBlobRemoval:
             return "isolated blob removal"
+        case .isolatedBlobRemoval2:
+            return "isolated blob removal phase 2"
         case .linearBlobAbsorbtion:
             return "linear blob absorbtion"
         case .populatingOutlierGroups:

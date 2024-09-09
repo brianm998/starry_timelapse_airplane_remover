@@ -154,6 +154,10 @@ public actor UpdatableProgressMonitor {
             updates.append(update)
         }
 
+        if let update = progressLine(for: .isolatedBlobRemoval2) {
+            updates.append(update)
+        }
+
         if let update = progressLine(for: .linearBlobAbsorbtion) {
             updates.append(update)
         }
