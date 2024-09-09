@@ -74,7 +74,9 @@ public class OutlierGroup: CustomStringConvertible,
 
     // how many of the hough lines to we consider when
     // trying to figure out which one is best
-    public static let numberOfLinesToConsider = 10 // XXX constant
+    public static let numberOfLinesToConsider = 100 // XXX constant
+
+    public static let numberOfLinesToReturn = 400 // XXX constant
     
     public func setFrame(_ frame: FrameAirplaneRemover) {
         self.frame = frame
@@ -86,9 +88,7 @@ public class OutlierGroup: CustomStringConvertible,
     
     var firstLine: Line? {
         if let _firstLine { return _firstLine }
-        _firstLine = OutlierGroup.findBestLine(for: pixels,
-                                               from: self.lines,
-                                               with: bounds)
+        _firstLine = HoughLineFinder(pixels: self.pixels, bounds: self.bounds).line
         return _firstLine
     }
 
@@ -102,6 +102,8 @@ public class OutlierGroup: CustomStringConvertible,
 
             var closestDistance: Double = 9999999999
             var bestLineIndex = 0
+
+            Log.d("lines.count \(lines.count)")
             
             for i in 0..<linesToConsider {
                 let (distance, _) = 
@@ -146,10 +148,14 @@ public class OutlierGroup: CustomStringConvertible,
                                         height: bounds.height,
                                         grayscale16BitImageData: pixels)
         
-        // XXX apply some edge border here like with the blobs?
+        // XXX apply some edge border here like with the blobs
+        // having the line go through the center on a small image gives bad results
+        // giving some border and not centering the pixels helps
         
         if let image = pixelImage.nsImage {
-            self.lines = kernelHoughTransform(image: image)
+            self.lines = kernelHoughTransform(image: image,
+                                              maxResults: OutlierGroup.numberOfLinesToReturn)
+            Log.d("FUCKING \(lines.count) lines")
         } else {
             self.lines = []     // XXX
         }

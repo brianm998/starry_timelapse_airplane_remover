@@ -1,7 +1,7 @@
 import Foundation
 
 // a monochrome pixel that is used by the blobber
-public class SortablePixel: Hashable, CustomStringConvertible, Codable {
+public class SortablePixel: AbstractPixel, Hashable, CustomStringConvertible, Codable {
     public let x: Int
     public let y: Int
     public let intensity: UInt16

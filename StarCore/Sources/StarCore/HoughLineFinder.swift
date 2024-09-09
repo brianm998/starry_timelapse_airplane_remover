@@ -27,7 +27,8 @@ fileprivate enum DataType {
     case list([AbstractPixel])
 }
 
-// this class uses the KHT to find lines, and then returns the one which best fits the input data
+// use the KHT to find lines, and then return the one which best fits the input data,
+// i.e. has the lowest mean distance of pixels to the line
 public struct HoughLineFinder {
 
     fileprivate let data: DataType

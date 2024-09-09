@@ -66,63 +66,8 @@ public class Blob: CustomStringConvertible, Hashable, Codable {
     // the best fitting line we have, if any
     public var line: Line? {
         if let _blobLine { return _blobLine }
-        
-        Log.d("frame \(frameIndex) blob \(self) calculating line")
-                
-        let blobImageData = self.blobImageData
-        
-        let pixelImage = PixelatedImage(width: self.blobImageDataWidth,
-                                        height: self.blobImageDataHeight,
-                                        grayscale8BitImageData: blobImageData)
-
-        Log.d("frame \(frameIndex) blob \(self) created image")
-
-        // XXX XXX XXX
-        // write out an image for every blob, slow, but helpful for debugging blob stuff
-        //try? pixelImage.writeTIFFEncoding(toFilename: "/tmp/Blob_frame_\(frameIndex)_\(self).tiff")
-        // XXX XXX XXX
-        
-        if let image = pixelImage.nsImage {
-            Log.d("frame \(frameIndex) blob \(self) created ns image")
-            let lines = kernelHoughTransform(image: image,
-                                             maxResults: OutlierGroup.numberOfLinesToReturn)
-            for (index, line) in lines.enumerated() {
-                Log.d("line \(index): \(line)")
-            }
-
-            /*
-                - look at the first N lines (10?)
-                - calculate the average distance from the line for each of them.
-                - choose the best one
-             */
-
-            if lines.count > 0 {
-                var linesToConsider = OutlierGroup.numberOfLinesToConsider
-                if linesToConsider > lines.count { linesToConsider = lines.count }
-
-                var closestDistance: Double = 9999999999
-                var bestLineIndex = 0
-                
-                for i in 0..<linesToConsider {
-                    let originZeroLine = self.originZeroLine(from: lines[i])
-
-
-
-                    let (avg, median, max) = self.averageMedianMaxDistance(from: originZeroLine)
-                    
-                    Log.d("line \(i) theta \(lines[i].theta) avg median max \(avg) \(median) \(max)")
-                    if median < closestDistance {
-                        Log.d("line \(i) is best")
-                        closestDistance = median
-                        bestLineIndex = i
-                    }
-                }
-
-                _blobLine = lines[bestLineIndex]
-                return _blobLine
-            }
-        }
-        return nil
+        _blobLine = HoughLineFinder(pixels: Array(self.pixels), bounds: self.boundingBox).line
+        return _blobLine
     }
 
     public var blobImageDataWidth: Int {
