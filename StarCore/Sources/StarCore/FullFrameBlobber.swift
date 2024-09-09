@@ -120,6 +120,7 @@ public class FullFrameBlobber {
         
         if let ignoreLowerPixels = config.ignoreLowerPixels {
             maxY = imageHeight - ignoreLowerPixels
+            if maxY < 0 { maxY = 0 }
         }
         
         for x in 0..<imageWidth {
@@ -170,7 +171,6 @@ public class FullFrameBlobber {
                 // a local maximum, this pixel is a blob seed
 
                 if newBlobId < UInt16.max {
-                    newBlobId += 1
                     let newBlob = Blob(pixel, id: newBlobId, frameIndex: frameIndex)
 
 
@@ -179,7 +179,7 @@ public class FullFrameBlobber {
                     
                     /*
 
-                     XXX after we expand, and before we append, try a further test:
+                     after we expand, and before we append, try a further test:
 
                      try starting a new blob on the original image, and compare the result
                      to what we got here.
@@ -187,16 +187,15 @@ public class FullFrameBlobber {
                      if the blob from the original image is a lot bigger, and brighter, then discard
                      
                      only keep if the number of bright pixels isn't all that much larger (how much?)
-
-
-                     
-
                      
                      */
 
                     // examine the blob in the original image.
 
-                    if check(blob: newBlob) { blobs.append(newBlob) }
+                    if check(blob: newBlob) {
+                        newBlobId += 1
+                        blobs.append(newBlob)
+                    }
                     //Log.d("expanding from seed pixel.intensity \(pixel.intensity)")
 
                 } else {
@@ -223,14 +222,6 @@ public class FullFrameBlobber {
                 // too close to the bottom 
                 return false
             }
-
-
-            /*
-
-             XXX adjust the following paramaters so that we still get what we want
-             but don't have 7000 outliers still
-             
-             */
 
             // these blobs are just too dim
             if blob.medianIntensity < constants.blobberMinBlobIntensity { return false }
@@ -275,38 +266,7 @@ public class FullFrameBlobber {
     public func neighbors(of pixel: SortablePixel) -> [SortablePixel] {
         return neighborsInt(pixel, self.neighborType)
     }
-/*
-    public func allNeighbors(of pixel: SortablePixel, within distance: Int) -> [SortablePixel] {
-        var minX = pixel.x - distance
-        var minY = pixel.y - distance
-        var maxX = pixel.x + distance
-        var maxY = pixel.y + distance
-        if minX < 0 { minX = 0 }
-        if minY < 0 { minY = 0 }
-        if maxX >= imageWidth { maxX = imageWidth - 1 }
-        if maxY >= imageHeight { maxY = imageHeight - 1 }
 
-        var ret: [SortablePixel] = []
-        
-        //Log.d("for pixel @ [\(pixel.x), \(pixel.y)] minX \(minX) minY \(minY) maxX \(maxX) maxY \(maxY)")
-        
-        for x in minX ... maxX {
-            for y in minY ... maxY {
-                if x == pixel.x && y == pixel.y
-                {
-                    //Log.d("cannot add pixel @ [\(x), \(y)]")
-                    // central pixel is not neighbor
-                } else if let pixel = pixels[x][y] {
-                    //Log.d("adding pixel @ [\(x), \(y)]")
-                    ret.append(pixel)
-                }
-            }
-        }
-
-        //Log.d("returning \(ret.count) pixels")
-        return ret
-    }
-*/
     fileprivate func neighbor(_ direction: NeighborDirection, for pixel: SortablePixel) -> SortablePixel? {
         if pixel.x == 0,
            (direction == .left || 
@@ -532,30 +492,6 @@ public class FullFrameBlobber {
         //Log.d("frame \(frameIndex) blob \(blob.id) \(blob.boundingBox) dimmerCount \(dimmerCount) brighterCount \(brighterCount) brighterCount/dimmerCount \(brighterCount/dimmerCount) < \(guess) = \(brighterCount/dimmerCount < guess)")
 //        return true
         return brighterCount/dimmerCount < guess
-    }
-    
-    fileprivate func check2(blob: Blob) -> Bool {
-
-        /*
-         what percentage of pixels within the bounding box in the original image are above the
-         seed pixel intensity?
-         */
-        let boundingBox = blob.boundingBox
-
-        var total: UInt64 = 0
-        var count: UInt64 = 0
-        
-        for x in boundingBox.min.x ... boundingBox.max.x {
-            for y in boundingBox.min.y ... boundingBox.max.y {
-                let intensity = UInt64(originalPixelData[y*imageWidth+x])
-                total += intensity
-                count += 1
-            }
-        }
-
-        total /= count
-        
-        return true
     }
     
     fileprivate func originalIsBrighter(at: (Int, Int),
