@@ -71,8 +71,8 @@ public struct HoughLineFinder {
         switch data {
         case .list(let pixels):
             for pixel in pixels {
-                let imageIndex = (pixel.y - minY + imageDataBorderSize)*imageDataWidth + 
-                  (pixel.x - minX + imageDataBorderSize)
+                let imageIndex = (pixel.y - minY)*imageDataWidth + 
+                  (pixel.x - minX)
                 imageData[imageIndex] = 0xFF
             }
 
@@ -81,8 +81,7 @@ public struct HoughLineFinder {
                 for y in 0..<self.bounds.height {
                     let index = y*self.bounds.width+x
                     if pixels[index] > 0 {
-                        let imageIndex = (y + imageDataBorderSize)*imageDataWidth + 
-                          (x + imageDataBorderSize)
+                        let imageIndex = y*imageDataWidth + x
 
                         if imageIndex < 0 || imageIndex >= imageData.count {
                             fatalError("from [\(x), \(y)] and \(self.bounds) BAD IMAGEINDEX \(imageIndex) for imageData.count \(imageData.count)")
@@ -124,7 +123,6 @@ public struct HoughLineFinder {
                 
                 for i in 0..<linesToConsider {
                     let originZeroLine = self.originZeroLine(from: lines[i])
-
                     let (avg, median, max) = self.averageMedianMaxDistance(from: originZeroLine)
                     
                     if median < closestDistance {
@@ -161,7 +159,8 @@ public struct HoughLineFinder {
                     let index = y*self.bounds.width+x
                     if pixels[index] > 0 {
                         numPixels += 1
-                        let distance = standardLine.distanceTo(x: x, y: y) 
+                        let distance = standardLine.distanceTo(x: x+bounds.min.x,
+                                                               y: y+bounds.min.y) 
                         distanceSum += distance
                         distances.append(distance)
                         if distance > max { max = distance }
@@ -180,8 +179,8 @@ public struct HoughLineFinder {
     }
 
     public func originZeroLine(from line: Line) -> Line {
-        let minX = self.bounds.min.x - imageDataBorderSize
-        let minY = self.bounds.min.y - imageDataBorderSize
+        let minX = self.bounds.min.x
+        let minY = self.bounds.min.y
         let (ap1, ap2) = line.twoPoints
         return Line(point1: DoubleCoord(x: ap1.x+Double(minX),
                                         y: ap1.y+Double(minY)),

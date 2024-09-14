@@ -32,6 +32,9 @@ class AbstractBlobAnalyzer {
 
     // height of the frame
     internal let height: Int
+
+    // what frame are we on?
+    internal let frameIndex: Int
     
     // a reference for each pixel for each blob it might belong to
     // non zero values reference a blob
@@ -39,17 +42,22 @@ class AbstractBlobAnalyzer {
 
     init(blobMap: [UInt16: Blob],
          width: Int,
-         height: Int)
+         height: Int,
+         frameIndex: Int)
     {
 
         self.blobMap =  blobMap
         self.width = width
         self.height = height
+        self.frameIndex = frameIndex
 
         self.blobRefs = [UInt16](repeating: 0, count: width*height)
 
+        Log.d("frame \(frameIndex) has \(blobMap.count) blobs")
+        
         for blob in blobMap.values {
             for pixel in blob.pixels {
+//                Log.d("frame \(frameIndex) has pixel [\(pixel.x), \(pixel.y)]")
                 let blobRefIndex = pixel.y*width+pixel.x
                 blobRefs[blobRefIndex] = blob.id
             }

@@ -72,6 +72,7 @@ public class BlobProcessor {
     }
 
     public func run() async throws -> BlobMap {
+        guard let frame else { throw "need frame" }
         var blobMap: BlobMap = [:]
         for step in steps {
             switch step {
@@ -82,17 +83,16 @@ public class BlobProcessor {
                 blobMap = try await method(blobMap)
 
             case .save(let imageType):
-                if let frame {
-                    if frame.config.writeOutlierGroupFiles {
-                        // save image 
-                        try await frame.saveImages(for: Array(blobMap.values), as: imageType)
-                    }
+                if frame.config.writeOutlierGroupFiles {
+                    // save image 
+                    try await frame.saveImages(for: Array(blobMap.values), as: imageType)
                 }
 
             case .frameState(let processingState):
-                frame?.state = processingState
+                frame.state = processingState
 
             }
+            Log.d("frame \(frame.frameIndex) now has \(blobMap.count) blobs")
         }
         return blobMap
     }
@@ -189,7 +189,8 @@ public class BlobProcessor {
         guard let frame else { return [:] }
         let idibr = DimIsolatedBlobRemover(blobMap: blobs,
                                            width: frame.width,
-                                           height: frame.height)
+                                           height: frame.height,
+                                           frameIndex: frame.frameIndex)
         
         idibr.process(scanSize: 20) // XXX constant
 
@@ -200,7 +201,8 @@ public class BlobProcessor {
         guard let frame else { return [:] }
         let isolatedRemover = IsolatedBlobRemover(blobMap: blobs,
                                                   width: frame.width,
-                                                  height: frame.height)
+                                                  height: frame.height,
+                                                  frameIndex: frame.frameIndex)
 
         isolatedRemover.process(minNeighborSize: 6, scanSize: 24)            
 
@@ -235,7 +237,8 @@ public class BlobProcessor {
         
         let finalIsolatedRemover = IsolatedBlobRemover(blobMap: blobs,
                                                        width: frame.width,
-                                                       height: frame.height)
+                                                       height: frame.height,
+                                                       frameIndex: frame.frameIndex)
 
         iterate() { shouldRun in
             if shouldRun {
@@ -251,7 +254,8 @@ public class BlobProcessor {
 
         let dimIsolatedBlobRemover = DimIsolatedBlobRemover(blobMap: blobs,
                                                             width: frame.width,
-                                                            height: frame.height)
+                                                            height: frame.height,
+                                                            frameIndex: frame.frameIndex)
 
         // XXX how about this one, how much does it suck?
         // not that much :)
@@ -288,7 +292,8 @@ public class BlobProcessor {
 
         let remover = DisconnectedBlobRemover(blobMap: blobs,
                                               width: frame.width,
-                                              height: frame.height)
+                                              height: frame.height,
+                                              frameIndex: frame.frameIndex)
 
         remover.process(scanSize: 60,
                         blobsSmallerThan: 18,
@@ -302,8 +307,9 @@ public class BlobProcessor {
 
         let remover = DisconnectedBlobRemover(blobMap: blobs,
                                               width: frame.width,
-                                              height: frame.height)
-
+                                              height: frame.height,
+                                              frameIndex: frame.frameIndex)
+        
         remover.process(scanSize: 60,
                         blobsSmallerThan: 50,
                         blobsLargerThan: 18,
@@ -317,10 +323,11 @@ public class BlobProcessor {
 
         let connector = LinearBlobConnector(blobMap: blobs,
                                             width: frame.width,
-                                            height: frame.height)
+                                            height: frame.height,
+                                            frameIndex: frame.frameIndex)
 
         connector.process(scanSize: 25,
-                          blobsSmallerThan: 18)
+                          blobsSmallerThan: 30)
 
         return connector.blobMap
     }

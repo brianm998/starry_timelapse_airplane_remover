@@ -83,8 +83,8 @@ public class Blob: CustomStringConvertible, Hashable, Codable {
         let minX = self.boundingBox.min.x
         let minY = self.boundingBox.min.y
         for pixel in pixels {
-            let imageIndex = (pixel.y - minY + blobImageDataBorderSize)*blobImageDataWidth + 
-                             (pixel.x - minX + blobImageDataBorderSize)
+            let imageIndex = (pixel.y - minY)*blobImageDataWidth + 
+                             (pixel.x - minX)
             //blobImageData[imageIndex] = pixel.intensity
             blobImageData[imageIndex] = 0xFF
         }
@@ -325,8 +325,8 @@ public class Blob: CustomStringConvertible, Hashable, Codable {
     }
 
     public func originZeroLine(from line: Line) -> Line {
-        let minX = self.boundingBox.min.x - blobImageDataBorderSize
-        let minY = self.boundingBox.min.y - blobImageDataBorderSize
+        let minX = self.boundingBox.min.x
+        let minY = self.boundingBox.min.y
         let (ap1, ap2) = line.twoPoints
         return Line(point1: DoubleCoord(x: ap1.x+Double(minX),
                                         y: ap1.y+Double(minY)),

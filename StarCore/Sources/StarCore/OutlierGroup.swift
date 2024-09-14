@@ -111,9 +111,8 @@ public class OutlierGroup: CustomStringConvertible,
                                                from: lines[i],
                                                with: bounds)
 
-                Log.d("line \(i) theta \(lines[i].theta) distance \(distance)")
                 if distance < closestDistance {
-                    Log.d("line \(i) is best")
+                    Log.d("line \(i) is best theta \(lines[i].theta) distance \(distance)")
                     closestDistance = distance
                     bestLineIndex = i
                 }
