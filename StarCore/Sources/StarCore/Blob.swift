@@ -51,15 +51,51 @@ public class Blob: CustomStringConvertible, Hashable, Codable {
     private var _intensity: UInt16?
     private var _medianIntensity: UInt16?
     private var _boundingBox: BoundingBox?
+    private var _blobImageData: [UInt8]?
     private var _blobLine: Line?
     private var _pixelValues: [UInt16]?
     private var _outlierGroup: OutlierGroup?
+
+    // it seems that the kernel hough transform works better on really small images
+    // if they're padded a bit on the sides. 
+    fileprivate let blobImageDataBorderSize = 80
+    
+    // a line computed from the pixels,
+    // origin is relative to the bounding box + blobImageDataBorderSize on each side
 
     // the best fitting line we have, if any
     public var line: Line? {
         if let _blobLine { return _blobLine }
         _blobLine = HoughLineFinder(pixels: Array(self.pixels), bounds: self.boundingBox).line
         return _blobLine
+    }
+
+    public var blobImageDataWidth: Int {
+        self.boundingBox.width+blobImageDataBorderSize*6
+    }
+
+    public var blobImageDataHeight: Int {
+        self.boundingBox.height+blobImageDataBorderSize*6
+    }
+
+    public var blobImageData: [UInt8] {
+        if let _blobImageData { return _blobImageData }
+
+        var blobImageData = [UInt8](repeating: 0, count: blobImageDataWidth * blobImageDataHeight)
+        
+        //Log.d("frame \(frameIndex) blob image data with \(pixels.count) pixels")
+        
+        let minX = self.boundingBox.min.x
+        let minY = self.boundingBox.min.y
+        for pixel in pixels {
+            let imageIndex = (pixel.y - minY + blobImageDataBorderSize)*blobImageDataWidth + 
+                             (pixel.x - minX + blobImageDataBorderSize)
+            //blobImageData[imageIndex] = pixel.intensity
+            blobImageData[imageIndex] = 0xFF
+        }
+
+        _blobImageData = blobImageData
+        return blobImageData
     }
 
     private var _averageDistanceFromIdealLine: Double? 
@@ -127,6 +163,7 @@ public class Blob: CustomStringConvertible, Hashable, Codable {
         _boundingBox = nil
         _pixelValues = nil
         _outlierGroup = nil
+        _blobImageData = nil
         _blobLine = nil
         _averageDistanceFromIdealLine = nil
         _membersArray = nil
@@ -293,8 +330,8 @@ public class Blob: CustomStringConvertible, Hashable, Codable {
     }
 
     public func originZeroLine(from line: Line) -> Line {
-        let minX = self.boundingBox.min.x
-        let minY = self.boundingBox.min.y
+        let minX = self.boundingBox.min.x - blobImageDataBorderSize
+        let minY = self.boundingBox.min.y - blobImageDataBorderSize
         let (ap1, ap2) = line.twoPoints
         return Line(point1: DoubleCoord(x: ap1.x+Double(minX),
                                         y: ap1.y+Double(minY)),
