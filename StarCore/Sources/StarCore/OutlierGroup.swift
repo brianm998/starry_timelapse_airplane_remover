@@ -86,41 +86,10 @@ public class OutlierGroup: CustomStringConvertible,
 
     fileprivate var _firstLine: Line?
     
-    var firstLine: Line? {
+    var firstLine: Line? {      // XXX rename this
         if let _firstLine { return _firstLine }
         _firstLine = HoughLineFinder(pixels: self.pixels, bounds: self.bounds).line
         return _firstLine
-    }
-
-    fileprivate static func findBestLine(for pixels: [UInt16],
-                                         from lines: [Line],
-                                         with bounds: BoundingBox) -> Line?
-    {
-        if lines.count > 0 {
-            var linesToConsider = OutlierGroup.numberOfLinesToConsider
-            if linesToConsider > lines.count { linesToConsider = lines.count }
-
-            var closestDistance: Double = 9999999999
-            var bestLineIndex = 0
-
-            Log.d("lines.count \(lines.count)")
-            
-            for i in 0..<linesToConsider {
-                let (distance, _) = 
-                  OutlierGroup.averageDistance(for: pixels,
-                                               from: lines[i],
-                                               with: bounds)
-
-                if distance < closestDistance {
-                    Log.d("line \(i) is best theta \(lines[i].theta) distance \(distance)")
-                    closestDistance = distance
-                    bestLineIndex = i
-                }
-            }
-
-            return lines[bestLineIndex]
-        }
-        return nil
     }
 
     public init(id: UInt16,
@@ -141,42 +110,17 @@ public class OutlierGroup: CustomStringConvertible,
         self.surfaceAreaToSizeRatio = ratioOfSurfaceAreaToSize(of: pixels,
                                                                width: bounds.width,
                                                                height: bounds.height)
-        // do a hough transform on just this outlier group
 
-        let pixelImage = PixelatedImage(width: bounds.width,
-                                        height: bounds.height,
-                                        grayscale16BitImageData: pixels)
-        
-        // XXX apply some edge border here like with the blobs
-        // having the line go through the center on a small image gives bad results
-        // giving some border and not centering the pixels helps
-        
-        if let image = pixelImage.nsImage {
-            self.lines = kernelHoughTransform(image: image,
-                                              maxResults: OutlierGroup.numberOfLinesToReturn)
-            Log.d("FUCKING \(lines.count) lines")
-        } else {
-            self.lines = []     // XXX
-        }
-
-        // apply same logic as the Blob class does, to not
-        // just choose the first line that we get,
-        // but instead look at the first N (10?) and choose the one
-        // which has the closest average distance for the pixels in
-        // this outlier group
-
-        _firstLine = OutlierGroup.findBestLine(for: pixels,
-                                               from: self.lines,
-                                               with: bounds)
-        
-        if let line = _firstLine {
+        if let line = HoughLineFinder(pixels: self.pixels, bounds: self.bounds).line {
             (self.averageLineVariance, self.lineLength) = 
               OutlierGroup.averageDistance(for: pixels,
                                            from: line,
                                            with: bounds)
+            self.lines = [line]
         } else {
             self.averageLineVariance = 0xFFFFFFFF
             self.lineLength = 0
+            self.lines = []
         }
         
         _ = self.houghLineHistogram
@@ -279,17 +223,63 @@ public class OutlierGroup: CustomStringConvertible,
     }()
     
     private var cachedTestImage: CGImage? 
+
+    fileprivate func testPaintAt(x: Int, y: Int, pixel: Pixel, imageData: inout Data) -> Bool {
+        
+        let bytesPerPixel = 64/8
+        
+        if x >= self.bounds.width ||
+           x < 0 ||
+           y >= self.bounds.height ||
+           y < 0
+        {
+            return false
+        }
+        
+        var nextValue = pixel.value
+        
+        let offset = (Int(y) * bytesPerPixel*self.bounds.width) + (Int(x) * bytesPerPixel)
+
+        imageData.replaceSubrange(offset ..< offset+bytesPerPixel,
+                                  with: &nextValue,
+                                  count: bytesPerPixel)
+        return true
+    }
     
     // outputs an image the same size as this outlier's bounding box,
     // coloring the outlier pixels red if will paint, green if not
     public func testImage() -> CGImage? {
 
+        let bytesPerPixel = 64/8
+        
         // return cached version if present
         if let ret = cachedTestImage { return ret }
         
-        let bytesPerPixel = 64/8
-        
         var imageData = Data(count: self.bounds.width*self.bounds.height*bytesPerPixel)
+
+        // write out the line
+        if let line = self.firstLine {
+            Log.d("have LINE \(line)")
+            var pixel = Pixel()
+            pixel.blue = 0xFFFF
+//            pixel.green = 0xFFFF
+//            pixel.red = 0xFFFF
+            pixel.alpha = 0xFFFF
+            
+            let centralCoord = DoubleCoord(x: Double(self.bounds.width/2),
+                                           y: Double(self.bounds.height/2))
+
+            Log.d("centralCoord \(centralCoord)")
+            line.iterate(.forwards, from: centralCoord) { x, y, iterationDirection in
+                testPaintAt(x: x, y: y, pixel: pixel, imageData: &imageData)
+            }
+            line.iterate(.backwards, from: centralCoord) { x, y, iterationDirection in
+                testPaintAt(x: x, y: y, pixel: pixel, imageData: &imageData)
+            }
+        }
+        
+
+        
         for x in 0 ..< self.bounds.width {
             for y in 0 ..< self.bounds.height {
                 let pixelIndex = y*self.bounds.width + x
@@ -461,12 +451,6 @@ public class OutlierGroup: CustomStringConvertible,
         case averagebrightness
         case medianBrightness
         case maxBrightness
-        case avgCountOfFirst10HoughLines
-        case maxThetaDiffOfFirst10HoughLines
-        case maxRhoDiffOfFirst10HoughLines
-        case avgCountOfAllHoughLines
-        case maxThetaDiffOfAllHoughLines
-        case maxRhoDiffOfAllHoughLines
         case numberOfNearbyOutliersInSameFrame
         case adjecentFrameNeighboringOutliersBestTheta
         case maxHoughTransformCount
@@ -583,49 +567,34 @@ public class OutlierGroup: CustomStringConvertible,
                 return 14
             case .maxBrightness:
                 return 15
-            case .avgCountOfFirst10HoughLines:
-                return 16
-            case .maxThetaDiffOfFirst10HoughLines:
-                return 17
-            case .maxRhoDiffOfFirst10HoughLines: // scored better without this
-                return 18
-            case .avgCountOfAllHoughLines:
-                return 19
-            case .maxThetaDiffOfAllHoughLines:
-                return 20
-            case .maxRhoDiffOfAllHoughLines:
-                return 21
             case .numberOfNearbyOutliersInSameFrame:
-                return 22
+                return 16
             case .adjecentFrameNeighboringOutliersBestTheta:
-                return 23
+                return 17
             case .maxHoughTransformCount:
-                return 24
+                return 18
             case .maxHoughTheta:
-                return 25
+                return 19
             case .maxOverlap:
-                return 26
+                return 20
             case .pixelBorderAmount:
-                return 27
+                return 21
             case .averageLineVariance:
-                return 28
+                return 22
             case .lineLength:
-                return 29
-
+                return 23
             case .histogramStreakDetection:
-                return 30
+                return 24
             case .longerHistogramStreakDetection:
-                return 31
+                return 25
             case .neighboringInterFrameOutlierThetaScore:
-                return 32
+                return 26
             case .maxOverlapTimesThetaHisto:
-                return 33
-
+                return 27
             case .nearbyDirectOverlapScore:
-                return 34
+                return 28
             case .boundingBoxOverlapScore:
-                return 35
-
+                return 29
             }
         }
 
@@ -685,45 +654,33 @@ public class OutlierGroup: CustomStringConvertible,
             ret = self.medianBrightness
         case .maxBrightness:    
             ret = self.maxBrightness
-        case .avgCountOfFirst10HoughLines:
-            ret = self.avgCountOfFirst10HoughLines
-        case .maxThetaDiffOfFirst10HoughLines:
-            ret = self.maxThetaDiffOfFirst10HoughLines
-        case .maxRhoDiffOfFirst10HoughLines:
-            ret = self.maxRhoDiffOfFirst10HoughLines
-        case .avgCountOfAllHoughLines:
-            ret = self.avgCountOfAllHoughLines
-        case .maxThetaDiffOfAllHoughLines:
-            ret = self.maxThetaDiffOfAllHoughLines
-        case .maxRhoDiffOfAllHoughLines:
-            ret = self.maxRhoDiffOfAllHoughLines
         case .maxHoughTransformCount:
             ret = self.maxHoughTransformCount
         case .maxHoughTheta:
             ret = self.maxHoughTheta
         case .numberOfNearbyOutliersInSameFrame: // keep out
-            ret = 0//self.numberOfNearbyOutliersInSameFrame
+            ret = self.numberOfNearbyOutliersInSameFrame
         case .adjecentFrameNeighboringOutliersBestTheta:
             ret = self.adjecentFrameNeighboringOutliersBestTheta
 
         case .histogramStreakDetection:
             ret = self.histogramStreakDetection
         case .longerHistogramStreakDetection: // keep out
-            ret = 0//self.longerHistogramStreakDetection
+            ret = self.longerHistogramStreakDetection
         case .neighboringInterFrameOutlierThetaScore: // keep out
-            ret = 0//self.neighboringInterFrameOutlierThetaScore
+            ret = self.neighboringInterFrameOutlierThetaScore
         case .maxOverlapTimesThetaHisto: // keep out
-            ret = 0// self.maxOverlapTimesThetaHisto
+            ret = self.maxOverlapTimesThetaHisto
 
         case .nearbyDirectOverlapScore:
             ret = self.nearbyDirectOverlapScore
         case .boundingBoxOverlapScore:
-            ret = 0//self.boundingBoxOverlapScore
+            ret = self.boundingBoxOverlapScore
             
         case .maxOverlap:       // keep out
-            ret = 0//self.maxOverlap
+            ret = self.maxOverlap
         case .pixelBorderAmount: // keep out
-            ret = 0//self.pixelBorderAmount
+            ret = self.pixelBorderAmount
         case .averageLineVariance:
             ret = self.averageLineVariance
         case .lineLength:
@@ -1159,84 +1116,6 @@ public class OutlierGroup: CustomStringConvertible,
                 fatalError("NO FRAME @ index \(frameIndex)")
             }
         }
-    }
-
-    fileprivate var maxThetaDiffOfFirst10HoughLines: Double {
-        var maxDiff = 0.0
-        if self.lines.count > 0 {
-            let firstTheta = self.lines[0].theta
-            var max = 10;
-            if self.lines.count < max { max = self.lines.count }
-            for i in 0..<max {
-                let thisTheta = self.lines[i].theta
-                let thisDiff = abs(thisTheta - firstTheta)
-                if thisDiff > maxDiff { maxDiff = thisDiff }
-            }
-        }
-        return maxDiff
-    }
-    
-    fileprivate var maxRhoDiffOfFirst10HoughLines: Double {
-        var maxDiff = 0.0
-        if self.lines.count > 0 {
-            let firstRho = self.lines[0].rho
-            var max = 10;
-            if self.lines.count < max { max = self.lines.count }
-            for i in 0..<max {
-                let thisRho = self.lines[i].rho
-                let thisDiff = abs(thisRho - firstRho)
-                if thisDiff > maxDiff { maxDiff = thisDiff }
-            }
-        }
-        return maxDiff
-    }
-    
-    fileprivate var avgCountOfFirst10HoughLines: Double {
-        var sum = 0.0
-        var divisor = 0.0
-        var max = 10;
-        if self.lines.count < max { max = self.lines.count }
-        for i in 0..<max {
-            sum += Double(self.lines[i].votes)/Double(self.size)
-            divisor += 1
-        }
-        return sum/divisor
-    }
-
-    fileprivate var maxThetaDiffOfAllHoughLines: Double {
-        var maxDiff = 0.0
-        if self.lines.count > 0 {
-            let firstTheta = self.lines[0].theta
-            for i in 1..<self.lines.count {
-                let thisTheta = self.lines[i].theta
-                let thisDiff = abs(thisTheta - firstTheta)
-                if thisDiff > maxDiff { maxDiff = thisDiff }
-            }
-        }
-        return maxDiff
-    }
-    
-    fileprivate var maxRhoDiffOfAllHoughLines: Double {
-        var maxDiff = 0.0
-        if self.lines.count > 0 {
-            let firstRho = self.lines[0].rho
-            for i in 1..<self.lines.count {
-                let thisRho = self.lines[i].rho
-                let thisDiff = abs(thisRho - firstRho)
-                if thisDiff > maxDiff { maxDiff = thisDiff }
-            }
-        }
-        return maxDiff
-    }
-    
-    fileprivate var avgCountOfAllHoughLines: Double {
-        var sum = 0.0
-        var divisor = 0.0
-        for i in 0..<self.lines.count {
-            sum += Double(self.lines[i].votes)/Double(self.size)
-            divisor += 1
-        }
-        return sum/divisor
     }
 
     /*

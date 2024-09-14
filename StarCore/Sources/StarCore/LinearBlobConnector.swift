@@ -39,7 +39,7 @@ class LinearBlobConnector: AbstractBlobAnalyzer {
 
             Log.d("iterating over blob \(id)")
 
-            // recursively find all neighbors 
+            // find a cloud of neighbors 
             let (neighborCloud, newProcessedBlobs) =
               neighborCloud(of: blob,
                             scanSize: scanSize,
@@ -70,7 +70,7 @@ class LinearBlobConnector: AbstractBlobAnalyzer {
             if let blobLine = fullBlob.originZeroLine {
 
                 // XXX for testing, write out this big blob as json
-/*
+/* 
                 let blobJsonFilename = "/tmp/Blob_frame_\(frameIndex)_\(fullBlob).json"
                 let encoder = JSONEncoder()
                 encoder.outputFormatting = [.prettyPrinted, .withoutEscapingSlashes]
@@ -86,80 +86,112 @@ class LinearBlobConnector: AbstractBlobAnalyzer {
                 }
 
  */
-                // we have an ideal origin zero line for this blob
-                Log.d("frame \(frameIndex) blob \(id) has line \(blobLine)")
 
-                var start: DoubleCoord?
-                var end: DoubleCoord?
+                // first iterate on the best line for the full blob
+                // maybe recurse on a better line from a smaller amount
+                iterate(on: blobLine, over: fullBlob)
+            }
+        }
+    }
 
-                // how much furter to look at the ends of the line
-                let line_border = 30
+    fileprivate func iterate(on blobLine: Line,
+                             over fullBlob: Blob,
+                             // how much furter to look at the ends of the line
+                             lineBorder: Int = 0,
+                             iterationCount: Int = 0)
+    {
+        // we have an ideal origin zero line for this blob
+        Log.d("frame \(frameIndex) blob \(fullBlob.id) has line \(blobLine)")
+
+        var start: DoubleCoord?
+        var end: DoubleCoord?
+
+        
+        switch blobLine.iterationOrientation {
+
+        case .horizontal:
+            var min = fullBlob.boundingBox.min.x - lineBorder
+            var max = fullBlob.boundingBox.max.x + lineBorder
+            if min < 0 { min = 0 }
+            if max >= width { max = width - 1 }
+            start = DoubleCoord(x: Double(min), y: 0)
+            end = DoubleCoord(x: Double(max), y: 0)
+            
+        case .vertical:
+            var min = fullBlob.boundingBox.min.y - lineBorder
+            var max = fullBlob.boundingBox.max.y + lineBorder
+            if min < 0 { min = 0 }
+            if max >= height { max = height - 1 }
+            start = DoubleCoord(x: 0, y: Double(min))
+            end = DoubleCoord(x: 0, y: Double(max))
+        }
+
+        if let start, let end {
+            Log.d("frame \(frameIndex) blob \(fullBlob.id) iterating between \(start) and \(end)")
+            var linearBlobIds = Set<UInt16>()
+            // iterate over the line and absorbs all blobs along it into a new blob
+            // remove all ids expept for the one from the combined blob ids from the blob map
+            
+            blobLine.iterate(between: start,
+                             and: end,
+                             numberOfAdjecentPixels: 5) // XXX constant
+            { x, y, orientation in
+                if x >= 0,
+                   y >= 0,
+                   x <= width,
+                   y <= height
+                {
+                    // look for blobs at x,y, i.e. blobs that are right on the line
+                    let index = y*width+x
+                    let blobId = blobRefs[index]
+                    if blobId != 0 {
+                        Log.d("frame \(frameIndex) blob \(fullBlob.id) found linear blob \(blobId) @ [\(x), \(y)]")
+                        linearBlobIds.insert(blobId)
+                    } else {
+                        //Log.d("frame \(frameIndex) blob \(fullBlob.id) nothing found @ [\(x), \(y)]")
+                    }
+                }
+            }
+
+            var linearBlobSet = linearBlobIds.compactMap { blobMap[$0] }
+            
+            if linearBlobSet.count > 1 {
                 
-                switch blobLine.iterationOrientation {
+                Log.d("frame \(frameIndex) blob \(fullBlob.id) found \(linearBlobIds.count) linear blobs")
+                
+                // we found more than one blob alone the line
 
-                case .horizontal:
-                    var min = fullBlob.boundingBox.min.x - line_border
-                    var max = fullBlob.boundingBox.max.x + line_border
-                    if min < 0 { min = 0 }
-                    if max >= width { max = width - 1 }
-                    start = DoubleCoord(x: Double(min), y: 0)
-                    end = DoubleCoord(x: Double(max), y: 0)
-                    
-                case .vertical:
-                    var min = fullBlob.boundingBox.min.y - line_border
-                    var max = fullBlob.boundingBox.max.y + line_border
-                    if min < 0 { min = 0 }
-                    if max >= height { max = height - 1 }
-                    start = DoubleCoord(x: 0, y: Double(min))
-                    end = DoubleCoord(x: 0, y: Double(max))
+                // the first blob in the set will absorb the others and survive
+                let firstBlob = linearBlobSet.removeFirst() 
+
+                // the others will get eaten and thrown away :(
+                for otherBlob in linearBlobSet {
+                    _ = firstBlob.absorb(otherBlob, always: true)
+                    blobMap.removeValue(forKey: otherBlob.id)
                 }
+                blobMap[firstBlob.id] = firstBlob // just in case
 
-                if let start, let end {
-                    Log.d("frame \(frameIndex) blob \(id) iterating between \(start) and \(end)")
-                    var linearBlobIds = Set<UInt16>()
-                    // iterate over the line and absorbs all blobs along it into a new blob
-                    // remove all ids expept for the one from the combined blob ids from the blob map
-                    
-                    blobLine.iterate(between: start,
-                                     and: end,
-                                     numberOfAdjecentPixels: 5) // XXX constant
-                    { x, y, orientation in
-                        if x >= 0,
-                           y >= 0,
-                           x <= width,
-                           y <= height
-                        {
-                            // look for blobs at x,y, i.e. blobs that are right on the line
-                            let index = y*width+x
-                            let blobId = blobRefs[index]
-                            if blobId != 0 {
-                                Log.d("frame \(frameIndex) blob \(id) found linear blob \(blobId) @ [\(x), \(y)]")
-                                linearBlobIds.insert(blobId)
-                            } else {
-                                Log.d("frame \(frameIndex) blob \(id) nothing found @ [\(x), \(y)]")
-                            }
-                        }
-                    }
+                /*
+                 If we have a line from this new blob, it is likely
+                 more accurate than the one we iterated on before.
 
-                    var linearBlobSet = linearBlobIds.compactMap { blobMap[$0] }
-                    
-                    if linearBlobSet.count > 1 {
-                        
-                        Log.d("frame \(frameIndex) blob \(id) found \(linearBlobIds.count) linear blobs")
-                        
-                        // we found more than one blob alone the line
+                 try recursing and iterating on this new line with some border
+                 to see what we might find.
+                 */
 
-                        // the first blob in the set will absorb the others and survive
-                        let firstBlob = linearBlobSet.removeFirst() 
-
-                        // the others will get eaten and thrown away :(
-                        for otherBlob in linearBlobSet {
-                            _ = firstBlob.absorb(otherBlob, always: true)
-                            blobMap.removeValue(forKey: otherBlob.id)
-                        }
-                        blobMap[firstBlob.id] = firstBlob // just in case
-                    }
+                if let line = firstBlob.originZeroLine,
+                   iterationCount < 10 // XXX constant
+                {
+                    Log.d("frame \(frameIndex) ITERATING iterationCount \(iterationCount)")
+                    self.iterate(on: line,
+                                 over: firstBlob,
+                                 lineBorder: 50, // XXX constnat
+                                 iterationCount: iterationCount + 1)
+                } else {
+                    Log.d("frame \(frameIndex) NOT ITERATING iterationCount \(iterationCount)")
                 }
+            } else {
+                Log.d("frame \(frameIndex) only found \(linearBlobSet.count) linear blobs")
             }
         }
     }
