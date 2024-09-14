@@ -61,7 +61,7 @@ public class FullFrameBlobber {
     // 100 means that all pixels will be in a blob
     let minContrast: Double
 
-    private var newBlobId: UInt16 = 0
+    private var newBlobId: UInt16 = 1 // start at one as zero means no blob
     
     // neighbor search policies
     public enum NeighborType {
@@ -227,11 +227,11 @@ public class FullFrameBlobber {
             if blob.medianIntensity < constants.blobberMinBlobIntensity { return false }
 
             // only keep smaller blobs if they are bright enough
-            if blob.adjustedSize <= fx3Size(for: constants.blobberBrightSmallSize),
+            if blob.size <= constants.blobberBrightSmallSize,
               blob.medianIntensity < constants.blobberBrightMinIntensity { return false }
 
             // anything this small is noise
-           if blob.adjustedSize <= fx3Size(for: constants.blobberMinBlobSize) { return false }
+           if blob.size <= constants.blobberMinBlobSize { return false }
 
             // this blob has passed all checks, keep it 
             return true

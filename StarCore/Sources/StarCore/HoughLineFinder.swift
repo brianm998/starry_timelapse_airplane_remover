@@ -19,6 +19,7 @@ public protocol AbstractPixel {
     var y: Int { get }
 }
 
+// process either row major image data, or a list of abstract pixels
 fileprivate enum DataType {
     // row major image data
     case rowMajor([UInt16])
@@ -44,8 +45,14 @@ public struct HoughLineFinder {
         self.bounds = bounds
     }
     
-    let imageDataBorderSize = 80
 
+    // it's best to keep the important pixel data away from the middle of the image,
+    // as the KHT uses the center of the image as the origin for its lines.
+    // we get better results this way, instead of giving the KHT algorithm a small image with a
+    // line right throught it
+    
+    let imageDataBorderSize = 80
+    
     public var imageDataWidth: Int {
         self.bounds.width+imageDataBorderSize*6
     }
@@ -98,9 +105,9 @@ public struct HoughLineFinder {
         if let image = pixelImage.nsImage {
             let lines = kernelHoughTransform(image: image,
                                              maxResults: OutlierGroup.numberOfLinesToReturn) // XXX move this constant here
-            for (index, line) in lines.enumerated() {
-                Log.d("line \(index): \(line)")
-            }
+            //for (index, line) in lines.enumerated() {
+//                Log.d("line \(index): \(line)")
+//            }
 
             /*
                 - look at the first N lines (10?)
@@ -120,9 +127,8 @@ public struct HoughLineFinder {
 
                     let (avg, median, max) = self.averageMedianMaxDistance(from: originZeroLine)
                     
-                    Log.d("line \(i) theta \(lines[i].theta) avg median max \(avg) \(median) \(max)")
                     if median < closestDistance {
-                        Log.d("line \(i) is best")
+                        Log.d("line \(i) is best theta \(lines[i].theta) avg median max \(avg) \(median) \(max)")
                         closestDistance = median
                         bestLineIndex = i
                     }
@@ -155,7 +161,7 @@ public struct HoughLineFinder {
                     let index = y*self.bounds.width+x
                     if pixels[index] > 0 {
                         numPixels += 1
-                        let distance = standardLine.distanceTo(x: x, y: y)
+                        let distance = standardLine.distanceTo(x: x, y: y) 
                         distanceSum += distance
                         distances.append(distance)
                         if distance > max { max = distance }

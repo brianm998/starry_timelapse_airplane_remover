@@ -70,7 +70,7 @@ class LinearBlobConnector: AbstractBlobAnalyzer {
             if let blobLine = fullBlob.originZeroLine {
 
                 // XXX for testing, write out this big blob as json
-                /*
+/*
                 let blobJsonFilename = "/tmp/Blob_frame_\(frameIndex)_\(fullBlob).json"
                 let encoder = JSONEncoder()
                 encoder.outputFormatting = [.prettyPrinted, .withoutEscapingSlashes]
@@ -84,26 +84,38 @@ class LinearBlobConnector: AbstractBlobAnalyzer {
                 } catch {
                     Log.e("\(error)")
                 }
-                */
+
+ */
                 // we have an ideal origin zero line for this blob
-                Log.d("blob \(id) has line \(blobLine)")
+                Log.d("frame \(frameIndex) blob \(id) has line \(blobLine)")
 
                 var start: DoubleCoord?
                 var end: DoubleCoord?
+
+                // how much furter to look at the ends of the line
+                let line_border = 30
                 
                 switch blobLine.iterationOrientation {
 
                 case .horizontal:
-                    start = DoubleCoord(x: Double(fullBlob.boundingBox.min.x), y: 0)
-                    end = DoubleCoord(x: Double(fullBlob.boundingBox.max.x), y: 0)
+                    var min = fullBlob.boundingBox.min.x - line_border
+                    var max = fullBlob.boundingBox.max.x + line_border
+                    if min < 0 { min = 0 }
+                    if max >= width { max = width - 1 }
+                    start = DoubleCoord(x: Double(min), y: 0)
+                    end = DoubleCoord(x: Double(max), y: 0)
                     
                 case .vertical:
-                    start = DoubleCoord(x: 0, y: Double(fullBlob.boundingBox.min.y))
-                    end = DoubleCoord(x: 0, y: Double(fullBlob.boundingBox.max.y))
+                    var min = fullBlob.boundingBox.min.y - line_border
+                    var max = fullBlob.boundingBox.max.y + line_border
+                    if min < 0 { min = 0 }
+                    if max >= height { max = height - 1 }
+                    start = DoubleCoord(x: 0, y: Double(min))
+                    end = DoubleCoord(x: 0, y: Double(max))
                 }
 
                 if let start, let end {
-                    Log.d("blob \(id) iterating between \(start) and \(end)")
+                    Log.d("frame \(frameIndex) blob \(id) iterating between \(start) and \(end)")
                     var linearBlobIds = Set<UInt16>()
                     // iterate over the line and absorbs all blobs along it into a new blob
                     // remove all ids expept for the one from the combined blob ids from the blob map
@@ -121,18 +133,19 @@ class LinearBlobConnector: AbstractBlobAnalyzer {
                             let index = y*width+x
                             let blobId = blobRefs[index]
                             if blobId != 0 {
-                                Log.d("blob \(id) found linear blob \(blobId) @ [\(x), \(y)]")
+                                Log.d("frame \(frameIndex) blob \(id) found linear blob \(blobId) @ [\(x), \(y)]")
                                 linearBlobIds.insert(blobId)
                             } else {
-                                Log.d("blob \(id) nothing found @ [\(x), \(y)]")
+                                Log.d("frame \(frameIndex) blob \(id) nothing found @ [\(x), \(y)]")
                             }
                         }
                     }
 
                     var linearBlobSet = linearBlobIds.compactMap { blobMap[$0] }
-                    Log.d("blob \(id) found \(linearBlobIds.count) linear blobs")
                     
                     if linearBlobSet.count > 1 {
+                        
+                        Log.d("frame \(frameIndex) blob \(id) found \(linearBlobIds.count) linear blobs")
                         
                         // we found more than one blob alone the line
 

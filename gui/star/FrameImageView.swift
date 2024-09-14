@@ -53,6 +53,12 @@ public struct FrameImageView: View {
             return frameView.filter2PreviewImage
         case .filter3:
             return frameView.filter3PreviewImage
+        case .filter4:
+            return frameView.filter4PreviewImage
+        case .filter5:
+            return frameView.filter5PreviewImage
+        case .filter6:
+            return frameView.filter6PreviewImage
         case .paintMask:
             return frameView.paintMaskPreviewImage
         case .validation:

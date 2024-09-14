@@ -52,18 +52,22 @@ public class BlobProcessor {
           .save(.blobs),
           .frameState(.isolatedBlobRemoval),
           .process(firstIsolatedDimProcess),
-          .process(firstIsolatedProcess),
-//          .process(funkyCompactMap),
-          .process(finalIsolatedRemover),
-          .process(finalDimIsolatedRemover),
           .save(.filter1),
+          .process(firstIsolatedProcess),
+          .save(.filter2),
+          .process(finalIsolatedRemover),
+          .save(.filter3),
+          .process(finalDimIsolatedRemover),
+          .save(.filter4),
           .frameState(.isolatedBlobRemoval2),
           .process(smallerDisconnectedBlobRemover),
+          .save(.filter5),
           .process(largerDisconnectedBlobRemover),
-          .save(.filter2),
           .frameState(.linearBlobAbsorbtion),
-          .process(linearBlobConnector),
-          .save(.filter3),
+          .process(linearBlobConnector), // run more than once?
+          // another step to remove any remaining small blobs
+          .process(funkyCompactMap),
+          .save(.filter6),
         ]
     }
 
@@ -198,7 +202,7 @@ public class BlobProcessor {
                                                   width: frame.width,
                                                   height: frame.height)
 
-        isolatedRemover.process(minNeighborSize: 0.4, scanSize: 24)            
+        isolatedRemover.process(minNeighborSize: 6, scanSize: 24)            
 
         Log.d("frame \(frame.frameIndex) first isolated remover returned \(isolatedRemover.blobMap.count) blobs")
         
@@ -209,12 +213,12 @@ public class BlobProcessor {
 
         // weed out blobs that are too small and not bright enough
         // XXX this is eating a lot of blobs we want :(
-        return blobs.compactMapValues { blob in
-            if blob.adjustedSize < fx3Size(for: 1.14), // XXX constant
+        blobs.compactMapValues { blob in
+            if blob.size < 20,
                blob.medianIntensity < 2000 // XXX constant
             {
                 return nil
-            } else if blob.adjustedSize < fx3Size(for: 3.1415926535987), // XXX constant
+            } else if blob.size < 30,
                       blob.medianIntensity < 1000 // XXX constant
             {
                 return nil 
@@ -233,12 +237,9 @@ public class BlobProcessor {
                                                        width: frame.width,
                                                        height: frame.height)
 
-        // XXX does this kill a lot of the outliers we want?
-        // XXX UNFORTUNALETY it does :(
-
         iterate() { shouldRun in
             if shouldRun {
-                finalIsolatedRemover.process(minNeighborSize: 0.4, scanSize: 24) // XXX constants
+                finalIsolatedRemover.process(minNeighborSize: 6, scanSize: 24) // XXX constants
             }
             return finalIsolatedRemover.blobMap.count
         }
@@ -289,9 +290,9 @@ public class BlobProcessor {
                                               width: frame.width,
                                               height: frame.height)
 
-        remover.process(scanSize: 40,
+        remover.process(scanSize: 60,
                         blobsSmallerThan: 18,
-                        requiredNeighbors: 8)
+                        requiredNeighbors: 2)
 
         return remover.blobMap
     }

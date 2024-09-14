@@ -10,6 +10,9 @@ public enum FrameViewMode: String, Equatable, CaseIterable {
     case filter1                // further blob processing
     case filter2                // ..
     case filter3                // ..
+    case filter4                // ..
+    case filter5                // ..
+    case filter6                // ..
     case validation             // an image of exactly what pixels have been identified as unwanted
     case paintMask              // the paint mask created from the validation image
     case processed              // the final processed image, 
@@ -33,6 +36,12 @@ public enum FrameViewMode: String, Equatable, CaseIterable {
             return .filter2
         case .filter3:
             return .filter3
+        case .filter4:
+            return .filter4
+        case .filter5:
+            return .filter5
+        case .filter6:
+            return .filter6
         case .paintMask:
             return .paintMask
         case .validation:
@@ -56,6 +65,12 @@ public enum FrameViewMode: String, Equatable, CaseIterable {
             return "f2"
         case .filter3:
             return "f3"
+        case .filter4:
+            return "f4"
+        case .filter5:
+            return "f5"
+        case .filter6:
+            return "f6"
         case .paintMask:
             return "pmask"
         case .validation:
@@ -79,6 +94,12 @@ public enum FrameViewMode: String, Equatable, CaseIterable {
             return "blob filter level 2"
         case .filter3:
             return "blob filter level 3"
+        case .filter4:
+            return "blob filter level 4"
+        case .filter5:
+            return "blob filter level 5"
+        case .filter6:
+            return "blob filter level 6"
         case .paintMask:
             return "computed paint mask"
         case .validation:

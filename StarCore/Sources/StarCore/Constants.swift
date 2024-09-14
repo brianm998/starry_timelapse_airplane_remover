@@ -59,7 +59,7 @@ public class Constants {
     // the size that blobs need to be smaller than for
     // blobberBrightMinIntensity to apply
     // larger size gives fewer blobs
-    public var blobberBrightSmallSize: Double {
+    public var blobberBrightSmallSize: Int {
         switch self.detectionType {
         case .mild:
             return 25        
@@ -70,7 +70,7 @@ public class Constants {
         case .exp:
             return 25
         case .radical:
-            return 5
+            return 10
         }
     }
 
@@ -94,7 +94,7 @@ public class Constants {
     
     // blobs smaller than this are ignored by the blobber
     // smaller values give more blobs
-    public var blobberMinBlobSize: Double {
+    public var blobberMinBlobSize: Int {
         switch self.detectionType {
         case .mild:
             return 8         
@@ -105,9 +105,7 @@ public class Constants {
         case .exp:
             return 5
         case .radical:
-            //return 1.8            // XXX this is the problem ATM
-            return 1.85
-            //return 3            // XXX this is the problem ATM
+            return 5
         }
     }
 

@@ -61,9 +61,7 @@ extension FrameAirplaneRemover {
 
     public func findOutliers() async throws {
         
-        let blobProcessor = BlobProcessor(frame: self)
-        
-        let blobMap = try await blobProcessor.run()
+        let blobMap = try await BlobProcessor(frame: self).run()
 
         // save blobs to blob image here
         var blobImageSaver: BlobImageSaver? = .init(blobMap: blobMap,
@@ -360,10 +358,4 @@ extension FrameAirplaneRemover {
         try outlierGroups?.writeOutliersImage(to: frame_outliers_dirname)
         // XXX add y-axis here too
     }
-
-}
-
-// XXX rename this
-func fx3Size(for size: Double) -> Double {
-    size / (4240 * 2832)
 }

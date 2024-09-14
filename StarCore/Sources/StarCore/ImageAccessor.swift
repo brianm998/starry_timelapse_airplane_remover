@@ -32,6 +32,9 @@ public enum FrameImageType {
     case filter1        // 
     case filter2        // 
     case filter3        // 
+    case filter4        // 
+    case filter5        // 
+    case filter6        // 
     case validated      // outlier group validation image
     case paintMask      // layer mask used in painting
     case processed      // final processed image
@@ -115,6 +118,9 @@ public struct ImageAccessor: ImageAccess {
         mkdir(ofType: .filter1)
         mkdir(ofType: .filter2)
         mkdir(ofType: .filter3)
+        mkdir(ofType: .filter4)
+        mkdir(ofType: .filter5)
+        mkdir(ofType: .filter6)
         mkdir(ofType: .paintMask)
         mkdir(ofType: .validated)
         mkdir(ofType: .processed)
@@ -128,6 +134,9 @@ public struct ImageAccessor: ImageAccess {
             mkdir(ofType: .filter1, andSize: .preview)
             mkdir(ofType: .filter2, andSize: .preview)
             mkdir(ofType: .filter3, andSize: .preview)
+            mkdir(ofType: .filter4, andSize: .preview)
+            mkdir(ofType: .filter5, andSize: .preview)
+            mkdir(ofType: .filter6, andSize: .preview)
             mkdir(ofType: .paintMask, andSize: .preview)
         }
         if config.writeFrameThumbnailFiles {
@@ -330,6 +339,33 @@ public struct ImageAccessor: ImageAccess {
                 return "\(config.outputPath)/\(baseDirName)-blobs-filter3"
             case .preview:
                 return "\(config.outputPath)/\(baseDirName)-blobs-filter3-preview"
+            case .thumbnail:
+                return nil
+            }
+        case .filter4:
+            switch size {
+            case .original:
+                return "\(config.outputPath)/\(baseDirName)-blobs-filter4"
+            case .preview:
+                return "\(config.outputPath)/\(baseDirName)-blobs-filter4-preview"
+            case .thumbnail:
+                return nil
+            }
+        case .filter5:
+            switch size {
+            case .original:
+                return "\(config.outputPath)/\(baseDirName)-blobs-filter5"
+            case .preview:
+                return "\(config.outputPath)/\(baseDirName)-blobs-filter5-preview"
+            case .thumbnail:
+                return nil
+            }
+        case .filter6:
+            switch size {
+            case .original:
+                return "\(config.outputPath)/\(baseDirName)-blobs-filter6"
+            case .preview:
+                return "\(config.outputPath)/\(baseDirName)-blobs-filter6-preview"
             case .thumbnail:
                 return nil
             }

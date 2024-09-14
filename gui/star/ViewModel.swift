@@ -233,6 +233,9 @@ public final class ViewModel: ObservableObject {
             let f1Task = Task { acc.loadImage(type: .filter1,    atSize: .preview)?.resizable() }
             let f2Task = Task { acc.loadImage(type: .filter2,    atSize: .preview)?.resizable() }
             let f3Task = Task { acc.loadImage(type: .filter3,    atSize: .preview)?.resizable() }
+            let f4Task = Task { acc.loadImage(type: .filter4,    atSize: .preview)?.resizable() }
+            let f5Task = Task { acc.loadImage(type: .filter5,    atSize: .preview)?.resizable() }
+            let f6Task = Task { acc.loadImage(type: .filter6,    atSize: .preview)?.resizable() }
             let ppTask = Task { acc.loadImage(type: .paintMask,  atSize: .preview)?.resizable() }
             let prTask = Task { acc.loadImage(type: .processed,  atSize: .preview)?.resizable() }
             let opTask = Task { acc.loadImage(type: .original,   atSize: .preview)?.resizable() }
@@ -255,6 +258,15 @@ public final class ViewModel: ObservableObject {
             }
             if let image = await f3Task.value {
                 self.frames[frame.frameIndex].filter3PreviewImage = image
+            }
+            if let image = await f4Task.value {
+                self.frames[frame.frameIndex].filter4PreviewImage = image
+            }
+            if let image = await f5Task.value {
+                self.frames[frame.frameIndex].filter5PreviewImage = image
+            }
+            if let image = await f6Task.value {
+                self.frames[frame.frameIndex].filter6PreviewImage = image
             }
             if let image = await ppTask.value {
                 self.frames[frame.frameIndex].paintMaskPreviewImage = image

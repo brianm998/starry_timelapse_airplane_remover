@@ -19,7 +19,9 @@ struct OutlierGroupTableRow: Identifiable {
     let name: UInt16
     let size: UInt
     let willPaint: Bool?
-
+    let centerX: Int
+    let centerY: Int
+    
     var willPaintType: WillPaintType {
         if let willPaint = willPaint {
             if willPaint {
@@ -67,6 +69,10 @@ struct OutlierGroupTableRow: Identifiable {
     init(_ group: OutlierGroup) {
         name = group.id
         size = group.size
+        centerX = group.bounds.center.x
+        centerY = group.bounds.center.y
+        let centerY: Int
+
         let shouldPaint = group.shouldPaint
         if let shouldPaint = shouldPaint {
             willPaint = shouldPaint.willPaint
@@ -123,6 +129,18 @@ struct OutlierGroupTable: View {
     var sizeColumn: DTColumn {
         TableColumn("size", value: \.size) { (row: OutlierGroupTableRow) in
             Text(String(row.size))
+        }.width(min: 30, ideal: 40, max: 80)
+    }
+
+    var xColumn: DTColumn {
+        TableColumn("X", value: \.centerX) { (row: OutlierGroupTableRow) in
+            Text(String(row.centerX))
+        }.width(min: 30, ideal: 40, max: 80)
+    }
+
+    var yColumn: DTColumn {
+        TableColumn("Y", value: \.centerY) { (row: OutlierGroupTableRow) in
+            Text(String(row.centerY))
         }.width(min: 30, ideal: 40, max: 80)
     }
 
@@ -358,20 +376,22 @@ struct OutlierGroupTable: View {
                     Group {
                         nameColumn
                         willPaintColumn
+                        self.sizeColumn
+                        //dtSizeColumn
+                        //dtWidthColumn
+                        //dtHeightColumn
                     }
 
                     Group {
-                        self.sizeColumn
 //                        if displayDtSizeColumn {
-                            dtSizeColumn
                         //            }
-                        dtWidthColumn
-                        dtHeightColumn
-                        dtCenterXColumn
-                        dtCenterYColumn
-                        dtMinXColumn
-                        dtMinYColumn
-                        dtMaxXColumn
+                        xColumn
+                        yColumn
+                        //dtCenterXColumn
+                        //dtCenterYColumn
+                        //dtMinXColumn
+                        //dtMinYColumn
+                        //dtMaxXColumn
                     }
                     Group {
                         dtMaxYColumn

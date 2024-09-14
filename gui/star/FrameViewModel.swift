@@ -90,6 +90,9 @@ public class FrameViewModel: ObservableObject {
     @Published var filter1PreviewImage: Image = initialImage
     @Published var filter2PreviewImage: Image = initialImage
     @Published var filter3PreviewImage: Image = initialImage
+    @Published var filter4PreviewImage: Image = initialImage
+    @Published var filter5PreviewImage: Image = initialImage
+    @Published var filter6PreviewImage: Image = initialImage
     @Published var paintMaskPreviewImage: Image = initialImage
     @Published var houghLinesPreviewImage: Image = initialImage
     @Published var validationPreviewImage: Image = initialImage

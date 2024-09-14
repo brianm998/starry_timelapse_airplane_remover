@@ -215,8 +215,6 @@ struct MultiChoiceSheetView: View {
                    frame.frameIndex <= end
                 {
                     await self.update(frame: frame, shouldPaint: shouldPaint)
-                    // save outlier paintability changes here
-                    await frame.writeOutliersBinary()
                 }
             }
         }
@@ -228,6 +226,8 @@ struct MultiChoiceSheetView: View {
             Task.detached(priority: .userInitiated) {
                 await frame.userSelectAllOutliers(toShouldPaint: new_value,
                                                   overlapping: multiChoiceOutlierView.groupViewModel.group)
+                // save outlier paintability changes here
+                await frame.writeOutliersBinary()
             }
         }
     }
