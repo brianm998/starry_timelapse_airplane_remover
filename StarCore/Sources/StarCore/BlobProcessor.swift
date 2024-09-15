@@ -90,7 +90,6 @@ public class BlobProcessor {
                                          blobsLargerThan: 18,
                                          requiredNeighbors: 2)),
         
-          .save(.filter5),
           .frameState(.linearBlobAbsorbtion),
 
           // find really close linear blobs
@@ -101,6 +100,8 @@ public class BlobProcessor {
           .linearBlobConnector(.init(scanSize: 35,
                                      blobsSmallerThan: 50)),
 
+          .save(.filter5),
+          
           // eviscerate any remaining small and dim blobs with no mercy 
           .process() { blobs in
               // weed out blobs that are too small and not bright enough
@@ -118,7 +119,7 @@ public class BlobProcessor {
                   {
                       return nil 
                   } else if blob.size < 150,
-                            blob.medianIntensity < 7000 // XXX constant
+                            blob.medianIntensity < 5000 // XXX constant
                   {
                       return nil 
                   } else {
