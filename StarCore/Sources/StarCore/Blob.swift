@@ -471,7 +471,8 @@ public class Blob: CustomStringConvertible, Hashable, Codable {
                                  bounds: self.boundingBox,
                                  frameIndex: frameIndex,
                                  pixels: self.pixelValues,
-                                 pixelSet: self.pixels)
+                                 pixelSet: self.pixels,
+                                 line: self.line)
         _outlierGroup = group
         return group
     }

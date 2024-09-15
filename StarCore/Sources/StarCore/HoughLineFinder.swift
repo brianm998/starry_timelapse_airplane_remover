@@ -49,7 +49,7 @@ public struct HoughLineFinder {
     // it's best to keep the important pixel data away from the middle of the image,
     // as the KHT uses the center of the image as the origin for its lines.
     // we get better results this way, instead of giving the KHT algorithm a small image with a
-    // line right throught it
+    // line right throught the middle of it
     
     let imageDataBorderSize = 80
     
@@ -102,13 +102,13 @@ public struct HoughLineFinder {
                                         grayscale8BitImageData: imageData)
 
         if let image = pixelImage.nsImage {
-            let lines = kernelHoughTransform(image: image)
-            for (index, line) in lines.enumerated() {
-                Log.d("line \(index): \(line)")
-            }
+            let lines = kernelHoughTransform(image: image, maxResults: 400) // XXX guess
+//            for (index, line) in lines.enumerated() {
+//                Log.d("line \(index): \(line)")
+//            }
 
             /*
-                - look at the first N lines (10?)
+                - look at the first N lines
                 - calculate the average distance from the line for each of them.
                 - choose the best one
              */

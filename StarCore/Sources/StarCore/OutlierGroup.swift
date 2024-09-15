@@ -92,8 +92,10 @@ public class OutlierGroup: CustomStringConvertible,
                 bounds: BoundingBox,
                 frameIndex: Int,
                 pixels: [UInt16],
-                pixelSet: Set<SortablePixel>)
+                pixelSet: Set<SortablePixel>,
+                line: Line?)
     {
+        self._firstLine = line
         self.id = id
         self.size = size
         self.brightness = brightness
@@ -105,16 +107,32 @@ public class OutlierGroup: CustomStringConvertible,
                                                                width: bounds.width,
                                                                height: bounds.height)
 
-        if let line = HoughLineFinder(pixels: self.pixels, bounds: self.bounds).line {
+        if let line {
             (self.averageLineVariance, self.lineLength) = 
               OutlierGroup.averageDistance(for: pixels,
                                            from: line,
                                            with: bounds)
             self.lines = [line]
+
         } else {
             self.averageLineVariance = 0xFFFFFFFF
             self.lineLength = 0
             self.lines = []
+            
+            // look for a line if we're not given one ?
+            /*
+            if let line = HoughLineFinder(pixels: self.pixels, bounds: self.bounds).line {
+                (self.averageLineVariance, self.lineLength) = 
+                  OutlierGroup.averageDistance(for: pixels,
+                                               from: line,
+                                               with: bounds)
+                self.lines = [line]
+            } else {
+                self.averageLineVariance = 0xFFFFFFFF
+                self.lineLength = 0
+                self.lines = []
+            }
+             */
         }
         
         _ = self.houghLineHistogram
