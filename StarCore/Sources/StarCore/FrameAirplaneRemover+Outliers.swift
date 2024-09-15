@@ -196,16 +196,22 @@ extension FrameAirplaneRemover {
         if endLocation.y < minY { minY = endLocation.y }
         if endLocation.y > maxY { maxY = endLocation.y }
 
-        let gestureBounds = BoundingBox(min: Coord(x: Int(minX), y: Int(minY)),
-                                        max: Coord(x: Int(maxX), y: Int(maxY)))
+        if let minX = minX.int,
+           let minY = minY.int,
+           let maxX = maxX.int,
+           let maxY = maxY.int
+        {
+            let gestureBounds = BoundingBox(min: Coord(x: minX, y: minY),
+                                            max: Coord(x: maxX, y: maxY))
 
-        foreachOutlierGroup() { group in
-            if gestureBounds.contains(other: group.bounds) {
-                // check to make sure this outlier's bounding box is fully contained
-                // otherwise don't change paint status
-                return closure(group)
-            } else {
-                return .continue
+            foreachOutlierGroup() { group in
+                if gestureBounds.contains(other: group.bounds) {
+                    // check to make sure this outlier's bounding box is fully contained
+                    // otherwise don't change paint status
+                    return closure(group)
+                } else {
+                    return .continue
+                }
             }
         }
     }
