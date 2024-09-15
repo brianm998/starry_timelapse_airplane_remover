@@ -17,8 +17,29 @@ You should have received a copy of the GNU General Public License along with sta
 */
 
 // gets rid of small blobs by themselves in nowhere
-class IsolatedBlobRemover: AbstractBlobAnalyzer {
+public class IsolatedBlobRemover: AbstractBlobAnalyzer {
 
+    public struct Args {
+        let minNeighborSize: Int   // how big does a neighbor need to be to count?
+        let scanSize: Int          // how far in each direction to look for neighbors
+        let requiredNeighbors: Int // how many neighbors does each one need?
+
+        public init(minNeighborSize: Int = 0, // how big does a neighbor need to be to count?
+                    scanSize: Int = 12,     // how far in each direction to look for neighbors
+                    requiredNeighbors: Int = 1) // how many neighbors does each one need?
+        {
+            self.minNeighborSize = minNeighborSize
+            self.scanSize = scanSize
+            self.requiredNeighbors = requiredNeighbors
+        }
+    }
+
+    public func process(_ args: Args) {
+        self.process(minNeighborSize: args.minNeighborSize,
+                     scanSize: args.scanSize,
+                     requiredNeighbors: args.requiredNeighbors)
+    }
+    
     public func process(minNeighborSize: Int = 0, // how big does a neighbor need to be to count?
                         scanSize: Int = 12,     // how far in each direction to look for neighbors
                         requiredNeighbors: Int = 1) // how many neighbors does each one need?
@@ -28,7 +49,6 @@ class IsolatedBlobRemover: AbstractBlobAnalyzer {
             if blob.size > 24 { // XXX constant XXX
                 return
             }
-
             
             // XXX constant XXX
                // each direction from center

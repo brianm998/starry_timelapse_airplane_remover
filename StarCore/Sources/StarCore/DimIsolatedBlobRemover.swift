@@ -17,8 +17,24 @@ You should have received a copy of the GNU General Public License along with sta
 */
 
 // gets rid of dimmer blobs off by themselves 
-class DimIsolatedBlobRemover: AbstractBlobAnalyzer {
+public class DimIsolatedBlobRemover: AbstractBlobAnalyzer {
 
+    public struct Args {
+        let scanSize: Int // how far in each direction to look for neighbors
+        let requiredNeighbors: Int // how many neighbors do we need to find?
+
+        public init(scanSize: Int = 12,
+                    requiredNeighbors: Int = 1)
+        {
+            self.scanSize = scanSize
+            self.requiredNeighbors = requiredNeighbors
+        }
+    }
+
+    public func process(_ args: Args) {
+        self.process(scanSize: args.scanSize, requiredNeighbors: args.requiredNeighbors)
+    }
+    
     public func process(scanSize: Int = 12, // how far in each direction to look for neighbors
                         requiredNeighbors: Int = 1) // how many neighbors do we need to find
     {

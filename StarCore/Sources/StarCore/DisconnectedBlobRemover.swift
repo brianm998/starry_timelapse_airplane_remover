@@ -18,8 +18,33 @@ You should have received a copy of the GNU General Public License along with sta
 
 // recurse on finding nearby blobs to isolate groups of neighbors as a set
 // use the size of the neighbor set to determine if we keep a blob or not
-class DisconnectedBlobRemover: AbstractBlobAnalyzer {
+public class DisconnectedBlobRemover: AbstractBlobAnalyzer {
 
+    public struct Args {
+        let scanSize: Int          // how far in each direction to look for neighbors
+        let blobsSmallerThan: Int  // ignore blobs larger than this
+        let blobsLargerThan: Int   // ignore blobs smaller than this
+        let requiredNeighbors: Int // how many neighbors do we need?
+
+        public init(scanSize: Int = 28,
+                    blobsSmallerThan: Int = 24,
+                    blobsLargerThan: Int = 0,
+                    requiredNeighbors: Int = 4)
+        {
+            self.scanSize = scanSize
+            self.blobsSmallerThan = blobsSmallerThan
+            self.blobsLargerThan = blobsLargerThan
+            self.requiredNeighbors = requiredNeighbors
+        }
+    }
+
+    public func process(_ args: Args) {
+        self.process(scanSize: args.scanSize,
+                     blobsSmallerThan: args.blobsSmallerThan,
+                     blobsLargerThan: args.blobsLargerThan,
+                     requiredNeighbors: args.requiredNeighbors)
+    }
+    
     public func process(scanSize: Int = 28,    // how far in each direction to look for neighbors
                         blobsSmallerThan: Int = 24, // ignore blobs larger than this
                         blobsLargerThan: Int = 0,  // ignore blobs smaller than this

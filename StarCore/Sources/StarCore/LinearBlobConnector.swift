@@ -18,8 +18,29 @@ You should have received a copy of the GNU General Public License along with sta
 
 // recurse on finding nearby blobs to find groups of neighbors in a set
 // use the KHT to try to combine some of them into a line (if we get a good enough line)
-class LinearBlobConnector: AbstractBlobAnalyzer {
+public class LinearBlobConnector: AbstractBlobAnalyzer {
 
+    public struct Args {
+        let scanSize: Int
+        let blobsSmallerThan: Int
+        let blobsLargerThan: Int
+
+        public init(scanSize: Int = 28,
+                    blobsSmallerThan: Int = 24, 
+                    blobsLargerThan: Int = 0)
+        {
+            self.scanSize = scanSize
+            self.blobsSmallerThan = blobsSmallerThan
+            self.blobsLargerThan = blobsLargerThan
+        }
+    }
+
+    public func process(_ args: Args) {
+        self.process(scanSize: args.scanSize,
+                     blobsSmallerThan: args.blobsSmallerThan,
+                     blobsLargerThan: args.blobsLargerThan)
+    }
+    
     public func process(scanSize: Int = 28,    // how far in each direction to look for neighbors
                         blobsSmallerThan: Int = 24, // ignore blobs larger than this
                         blobsLargerThan: Int = 0)  // ignore blobs smaller than this
@@ -70,7 +91,7 @@ class LinearBlobConnector: AbstractBlobAnalyzer {
             if let blobLine = fullBlob.originZeroLine {
 
                 // XXX for testing, write out this big blob as json
-/*
+/* 
                 let blobJsonFilename = "/tmp/Blob_frame_\(frameIndex)_\(fullBlob).json"
                 let encoder = JSONEncoder()
                 encoder.outputFormatting = [.prettyPrinted, .withoutEscapingSlashes]

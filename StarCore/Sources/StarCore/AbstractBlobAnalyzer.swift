@@ -17,12 +17,12 @@ You should have received a copy of the GNU General Public License along with sta
 */
 
 
-class LastBlob {
+public class LastBlob {
     var blob: Blob?
 }
 
 // skeleton for analyzer of blobs that can then manipulate the blobs in some way
-class AbstractBlobAnalyzer {
+public class AbstractBlobAnalyzer {
 
     // map of all known blobs keyed by blob id
     var blobMap: [UInt16: Blob]

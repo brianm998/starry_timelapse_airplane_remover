@@ -16,9 +16,13 @@ public typealias BlobMap = [UInt16:Blob]
 
 public enum BlobProcessingType {
     case create(() async throws -> BlobMap)
-    case process((BlobMap) async throws -> BlobMap)
     case save(FrameImageType)
     case frameState(FrameProcessingState)
+    case process((BlobMap) async throws -> BlobMap)
+    case dimIsolatedBlobRemover(DimIsolatedBlobRemover.Args)
+    case isolatedBlobRemover(IsolatedBlobRemover.Args)
+    case disconnectedBlobRemover(DisconnectedBlobRemover.Args)
+    case linearBlobConnector(LinearBlobConnector.Args)
 }
 
 // load and process all blobs for a frame, using a defined sequence of steps
@@ -48,25 +52,57 @@ public class BlobProcessor {
          */
         
         self.steps = [
+
+          // align frame, subtract it, sort pixels, then detect blobs
           .create(findBlobs),
+          
           .save(.blobs),
+
           .frameState(.isolatedBlobRemoval),
-          .process(firstIsolatedDimProcess),
+
+          // a first pass on dim isolated blob removal
+          .dimIsolatedBlobRemover(.init(scanSize: 30,
+                                        requiredNeighbors: 2)),
+          
           .save(.filter1),
-          .process(firstIsolatedProcess),
+
+          // remove isolated blobs
+          .isolatedBlobRemover(.init(minNeighborSize: 6, scanSize: 24)),
+          
           .save(.filter2),
-          .process(finalIsolatedRemover),
+
+          // a final pass on dim isolated blobs
+          .dimIsolatedBlobRemover(.init(scanSize: 24)),
+
           .save(.filter3),
-          .process(finalDimIsolatedRemover),
-          .save(.filter4),
+
           .frameState(.isolatedBlobRemoval2),
-          .process(smallerDisconnectedBlobRemover),
+
+          // remove smaller disconected blobs
+          .disconnectedBlobRemover(.init(scanSize: 60,
+                                         blobsSmallerThan: 18,
+                                         requiredNeighbors: 2)),
+          .save(.filter4),
+
+          // remove larger disconected blobs
+          .disconnectedBlobRemover(.init(scanSize: 60,
+                                         blobsSmallerThan: 50,
+                                         blobsLargerThan: 18,
+                                         requiredNeighbors: 2)),
+        
           .save(.filter5),
-          .process(largerDisconnectedBlobRemover),
           .frameState(.linearBlobAbsorbtion),
-          .process(linearBlobConnector), // run more than once?
-          // another step to remove any remaining small blobs
-          .process(funkyCompactMap),
+
+          // find really close linear blobs
+          .linearBlobConnector(.init(scanSize: 12,
+                                     blobsSmallerThan: 30)),
+
+          // then try to connect more distant linear blobs
+          .linearBlobConnector(.init(scanSize: 35,
+                                     blobsSmallerThan: 50)),
+
+          // eviscerate any remaining small and dim blobs with no mercy 
+          .process(blobEviscerater),           
           .save(.filter6),
         ]
     }
@@ -79,9 +115,59 @@ public class BlobProcessor {
             case .create(let method):
                 blobMap = try await method()
 
+                
             case .process(let method):
                 blobMap = try await method(blobMap)
 
+
+            case .linearBlobConnector(let args):
+                let connector = LinearBlobConnector(blobMap: blobMap,
+                                                    width: frame.width,
+                                                    height: frame.height,
+                                                    frameIndex: frame.frameIndex)
+                connector.process(args)
+                blobMap = connector.blobMap
+
+
+            case .isolatedBlobRemover(let args):
+                let remover = IsolatedBlobRemover(blobMap: blobMap,
+                                                  width: frame.width,
+                                                  height: frame.height,
+                                                  frameIndex: frame.frameIndex)
+                iterate() { shouldRun in
+                    if shouldRun {
+                        remover.process(args)
+                    }
+                    return remover.blobMap.count
+                }
+                blobMap = remover.blobMap
+                
+
+            case .disconnectedBlobRemover(let args):
+                let remover = DisconnectedBlobRemover(blobMap: blobMap,
+                                                      width: frame.width,
+                                                      height: frame.height,
+                                                      frameIndex: frame.frameIndex)
+                remover.process(args)
+                blobMap = remover.blobMap
+                
+
+            case .dimIsolatedBlobRemover(let args):
+                let remover = DimIsolatedBlobRemover(blobMap: blobMap,
+                                                     width: frame.width,
+                                                     height: frame.height,
+                                                     frameIndex: frame.frameIndex)
+                iterate() { shouldRun in
+                    if shouldRun {
+                        remover.process(args)
+                    }
+
+                    return remover.blobMap.count
+                }
+                blobMap = remover.blobMap
+                
+                
+                
             case .save(let imageType):
                 if frame.config.writeOutlierGroupFiles {
                     // save image 
@@ -184,40 +270,8 @@ public class BlobProcessor {
 
         return blobber.blobMap
     }
-
-    fileprivate func firstIsolatedDimProcess(blobs: BlobMap) async throws -> BlobMap {
-        guard let frame else { return [:] }
-        let idibr = DimIsolatedBlobRemover(blobMap: blobs,
-                                           width: frame.width,
-                                           height: frame.height,
-                                           frameIndex: frame.frameIndex)
-        
-        iterate() { shouldRun in
-            if shouldRun {
-                idibr.process(scanSize: 30, requiredNeighbors: 2) // XXX constant
-            }
-
-            return idibr.blobMap.count
-        }
-
-        return idibr.blobMap
-    }
     
-    fileprivate func firstIsolatedProcess(blobs: BlobMap) async throws -> BlobMap {
-        guard let frame else { return [:] }
-        let isolatedRemover = IsolatedBlobRemover(blobMap: blobs,
-                                                  width: frame.width,
-                                                  height: frame.height,
-                                                  frameIndex: frame.frameIndex)
-
-        isolatedRemover.process(minNeighborSize: 6, scanSize: 24)            
-
-        Log.d("frame \(frame.frameIndex) first isolated remover returned \(isolatedRemover.blobMap.count) blobs")
-        
-        return isolatedRemover.blobMap
-    }
-
-    fileprivate func funkyCompactMap(blobs: BlobMap) async throws -> BlobMap {
+    fileprivate func blobEviscerater(blobs: BlobMap) async throws -> BlobMap {
 
         // weed out blobs that are too small and not bright enough
         // XXX this is eating a lot of blobs we want :(
@@ -246,45 +300,6 @@ public class BlobProcessor {
         }
     }
 
-    fileprivate func finalIsolatedRemover(blobs: BlobMap) async throws -> BlobMap {
-        guard let frame else { return [:] }
-        
-        let finalIsolatedRemover = IsolatedBlobRemover(blobMap: blobs,
-                                                       width: frame.width,
-                                                       height: frame.height,
-                                                       frameIndex: frame.frameIndex)
-
-        iterate() { shouldRun in
-            if shouldRun {
-                finalIsolatedRemover.process(minNeighborSize: 6, scanSize: 24) // XXX constants
-            }
-            return finalIsolatedRemover.blobMap.count
-        }
-        return finalIsolatedRemover.blobMap
-    }
-
-    fileprivate func finalDimIsolatedRemover(blobs: BlobMap) async throws -> BlobMap {
-        guard let frame else { return [:] }
-
-        let dimIsolatedBlobRemover = DimIsolatedBlobRemover(blobMap: blobs,
-                                                            width: frame.width,
-                                                            height: frame.height,
-                                                            frameIndex: frame.frameIndex)
-
-        // XXX how about this one, how much does it suck?
-        // not that much :)
-
-        iterate() { shouldRun in
-            if shouldRun {
-                dimIsolatedBlobRemover.process(scanSize: 24) // XXX constant
-            }
-
-            return dimIsolatedBlobRemover.blobMap.count
-        }
-
-        return dimIsolatedBlobRemover.blobMap
-    }
-
     // re-run something repeatedly
     fileprivate func iterate(closure: (Bool) -> Int, max: Int = 8) {
 
@@ -299,50 +314,5 @@ public class BlobProcessor {
             count += 1
             if count > max { shouldContinue = false }
         }
-    }
-
-    fileprivate func smallerDisconnectedBlobRemover(blobs: BlobMap) async throws -> BlobMap {
-        guard let frame else { return [:] }
-
-        let remover = DisconnectedBlobRemover(blobMap: blobs,
-                                              width: frame.width,
-                                              height: frame.height,
-                                              frameIndex: frame.frameIndex)
-
-        remover.process(scanSize: 60,
-                        blobsSmallerThan: 18,
-                        requiredNeighbors: 2)
-
-        return remover.blobMap
-    }
-
-    fileprivate func largerDisconnectedBlobRemover(blobs: BlobMap) async throws -> BlobMap {
-        guard let frame else { return [:] }
-
-        let remover = DisconnectedBlobRemover(blobMap: blobs,
-                                              width: frame.width,
-                                              height: frame.height,
-                                              frameIndex: frame.frameIndex)
-        
-        remover.process(scanSize: 60,
-                        blobsSmallerThan: 50,
-                        blobsLargerThan: 18,
-                        requiredNeighbors: 2)
-
-        return remover.blobMap
-    }
-
-    fileprivate func linearBlobConnector(blobs: BlobMap) async throws -> BlobMap {
-        guard let frame else { return [:] }
-
-        let connector = LinearBlobConnector(blobMap: blobs,
-                                            width: frame.width,
-                                            height: frame.height,
-                                            frameIndex: frame.frameIndex)
-
-        connector.process(scanSize: 25,
-                          blobsSmallerThan: 30)
-
-        return connector.blobMap
     }
 }
