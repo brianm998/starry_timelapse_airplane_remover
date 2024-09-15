@@ -13,38 +13,20 @@ public let RADIANS_TO_DEGREES = 45 / atan(1.0)
 // these default parameter values need more documentation.  All but the last
 // four were taken from main.cpp from the kht implementation.
 public func kernelHoughTransform(image: NSImage,
-                                 
-                                 // discard lines with fewer votes than this
-                                 minVotes: Int = 20,
-
-                                 // always return at least this many lines,
-                                 // even if they are below the minVotes 
-                                 minResults: Int = 4,
-
                                  // never return more than this many lines
-                                 maxResults: Int = 10) -> [Line]
+                                 // returns all if not given
+                                 maxResults: Int? = nil) -> [Line]
 {
     transformer.kernelHoughTransform(image: image,
-                                     minVotes: minVotes,
-                                     minResults: minResults,
                                      maxResults: maxResults)
 }
 
 public func kernelHoughTransform(elements: [ImageMatrixElement],
-
-                                 // discard lines with fewer votes than this
-                                 minVotes: Int = 20,
-
-                                 // always return at least this many lines,
-                                 // even if they are below the minVotes 
-                                 minResults: Int = 4,
-
                                  // never return more than this many lines
-                                 maxResults: Int = 10) -> [ImageMatrixElement]
+                                 // returns all if not given
+                                 maxResults: Int? = nil) -> [ImageMatrixElement]
 {
     transformer.kernelHoughTransform(elements: elements,
-                                     minVotes: minVotes,
-                                     minResults: minResults,
                                      maxResults: maxResults)
     
 }
@@ -61,17 +43,13 @@ fileprivate let transformer = HoughTransformer()
 fileprivate class HoughTransformer {
 
     public func kernelHoughTransform(elements: [ImageMatrixElement],
-                                     minVotes: Int,
-                                     minResults: Int,
-                                     maxResults: Int) -> [ImageMatrixElement]
+                                     maxResults: Int?) -> [ImageMatrixElement]
     {
         let ret = elements
         for element in ret {
             if let image = element.image {
                 element.lines = 
                   kernelHoughTransform(image: image,
-                                       minVotes: minVotes,
-                                       minResults: minResults,
                                        maxResults: maxResults)
                 element.image = nil
             }
@@ -81,9 +59,7 @@ fileprivate class HoughTransformer {
 
     
     public func kernelHoughTransform(image: NSImage,
-                                     minVotes: Int,
-                                     minResults: Int,
-                                     maxResults: Int) -> [Line]
+                                     maxResults: Int?) -> [Line]
     {
         var ret: [Line] = []
 
@@ -91,11 +67,10 @@ fileprivate class HoughTransformer {
         if let lines = KHTBridge.translate(image) {
             //Log.d("got \(lines.count) lines")
 
-            var lastVotes: Int = 0
-            
             for line in lines {
                 if let line = line as? KHTBridgeLine {
-                    if ret.count >= maxResults { return ret }
+                    if let maxResults,
+                       ret.count >= maxResults { return ret }
                     
                     // change how each line is represented
 
@@ -104,25 +79,7 @@ fileprivate class HoughTransformer {
                     let newLine = line.leftCenterOriginLine(width: Int32(image.size.width),
                                                             height: Int32(image.size.height))
                     
-                    var shouldAppend = true
-
-                    if newLine.votes < minVotes,
-                       ret.count >= minResults
-                    {
-                        // ignore lines with small counts,
-                        // as long as we have more than minResults
-                        shouldAppend = false
-                    }
-
-                    // if there is a sharp decrease in the quality of line votes, don't add more
-                    if newLine.votes < lastVotes/3 { // XXX hardcoded parameter XXX
-                        shouldAppend = false
-                    }
-
-                    if shouldAppend {
-                        ret.append(newLine)
-                        lastVotes = newLine.votes
-                    }
+                    ret.append(newLine)
                 }
             }
         }

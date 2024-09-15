@@ -102,11 +102,10 @@ public struct HoughLineFinder {
                                         grayscale8BitImageData: imageData)
 
         if let image = pixelImage.nsImage {
-            let lines = kernelHoughTransform(image: image,
-                                             maxResults: OutlierGroup.numberOfLinesToReturn) // XXX move this constant here
-            //for (index, line) in lines.enumerated() {
-//                Log.d("line \(index): \(line)")
-//            }
+            let lines = kernelHoughTransform(image: image)
+            for (index, line) in lines.enumerated() {
+                Log.d("line \(index): \(line)")
+            }
 
             /*
                 - look at the first N lines (10?)
@@ -115,18 +114,15 @@ public struct HoughLineFinder {
              */
 
             if lines.count > 0 {
-                var linesToConsider = OutlierGroup.numberOfLinesToConsider
-                if linesToConsider > lines.count { linesToConsider = lines.count }
-
-                var closestDistance: Double = 9999999999
+                var closestDistance: Double = 9999999999999
                 var bestLineIndex = 0
                 
-                for i in 0..<linesToConsider {
+                for i in 0..<lines.count {
                     let originZeroLine = self.originZeroLine(from: lines[i])
                     let (avg, median, max) = self.averageMedianMaxDistance(from: originZeroLine)
                     
                     if median < closestDistance {
-                        //Log.d("line \(i) is best theta \(lines[i].theta) avg median max \(avg) \(median) \(max)")
+                        Log.d("line \(i) is best theta \(lines[i].theta) avg median max \(avg) \(median) \(max)")
                         closestDistance = median
                         bestLineIndex = i
                     }

@@ -72,12 +72,6 @@ public class OutlierGroup: CustomStringConvertible,
     // has to be optional so we can read OuterlierGroups as codable
     public var frame: FrameAirplaneRemover?
 
-    // how many of the hough lines to we consider when
-    // trying to figure out which one is best
-    public static let numberOfLinesToConsider = 100 // XXX constant
-
-    public static let numberOfLinesToReturn = 400 // XXX constant
-    
     public func setFrame(_ frame: FrameAirplaneRemover) {
         self.frame = frame
     }
@@ -257,8 +251,11 @@ public class OutlierGroup: CustomStringConvertible,
         
         var imageData = Data(count: self.bounds.width*self.bounds.height*bytesPerPixel)
 
-        // write out the line
-        if self.size > 150,
+        let writeLine = false   // XXX this is nice to see for debugging, but slow
+        
+        // maybe write out the line
+        if writeLine,
+//           self.size > 150,
            let line = self.firstLine
         {
             Log.d("have LINE \(line)")
