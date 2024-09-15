@@ -71,7 +71,7 @@ public class BlobProcessor {
           
           .save(.filter2),
 
-          // a final pass on dim isolated blobs
+          // a final pass on dim isolated blobs - seems to do nothing :(
           .dimIsolatedBlobRemover(.init(scanSize: 24)),
 
           .save(.filter3),
@@ -102,7 +102,33 @@ public class BlobProcessor {
                                      blobsSmallerThan: 50)),
 
           // eviscerate any remaining small and dim blobs with no mercy 
-          .process(blobEviscerater),           
+          .process() { blobs in
+              // weed out blobs that are too small and not bright enough
+              blobs.compactMapValues { blob in
+                  if blob.size < 20   // XXX constant
+                  {
+                      // discard blobs that are still this small 
+                      return nil
+                  } else if blob.size < 30,
+                            blob.medianIntensity < 10000 // XXX constant
+                  {
+                      return nil
+                  } else if blob.size < 50,
+                            blob.medianIntensity < 15000 // XXX constant
+                  {
+                      return nil 
+                  } else if blob.size < 150,
+                            blob.medianIntensity < 7000 // XXX constant
+                  {
+                      return nil 
+                  } else {
+                      // this blob is either bigger than the largest size tested for above,
+                      // or brighter than the medianIntensity set for its size group
+                      return blob
+                  }
+              }
+          },
+
           .save(.filter6),
         ]
     }
@@ -271,35 +297,6 @@ public class BlobProcessor {
         return blobber.blobMap
     }
     
-    fileprivate func blobEviscerater(blobs: BlobMap) async throws -> BlobMap {
-
-        // weed out blobs that are too small and not bright enough
-        // XXX this is eating a lot of blobs we want :(
-        blobs.compactMapValues { blob in
-            if blob.size < 20   // XXX constant
-            {
-                // discard blobs that are still this small 
-                return nil
-            } else if blob.size < 30,
-               blob.medianIntensity < 10000 // XXX constant
-            {
-                return nil
-            } else if blob.size < 50,
-                      blob.medianIntensity < 15000 // XXX constant
-            {
-                return nil 
-            } else if blob.size < 100,
-                      blob.medianIntensity < 7000 // XXX constant
-            {
-                return nil 
-            } else {
-                // this blob is either bigger than the largest size tested for above,
-                // or brighter than the medianIntensity set for its size group
-                return blob
-            }
-        }
-    }
-
     // re-run something repeatedly
     fileprivate func iterate(closure: (Bool) -> Int, max: Int = 8) {
 

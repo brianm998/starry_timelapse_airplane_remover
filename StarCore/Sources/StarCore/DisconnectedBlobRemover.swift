@@ -39,25 +39,14 @@ public class DisconnectedBlobRemover: AbstractBlobAnalyzer {
     }
 
     public func process(_ args: Args) {
-        self.process(scanSize: args.scanSize,
-                     blobsSmallerThan: args.blobsSmallerThan,
-                     blobsLargerThan: args.blobsLargerThan,
-                     requiredNeighbors: args.requiredNeighbors)
-    }
-    
-    public func process(scanSize: Int = 28,    // how far in each direction to look for neighbors
-                        blobsSmallerThan: Int = 24, // ignore blobs larger than this
-                        blobsLargerThan: Int = 0,  // ignore blobs smaller than this
-                        requiredNeighbors: Int = 4) // how many neighbors do we need?
-    {
         var processedBlobs: Set<UInt16> = []
         iterateOverAllBlobs() { id, blob in
             if processedBlobs.contains(id) { return }
             processedBlobs.insert(id)
             
             // only deal with blobs in a certain size range
-            if blob.size >= blobsSmallerThan || 
-               blob.size < blobsLargerThan
+            if blob.size >= args.blobsSmallerThan || 
+               blob.size < args.blobsLargerThan
             {
                 return
             }
@@ -65,7 +54,7 @@ public class DisconnectedBlobRemover: AbstractBlobAnalyzer {
             // find a cloud of neighbors 
             let (neighborCloud, newProcessedBlobs) =
               neighborCloud(of: blob,
-                            scanSize: scanSize,
+                            scanSize: args.scanSize,
                             processedBlobs: processedBlobs)
 
             processedBlobs = processedBlobs.union(newProcessedBlobs)
@@ -73,8 +62,8 @@ public class DisconnectedBlobRemover: AbstractBlobAnalyzer {
             let totalBlobSize = neighborCloud.map { $0.size }.reduce(0, +) + blob.size
             let averageBlobSize = Double(totalBlobSize)/Double(neighborCloud.count+1)
             
-            if neighborCloud.count < requiredNeighbors,
-               averageBlobSize < Double(blobsSmallerThan)
+            if neighborCloud.count < args.requiredNeighbors,
+               averageBlobSize < Double(args.blobsSmallerThan)
             {
                 Log.i("blob of size \(blob.size) only has \(neighborCloud.count) neighbors")
                 // remove the blob we're iterating over

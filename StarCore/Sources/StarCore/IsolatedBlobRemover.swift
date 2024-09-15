@@ -23,51 +23,32 @@ public class IsolatedBlobRemover: AbstractBlobAnalyzer {
         let minNeighborSize: Int   // how big does a neighbor need to be to count?
         let scanSize: Int          // how far in each direction to look for neighbors
         let requiredNeighbors: Int // how many neighbors does each one need?
+        let minBlobSize: Int       // blobs smaller than this are ignored
 
-        public init(minNeighborSize: Int = 0, // how big does a neighbor need to be to count?
-                    scanSize: Int = 12,     // how far in each direction to look for neighbors
-                    requiredNeighbors: Int = 1) // how many neighbors does each one need?
+        public init(minNeighborSize: Int = 0,
+                    scanSize: Int = 12,     
+                    requiredNeighbors: Int = 1,
+                    minBlobSize: Int = 24)
         {
             self.minNeighborSize = minNeighborSize
             self.scanSize = scanSize
             self.requiredNeighbors = requiredNeighbors
+            self.minBlobSize = minBlobSize
         }
     }
 
     public func process(_ args: Args) {
-        self.process(minNeighborSize: args.minNeighborSize,
-                     scanSize: args.scanSize,
-                     requiredNeighbors: args.requiredNeighbors)
-    }
-    
-    public func process(minNeighborSize: Int = 0, // how big does a neighbor need to be to count?
-                        scanSize: Int = 12,     // how far in each direction to look for neighbors
-                        requiredNeighbors: Int = 1) // how many neighbors does each one need?
-    {
         iterateOverAllBlobs() { _, blob in
             // only deal with small blobs
-            if blob.size > 24 { // XXX constant XXX
-                return
-            }
+            if blob.size > args.minBlobSize { return }
             
-            // XXX constant XXX
-               // each direction from center
-/*
-            var scanSize = scanSize
- 
-            if blob.medianIntensity > 8000 { // XXX constant XXX 
-                // scan farther from brighter blobs
-                scanSize = scanSize * 2   // XXX constant XXX
-            }
- */          
-
-            let otherBlobsNearby = self.directNeighbors(of: blob, scanSize: scanSize,
-                                                        requiredNeighbors: requiredNeighbors)
+            let otherBlobsNearby = self.directNeighbors(of: blob, scanSize: args.scanSize,
+                                                        requiredNeighbors: args.requiredNeighbors)
             { otherBlob in
-                otherBlob.size > minNeighborSize
+                otherBlob.size > args.minNeighborSize
             }
 
-            if otherBlobsNearby.count < requiredNeighbors {
+            if otherBlobsNearby.count < args.requiredNeighbors {
                 blobMap.removeValue(forKey: blob.id)
             }
         }

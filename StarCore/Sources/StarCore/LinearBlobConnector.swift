@@ -21,9 +21,9 @@ You should have received a copy of the GNU General Public License along with sta
 public class LinearBlobConnector: AbstractBlobAnalyzer {
 
     public struct Args {
-        let scanSize: Int
-        let blobsSmallerThan: Int
-        let blobsLargerThan: Int
+        let scanSize: Int         // how far in each direction to look for neighbors
+        let blobsSmallerThan: Int // ignore blobs larger than this
+        let blobsLargerThan: Int  // ignore blobs smaller than this
 
         public init(scanSize: Int = 28,
                     blobsSmallerThan: Int = 24, 
@@ -36,24 +36,14 @@ public class LinearBlobConnector: AbstractBlobAnalyzer {
     }
 
     public func process(_ args: Args) {
-        self.process(scanSize: args.scanSize,
-                     blobsSmallerThan: args.blobsSmallerThan,
-                     blobsLargerThan: args.blobsLargerThan)
-    }
-    
-    public func process(scanSize: Int = 28,    // how far in each direction to look for neighbors
-                        blobsSmallerThan: Int = 24, // ignore blobs larger than this
-                        blobsLargerThan: Int = 0)  // ignore blobs smaller than this
-
-    {
         var processedBlobs: Set<UInt16> = []
         iterateOverAllBlobs() { id, blob in
             if processedBlobs.contains(id) { return }
             processedBlobs.insert(id)
             
             // only deal with blobs in a certain size range
-            if blob.size >= blobsSmallerThan || 
-               blob.size < blobsLargerThan
+            if blob.size >= args.blobsSmallerThan || 
+               blob.size < args.blobsLargerThan
             {
                 return
             }
@@ -63,7 +53,7 @@ public class LinearBlobConnector: AbstractBlobAnalyzer {
             // find a cloud of neighbors 
             let (neighborCloud, newProcessedBlobs) =
               neighborCloud(of: blob,
-                            scanSize: scanSize,
+                            scanSize: args.scanSize,
                             processedBlobs: processedBlobs)
 
             processedBlobs = processedBlobs.union(newProcessedBlobs)
