@@ -70,7 +70,7 @@ class LinearBlobConnector: AbstractBlobAnalyzer {
             if let blobLine = fullBlob.originZeroLine {
 
                 // XXX for testing, write out this big blob as json
-/* 
+/*
                 let blobJsonFilename = "/tmp/Blob_frame_\(frameIndex)_\(fullBlob).json"
                 let encoder = JSONEncoder()
                 encoder.outputFormatting = [.prettyPrinted, .withoutEscapingSlashes]
@@ -185,7 +185,7 @@ class LinearBlobConnector: AbstractBlobAnalyzer {
                     Log.d("frame \(frameIndex) ITERATING iterationCount \(iterationCount)")
                     self.iterate(on: line,
                                  over: firstBlob,
-                                 lineBorder: 50, // XXX constnat
+                                 lineBorder: 100, // XXX constnat
                                  iterationCount: iterationCount + 1)
                 } else {
                     Log.d("frame \(frameIndex) NOT ITERATING iterationCount \(iterationCount)")

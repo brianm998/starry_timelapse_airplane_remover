@@ -201,6 +201,7 @@ public class FullFrameBlobber {
                 } else {
                     // we've got more than UInt16.max blob seeds, that's a lot
                     // don't create more blobs
+                    Log.w("frame \(frameIndex) reached newBlobId \(newBlobId), cannot create new blobs") 
                     break
                 }
 

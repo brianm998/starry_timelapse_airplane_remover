@@ -51,9 +51,6 @@ struct OutlierGroupTableRow: Identifiable {
     let dt_averagebrightness: Double
     let dt_medianBrightness: Double
     let dt_maxBrightness: Double
-    let dt_avgCountOfFirst10HoughLines: Double
-    let dt_maxThetaDiffOfFirst10HoughLines: Double
-    let dt_maxRhoDiffOfFirst10HoughLines: Double
     let dt_numberOfNearbyOutliersInSameFrame: Double
     let dt_adjecentFrameNeighboringOutliersBestTheta: Double
     let dt_histogramStreakDetection: Double
@@ -96,9 +93,6 @@ struct OutlierGroupTableRow: Identifiable {
         dt_averagebrightness = group.decisionTreeValue(for: .averagebrightness)
         dt_medianBrightness = group.decisionTreeValue(for: .medianBrightness)
         dt_maxBrightness = group.decisionTreeValue(for: .maxBrightness)
-        dt_avgCountOfFirst10HoughLines = group.decisionTreeValue(for: .avgCountOfFirst10HoughLines)
-        dt_maxThetaDiffOfFirst10HoughLines = group.decisionTreeValue(for: .maxThetaDiffOfFirst10HoughLines)
-        dt_maxRhoDiffOfFirst10HoughLines = group.decisionTreeValue(for: .maxRhoDiffOfFirst10HoughLines)
         dt_numberOfNearbyOutliersInSameFrame = group.decisionTreeValue(for: .numberOfNearbyOutliersInSameFrame)
         dt_adjecentFrameNeighboringOutliersBestTheta = group.decisionTreeValue(for: .adjecentFrameNeighboringOutliersBestTheta)
 
@@ -247,27 +241,6 @@ struct OutlierGroupTable: View {
         }
     }
 
-    var dtAvgCountOfFirst10HoughLinesColumn: DTColumn {
-        self.tableColumn(for: "avgCountOfFirst10HoughLines",
-                         value: \.dt_avgCountOfFirst10HoughLines) { row in
-            row.dt_avgCountOfFirst10HoughLines
-        }
-    }
-
-    var dtMaxThetaDiffOfFirst10HoughLinesColumn: DTColumn {
-        self.tableColumn(for: "maxThetaDiffOfFirst10HoughLines",
-                         value: \.dt_maxThetaDiffOfFirst10HoughLines) { row in
-            row.dt_maxThetaDiffOfFirst10HoughLines
-        }
-    }
-
-    var dtMaxRhoDiffOfFirst10HoughLinesColumn: DTColumn {
-        self.tableColumn(for: "maxRhoDiffOfFirst10HoughLines",
-                         value: \.dt_maxRhoDiffOfFirst10HoughLines) { row in
-            row.dt_maxRhoDiffOfFirst10HoughLines
-        }
-    }
-    
     var dtNumberOfNearbyOutliersInSameFrameColumn: DTColumn {
         self.tableColumn(for: "numberOfNearbyOutliersInSameFrame",
                          value: \.dt_numberOfNearbyOutliersInSameFrame) { row in
@@ -402,11 +375,8 @@ struct OutlierGroupTable: View {
                         dtAveragebrightnessColumn
                         dtMedianBrightnessColumn
                         dtMaxBrightnessColumn
-                        dtAvgCountOfFirst10HoughLinesColumn
-                        dtMaxThetaDiffOfFirst10HoughLinesColumn
                     }
                     Group {
-                        dtMaxRhoDiffOfFirst10HoughLinesColumn
                         dtNumberOfNearbyOutliersInSameFrameColumn
                         dtAdjecentFrameNeighboringOutliersBestThetaColumn
                         dtHistogramStreakDetectionColumn

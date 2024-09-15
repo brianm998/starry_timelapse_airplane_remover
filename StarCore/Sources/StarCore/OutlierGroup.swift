@@ -258,7 +258,9 @@ public class OutlierGroup: CustomStringConvertible,
         var imageData = Data(count: self.bounds.width*self.bounds.height*bytesPerPixel)
 
         // write out the line
-        if let line = self.firstLine {
+        if self.size > 150,
+           let line = self.firstLine
+        {
             Log.d("have LINE \(line)")
             var pixel = Pixel()
             pixel.blue = 0xFFFF
@@ -269,7 +271,7 @@ public class OutlierGroup: CustomStringConvertible,
             let centralCoord = DoubleCoord(x: Double(self.bounds.width/2),
                                            y: Double(self.bounds.height/2))
 
-            Log.d("centralCoord \(centralCoord)")
+            //Log.d("centralCoord \(centralCoord)")
             line.iterate(.forwards, from: centralCoord) { x, y, iterationDirection in
                 testPaintAt(x: x, y: y, pixel: pixel, imageData: &imageData)
             }

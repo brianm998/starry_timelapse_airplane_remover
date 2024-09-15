@@ -192,7 +192,13 @@ public class BlobProcessor {
                                            height: frame.height,
                                            frameIndex: frame.frameIndex)
         
-        idibr.process(scanSize: 20) // XXX constant
+        iterate() { shouldRun in
+            if shouldRun {
+                idibr.process(scanSize: 30, requiredNeighbors: 2) // XXX constant
+            }
+
+            return idibr.blobMap.count
+        }
 
         return idibr.blobMap
     }
@@ -216,12 +222,20 @@ public class BlobProcessor {
         // weed out blobs that are too small and not bright enough
         // XXX this is eating a lot of blobs we want :(
         blobs.compactMapValues { blob in
-            if blob.size < 20,
-               blob.medianIntensity < 2000 // XXX constant
+            if blob.size < 20   // XXX constant
             {
+                // discard blobs that are still this small 
                 return nil
             } else if blob.size < 30,
-                      blob.medianIntensity < 1000 // XXX constant
+               blob.medianIntensity < 10000 // XXX constant
+            {
+                return nil
+            } else if blob.size < 50,
+                      blob.medianIntensity < 15000 // XXX constant
+            {
+                return nil 
+            } else if blob.size < 100,
+                      blob.medianIntensity < 7000 // XXX constant
             {
                 return nil 
             } else {
