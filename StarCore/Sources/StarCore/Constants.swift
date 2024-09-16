@@ -141,6 +141,7 @@ public class Constants {
     }
 }
 
+// allows blobs if they are bigger or more intense than this
 public struct BlobQualifier {
     let size: Int
     let medianIntensity: UInt16

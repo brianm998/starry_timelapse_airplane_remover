@@ -383,12 +383,6 @@ public class Blob: CustomStringConvertible, Hashable, Codable {
         return false
     }
 
-    public func isIn(matrixElement: ImageMatrixElement,
-                     within borderDistance: Double = 0) -> Bool
-    {
-        self.boundingBox.edgeDistance(to: matrixElement.boundingBox) < borderDistance
-    }
-    
     public var boundingBox: BoundingBox {
         if let _boundingBox { return _boundingBox }
         var min_x:Int = Int.max

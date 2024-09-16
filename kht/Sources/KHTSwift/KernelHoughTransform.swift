@@ -21,16 +21,6 @@ public func kernelHoughTransform(image: NSImage,
                                      maxResults: maxResults)
 }
 
-public func kernelHoughTransform(elements: [ImageMatrixElement],
-                                 // never return more than this many lines
-                                 // returns all if not given
-                                 maxResults: Int? = nil) -> [ImageMatrixElement]
-{
-    transformer.kernelHoughTransform(elements: elements,
-                                     maxResults: maxResults)
-    
-}
-
 /*
 
  Isolate the c++ code within an actor as it is not thread safe.
@@ -42,22 +32,6 @@ fileprivate let transformer = HoughTransformer()
 
 fileprivate class HoughTransformer {
 
-    public func kernelHoughTransform(elements: [ImageMatrixElement],
-                                     maxResults: Int?) -> [ImageMatrixElement]
-    {
-        let ret = elements
-        for element in ret {
-            if let image = element.image {
-                element.lines = 
-                  kernelHoughTransform(image: image,
-                                       maxResults: maxResults)
-                element.image = nil
-            }
-        }
-        return ret
-    }
-
-    
     public func kernelHoughTransform(image: NSImage,
                                      maxResults: Int?) -> [Line]
     {

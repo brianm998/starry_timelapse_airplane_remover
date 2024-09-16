@@ -16,6 +16,15 @@ public struct Line: Codable {
         self.votes = votes
     }
 
+    // constructs a line that passes through the two given points
+    public init(point1: DoubleCoord,
+                point2: DoubleCoord,
+                votes: Int = 0)
+    {
+        (self.theta, self.rho) = polarCoords(point1: point1, point2: point2)
+        self.votes = votes
+    }
+
     // returns to points that are on this line
     public var twoPoints: (DoubleCoord, DoubleCoord) {
         // this point is always on the line
@@ -40,15 +49,6 @@ public struct Line: Codable {
         let (p1, p2) = self.twoPoints
 
         return StandardLine(point1: p1, point2: p2)
-    }
-    
-    // constructs a line that passes through the two given points
-    public init(point1: DoubleCoord,
-                point2: DoubleCoord,
-                votes: Int = 0)
-    {
-        (self.theta, self.rho) = polarCoords(point1: point1, point2: point2)
-        self.votes = votes
     }
 }
 
