@@ -206,7 +206,7 @@ struct StarCli: AsyncParsableCommand {
     var numConcurrentRenders: UInt = TaskRunner.maxConcurrentTasks
 
     @Option(name: .shortAndLong, help: "Detection Types")
-    var detectionType: DetectionType = .exp // XXX rename these and make this the new default
+    var detectionType: DetectionType = .strong
     
     @Option(name: .shortAndLong, help: """
         When set, outlier groups closer to the bottom of the screen than this are ignored.
@@ -336,7 +336,7 @@ struct StarCli: AsyncParsableCommand {
                             for: .console)
                     let name = inputImageSequenceName
                     let path = inputImageSequencePath
-                    let message = "star v\(config.starVersion) is processing images from sequence in \(path)/\(name)"
+                    let message = "star v\(config.starVersion) is processing images from sequence in \(path)/\(name)" // XXX this shows the version from the config file, not the running version (:
                     Task {
                         await updatable.log(name: "star",
                                             message: message,

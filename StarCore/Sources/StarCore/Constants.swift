@@ -18,22 +18,18 @@ public let constants = Constants()
 
 public class Constants {
 
-    public var detectionType: DetectionType = .mild
+    public var detectionType: DetectionType = .strong
     
     // pixels with less changed intensity than this cannot start blobs
     // lower values give more blobs
     public var blobberMinPixelIntensity: UInt16 {
         switch self.detectionType {
         case .mild:
-            return 5000
+            return 7000
         case .strong:
-            return 3000
-        case .excessive:
-            return 2000
-        case .exp:
-            return 6500
-        case .radical:
             return 6000
+        case .excessive:
+            return 4500
         }
     }
 
@@ -46,13 +42,9 @@ public class Constants {
         case .mild:
             return 50        
         case .strong:
-            return 55
+            return 60 
         case .excessive:
             return 62
-        case .exp:
-            return 66 
-        case .radical:
-            return 60 
         }
     }
 
@@ -64,13 +56,9 @@ public class Constants {
         case .mild:
             return 25        
         case .strong:
-            return 22
-        case .excessive:
-            return 20
-        case .exp:
-            return 25
-        case .radical:
             return 10
+        case .excessive:
+            return 8
         }
     }
 
@@ -82,13 +70,9 @@ public class Constants {
         case .mild:
             return 3500      
         case .strong:
-            return 3300
+            return 3500
         case .excessive:
             return 3000
-        case .exp:
-            return 3500
-        case .radical:
-            return 3500
         }
     }
     
@@ -99,13 +83,9 @@ public class Constants {
         case .mild:
             return 8         
         case .strong:
-            return 6
+            return 5
         case .excessive:
             return 4
-        case .exp:
-            return 5
-        case .radical:
-            return 5
         }
     }
 
@@ -116,49 +96,71 @@ public class Constants {
         case .mild:
             return 2500      
         case .strong:
-            return 2200
-        case .excessive:
-            return 2000
-        case .exp:
-            return 2500
-        case .radical:
             return 1500
-        }
-    }
-    
-    // lines generated from the subtraction frame
-    // that have fewer votes than this are ignored
-    // larger values speed up processing and
-    // decrease how many outlier groups are joined with lines
-    public var khtMinLineVotes: Int {
-        switch self.detectionType {
-        case .mild:
-            return 3000      
-        case .strong:
-            return 2500
         case .excessive:
-            return 2000
-        case .exp:
-            return 3000
-        case .radical:
-            return 1000
+            return 1200
         }
     }
 
-    // how far off of the end of the line do we look when doing KHT processing?
-    // larger values increase processing time
-    public var khtLineExtensionAmount: Int {
+    // blobs smaller than this are discarded at the end of blob processing
+    // smaller values give more blobs 
+    public var finalMinBlobSize: Int {
         switch self.detectionType {
         case .mild:
-            return 64
+            return 40      
         case .strong:
-            return 128
+            return 20
         case .excessive:
-            return 256
-        case .exp:
-            return 64
-        case .radical:
-            return 4
+            return 15
         }
+    }
+
+    // blobs smaller and dimmer than this are discarded at the end
+    // smaller values give more blobs
+    public var finalSmallDimBlobQualifier: BlobQualifier {
+        switch self.detectionType {
+        case .mild:
+            return .init(size: 50, medianIntensity: 12000)
+        case .strong:
+            return .init(size: 30, medianIntensity: 10000)
+        case .excessive:
+            return .init(size: 20, medianIntensity: 8000)
+        }
+    }
+
+    // blobs smaller and dimmer than this are discarded at the end
+    // smaller values give more blobs
+    public var finalMediumDimBlobQualifier: BlobQualifier {
+        switch self.detectionType {
+        case .mild:
+            return .init(size: 60, medianIntensity: 15000)
+        case .strong:
+            return .init(size: 50, medianIntensity: 15000)
+        case .excessive:
+            return .init(size: 30, medianIntensity: 10000)
+        }
+    }
+
+    // blobs smaller and dimmer than this are discarded at the end
+    // smaller values give more blobs
+    public var finalLargeDimBlobQualifier: BlobQualifier {
+        switch self.detectionType {
+        case .mild:
+            return .init(size: 150, medianIntensity: 5000)
+        case .strong:
+            return .init(size: 120, medianIntensity: 4000)
+        case .excessive:
+            return .init(size: 80, medianIntensity: 2500)
+        }
+    }
+}
+
+public struct BlobQualifier {
+    let size: Int
+    let medianIntensity: UInt16
+
+    // is this blob allowed?
+    func allows(_ blob: Blob) -> Bool {
+        !(blob.size < size && blob.medianIntensity < medianIntensity)
     }
 }

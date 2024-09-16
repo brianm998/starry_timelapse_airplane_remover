@@ -106,21 +106,14 @@ public class BlobProcessor {
           .process() { blobs in
               // weed out blobs that are too small and not bright enough
               blobs.compactMapValues { blob in
-                  if blob.size < 20   // XXX constant
-                  {
-                      // discard blobs that are still this small 
+                  if blob.size < constants.finalMinBlobSize {
+                      // discard any blobs that are still this small 
                       return nil
-                  } else if blob.size < 30,
-                            blob.medianIntensity < 10000 // XXX constant
-                  {
+                  } else if !constants.finalSmallDimBlobQualifier.allows(blob) {
                       return nil
-                  } else if blob.size < 50,
-                            blob.medianIntensity < 15000 // XXX constant
-                  {
+                  } else if !constants.finalMediumDimBlobQualifier.allows(blob) {
                       return nil 
-                  } else if blob.size < 150,
-                            blob.medianIntensity < 5000 // XXX constant
-                  {
+                  } else if !constants.finalLargeDimBlobQualifier.allows(blob) {
                       return nil 
                   } else {
                       // this blob is either bigger than the largest size tested for above,

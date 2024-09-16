@@ -168,7 +168,7 @@ public struct Config: Codable {
     // 0.6.5 re-worked blob detection again, added separate DetectionType
     // 0.6.6 re-wrote outlier saving, using one image per frame for outlier data now
     // 0.6.7 y-axis outlier images, two new classfication features
-    // 0.7.0 updated Full FrameBlobber, added BlobProcessor and LinearBlobConnector, fixed KHT bugs
+    // 0.7.0 updated FullFrameBlobber, added BlobProcessor and LinearBlobConnector, KHT works now
     
     public var starVersion = "0.7.0" // XXX move this out
 
