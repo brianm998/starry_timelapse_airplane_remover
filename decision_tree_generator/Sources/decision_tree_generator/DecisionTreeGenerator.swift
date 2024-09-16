@@ -122,7 +122,7 @@ actor DecisionTreeGenerator {
             let name = tree.tree.name
             Log.i("have tree \(name) w/ score \(score)")
 
-            treesDeclarationString += "    let tree_\(name) = OutlierGroupDecisionTree_\(name)()\n"
+            treesDeclarationString += "    let tree_\(name) = OutlierGroupDecisionTreeForest_\(name)()\n"
             treesClassificationString1 += "        total += self.tree_\(name).classification(of: group) * \(score)\n"
             treesClassificationString2 += "        total += self.tree_\(name).classification(of: featureData) * \(score)\n"
             treesNameListString += " \"\(name)\","

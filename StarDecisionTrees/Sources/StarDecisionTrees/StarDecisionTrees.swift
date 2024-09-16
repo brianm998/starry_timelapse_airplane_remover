@@ -2,13 +2,13 @@ import Foundation
 import StarCore
 
 public let decisionTrees: [String: NamedOutlierGroupClassifier] = [
-    "ec1b7e4c": OutlierGroupDecisionTreeForest_ec1b7e4c(),
-    "ec9e847b": OutlierGroupDecisionTreeForest_ec9e847b(),
-    "5e53517e": OutlierGroupDecisionTreeForest_5e53517e(),
-    "ef3ebd34": OutlierGroupDecisionTreeForest_ef3ebd34(),
-    "469916bb": OutlierGroupDecisionTreeForest_469916bb(),
-    "585e119c": OutlierGroupDecisionTreeForest_585e119c(),
-    "f04812f6": OutlierGroupDecisionTreeForest_f04812f6(),
-    "d411a00d": OutlierGroupForestClassifier_d411a00d(),
-    "1e37db18": OutlierGroupDecisionTreeForest_1e37db18(),
+    "6101edf0": OutlierGroupDecisionTreeForest_6101edf0(),
+    "6071a97c": OutlierGroupDecisionTreeForest_6071a97c(),
+    "8945b17a": OutlierGroupDecisionTreeForest_8945b17a(),
+    "3690e5b5": OutlierGroupDecisionTreeForest_3690e5b5(),
+    "ddd0a428": OutlierGroupDecisionTreeForest_ddd0a428(),
+    "d85dc590": OutlierGroupDecisionTreeForest_d85dc590(),
+    "39508f50": OutlierGroupForestClassifier_39508f50(),
+    "3961a6e5": OutlierGroupDecisionTreeForest_3961a6e5(),
+    "23637273": OutlierGroupDecisionTreeForest_23637273(),
 ]

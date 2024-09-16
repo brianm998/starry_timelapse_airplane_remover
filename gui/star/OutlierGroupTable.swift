@@ -52,13 +52,7 @@ struct OutlierGroupTableRow: Identifiable {
     let dt_medianBrightness: Double
     let dt_maxBrightness: Double
     let dt_numberOfNearbyOutliersInSameFrame: Double
-    let dt_adjecentFrameNeighboringOutliersBestTheta: Double
-    let dt_histogramStreakDetection: Double
     let dt_maxHoughTransformCount: Double
-    let dt_maxHoughTheta: Double
-    let dt_neighboringInterFrameOutlierThetaScore: Double
-    let dt_maxOverlap: Double
-    let dt_maxOverlapTimesThetaHisto: Double
     let dt_pixelBorderAmount: Double
     let dt_averageLineVariance: Double
     let dt_lineLength: Double
@@ -94,15 +88,9 @@ struct OutlierGroupTableRow: Identifiable {
         dt_medianBrightness = group.decisionTreeValue(for: .medianBrightness)
         dt_maxBrightness = group.decisionTreeValue(for: .maxBrightness)
         dt_numberOfNearbyOutliersInSameFrame = group.decisionTreeValue(for: .numberOfNearbyOutliersInSameFrame)
-        dt_adjecentFrameNeighboringOutliersBestTheta = group.decisionTreeValue(for: .adjecentFrameNeighboringOutliersBestTheta)
 
-        dt_histogramStreakDetection = group.decisionTreeValue(for: .histogramStreakDetection)
         dt_maxHoughTransformCount = group.decisionTreeValue(for: .maxHoughTransformCount)
-        dt_maxHoughTheta = group.decisionTreeValue(for: .maxHoughTheta)
-        dt_neighboringInterFrameOutlierThetaScore = group.decisionTreeValue(for: .neighboringInterFrameOutlierThetaScore)
 
-        dt_maxOverlap = group.decisionTreeValue(for: .maxOverlap)
-        dt_maxOverlapTimesThetaHisto = group.decisionTreeValue(for: .maxOverlapTimesThetaHisto)
         dt_pixelBorderAmount = group.decisionTreeValue(for: .pixelBorderAmount)
         dt_averageLineVariance = group.decisionTreeValue(for: .averageLineVariance)
         dt_lineLength = group.decisionTreeValue(for: .lineLength)
@@ -248,52 +236,10 @@ struct OutlierGroupTable: View {
         }
     }
 
-    var dtAdjecentFrameNeighboringOutliersBestThetaColumn: DTColumn {
-        self.tableColumn(for: "adjecentFrameNeighboringOutliersBestTheta",
-                         value: \.dt_adjecentFrameNeighboringOutliersBestTheta) { row in
-            row.dt_adjecentFrameNeighboringOutliersBestTheta
-        }
-    }
-
-    var dtHistogramStreakDetectionColumn: DTColumn {
-        self.tableColumn(for: "histogramStreakDetection",
-                         value: \.dt_histogramStreakDetection) { row in
-            row.dt_histogramStreakDetection
-        }
-    }
-
     var dtMaxHoughTransformCountColumn: DTColumn {
         self.tableColumn(for: "maxHoughTransformCount",
                          value: \.dt_maxHoughTransformCount) { row in
             row.dt_maxHoughTransformCount
-        }
-    }
-
-    var dtMaxHoughThetaColumn: DTColumn {
-        self.tableColumn(for: "maxHoughTheta",
-                         value: \.dt_maxHoughTheta) { row in
-            row.dt_maxHoughTheta
-        }
-    }
-
-    var dtNeighboringInterFrameOutlierThetaScoreColumn: DTColumn {
-        self.tableColumn(for: "neighboringInterFrameOutlierThetaScore",
-                         value: \.dt_neighboringInterFrameOutlierThetaScore) { row in
-            row.dt_neighboringInterFrameOutlierThetaScore
-        }
-    }
-
-    var dtMaxOverlap: DTColumn {
-        self.tableColumn(for: "maxOverlap",
-                         value: \.dt_maxOverlap) { row in
-            row.dt_maxOverlap
-        }
-    }
-
-    var dtMaxOverlapTimesThetaHisto: DTColumn {
-        self.tableColumn(for: "maxOverlapTimesThetaHisto",
-                         value: \.dt_maxOverlapTimesThetaHisto) { row in
-            row.dt_maxOverlapTimesThetaHisto
         }
     }
 
@@ -378,13 +324,6 @@ struct OutlierGroupTable: View {
                     }
                     Group {
                         dtNumberOfNearbyOutliersInSameFrameColumn
-                        dtAdjecentFrameNeighboringOutliersBestThetaColumn
-                        dtHistogramStreakDetectionColumn
-                        dtMaxHoughTransformCountColumn
-                        dtMaxHoughThetaColumn
-                        dtNeighboringInterFrameOutlierThetaScoreColumn
-                        dtMaxOverlap
-                        dtMaxOverlapTimesThetaHisto
                         dtPixelBorderAmount
                     }
                     Group {

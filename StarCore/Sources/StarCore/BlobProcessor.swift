@@ -81,9 +81,7 @@ public class BlobProcessor {
               }
           },
 
-          .save(.blobs),
-
-          
+          .save(.blobs),          
           .frameState(.isolatedBlobRemoval1),
 
           // a first pass on dim isolated blob removal
@@ -91,7 +89,6 @@ public class BlobProcessor {
                                         requiredNeighbors: 2)),
           
           .save(.filter1),
-
           .frameState(.isolatedBlobRemoval2),
 
           // remove isolated blobs
@@ -127,24 +124,29 @@ public class BlobProcessor {
 
           .save(.filter5),
           .frameState(.finalCrunch),
+
+
+          /*
+           add a stop where we look at blobs which have a line, and attempt to trim them a bit
+
+           looks like excessive mode could use that 
+           */
+
           
           // eviscerate any remaining small and dim blobs with no mercy 
           .process() { blobs in
               // weed out blobs that are too small and not bright enough
               blobs.compactMapValues { blob in
-                  if blob.size < constants.finalMinBlobSize {
-                      // discard any blobs that are still this small 
-                      return nil
-                  } else if !constants.finalSmallDimBlobQualifier.allows(blob) {
-                      return nil
-                  } else if !constants.finalMediumDimBlobQualifier.allows(blob) {
-                      return nil 
-                  } else if !constants.finalLargeDimBlobQualifier.allows(blob) {
-                      return nil 
-                  } else {
-                      // this blob is either bigger than the largest size tested for above,
-                      // or brighter than the medianIntensity set for its size group
+                  // discard any blobs that are still too small or dim
+                  if blob.size >= constants.finalMinBlobSize,
+                     constants.finalSmallDimBlobQualifier.allows(blob),
+                     constants.finalMediumDimBlobQualifier.allows(blob),
+                     constants.finalLargeDimBlobQualifier.allows(blob)
+                  {
+                      // this blob is good enough for machine learning classification
                       return blob
+                  } else {
+                      return nil
                   }
               }
           },
