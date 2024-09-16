@@ -150,7 +150,7 @@ public actor UpdatableProgressMonitor {
             updates.append(update)
         }
 
-        if let update = progressLine(for: .isolatedBlobRemoval) {
+        if let update = progressLine(for: .isolatedBlobRemoval1) {
             updates.append(update)
         }
 
@@ -158,7 +158,23 @@ public actor UpdatableProgressMonitor {
             updates.append(update)
         }
 
-        if let update = progressLine(for: .linearBlobAbsorbtion) {
+        if let update = progressLine(for: .isolatedBlobRemoval3) {
+            updates.append(update)
+        }
+
+        if let update = progressLine(for: .isolatedBlobRemoval4) {
+            updates.append(update)
+        }
+
+        if let update = progressLine(for: .smallLinearBlobAbsorbtion) {
+            updates.append(update)
+        }
+
+        if let update = progressLine(for: .largerLinearBlobAbsorbtion) {
+            updates.append(update)
+        }
+        
+        if let update = progressLine(for: .finalCrunch) {
             updates.append(update)
         }
         

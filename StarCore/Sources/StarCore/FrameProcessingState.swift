@@ -30,9 +30,13 @@ public enum FrameProcessingState: Int, CaseIterable, Codable {
     case assemblingPixels
     case sortingPixels
     case detectingBlobs
-    case isolatedBlobRemoval
+    case isolatedBlobRemoval1
     case isolatedBlobRemoval2
-    case linearBlobAbsorbtion
+    case isolatedBlobRemoval3
+    case isolatedBlobRemoval4
+    case smallLinearBlobAbsorbtion
+    case largerLinearBlobAbsorbtion
+    case finalCrunch
     case populatingOutlierGroups
     case readyForInterFrameProcessing
     case interFrameProcessing
@@ -60,12 +64,20 @@ public enum FrameProcessingState: Int, CaseIterable, Codable {
             return "sorting pixels"
         case .detectingBlobs:
             return "detecting blobs"
-        case .isolatedBlobRemoval:
-            return "isolated blob removal"
+        case .isolatedBlobRemoval1:
+            return "isolated blob removal phase 1"
         case .isolatedBlobRemoval2:
             return "isolated blob removal phase 2"
-        case .linearBlobAbsorbtion:
-            return "linear blob absorbtion"
+        case .isolatedBlobRemoval3:
+            return "isolated blob removal phase 3"
+        case .isolatedBlobRemoval4:
+            return "isolated blob removal phase 4"
+        case .smallLinearBlobAbsorbtion:
+            return "small linear blob absorbtion"
+        case .largerLinearBlobAbsorbtion:
+            return "larger linear blob absorbtion"
+        case .finalCrunch:
+            return "final crunch"
         case .populatingOutlierGroups:
             return "populating outlier groups"
         case .readyForInterFrameProcessing: // XXX not covered in progress monitor

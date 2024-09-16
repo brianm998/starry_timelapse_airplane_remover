@@ -58,7 +58,7 @@ public class BlobProcessor {
           
           .save(.blobs),
 
-          .frameState(.isolatedBlobRemoval),
+          .frameState(.isolatedBlobRemoval1),
 
           // a first pass on dim isolated blob removal
           .dimIsolatedBlobRemover(.init(scanSize: 30,
@@ -66,41 +66,41 @@ public class BlobProcessor {
           
           .save(.filter1),
 
+          .frameState(.isolatedBlobRemoval2),
+
           // remove isolated blobs
           .isolatedBlobRemover(.init(minNeighborSize: 6, scanSize: 24)),
           
           .save(.filter2),
-
-          // a final pass on dim isolated blobs - seems to do nothing :(
-          .dimIsolatedBlobRemover(.init(scanSize: 24)),
-
-          .save(.filter3),
-
-          .frameState(.isolatedBlobRemoval2),
+          .frameState(.isolatedBlobRemoval3),
 
           // remove smaller disconected blobs
           .disconnectedBlobRemover(.init(scanSize: 60,
                                          blobsSmallerThan: 18,
                                          requiredNeighbors: 2)),
-          .save(.filter4),
+          .save(.filter3),
+          .frameState(.isolatedBlobRemoval4),
 
           // remove larger disconected blobs
           .disconnectedBlobRemover(.init(scanSize: 60,
                                          blobsSmallerThan: 50,
                                          blobsLargerThan: 18,
                                          requiredNeighbors: 2)),
-        
-          .frameState(.linearBlobAbsorbtion),
-
+          .save(.filter4),
+          .frameState(.smallLinearBlobAbsorbtion),
+          
           // find really close linear blobs
           .linearBlobConnector(.init(scanSize: 12,
                                      blobsSmallerThan: 30)),
 
+          .frameState(.largerLinearBlobAbsorbtion),
+          
           // then try to connect more distant linear blobs
           .linearBlobConnector(.init(scanSize: 35,
                                      blobsSmallerThan: 50)),
 
           .save(.filter5),
+          .frameState(.finalCrunch),
           
           // eviscerate any remaining small and dim blobs with no mercy 
           .process() { blobs in

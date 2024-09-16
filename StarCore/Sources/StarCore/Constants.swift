@@ -76,7 +76,7 @@ public class Constants {
         }
     }
     
-    // blobs smaller than this are ignored by the blobber
+    // blobs smaller than this are ignored at the start by the blobber
     // smaller values give more blobs
     public var blobberMinBlobSize: Int {
         switch self.detectionType {
@@ -86,19 +86,6 @@ public class Constants {
             return 5
         case .excessive:
             return 4
-        }
-    }
-
-    // blobs with less median intensity than this are ignored
-    // lower values give more blobs
-    public var blobberMinBlobIntensity: UInt16 {
-        switch self.detectionType {
-        case .mild:
-            return 2500      
-        case .strong:
-            return 1500
-        case .excessive:
-            return 1200
         }
     }
 
@@ -112,6 +99,19 @@ public class Constants {
             return 20
         case .excessive:
             return 15
+        }
+    }
+
+    // blobs with less median intensity than this are ignored
+    // lower values give more blobs
+    public var blobberMinBlobIntensity: UInt16 {
+        switch self.detectionType {
+        case .mild:
+            return 2500      
+        case .strong:
+            return 1500
+        case .excessive:
+            return 1200
         }
     }
 
@@ -148,9 +148,9 @@ public class Constants {
         case .mild:
             return .init(size: 150, medianIntensity: 5000)
         case .strong:
-            return .init(size: 120, medianIntensity: 4000)
+            return .init(size: 120, medianIntensity: 3000)
         case .excessive:
-            return .init(size: 80, medianIntensity: 2500)
+            return .init(size: 80, medianIntensity: 2000)
         }
     }
 }
