@@ -212,35 +212,11 @@ public class FullFrameBlobber {
             }                    
         }
 
-        Log.d("frame \(frameIndex) initially found \(blobs.count) blobs")
-
-        // filter out a lot of the blobs
-        self.blobs = self.blobs.filter { blob in
-
-            if let ignoreLowerPixels = config.ignoreLowerPixels,
-               blob.boundingBox.min.y + ignoreLowerPixels > imageHeight
-            {
-                // too close to the bottom 
-                return false
-            }
-
-            // these blobs are just too dim
-            if blob.medianIntensity < constants.blobberMinBlobIntensity { return false }
-
-            // only keep smaller blobs if they are bright enough
-            if blob.size <= constants.blobberBrightSmallSize,
-              blob.medianIntensity < constants.blobberBrightMinIntensity { return false }
-
-            // anything this small is noise
-           if blob.size <= constants.blobberMinBlobSize { return false }
-
-            // this blob has passed all checks, keep it 
-            return true
-        }         
         Log.i("frame \(frameIndex) found \(blobs.count) blobs")
     }
-    public var blobMap: [UInt16: Blob] {
-        var ret: [UInt16: Blob] = [:]
+    
+    public var blobMap: BlobMap {
+        var ret: BlobMap = [:]
         for blob in self.blobs { ret[blob.id] = blob }
         return ret
     }

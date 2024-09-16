@@ -48,35 +48,21 @@ public class Constants {
         }
     }
 
-    // the size that blobs need to be smaller than for
-    // blobberBrightMinIntensity to apply
-    // larger size gives fewer blobs
-    public var blobberBrightSmallSize: Int {
-        switch self.detectionType {
-        case .mild:
-            return 25        
-        case .strong:
-            return 10
-        case .excessive:
-            return 8
-        }
-    }
-
-    // if a blob is smaller than blobberBrightSmallSize,
+    // if a blob is smaller than size,
     // then discard it if it's median intensity is less than this
     // larger values give fewer blobs
-    public var blobberBrightMinIntensity: UInt16 {
+    public var blobberSmallBlobQualifier: BlobQualifier {
         switch self.detectionType {
         case .mild:
-            return 3500      
+            return .init(size: 25, medianIntensity: 3500)
         case .strong:
-            return 3500
+            return .init(size: 10, medianIntensity: 3500)
         case .excessive:
-            return 3000
+            return .init(size: 8, medianIntensity: 3000)
         }
     }
     
-    // blobs smaller than this are ignored at the start by the blobber
+    // blobs smaller than this are ignored at the beginning of blob processing
     // smaller values give more blobs
     public var blobberMinBlobSize: Int {
         switch self.detectionType {

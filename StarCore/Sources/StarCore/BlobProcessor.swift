@@ -53,11 +53,37 @@ public class BlobProcessor {
         
         self.steps = [
 
-          // align frame, subtract it, sort pixels, then detect blobs
+          // align frame, subtract it, sort pixels, then initial blob detection
           .create(findBlobs),
-          
+
+          // a first pass at cutting out individual blobs based upon size, brightness
+          // or being too close to the bottom
+          .process() { blobs in
+              blobs.compactMapValues { blob in
+                  if let ignoreLowerPixels = frame.config.ignoreLowerPixels,
+                     blob.boundingBox.min.y + ignoreLowerPixels > frame.height
+                  {
+                      // too close to the bottom 
+                      return nil
+                  }
+
+                  // anything this small is noise
+                  if blob.size <= constants.blobberMinBlobSize { return nil }
+
+                  // these blobs are just too dim
+                  if blob.medianIntensity < constants.blobberMinBlobIntensity { return nil }
+                  
+                  // only keep smaller blobs if they are bright enough
+                  if !constants.blobberSmallBlobQualifier.allows(blob) { return nil }
+
+                  // this blob has passed these checks, keep it for now
+                  return blob
+              }
+          },
+
           .save(.blobs),
 
+          
           .frameState(.isolatedBlobRemoval1),
 
           // a first pass on dim isolated blob removal
