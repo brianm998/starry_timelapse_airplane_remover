@@ -149,17 +149,19 @@ public class LinearBlobConnector: AbstractBlobAnalyzer {
             { x, y, orientation in
                 if x >= 0,
                    y >= 0,
-                   x <= width,
-                   y <= height
+                   x < width,
+                   y < height
                 {
                     // look for blobs at x,y, i.e. blobs that are right on the line
                     let index = y*width+x
-                    let blobId = blobRefs[index]
-                    if blobId != 0 {
-                        Log.d("frame \(frameIndex) blob \(fullBlob.id) found linear blob \(blobId) @ [\(x), \(y)]")
-                        linearBlobIds.insert(blobId)
-                    } else {
-                        //Log.d("frame \(frameIndex) blob \(fullBlob.id) nothing found @ [\(x), \(y)]")
+                    if index < blobRefs.count {
+                        let blobId = blobRefs[index]
+                        if blobId != 0 {
+                            Log.d("frame \(frameIndex) blob \(fullBlob.id) found linear blob \(blobId) @ [\(x), \(y)]")
+                            linearBlobIds.insert(blobId)
+                        } else {
+                            //Log.d("frame \(frameIndex) blob \(fullBlob.id) nothing found @ [\(x), \(y)]")
+                        }
                     }
                 }
             }
