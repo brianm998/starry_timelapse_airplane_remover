@@ -240,7 +240,8 @@ struct StarCli: AsyncParsableCommand {
         TaskRunner.maxConcurrentTasks = numConcurrentRenders
 
         // gui should do this too
-        StarCore.currentClassifier = OutlierGroupForestClassifier_39508f50()
+        
+        StarCore.currentClassifier = OutlierGroupForestClassifier_3c8d0d49()
 
         if version {
             print("""
@@ -395,10 +396,10 @@ struct StarCli: AsyncParsableCommand {
         } else {
             throw ValidationError("need to provide input")
         }
-        
         await TaskWaiter.shared.finish()
-        let loggingSemaphore = await logging.gremlin.finishLogging()
-        await loggingSemaphore.wait()
+        if let loggingSemaphore = await logging.gremlin.finishLogging() {
+            await loggingSemaphore.wait()
+        }
     }
 }
 
