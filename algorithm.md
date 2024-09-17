@@ -1,6 +1,6 @@
 # This document describes the algorithm used by Star to remove airplanes and satellites from image sequences
 
-Written as of Star 0.6.7.
+Written as of Star 0.7.0.
 
 ## High level
 
@@ -10,9 +10,11 @@ At a high level, Star processes each frame in the following steps.
 2. subtract the image from step #1 from the frame being processed
 3. detect bright groups of pixels in the image from step #2
 4. apply some heuristics to filter out a lot of the groups from step #3
-5. classify groups left after step #4 using machine learning to decide which ones to derive layer masks from
-6. create a layer mask for this frame using the classified groups from step #5
-7. use the layer mask from step #6 and the star-aligned neighbor frame from step #1 to generate the output image for this frame
+5. use grouping and line detection to combine lines of dots
+6. throw out a lot of smaller groups
+7. classify groups left after step #4 using machine learning to decide which ones to derive layer masks from
+8. create a layer mask for this frame using the classified groups from step #5
+9. use the layer mask from step #6 and the star-aligned neighbor frame from step #1 to generate the output image for this frame
 
 ### Step #1, Star Alignment
 
@@ -57,6 +59,12 @@ Star then iterates, brightest pixel first, and looks for pixels around each brig
 
 These are called `Blobs` in the Star code.
 
+A first level of filter is done here, where we look back at the original image around the pixels which we have identified as part of each blob.  If the signal we're observing is because of a moving lighted object, then it is almost always the case that any nearby pixels in the original image are less bright than the pixels in the blob.
+
+Other signals can show up in the subtraction image which do not follow this rule.  Moving landscape is one.  Partially, but not fully aligned bright stars are another.
+
+So before being added to the initial list to blobs to consider, a quick check of nearby pixels on the original source image is performed, which can throw out nearly half of the blobs in many cases.
+
 ### Step #4, apply heuristics to filter out groups
 
 In step #4, a set of heuristics is applied to the potentially large group of blobs from step #3.
@@ -67,7 +75,21 @@ Many of the smaller blobs that are not close to any other blos are removed here,
 
 Using different versions of `--detection-type` will result in more Blobs making it past this step.
 
-### Step #5, use machine learning to classify bright groups
+This can drasticaly reduce the number of blobs present
+
+### Step #5, use grouping and line detection to combine blobs
+
+In these steps, nearby blobs are grouped together, and then some of them may be combined together if they are found to be linear, i.e. making a line.  Star uses the kernel hough transform to detect lines in blobs.
+
+Many airplane signals close to the horizon are a sequence of separated dots.  This step tries to combine them into a single group, which conforms to a line we have found.
+
+Combining these small dots at this step helps us to both categorize based upon linearity, and weed out smaller blobs after this that do not form a line.
+
+### Step #6, throw out a lot of small, dimmer blobs
+
+At this step, we assume that any blobs that are small and too dim can be thrown away.  This can really reduce the number of blobs per frame, from thousands to hundreds or less.
+
+### Step #7, use machine learning to classify bright groups
 
 At this point, what are called `Blob`s in the code are promoted to `OutlierGroup`s.
 
