@@ -133,9 +133,8 @@ public class Log {
 
      */
     public static func add(handler: LogHandler, for outputType: Log.Output) {
-        if handler.level < minimumLogLevel {
+        if handler.level > minimumLogLevel {
             minimumLogLevel = handler.level
-            print("minimumLogLevel set to \(minimumLogLevel)")
         }
         Task { await gremlin.add(handler: handler, for: outputType) }
     }
@@ -880,8 +879,10 @@ fileprivate extension Log {
                                _ function: String,
                                _ line: Int)
     {
+        if logLevel > minimumLogLevel { return }
+
         let logTime = NSDate().timeIntervalSince1970
-            
+
         Task {
             var string = ""
             
@@ -908,15 +909,11 @@ fileprivate extension Log {
                 }
             }
 
-            if logLevel > minimumLogLevel {
-                await gremlin.log(string, at: logLevel,
-                                  logTime: logTime, extraData: extraData,
-                                  file, function, line)
-
-            }
+            await gremlin.log(string, at: logLevel,
+                              logTime: logTime, extraData: extraData,
+                              file, function, line)
         }
     }
-
 }
 
 public struct LogHolder {
@@ -933,17 +930,27 @@ public let gremlin = LogGremlin()
 public actor LogGremlin {
 
     private var semaphore: AsyncSemaphore?
+    private var _isRunning = true
 
-    public func finishLogging() async -> AsyncSemaphore {
-        let ret = AsyncSemaphore(value: 0)
-        semaphore = ret
-        return ret
+    public func finishLogging() async -> AsyncSemaphore? {
+        if _isRunning {
+            let ret = AsyncSemaphore(value: 0)
+            semaphore = ret
+            return ret
+        }
+        return nil
+    }
+
+    public func isRunning() -> Bool { _isRunning }
+    
+    public func stopRunning() {
+        if let semaphore { semaphore.signal() }
+        _isRunning = false
     }
     
     public init() {
         Task {
-            var shouldRun = true
-            while(shouldRun) {
+            while(await self.isRunning()) {
                 if let log = await gremlin.nextLog() {
                     for handler in await gremlin.getHandlers().values {
                         if log.logLevel <= handler.level {
@@ -954,14 +961,11 @@ public actor LogGremlin {
                                         logTime: log.logTime)
                         }
                     }
-                    if let semaphore = await semaphore,
-                       await pendingLogs.count == 0
-                    {
-                        semaphore.signal()
-                        shouldRun = false
-                    }
                 } else {
                     try? await Task.sleep(nanoseconds: 1_000_000_000)
+                    if await pendingLogs.count == 0 {
+                        await stopRunning()
+                    }
                 }
             }
         }
@@ -978,7 +982,6 @@ public actor LogGremlin {
     func add(handler: LogHandler, for outputType: Log.Output) {
         handlers[outputType] = handler
         if handler.level < minimumLogLevel {
-            print("using minimum log level \(minimumLogLevel)")
             minimumLogLevel = handler.level
         }
     }
