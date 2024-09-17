@@ -474,30 +474,24 @@ public class OutlierGroup: CustomStringConvertible,
         case averageLineVariance
         case lineLength
 
-        // XXX these four account for more than 99% of the time to calculate these values
-        // XXX maybe render them obsolete ??
-
         case nearbyDirectOverlapScore
         case boundingBoxOverlapScore
-/*
+
+        /*
          XXX add:
            - A new feature that accounts for empty space along the line
              given a line for the outlier group, what percentage of the pixels
              along that line (withing a small distance) are filled in by the
              outlier group, and what ones are not?  Airplane lines have more
              pixels along the line, random other assortments do not.
-             
          
-           - config stuff:
-             - outlierMaxThreshold
-             - minGroupSize
+           - now that we've gotten good lines out of the KHT, try rewriting the old streak
+             detection logic to iterate on an outliers line outside of its bounding box.
+             score can be how good a fit is found on either side.  Fit can be determined
+             by a combination of size, brightness, and line similarity, 0-1 where 1 is identical.
 
-           - a new feature that sees, for each outlier group,
-             how many pixels on each neighboring frame are also part of some outlier group
-             give a double between 0 and 1, where 1 is all pixels are also covered
-
-           - expand the above to look within the entire bouding box as well,
-             to produce another feature
+           - add median line variance
+             
          */
         
         /*
