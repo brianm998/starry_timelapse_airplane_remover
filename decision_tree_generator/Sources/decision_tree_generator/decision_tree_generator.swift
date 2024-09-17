@@ -125,8 +125,9 @@ struct decision_tree_generator: AsyncParsableCommand {
         }
         
         await TaskWaiter.shared.finish()
-        let loggingSemaphore = await logging.gremlin.finishLogging()
-        await loggingSemaphore.wait()
+        if let loggingSemaphore = await logging.gremlin.finishLogging() {
+            await loggingSemaphore.wait()
+        }
     }
 
     func runVerification(basedUpon jsonConfigFileName: String) async throws -> TreeTestResults {
