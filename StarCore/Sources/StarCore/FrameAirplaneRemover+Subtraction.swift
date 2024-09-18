@@ -37,13 +37,18 @@ extension FrameAirplaneRemover {
         }
         Log.d("frame \(frameIndex) got orig image")
         
-        guard let otherFrame = await imageAccessor.load(type: .aligned, atSize: .original)
-        else {
-            // XXX maybe try creating it here instead of dying??
-            Log.e("frame \(frameIndex) couldn't load aligned images")
-            throw "frame \(frameIndex) couldn't load aligned images"
+        var otherFrame = await imageAccessor.load(type: .aligned, atSize: .original)
+        if otherFrame == nil {
+            // try creating the star aligned image if we can't load it
+            otherFrame = await starAlignedImage()
         }
 
+        guard let otherFrame else {
+            let error = "frame \(frameIndex) can't load the star aligned image"
+            Log.e(error)
+            throw error
+        }
+        
         Log.d("frame \(frameIndex) got aligned image")
         
         self.state = .subtractingNeighbor
@@ -60,7 +65,7 @@ extension FrameAirplaneRemover {
                 try await imageAccessor.save(subtractionImage, as: .subtracted,
                                              atSize: .preview, overwrite: false)
             } catch {
-                Log.e("can't write subtraction image: \(error)")
+                Log.e("frame \(frameIndex) can't write subtraction image: \(error)")
             }
         }
 

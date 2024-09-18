@@ -205,7 +205,6 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
         }
 
         // run separately from init for better state logging
-        await frame.setupAlignment()
         try await frame.setupOutliers()
         
         return frame

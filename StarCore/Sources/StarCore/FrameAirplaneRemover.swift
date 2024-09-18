@@ -149,15 +149,19 @@ public class FrameAirplaneRemover: Equatable, Hashable {
     private var otherFilename: String = ""
     private let baseFilename: String
 
-    // XXX make this a lazy property 
-    public func setupAlignment() async {
-
-        // align a neighboring frame for detection
+    private var _starAlignedImage: PixelatedImage? 
+    
+    // lazy loaded aligned a neighboring frame
+    public func starAlignedImage() async -> PixelatedImage? {
+        if let _starAlignedImage { return _starAlignedImage }
+        
         let alignmentFilename = otherFilename
 
-        let alignedFrame = await imageAccessor.load(type: .aligned, atSize: .original)
-
-        if alignedFrame == nil {
+        if let alignedFrame = await imageAccessor.load(type: .aligned, atSize: .original) {
+            Log.d("frame \(frameIndex) loaded existing aligned frame")
+            _starAlignedImage = alignedFrame
+            return alignedFrame
+        } else {
             Log.d("frame \(frameIndex) creating aligned frame")
             if let dirname = imageAccessor.dirForImage(ofType: .aligned, atSize: .original) {
                 Log.d("frame \(frameIndex) creating aligned frame in \(dirname)")
@@ -176,15 +180,20 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                 Log.d("frame \(frameIndex) alignedFilename \(String(describing: alignedFilename))")
                 if let alignedFilename {
                     Log.d("frame \(frameIndex) got aligned filename \(alignedFilename)")
+                    if let alignedFrame = await imageAccessor.load(type: .aligned, atSize: .original) {
+                        _starAlignedImage = alignedFrame
+                        return alignedFrame
+                    } else {
+                        Log.e("frame \(frameIndex) could not load aligned frame")
+                    }
                 } else {
                     Log.e("frame \(frameIndex) COULD NOT ALIGN FRAME")
                 }
             } else {
                 Log.w("frame \(frameIndex) no dirname for aligned original images")
             }
-        } else {
-            Log.d("frame \(frameIndex) loaded existing aligned frame")
         }
+        return nil
     }
     
     public func setupOutliers() async throws {
@@ -249,8 +258,15 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         try await imageAccessor.save(image, as: .original, atSize: .preview, overwrite: false)
         try await imageAccessor.save(image, as: .original, atSize: .thumbnail, overwrite: false)
 
-        guard let otherFrame = await imageAccessor.load(type: .aligned, atSize: .original)
-        else { throw "couldn't load aligned file for finishing" }
+        var otherFrame = await imageAccessor.load(type: .aligned, atSize: .original)
+        if otherFrame == nil {
+            // try creating the star aligned image if we can't load it
+            otherFrame = await starAlignedImage()
+        }
+        
+        guard let otherFrame else {
+            throw "couldn't load aligned file for finishing"
+        }
         
         let format = image.imageData // make a copy
         switch format {
