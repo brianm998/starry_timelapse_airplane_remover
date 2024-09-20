@@ -86,6 +86,23 @@ public class OutlierGroup: CustomStringConvertible,
         return _line
     }
 
+    // a line with (0,0) origin calculated from the pixels in this group, if possible
+    public var originZeroLine: Line? {
+        if let line { return originZeroLine(from: line) }
+        return nil
+    }
+
+    public func originZeroLine(from line: Line) -> Line {
+        let minX = self.bounds.min.x
+        let minY = self.bounds.min.y
+        let (ap1, ap2) = line.twoPoints
+        return Line(point1: DoubleCoord(x: ap1.x+Double(minX),
+                                        y: ap1.y+Double(minY)),
+                    point2: DoubleCoord(x: ap2.x+Double(minX),
+                                        y: ap2.y+Double(minY)),
+                    votes: 0)
+    }
+    
     public init(id: UInt16,
                 size: UInt,
                 brightness: UInt,      // average brightness
@@ -236,8 +253,20 @@ public class OutlierGroup: CustomStringConvertible,
     
     private var cachedTestImage: CGImage? 
 
+    // x,y origin at 0,0
     fileprivate func hasPixelAt(x: Int, y: Int) -> Bool {
-        pixels[(y-bounds.min.y)*bounds.width + (x-bounds.min.x)] != 0
+        if x < 0 || y < 0 {
+            return false
+        } else {
+            let index = (y-bounds.min.y)*bounds.width + (x-bounds.min.x)
+            if index >= 0,
+               index < pixels.count
+            {
+                return pixels[index] != 0
+            } else {
+                return false
+            }
+        }
     }
     
     fileprivate func testPaintAt(x: Int, y: Int, pixel: Pixel, imageData: inout Data) -> Bool {
@@ -739,7 +768,6 @@ public class OutlierGroup: CustomStringConvertible,
                 let previousOutlierGroupsOutlierYAxisImageData = previousOutlierGroups.outlierYAxisImageData
                 let previousOutlierGroupsOutlierImageData = previousOutlierGroups.outlierImageData
                 numberFrames += 1
-                //print("FUCK 1 bounds \(bounds)")
                 for y in bounds.min.y...bounds.max.y {
                     if let yAxis = previousOutlierGroupsOutlierYAxisImageData,
                        yAxis[y] == 0 { continue }
@@ -759,7 +787,6 @@ public class OutlierGroup: CustomStringConvertible,
                 let nextOutlierGroupsOutlierYAxisImageData = nextOutlierGroups.outlierYAxisImageData
                 let nextOutlierGroupsOutlierImageData = nextOutlierGroups.outlierImageData
                 numberFrames += 1
-                //print("FUCK 2 bounds \(bounds)")
                 for y in bounds.min.y...bounds.max.y {
                     if let yAxis = nextOutlierGroupsOutlierYAxisImageData,
                        yAxis[y] == 0 { continue }
@@ -832,8 +859,8 @@ public class OutlierGroup: CustomStringConvertible,
        0 if no line or no pixels on line
        1 if all line pixels are filled by this outlier group
      */
-    private var lineFillAmount: Double {
-        if let line = self.line {
+    public var lineFillAmount: Double {
+        if let line = self.originZeroLine {
             let borders = self.bounds.intersections(with: line.standardLine)
             if borders.count > 1 {
                 var totalPixels = 0
@@ -841,10 +868,12 @@ public class OutlierGroup: CustomStringConvertible,
                 
                 line.iterate(between: borders[0],
                              and: borders[1],
-                             numberOfAdjecentPixels: 3)
+                             numberOfAdjecentPixels: 1)
                 { x, y, iterationDirection in
                     totalPixels += 1
-                    if self.hasPixelAt(x: x, y: y) { linePixels += 1 }
+                    if self.hasPixelAt(x: x, y: y) {
+                        linePixels += 1
+                    }
                 }
                 return Double(linePixels)/Double(totalPixels)
             } else {
