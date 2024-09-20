@@ -25,8 +25,16 @@ extension FrameAirplaneRemover {
     // returns a grayscale image pixel value array from subtracting the aligned frame
     // from the frame being processed.
     internal func subtractAlignedImageFromFrame() async throws -> PixelatedImage {
+        // first try to load the subtracted image directly from file
+        if let image = await imageAccessor.load(type: .subtracted, atSize: .original) {
+            return image
+        }
+
+        // if we don't have the subtracted image on file yet, make it
         Log.d("frame \(frameIndex) subtractAlignedImageFromFrame")
-        
+
+
+        // load the original
         guard let image = await imageAccessor.load(type: .original, atSize: .original)
         else {
             Log.e("frame \(frameIndex) couldn't load original image")
@@ -37,13 +45,14 @@ extension FrameAirplaneRemover {
         }
         Log.d("frame \(frameIndex) got orig image")
         
-        var otherFrame = await imageAccessor.load(type: .aligned, atSize: .original)
-        if otherFrame == nil {
+        // load or create the aligned frame
+        var alignedFrame = await imageAccessor.load(type: .aligned, atSize: .original)
+        if alignedFrame == nil {
             // try creating the star aligned image if we can't load it
-            otherFrame = await starAlignedImage()
+            alignedFrame = await starAlignedImage()
         }
 
-        guard let otherFrame else {
+        guard let alignedFrame else {
             let error = "frame \(frameIndex) can't load the star aligned image"
             Log.e(error)
             throw error
@@ -55,7 +64,11 @@ extension FrameAirplaneRemover {
         
         Log.i("frame \(frameIndex) finding outliers")
 
-        let subtractionImage = image.subtract(otherFrame)
+        // subtract them
+        // result is image - alignedFrame
+        // any pixel which is bright in image but not bright in alignedFrame
+        // will be bright in the subtractionImage
+        let subtractionImage = image.subtract(alignedFrame)
         
         if config.writeOutlierGroupFiles {
             // write out image of outlier amounts
