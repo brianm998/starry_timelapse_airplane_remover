@@ -80,7 +80,7 @@ public class OutlierGroup: CustomStringConvertible,
 
     fileprivate var _line: Line?
     
-    var line: Line? {      // XXX rename this
+    var line: Line? { 
         if let _line { return _line }
         _line = HoughLineFinder(pixels: self.pixels, bounds: self.bounds).line
         return _line
@@ -236,6 +236,10 @@ public class OutlierGroup: CustomStringConvertible,
     
     private var cachedTestImage: CGImage? 
 
+    fileprivate func hasPixelAt(x: Int, y: Int) -> Bool {
+        pixels[(y-bounds.min.y)*bounds.width + (x-bounds.min.x)] != 0
+    }
+    
     fileprivate func testPaintAt(x: Int, y: Int, pixel: Pixel, imageData: inout Data) -> Bool {
         
         let bytesPerPixel = 64/8
@@ -476,6 +480,7 @@ public class OutlierGroup: CustomStringConvertible,
 
         case nearbyDirectOverlapScore
         case boundingBoxOverlapScore
+        case lineFillAmount
 
         /*
          XXX add:
@@ -572,6 +577,8 @@ public class OutlierGroup: CustomStringConvertible,
                 return 21
             case .boundingBoxOverlapScore:
                 return 22
+            case .lineFillAmount:
+                return 23
             }
         }
 
@@ -645,6 +652,8 @@ public class OutlierGroup: CustomStringConvertible,
             ret = self.averageLineVariance
         case .lineLength:
             ret = self.lineLength
+        case .lineFillAmount:
+            ret = self.lineFillAmount
         }
         //let t1 = NSDate().timeIntervalSince1970
         //Log.d("group \(id) @ frame \(frameIndex) decisionTreeValue(for: \(type)) = \(ret) after \(t1-t0)s")
@@ -810,6 +819,39 @@ public class OutlierGroup: CustomStringConvertible,
             return Double(matchCount)/(Double(numberFrames)*Double(pixelCount))
         } else {
             fatalError("NO FRAME for nearbyDirectOverlapScore @ index \(frameIndex)")
+        }
+    }
+
+
+    /*
+     - A feature that accounts for empty space along the line
+       given a line for the outlier group, what percentage of the pixels
+       along that line (withing a small distance) are filled in by the
+       outlier group, and what ones are not?  Airplane lines have more
+       pixels along the line, random other assortments do not.
+       0 if no line or no pixels on line
+       1 if all line pixels are filled by this outlier group
+     */
+    private var lineFillAmount: Double {
+        if let line = self.line {
+            let borders = self.bounds.intersections(with: line.standardLine)
+            if borders.count > 1 {
+                var totalPixels = 0
+                var linePixels = 0
+                
+                line.iterate(between: borders[0],
+                             and: borders[1],
+                             numberOfAdjecentPixels: 3)
+                { x, y, iterationDirection in
+                    totalPixels += 1
+                    if self.hasPixelAt(x: x, y: y) { linePixels += 1 }
+                }
+                return Double(linePixels)/Double(totalPixels)
+            } else {
+                return 0
+            }
+        } else {
+            return 0
         }
     }
     
