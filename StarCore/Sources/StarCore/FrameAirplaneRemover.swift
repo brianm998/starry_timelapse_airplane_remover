@@ -148,18 +148,14 @@ public class FrameAirplaneRemover: Equatable, Hashable {
 
     private var otherFilename: String = ""
     private let baseFilename: String
-
-    private var _starAlignedImage: PixelatedImage? 
     
     // lazy loaded aligned a neighboring frame
     public func starAlignedImage() async -> PixelatedImage? {
-        if let _starAlignedImage { return _starAlignedImage }
         
         let alignmentFilename = otherFilename
 
         if let alignedFrame = await imageAccessor.load(type: .aligned, atSize: .original) {
             Log.d("frame \(frameIndex) loaded existing aligned frame")
-            _starAlignedImage = alignedFrame
             return alignedFrame
         } else {
             Log.d("frame \(frameIndex) creating aligned frame")
@@ -181,7 +177,6 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                 if let alignedFilename {
                     Log.d("frame \(frameIndex) got aligned filename \(alignedFilename)")
                     if let alignedFrame = await imageAccessor.load(type: .aligned, atSize: .original) {
-                        _starAlignedImage = alignedFrame
                         return alignedFrame
                     } else {
                         Log.e("frame \(frameIndex) could not load aligned frame")
@@ -261,6 +256,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         var otherFrame = await imageAccessor.load(type: .aligned, atSize: .original)
         if otherFrame == nil {
             // try creating the star aligned image if we can't load it
+            Log.w("doing star alignment at finish")
             otherFrame = await starAlignedImage()
         }
         
