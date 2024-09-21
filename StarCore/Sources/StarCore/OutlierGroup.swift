@@ -40,7 +40,6 @@ public class OutlierGroup: CustomStringConvertible,
     public let size: UInt              // number of pixels in this outlier group
     public let bounds: BoundingBox     // a bounding box on the image that contains this group
     public let brightness: UInt        // the average amount per pixel of brightness over the limit 
-    public let lines: [Line]           // sorted lines from the hough transform of this outlier group
 
     // how far away from the most dominant line in this outlier group are
     // the pixels in it, on average?
@@ -124,112 +123,49 @@ public class OutlierGroup: CustomStringConvertible,
         self.pixels = pixels
         self.pixelSet = pixelSet
         self.surfaceAreaToSizeRatio = ratioOfSurfaceAreaToSize(of: pixels,
+                                                               and: pixelSet,
                                                                width: bounds.width,
                                                                height: bounds.height)
 
         if let line {
             (self.averageLineVariance, self.medianLineVariance, self.lineLength) = 
-              OutlierGroup.averageMedianMaxDistance(for: pixels,
+              OutlierGroup.averageMedianMaxDistance(for: pixelSet,
                                                     from: line,
                                                     with: bounds)
-            self.lines = [line]
-
         } else {
             self.averageLineVariance = 0xFFFFFFFF
             self.medianLineVariance = 0xFFFFFFFF
             self.lineLength = 0
-            self.lines = []
         }
-        
-        _ = self.houghLineHistogram_FF
     }
 
-    public static func averageMedianMaxDistance(for pixels: [UInt16],
-                                                from line: Line,
-                                                with bounds: BoundingBox)
+    fileprivate static func averageMedianMaxDistance(for pixelSet: Set<SortablePixel>,
+                                                     from line: Line,
+                                                     with bounds: BoundingBox)
       -> (Double, Double, Double)
     {
         let standardLine = line.standardLine
         var distanceSum: Double = 0.0
         var distances:[Double] = []
         var max: Double = 0
+        
+        for pixel in pixelSet {
+            // calculate how close each pixel is to this line
 
-        for x in 0..<bounds.width {
-            for y in 0..<bounds.height {
-                // calculate how close each pixel is to this line
-                if pixels[y*bounds.width+x] > 0 {
-                    let distance = standardLine.distanceTo(x: x, y: y)
-                    distanceSum += distance
-                    distances.append(distance)
-                    if distance > max { max = distance }
-                }
-            }
+            let distance = standardLine.distanceTo(x: pixel.x, y: pixel.y)
+            distanceSum += distance
+            distances.append(distance)
+            if distance > max { max = distance }
         }
+
         distances.sort { $0 > $1 }
-        if pixels.count == 0 {
+        if pixelSet.count == 0 {
             return (0, 0, 0)
         } else {
-            let average = distanceSum/Double(pixels.count)
+            let average = distanceSum/Double(pixelSet.count)
             let median = distances[distances.count/2]
             return (average, median, max)
         }
-    }
-    
-    // calculate how far, on average, the pixels in this group are from the ideal
-    // line that we have calculated for this group,
-    // divided by the total length pixels in that line.
-    // A really straight, narrow line will have a low value,
-    // while a big cloud of fuzzy points should have a larger value.
-    // XXX move this elsewhere XXX DELETE THIS METHOD
-    public static func averageDistance_XXX(for pixels: [UInt16],
-                                       from line: Line,
-                                       with bounds: BoundingBox,
-                                       frameIndex: Int? = nil) -> (Double, Double)
-    {
-        var distanceSum: Double = 0.0
-        var numDistances: Double = 0.0
-        let standardLine = line.standardLine
-
-        var minX = bounds.width
-        var minY = bounds.width
-        var maxX = 0
-        var maxY = 0
-
-        for x in 0..<bounds.width {
-            for y in 0..<bounds.height {
-                // calculate how close each pixel is to this line
-                if pixels[y*bounds.width+x] > 0 {
-                    let distance = standardLine.distanceTo(x: x, y: y)
-
-                    // don't use a small outlying pixel with large distance
-                    // from the line for the maximum, this can create situations
-                    // where the score is reduced (improved) by adding a small
-                    // far away pixel that is out of line
-
-                    if distance < 4 { // XXX another constant :(
-                        if y < minY { minY = y }
-                        if x < minX { minX = x }
-                        if y > maxY { maxY = y }
-                        if x > maxX { maxX = x }
-                    }
-
-                    distanceSum += distance
-                    numDistances += 1
-                }
-            }
-        }
-
-
-        let xDiff = Double(maxX-minX)
-        let yDiff = Double(maxY-minY)
-        let totalLength = sqrt(xDiff*xDiff+yDiff*yDiff)
-        let distance = distanceSum/numDistances
-
-        //if let frameIndex {
-            //Log.d("frame \(frameIndex) averageDistance \(distance) \(numDistances) totalLength \(totalLength)")
-    //}
-        
-        return (distance, totalLength)
     }
 
     public static func == (lhs: OutlierGroup, rhs: OutlierGroup) -> Bool {
@@ -349,28 +285,23 @@ public class OutlierGroup: CustomStringConvertible,
         }
         
 
-        
-        for x in 0 ..< self.bounds.width {
-            for y in 0 ..< self.bounds.height {
-                let pixelIndex = y*self.bounds.width + x
-                var pixel = Pixel()
-                if self.pixels[pixelIndex] != 0 { // XXX use pixelSet
-                    // the real color is set in the view layer 
-                    pixel.red = 0xFFFF
-                    pixel.green = 0xFFFF
-                    pixel.blue = 0xFFFF
-                    pixel.alpha = 0xFFFF
+        for pixel in pixelSet {
+            var pixelToWrite = Pixel()
+            // the real color is set in the view layer 
+            pixelToWrite.red = 0xFFFF
+            pixelToWrite.green = 0xFFFF
+            pixelToWrite.blue = 0xFFFF
+            pixelToWrite.alpha = 0xFFFF
 
-                    var nextValue = pixel.value
-                    
-                    let offset = (Int(y) * bytesPerPixel*self.bounds.width) + (Int(x) * bytesPerPixel)
-                    
-                    imageData.replaceSubrange(offset ..< offset+bytesPerPixel,
-                                               with: &nextValue,
-                                               count: bytesPerPixel)
+            var nextValue = pixelToWrite.value
+            
+            let offset = (Int(pixel.y) * bytesPerPixel*self.bounds.width) +
+                         (Int(pixel.x) * bytesPerPixel)
+            
+            imageData.replaceSubrange(offset ..< offset+bytesPerPixel,
+                                      with: &nextValue,
+                                      count: bytesPerPixel)
 
-                }
-            }
         }
 
         let bitmapInfo = CGBitmapInfo(rawValue: CGImageAlphaInfo.last.rawValue)
@@ -534,19 +465,11 @@ public class OutlierGroup: CustomStringConvertible,
 
         /*
          XXX add:
-           - A new feature that accounts for empty space along the line
-             given a line for the outlier group, what percentage of the pixels
-             along that line (withing a small distance) are filled in by the
-             outlier group, and what ones are not?  Airplane lines have more
-             pixels along the line, random other assortments do not.
-         
            - now that we've gotten good lines out of the KHT, try rewriting the old streak
              detection logic to iterate on an outliers line outside of its bounding box.
              score can be how good a fit is found on either side.  Fit can be determined
              by a combination of size, brightness, and line similarity, 0-1 where 1 is identical.
 
-           - add median line variance
-             
          */
         
         /*
@@ -718,17 +641,17 @@ public class OutlierGroup: CustomStringConvertible,
 
     fileprivate var maxBrightness: Double {
         var max: UInt16 = 0
-        for pixel in pixels {   // XXX use pixelSet
-            if pixel > max { max = pixel }
+        for pixel in pixelSet {  
+            if pixel.intensity > max { max = pixel.intensity }
         }
         return Double(max)
     }
     
     fileprivate var medianBrightness: Double {
         var values: [UInt16] = []
-        for pixel in pixels {   // // XXX use pixelSet
-            if pixel > 0 {
-                values.append(pixel)
+        for pixel in pixelSet {  
+            if pixel.intensity > 0 {
+                values.append(pixel.intensity)
             }
         }
         // XXX all zero pixels :(
@@ -747,22 +670,6 @@ public class OutlierGroup: CustomStringConvertible,
                 fatalError("Died on frame \(frameIndex)")
             }
         }
-    }
-
-    fileprivate var _houghLineHistogram: HoughLineHistogram?
-    
-    // use these to compare outliers in same and different frames
-    fileprivate var houghLineHistogram_FF: HoughLineHistogram {
-        // use cached copy if possible
-        if let _houghLineHistogram = _houghLineHistogram { return _houghLineHistogram }
-        
-        let lines = self.lines                            // try to copy
-        let ret = HoughLineHistogram(withDegreeIncrement: 5, // XXX hardcoded 5
-                                     lines: lines,
-                                     andGroupSize: self.size)
-        // cache it for later
-        _houghLineHistogram = ret
-        return ret
     }
 
     fileprivate var maxHoughTransformCount: Double {
@@ -913,35 +820,29 @@ public class OutlierGroup: CustomStringConvertible,
     // higher numbers mean they are packed closer together
     // lower numbers mean they are more of a disparate cloud
 
-    // XXX use pixelSet
     fileprivate var pixelBorderAmount: Double {
         var totalNeighbors: Double = 0.0
         var totalSize: Int = 0
-        
-        for x in 0 ..< self.bounds.width {
-            for y in 0 ..< self.bounds.height {
-                let pixelIndex = y*self.bounds.width + x
-                if self.pixels[pixelIndex] != 0 {
-                    totalSize += 1
 
-                    var leftIndex = x - 1
-                    var rightIndex = x + 1
-                    var topIndex = y - 1
-                    var bottomIndex = y + 1
-                    if leftIndex < 0 { leftIndex = 0 }
-                    if topIndex < 0 { topIndex = 0 }
-                    if rightIndex >= self.bounds.width { rightIndex = self.bounds.width - 1 }
-                    if bottomIndex >= self.bounds.height { bottomIndex = self.bounds.height - 1 }
+        for pixel in pixelSet {
+            totalSize += 1
 
-                    for neighborX in leftIndex...rightIndex {
-                        for neighborY in topIndex...bottomIndex {
-                            if neighborX != x,
-                               neighborY != y,
-                               self.pixels[neighborY*self.bounds.width + neighborX] != 0
-                            {
-                                totalNeighbors += 1
-                            }
-                        }
+            var leftIndex = pixel.x - 1
+            var rightIndex = pixel.x + 1
+            var topIndex = pixel.y - 1
+            var bottomIndex = pixel.y + 1
+            if leftIndex < 0 { leftIndex = 0 }
+            if topIndex < 0 { topIndex = 0 }
+            if rightIndex >= self.bounds.width { rightIndex = self.bounds.width - 1 }
+            if bottomIndex >= self.bounds.height { bottomIndex = self.bounds.height - 1 }
+
+            for neighborX in leftIndex...rightIndex {
+                for neighborY in topIndex...bottomIndex {
+                    if neighborX != pixel.x,
+                       neighborY != pixel.y,
+                       self.pixels[neighborY*self.bounds.width + neighborX] != 0
+                    {
+                        totalNeighbors += 1
                     }
                 }
             }
@@ -954,55 +855,55 @@ public class OutlierGroup: CustomStringConvertible,
     }()
 }
 
-// XXX use pixelSet
-// and outliers.tiff
-public func ratioOfSurfaceAreaToSize(of pixels: [UInt16], width: Int, height: Int) -> Double {
+public func ratioOfSurfaceAreaToSize(of pixels: [UInt16],
+                                     and pixelSet: Set<SortablePixel>,
+                                     width: Int,
+                                     height: Int) -> Double
+{
     var size: Int = 0
     var surfaceArea: Int = 0
-    for x in 0 ..< width {
-        for y in 0 ..< height {
-            let index = y * width + x
+    for pixel in pixelSet {
+        let x = pixel.x
+        let y = pixel.y
 
-            if pixels[index] != 0 {
-                size += 1
+        size += 1
 
-                var hasTopNeighbor = false
-                var hasBottomNeighbor = false
-                var hasLeftNeighbor = false
-                var hasRightNeighbor = false
-                
-                if x > 0 {
-                    if pixels[y * width + x - 1] != 0 {
-                        hasLeftNeighbor = true
-                    }
-                }
-                if y > 0 {
-                    if pixels[(y - 1) * width + x] != 0 {
-                        hasTopNeighbor = true
-                    }
-                }
-                if x + 1 < width {
-                    if pixels[y * width + x + 1] != 0 {
-                        hasRightNeighbor = true
-                    }
-                }
-                if y + 1 < height {
-                    if pixels[(y + 1) * width + x] != 0 {
-                        hasBottomNeighbor = true
-                    }
-                }
-                
-                if hasTopNeighbor,
-                   hasBottomNeighbor,
-                   hasLeftNeighbor,
-                   hasRightNeighbor
-                {
-                    
-                } else {
-                    surfaceArea += 1
-                }
+        var hasTopNeighbor = false
+        var hasBottomNeighbor = false
+        var hasLeftNeighbor = false
+        var hasRightNeighbor = false
+        
+        if x > 0 {
+            if pixels[y * width + x - 1] != 0 {
+                hasLeftNeighbor = true
             }
         }
+        if y > 0 {
+            if pixels[(y - 1) * width + x] != 0 {
+                hasTopNeighbor = true
+            }
+        }
+        if x + 1 < width {
+            if pixels[y * width + x + 1] != 0 {
+                hasRightNeighbor = true
+            }
+        }
+        if y + 1 < height {
+            if pixels[(y + 1) * width + x] != 0 {
+                hasBottomNeighbor = true
+            }
+        }
+        
+        if hasTopNeighbor,
+           hasBottomNeighbor,
+           hasLeftNeighbor,
+           hasRightNeighbor
+        {
+            
+        } else {
+            surfaceArea += 1
+        }
+
     }
     return Double(surfaceArea)/Double(size)
 }
