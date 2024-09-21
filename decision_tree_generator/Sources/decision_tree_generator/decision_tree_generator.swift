@@ -125,9 +125,7 @@ struct decision_tree_generator: AsyncParsableCommand {
         }
         
         await TaskWaiter.shared.finish()
-        if let loggingSemaphore = await logging.gremlin.finishLogging() {
-            await loggingSemaphore.wait()
-        }
+        await logging.gremlin.finishLogging() 
     }
 
     func runVerification(basedUpon jsonConfigFileName: String) async throws -> TreeTestResults {
@@ -263,6 +261,7 @@ struct decision_tree_generator: AsyncParsableCommand {
                 Log.d("runVerification inputDirname loaded \(inputDirname)")
             }
         }
+
         // we've loaded all the classified data
         Log.d("runVerification f1 WTF")
 
@@ -411,7 +410,7 @@ struct decision_tree_generator: AsyncParsableCommand {
 
         // test data gathered from -t on command line
         let testData = try await loadTestData().split(into: ProcessInfo.processInfo.activeProcessorCount)
-        
+
         let forest =
           try await generator.generateForest(withInputData: loadTrainingData(),
                                              andTestData: testData,
@@ -441,6 +440,8 @@ struct decision_tree_generator: AsyncParsableCommand {
                 let result = try await loadDataFrom(dirname: dirname)
                 testData.positiveData += result.positiveData
                 testData.negativeData += result.negativeData
+            } else {
+                Log.w("cannot load test data from non existant dir \(dirname)")
             }
         }
         return testData
@@ -560,16 +561,20 @@ struct decision_tree_generator: AsyncParsableCommand {
                     if matrix.types[type.sortOrder] != type {
                         Log.e("@ sort order \(type.sortOrder) \(matrix.types[type.sortOrder]) != \(type), cannot use this data from \(dirname)")
                         usable = false
+                        break
                     }
                 } else {
                     Log.e("@ sort order \(type.sortOrder) is out of range, cannot use this data from \(dirname)")
                     usable = false
+                    break
                 }
             }
             
             if usable {
                 positiveData = matrix.positiveValues.map { OutlierFeatureData($0) }
                 negativeData = matrix.negativeValues.map { OutlierFeatureData($0) }
+            } else {
+                Log.e("ERROR \(dirname) not usable :(")
             }
         } else {
             throw "fuck"        // XXX un-fuck this

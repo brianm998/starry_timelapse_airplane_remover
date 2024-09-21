@@ -397,9 +397,7 @@ struct StarCli: AsyncParsableCommand {
             throw ValidationError("need to provide input")
         }
         await TaskWaiter.shared.finish()
-        if let loggingSemaphore = await logging.gremlin.finishLogging() {
-            await loggingSemaphore.wait()
-        }
+        await logging.gremlin.finishLogging() 
     }
 }
 

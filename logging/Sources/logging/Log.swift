@@ -11,7 +11,6 @@ You should have received a copy of the GNU General Public License along with sta
 */
 
 import Foundation
-import Semaphore
 
 /*
 
@@ -862,6 +861,20 @@ extension Log {
 
 // after here are the internal implemenation details
 
+fileprivate actor PendingLogCounter {
+    private var pendingLogCount = 0
+
+    public func logIsPending() {
+        pendingLogCount += 1
+    }
+    public func logHasFinished() {
+        pendingLogCount -= 1
+    }
+    public func isPending() -> Bool { pendingLogCount > 0 }
+}
+
+fileprivate let pendingLogCounter = PendingLogCounter()
+
 fileprivate extension Log {
     static func logInternal(_ message: String? = nil,
                             at logLevel: Level,
@@ -884,6 +897,7 @@ fileprivate extension Log {
         let logTime = NSDate().timeIntervalSince1970
 
         Task {
+            await pendingLogCounter.logIsPending()
             var string = ""
             
             if let message = message {
@@ -912,6 +926,7 @@ fileprivate extension Log {
             await gremlin.log(string, at: logLevel,
                               logTime: logTime, extraData: extraData,
                               file, function, line)
+            await pendingLogCounter.logHasFinished()
         }
     }
 }
@@ -929,23 +944,15 @@ public let gremlin = LogGremlin()
 // this little guy just sits around and keeps the logs orderly by handling one log line at at time
 public actor LogGremlin {
 
-    private var semaphore: AsyncSemaphore?
-    private var _isRunning = true
+    private var running = true
 
-    public func finishLogging() async -> AsyncSemaphore? {
-        if _isRunning {
-            let ret = AsyncSemaphore(value: 0)
-            semaphore = ret
-            return ret
-        }
-        return nil
-    }
-
-    public func isRunning() -> Bool { _isRunning }
+    private func isRunning() -> Bool { running }
     
-    public func stopRunning() {
-        if let semaphore { semaphore.signal() }
-        _isRunning = false
+    public func finishLogging() async {
+        running = false
+        repeat {
+            try? await Task.sleep(nanoseconds: 100_000_000)
+        } while await pendingLogCounter.isPending()
     }
     
     public init() {
@@ -960,11 +967,6 @@ public actor LogGremlin {
                                         at: log.logLevel,
                                         logTime: log.logTime)
                         }
-                    }
-                } else {
-                    try? await Task.sleep(nanoseconds: 1_000_000_000)
-                    if await pendingLogs.count == 0 {
-                        await stopRunning()
                     }
                 }
             }
