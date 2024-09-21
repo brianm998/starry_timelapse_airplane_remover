@@ -46,6 +46,9 @@ public class OutlierGroup: CustomStringConvertible,
     // the pixels in it, on average?
     public let averageLineVariance: Double
 
+    // on median?
+    public let medianLineVariance: Double
+
     // what is the length of the assumed line? 
     public let lineLength: Double
 
@@ -125,43 +128,60 @@ public class OutlierGroup: CustomStringConvertible,
                                                                height: bounds.height)
 
         if let line {
-            (self.averageLineVariance, self.lineLength) = 
-              OutlierGroup.averageDistance(for: pixels,
-                                           from: line,
-                                           with: bounds)
+            (self.averageLineVariance, self.medianLineVariance, self.lineLength) = 
+              OutlierGroup.averageMedianMaxDistance(for: pixels,
+                                                    from: line,
+                                                    with: bounds)
             self.lines = [line]
 
         } else {
             self.averageLineVariance = 0xFFFFFFFF
+            self.medianLineVariance = 0xFFFFFFFF
             self.lineLength = 0
             self.lines = []
-            
-            // look for a line if we're not given one ?
-            /*
-            if let line = HoughLineFinder(pixels: self.pixels, bounds: self.bounds).line {
-                (self.averageLineVariance, self.lineLength) = 
-                  OutlierGroup.averageDistance(for: pixels,
-                                               from: line,
-                                               with: bounds)
-                self.lines = [line]
-            } else {
-                self.averageLineVariance = 0xFFFFFFFF
-                self.lineLength = 0
-                self.lines = []
-            }
-             */
         }
         
-        _ = self.houghLineHistogram
+        _ = self.houghLineHistogram_FF
     }
 
+    public static func averageMedianMaxDistance(for pixels: [UInt16],
+                                                from line: Line,
+                                                with bounds: BoundingBox)
+      -> (Double, Double, Double)
+    {
+        let standardLine = line.standardLine
+        var distanceSum: Double = 0.0
+        var distances:[Double] = []
+        var max: Double = 0
+
+        for x in 0..<bounds.width {
+            for y in 0..<bounds.height {
+                // calculate how close each pixel is to this line
+                if pixels[y*bounds.width+x] > 0 {
+                    let distance = standardLine.distanceTo(x: x, y: y)
+                    distanceSum += distance
+                    distances.append(distance)
+                    if distance > max { max = distance }
+                }
+            }
+        }
+        distances.sort { $0 > $1 }
+        if pixels.count == 0 {
+            return (0, 0, 0)
+        } else {
+            let average = distanceSum/Double(pixels.count)
+            let median = distances[distances.count/2]
+            return (average, median, max)
+        }
+    }
+    
     // calculate how far, on average, the pixels in this group are from the ideal
     // line that we have calculated for this group,
     // divided by the total length pixels in that line.
     // A really straight, narrow line will have a low value,
     // while a big cloud of fuzzy points should have a larger value.
-    // XXX move this elsewhere
-    public static func averageDistance(for pixels: [UInt16],
+    // XXX move this elsewhere XXX DELETE THIS METHOD
+    public static func averageDistance_XXX(for pixels: [UInt16],
                                        from line: Line,
                                        with bounds: BoundingBox,
                                        frameIndex: Int? = nil) -> (Double, Double)
@@ -505,6 +525,7 @@ public class OutlierGroup: CustomStringConvertible,
         case maxHoughTransformCount
         case pixelBorderAmount
         case averageLineVariance
+        case medianLineVariance
         case lineLength
 
         case nearbyDirectOverlapScore
@@ -600,14 +621,16 @@ public class OutlierGroup: CustomStringConvertible,
                 return 18
             case .averageLineVariance:
                 return 19
-            case .lineLength:
+            case .medianLineVariance:
                 return 20
-            case .nearbyDirectOverlapScore:
+            case .lineLength:
                 return 21
-            case .boundingBoxOverlapScore:
+            case .nearbyDirectOverlapScore:
                 return 22
-            case .lineFillAmount:
+            case .boundingBoxOverlapScore:
                 return 23
+            case .lineFillAmount:
+                return 24
             }
         }
 
@@ -679,6 +702,8 @@ public class OutlierGroup: CustomStringConvertible,
             ret = self.pixelBorderAmount
         case .averageLineVariance:
             ret = self.averageLineVariance
+        case .medianLineVariance:
+            ret = self.medianLineVariance
         case .lineLength:
             ret = self.lineLength
         case .lineFillAmount:
@@ -727,7 +752,7 @@ public class OutlierGroup: CustomStringConvertible,
     fileprivate var _houghLineHistogram: HoughLineHistogram?
     
     // use these to compare outliers in same and different frames
-    var houghLineHistogram: HoughLineHistogram {
+    fileprivate var houghLineHistogram_FF: HoughLineHistogram {
         // use cached copy if possible
         if let _houghLineHistogram = _houghLineHistogram { return _houghLineHistogram }
         
