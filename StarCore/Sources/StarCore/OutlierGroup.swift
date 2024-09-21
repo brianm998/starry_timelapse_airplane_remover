@@ -294,8 +294,8 @@ public class OutlierGroup: CustomStringConvertible,
 
             var nextValue = pixelToWrite.value
             
-            let offset = (Int(pixel.y) * bytesPerPixel*self.bounds.width) +
-                         (Int(pixel.x) * bytesPerPixel)
+            let offset = (Int(pixel.y-bounds.min.y) * bytesPerPixel*self.bounds.width) +
+                         (Int(pixel.x-bounds.min.x) * bytesPerPixel)
             
             imageData.replaceSubrange(offset ..< offset+bytesPerPixel,
                                       with: &nextValue,
