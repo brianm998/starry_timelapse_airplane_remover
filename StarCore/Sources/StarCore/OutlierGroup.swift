@@ -124,8 +124,7 @@ public class OutlierGroup: CustomStringConvertible,
         self.pixelSet = pixelSet
         self.surfaceAreaToSizeRatio = ratioOfSurfaceAreaToSize(of: pixels,
                                                                and: pixelSet,
-                                                               width: bounds.width,
-                                                               height: bounds.height)
+                                                               bounds: bounds)
 
         if let line {
             (self.averageLineVariance, self.medianLineVariance, self.lineLength) = 
@@ -825,12 +824,15 @@ public class OutlierGroup: CustomStringConvertible,
         var totalSize: Int = 0
 
         for pixel in pixelSet {
+            let x = pixel.x - bounds.min.x
+            let y = pixel.y - bounds.min.y
+            
             totalSize += 1
 
-            var leftIndex = pixel.x - 1
-            var rightIndex = pixel.x + 1
-            var topIndex = pixel.y - 1
-            var bottomIndex = pixel.y + 1
+            var leftIndex = x - 1
+            var rightIndex = x + 1
+            var topIndex = y - 1
+            var bottomIndex = y + 1
             if leftIndex < 0 { leftIndex = 0 }
             if topIndex < 0 { topIndex = 0 }
             if rightIndex >= self.bounds.width { rightIndex = self.bounds.width - 1 }
@@ -838,8 +840,8 @@ public class OutlierGroup: CustomStringConvertible,
 
             for neighborX in leftIndex...rightIndex {
                 for neighborY in topIndex...bottomIndex {
-                    if neighborX != pixel.x,
-                       neighborY != pixel.y,
+                    if neighborX != x,
+                       neighborY != y,
                        self.pixels[neighborY*self.bounds.width + neighborX] != 0
                     {
                         totalNeighbors += 1
@@ -857,14 +859,15 @@ public class OutlierGroup: CustomStringConvertible,
 
 public func ratioOfSurfaceAreaToSize(of pixels: [UInt16],
                                      and pixelSet: Set<SortablePixel>,
-                                     width: Int,
-                                     height: Int) -> Double
+                                     bounds: BoundingBox) -> Double
 {
+    let width = bounds.width
+    let height = bounds.height
     var size: Int = 0
     var surfaceArea: Int = 0
     for pixel in pixelSet {
-        let x = pixel.x
-        let y = pixel.y
+        let x = pixel.x - bounds.min.x
+        let y = pixel.y - bounds.min.y
 
         size += 1
 
