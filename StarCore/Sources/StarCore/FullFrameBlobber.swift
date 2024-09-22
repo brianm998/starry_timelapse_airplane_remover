@@ -16,6 +16,33 @@ You should have received a copy of the GNU General Public License along with sta
 
 */
 
+public struct RawPixelData {
+    public let pixels: [UInt16]
+    public let bytesPerRow: Int
+    public let bytesPerPixel: Int
+    public let width: Int
+    public let height: Int
+
+    public func intensity(atX x: Int, andY y: Int) -> UInt {
+        let baseIndex = (y * bytesPerRow/2) + (x * bytesPerPixel/2)
+        if bytesPerPixel == 2 {
+            // monochorome input image
+            return(UInt(pixels[baseIndex]))
+        } else if bytesPerPixel >= 6 {
+            // at least three colors in the input image
+
+            let red = UInt(pixels[baseIndex])
+            let blue = UInt(pixels[baseIndex+1])
+            let green = UInt(pixels[baseIndex+2])
+
+            return red+blue+green
+        } else {
+            fatalError("invalid bytesPerPixel \(bytesPerPixel)")
+        }
+    }
+    
+}
+
 /*
  A bright blob detector.
 
@@ -43,9 +70,8 @@ public class FullFrameBlobber {
     public let imageWidth: Int
     public let imageHeight: Int
     public let subtractionPixelData: [UInt16]
-    public let originalPixelData: [UInt16]
-    public let originalBytesPerRow: Int
-    public let originalBytesPerPixel: Int
+
+    public let originalImage: RawPixelData
     public let frameIndex: Int
     
     // running blob bucket
@@ -86,9 +112,7 @@ public class FullFrameBlobber {
                 imageWidth: Int,
                 imageHeight: Int,
                 subtractionPixelData: [UInt16],
-                originalPixelData: [UInt16],
-                originalBytesPerRow: Int,
-                originalBytesPerPixel: Int,
+                originalImage: RawPixelData,
                 frameIndex: Int,
                 neighborType: NeighborType)
     {
@@ -98,9 +122,7 @@ public class FullFrameBlobber {
         self.imageWidth = imageWidth
         self.imageHeight = imageHeight
         self.subtractionPixelData = subtractionPixelData
-        self.originalPixelData = originalPixelData
-        self.originalBytesPerPixel = originalBytesPerPixel
-        self.originalBytesPerRow = originalBytesPerRow
+        self.originalImage = originalImage
         self.frameIndex = frameIndex
         self.neighborType = neighborType
         self.minContrast = constants.blobberMinContrast
@@ -192,7 +214,10 @@ public class FullFrameBlobber {
 
                     // examine the blob in the original image.
 
-                    if check(blob: newBlob) {
+                    // XXX maybe make this a classification criteria instead
+                    // of just dumping them outright here?
+
+                    if newBlob.borderBrightness(in: originalImage) < 0.1 { // XXX guess
                         newBlobId += 1
                         blobs.append(newBlob)
                     }
@@ -394,112 +419,6 @@ public class FullFrameBlobber {
         }
         return ret
 
-    }
-
-    fileprivate func originalImageIntensity(atX x: Int, andY y: Int) -> UInt {
-        let baseIndex = (y * originalBytesPerRow/2) + (x * originalBytesPerPixel/2)
-        if originalBytesPerPixel == 2 {
-            // monochorome input image
-            return(UInt(originalPixelData[baseIndex]))
-        } else if originalBytesPerPixel >= 6 {
-            // at least three colors in the input image
-
-            let red = UInt(originalPixelData[baseIndex])
-            let blue = UInt(originalPixelData[baseIndex+1])
-            let green = UInt(originalPixelData[baseIndex+2])
-
-            return red+blue+green
-        } else {
-            fatalError("invalid originalBytesPerPixel \(originalBytesPerPixel)")
-        }
-    }
-    
-    fileprivate func check(blob: Blob) -> Bool { // XXX rename this method
-        let b = blob.pixels
-
-        var dimmerCount = 0.0
-        var brighterCount = 0.0
-        
-        for pixel in blob.pixels {
-            /*
-             for every pixel in this newly expanded blob, examine every neighbor pixel
-             in the original image which is not part of the blob.
-             if this neighbor pixel is the same brightness or more than the pixel we're
-             coming from, then throw away this blob
-             */
-
-            let i = originalImageIntensity(atX: pixel.x, andY: pixel.y)
-
-            let neighbors = [
-              (pixel.x - 1, pixel.y - 1),
-              (pixel.x,     pixel.y - 1),
-              (pixel.x + 1, pixel.y - 1),
-              (pixel.x - 1, pixel.y    ),
-              (pixel.x + 1, pixel.y    ),
-              (pixel.x - 1, pixel.y + 1),
-              (pixel.x,     pixel.y + 1),
-              (pixel.x + 1, pixel.y + 1),
-            ]
-
-            for neighbor in neighbors {
-                if let value = originalIsBrighter(at: neighbor, than: i, ignoring: b) {
-                    if value {
-                        brighterCount += 1
-                    } else {
-                        dimmerCount += 1
-                    }
-                }
-            }
-        }
-
-        brighterCount /= Double(blob.pixels.count)
-        dimmerCount   /= Double(blob.pixels.count)
-
-        // the ratio of brighter to dimmer
-        // higher is brighter
-        //let guess = 0.125    // XXX guess more than 4000 on frame 0
-        //let guess = 0.1
-        //let guess = 0.096875 // XXX  more than 3000
-        //let guess = 0.06875  // XXX less than 1500 on frame 0, missing a few :(
-        //let guess = 0.06  // XXX less than 1100
-        let guess = 0.053  // XXX less than 800 good enough :)
-        //let guess = 0.05     // XXX less than 700, really close
-        //let guess = 0.0125   // XXX guess less than 50, but more than half what need
-        
-        //Log.d("frame \(frameIndex) blob \(blob.id) \(blob.boundingBox) dimmerCount \(dimmerCount) brighterCount \(brighterCount) brighterCount/dimmerCount \(brighterCount/dimmerCount) < \(guess) = \(brighterCount/dimmerCount < guess)")
-//        return true
-        return brighterCount/dimmerCount < guess
-    }
-    
-    fileprivate func originalIsBrighter(at: (Int, Int),
-                                        than intensity: UInt,
-                                        ignoring blobPixels: Set<SortablePixel>) -> Bool?
-    {
-        let x = at.0
-        let y = at.1
-
-        if x < 0 { return nil }
-        if y < 0 { return nil }
-        if x >= imageWidth { return nil }
-        if y >= imageHeight { return nil }
-
-        let sortablePixel = SortablePixel(x: x, y: y,
-                                          intensity: 0) // not used here
-
-        if blobPixels.contains(sortablePixel) { return nil }
-/*
-        for pixel in blobPixels {
-            if pixel.x == x,
-               pixel.y == y
-            {
-                return nil
-            }
-        }
- */
-
-//        Log.d("frame \(frameIndex) originalPixelData[\(x), \(y)] > intensity \(originalPixelData[y*imageWidth+x]) > \(intensity) = \(originalPixelData[y*imageWidth+x] > intensity)")
-
-        return originalImageIntensity(atX: x, andY: y) > intensity
     }
 }
 

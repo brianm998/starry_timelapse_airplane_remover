@@ -513,4 +513,66 @@ public class Blob: CustomStringConvertible, Hashable, Codable {
         try container.encode(id, forKey: .id)
         try container.encode(frameIndex, forKey: .frameIndex)
     }
+
+    public func borderBrightness(in originalImage: RawPixelData) -> Double {
+        let b = self.pixels
+        
+        var dimmerCount = 0.0
+        var brighterCount = 0.0
+        
+        for pixel in self.pixels {
+            /*
+             for every pixel in this newly expanded self, examine every neighbor pixel
+             in the original image which is not part of the blob.
+             if this neighbor pixel is the same brightness or more than the pixel we're
+             coming from, then throw away this blob
+             */
+
+            let i = originalImage.intensity(atX: pixel.x, andY: pixel.y)
+
+            let neighbors = [
+              (pixel.x - 1, pixel.y - 1),
+              (pixel.x,     pixel.y - 1),
+              (pixel.x + 1, pixel.y - 1),
+              (pixel.x - 1, pixel.y    ),
+              (pixel.x + 1, pixel.y    ),
+              (pixel.x - 1, pixel.y + 1),
+              (pixel.x,     pixel.y + 1),
+              (pixel.x + 1, pixel.y + 1),
+            ]
+
+            for neighbor in neighbors {
+                if let value = image(originalImage, isBrighterAt: neighbor, than: i, ignoring: b) {
+                    if value {
+                        brighterCount += 1
+                    } else {
+                        dimmerCount += 1
+                    }
+                }
+            }
+        }
+
+        brighterCount /= Double(self.pixels.count)
+        dimmerCount   /= Double(self.pixels.count)
+
+        // the ratio of brighter to dimmer
+        // higher is brighter
+        return brighterCount/dimmerCount
+    }
+
+    fileprivate func image(_ image: RawPixelData,
+                           isBrighterAt at: (Int, Int),
+                           than intensity: UInt,
+                           ignoring blobPixels: Set<SortablePixel>) -> Bool?
+    {
+        let x = at.0
+        let y = at.1
+
+        let sortablePixel = SortablePixel(x: x, y: y,
+                                          intensity: 0) // not used here
+
+        if blobPixels.contains(sortablePixel) { return nil }
+
+        return image.intensity(atX: x, andY: y) > intensity
+    }
 }

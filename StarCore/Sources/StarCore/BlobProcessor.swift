@@ -14,6 +14,18 @@ You should have received a copy of the GNU General Public License along with sta
 */
 public typealias BlobMap = [UInt16:Blob]
 
+/*
+
+ chnages:
+
+ - initial check in FullFrameBlobber needs to update
+   - losen the ones that are dumped immediately a lot
+   - include this checked value as a classification feature for outliers that persist
+ - final cruch can be too much
+ - try blobbing close ones together sooner, with tigher params, looser ones later after pruning
+ 
+ */
+
 public enum BlobProcessingType {
     case create(() async throws -> BlobMap)
     case save(FrameImageType)
@@ -292,18 +304,22 @@ public class BlobProcessor {
         frame.state = .assemblingPixels
 
         Log.d("frame \(frameIndex) running blobber")
-                
+
+        let rawOriginalImage = RawPixelData(pixels: originalImageArray,
+                                            bytesPerRow: originalImage.bytesPerRow,
+                                            bytesPerPixel: originalImage.bytesPerPixel,
+                                            width: frame.width,
+                                            height: frame.height)
+        
         // detect blobs of difference in brightness in the subtraction array
-        // airplanes show up as lines or does in a line
+        // airplanes show up as lines or dots in a line
         // because the image subtracted from this frame had the sky aligned,
         // the ground may get moved, and therefore may contain blobs as well.
         let blobber = FullFrameBlobber(config: frame.config,
                                        imageWidth: frame.width,
                                        imageHeight: frame.height,
                                        subtractionPixelData: subtractionArray,
-                                       originalPixelData: originalImageArray,
-                                       originalBytesPerRow: originalImage.bytesPerRow,
-                                       originalBytesPerPixel: originalImage.bytesPerPixel,
+                                       originalImage: rawOriginalImage,
                                        frameIndex: frameIndex,
                                        neighborType: .eight)//.fourCardinal
 
