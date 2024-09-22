@@ -206,15 +206,17 @@ public struct Config: Codable, Sendable {
 
 public struct Callbacks: Sendable {
     
-    public let updatable: UpdatableLog?
+    public var updatable: UpdatableLog?
 
-    public let frameStateChangeCallback: (@Sendable (FrameAirplaneRemover, FrameProcessingState) -> ())?
+    public var frameStateChangeCallback: (@Sendable (FrameAirplaneRemover, FrameProcessingState) -> ())?
 
     // called for the user to see a frame
-    public let frameCheckClosure: (@Sendable (FrameAirplaneRemover) -> ())?
+    public var frameCheckClosure: (@Sendable (FrameAirplaneRemover) -> ())?
 
     // returns the total full size of the image sequence
-    public let imageSequenceSizeClosure: (@Sendable (Int) -> Void)?
+    public var imageSequenceSizeClosure: (@Sendable (Int) -> Void)?
+
+    public init() { }
 }
 
 

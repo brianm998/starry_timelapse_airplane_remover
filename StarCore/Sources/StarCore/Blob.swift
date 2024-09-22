@@ -574,25 +574,25 @@ public actor Blob: CustomStringConvertible,
              coming from, then throw away this blob
              */
 
-            let i = originalImage.intensity(atX: pixel._pixel.x, andY: pixel._pixel.y)
+            if let i = originalImage.intensity(atX: pixel._pixel.x, andY: pixel._pixel.y) {
+                let neighbors = [
+                  (pixel._pixel.x - 1, pixel._pixel.y - 1),
+                  (pixel._pixel.x,     pixel._pixel.y - 1),
+                  (pixel._pixel.x + 1, pixel._pixel.y - 1),
+                  (pixel._pixel.x - 1, pixel._pixel.y    ),
+                  (pixel._pixel.x + 1, pixel._pixel.y    ),
+                  (pixel._pixel.x - 1, pixel._pixel.y + 1),
+                  (pixel._pixel.x,     pixel._pixel.y + 1),
+                  (pixel._pixel.x + 1, pixel._pixel.y + 1),
+                ]
 
-            let neighbors = [
-              (pixel._pixel.x - 1, pixel._pixel.y - 1),
-              (pixel._pixel.x,     pixel._pixel.y - 1),
-              (pixel._pixel.x + 1, pixel._pixel.y - 1),
-              (pixel._pixel.x - 1, pixel._pixel.y    ),
-              (pixel._pixel.x + 1, pixel._pixel.y    ),
-              (pixel._pixel.x - 1, pixel._pixel.y + 1),
-              (pixel._pixel.x,     pixel._pixel.y + 1),
-              (pixel._pixel.x + 1, pixel._pixel.y + 1),
-            ]
-
-            for neighbor in neighbors {
-                if let value = image(originalImage, isBrighterAt: neighbor, than: i, ignoring: b) {
-                    if value {
-                        brighterCount += 1
-                    } else {
-                        dimmerCount += 1
+                for neighbor in neighbors {
+                    if let value = image(originalImage, isBrighterAt: neighbor, than: i, ignoring: b) {
+                        if value {
+                            brighterCount += 1
+                        } else {
+                            dimmerCount += 1
+                        }
                     }
                 }
             }
@@ -614,12 +614,18 @@ public actor Blob: CustomStringConvertible,
         let x = at.0
         let y = at.1
 
+        if x < 0 || y < 0 { return nil }
+        
         let sortablePixel = StatusPixel(x: x, y: y,
                                         intensity: 0) // not used here
 
         if blobPixels.contains(sortablePixel) { return nil }
 
-        return image.intensity(atX: x, andY: y) > intensity
+        if let imageIntensity = image.intensity(atX: x, andY: y) {
+            return imageIntensity > intensity
+        }
+
+        return nil
     }
 }
 

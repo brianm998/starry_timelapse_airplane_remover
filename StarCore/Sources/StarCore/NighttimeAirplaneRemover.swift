@@ -50,6 +50,8 @@ public actor NighttimeAirplaneRemover {
 
     public var imageSequence: ImageSequence    // the sequence of images that we're processing
 
+    public func frameCount() -> Int { imageSequence.filenames.count }
+    
     var shouldProcess: [Bool] = []       // indexed by frame number
     var existingOutputFiles: [Bool] = [] // indexed by frame number
 

@@ -175,11 +175,6 @@ You should have received a copy of the GNU General Public License along with sta
  */
 
 
-// do these really have to be globals?
-var config: Config = Config()
-
-var callbacks = Callbacks()
-
 @main
 struct StarCli: AsyncParsableCommand {
 
@@ -237,11 +232,15 @@ struct StarCli: AsyncParsableCommand {
 
     mutating func run() async throws {
 
+        var config: Config = Config()
+
         TaskRunner.maxConcurrentTasks = numConcurrentRenders
 
+        var callbacks = Callbacks()
+        
         // gui should do this too
         
-        StarCore.currentClassifier = OutlierGroupForestClassifier_3c8d0d49()
+        //StarCore.currentClassifier = OutlierGroupForestClassifier_3c8d0d49()
 
         if version {
             print("""
@@ -266,7 +265,10 @@ struct StarCli: AsyncParsableCommand {
                 do {
                     config = try await Config.read(fromJsonFilename: fuck)
                     config.writeOutlierClassificationValues = shouldWriteOutlierClassificationValues
-                    constants.detectionType = config.detectionType
+                    // overwrite global constants constant 
+                    // not really thread safe,
+                    // but we only do it here before starting any other threads.
+                    constants = Constants(detectionType: config.detectionType)
                 } catch {
                     print("\(error)")
                 }
@@ -282,7 +284,7 @@ struct StarCli: AsyncParsableCommand {
 
                 if !inputImageSequenceDirname.hasPrefix("/") {
                     let fullPath =
-                      fileManager.currentDirectoryPath + "/" + 
+                      FileManager.default.currentDirectoryPath + "/" + 
                       inputImageSequenceDirname
                     inputImageSequenceDirname = fullPath
                 }
@@ -316,7 +318,10 @@ struct StarCli: AsyncParsableCommand {
                                 writeFrameThumbnailFiles: shouldWriteOutlierGroupFiles)
 
                 config.writeOutlierClassificationValues = shouldWriteOutlierClassificationValues
-                constants.detectionType = config.detectionType
+
+                // overwrite global constants constant :( make this better
+                constants = Constants(detectionType: config.detectionType)
+                
                 config.ignoreLowerPixels = ignoreLowerPixels
                 Log.nameSuffix = inputImageSequenceName
                 // no name suffix on json config path
@@ -364,32 +369,35 @@ struct StarCli: AsyncParsableCommand {
             let writeOutputFiles = !skipOutputFiles
 
             do {
+
                 let eraser = try await NighttimeAirplaneRemover(with: config,
                                                                 callbacks: callbacks,
                                                                 processExistingFiles: false,
                                                                 maxResidentImages: 40, // XXX
                                                                 writeOutputFiles: writeOutputFiles)
                 
-                if let _ = eraser.callbacks.updatable {
+                let frameCount = await eraser.frameCount()
+                
+                if let _ = callbacks.updatable {
                     // setup sequence monitor
                     let updatableProgressMonitor =
-                      await UpdatableProgressMonitor(frameCount: eraser.imageSequence.filenames.count,
+                      await UpdatableProgressMonitor(frameCount: frameCount,
                                                      numConcurrentRenders: 30, // xXX
-                                                     config: eraser.config,
+                                                     config: config,
                                                      callbacks: callbacks)
-                    eraser.callbacks.frameStateChangeCallback = { frame, state in
+                    callbacks.frameStateChangeCallback = { frame, state in
                         // XXX make sure to wait for this
                         Task(priority: .userInitiated) {
                             await updatableProgressMonitor.stateChange(for: frame, to: state)
                         }
                     }
                 }
+
                 try await eraser.run()
 
                 Log.i("done")
 
             } catch {
-                print("DOH! \(error)")
                 Log.e("\(error)")
             }
 
@@ -407,5 +415,4 @@ extension Log.Level: ExpressibleByArgument { }
 
 extension DetectionType: ExpressibleByArgument { }
 
-fileprivate let fileManager = FileManager.default
 

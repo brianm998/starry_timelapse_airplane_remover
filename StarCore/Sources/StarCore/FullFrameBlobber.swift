@@ -23,14 +23,25 @@ public struct RawPixelData: Sendable {
     public let width: Int
     public let height: Int
 
-    public func intensity(atX x: Int, andY y: Int) -> UInt {
+    public func intensity(atX x: Int, andY y: Int) -> UInt? {
+        if x < 0 || y < 0 || x >= width || y >= height { return nil }
+        
         let baseIndex = (y * bytesPerRow/2) + (x * bytesPerPixel/2)
         if bytesPerPixel == 2 {
+
+            if baseIndex >= pixels.count {
+                fatalError("bad index \(baseIndex) pixels.count \(pixels.count)")
+            }
+            
             // monochorome input image
             return(UInt(pixels[baseIndex]))
         } else if bytesPerPixel >= 6 {
             // at least three colors in the input image
 
+            if baseIndex >= pixels.count-2 {
+                fatalError("bad index \(baseIndex) pixels.count \(pixels.count) (atX \(x), andY \(y)) width \(width) height \(height)")
+            }
+            
             let red = UInt(pixels[baseIndex])
             let blue = UInt(pixels[baseIndex+1])
             let green = UInt(pixels[baseIndex+2])
@@ -40,7 +51,6 @@ public struct RawPixelData: Sendable {
             fatalError("invalid bytesPerPixel \(bytesPerPixel)")
         }
     }
-    
 }
 
 /*
