@@ -12,9 +12,9 @@ You should have received a copy of the GNU General Public License along with sta
 
 import Foundation
 
-public protocol LogData: CustomStringConvertible {
+public protocol LogData: Sendable, CustomStringConvertible {
     // we _might_ have an encodable, but we ^^^ always have a description string
-    var encodable: Encodable? { get }
+//    var encodable: Encodable? { get }
 }
 
 

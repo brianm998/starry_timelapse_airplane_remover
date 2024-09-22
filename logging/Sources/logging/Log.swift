@@ -138,20 +138,21 @@ public class Log {
         Task { await gremlin.add(handler: handler, for: outputType) }
     }
 
-    private static var minimumLogLevel: Log.Level = .error
+    private nonisolated(unsafe) static var minimumLogLevel: Log.Level = .error
     
-    public enum Output {
+    public enum Output: Sendable {
         case console
         case file
         case alert
     }
 
-    public static var name: String = "log"
-    public static var nameSuffix: String?
+    public nonisolated(unsafe) static var name: String = "log"
+    public nonisolated(unsafe) static var nameSuffix: String?
 
     public static let dispatchGroup = DispatchGroup()
     
     public enum Level: String,
+                       Sendable,
                        CustomStringConvertible,
                        CaseIterable,
                        Decodable
@@ -246,10 +247,10 @@ extension Log {
        Log.verbose("something happened", somedata)
      */
     public static func verbose<T>(_ message: String? = nil,
-                                _ data: T?,
-                                file: String = #file,
-                                function: String = #function,
-                                line: Int = #line) 
+                                  _ data: T?,
+                                  file: String = #file,
+                                  function: String = #function,
+                                  line: Int = #line) where T: Sendable
     {
         logInternal(message, with: data, at: .verbose, file, function, line)
     }
@@ -260,7 +261,7 @@ extension Log {
     public static func verbose<T>(_ data: T?,
                                 file: String = #file,
                                 function: String = #function,
-                                line: Int = #line)
+                                line: Int = #line) where T: Sendable
     {
         logInternal(with: data, at: .verbose, file, function, line)
     }
@@ -272,7 +273,7 @@ extension Log {
                                 _ data: [T]?,
                                 file: String = #file,
                                 function: String = #function,
-                                line: Int = #line)
+                                line: Int = #line) where T: Sendable
     {
         logInternal(message, with: data, at: .verbose, file, function, line)
     }
@@ -283,7 +284,7 @@ extension Log {
     public static func verbose<T>(_ data: [T]?,
                                 file: String = #file,
                                 function: String = #function,
-                                line: Int = #line)
+                                line: Int = #line) where T: Sendable
     {
         logInternal(with: data, at: .verbose, file, function, line)
     }
@@ -309,7 +310,7 @@ extension Log {
                             _ data: T?,
                             file: String = #file,
                             function: String = #function,
-                            line: Int = #line) 
+                            line: Int = #line)  where T: Sendable
     {
         logInternal(message, with: data, at: .verbose, file, function, line)
     }
@@ -320,7 +321,7 @@ extension Log {
     public static func v<T>(_ data: T?,
                             file: String = #file,
                             function: String = #function,
-                            line: Int = #line)
+                            line: Int = #line) where T: Sendable
     {
         logInternal(with: data, at: .verbose, file, function, line)
     }
@@ -332,7 +333,7 @@ extension Log {
                             _ data: [T]?,
                             file: String = #file,
                             function: String = #function,
-                            line: Int = #line)
+                            line: Int = #line) where T: Sendable
     {
         logInternal(message, with: data, at: .verbose, file, function, line)
     }
@@ -343,7 +344,7 @@ extension Log {
     public static func v<T>(_ data: [T]?,
                             file: String = #file,
                             function: String = #function,
-                            line: Int = #line)
+                            line: Int = #line) where T: Sendable
     {
         logInternal(with: data, at: .verbose, file, function, line)
     }
@@ -370,7 +371,7 @@ extension Log {
                                 _ data: T?,
                                 file: String = #file,
                                 function: String = #function,
-                                line: Int = #line) 
+                                line: Int = #line) where T: Sendable
     {
         logInternal(message, with: data, at: .debug, file, function, line)
     }
@@ -381,7 +382,7 @@ extension Log {
     public static func debug<T>(_ data: T?,
                                 file: String = #file,
                                 function: String = #function,
-                                line: Int = #line)
+                                line: Int = #line) where T: Sendable
     {
         logInternal(with: data, at: .debug, file, function, line)
     }
@@ -393,7 +394,7 @@ extension Log {
                                 _ data: [T]?,
                                 file: String = #file,
                                 function: String = #function,
-                                line: Int = #line)
+                                line: Int = #line) where T: Sendable
     {
         logInternal(message, with: data, at: .debug, file, function, line)
     }
@@ -404,7 +405,7 @@ extension Log {
     public static func debug<T>(_ data: [T]?,
                                 file: String = #file,
                                 function: String = #function,
-                                line: Int = #line)
+                                line: Int = #line) where T: Sendable
     {
         logInternal(with: data, at: .debug, file, function, line)
     }
@@ -430,7 +431,7 @@ extension Log {
                             _ data: T?,
                             file: String = #file,
                             function: String = #function,
-                            line: Int = #line) 
+                            line: Int = #line) where T: Sendable
     {
         logInternal(message, with: data, at: .debug, file, function, line)
     }
@@ -441,7 +442,7 @@ extension Log {
     public static func d<T>(_ data: T?,
                             file: String = #file,
                             function: String = #function,
-                            line: Int = #line)
+                            line: Int = #line) where T: Sendable
     {
         logInternal(with: data, at: .debug, file, function, line)
     }
@@ -453,7 +454,7 @@ extension Log {
                             _ data: [T]?,
                             file: String = #file,
                             function: String = #function,
-                            line: Int = #line)
+                            line: Int = #line) where T: Sendable
     {
         logInternal(message, with: data, at: .debug, file, function, line)
     }
@@ -464,7 +465,7 @@ extension Log {
     public static func d<T>(_ data: [T]?,
                             file: String = #file,
                             function: String = #function,
-                            line: Int = #line)
+                            line: Int = #line) where T: Sendable
     {
         logInternal(with: data, at: .debug, file, function, line)
     }
@@ -490,7 +491,7 @@ extension Log {                 // info
                                _ data: T?,
                                file: String = #file,
                                function: String = #function,
-                               line: Int = #line)
+                               line: Int = #line) where T: Sendable
     {
         logInternal(message, with: data, at: .info, file, function, line)
     }
@@ -501,7 +502,7 @@ extension Log {                 // info
     public static func info<T>(_ data: T?,
                                file: String = #file,
                                function: String = #function,
-                               line: Int = #line)
+                               line: Int = #line) where T: Sendable
     {
         logInternal(with: data, at: .info, file, function, line)
     }
@@ -513,7 +514,7 @@ extension Log {                 // info
                                _ data: [T]?,
                                file: String = #file,
                                function: String = #function,
-                               line: Int = #line)
+                               line: Int = #line) where T: Sendable
     {
         logInternal(message, with: data, at: .info, file, function, line)
     }
@@ -524,7 +525,7 @@ extension Log {                 // info
     public static func info<T>(_ data: [T]?,
                                file: String = #file,
                                function: String = #function,
-                               line: Int = #line)
+                               line: Int = #line) where T: Sendable
     {
         logInternal(with: data, at: .info, file, function, line)
     }
@@ -550,7 +551,7 @@ extension Log {                 // i
                                _ data: T?,
                                file: String = #file,
                                function: String = #function,
-                               line: Int = #line)
+                               line: Int = #line) where T: Sendable
     {
         logInternal(message, with: data, at: .info, file, function, line)
     }
@@ -561,7 +562,7 @@ extension Log {                 // i
     public static func i<T>(_ data: T?,
                             file: String = #file,
                             function: String = #function,
-                            line: Int = #line)
+                            line: Int = #line) where T: Sendable
     {
         logInternal(with: data, at: .info, file, function, line)
     }
@@ -573,7 +574,7 @@ extension Log {                 // i
                             _ data: [T]?,
                             file: String = #file,
                             function: String = #function,
-                            line: Int = #line)
+                            line: Int = #line) where T: Sendable
     {
         logInternal(message, with: data, at: .info, file, function, line)
     }
@@ -584,7 +585,7 @@ extension Log {                 // i
     public static func i<T>(_ data: [T]?,
                             file: String = #file,
                             function: String = #function,
-                            line: Int = #line)
+                            line: Int = #line) where T: Sendable
     {
         logInternal(with: data, at: .info, file, function, line)
     }
@@ -610,7 +611,7 @@ extension Log {
                                _ data: T?,
                                file: String = #file,
                                function: String = #function,
-                               line: Int = #line)
+                               line: Int = #line) where T: Sendable
     {
         logInternal(message, with: data, at: .warn, file, function, line)
     }
@@ -621,7 +622,7 @@ extension Log {
     public static func warn<T>(_ data: T?,
                                file: String = #file,
                                function: String = #function,
-                               line: Int = #line)
+                               line: Int = #line) where T: Sendable
     {
         logInternal(with: data, at: .warn, file, function, line)
     }
@@ -633,7 +634,7 @@ extension Log {
                                _ data: [T]?,
                                file: String = #file,
                                function: String = #function,
-                               line: Int = #line)
+                               line: Int = #line) where T: Sendable
     {
         logInternal(message, with: data, at: .warn, file, function, line)
     }
@@ -644,7 +645,7 @@ extension Log {
     public static func warn<T>(_ data: [T]?,
                                file: String = #file,
                                function: String = #function,
-                               line: Int = #line)
+                               line: Int = #line) where T: Sendable
     {
         logInternal(with: data, at: .warn, file, function, line)
     }
@@ -670,7 +671,7 @@ extension Log {
                             _ data: T?,
                             file: String = #file,
                             function: String = #function,
-                            line: Int = #line)
+                            line: Int = #line) where T: Sendable
     {
         logInternal(message, with: data, at: .warn, file, function, line)
     }
@@ -681,7 +682,7 @@ extension Log {
     public static func w<T>(_ data: T?,
                             file: String = #file,
                             function: String = #function,
-                            line: Int = #line)
+                            line: Int = #line) where T: Sendable
     {
         logInternal(with: data, at: .warn, file, function, line)
     }
@@ -693,7 +694,7 @@ extension Log {
                             _ data: [T]?,
                             file: String = #file,
                             function: String = #function,
-                            line: Int = #line)
+                            line: Int = #line) where T: Sendable
     {
         logInternal(message, with: data, at: .warn, file, function, line)
     }
@@ -704,7 +705,7 @@ extension Log {
     public static func w<T>(_ data: [T]?,
                             file: String = #file,
                             function: String = #function,
-                            line: Int = #line)
+                            line: Int = #line) where T: Sendable
     {
         logInternal(with: data, at: .warn, file, function, line)
     }
@@ -744,7 +745,7 @@ extension Log {
                                 _ data: T?,
                                 file: String = #file,
                                 function: String = #function,
-                                line: Int = #line)
+                                line: Int = #line) where T: Sendable
     {
         logInternal(message, with: data, at: .error, file, function, line)
     }
@@ -755,7 +756,7 @@ extension Log {
     public static func error<T>(_ data: T?,
                                 file: String = #file,
                                 function: String = #function,
-                                line: Int = #line)
+                                line: Int = #line) where T: Sendable
     {
         logInternal(with: data, at: .error, file, function, line)
     }
@@ -767,7 +768,7 @@ extension Log {
                                 _ data: [T]?,
                                 file: String = #file,
                                 function: String = #function,
-                                line: Int = #line)
+                                line: Int = #line) where T: Sendable
     {
         logInternal(message, with: data, at: .error, file, function, line)
     }
@@ -778,7 +779,7 @@ extension Log {
     public static func error<T>(_ data: [T]?,
                                 file: String = #file,
                                 function: String = #function,
-                                line: Int = #line)
+                                line: Int = #line) where T: Sendable
     {
         logInternal(with: data, at: .error, file, function, line)
     }
@@ -819,7 +820,7 @@ extension Log {
                             _ data: T?,
                             file: String = #file,
                             function: String = #function,
-                            line: Int = #line)
+                            line: Int = #line) where T: Sendable
     {
         logInternal(message, with: data, at: .error, file, function, line)
     }
@@ -830,7 +831,7 @@ extension Log {
     public static func e<T>(_ data: T?,
                             file: String = #file,
                             function: String = #function,
-                            line: Int = #line)
+                            line: Int = #line) where T: Sendable
     {
         logInternal(with: data, at: .error, file, function, line)
     }
@@ -842,7 +843,7 @@ extension Log {
                             _ data: [T]?,
                             file: String = #file,
                             function: String = #function,
-                            line: Int = #line)
+                            line: Int = #line) where T: Sendable
     {
         logInternal(message, with: data, at: .error, file, function, line)
     }
@@ -853,7 +854,7 @@ extension Log {
     public static func e<T>(_ data: [T]?,
                             file: String = #file,
                             function: String = #function,
-                            line: Int = #line)
+                            line: Int = #line) where T: Sendable
     {
         logInternal(with: data, at: .error, file, function, line)
     }
@@ -890,14 +891,15 @@ fileprivate extension Log {
                                at logLevel: Level,
                                _ file: String,
                                _ function: String,
-                               _ line: Int)
+                               _ line: Int) where T: Sendable
     {
         if logLevel > minimumLogLevel { return }
 
         let logTime = NSDate().timeIntervalSince1970
 
         Task {
-            await pendingLogCounter.logIsPending()
+            /*
+             await pendingLogCounter.logIsPending()
             var string = ""
             
             if let message = message {
@@ -907,31 +909,42 @@ fileprivate extension Log {
             }
             
             var extraData: LogData?
+ */
             
-            if let data = data {
+//            if let data = data {
+                /*
                 if let encodableData = data as? Encodable,
                    let encodableLogData = EncodableLogData(with: encodableData)
                 {
                     // first we try to json encode any Encodable data
                     extraData = encodableLogData
-                } else if let stringConvertibleData = data as? CustomStringConvertible {
+                    } else*/
+
+
+/*
+                
+                if let stringConvertibleData = data as? CustomStringConvertible {
                     // then we try the description of any CustomStringConvertible data
                     extraData = StringLogData(with: stringConvertibleData)
                 } else {
                     // our final fallback for data we don't have a better way to encode
                     extraData = StringLogData(with: data)
-                }
-            }
-
+                    }
+                    
+ */
+//            }
+/*
             await gremlin.log(string, at: logLevel,
                               logTime: logTime, extraData: extraData,
                               file, function, line)
             await pendingLogCounter.logHasFinished()
+
+ */
         }
     }
 }
 
-public struct LogHolder {
+public struct LogHolder: Sendable {
     let message: String
     let fileLocation: String
     let data: LogData?
@@ -1025,14 +1038,16 @@ public actor LogGremlin {
 // this is helpful when testing logging, to see a few test lines, and then avoid further spew 
 public func LOG_ABORT() {
     Log.dispatchGroup.enter()
-    TaskWaiter.shared.task {
-        print("\n\n")
-        print("☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️")
-        print("☠️☠️☠️ was asked to abort ☠️☠️☠️")
-        print("☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️")
-        print("\n\n")
-        Log.dispatchGroup.leave()
-        abort()
+    Task {
+        await TaskWaiter.shared.task {
+            print("\n\n")
+            print("☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️")
+            print("☠️☠️☠️ was asked to abort ☠️☠️☠️")
+            print("☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️")
+            print("\n\n")
+            Log.dispatchGroup.leave()
+            abort()
+        }
     }
 }
 

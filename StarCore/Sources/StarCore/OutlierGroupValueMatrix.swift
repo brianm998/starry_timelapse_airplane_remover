@@ -9,12 +9,12 @@ public class OutlierGroupValueMatrix {
     public var positiveValues: [[Double]]
     public var negativeValues: [[Double]]
 
-    public static var positiveDataFilename = "positive_data.csv"
-    public static var negativeDataFilename = "negative_data.csv"
+    public static let positiveDataFilename = "positive_data.csv"
+    public static let negativeDataFilename = "negative_data.csv"
 
     public init?(from dir: String) async throws {
         let typesCSVFilename = "\(dir)/\(CondensedOutlierGroupValueMatrix.typesFilename)"
-        if fileManager.fileExists(atPath: typesCSVFilename) {
+        if FileManager.default.fileExists(atPath: typesCSVFilename) {
 
             let url = NSURL(fileURLWithPath: typesCSVFilename,
                             isDirectory: false)
@@ -27,7 +27,7 @@ public class OutlierGroupValueMatrix {
         }
 
         let positive_filename = "\(dir)/\(OutlierGroupValueMatrix.positiveDataFilename)"
-        if fileManager.fileExists(atPath: positive_filename) {
+        if FileManager.default.fileExists(atPath: positive_filename) {
 
             let url = NSURL(fileURLWithPath: positive_filename,
                             isDirectory: false)
@@ -47,7 +47,7 @@ public class OutlierGroupValueMatrix {
         }
 
         let negative_filename = "\(dir)/\(OutlierGroupValueMatrix.negativeDataFilename)"
-        if fileManager.fileExists(atPath: negative_filename) {
+        if FileManager.default.fileExists(atPath: negative_filename) {
 
             let url = NSURL(fileURLWithPath: negative_filename,
                             isDirectory: false)
@@ -73,4 +73,3 @@ public class OutlierGroupValueMatrix {
 
 
 
-fileprivate let fileManager = FileManager.default

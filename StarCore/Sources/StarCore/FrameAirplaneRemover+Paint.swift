@@ -37,7 +37,7 @@ extension FrameAirplaneRemover {
             return
         }
 
-        guard outlierGroups.members.count > 0 else {
+        guard await outlierGroups.getMembers().count > 0 else {
             Log.v("no outliers, not painting")
             return
         }
@@ -64,8 +64,8 @@ extension FrameAirplaneRemover {
         // only paint when we have found at least one positive outlier group
         var shouldPaint = false
         
-        for (_, group) in outlierGroups.members {
-            if let reason = group.shouldPaint,
+        for (_, group) in await outlierGroups.getMembers() {
+            if let reason = await group.shouldPaint,
                reason.willPaint
             {
                 shouldPaint = true
@@ -73,8 +73,8 @@ extension FrameAirplaneRemover {
 
                 for pixel in group.pixelSet {
                     // start in frame coords
-                    let maskStartX = pixel.x - paintMaskIntRadius
-                    let maskStartY = pixel.y - paintMaskIntRadius
+                    let maskStartX = pixel._pixel.x - paintMaskIntRadius
+                    let maskStartY = pixel._pixel.y - paintMaskIntRadius
 
                     for maskX in 0..<paintMask.size {
                         for maskY in 0..<paintMask.size {
@@ -127,7 +127,7 @@ extension FrameAirplaneRemover {
         }
 
         if shouldPaint {
-            self.state = .painting2
+            self.set(state: .painting2)
             
             // then actually paint each non zero alpha pizel
             for y in 0 ..< height {

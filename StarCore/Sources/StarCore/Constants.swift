@@ -14,11 +14,15 @@ You should have received a copy of the GNU General Public License along with sta
 */
 
 // public global
-public let constants = Constants()
+nonisolated(unsafe) public var constants = Constants(detectionType: .strong)
 
-public class Constants {
+public final class Constants: Sendable {
 
-    public var detectionType: DetectionType = .strong
+    public let detectionType: DetectionType
+
+    public init(detectionType: DetectionType) {
+        self.detectionType = detectionType
+    }
     
     // pixels with less changed intensity than this cannot start blobs
     // lower values give more blobs
@@ -147,7 +151,10 @@ public struct BlobQualifier {
     let medianIntensity: UInt16
 
     // is this blob allowed?
-    func allows(_ blob: Blob) -> Bool {
-        !(blob.size < size && blob.medianIntensity < medianIntensity)
+    func allows(_ blob: Blob) async -> Bool {
+        let blobSize = await blob.size()
+        let intensity = await blob.medianIntensity()
+        
+        return !(blobSize < size && intensity < medianIntensity)
     }
 }

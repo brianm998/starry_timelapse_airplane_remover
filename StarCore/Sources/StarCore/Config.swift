@@ -13,7 +13,7 @@ You should have received a copy of the GNU General Public License along with sta
 
 */
 
-public struct Config: Codable {
+public struct Config: Codable, Sendable {
 
     public init() {
         self.outputPath = "."
@@ -113,8 +113,8 @@ public struct Config: Codable {
     public var thumbnailWidth: Int = defaultThumbnailWidth
     public var thumbnailHeight: Int = defaultThumbnailHeight
 
-    public static var defaultThumbnailWidth: Int = 80
-    public static var defaultThumbnailHeight: Int = 60
+    nonisolated(unsafe) public static var defaultThumbnailWidth: Int = 80
+    nonisolated(unsafe) public static var defaultThumbnailHeight: Int = 60
 
     // how far away from an outlier group pixel do we keep painting?
     public static let defaultOutlierGroupPaintBorderPixels: Double = 6
@@ -192,11 +192,11 @@ public struct Config: Codable {
             let jsonData = try encoder.encode(self)
 
             let fullPath = "\(self.outputPath)/\(filename)"
-            if fileManager.fileExists(atPath: fullPath) {
+            if FileManager.default.fileExists(atPath: fullPath) {
                 Log.w("cannot write to \(fullPath), it already exists")
             } else {
                 Log.i("creating \(fullPath)")                      
-                fileManager.createFile(atPath: fullPath, contents: jsonData, attributes: nil)
+                FileManager.default.createFile(atPath: fullPath, contents: jsonData, attributes: nil)
             }
         } catch {
             Log.e("\(error)")
@@ -204,18 +204,17 @@ public struct Config: Codable {
     }
 }
 
-public class Callbacks {
-    public init() { }
+public struct Callbacks: Sendable {
     
-    public var updatable: UpdatableLog?
+    public let updatable: UpdatableLog?
 
-    public var frameStateChangeCallback: ((FrameAirplaneRemover, FrameProcessingState) -> ())?
+    public let frameStateChangeCallback: (@Sendable (FrameAirplaneRemover, FrameProcessingState) -> ())?
+
     // called for the user to see a frame
-    public var frameCheckClosure: ((FrameAirplaneRemover) -> ())?
+    public let frameCheckClosure: (@Sendable (FrameAirplaneRemover) -> ())?
 
     // returns the total full size of the image sequence
-    public var imageSequenceSizeClosure: ((Int) -> Void)?
-
+    public let imageSequenceSizeClosure: (@Sendable (Int) -> Void)?
 }
 
-fileprivate let fileManager = FileManager.default
+

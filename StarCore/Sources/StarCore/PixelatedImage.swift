@@ -16,8 +16,7 @@ import KHTSwift
 import logging
 import Cocoa
 
-
-public struct PixelatedImage {
+public struct PixelatedImage: Sendable {
     public let width: Int
     public let height: Int
 
@@ -39,7 +38,7 @@ public struct PixelatedImage {
     // enum to bridge between Data and direct individual component access
     // do we have 8 bits per component, or 16?
     // pixels could have multiple components, or just one.
-    public enum DataFormat {
+    public enum DataFormat: Sendable {
 
         // the number of bits per pixel, not per component
         case eightBit([UInt8])
@@ -280,9 +279,9 @@ public struct PixelatedImage {
     func writeTIFFEncoding(ofData imageData: Data,
                            toFilename imageFilename: String) throws
     {
-        if fileManager.fileExists(atPath: imageFilename) {
+        if FileManager.default.fileExists(atPath: imageFilename) {
             Log.i("overwriting already existing filename \(imageFilename)")
-            try fileManager.removeItem(atPath: imageFilename)
+            try FileManager.default.removeItem(atPath: imageFilename)
         }
         
         // create a CGImage from the data we just changed
@@ -447,5 +446,4 @@ fileprivate func loadImage(fromFile filename: String) async throws -> NSImage? {
     }
 }
 
-fileprivate let fileManager = FileManager.default
 

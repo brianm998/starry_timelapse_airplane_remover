@@ -2,7 +2,7 @@ import Foundation
 import logging
 
 // polar coordinates for right angle intersection with line from origin of [0, 0]
-public struct Line: Codable {
+public struct Line: Codable, Sendable {
     public let theta: Double           // angle in degrees
     public let rho: Double             // distance in pixels
     public let votes: Int

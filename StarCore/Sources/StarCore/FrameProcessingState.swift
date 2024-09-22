@@ -18,12 +18,16 @@ You should have received a copy of the GNU General Public License along with sta
 
 // the first pass is done upon init, finding and pruning outlier groups
 
-public enum LoopReturn {
+public enum LoopReturn: Sendable {
     case `continue`
     case `break`
 }
 
-public enum FrameProcessingState: Int, CaseIterable, Codable {
+public enum FrameProcessingState: Int,
+                                  CaseIterable,
+                                  Codable,
+                                  Sendable
+{
     case unprocessed
     case starAlignment    
     case subtractingNeighbor

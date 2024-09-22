@@ -30,7 +30,7 @@ public func kernelHoughTransform(image: NSImage,
  */
 fileprivate let transformer = HoughTransformer()
 
-fileprivate class HoughTransformer {
+fileprivate final class HoughTransformer: Sendable {
 
     public func kernelHoughTransform(image: NSImage,
                                      maxResults: Int?) -> [Line]

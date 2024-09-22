@@ -19,10 +19,10 @@ public extension Encodable {
 public extension Data {
     var utf8String: String? { return String(data: self, encoding: .utf8) }
 }
-
+/*
 public struct EncodableLogData: LogData {
 
-    public let encodable: Encodable?
+    public let encodable: Encodable? 
     public let description: String
 
     public init?(with encodable: Encodable) {
@@ -35,3 +35,4 @@ public struct EncodableLogData: LogData {
     }
 }
 
+*/

@@ -13,7 +13,6 @@ import Foundation
 
 public struct StringLogData: LogData {
 
-    public let encodable: Encodable? = nil
     public let description: String
 
     public init(with convertable: CustomStringConvertible) {

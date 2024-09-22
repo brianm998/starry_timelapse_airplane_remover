@@ -15,9 +15,7 @@ You should have received a copy of the GNU General Public License along with sta
 // a wrapper around the ThrowingTaskGroup that has keeps too many tasks from
 // running concurrently
 
-
-
-public actor LimitedTaskGroup<T> {
+public actor LimitedTaskGroup<T> where T: Sendable {
     var tasks: [Task<T,Never>] = []
     var iterator = 0
 
@@ -43,7 +41,7 @@ public actor LimitedTaskGroup<T> {
         for task in tasks { _ = await task.value }
     }
 
-    public func addTask(closure: @escaping () async -> T) async {
+    public func addTask(closure: @escaping @Sendable () async -> T) async {
         tasks.append(await runTask(at: taskPriority, with: taskMaster, closure))
     }
 }

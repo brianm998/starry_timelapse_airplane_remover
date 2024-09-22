@@ -9,11 +9,11 @@ public class CondensedOutlierGroupValueMatrix {
     public var outlierValues: [[Double]]
     
     public func append(outlierGroup: OutlierGroup) async {
-        outlierValues.append(outlierGroup.decisionTreeValues)
+        outlierValues.append(await outlierGroup.decisionTreeValues())
     }
 
-    public static var typesFilename = "types.csv"
-    public static var outlierDataFilename = "outlier_data.csv"
+    public static let typesFilename = "types.csv"
+    public static let outlierDataFilename = "outlier_data.csv"
 
     public init() {
         self.types = OutlierGroup.decisionTreeValueTypes
@@ -54,4 +54,4 @@ public class CondensedOutlierGroupValueMatrix {
 
 
 
-fileprivate let fileManager = FileManager.default
+nonisolated(unsafe) fileprivate let fileManager = FileManager.default

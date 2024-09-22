@@ -20,17 +20,17 @@ import Cocoa
 
 // these need to be setup at startup so the decision tree values are right
 // XXX these suck, find a better way
-public var IMAGE_WIDTH: Double?
-public var IMAGE_HEIGHT: Double?
+nonisolated(unsafe) public var IMAGE_WIDTH: Double?
+nonisolated(unsafe) public var IMAGE_HEIGHT: Double?
 
 // used for both outlier groups and raw data
 public protocol ClassifiableOutlierGroup {
-    func decisionTreeValue(for type: OutlierGroup.Feature) -> Double 
+    func decisionTreeValue(for type: OutlierGroup.Feature) async -> Double 
 }
 
 // represents a single outler group in a frame
 // XXX make this an actor, seen crashes with multiple threads accessing at once
-public class OutlierGroup: CustomStringConvertible,
+public actor OutlierGroup: CustomStringConvertible,
                            Hashable,
                            Equatable,
                            Comparable,
@@ -41,6 +41,9 @@ public class OutlierGroup: CustomStringConvertible,
     public let bounds: BoundingBox     // a bounding box on the image that contains this group
     public let brightness: UInt        // the average amount per pixel of brightness over the limit 
 
+    // a bounding box on the image that contains this group
+    public func getBounds() -> BoundingBox { bounds }
+    
     // how far away from the most dominant line in this outlier group are
     // the pixels in it, on average?
     public let averageLineVariance: Double
@@ -56,25 +59,23 @@ public class OutlierGroup: CustomStringConvertible,
     public let pixels: [UInt16]        // indexed by y * bounds.width + x
 
     // a set of the pixels in this outlier 
-    public let pixelSet: Set<SortablePixel>
+    public let pixelSet: Set<StatusPixel>
+
+    public func getPixelSet() -> Set<StatusPixel> { pixelSet }
     
     public let surfaceAreaToSizeRatio: Double
 
-    public var shouldPaintDidChange: ((OutlierGroup, PaintReason?) -> Void)?
+    public var shouldPaintDidChange: ((UInt16, PaintReason?) -> Void)? // keyed by id
     
     // after init, shouldPaint is usually set to a base value based upon different statistics 
-    public var shouldPaint: PaintReason? { // should we paint this group, and why?
-        didSet {
-            //Log.d("shouldPaint did change callback \(shouldPaintDidChange)")
-        }
-    }
+    public var shouldPaint: PaintReason?  // should we paint this group, and why?
     
     public let frameIndex: Int
 
     // has to be optional so we can read OuterlierGroups as codable
     public var frame: FrameAirplaneRemover?
 
-    public func setFrame(_ frame: FrameAirplaneRemover) {
+    public func set(frame: FrameAirplaneRemover) {
         self.frame = frame
     }
     
@@ -111,7 +112,7 @@ public class OutlierGroup: CustomStringConvertible,
                 bounds: BoundingBox,
                 frameIndex: Int,
                 pixels: [UInt16],
-                pixelSet: Set<SortablePixel>,
+                pixelSet: Set<StatusPixel>,
                 line: Line?)
     {
         self._line = line
@@ -138,7 +139,7 @@ public class OutlierGroup: CustomStringConvertible,
         }
     }
 
-    fileprivate static func averageMedianMaxDistance(for pixelSet: Set<SortablePixel>,
+    fileprivate static func averageMedianMaxDistance(for pixelSet: Set<StatusPixel>,
                                                      from line: Line,
                                                      with bounds: BoundingBox)
       -> (Double, Double, Double)
@@ -151,7 +152,7 @@ public class OutlierGroup: CustomStringConvertible,
         for pixel in pixelSet {
             // calculate how close each pixel is to this line
 
-            let distance = standardLine.distanceTo(x: pixel.x, y: pixel.y)
+            let distance = standardLine.distanceTo(x: pixel._pixel.x, y: pixel._pixel.y)
             distanceSum += distance
             distances.append(distance)
             if distance > max { max = distance }
@@ -183,28 +184,31 @@ public class OutlierGroup: CustomStringConvertible,
         hasher.combine(id)
         hasher.combine(frameIndex)
     }
+
+    public func shouldPaintFunc() -> PaintReason? { shouldPaint } // XXX rename this
     
-    public func shouldPaint(_ shouldPaint: PaintReason) {
+    public func shouldPaint(_ _shouldPaint: PaintReason) async {
         //Log.d("\(self) should paint \(shouldPaint) self.frame \(self.frame)")
-        self.shouldPaint = shouldPaint
+        self.shouldPaint = _shouldPaint
 
         // XXX update frame that it's different 
-        self.frame?.markAsChanged()
-
+        await self.frame?.markAsChanged()
         if let shouldPaintDidChange {
             //Log.d("shouldPaint did change 1")
-            Task { @MainActor in
+//            Task { @MainActor in
+                let fuck = _shouldPaint
                 //Log.d("shouldPaint did change 2")
-                shouldPaintDidChange(self, shouldPaint)
-            }
+                let id = self.id
+                shouldPaintDidChange(id, fuck) // XXX this isn't on the main actor :(
+//            }
         }
     }
 
-    // a local cache of other nearby groups
-    lazy public var nearbyGroups: [OutlierGroup]? = {
+    // a local cache of other nearby groups - NO LONGER CACHED AFTER SWIFT 6 :( 
+    public func nearbyGroups() async -> [OutlierGroup]? {
         // only run this only once, and only if needed, as it's not fast
-        self.frame?.outlierGroups?.groups(nearby: self, within: 80) // XXX hardcoded constant
-    }()
+        await self.frame?.outlierGroups?.groups(nearby: self, within: 80) // XXX hardcoded constant
+    }
     
     private var cachedTestImage: CGImage? 
 
@@ -294,8 +298,8 @@ public class OutlierGroup: CustomStringConvertible,
 
             var nextValue = pixelToWrite.value
             
-            let offset = (Int(pixel.y-bounds.min.y) * bytesPerPixel*self.bounds.width) +
-                         (Int(pixel.x-bounds.min.x) * bytesPerPixel)
+            let offset = (Int(pixel._pixel.y-bounds.min.y) * bytesPerPixel*self.bounds.width) +
+                         (Int(pixel._pixel.x-bounds.min.x) * bytesPerPixel)
             
             imageData.replaceSubrange(offset ..< offset+bytesPerPixel,
                                       with: &nextValue,
@@ -379,7 +383,7 @@ public class OutlierGroup: CustomStringConvertible,
     private var _decisionTreeValues: [Double]?
     
     // ordered by the list of features below
-    var decisionTreeValues: [Double] {
+    func decisionTreeValues() async -> [Double] {
         if let _decisionTreeValues = _decisionTreeValues {
             return _decisionTreeValues
         }
@@ -387,7 +391,7 @@ public class OutlierGroup: CustomStringConvertible,
         ret.append(Double(self.id))
         for type in OutlierGroup.Feature.allCases {
             //let t0 = NSDate().timeIntervalSince1970
-            ret.append(self.decisionTreeValue(for: type))
+            ret.append(await self.decisionTreeValue(for: type))
             //let t1 = NSDate().timeIntervalSince1970
             //Log.i("frame \(frameIndex) group \(self) took \(t1-t0) seconds to calculate value for \(type)")
         }
@@ -396,7 +400,7 @@ public class OutlierGroup: CustomStringConvertible,
     }
 
     // cached value
-    private static var _decisionTreeValueTypes: [OutlierGroup.Feature]?
+    nonisolated(unsafe) private static var _decisionTreeValueTypes: [OutlierGroup.Feature]?
     
     // the ordering of the list of values above
     static var decisionTreeValueTypes: [OutlierGroup.Feature] {
@@ -411,11 +415,11 @@ public class OutlierGroup: CustomStringConvertible,
         return ret
     }
 
-     public var decisionTreeGroupValues: OutlierFeatureData {
+    public func decisionTreeGroupValues() async -> OutlierFeatureData {
          var rawValues = OutlierFeatureData.rawValues()
          for type in OutlierGroup.Feature.allCases {
              let t0 = NSDate().timeIntervalSince1970
-             let value = self.decisionTreeValue(for: type)
+             let value = await self.decisionTreeValue(for: type)
              let t1 = NSDate().timeIntervalSince1970
              Log.i("frame \(frameIndex) group \(self) took \(t1-t0) seconds to calculate value for \(type)")
              rawValues[type.sortOrder] = value
@@ -433,7 +437,8 @@ public class OutlierGroup: CustomStringConvertible,
                          CaseIterable,
                          Hashable,
                          Codable,
-                         Comparable
+                         Comparable,
+                         Sendable
     {
         case size
         case width
@@ -569,7 +574,7 @@ public class OutlierGroup: CustomStringConvertible,
 
     public func clearFeatureValueCache() { featureValueCache = [:] }
     
-    public func decisionTreeValue(for type: Feature) -> Double {
+    public func decisionTreeValue(for type: Feature) async -> Double {
         let height = IMAGE_HEIGHT!
         let width = IMAGE_WIDTH!
 
@@ -615,11 +620,11 @@ public class OutlierGroup: CustomStringConvertible,
         case .maxHoughTransformCount:
             ret = self.maxHoughTransformCount
         case .numberOfNearbyOutliersInSameFrame: // keep out
-            ret = self.numberOfNearbyOutliersInSameFrame
+            ret = await self.numberOfNearbyOutliersInSameFrame()
         case .nearbyDirectOverlapScore:
-            ret = self.nearbyDirectOverlapScore
+            ret = await self.nearbyDirectOverlapScore()
         case .boundingBoxOverlapScore:
-            ret = self.boundingBoxOverlapScore
+            ret = await self.boundingBoxOverlapScore()
         case .pixelBorderAmount: // keep out
             ret = self.pixelBorderAmount
         case .averageLineVariance:
@@ -641,7 +646,7 @@ public class OutlierGroup: CustomStringConvertible,
     fileprivate var maxBrightness: Double {
         var max: UInt16 = 0
         for pixel in pixelSet {  
-            if pixel.intensity > max { max = pixel.intensity }
+            if pixel._pixel.intensity > max { max = pixel._pixel.intensity }
         }
         return Double(max)
     }
@@ -649,8 +654,8 @@ public class OutlierGroup: CustomStringConvertible,
     fileprivate var medianBrightness: Double {
         var values: [UInt16] = []
         for pixel in pixelSet {  
-            if pixel.intensity > 0 {
-                values.append(pixel.intensity)
+            if pixel._pixel.intensity > 0 {
+                values.append(pixel._pixel.intensity)
             }
         }
         // XXX all zero pixels :(
@@ -658,17 +663,15 @@ public class OutlierGroup: CustomStringConvertible,
         return Double(values.sorted()[values.count/2]) // SIGABRT HERE :(
     }
 
-    fileprivate var numberOfNearbyOutliersInSameFrame: Double {
-        get {
-            if let frame = frame,
-               let nearbyGroups = frame.outlierGroups(within: OutlierGroup.maxNearbyGroupDistance,
-                                                       of: self)
-            {
-                return Double(nearbyGroups.count)
-            } else {
-                fatalError("Died on frame \(frameIndex)")
-            }
+    fileprivate func numberOfNearbyOutliersInSameFrame() async -> Double {
+        if let frame = frame,
+           let nearbyGroups = await frame.outlierGroups(within: OutlierGroup.maxNearbyGroupDistance, of: self)
+        {
+            return Double(nearbyGroups.count)
+        } else {
+            fatalError("Died on frame \(frameIndex)")
         }
+
     }
 
     fileprivate var maxHoughTransformCount: Double {
@@ -685,7 +688,7 @@ public class OutlierGroup: CustomStringConvertible,
     // 0 if no pixels are found withing the bounding box in neighboring frames
     // 1 if all pixels withing the bounding box in neighboring frames are filled
     // airplane streaks typically do not overlap the same pixels on neighboring frames
-    fileprivate var boundingBoxOverlapScore: Double {
+    fileprivate func boundingBoxOverlapScore() async -> Double {
 
         if bounds.max.y - bounds.min.y < 2 { return 0 }
         
@@ -693,11 +696,11 @@ public class OutlierGroup: CustomStringConvertible,
             var matchCount = 0
             var numberFrames = 0
 
-            if let previousFrame = frame.previousFrame,
-               let previousOutlierGroups = previousFrame.outlierGroups
+            if let previousFrame = await frame.getPreviousFrame(),
+               let previousOutlierGroups = await previousFrame.getOutlierGroups()
             {
-                let previousOutlierGroupsOutlierYAxisImageData = previousOutlierGroups.outlierYAxisImageData
-                let previousOutlierGroupsOutlierImageData = previousOutlierGroups.outlierImageData
+                let previousOutlierGroupsOutlierYAxisImageData = await previousOutlierGroups.outlierYAxisImageData
+                let previousOutlierGroupsOutlierImageData = await previousOutlierGroups.outlierImageData
                 numberFrames += 1
                 for y in bounds.min.y...bounds.max.y {
                     if let yAxis = previousOutlierGroupsOutlierYAxisImageData,
@@ -712,11 +715,11 @@ public class OutlierGroup: CustomStringConvertible,
                     }
                 }
             }
-            if let nextFrame = frame.nextFrame,
-               let nextOutlierGroups = nextFrame.outlierGroups
+            if let nextFrame = await frame.getNextFrame(),
+               let nextOutlierGroups = await nextFrame.getOutlierGroups()
             {
-                let nextOutlierGroupsOutlierYAxisImageData = nextOutlierGroups.outlierYAxisImageData
-                let nextOutlierGroupsOutlierImageData = nextOutlierGroups.outlierImageData
+                let nextOutlierGroupsOutlierYAxisImageData = await nextOutlierGroups.outlierYAxisImageData
+                let nextOutlierGroupsOutlierImageData = await nextOutlierGroups.outlierImageData
                 numberFrames += 1
                 for y in bounds.min.y...bounds.max.y {
                     if let yAxis = nextOutlierGroupsOutlierYAxisImageData,
@@ -742,25 +745,25 @@ public class OutlierGroup: CustomStringConvertible,
     // 1.0 if all pixels in this group overlap all pixels of outliers in all neighboring frames
     // 0 if none of the pixels overlap
     // airplane streaks typically do not overlap the same pixels on neighboring frames
-    fileprivate var nearbyDirectOverlapScore: Double {
+    fileprivate func nearbyDirectOverlapScore() async -> Double {
         if let frame {
             let pixelCount = self.pixelSet.count
             var matchCount = 0
-            let previousFrame = frame.previousFrame 
-            let nextFrame = frame.nextFrame
+            let previousFrame = await frame.getPreviousFrame()
+            let nextFrame = await frame.getNextFrame()
 
             for pixel in pixelSet {
-                let index = pixel.y * Int(IMAGE_WIDTH!) + pixel.x
+                let index = pixel._pixel.y * Int(IMAGE_WIDTH!) + pixel._pixel.x
                 if let previousFrame,
-                   let previousOutlierGroups = previousFrame.outlierGroups,
-                   previousOutlierGroups.outlierImageData[index] != 0
+                   let previousOutlierGroups = await previousFrame.getOutlierGroups(),
+                   await previousOutlierGroups.outlierImageDataFunc()[index] != 0
                 {
                     matchCount += 1
                 }
 
                 if let nextFrame,
-                   let nextOutlierGroups = nextFrame.outlierGroups,
-                   nextOutlierGroups.outlierImageData[index] != 0
+                   let nextOutlierGroups = await nextFrame.getOutlierGroups(),
+                   await nextOutlierGroups.outlierImageDataFunc()[index] != 0
                 {
                     matchCount += 1
                 }
@@ -824,8 +827,8 @@ public class OutlierGroup: CustomStringConvertible,
         var totalSize: Int = 0
 
         for pixel in pixelSet {
-            let x = pixel.x - bounds.min.x
-            let y = pixel.y - bounds.min.y
+            let x = pixel._pixel.x - bounds.min.x
+            let y = pixel._pixel.y - bounds.min.y
             
             totalSize += 1
 
@@ -852,13 +855,13 @@ public class OutlierGroup: CustomStringConvertible,
         return totalNeighbors/Double(totalSize)
     }
     
-    lazy var blob: Blob = {
+    func blob() -> Blob {
         Blob(pixelSet, id: id, frameIndex: frameIndex)
-    }()
+    }
 }
 
 public func ratioOfSurfaceAreaToSize(of pixels: [UInt16],
-                                     and pixelSet: Set<SortablePixel>,
+                                     and pixelSet: Set<StatusPixel>,
                                      bounds: BoundingBox) -> Double
 {
     let width = bounds.width
@@ -866,8 +869,8 @@ public func ratioOfSurfaceAreaToSize(of pixels: [UInt16],
     var size: Int = 0
     var surfaceArea: Int = 0
     for pixel in pixelSet {
-        let x = pixel.x - bounds.min.x
-        let y = pixel.y - bounds.min.y
+        let x = pixel._pixel.x - bounds.min.x
+        let y = pixel._pixel.y - bounds.min.y
 
         size += 1
 
@@ -911,4 +914,3 @@ public func ratioOfSurfaceAreaToSize(of pixels: [UInt16],
     return Double(surfaceArea)/Double(size)
 }
 
-fileprivate let fileManager = FileManager.default

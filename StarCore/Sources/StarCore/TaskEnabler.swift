@@ -3,7 +3,7 @@ import logging
 import Semaphore
 
 // uses a semaphore to enable a task to wait for the right time to run
-public class TaskEnabler {
+final public class TaskEnabler: Sendable {
     public let priority: TaskPriority
     private let semaphore = AsyncSemaphore(value: 0)
     

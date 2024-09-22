@@ -18,13 +18,13 @@ You should have received a copy of the GNU General Public License along with sta
 
 // logic for loading different kinds of images
 
-public enum ImageDisplaySize {
+public enum ImageDisplaySize: Sendable {
     case original
     case preview
     case thumbnail
 }
 
-public enum FrameImageType {
+public enum FrameImageType: Sendable {
     case original       // original image
     case aligned        // aligned neighbor frame
     case subtracted     // result of subtracting the aligned neighbor from original frame
@@ -40,7 +40,7 @@ public enum FrameImageType {
     case processed      // final processed image
 }
 
-public protocol ImageAccess {
+public protocol ImageAccess: Sendable {
     // save image, will rescale and jpeg if necessary
     func save(_ image: PixelatedImage,
               as type: FrameImageType,
@@ -76,7 +76,7 @@ public protocol ImageAccess {
 }
 
 // read and write access to different image types for a given frame
-public struct ImageAccessor: ImageAccess {
+public struct ImageAccessor: ImageAccess, @unchecked Sendable {
     let config: Config
     let baseDirName: String
     let baseFileName: String
@@ -468,4 +468,5 @@ public struct ImageAccessor: ImageAccess {
     }
     
 }
-fileprivate let fileManager = FileManager.default
+
+nonisolated(unsafe) fileprivate let fileManager = FileManager.default

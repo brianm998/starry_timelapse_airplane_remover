@@ -11,10 +11,10 @@ You should have received a copy of the GNU General Public License along with sta
 */
 import Foundation
 
-public class ConsoleLogHandler: LogHandler {
+public final class ConsoleLogHandler: LogHandler {
 
     public let dispatchQueue: DispatchQueue
-    public var level: Log.Level
+    public let level: Log.Level
     private let dateFormatter = DateFormatter()
 
     public init(at level: Log.Level) {

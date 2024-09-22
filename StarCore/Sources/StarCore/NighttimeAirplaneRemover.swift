@@ -30,12 +30,145 @@ public actor NumberLeft {
     public func hasMore() -> Bool { numberLeft > 0 }
 }
 
-public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemover> {
+public actor NighttimeAirplaneRemover {
+
+
+    // ImageSequenceProcessor code
+
+    // the name of the directory holding the image sequence being processed
+    public let imageSequenceDirname: String
+
+    // the name of the directory to write processed images to
+    public let outputDirname: String
+
+    public let numberFinalProcessingNeighborsNeeded: Int
+    
+    // the following properties get included into the output videoname
+    
+    // actors
+    var methodList = MethodList<FrameAirplaneRemover>()       // a list of methods to process each frame
+
+    public var imageSequence: ImageSequence    // the sequence of images that we're processing
+
+    var shouldProcess: [Bool] = []       // indexed by frame number
+    var existingOutputFiles: [Bool] = [] // indexed by frame number
+
+    var remainingImagesClosure: (@Sendable (Int) -> Void)?
+
+    // if this is true, outliers are detected, inter-frame processing is done
+    // if false, frames are handed back without outliers detected
+    let fullyProcess: Bool
+
+    let processExistingFiles: Bool
+    
+    func assembleMethodList() throws -> MethodList<FrameAirplaneRemover> {
+        /*
+           read all existing output files 
+           sort them into frame order
+           remove ones within numberFinalProcessingNeighborsNeeded frames of holes
+           make sure these re-runs doesn't bork on existing files later
+           only process below based upon this info
+        */
+    
+        var _methodList: [Int : @Sendable () async throws -> FrameAirplaneRemover] = [:]
+        
+        for (index, imageFilename) in imageSequence.filenames.enumerated() {
+            let basename = removePath(fromString: imageFilename)
+            let outputFilename = "\(outputDirname)/\(basename)"
+            if FileManager.default.fileExists(atPath: outputFilename) {
+                existingOutputFiles[index] = true
+            }                                  
+        }
+        
+        for (index, outputFileAlreadyExists) in existingOutputFiles.enumerated() {
+            if !outputFileAlreadyExists {
+                var startIdx = index - numberFinalProcessingNeighborsNeeded
+                var endIdx = index + numberFinalProcessingNeighborsNeeded
+                if startIdx < 0 { startIdx = 0 }
+                if endIdx >= existingOutputFiles.count {
+                    endIdx = existingOutputFiles.count - 1
+                }
+                for i in startIdx ... endIdx {
+                    shouldProcess[i] = true
+                }
+            }
+        }
+
+        // XX VVV XX appears to be the root of the frameIndex starting at zero 
+        for (index, imageFilename) in self.imageSequence.filenames.enumerated() {
+            let filename = self.imageSequence.filenames[index]
+            let basename = removePath(fromString: filename)
+            let outputFilename = "\(outputDirname)/\(basename)"
+            if shouldProcess[index] {
+                _methodList[index] = {
+                    // this method is run async later
+                    Log.i("loading \(imageFilename) for frame \(index)")
+                    //let image = await self.imageSequence.getImage(withName: imageFilename)
+                    return try await self.processFrame(number: index,
+                                                       outputFilename: outputFilename,
+                                                       baseName: basename) 
+                }
+            } else {
+                Log.i("not processing existing file \(filename)")
+            }
+        }
+
+        return MethodList<FrameAirplaneRemover>(list: _methodList, removeClosure: remainingImagesClosure)
+    }
+
+    public func superRun() async throws { // XXX merge this with run below
+        Log.d("run")
+        let task = Task { try await startupHook() }
+        try await task.value
+
+        Log.d("done with startup hook")
+        
+        mkdir(outputDirname)
+
+        // each of these methods removes the airplanes from a particular frame
+        //Log.i("processing a total of \(await methodList.list.count) frames")
+        
+        try await withLimitedThrowingTaskGroup(of: FrameAirplaneRemover.self, at: .low) { group in
+            while(await methodList.list.count > 0) {
+                //Log.d("we have \(await methodList.list.count) more frames to process")
+                Log.d("processing new frame")
+                
+                // sort the keys and take the smallest one first
+                if let nextMethodKey = await methodList.nextKey,
+                   let nextMethod = await methodList.list[nextMethodKey]
+                {
+                    await methodList.removeValue(forKey: nextMethodKey)
+                    try await group.addTask() {
+                        // XXX are errors thrown here handled?
+                        let ret = try await nextMethod()
+                        await self.resultHook(with: ret)
+                        return ret
+                    }
+                } else {
+                    Log.e("FUCK") 
+                    fatalError("FUCK")
+                }
+            }
+            try await group.waitForAll()
+            
+            Log.d("finished hook")
+        }
+
+        Log.i("done")
+    }
+
+
+
+    // ImageSequenceProcessor code
 
     public var config: Config
     public var callbacks: Callbacks
 
     public var numberLeft = NumberLeft()
+
+    public func decrementNumberLeft() async {
+        await self.numberLeft.decrement()
+    }
     
     public var finalProcessor: FinalProcessor?    
 
@@ -61,13 +194,17 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
 
         self.basename = config.basename
 
-        try super.init(imageSequenceDirname: "\(config.imageSequencePath)/\(config.imageSequenceDirname)",
-                       outputDirname: "\(config.outputPath)/\(basename)",
-                       supportedImageFileTypes: config.supportedImageFileTypes,
-                       numberFinalProcessingNeighborsNeeded: config.numberFinalProcessingNeighborsNeeded,
-                       processExistingFiles: processExistingFiles,
-                       maxImages: maxResidentImages,
-                       fullyProcess: fullyProcess);
+        self.processExistingFiles = processExistingFiles
+        self.imageSequenceDirname = "\(config.imageSequencePath)/\(config.imageSequenceDirname)"
+        self.outputDirname = "\(config.outputPath)/\(basename)"
+        self.numberFinalProcessingNeighborsNeeded = config.numberFinalProcessingNeighborsNeeded
+        self.imageSequence = try ImageSequence(dirname: imageSequenceDirname,
+                                               supportedImageFileTypes: config.supportedImageFileTypes,
+                                               maxImages: maxResidentImages)
+        self.shouldProcess = [Bool](repeating: processExistingFiles, count: imageSequence.filenames.count)
+        self.existingOutputFiles = [Bool](repeating: false, count: imageSequence.filenames.count)
+        self.fullyProcess = fullyProcess
+        self.methodList = try assembleMethodList()
 
         let imageSequenceSize = /*self.*/imageSequence.filenames.count
 
@@ -78,18 +215,24 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
         self.remainingImagesClosure = { numberOfUnprocessed in
             if let updatable = callbacks.updatable {
                 // log number of unprocessed images here
-                TaskWaiter.shared.task(priority: .userInitiated) {
-                    let progress = Double(numberOfUnprocessed)/Double(imageSequenceSize)
-                    await updatable.log(name: "unprocessed frames",
-                                        message: reverseProgressBar(length: config.progressBarLength, progress: progress) + " \(numberOfUnprocessed) frames waiting to process",
-                                        value: -1)
+                let progressBarLength = config.progressBarLength
+                Task {
+                    await TaskWaiter.shared.task(priority: .userInitiated) {
+                        let progress = Double(numberOfUnprocessed)/Double(imageSequenceSize)
+                        await updatable.log(name: "unprocessed frames",
+                                            message: reverseProgressBar(length: progressBarLength, progress: progress) + " \(numberOfUnprocessed) frames waiting to process",
+                                            value: -1)
+                    }
                 }
             }
         }
         if let remainingImagesClosure {
-            TaskWaiter.shared.task(priority: .medium) {
-                await self.methodList.set(removeClosure: remainingImagesClosure)
-                remainingImagesClosure(await self.methodList.count)
+            let methodList = self.methodList
+            Task {
+                await TaskWaiter.shared.task(priority: .medium) {
+                    await methodList.set(removeClosure: remainingImagesClosure)
+                    remainingImagesClosure(await methodList.count)
+                }
             }
         }
 
@@ -106,7 +249,7 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
                                               isGUI: isGUI || processExistingFiles)
     }
 
-    public override func run() async throws {
+    public func run() async throws {
 
         guard let finalProcessor = finalProcessor
         else {
@@ -120,7 +263,7 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
             try await finalProcessor.run()
         }
 
-        try await super.run()
+        try await superRun()
 
         while(await numberLeft.hasMore()) {
             // XXX use semaphore
@@ -139,8 +282,8 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
         _ = try await finalProcessorTask.value
     }
 
-    // called by the superclass at startup
-    override func startupHook() async throws {
+    // called at startup
+    func startupHook() async throws {
         Log.d("startup hook starting")
         if imageWidth == nil ||
            imageHeight == nil ||
@@ -182,9 +325,9 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
     
     // called by the superclass to process each frame
     // called async check access to shared data
-    override func processFrame(number index: Int,
-                               outputFilename: String,
-                               baseName: String) async throws -> FrameAirplaneRemover
+    func processFrame(number index: Int,
+                      outputFilename: String,
+                      baseName: String) async throws -> FrameAirplaneRemover
     {
         await numberLeft.increment()
         let frame = try await FrameAirplaneRemover(with: config,
@@ -201,7 +344,7 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
                                                    writeOutputFiles: writeOutputFiles)
         {
             // run when frame has completed processing
-            await self.numberLeft.decrement()
+            await self.decrementNumberLeft()
         }
 
         // run separately from init for better state logging
@@ -214,7 +357,7 @@ public class NighttimeAirplaneRemover: ImageSequenceProcessor<FrameAirplaneRemov
     public var imageHeight: Int?
     public var imageBytesPerPixel: Int? // XXX bad name
 
-    override func resultHook(with result: FrameAirplaneRemover) async {
+    func resultHook(with result: FrameAirplaneRemover) async {
 
         // send this frame to the final processor
         

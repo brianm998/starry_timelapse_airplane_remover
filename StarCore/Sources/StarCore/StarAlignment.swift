@@ -59,7 +59,11 @@ push enter
 
      
      */
-    public static let pathToBinary = "/Users/brian/git/nighttime_timelapse_airplane_remover/align-image-stack/bin"
+
+    //public static let pathToBinary = "/Users/brian/git/nighttime_timelapse_airplane_remover/align-image-stack/bin"
+
+    // make this more configurable, and handle better when this is wrong
+    public static let pathToBinary = "/Applications/Hugin/tools_mac"
     public static let binaryName = "align_image_stack"
 
     // write an output file with the same name as the reference image to the outputDirname
@@ -78,7 +82,7 @@ push enter
         Log.d("baseName \(baseName)")
         let outputFilename = "\(outputDirname)/\(baseName).\(baseExt)"
 
-        if fileManager.fileExists(atPath: outputFilename) {
+        if FileManager.default.fileExists(atPath: outputFilename) {
             return outputFilename
         }
         
@@ -153,4 +157,4 @@ push enter
     }
 }
 
-fileprivate let fileManager = FileManager.default
+

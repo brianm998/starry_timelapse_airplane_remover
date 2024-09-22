@@ -20,25 +20,22 @@ You should have received a copy of the GNU General Public License along with sta
 // the first pass is done upon init, finding and pruning outlier groups
 
 
-public class FrameAirplaneRemover: Equatable, Hashable {
+final public actor FrameAirplaneRemover: Equatable, Hashable {
 
-    internal var state: FrameProcessingState = .unprocessed {
-        willSet {
-            if let frameStateChangeCallback = self.callbacks.frameStateChangeCallback {
-                frameStateChangeCallback(self, newValue)
-            }
-        }
-    }
+    fileprivate var state: FrameProcessingState = .unprocessed 
 
-    public func processingState() -> FrameProcessingState { return state }
-    
-    public func hash(into hasher: inout Hasher) {
-        hasher.combine(frameIndex)
-    }
-    
-    func set(state: FrameProcessingState) {
+    public func set(state: FrameProcessingState) {
         Log.i("frame \(frameIndex) transitioning to state \(state)")
         self.state = state
+        if let frameStateChangeCallback = self.callbacks.frameStateChangeCallback {
+            frameStateChangeCallback(self, state)
+        }
+    }
+    
+    public func processingState() -> FrameProcessingState { return state }
+    
+    nonisolated public func hash(into hasher: inout Hasher) {
+        hasher.combine(frameIndex)
     }
     
     public let width: Int
@@ -52,6 +49,8 @@ public class FrameAirplaneRemover: Equatable, Hashable {
     // populated by pruning
     public var outlierGroups: OutlierGroups? 
 
+    public func getOutlierGroups() -> OutlierGroups?  { outlierGroups }
+    
     private var didChange = false
 
     public func changesHandled() { didChange = false }
@@ -74,9 +73,13 @@ public class FrameAirplaneRemover: Equatable, Hashable {
     var previousFrame: FrameAirplaneRemover?
     var nextFrame: FrameAirplaneRemover?
 
+    func getPreviousFrame() -> FrameAirplaneRemover? { previousFrame }
+    
     func setPreviousFrame(_ frame: FrameAirplaneRemover) {
         previousFrame = frame
     }
+
+    func getNextFrame() -> FrameAirplaneRemover? { nextFrame }
     
     func setNextFrame(_ frame: FrameAirplaneRemover) {
         nextFrame = frame
@@ -87,7 +90,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
     // if this is false, just write out outlier data
     let writeOutputFiles: Bool
 
-    public let imageAccessor: ImageAccess
+    public let imageAccessor: ImageAccessor
 
     private let completion: (() async -> Void)?
     
@@ -103,7 +106,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
                 outlierOutputDirname: String,
                 fullyProcess: Bool = true,
                 writeOutputFiles: Bool = true,
-                completion: (() async -> Void)? = nil) async throws
+                completion: (@Sendable () async -> Void)? = nil) async throws
     {
         self.imageAccessor = ImageAccessor(config: config,
                                            imageSequence: imageSequence,
@@ -154,6 +157,8 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         
         let alignmentFilename = otherFilename
 
+//        let accessor = imageAccessor
+        
         if let alignedFrame = await imageAccessor.load(type: .aligned, atSize: .original) {
             Log.d("frame \(frameIndex) loaded existing aligned frame")
             return alignedFrame
@@ -161,7 +166,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
             Log.d("frame \(frameIndex) creating aligned frame")
             if let dirname = imageAccessor.dirForImage(ofType: .aligned, atSize: .original) {
                 Log.d("frame \(frameIndex) creating aligned frame in \(dirname)")
-                self.state = .starAlignment
+                self.set(state: .starAlignment)
 
                 // call directly in init becuase didSet() isn't called from here :P
 //                if let frameStateChangeCallback = callbacks.frameStateChangeCallback {
@@ -230,7 +235,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
 
         if config.writeOutlierClassificationValues {
             // THIS MOFO IS SLOW
-            self.state = .writingOutlierValues
+            self.set(state: .writingOutlierValues)
 
             Log.d("frame \(self.frameIndex) finish 1")
             // write out the classifier feature data for this data point
@@ -240,7 +245,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         Log.d("frame \(self.frameIndex) finish 2")
         if !self.writeOutputFiles {
             Log.d("frame \(self.frameIndex) not writing output files")
-            self.state = .complete
+            self.set(state: .complete)
             if let completion { await completion() }
             return
         }
@@ -269,14 +274,14 @@ public class FrameAirplaneRemover: Equatable, Hashable {
         case .eightBit(_):
             Log.e("8 bit not supported here now")
         case .sixteenBit(var outputData):
-            self.state = .painting
+            self.set(state: .painting)
 
             Log.d("frame \(self.frameIndex) painting over airplanes")
 
             try await self.paintOverAirplanes(toData: &outputData, otherFrame: otherFrame)
 
             Log.d("frame \(self.frameIndex) writing output files")
-            self.state = .writingOutputFile
+            self.set(state: .writingOutputFile)
 
             Log.d("frame \(self.frameIndex) updating image")
             let processedImage = image.updated(with: outputData)
@@ -295,7 +300,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
             }
             if let outlierGroups {
                 Log.d("frame \(self.frameIndex) getting validating image")
-                let validationImage = outlierGroups.validationImage
+                let validationImage = await outlierGroups.validationImage()
                 Log.d("frame \(self.frameIndex) writing validated image")
                 try await imageAccessor.save(validationImage, as: .validated,
                                              atSize: .original, overwrite: false)
@@ -305,7 +310,7 @@ public class FrameAirplaneRemover: Equatable, Hashable {
             }
             Log.d("frame \(self.frameIndex) done writing toutut files")
         }
-        self.state = .complete
+        self.set(state: .complete)
         if let completion { await completion() }
 
         

@@ -1,7 +1,7 @@
 import Foundation
 
 // x, y coordinates
-public struct Coord: Codable, Equatable {
+public struct Coord: Codable, Equatable, Sendable {
     public let x: Int
     public let y: Int
 

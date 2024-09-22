@@ -12,13 +12,13 @@ You should have received a copy of the GNU General Public License along with sta
 
 import Foundation
 
-public protocol LogHandler {
+public protocol LogHandler: Sendable {
     func log(message: String,
              at fileLocation: String,
              with data: LogData?,
              at logLevel: Log.Level,
              logTime: TimeInterval)
     
-    var level: Log.Level { get set }
+    var level: Log.Level { get }
 }
 

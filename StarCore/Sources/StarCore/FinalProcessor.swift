@@ -83,7 +83,7 @@ public actor FinalProcessor {
         if let updatable = callbacks.updatable {
            let localFrames = self.frames
             // show what frames are in place to be processed
-           TaskWaiter.shared.task(priority: .userInitiated) {
+           Task {
                var padding = ""
                let numConcurrentRenders = 30 // XXX
                if numConcurrentRenders < self.config.progressBarLength {
@@ -137,14 +137,14 @@ public actor FinalProcessor {
         Log.d("finishing all")
         try await withLimitedThrowingTaskGroup(of: Void.self,
                                                at: .medium) { taskGroup in
-            for (_, frame) in frames.enumerated() {
+            for (_, frame) in await frames.enumerated() {
                 if let frame {
                     Log.d("adding frame \(frame.frameIndex) to final queue")
                     try await taskGroup.addTask() {
 
                         await frame.maybeApplyOutlierGroupClassifier()
 
-                        frame.set(state: .outlierProcessingComplete)
+                        await frame.set(state: .outlierProcessingComplete)
                         try await self.finish(frame: frame)
                     }
                 }
@@ -159,8 +159,7 @@ public actor FinalProcessor {
 
         Log.d("finish frame \(frame.frameIndex)")
         
-        if let frameCheckClosure = callbacks.frameCheckClosure
-        {
+        if let frameCheckClosure = callbacks.frameCheckClosure {
             // gui
             await MainActor.run {
                 Log.d("calling frameCheckClosure for frame \(frame.frameIndex)")
@@ -186,9 +185,9 @@ public actor FinalProcessor {
         // wait here for at least one frame to be published
         await semaphore.wait()
         
-        var done = false
         try await withLimitedThrowingTaskGroup(of: Void.self,
                                                at: .medium) { taskGroup in
+            var done = false
             while(!done) {
                 //Log.v("FINAL THREAD running")
                 let (cfi, framesCount) = await (currentFrameIndex, frames.count)
@@ -253,11 +252,11 @@ public actor FinalProcessor {
                     Log.i("FINAL THREAD frame \(indexToProcess) doing inter-frame analysis with \(imagesToProcess.count) frames")
 
                     // doubly link the outliers so their feature values across frames work
-                    doublyLink(frames: imagesToProcess)    
+                    await doublyLink(frames: imagesToProcess)    
 
                     Log.i("FINAL THREAD frame \(indexToProcess) done with inter-frame analysis")
                     await self.incrementCurrentFrameIndex()
-                    
+
                     if startIndex > 0,
                        indexToProcess < frameCount - config.numberFinalProcessingNeighborsNeeded - 1
                     {
@@ -274,7 +273,7 @@ public actor FinalProcessor {
                                 await frameToFinish.clearOutlierGroupValueCaches()
 
                                 await frameToFinish.maybeApplyOutlierGroupClassifier()
-                                frameToFinish.set(state: .outlierProcessingComplete)
+                                await frameToFinish.set(state: .outlierProcessingComplete)
 
                                 Log.v("FINAL THREAD frame \(indexToProcess) classified")
                                 do {
@@ -304,18 +303,18 @@ public actor FinalProcessor {
 }    
 
 
-public func doublyLink(frames: [FrameAirplaneRemover]) {
+public func doublyLink(frames: [FrameAirplaneRemover]) async {
     // doubly link frames here so that the decision tree can have acess to other frames
     for (i, frame) in frames.enumerated() {
-        if frames[i].previousFrame == nil,
+        if await frames[i].getPreviousFrame() == nil,
            i > 0
         {
-            frame.setPreviousFrame(frames[i-1])
+            await frame.setPreviousFrame(frames[i-1])
         }
-        if frames[i].nextFrame == nil,
+        if await frames[i].getNextFrame() == nil,
            i < frames.count - 1
         {
-            frame.setNextFrame(frames[i+1])
+            await frame.setNextFrame(frames[i+1])
         }
     }
 }

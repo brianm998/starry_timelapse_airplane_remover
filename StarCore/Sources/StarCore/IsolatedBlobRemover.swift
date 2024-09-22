@@ -17,9 +17,26 @@ You should have received a copy of the GNU General Public License along with sta
 */
 
 // gets rid of small blobs by themselves in nowhere
-public class IsolatedBlobRemover: AbstractBlobAnalyzer {
+public actor IsolatedBlobRemover {
 
-    public struct Args {
+    let analyzer: BlobAnalyzer
+    
+    init(blobMap: [UInt16: Blob],
+         width: Int,
+         height: Int,
+         frameIndex: Int) async
+    {
+        analyzer = await BlobAnalyzer(blobMap: blobMap,
+                                      width: width,
+                                      height: height,
+                                      frameIndex: frameIndex)
+    }
+    
+    public func blobMap() async -> [UInt16:Blob] {
+        await analyzer.mapOfBlobs()
+    }
+    
+    public struct Args: Sendable {
         let minNeighborSize: Int   // how big does a neighbor need to be to count?
         let scanSize: Int          // how far in each direction to look for neighbors
         let requiredNeighbors: Int // how many neighbors does each one need?
@@ -37,19 +54,19 @@ public class IsolatedBlobRemover: AbstractBlobAnalyzer {
         }
     }
 
-    public func process(_ args: Args) {
-        iterateOverAllBlobs() { _, blob in
+    public func process(_ args: Args) async {
+        await analyzer.iterateOverAllBlobsAsync() { _, blob in
             // only deal with small blobs
-            if blob.size > args.minBlobSize { return }
+            if await blob.size() > args.minBlobSize { return }
             
-            let otherBlobsNearby = self.directNeighbors(of: blob, scanSize: args.scanSize,
-                                                        requiredNeighbors: args.requiredNeighbors)
+            let otherBlobsNearby = await analyzer.directNeighbors(of: blob, scanSize: args.scanSize,
+                                                                  requiredNeighbors: args.requiredNeighbors)
             { otherBlob in
-                otherBlob.size > args.minNeighborSize
+                await otherBlob.size() > args.minNeighborSize
             }
 
             if otherBlobsNearby.count < args.requiredNeighbors {
-                blobMap.removeValue(forKey: blob.id)
+                await analyzer.remove(blob: blob)
             }
         }
     }

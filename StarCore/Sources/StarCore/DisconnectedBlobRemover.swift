@@ -18,9 +18,26 @@ You should have received a copy of the GNU General Public License along with sta
 
 // recurse on finding nearby blobs to isolate groups of neighbors as a set
 // use the size of the neighbor set to determine if we keep a blob or not
-public class DisconnectedBlobRemover: AbstractBlobAnalyzer {
+public actor DisconnectedBlobRemover {
 
-    public struct Args {
+    let analyzer: BlobAnalyzer
+    
+    init(blobMap: [UInt16: Blob],
+         width: Int,
+         height: Int,
+         frameIndex: Int) async
+    {
+        analyzer = await BlobAnalyzer(blobMap: blobMap,
+                                      width: width,
+                                      height: height,
+                                      frameIndex: frameIndex)
+    }
+
+    public func blobMap() async -> [UInt16:Blob] {
+        await analyzer.mapOfBlobs()
+    }
+    
+    public struct Args: Sendable {
         let scanSize: Int          // how far in each direction to look for neighbors
         let blobsSmallerThan: Int  // ignore blobs larger than this
         let blobsLargerThan: Int   // ignore blobs smaller than this
@@ -38,42 +55,48 @@ public class DisconnectedBlobRemover: AbstractBlobAnalyzer {
         }
     }
 
-    public func process(_ args: Args) {
-        var processedBlobs: Set<UInt16> = []
-        iterateOverAllBlobs() { id, blob in
+    public func process(_ args: Args) async {
+        await analyzer.iterateOverAllBlobsAsync() { id, blob in
+            var processedBlobs: Set<UInt16> = []
+            
             if processedBlobs.contains(id) { return }
             processedBlobs.insert(id)
             
             // only deal with blobs in a certain size range
-            if blob.size >= args.blobsSmallerThan || 
-               blob.size < args.blobsLargerThan
+            let blobSize = await blob.size()
+            
+            if blobSize >= args.blobsSmallerThan || 
+               blobSize < args.blobsLargerThan
             {
                 return
             }
 
             // find a cloud of neighbors 
             let (neighborCloud, newProcessedBlobs) =
-              neighborCloud(of: blob,
-                            scanSize: args.scanSize,
-                            processedBlobs: processedBlobs)
+              await analyzer.neighborCloud(of: blob,
+                                           scanSize: args.scanSize,
+                                           processedBlobs: processedBlobs)
 
             processedBlobs = processedBlobs.union(newProcessedBlobs)
 
-            let totalBlobSize = neighborCloud.map { $0.size }.reduce(0, +) + blob.size
+            var totalBlobSize = await blob.size()
+            for neighborBlob in neighborCloud {
+                totalBlobSize += await neighborBlob.size()
+            }
             let averageBlobSize = Double(totalBlobSize)/Double(neighborCloud.count+1)
             
             if neighborCloud.count < args.requiredNeighbors,
                averageBlobSize < Double(args.blobsSmallerThan)
             {
-                Log.i("blob of size \(blob.size) only has \(neighborCloud.count) neighbors")
+                Log.i("blob of size \(await blob.size()) only has \(neighborCloud.count) neighbors")
                 // remove the blob we're iterating over
-                blobMap.removeValue(forKey: blob.id)
+                await analyzer.remove(blob: blob)
                 // and remove all of its (few) neighbors as well
                 for blob in neighborCloud {
-                    blobMap.removeValue(forKey: blob.id)
+                    await analyzer.remove(blob: blob)
                 }
             } else {
-                Log.i("blob of size \(blob.size) has \(neighborCloud.count) neighbors")
+                Log.i("blob of size \(await blob.size()) has \(neighborCloud.count) neighbors")
             }
         }
     }

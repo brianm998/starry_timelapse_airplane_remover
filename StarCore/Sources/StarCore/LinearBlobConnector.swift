@@ -18,9 +18,26 @@ You should have received a copy of the GNU General Public License along with sta
 
 // recurse on finding nearby blobs to find groups of neighbors in a set
 // use the KHT to try to combine some of them into a line (if we get a good enough line)
-public class LinearBlobConnector: AbstractBlobAnalyzer {
+public actor LinearBlobConnector {
 
-    public struct Args {
+    let analyzer: BlobAnalyzer
+    
+    init(blobMap: [UInt16: Blob],
+         width: Int,
+         height: Int,
+         frameIndex: Int) async
+    {
+        analyzer = await BlobAnalyzer(blobMap: blobMap,
+                                      width: width,
+                                      height: height,
+                                      frameIndex: frameIndex)
+    }
+    
+    public func blobMap() async -> [UInt16:Blob] {
+        await analyzer.mapOfBlobs()
+    }
+    
+    public struct Args: Sendable {
         let scanSize: Int         // how far in each direction to look for neighbors
         let blobsSmallerThan: Int // ignore blobs larger than this
         let blobsLargerThan: Int  // ignore blobs smaller than this
@@ -35,15 +52,17 @@ public class LinearBlobConnector: AbstractBlobAnalyzer {
         }
     }
 
-    public func process(_ args: Args) {
-        var processedBlobs: Set<UInt16> = []
-        iterateOverAllBlobs() { id, blob in
+    public func process(_ args: Args) async {
+        await analyzer.iterateOverAllBlobsAsync() { id, blob in
+            var processedBlobs: Set<UInt16> = []
             if processedBlobs.contains(id) { return }
             processedBlobs.insert(id)
             
             // only deal with blobs in a certain size range
-            if blob.size >= args.blobsSmallerThan || 
-               blob.size < args.blobsLargerThan
+            let blobSize = await blob.size()
+            
+            if blobSize >= args.blobsSmallerThan || 
+               blobSize < args.blobsLargerThan
             {
                 return
             }
@@ -52,9 +71,9 @@ public class LinearBlobConnector: AbstractBlobAnalyzer {
 
             // find a cloud of neighbors 
             let (neighborCloud, newProcessedBlobs) =
-              neighborCloud(of: blob,
-                            scanSize: args.scanSize,
-                            processedBlobs: processedBlobs)
+              await analyzer.neighborCloud(of: blob,
+                                           scanSize: args.scanSize,
+                                           processedBlobs: processedBlobs)
 
             processedBlobs = processedBlobs.union(newProcessedBlobs)
 
@@ -67,18 +86,18 @@ public class LinearBlobConnector: AbstractBlobAnalyzer {
             
             // first create a temporary blob that combines all of the nearby blobs
             let fullBlob = Blob(id: id, frameIndex: frameIndex) // values not used
-            for blob in neighborCloud { _ = fullBlob.absorb(blob, always: true) }
+            for blob in neighborCloud { _ = await fullBlob.absorb(blob, always: true) }
 
             // here we have combined all of the nearby blobs within our given scanSize
             // to eachother.  This may be enormous, if we have lots of small blobs close together.
             // Or or may be 50-80% small blobs on the same line.
 
 
-            Log.d("blob \(id) fullBlob has \(fullBlob.pixels.count) pixels boundingBox \(fullBlob.boundingBox) line \(fullBlob.line)")
+            Log.d("blob \(id) fullBlob has \(await fullBlob.getPixels().count) pixels boundingBox \(await fullBlob.boundingBox()) line \(await fullBlob.line)")
 
             
             // render a KHT on this full blob
-            if let blobLine = fullBlob.originZeroLine {
+            if let blobLine = await fullBlob.originZeroLine {
 
                 // XXX for testing, write out this big blob as json
 /* 
@@ -89,7 +108,7 @@ public class LinearBlobConnector: AbstractBlobAnalyzer {
                 do {
                     let jsonData = try encoder.encode(fullBlob)
                     
-                    fileManager.createFile(atPath: blobJsonFilename,
+                    FileManager.default.createFile(atPath: blobJsonFilename,
                                            contents: jsonData,
                                            attributes: nil)
                 } catch {
@@ -100,7 +119,7 @@ public class LinearBlobConnector: AbstractBlobAnalyzer {
 
                 // first iterate on the best line for the full blob
                 // maybe recurse on a better line from a smaller amount
-                iterate(on: blobLine, over: fullBlob)
+                await iterate(on: blobLine, over: fullBlob)
             }
         }
     }
@@ -109,36 +128,37 @@ public class LinearBlobConnector: AbstractBlobAnalyzer {
                              over fullBlob: Blob,
                              // how much furter to look at the ends of the line
                              lineBorder: Int = 0,
-                             iterationCount: Int = 0)
+                             iterationCount: Int = 0) async
     {
         // we have an ideal origin zero line for this blob
-        Log.d("frame \(frameIndex) blob \(fullBlob.id) has line \(blobLine)")
+        //Log.d("frame \(frameIndex) blob \(fullBlob.id) has line \(blobLine)")
 
         var start: DoubleCoord?
         var end: DoubleCoord?
 
+        let boundingBox = await fullBlob.boundingBox()
         
         switch blobLine.iterationOrientation {
-
+            
         case .horizontal:
-            var min = fullBlob.boundingBox.min.x - lineBorder
-            var max = fullBlob.boundingBox.max.x + lineBorder
+            var min = boundingBox.min.x - lineBorder
+            var max = boundingBox.max.x + lineBorder
             if min < 0 { min = 0 }
-            if max >= width { max = width - 1 }
+            if max >= analyzer.width { max = analyzer.width - 1 }
             start = DoubleCoord(x: Double(min), y: 0)
             end = DoubleCoord(x: Double(max), y: 0)
             
         case .vertical:
-            var min = fullBlob.boundingBox.min.y - lineBorder
-            var max = fullBlob.boundingBox.max.y + lineBorder
+            var min = boundingBox.min.y - lineBorder
+            var max = boundingBox.max.y + lineBorder
             if min < 0 { min = 0 }
-            if max >= height { max = height - 1 }
+            if max >= analyzer.height { max = analyzer.height - 1 }
             start = DoubleCoord(x: 0, y: Double(min))
             end = DoubleCoord(x: 0, y: Double(max))
         }
 
         if let start, let end {
-            Log.d("frame \(frameIndex) blob \(fullBlob.id) iterating between \(start) and \(end)")
+            //Log.d("frame \(frameIndex) blob \(fullBlob.id) iterating between \(start) and \(end)")
             var linearBlobIds = Set<UInt16>()
             // iterate over the line and absorbs all blobs along it into a new blob
             // remove all ids expept for the one from the combined blob ids from the blob map
@@ -149,15 +169,15 @@ public class LinearBlobConnector: AbstractBlobAnalyzer {
             { x, y, orientation in
                 if x >= 0,
                    y >= 0,
-                   x < width,
-                   y < height
+                   x < analyzer.width,
+                   y < analyzer.height
                 {
                     // look for blobs at x,y, i.e. blobs that are right on the line
-                    let index = y*width+x
-                    if index < blobRefs.count {
-                        let blobId = blobRefs[index]
+                    let index = y*analyzer.width+x
+                    if index < analyzer.blobRefs.count {
+                        let blobId = analyzer.blobRefs[index]
                         if blobId != 0 {
-                            Log.d("frame \(frameIndex) blob \(fullBlob.id) found linear blob \(blobId) @ [\(x), \(y)]")
+                            Log.d("frame \(analyzer.frameIndex) blob \(fullBlob.id) found linear blob \(blobId) @ [\(x), \(y)]")
                             linearBlobIds.insert(blobId)
                         } else {
                             //Log.d("frame \(frameIndex) blob \(fullBlob.id) nothing found @ [\(x), \(y)]")
@@ -166,11 +186,11 @@ public class LinearBlobConnector: AbstractBlobAnalyzer {
                 }
             }
 
-            var linearBlobSet = linearBlobIds.compactMap { blobMap[$0] }
+            var linearBlobSet = await analyzer.blobs(with: linearBlobIds)
             
             if linearBlobSet.count > 1 {
                 
-                Log.d("frame \(frameIndex) blob \(fullBlob.id) found \(linearBlobIds.count) linear blobs")
+                Log.d("frame \(analyzer.frameIndex) blob \(fullBlob.id) found \(linearBlobIds.count) linear blobs")
                 
                 // we found more than one blob alone the line
 
@@ -179,10 +199,10 @@ public class LinearBlobConnector: AbstractBlobAnalyzer {
 
                 // the others will get eaten and thrown away :(
                 for otherBlob in linearBlobSet {
-                    _ = firstBlob.absorb(otherBlob, always: true)
-                    blobMap.removeValue(forKey: otherBlob.id)
+                    _ = await firstBlob.absorb(otherBlob, always: true)
+                    await analyzer.remove(blob: otherBlob)
                 }
-                blobMap[firstBlob.id] = firstBlob // just in case
+                //blobMap[firstBlob.id] = firstBlob // just in case
 
                 /*
                  If we have a line from this new blob, it is likely
@@ -192,22 +212,21 @@ public class LinearBlobConnector: AbstractBlobAnalyzer {
                  to see what we might find.
                  */
 
-                if let line = firstBlob.originZeroLine,
+                if let line = await firstBlob.originZeroLine,
                    iterationCount < 10 // XXX constant
                 {
-                    Log.d("frame \(frameIndex) ITERATING iterationCount \(iterationCount)")
-                    self.iterate(on: line,
-                                 over: firstBlob,
-                                 lineBorder: 100, // XXX constnat
-                                 iterationCount: iterationCount + 1)
+                    Log.d("frame \(analyzer.frameIndex) ITERATING iterationCount \(iterationCount)")
+                    await self.iterate(on: line,
+                                       over: firstBlob,
+                                       lineBorder: 100, // XXX constnat
+                                       iterationCount: iterationCount + 1)
                 } else {
-                    Log.d("frame \(frameIndex) NOT ITERATING iterationCount \(iterationCount)")
+                    Log.d("frame \(analyzer.frameIndex) NOT ITERATING iterationCount \(iterationCount)")
                 }
             } else {
-                Log.d("frame \(frameIndex) only found \(linearBlobSet.count) linear blobs")
+                Log.d("frame \(analyzer.frameIndex) only found \(linearBlobSet.count) linear blobs")
             }
         }
     }
 }
 
-fileprivate let fileManager = FileManager.default

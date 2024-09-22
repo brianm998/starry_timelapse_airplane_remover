@@ -3,7 +3,10 @@ import KHTSwift
 import logging
 
 // the bounding box of an outlier group
-public struct BoundingBox: Codable, Equatable {
+public struct BoundingBox: Codable,
+                           Equatable,
+                           Sendable
+{
     public let min: Coord
     public let max: Coord
 

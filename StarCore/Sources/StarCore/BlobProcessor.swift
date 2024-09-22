@@ -71,26 +71,30 @@ public class BlobProcessor {
           // a first pass at cutting out individual blobs based upon size, brightness
           // or being too close to the bottom
           .process() { blobs in
-              blobs.compactMapValues { blob in
+              var ret: [UInt16: Blob] = [:]
+
+              for (id, blob) in blobs {
+                  /* XXX checked before pixel creation as well
                   if let ignoreLowerPixels = frame.config.ignoreLowerPixels,
-                     blob.boundingBox.min.y + ignoreLowerPixels > frame.height
+                     await blob.boundingBox().min.y + ignoreLowerPixels > frame.height
                   {
                       // too close to the bottom 
                       return nil
                   }
-
+*/
                   // anything this small is noise
-                  if blob.size <= constants.blobberMinBlobSize { return nil }
+                  if await blob.size() <= constants.blobberMinBlobSize { continue }
 
                   // these blobs are just too dim
-                  if blob.medianIntensity < constants.blobberMinBlobIntensity { return nil }
+                  if await blob.medianIntensity() < constants.blobberMinBlobIntensity { continue }
                   
                   // only keep smaller blobs if they are bright enough
-                  if !constants.blobberSmallBlobQualifier.allows(blob) { return nil }
+                  if !(await constants.blobberSmallBlobQualifier.allows(blob)) { continue }
 
                   // this blob has passed these checks, keep it for now
-                  return blob
+                  ret[blob.id] = blob
               }
+              return ret
           },
 
           .save(.blobs),          
@@ -148,19 +152,21 @@ public class BlobProcessor {
           // eviscerate any remaining small and dim blobs with no mercy 
           .process() { blobs in
               // weed out blobs that are too small and not bright enough
-              blobs.compactMapValues { blob in
+
+              var ret: [UInt16: Blob] = [:]
+
+              for (id, blob) in blobs {
                   // discard any blobs that are still too small or dim
-                  if blob.size >= constants.finalMinBlobSize,
-                     constants.finalSmallDimBlobQualifier.allows(blob),
-                     constants.finalMediumDimBlobQualifier.allows(blob),
-                     constants.finalLargeDimBlobQualifier.allows(blob)
+                  if await blob.size() >= constants.finalMinBlobSize,
+                     await constants.finalSmallDimBlobQualifier.allows(blob),
+                     await constants.finalMediumDimBlobQualifier.allows(blob),
+                     await constants.finalLargeDimBlobQualifier.allows(blob)
                   {
                       // this blob is good enough for machine learning classification
-                      return blob
-                  } else {
-                      return nil
+                      ret[blob.id] = blob
                   }
               }
+              return ret
           },
 
           .save(.filter6),
@@ -181,61 +187,61 @@ public class BlobProcessor {
 
 
             case .linearBlobConnector(let args):
-                let connector = LinearBlobConnector(blobMap: blobMap,
-                                                    width: frame.width,
-                                                    height: frame.height,
-                                                    frameIndex: frame.frameIndex)
-                connector.process(args)
-                blobMap = connector.blobMap
+                let connector = await LinearBlobConnector(blobMap: blobMap,
+                                                          width: frame.width,
+                                                          height: frame.height,
+                                                          frameIndex: frame.frameIndex)
+                await connector.process(args)
+                blobMap = await connector.blobMap()
 
 
             case .isolatedBlobRemover(let args):
-                let remover = IsolatedBlobRemover(blobMap: blobMap,
-                                                  width: frame.width,
-                                                  height: frame.height,
-                                                  frameIndex: frame.frameIndex)
-                iterate() { shouldRun in
+                let remover = await IsolatedBlobRemover(blobMap: blobMap,
+                                                        width: frame.width,
+                                                        height: frame.height,
+                                                        frameIndex: frame.frameIndex)
+                await iterate() { shouldRun in
                     if shouldRun {
-                        remover.process(args)
+                        await remover.process(args)
                     }
-                    return remover.blobMap.count
+                    return await remover.blobMap().count
                 }
-                blobMap = remover.blobMap
+                blobMap = await remover.blobMap()
                 
 
             case .disconnectedBlobRemover(let args):
-                let remover = DisconnectedBlobRemover(blobMap: blobMap,
-                                                      width: frame.width,
-                                                      height: frame.height,
-                                                      frameIndex: frame.frameIndex)
-                remover.process(args)
-                blobMap = remover.blobMap
+                let remover = await DisconnectedBlobRemover(blobMap: blobMap,
+                                                            width: frame.width,
+                                                            height: frame.height,
+                                                            frameIndex: frame.frameIndex)
+                await remover.process(args)
+                blobMap = await remover.blobMap()
                 
 
             case .dimIsolatedBlobRemover(let args):
-                let remover = DimIsolatedBlobRemover(blobMap: blobMap,
-                                                     width: frame.width,
-                                                     height: frame.height,
-                                                     frameIndex: frame.frameIndex)
-                iterate() { shouldRun in
+                let remover = await DimIsolatedBlobRemover(blobMap: blobMap,
+                                                           width: frame.width,
+                                                           height: frame.height,
+                                                           frameIndex: frame.frameIndex)
+                await iterate() { shouldRun in
                     if shouldRun {
-                        remover.process(args)
+                        await remover.process(args)
                     }
 
-                    return remover.blobMap.count
+                    return await remover.blobMap().count
                 }
-                blobMap = remover.blobMap
-                
+                blobMap = await remover.blobMap()
                 
                 
             case .save(let imageType):
                 if frame.config.writeOutlierGroupFiles {
-                    // save image 
-                    try await frame.saveImages(for: Array(blobMap.values), as: imageType)
+                    // save image
+                    let fuck = imageType
+                    try await frame.saveImages(for: Array(blobMap.values), as: fuck)
                 }
 
             case .frameState(let processingState):
-                frame.state = processingState
+                await frame.set(state: processingState)
 
             }
             Log.d("frame \(frame.frameIndex) now has \(blobMap.count) blobs")
@@ -301,7 +307,7 @@ public class BlobProcessor {
             throw "8 bit images are not currently supported by Star, only 16 bit images"
         }
         
-        frame.state = .assemblingPixels
+        await frame.set(state: .assemblingPixels)
 
         Log.d("frame \(frameIndex) running blobber")
 
@@ -325,10 +331,10 @@ public class BlobProcessor {
 
         blobber.sortPixels()
         
-        frame.state = .detectingBlobs
+        await frame.set(state: .detectingBlobs)
         
         // run the blobber
-        blobber.process()
+        await blobber.process()
 
         Log.d("frame \(frameIndex) blobber done")
 
@@ -336,14 +342,14 @@ public class BlobProcessor {
     }
     
     // re-run something repeatedly
-    fileprivate func iterate(closure: (Bool) -> Int, max: Int = 8) {
+    fileprivate func iterate(closure: (Bool) async -> Int, max: Int = 8) async {
 
-        var lastCount = closure(false)
+        var lastCount = await closure(false)
         var shouldContinue = true
         var count = 0
 
         while shouldContinue {
-            let thisCount = closure(true)
+            let thisCount = await closure(true)
             if lastCount == thisCount { shouldContinue = false }
             lastCount = thisCount
             count += 1

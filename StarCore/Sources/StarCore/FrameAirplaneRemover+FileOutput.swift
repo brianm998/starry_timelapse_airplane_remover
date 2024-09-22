@@ -35,12 +35,12 @@ extension FrameAirplaneRemover {
             let csvFilename = "\(frameOutlierDir)/\(CondensedOutlierGroupValueMatrix.outlierDataFilename)"
 
             // check to see if both of these files exist already
-            if fileManager.fileExists(atPath: csvFilename) {
+            if FileManager.default.fileExists(atPath: csvFilename) {
                 Log.i("frame \(self.frameIndex) not recalculating outlier values with existing files")
             } else {
                 let valueMatrix = CondensedOutlierGroupValueMatrix()
                 
-                if let outliers = self.outlierGroupList() {
+                if let outliers = await self.outlierGroupList() {
                     Log.d("frame \(self.frameIndex) writeOutlierValuesCSV 1a \(outliers.count) outliers")
                     //let startTime = NSDate().timeIntervalSince1970
                     // XXX start time
@@ -76,4 +76,4 @@ extension FrameAirplaneRemover {
     }
 }
 
-fileprivate let fileManager = FileManager.default
+

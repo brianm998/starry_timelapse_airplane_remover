@@ -9,7 +9,7 @@ public class TaskRunner {
     // XXX getting this number right is hard
     // too big and the swift runtime barfs underneath
     // too small and the process runs without available cpu resources
-    public static var maxConcurrentTasks: UInt = determineMax() {
+    nonisolated(unsafe) public static var maxConcurrentTasks: UInt = determineMax() {
         didSet {
             Log.i("using maximum of \(maxConcurrentTasks) concurrent tasks")
         }
@@ -37,7 +37,7 @@ fileprivate func determineMax() -> UInt {
  */
 public func runTask<Type>(at priority: TaskPriority = .medium,
                           with taskMaster: TaskMaster = defaultTaskMaster,
-                          _ closure: @escaping () async -> Type) async -> Task<Type,Never>
+                          _ closure: @escaping @Sendable () async -> Type) async -> Task<Type,Never>
 {
     let enabler = TaskEnabler(priority: priority)
     await taskMaster.register(enabler)
@@ -63,7 +63,7 @@ public func runTask<Type>(at priority: TaskPriority = .medium,
  */
 public func runThrowingTask<Type>(at priority: TaskPriority = .medium,
                                   with taskMaster: TaskMaster = defaultTaskMaster,
-                                  _ closure: @escaping () async throws -> Type)
+                                  _ closure: @escaping @Sendable () async throws -> Type)
   async throws -> Task<Type,Error>
 {
     let enabler = TaskEnabler(priority: priority)
@@ -84,7 +84,7 @@ public func runThrowingTask<Type>(at priority: TaskPriority = .medium,
 
 public func runDeferredThrowingTask<Type>(at priority: TaskPriority = .medium,
                                           with taskMaster: TaskMaster = defaultTaskMaster,
-                                          _ closure: @escaping () async throws -> Type)
+                                          _ closure: @escaping @Sendable () async throws -> Type)
   async throws -> Task<Type,Error>
 {
     return Task<Type,Error> {

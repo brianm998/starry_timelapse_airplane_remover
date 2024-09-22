@@ -12,10 +12,10 @@ You should have received a copy of the GNU General Public License along with sta
 
 import Foundation
 
-public class FileLogHandler: LogHandler {
+public final class FileLogHandler: LogHandler {
     
     let dateFormatter = DateFormatter()
-    public var level: Log.Level
+    public let level: Log.Level
     //private let logfilename: String
     public let full_log_path: String
     public let logURL: URL
@@ -73,5 +73,5 @@ public class FileLogHandler: LogHandler {
 }
 
 // make any string into an Error, so it can be thrown by itself if desired
-extension String: Error {}
+extension String: @retroactive Error {}
 

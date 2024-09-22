@@ -15,14 +15,14 @@ You should have received a copy of the GNU General Public License along with sta
 
 */
 
-public class UpdatableLogHandler: LogHandler {
+public final class UpdatableLogHandler: LogHandler {
     public func log(message: String,
                     at fileLocation: String,
                     with data: LogData?,
                     at logLevel: Log.Level,
                     logTime: TimeInterval)
     {
-        TaskWaiter.shared.task(priority: .userInitiated) {
+        Task {
             var logMessage = ""
             if let data {
                 logMessage = "\(logLevel.emo) \(logLevel) | \(fileLocation): \(message) | \(data.description)"
@@ -36,7 +36,7 @@ public class UpdatableLogHandler: LogHandler {
         }
     }
     
-    public var level: Log.Level
+    public let level: Log.Level
     let updatable: UpdatableLog
     
     public init(_ updatable: UpdatableLog) {
@@ -85,7 +85,7 @@ public actor UpdatableProgressMonitor {
     private var lastUpdateTime: TimeInterval?
     
     public func stateChange(for frame: FrameAirplaneRemover,
-                            to newState: FrameProcessingState)
+                            to newState: FrameProcessingState) async 
     {
         for state in FrameProcessingState.allCases {
             if state == newState { continue }
@@ -101,7 +101,7 @@ public actor UpdatableProgressMonitor {
             frames[newState] = [frame]
         }
 
-        redraw()
+        await redraw()
     }
 
     func progressLine(for processingState: FrameProcessingState) -> (() async -> Void)?
@@ -126,7 +126,7 @@ public actor UpdatableProgressMonitor {
     }
     
     var value: Double = 0
-    func redraw() {
+    func redraw() async {
 
         guard let updatable = callbacks.updatable else { return }
 
@@ -235,9 +235,7 @@ public actor UpdatableProgressMonitor {
 
         let _updates = updates
 
-        TaskWaiter.shared.task(priority: .userInitiated) {
-            for update in _updates { await update() }
-        }
+        for update in _updates { await update() }
     }
 }
 

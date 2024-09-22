@@ -1,41 +1,45 @@
 import Foundation
 
-// a monochrome pixel that is used by the blobber
-public class SortablePixel: AbstractPixel, Hashable, CustomStringConvertible, Codable {
-    public let x: Int
-    public let y: Int
-    public let intensity: UInt16
-    public var status = Status.unknown
+public actor StatusPixel: Hashable {
 
-    enum CodingKeys: String, CodingKey {
-        case x
-        case y
-        case intensity
+    nonisolated public let _pixel: SortablePixel // XXX rename this
+    private var _status = Status.unknown
+
+    public init(_ pixel: SortablePixel) {
+        self._pixel = pixel
+    }
+
+    public init(x: Int = 0,
+                y: Int = 0,
+                intensity: UInt16 = 0)
+    {
+        self._pixel = SortablePixel(x: x, y: y, intensity: intensity)
     }
     
-    public static func == (lhs: SortablePixel, rhs: SortablePixel) -> Bool {
-        return lhs.x == rhs.x && lhs.y == rhs.y
+    public func status() -> Status  { _status }
+    public func set(status: Status) { _status = status }
+
+    nonisolated public func hash(into hasher: inout Hasher) {
+        hasher.combine(_pixel)
+    }
+    
+    public static func == (lhs: StatusPixel, rhs: StatusPixel) -> Bool {
+        return lhs._pixel == rhs._pixel
     }
 
-    public func hash(into hasher: inout Hasher) {
-        hasher.combine(x)
-        hasher.combine(y)
-    }
+//    public func pixel() -> SortablePixel  { _pixel } // necessary? 
+//    public func set(pixel: SortablePixel) { _pixel = pixel }
 
-    public var description: String {
-        return "[\(x), \(y)]"
-    }
-
-    public enum Status {
+    public enum Status: Sendable {
         case unknown
         case background
         case blobbed(Blob)
 
-        public static func != (lhs: SortablePixel.Status, rhs: SortablePixel.Status) -> Bool {
+        public static func != (lhs: StatusPixel.Status, rhs: StatusPixel.Status) -> Bool {
             !(lhs == rhs)
         }
         
-        public static func == (lhs: SortablePixel.Status, rhs: SortablePixel.Status) -> Bool {
+        public static func == (lhs: StatusPixel.Status, rhs: StatusPixel.Status) -> Bool {
             switch lhs {
             case .unknown:
                 switch rhs {
@@ -61,7 +65,36 @@ public class SortablePixel: AbstractPixel, Hashable, CustomStringConvertible, Co
             }
         }
     }
+}
+
+// a monochrome pixel that is used by the blobber
+public struct SortablePixel: AbstractPixel,
+                             Hashable,
+                             /*@preconcurrency*/ CustomStringConvertible,
+                             Codable,
+                             Sendable
+{
+    public let x: Int
+    public let y: Int
+    public let intensity: UInt16
     
+    enum CodingKeys: String, CodingKey {
+        case x
+        case y
+        case intensity
+    }
+    
+    public static func == (lhs: SortablePixel, rhs: SortablePixel) -> Bool {
+        return lhs.x == rhs.x && lhs.y == rhs.y
+    }
+
+    nonisolated public func hash(into hasher: inout Hasher) {
+        hasher.combine(x)
+        hasher.combine(y)
+    }
+
+    public var description: String { "[\(x), \(y)]" }
+
     public init(x: Int = 0,
                 y: Int = 0,
                 intensity: UInt16 = 0)
@@ -87,14 +120,14 @@ public class SortablePixel: AbstractPixel, Hashable, CustomStringConvertible, Co
         return diff / max * 100
     }
 
-    public required init(from decoder: Decoder) throws {
+    public init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
         x = try values.decode(Int.self, forKey: .x)
         y = try values.decode(Int.self, forKey: .y)
         intensity = try values.decode(UInt16.self, forKey: .intensity)
     }
 
-    public func encode(to encoder: Encoder) throws {
+    nonisolated public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(x, forKey: .x)
         try container.encode(y, forKey: .y)

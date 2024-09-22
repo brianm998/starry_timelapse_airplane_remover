@@ -17,9 +17,26 @@ You should have received a copy of the GNU General Public License along with sta
 */
 
 // gets rid of dimmer blobs off by themselves 
-public class DimIsolatedBlobRemover: AbstractBlobAnalyzer {
+public actor DimIsolatedBlobRemover {
 
-    public struct Args {
+    let analyzer: BlobAnalyzer
+
+    init(blobMap: [UInt16: Blob],
+         width: Int,
+         height: Int,
+         frameIndex: Int) async
+    {
+        analyzer = await BlobAnalyzer(blobMap: blobMap,
+                                      width: width,
+                                      height: height,
+                                      frameIndex: frameIndex)
+    }
+    
+    public func blobMap() async -> [UInt16:Blob] {
+        await analyzer.mapOfBlobs()
+    }
+    
+    public struct Args: Sendable {
         let scanSize: Int // how far in each direction to look for neighbors
         let requiredNeighbors: Int // how many neighbors do we need to find?
         let minBlobSize: Int       // blobs smaller than this are ignored
@@ -34,12 +51,15 @@ public class DimIsolatedBlobRemover: AbstractBlobAnalyzer {
         }
     }
 
-    public func process(_ args: Args) {
-        var filteredBlobs = Array(blobMap.values)
+    public func process(_ args: Args) async {
+        var filteredBlobs = await analyzer.blobs()
 
         if filteredBlobs.count == 0 { return }
 
-        filteredBlobs.sort { $0.medianIntensity < $1.medianIntensity }
+        var medianIntensities = await medianIntensities(of: filteredBlobs)
+        
+        medianIntensities.sort { $0 < $1 }
+        
         let midPoint = filteredBlobs.count/2
         let quarterPoint = filteredBlobs.count/4
 
@@ -48,25 +68,27 @@ public class DimIsolatedBlobRemover: AbstractBlobAnalyzer {
 
         // median blob of dimmer half
         let quarterBlob = filteredBlobs[quarterPoint]
+
+        let quarterBlobMedianIntensity = await quarterBlob.medianIntensity()
+        let midBlobMedianIntensity = await midBlob.medianIntensity()
         
-        iterateOverAllBlobs() { _, blob in
+        await analyzer.iterateOverAllBlobsAsync() { _, blob in
             // only deal with small blobs
-            if blob.size > args.minBlobSize { return }
+            if await blob.size() > args.minBlobSize { return }
             
             // only deal with dim blobs
-            if blob.medianIntensity > midBlob.medianIntensity { return }
+            if await blob.medianIntensity() > midBlobMedianIntensity { return }
 
             // each direction from center
-
-            let otherBlobsNearby = self.directNeighbors(of: blob,
-                                                        scanSize: args.scanSize,
-                                                        requiredNeighbors: args.requiredNeighbors)
+            let otherBlobsNearby = await analyzer.directNeighbors(of: blob,
+                                                                  scanSize: args.scanSize,
+                                                                  requiredNeighbors: args.requiredNeighbors)
             { otherBlob in
-                otherBlob.medianIntensity > quarterBlob.medianIntensity
+                await otherBlob.medianIntensity() > quarterBlobMedianIntensity
             }
                                                           
             if otherBlobsNearby.count < args.requiredNeighbors {
-                blobMap.removeValue(forKey: blob.id)
+                await analyzer.remove(blob: blob)
             }
         }
     }

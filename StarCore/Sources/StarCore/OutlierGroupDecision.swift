@@ -11,15 +11,15 @@ import logging
 // XXX move these 
 
 // different ways we split up data sets that are still overlapping
-public enum DecisionSplitType: String {
+public enum DecisionSplitType: String, Sendable {
     case median
     case mean
     // XXX others ???
 }
 
-public var currentClassifier: NamedOutlierGroupClassifier? 
+nonisolated(unsafe) public var currentClassifier: NamedOutlierGroupClassifier? 
 
-public enum StreakDirection {
+public enum StreakDirection: Sendable {
     case forwards
     case backwards
 }

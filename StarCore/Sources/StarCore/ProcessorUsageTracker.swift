@@ -38,7 +38,7 @@ public actor ProcessorUsageTracker {
     }
 
     private func readUsage() -> Double {
-        var ret = ProcessorUsage.busy()
+        nonisolated(unsafe) var ret = ProcessorUsage.busy()
         do {
             try ObjC.catchException {
                 let usageString = try shellOut(to: "top -R -F -n 0 -l 2 -s 0")

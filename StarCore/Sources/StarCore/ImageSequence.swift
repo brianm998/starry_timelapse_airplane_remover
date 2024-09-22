@@ -33,7 +33,7 @@ public actor ImageLoader {
     }
 }
 
-public struct ImageInfo {
+public struct ImageInfo: Sendable {
     public let imageWidth: Int
     public let imageHeight: Int
     public let imageBytesPerPixel: Int // XXX bad name
@@ -55,10 +55,10 @@ public actor ImageSequence {
     {
         self.maxImages = maxImages
         var imageFiles: [String] = []
-        if !fileManager.fileExists(atPath: dirname) {
+        if !FileManager.default.fileExists(atPath: dirname) {
             throw "\(dirname) does not exist"
         }
-        let contents = try fileManager.contentsOfDirectory(atPath: dirname)
+        let contents = try FileManager.default.contentsOfDirectory(atPath: dirname)
         contents.forEach { file in
             supportedImageFileTypes.forEach { type in
                 if file.hasSuffix(type) {
@@ -151,4 +151,3 @@ func removePathAndSuffix(fromString string: String) -> String {
     return components[components.count-1]
 }
 
-fileprivate let fileManager = FileManager.default

@@ -23,9 +23,9 @@ extension FrameAirplaneRemover {
     
     public func applyDecisionTreeToAutoSelectedOutliers() async {
         if let classifier = currentClassifier {
-            foreachOutlierGroup() { group in
+            await foreachOutlierGroupAsync() { group in
                 var apply = true
-                if let shouldPaint = group.shouldPaint {
+                if let shouldPaint = await group.shouldPaintFunc() {
                     switch shouldPaint {
                     case .userSelected(_):
                         // leave user selected ones in place
@@ -36,7 +36,7 @@ extension FrameAirplaneRemover {
                 }
                 if apply {
                     Log.d("applying decision tree")
-                    group.shouldPaint(.fromClassifier(classifier.classification(of: group)))
+                    await group.shouldPaint(.fromClassifier(classifier.classification(of: group)))
                 }
                 return .continue
             }
@@ -46,20 +46,20 @@ extension FrameAirplaneRemover {
     }
 
     public func clearOutlierGroupValueCaches() async {
-        foreachOutlierGroup() { group in
-            group.clearFeatureValueCache()
+        await foreachOutlierGroupAsync() { group in
+            await group.clearFeatureValueCache()
             return .continue
         }
     }
 
     public func applyDecisionTreeToAllOutliers() async {
-        Log.d("frame \(self.frameIndex) applyDecisionTreeToAll \(self.outlierGroups?.members.count ?? 0) Outliers")
+        //Log.d("frame \(self.frameIndex) applyDecisionTreeToAll \(self.outlierGroups?.members.count ?? 0) Outliers")
         if let classifier = currentClassifier {
             let startTime = NSDate().timeIntervalSince1970
-            foreachOutlierGroup() { group in
-                if group.shouldPaint == nil {
+            await foreachOutlierGroupAsync() { group in
+                if await group.shouldPaintFunc() == nil {
                     // only apply classifier when no other classification is otherwise present
-                    group.shouldPaint(.fromClassifier(classifier.classification(of: group)))
+                    await group.shouldPaint(.fromClassifier(classifier.classification(of: group)))
                 }
                 return .continue
             }
@@ -71,38 +71,38 @@ extension FrameAirplaneRemover {
         Log.d("frame \(self.frameIndex) DONE applyDecisionTreeToAllOutliers")
     }
     
-    public func userSelectAllOutliers(toShouldPaint shouldPaint: Bool) {
-        foreachOutlierGroup() { group in
-            group.shouldPaint(.userSelected(shouldPaint))
+    public func userSelectAllOutliers(toShouldPaint shouldPaint: Bool) async {
+        await foreachOutlierGroupAsync() { group in
+            await group.shouldPaint(.userSelected(shouldPaint))
             return .continue
         }
     }
 
-    public func userSelectUndecidedOutliers(toShouldPaint shouldPaint: Bool) {
-        foreachOutlierGroup() { group in
-            if group.shouldPaint == nil {
-                group.shouldPaint(.userSelected(shouldPaint))
+    public func userSelectUndecidedOutliers(toShouldPaint shouldPaint: Bool) async {
+        await foreachOutlierGroupAsync() { group in
+            if await group.shouldPaintFunc() == nil { // XXX gross syntax :(
+                await group.shouldPaint(.userSelected(shouldPaint))
             }
             return .continue
         }
     }
 
     public func userSelectAllOutliers(toShouldPaint shouldPaint: Bool,
-                                      overlapping group: OutlierGroup)
+                                      overlapping group: OutlierGroup) async
     {
         guard let outlierGroups else { return }
 
-        for group in outlierGroups.groups(overlapping: group) {
-            group.shouldPaint(.userSelected(shouldPaint))
+        for group in await outlierGroups.groups(overlapping: group) {
+            await group.shouldPaint(.userSelected(shouldPaint))
         }
     }
     
     public func userSelectAllOutliers(toShouldPaint shouldPaint: Bool,
                                       between startLocation: CGPoint,
-                                      and endLocation: CGPoint)
+                                      and endLocation: CGPoint) async
     {
-        foreachOutlierGroup(between: startLocation, and: endLocation) { group in
-            group.shouldPaint(.userSelected(shouldPaint))
+        await foreachOutlierGroupAsync(between: startLocation, and: endLocation) { group in
+            await group.shouldPaint(.userSelected(shouldPaint))
             return .continue
         }
     }

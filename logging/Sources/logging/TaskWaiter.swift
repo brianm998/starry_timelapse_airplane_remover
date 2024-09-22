@@ -8,13 +8,11 @@ import Foundation
     
     private var tasks: [Task<Void,Never>] = []
     
-    public nonisolated func task(priority: TaskPriority = .medium, closure: @escaping () async -> Void) {
+    public func task(priority: TaskPriority = .medium, closure: @escaping @Sendable () async -> Void) {
         let task = Task(priority: priority) {
             await closure()
         }
-        Task {
-            await self.add(task: task)
-        }
+        self.add(task: task)
     }
 
     private func add(task: Task<Void,Never>) {

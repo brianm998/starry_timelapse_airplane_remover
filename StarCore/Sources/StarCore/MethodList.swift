@@ -14,24 +14,26 @@ You should have received a copy of the GNU General Public License along with sta
 */
 
 actor MethodList<T> {
-    var list: [Int : () async throws -> T]
-    var removeClosure: ((Int) -> Void)?
+    var list: [Int : @Sendable () async throws -> T]
+    var removeClosure: (@Sendable (Int) -> Void)?
     
-    init(removeClosure: ((Int) -> Void)? = nil) {
+    init(removeClosure: (@Sendable (Int) -> Void)? = nil) {
         self.list = [:]
         self.removeClosure = removeClosure
     }
     
-    init(list: [Int : () async throws -> T], removeClosure: ((Int) -> Void)? = nil) {
+    init(list: [Int : @Sendable () async throws -> T],
+         removeClosure: (@Sendable (Int) -> Void)? = nil)
+    {
         self.list = list
         self.removeClosure = removeClosure
     }
     
-    func add(atIndex index: Int, method: @escaping () async throws -> T) {
+    func add(atIndex index: Int, method: @escaping @Sendable () async throws -> T) {
         list[index] = method
     }
 
-    func set(removeClosure: @escaping (Int) -> Void) {
+    func set(removeClosure: @escaping @Sendable (Int) -> Void) {
         self.removeClosure = removeClosure
     }
     
@@ -44,7 +46,7 @@ actor MethodList<T> {
         }
     }
     
-    func value(forKey key: Int) async -> (() async throws -> T)? {
+    func value(forKey key: Int) async -> (@Sendable () async throws -> T)? {
         return list[key]
     }
     

@@ -49,7 +49,7 @@ extension FrameAirplaneRemover {
                                                         fromOutlierDir: "\(self.outlierOutputDirname)/\(frameIndex)")
                 {
                     let endTime = Date().timeIntervalSinceReferenceDate
-                    Log.i("frame \(frameIndex) loaded \(groups.members.count) outliers in \(endTime-startTime) seconds")
+                    Log.i("frame \(frameIndex) loaded \(await groups.members.count) outliers in \(endTime-startTime) seconds")
                     return groups
                 }
             } catch {
@@ -64,26 +64,26 @@ extension FrameAirplaneRemover {
         let blobMap = try await BlobProcessor(frame: self).run()
 
         // save blobs to blob image here
-        var blobImageSaver: BlobImageSaver? = .init(blobMap: blobMap,
-                                                    width: width,
-                                                    height: height,
-                                                    frameIndex: frameIndex)
-
+        var blobImageSaver: BlobImageSaver? = await .init(blobMap: blobMap,
+                                                          width: width,
+                                                          height: height,
+                                                          frameIndex: frameIndex)
+        
         if let blobImageSaver {
             // keep the blobRefs from this for later analysis of nearby outliers
-            outlierGroups?.outlierImageData = blobImageSaver.blobRefs
-            outlierGroups?.outlierYAxisImageData = blobImageSaver.yAxis
+            await outlierGroups?.set(outlierImageData: blobImageSaver.blobRefs)
+            await outlierGroups?.set(outlierYAxisImageData: blobImageSaver.yAxis)
             // XXX keep the y-axis too?
 
             // make sure the OutlierGroups object we created before has this data
-            self.outlierGroups?.outlierImageData = blobImageSaver.blobRefs
+            //self.outlierGroups?.outlierImageData = blobImageSaver.blobRefs
         }
         
         let frame_outliers_dirname = "\(self.outlierOutputDirname)/\(frameIndex)"
 
         mkdir(frame_outliers_dirname)
         
-        blobImageSaver?.save(to: frame_outliers_dirname)
+        await blobImageSaver?.save(to: frame_outliers_dirname)
 
         blobImageSaver = nil
 
@@ -91,18 +91,18 @@ extension FrameAirplaneRemover {
         let blobs = Array(blobMap.values)
 
         Log.i("frame \(frameIndex) has \(blobs.count) blobs")
-        self.state = .populatingOutlierGroups
+        self.set(state: .populatingOutlierGroups)
 
         // promote found blobs to outlier groups for further processing
         for blob in blobs {
             // make outlier group from this blob
-            let outlierGroup = blob.outlierGroup(at: frameIndex)
+            let outlierGroup = await blob.outlierGroup(at: frameIndex)
 
             //Log.i("frame \(frameIndex) promoting \(blob) to outlier group \(outlierGroup.id) line \(String(describing: blob.line))")
-            outlierGroup.frame = self
-            outlierGroups?.members[outlierGroup.id] = outlierGroup
+            await outlierGroup.set(frame: self)
+            await outlierGroups?.add(member: outlierGroup)
         }
-        self.state = .readyForInterFrameProcessing
+        self.set(state: .readyForInterFrameProcessing)
     }
     
     public func loadOutliers() async throws {
@@ -110,8 +110,8 @@ extension FrameAirplaneRemover {
             Log.d("frame \(frameIndex) loading outliers")
             if let outlierGroups = await loadOutliersFromFile() {
                 Log.d("frame \(frameIndex) loading outliers from file")
-                for outlier in outlierGroups.members.values {
-                    outlier.setFrame(self) 
+                for outlier in await outlierGroups.getMembers().values {
+                    await outlier.set(frame: self) 
                 }
                                                                   
                 self.outlierGroups = outlierGroups
@@ -119,9 +119,9 @@ extension FrameAirplaneRemover {
                 // we still need to inter frame process them so that
                 // frames are linked with their neighbors and outlier
                 // groups can use these links for decision tree values
-                self.state = .readyForInterFrameProcessing
+                self.set(state: .readyForInterFrameProcessing)
                 self.outliersLoadedFromFile = true
-                Log.i("loaded \(String(describing: self.outlierGroups?.members.count)) outlier groups for frame \(frameIndex)")
+                Log.i("loaded \(String(describing: await self.outlierGroups?.getMembers().count)) outlier groups for frame \(frameIndex)")
             } else {
                 Log.d("frame \(frameIndex) calculating outliers")
                 self.outlierGroups = OutlierGroups(frameIndex: frameIndex,
@@ -138,18 +138,9 @@ extension FrameAirplaneRemover {
         }
     }
 
-    public func foreachOutlierGroup(_ closure: (OutlierGroup) -> LoopReturn) {
-        if let outlierGroups = self.outlierGroups {
-            for (_, group) in outlierGroups.members {
-                let result = closure(group)
-                if result == .break { break }
-            }
-        } 
-    }
-
-    public func foreachOutlierGroupAsync(_ closure: (OutlierGroup) async -> LoopReturn) async {
-        if let outlierGroups = self.outlierGroups {
-            for (_, group) in outlierGroups.members {
+    public func foreachOutlierGroupAsync(_ closure: @Sendable (OutlierGroup) async -> LoopReturn) async {
+        if let outlierGroups {
+            for (_, group) in await outlierGroups.getMembers() {
                 let result = await closure(group)
                 if result == .break { break }
             }
@@ -158,9 +149,9 @@ extension FrameAirplaneRemover {
 
     // uses spatial 2d array for search
     public func outlierGroups(within distance: Double,
-                              of group: OutlierGroup) -> [OutlierGroup]?
+                              of group: OutlierGroup) async -> [OutlierGroup]?
     {
-        if let nearbyGroups = group.nearbyGroups {
+        if let nearbyGroups = await group.nearbyGroups() {
             var ret: [OutlierGroup] = []
             for nearbyGroup in nearbyGroups {
                 if nearbyGroup.bounds.centerDistance(to: group.bounds) < distance {
@@ -172,53 +163,13 @@ extension FrameAirplaneRemover {
         return nil
     }
 
-    public func outlierGroup(named outlierName: UInt16) -> OutlierGroup? {
-        return outlierGroups?.members[outlierName]
+    public func outlierGroup(named outlierName: UInt16) async -> OutlierGroup? {
+        await outlierGroups?.getMembers()[outlierName]
     }
     
-    public func foreachOutlierGroup(between startLocation: CGPoint,
-                                    and endLocation: CGPoint,
-                                    _ closure: (OutlierGroup) -> LoopReturn) 
-    {
-        // first get bounding box from start and end location
-        var minX: CGFloat = CGFLOAT_MAX
-        var maxX: CGFloat = 0
-        var minY: CGFloat = CGFLOAT_MAX
-        var maxY: CGFloat = 0
-
-        if startLocation.x < minX { minX = startLocation.x }
-        if startLocation.x > maxX { maxX = startLocation.x }
-        if startLocation.y < minY { minY = startLocation.y }
-        if startLocation.y > maxY { maxY = startLocation.y }
-        
-        if endLocation.x < minX { minX = endLocation.x }
-        if endLocation.x > maxX { maxX = endLocation.x }
-        if endLocation.y < minY { minY = endLocation.y }
-        if endLocation.y > maxY { maxY = endLocation.y }
-
-        if let minX = minX.int,
-           let minY = minY.int,
-           let maxX = maxX.int,
-           let maxY = maxY.int
-        {
-            let gestureBounds = BoundingBox(min: Coord(x: minX, y: minY),
-                                            max: Coord(x: maxX, y: maxY))
-
-            foreachOutlierGroup() { group in
-                if gestureBounds.contains(other: group.bounds) {
-                    // check to make sure this outlier's bounding box is fully contained
-                    // otherwise don't change paint status
-                    return closure(group)
-                } else {
-                    return .continue
-                }
-            }
-        }
-    }
-
     public func foreachOutlierGroupAsync(between startLocation: CGPoint,
                                          and endLocation: CGPoint,
-                                         _ closure: (OutlierGroup) async -> LoopReturn) async
+                                         _ closure: @Sendable (OutlierGroup) async -> LoopReturn) async
     {
         // first get bounding box from start and end location
         var minX: CGFloat = CGFLOAT_MAX
@@ -267,7 +218,7 @@ extension FrameAirplaneRemover {
         if let image = await imageAccessor.load(type: .validated, atSize: .original) {
             switch image.imageData {
             case .eightBit(let validationArr):
-                classifyOutliers(with: validationArr)
+                await classifyOutliers(with: validationArr)
                 shouldUseDecisionTree = false
                 self.markAsChanged()
                 
@@ -298,12 +249,12 @@ extension FrameAirplaneRemover {
     // this validation image contains a non zero pixel for each outlier
     // that should be painted over.
     // any outlier that matches any pixels is classified to paint here.
-    private func classifyOutliers(with validationData: [UInt8]) {
+    private func classifyOutliers(with validationData: [UInt8]) async {
         Log.d("frame \(frameIndex) classifying outliers with validation image data")
 
         if let outlierGroups {
 
-            for group in outlierGroups.members.values {
+            for group in await outlierGroups.getMembers().values {
                 var groupIsValid = false
                 for x in 0 ..< group.bounds.width {
                     for y in 0 ..< group.bounds.height {
@@ -324,16 +275,16 @@ extension FrameAirplaneRemover {
                     if groupIsValid { break }
                 }
                 //Log.d("group \(group) shouldPaint \(String(describing: group.shouldPaint))")
-                group.shouldPaint = .userSelected(groupIsValid)
+                await group.shouldPaint(.userSelected(groupIsValid))
             }
         } else {
             Log.w("cannot classify nil outlier groups")
         }
     }
 
-    public func outlierGroupList() -> [OutlierGroup]? {
+    public func outlierGroupList() async -> [OutlierGroup]? {
         if let outlierGroups {
-            let groups = outlierGroups.members
+            let groups = await outlierGroups.getMembers()
             return groups.map {$0.value}
         }
         return nil
@@ -343,25 +294,26 @@ extension FrameAirplaneRemover {
     public func saveImages(for blobs: [Blob], as frameImageType: FrameImageType) async throws {
         var blobImageData = [UInt8](repeating: 0, count: width*height)
         for blob in blobs {
-            for pixel in blob.pixels {
-                blobImageData[pixel.y*width+pixel.x] = 0xFF // make different per blob?
+            for pixel in await blob.getPixels() {
+                blobImageData[pixel._pixel.y*width+pixel._pixel.x] = 0xFF // make different per blob?
             }
         }
+        let fuck = frameImageType
         let blobImage = PixelatedImage(width: width, height: height,
                                        grayscale8BitImageData: blobImageData)
-        let (_, _) = await (try imageAccessor.save(blobImage, as: frameImageType,
+        let (_, _) = await (try imageAccessor.save(blobImage, as: fuck,
                                                    atSize: .original, overwrite: true),
-                            try imageAccessor.save(blobImage, as: frameImageType,
+                            try imageAccessor.save(blobImage, as: fuck,
                                                    atSize: .preview, overwrite: true))
         
     }
 
-    public func deleteOutliers(in boundingBox: BoundingBox) throws {
-        outlierGroups?.deleteOutliers(in: boundingBox)
+    public func deleteOutliers(in boundingBox: BoundingBox) async throws {
+        await outlierGroups?.deleteOutliers(in: boundingBox)
 
         let frame_outliers_dirname = "\(self.outlierOutputDirname)/\(frameIndex)"
 //        mkdir(frame_outliers_dirname)
-        try outlierGroups?.writeOutliersImage(to: frame_outliers_dirname)
+        try await outlierGroups?.writeOutliersImage(to: frame_outliers_dirname)
         // XXX add y-axis here too
     }
 }

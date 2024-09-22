@@ -14,7 +14,7 @@ You should have received a copy of the GNU General Public License along with sta
 
 // a wrapper around runThrowingTask that keeps too many tasks from running at the same time
 
-public actor LimitedThrowingTaskGroup<T> {
+public actor LimitedThrowingTaskGroup<T> where T: Sendable {
 
     var tasks: [Task<T,Error>] = []
     var iterator = 0
@@ -42,11 +42,11 @@ public actor LimitedThrowingTaskGroup<T> {
     }
 
 
-    public func addDeferredTask(closure: @escaping () async throws -> T) async throws {
+    public func addDeferredTask(closure: @escaping @Sendable () async throws -> T) async throws {
         tasks.append(try await runDeferredThrowingTask(at: taskPriority, with: taskMaster, closure))
     }
     
-    public func addTask(closure: @escaping () async throws -> T) async throws {
+    public func addTask(closure: @escaping @Sendable () async throws -> T) async throws {
         tasks.append(try await runThrowingTask(at: taskPriority, with: taskMaster, closure))
     }
 }
@@ -56,7 +56,7 @@ public func withLimitedThrowingTaskGroup<ChildTaskResult, GroupResult>(
   at taskPriority: TaskPriority = .high,
   with taskMaster: TaskMaster = defaultTaskMaster,
   returning returnType: GroupResult.Type = GroupResult.self,
-  body: (inout LimitedThrowingTaskGroup<ChildTaskResult>) async throws -> GroupResult
+  body: @Sendable (inout LimitedThrowingTaskGroup<ChildTaskResult>) async throws -> GroupResult
 ) async throws -> GroupResult where ChildTaskResult : Sendable
 {
     var limitedTaskGroup: LimitedThrowingTaskGroup<ChildTaskResult> =

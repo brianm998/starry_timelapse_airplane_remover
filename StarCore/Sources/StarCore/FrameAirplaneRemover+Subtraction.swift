@@ -26,6 +26,9 @@ extension FrameAirplaneRemover {
     // from the frame being processed.
     internal func subtractAlignedImageFromFrame() async throws -> PixelatedImage {
         // first try to load the subtracted image directly from file
+
+        let accessor = imageAccessor
+        
         if let image = await imageAccessor.load(type: .subtracted, atSize: .original) {
             return image
         }
@@ -35,7 +38,7 @@ extension FrameAirplaneRemover {
 
 
         // load the original
-        guard let image = await imageAccessor.load(type: .original, atSize: .original)
+        guard let image = await accessor.load(type: .original, atSize: .original)
         else {
             Log.e("frame \(frameIndex) couldn't load original image")
             // XXX these should really throw an error, and that really should
@@ -46,7 +49,7 @@ extension FrameAirplaneRemover {
         Log.d("frame \(frameIndex) got orig image")
         
         // load or create the aligned frame
-        var alignedFrame = await imageAccessor.load(type: .aligned, atSize: .original)
+        var alignedFrame = await accessor.load(type: .aligned, atSize: .original)
         if alignedFrame == nil {
             // try creating the star aligned image if we can't load it
             alignedFrame = await starAlignedImage()
@@ -60,7 +63,7 @@ extension FrameAirplaneRemover {
         
         Log.d("frame \(frameIndex) got aligned image")
         
-        self.state = .subtractingNeighbor
+        self.set(state: .subtractingNeighbor)
         
         Log.i("frame \(frameIndex) finding outliers")
 
@@ -73,9 +76,9 @@ extension FrameAirplaneRemover {
         if config.writeOutlierGroupFiles {
             // write out image of outlier amounts
             do {
-                try await imageAccessor.save(subtractionImage, as: .subtracted,
+                try await accessor.save(subtractionImage, as: .subtracted,
                                              atSize: .original, overwrite: false)
-                try await imageAccessor.save(subtractionImage, as: .subtracted,
+                try await accessor.save(subtractionImage, as: .subtracted,
                                              atSize: .preview, overwrite: false)
             } catch {
                 Log.e("frame \(frameIndex) can't write subtraction image: \(error)")

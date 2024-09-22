@@ -18,7 +18,7 @@ You should have received a copy of the GNU General Public License along with sta
 
 // saves the given set of blobs as a 16 bit grayscale image,
 // pixel values come from blob id number
-public class BlobImageSaver {
+public actor BlobImageSaver {
 
     // map of all known blobs keyed by blob id
     private var blobMap: [UInt16: Blob]
@@ -47,7 +47,7 @@ public class BlobImageSaver {
     init(blobMap: [UInt16: Blob],
          width: Int,
          height: Int,
-         frameIndex: Int)
+         frameIndex: Int) async
     {
         self.blobMap = blobMap
         self.width = width
@@ -58,10 +58,10 @@ public class BlobImageSaver {
         self.yAxis = [UInt8](repeating: 0, count: height)
 
         for blob in blobMap.values {
-            for pixel in blob.pixels {
-                let blobRefIndex = pixel.y*width+pixel.x
+            for pixel in await blob.getPixels() {
+                let blobRefIndex = pixel._pixel.y*width+pixel._pixel.x
                 blobRefs[blobRefIndex] = blob.id
-                yAxis[pixel.y] = 0xFF
+                yAxis[pixel._pixel.y] = 0xFF
             }
         }
     }
@@ -87,4 +87,4 @@ public class BlobImageSaver {
     }
 }
 
-fileprivate let fileManager = FileManager.default
+nonisolated(unsafe) fileprivate let fileManager = FileManager.default

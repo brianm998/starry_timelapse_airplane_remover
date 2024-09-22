@@ -90,12 +90,16 @@ public class UpdatableLogLine {
     }
 }
 
-var screen_width: UInt16 = 120
-
 public actor UpdatableLog {
+
+    var screen_width: UInt16 = 120
 
     var list: [UpdatableLogLine] = []
 
+    func setScreenWidth(_ width: UInt16) {
+        screen_width = width
+    }
+    
     public init() {
         var w = winsize()
         let ioctl_ret = ioctl(STDOUT_FILENO, TIOCGWINSZ, &w)
@@ -118,7 +122,9 @@ public actor UpdatableLog {
         let sigwinchSrc = DispatchSource.makeSignalSource(signal: SIGWINCH, queue: .main)
         sigwinchSrc.setEventHandler {
             if ioctl(STDOUT_FILENO, TIOCGWINSZ, &w) == 0 {
-                screen_width = w.ws_col
+                Task {
+                    await self.setScreenWidth(w.ws_col)
+                }
                 /*
                 if let updatable = updatable {
                     Task(priority: .userInitiated) {

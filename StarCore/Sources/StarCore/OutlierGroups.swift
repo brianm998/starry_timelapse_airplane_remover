@@ -17,7 +17,7 @@ import logging
 // this class holds all the outlier groups for a frame
 
 
-public class OutlierGroups {
+public actor OutlierGroups {
 
     let height = Int(IMAGE_HEIGHT!)
     let width = Int(IMAGE_WIDTH!)
@@ -25,10 +25,26 @@ public class OutlierGroups {
     public let frameIndex: Int
     public var members: [UInt16: OutlierGroup] // keyed by name
 
+    public func add(member: OutlierGroup) {
+        members[member.id] = member
+    }
+
+    public func getMembers() -> [UInt16: OutlierGroup] { members }
+    
     // image data from an image with non zero pixels set with an outlier id
-    public var outlierImageData: [UInt16] // outlier ids for frame, row major indexed
+    public var outlierImageData: [UInt16] = [] // outlier ids for frame, row major indexed
     public var outlierYAxisImageData: [UInt8]? // y axis of the outlierImage data
 
+    public func outlierImageDataFunc() -> [UInt16] { outlierImageData } // XXX rename this
+    
+    public func set(outlierImageData: [UInt16]) {
+        self.outlierImageData = outlierImageData
+    }
+
+    public func set(outlierYAxisImageData: [UInt8]) {
+        self.outlierYAxisImageData = outlierYAxisImageData
+    }
+    
     public init(frameIndex: Int,
                 members: [UInt16: OutlierGroup])
     {
@@ -39,7 +55,7 @@ public class OutlierGroups {
     }
 
     public static func loadOutlierGroupPaintData(from filename: String) async throws -> [UInt16:PaintReason]? {
-        if fileManager.fileExists(atPath: filename) {
+        if FileManager.default.fileExists(atPath: filename) {
 
             let decoder = JSONDecoder()
             decoder.nonConformingFloatDecodingStrategy = .convertFromString(
@@ -127,13 +143,13 @@ public class OutlierGroups {
                         let blobId = imageArr[index]
                         if blobId != 0 {
                             let pixelValue = subtractionArr[index]
-                            let pixel = SortablePixel(x: x, y: y, intensity: pixelValue)
+                            let pixel = StatusPixel(x: x, y: y, intensity: pixelValue)
                             if let blob = blobMap[blobId] {
                                 // add this pixel to existing blob
-                                blob.add(pixel: pixel)
+                                await blob.add(pixel: pixel)
                             } else {
                                 // start a new blob with this pixel
-                                let blob = Blob(pixel, id: blobId, frameIndex: frameIndex)
+                                let blob = Blob(CodableBlob(pixel, id: blobId, frameIndex: frameIndex))
                                 blobMap[blobId] = blob
                             }
                         }
@@ -146,13 +162,13 @@ public class OutlierGroups {
                 
                 for blob in blobMap.values {
                     // make outlier group from this blob
-                    let outlierGroup = blob.outlierGroup(at: frameIndex)
+                    let outlierGroup = await blob.outlierGroup(at: frameIndex)
 
                     if let _outlierGroupPaintData {
                         // the newer full frame json file
 
                         if let shouldPaint = _outlierGroupPaintData[outlierGroup.id] {
-                            outlierGroup.shouldPaint(shouldPaint)
+                            await outlierGroup.shouldPaint(shouldPaint)
                         } else {
                             //Log.i("frame \(frameIndex) could not find outlier group info for group \(outlierGroup.id) in outlierGroupPaintData")
                         }
@@ -169,12 +185,11 @@ public class OutlierGroups {
     }
 
     // returns outlier groups from this frame that overlap with the given group from another frame
-    public func groups(overlapping group: OutlierGroup) -> [OutlierGroup]
-    {
+    public func groups(overlapping group: OutlierGroup) async -> [OutlierGroup] {
         var ret: [UInt16: OutlierGroup] = [:]
 
-        for pixel in group.pixelSet {
-            let index = pixel.y * width + pixel.x
+        for pixel in await group.getPixelSet() {
+            let index = pixel._pixel.y * width + pixel._pixel.x
             let outlierId = outlierImageData[index]
             if outlierId != 0 {
                 ret[outlierId] = members[outlierId]
@@ -229,26 +244,26 @@ public class OutlierGroups {
         }
     }
 
-    public func writeOutliersImage(to dirname: String) throws {
+    public func writeOutliersImage(to dirname: String) async throws {
 
         var blobMap: [UInt16: Blob] = [:]
 
         for outlier in members.values {
-            let blob = outlier.blob
+            let blob = await outlier.blob()
             blobMap[blob.id] = blob
         }
 
-        let blobImageSaver: BlobImageSaver = .init(blobMap: blobMap,
-                                                   width: width,
-                                                   height: height,
-                                                   frameIndex: frameIndex)
-
-        self.outlierImageData = blobImageSaver.blobRefs
-        self.outlierYAxisImageData = blobImageSaver.yAxis
+        let blobImageSaver: BlobImageSaver = await .init(blobMap: blobMap,
+                                                         width: width,
+                                                         height: height,
+                                                         frameIndex: frameIndex)
+        
+        self.outlierImageData = await blobImageSaver.blobRefs
+        self.outlierYAxisImageData = await blobImageSaver.yAxis
 
         mkdir(dirname)
         
-        blobImageSaver.save(to: dirname)
+        await blobImageSaver.save(to: dirname)
     }
     
     // only writes the paint reasons now, outlier image is written elsewhere
@@ -263,7 +278,7 @@ public class OutlierGroups {
         
         for group in members.values {
             // collate paint reasons for each group
-            if let shouldPaint = group.shouldPaint {
+            if let shouldPaint = await group.shouldPaintFunc() {
                 outlierGroupPaintData[group.id] = shouldPaint
             }
         }
@@ -279,10 +294,10 @@ public class OutlierGroups {
           negativeInfinity: "-inf",
           nan: "nan")
 
-        if fileManager.fileExists(atPath: outlierGroupPaintDataFilename) {
-            try fileManager.removeItem(atPath: outlierGroupPaintDataFilename)
+        if FileManager.default.fileExists(atPath: outlierGroupPaintDataFilename) {
+            try FileManager.default.removeItem(atPath: outlierGroupPaintDataFilename)
         } 
-        fileManager.createFile(atPath: outlierGroupPaintDataFilename,
+        FileManager.default.createFile(atPath: outlierGroupPaintDataFilename,
                                contents: try encoder.encode(outlierGroupPaintData),
                                attributes: nil)
         
@@ -291,21 +306,21 @@ public class OutlierGroups {
 
     // outputs an 8 bit monochrome image that contains a white
     // value for every pixel that was determined to be an outlier
-    public var validationImage: PixelatedImage {
+    public func validationImage() async -> PixelatedImage {
         PixelatedImage(width: Int(IMAGE_WIDTH!),
                        height: Int(IMAGE_HEIGHT!),
-                       grayscale8BitImageData: self.validationImageData)
+                       grayscale8BitImageData: await self.validationImageData())
     }
     
     // outputs image data for an 8 bit monochrome image that contains a white
     // value for every pixel that was determined to be an outlier
-    public var validationImageData: [UInt8] {
+    public func validationImageData() async -> [UInt8] {
         // create base image data array
         var baseData = [UInt8](repeating: 0, count: Int(IMAGE_WIDTH!*IMAGE_HEIGHT!))
 
         // write into this array from the pixels in this group
         for (_, group) in self.members {
-            if let shouldPaint = group.shouldPaint,
+            if let shouldPaint = await group.shouldPaintFunc(),
                shouldPaint.willPaint
             {
                 /*
@@ -351,5 +366,4 @@ public class OutlierGroups {
     }
 }
 
-fileprivate let fileManager = FileManager.default
 
