@@ -35,7 +35,7 @@ class OutlierGroupViewModel: ObservableObject {
     }
     
     deinit {
-        self.group.shouldPaintDidChange = nil
+      Task { await self.group.set(shouldPaintDidChange: nil) }
     }
     
     @ObservedObject var viewModel: ViewModel

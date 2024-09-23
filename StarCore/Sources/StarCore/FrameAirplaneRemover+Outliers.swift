@@ -311,6 +311,8 @@ extension FrameAirplaneRemover {
     public func deleteOutliers(in boundingBox: BoundingBox) async throws {
         await outlierGroups?.deleteOutliers(in: boundingBox)
 
+        self.markAsChanged()
+        
         let frame_outliers_dirname = "\(self.outlierOutputDirname)/\(frameIndex)"
 //        mkdir(frame_outliers_dirname)
         try await outlierGroups?.writeOutliersImage(to: frame_outliers_dirname)

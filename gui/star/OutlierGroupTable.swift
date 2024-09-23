@@ -57,43 +57,43 @@ struct OutlierGroupTableRow: Identifiable {
     let dt_averageLineVariance: Double
     let dt_lineLength: Double
 
-    init(_ group: OutlierGroup) {
+    init(_ group: OutlierGroup) async {
         name = group.id
         size = group.size
         centerX = group.bounds.center.x
         centerY = group.bounds.center.y
         let centerY: Int
 
-        let shouldPaint = group.shouldPaint
+        let shouldPaint = await group.shouldPaintFunc()
         if let shouldPaint = shouldPaint {
             willPaint = shouldPaint.willPaint
         } else {
             willPaint = nil
         }
 
-        dt_size = group.decisionTreeValue(for: .size)
-        dt_width = group.decisionTreeValue(for: .width)
-        dt_height = group.decisionTreeValue(for: .height)
-        dt_centerX = group.decisionTreeValue(for: .centerX)
-        dt_centerY = group.decisionTreeValue(for: .centerY)
-        dt_minX = group.decisionTreeValue(for: .minX)
-        dt_minY = group.decisionTreeValue(for: .minY)
-        dt_maxX = group.decisionTreeValue(for: .maxX)
-        dt_maxY = group.decisionTreeValue(for: .maxY)
-        dt_hypotenuse = group.decisionTreeValue(for: .hypotenuse)
-        dt_aspectRatio = group.decisionTreeValue(for: .aspectRatio)
-        dt_fillAmount = group.decisionTreeValue(for: .fillAmount)
-        dt_surfaceAreaRatio = group.decisionTreeValue(for: .surfaceAreaRatio)
-        dt_averagebrightness = group.decisionTreeValue(for: .averagebrightness)
-        dt_medianBrightness = group.decisionTreeValue(for: .medianBrightness)
-        dt_maxBrightness = group.decisionTreeValue(for: .maxBrightness)
-        dt_numberOfNearbyOutliersInSameFrame = group.decisionTreeValue(for: .numberOfNearbyOutliersInSameFrame)
+        dt_size = await group.decisionTreeValue(for: .size)
+        dt_width = await group.decisionTreeValue(for: .width)
+        dt_height = await group.decisionTreeValue(for: .height)
+        dt_centerX = await group.decisionTreeValue(for: .centerX)
+        dt_centerY = await group.decisionTreeValue(for: .centerY)
+        dt_minX = await group.decisionTreeValue(for: .minX)
+        dt_minY = await group.decisionTreeValue(for: .minY)
+        dt_maxX = await group.decisionTreeValue(for: .maxX)
+        dt_maxY = await group.decisionTreeValue(for: .maxY)
+        dt_hypotenuse = await group.decisionTreeValue(for: .hypotenuse)
+        dt_aspectRatio = await group.decisionTreeValue(for: .aspectRatio)
+        dt_fillAmount = await group.decisionTreeValue(for: .fillAmount)
+        dt_surfaceAreaRatio = await group.decisionTreeValue(for: .surfaceAreaRatio)
+        dt_averagebrightness = await group.decisionTreeValue(for: .averagebrightness)
+        dt_medianBrightness = await group.decisionTreeValue(for: .medianBrightness)
+        dt_maxBrightness = await group.decisionTreeValue(for: .maxBrightness)
+        dt_numberOfNearbyOutliersInSameFrame = await group.decisionTreeValue(for: .numberOfNearbyOutliersInSameFrame)
 
-        dt_maxHoughTransformCount = group.decisionTreeValue(for: .maxHoughTransformCount)
+        dt_maxHoughTransformCount = await group.decisionTreeValue(for: .maxHoughTransformCount)
 
-        dt_pixelBorderAmount = group.decisionTreeValue(for: .pixelBorderAmount)
-        dt_averageLineVariance = group.decisionTreeValue(for: .averageLineVariance)
-        dt_lineLength = group.decisionTreeValue(for: .lineLength)
+        dt_pixelBorderAmount = await group.decisionTreeValue(for: .pixelBorderAmount)
+        dt_averageLineVariance = await group.decisionTreeValue(for: .averageLineVariance)
+        dt_lineLength = await group.decisionTreeValue(for: .lineLength)
     }
 }
 

@@ -53,7 +53,7 @@ class FrameSaveQueue: ObservableObject {
                 do {
                     try await frame.loadOutliers()
                     try await frame.finish()
-                    frame.changesHandled()
+                    await frame.changesHandled()
 
                     let save_task = await MainActor.run {
                         // XXX this VVV doesn't always update in the UI without user action

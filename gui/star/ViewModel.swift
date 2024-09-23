@@ -185,7 +185,13 @@ public final class ViewModel: ObservableObject {
         return nil
     }
 
+    // XX set this up to use combine
     var numberOfFramesChanged: Int {
+        0
+    }
+
+    /*
+    var OLD_numberOfFramesChanged: Int {
         var ret = frameSaveQueue?.purgatory.count ?? 0
         if let currentFrame = self.currentFrame,
            currentFrame.hasChanges(),
@@ -194,7 +200,7 @@ public final class ViewModel: ObservableObject {
             ret += 1            // XXX make sure the current frame isn't in purgatory
         }
         return ret
-    }
+    }*/
     
     var loadingOutlierGroups: Bool {
         for frame in frames { if frame.loadingOutlierViews { return true } }
@@ -225,7 +231,7 @@ public final class ViewModel: ObservableObject {
                 outlierTask = Task { await self.setOutlierGroups(forFrame: frame) }
             }
             
-            let acc = frame.imageAccessor
+            let acc = await frame.imageAccessor
 
             let vpTask = Task { acc.loadImage(type: .validated,  atSize: .preview)?.resizable() }
             let spTask = Task { acc.loadImage(type: .subtracted, atSize: .preview)?.resizable() }
@@ -325,12 +331,12 @@ public final class ViewModel: ObservableObject {
 
     func setOutlierGroups(forFrame frame: FrameAirplaneRemover) async {
         Task.detached(priority: .userInitiated) {
-            let outlierGroups = frame.outlierGroupList()
+          let outlierGroups = await frame.outlierGroupList()
             if let outlierGroups = outlierGroups {
                 Log.d("got \(outlierGroups.count) groups for frame \(frame.frameIndex)")
                 var newOutlierGroups: [OutlierGroupViewModel] = []
                 for group in outlierGroups {
-                    if let cgImage = group.testImage() { // XXX heap corruption here :(
+                    if let cgImage = await group.testImage() { // XXX heap corruption here :(
                         var size = CGSize()
                         size.width = CGFloat(cgImage.width)
                         size.height = CGFloat(cgImage.height)
@@ -448,7 +454,8 @@ public final class ViewModel: ObservableObject {
                 UserPreferences.shared.justOpened(filename: jsonConfigFilename)
                 
                 let config = try await Config.read(fromJsonFilename: jsonConfigFilename)
-                constants.detectionType = config.detectionType
+                // overwrite global constants constant :( make this better
+                constants = Constants(detectionType: config.detectionType)
 
                 Log.d("loaded config \(config.imageSequenceDirname)")
                 
@@ -518,7 +525,7 @@ public final class ViewModel: ObservableObject {
                 }
                 
                 // doubly link them here
-                doublyLink(frames: frames)
+                await doublyLink(frames: frames)
             }
         }
     }
@@ -574,8 +581,8 @@ public final class ViewModel: ObservableObject {
                             writeFrameProcessedPreviewFiles: shouldWriteOutlierGroupFiles,
                             writeFrameThumbnailFiles: shouldWriteOutlierGroupFiles)
 
-        // XXX always using default here, not set above in config constructor
-        constants.detectionType = config.detectionType
+        // overwrite global constants constant :( make this better
+        constants = Constants(detectionType: config.detectionType)
         
         let callbacks = self.makeCallbacks()
         Log.i("have config")
@@ -591,14 +598,16 @@ public final class ViewModel: ObservableObject {
     }
     
     @MainActor func makeCallbacks() -> Callbacks {
-        let callbacks = Callbacks()
+        var callbacks = Callbacks()
 
 
         // get the full number of images in the sequcne
         callbacks.imageSequenceSizeClosure = { imageSequenceSize in
-            self.imageSequenceSize = imageSequenceSize
-            Log.i("read imageSequenceSize \(imageSequenceSize)")
-            self.set(numberOfFrames: imageSequenceSize)
+            Task { @MainActor in
+                self.imageSequenceSize = imageSequenceSize
+                Log.i("read imageSequenceSize \(imageSequenceSize)")
+                self.set(numberOfFrames: imageSequenceSize)
+            }
         }
         
         callbacks.frameStateChangeCallback = { frame, state in
@@ -615,8 +624,9 @@ public final class ViewModel: ObservableObject {
         // called when we should check a frame
         callbacks.frameCheckClosure = { newFrame in
             Log.d("frameCheckClosure for frame \(newFrame.frameIndex)")
-
-            self.addToViewModel(frame: newFrame)
+            Task { @MainActor in
+                self.addToViewModel(frame: newFrame)
+            }
         }
         
         return callbacks

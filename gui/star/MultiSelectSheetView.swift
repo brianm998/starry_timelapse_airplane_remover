@@ -354,7 +354,7 @@ struct MultiSelectSheetView: View {
 
                 if let frame = frameView.frame {
                     do {
-                        try frame.deleteOutliers(in: gestureBounds)
+                        try await frame.deleteOutliers(in: gestureBounds)
                         // save outlier paintability changes here
                         await frame.writeOutliersBinary()
                     } catch {

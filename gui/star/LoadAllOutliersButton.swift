@@ -19,14 +19,16 @@ struct LoadAllOutliersButton: View {
                     try await withLimitedThrowingTaskGroup(of: Void.self) { taskGroup in
                         let max_concurrent = ProcessInfo.processInfo.activeProcessorCount
                         // this gets "Too many open files" with more than 2000 images :(
-                        viewModel.loadingAllOutliers = true
-                        Log.d("foobar starting")
-                        if loadingType == .all {
-                            viewModel.numberOfFramesWithOutliersLoaded = 0
+                        await MainActor.run {
+                            viewModel.loadingAllOutliers = true
+                            Log.d("foobar starting")
+                            if loadingType == .all {
+                                viewModel.numberOfFramesWithOutliersLoaded = 0
+                            }
                         }
-                        for frameView in viewModel.frames {
+                      for frameView in await viewModel.frames {
                             if loadingType == .fromCurrentFrame,
-                               frameView.frameIndex < viewModel.currentIndex
+                               await frameView.frameIndex < viewModel.currentIndex
                             {
                                 Log.d("skipping loading outliers for frame \(frameView.frameIndex)")
                                 continue
@@ -59,8 +61,10 @@ struct LoadAllOutliersButton: View {
                         }
                         
                         let end_time = Date().timeIntervalSinceReferenceDate
-                        viewModel.loadingAllOutliers = false
-                        Log.d("foobar loaded outliers for \(viewModel.frames.count) frames in \(end_time - startTime) seconds")
+                        await MainActor.run {
+                            viewModel.loadingAllOutliers = false
+                        }
+                      Log.d("foobar loaded outliers for \(await viewModel.frames.count) frames in \(end_time - startTime) seconds")
                     }                                 
                 } catch {
                     Log.e("\(error)")

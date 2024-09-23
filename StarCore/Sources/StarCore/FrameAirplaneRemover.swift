@@ -2,6 +2,7 @@ import Foundation
 import CoreGraphics
 import logging
 import Cocoa
+import Combine
 
 /*
 
@@ -51,11 +52,56 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
     public func getOutlierGroups() -> OutlierGroups?  { outlierGroups }
     
-    private var didChange = false
+    fileprivate var didChange = false
 
     public func changesHandled() { didChange = false }
+
+    private let numberOfPositiveOutliersSubject = CurrentValueSubject<Int,Never>(0)
+    private let numberOfNegativeOutliersSubject = CurrentValueSubject<Int,Never>(0)
+    private let numberOfUnknownOutliersSubject = CurrentValueSubject<Int,Never>(0)
+
+    public func numberOfPositiveOutliersPublisher() -> AnyPublisher<Int,Never> {
+        numberOfPositiveOutliersSubject.eraseToAnyPublisher()
+    }
     
-    public func markAsChanged() { didChange = true }
+    public func numberOfNegativeOutliersPublisher() -> AnyPublisher<Int,Never> {
+        numberOfNegativeOutliersSubject.eraseToAnyPublisher()
+    }
+    
+    public func numberOfUnknownOutliersPublisher() -> AnyPublisher<Int,Never> {
+        numberOfUnknownOutliersSubject.eraseToAnyPublisher()
+    }
+    
+    public func updateCombineSubjects() async {
+        if let outliers = await outlierGroups?.getMembers() {
+            var totalPositive: Int = 0
+            var totalNegative: Int = 0
+            var totalUnknown: Int = 0
+            for (id, group) in outliers {
+                if let shouldPaint = await group.shouldPaintFunc() {
+                    if shouldPaint.willPaint {
+                        totalPositive += 1
+                    } else {
+                        totalNegative += 1
+                    }
+                } else {
+                    totalUnknown += 1
+                }
+            }
+            // update combine subjects here
+//            await MainActor.run {
+                numberOfPositiveOutliersSubject.send(totalPositive)
+                numberOfNegativeOutliersSubject.send(totalNegative)
+                numberOfUnknownOutliersSubject.send(totalUnknown)
+//            }
+        }
+    }
+
+    // when this happens, re-calculate and send to all the combine subjects
+    public func markAsChanged() {
+        didChange = true
+        Task { await self.updateCombineSubjects() }
+    }
 
     public func hasChanges() -> Bool { didChange }
 
@@ -147,6 +193,8 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         if let frameStateChangeCallback = callbacks.frameStateChangeCallback {
             frameStateChangeCallback(self, self.state)
         }
+
+        await self.updateCombineSubjects()
     }
 
     private var otherFilename: String = ""

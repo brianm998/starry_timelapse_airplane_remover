@@ -66,6 +66,10 @@ public actor OutlierGroup: CustomStringConvertible,
     nonisolated public let surfaceAreaToSizeRatio: Double
 
     public var shouldPaintDidChange: ((UInt16, PaintReason?) -> Void)? // keyed by id
+
+    public func set(shouldPaintDidChange: ((UInt16, PaintReason?) -> Void)?) {
+        self.shouldPaintDidChange = shouldPaintDidChange
+    }
     
     // after init, shouldPaint is usually set to a base value based upon different statistics 
     public var shouldPaint: PaintReason?  // should we paint this group, and why?

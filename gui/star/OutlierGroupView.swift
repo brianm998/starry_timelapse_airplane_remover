@@ -173,7 +173,7 @@ struct OutlierGroupView: View {
                 // make this row the only selected one
                 let frame_view = self.groupViewModel.viewModel.frames[self.groupViewModel.group.frameIndex]
                 if let frame = frame_view.frame,
-                   let group = frame.outlierGroup(named: self.groupViewModel.group.id)
+                   let group = await frame.outlierGroup(named: self.groupViewModel.group.id)
                 {
                     if let outlier_views = frame_view.outlierViews {
                         for outlier_view in outlier_views {

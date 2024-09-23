@@ -133,9 +133,9 @@ struct FrameEditView: View {
                               //var new_outlier_info: [OutlierGroup] = []
                               var _outlierGroupTableRows: [OutlierGroupTableRow] = []
                               
-                              frame.foreachOutlierGroup(between: selectionStart,
-                                                        and: end_location) { group in
-                                  let new_row = OutlierGroupTableRow(group)
+                            await frame.foreachOutlierGroupAsync(between: selectionStart,
+                                                             and: end_location) { group in
+                              let new_row = await OutlierGroupTableRow(group)
                                   _outlierGroupTableRows.append(new_row)
                                   return .continue
                               }
@@ -171,7 +171,7 @@ struct FrameEditView: View {
         if let frame = frameView.frame {
             Task.detached(priority: .userInitiated) {
                 // update the frame in the background
-                try frame.deleteOutliers(in: gestureBounds) // XXX errors not handled
+                try await frame.deleteOutliers(in: gestureBounds) // XXX errors not handled
                 await MainActor.run {
                     viewModel.selectionStart = nil
                     viewModel.selectionEnd = nil
@@ -191,9 +191,9 @@ struct FrameEditView: View {
         if let frame = frameView.frame {
             let new_value = shouldPaint
             Task.detached(priority: .userInitiated) {
-                frame.userSelectAllOutliers(toShouldPaint: new_value,
-                                            between: selectionStart,
-                                            and: end_location)
+               await frame.userSelectAllOutliers(toShouldPaint: new_value,
+                                                 between: selectionStart,
+                                                 and: end_location)
                 await MainActor.run {
                     viewModel.selectionStart = nil
                     viewModel.selectionEnd = nil

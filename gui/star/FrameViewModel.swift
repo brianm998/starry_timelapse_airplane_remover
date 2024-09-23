@@ -4,6 +4,7 @@ import Cocoa
 import StarCore
 import logging
 import KHTSwift
+import Combine
 
 // UI view class used for each frame
 public class FrameViewModel: ObservableObject {
@@ -11,70 +12,48 @@ public class FrameViewModel: ObservableObject {
         self.frameIndex = frameIndex
     }
 
+    private var cancelBag = Set<AnyCancellable>()
+
     var isCurrentFrame: Bool = false
     
     let frameIndex: Int
     var frame: FrameAirplaneRemover? {
         didSet {
             Log.d("frame \(frameIndex) set frame to \(String(describing: frame))")
+            cancelBag.removeAll()
+            if let frame {
+                Task {
+                    // XXX run on main actor?
+                    await frame.numberOfPositiveOutliersPublisher()
+                      .sink { [weak self] value in
+                          self?.numberOfPositiveOutliers = value
+                      } 
+                      .store(in: &cancelBag)
+
+                    await frame.numberOfNegativeOutliersPublisher()
+                      .sink { [weak self] value in
+                          self?.numberOfNegativeOutliers = value
+                      } 
+                      .store(in: &cancelBag)
+
+                    await frame.numberOfUnknownOutliersPublisher()
+                      .sink { [weak self] value in
+                          self?.numberOfUndecidedOutliers = value
+                      } 
+                      .store(in: &cancelBag)
+                }
+            }
         }
     }
 
     // XXX turn these into properties that are updated when the paintability changes
     // have the FrameAirplaneRemover be able to both knows these values,
     // and transmit changes to the UI with a callback that updates view state
-    var numberOfPositiveOutliers: Int? {
-        // XXX this is likley show
-        if let outlierViews = outlierViews {
-            var total: Int = 0
-            for outlierView in outlierViews {
-                if let shouldPaint = outlierView.group.shouldPaint,
-                   shouldPaint.willPaint
-                {
-                    total += 1
-                }
-            }
-            return total
-        }
-        return nil
-    }
 
-    var numberOfNegativeOutliers: Int? {
-        // XXX this is likley show
-        Log.d("numberOfNegativeOutliers \(String(describing: outlierViews?.count))")
-
-        if let outlierViews = outlierViews {
-            var total: Int = 0
-            Log.v("numberOfNegativeOutliers have outlier views")
-            for outlierView in outlierViews {
-                Log.v("numberOfNegativeOutliers outlier view \(outlierView) \(outlierView.group.id) \(String(describing: outlierView.group.shouldPaint))")
-                if let shouldPaint = outlierView.group.shouldPaint,
-                   !shouldPaint.willPaint
-                {
-                    Log.v("increading count")
-                    total += 1
-                }
-            }
-            Log.v("numberOfNegativeOutliers \(total)")
-            return total
-        }
-        return nil
-    }
+    @Published var numberOfPositiveOutliers: Int? 
+    @Published var numberOfNegativeOutliers: Int? 
+    @Published var numberOfUndecidedOutliers: Int?
     
-    var numberOfUndecidedOutliers: Int? {
-        // XXX this is likley show
-        if let outlierViews = outlierViews {
-            var total: Int = 0
-            for outlierView in outlierViews {
-                if outlierView.group.shouldPaint == nil {
-                    total += 1
-                }
-            }
-            return total
-        }
-        return nil
-    }
-
     // optional to distinguish between not loaded and empty list
     @Published var outlierViews: [OutlierGroupViewModel]?
     @Published var loadingOutlierViews: Bool = false

@@ -25,7 +25,9 @@ struct RenderAllFramesButton: View {
                                      */
                                     number_to_save -= 1
                                     if number_to_save == 0 {
-                                        self.viewModel.renderingAllFrames = false
+                                        await MainActor.run {
+                                            self.viewModel.renderingAllFrames = false
+                                        }
                                     }
                                 }
                             }
