@@ -166,6 +166,10 @@ public actor NighttimeAirplaneRemover {
     public var config: Config
     public var callbacks: Callbacks
 
+    public func set(callbacks: Callbacks) {
+        self.callbacks = callbacks
+    }
+    
     public var numberLeft = NumberLeft()
 
     public func decrementNumberLeft() async {

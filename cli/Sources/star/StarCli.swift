@@ -391,6 +391,8 @@ struct StarCli: AsyncParsableCommand {
                             await updatableProgressMonitor.stateChange(for: frame, to: state)
                         }
                     }
+
+                    await eraser.set(callbacks: callbacks)
                 }
 
                 try await eraser.run()
