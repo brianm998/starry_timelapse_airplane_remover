@@ -54,14 +54,14 @@ actor DecisionTreeGenerator {
         
         let inputDataSplit = inputData.shuffleSplit(into: treeCount)
 
-        var validationData = ClassifiedData()
 
         let trees = try await withLimitedThrowingTaskGroup(of: TreeForestResult.self) { taskGroup in
+            //var validationData = ClassifiedData()
             var results: [TreeForestResult] = []
             for validationIndex in 0..<inputDataSplit.count {
                 try await taskGroup.addTask() { 
                     // generate a tree from this validation data
-                    validationData = inputDataSplit[validationIndex]
+                    var validationData = inputDataSplit[validationIndex]
                     
                     // use the remaining data for training
                     let trainingData = ClassifiedData()
@@ -82,13 +82,13 @@ actor DecisionTreeGenerator {
                     Log.i("generated tree")
                     
                     // save this generated swift code to a file
-                    if fileManager.fileExists(atPath: tree.filename) {
+                    if FileManager.default.fileExists(atPath: tree.filename) {
                         Log.i("overwriting already existing filename \(tree.filename)")
-                        try fileManager.removeItem(atPath: tree.filename)
+                        try FileManager.default.removeItem(atPath: tree.filename)
                     }
 
                     // write to file
-                    fileManager.createFile(atPath: tree.filename,
+                    FileManager.default.createFile(atPath: tree.filename,
                                             contents: tree.swiftCode.data(using: .utf8),
                                             attributes: nil)
 
@@ -211,13 +211,13 @@ actor DecisionTreeGenerator {
              }
              """
         // save this generated swift code to a file
-        if fileManager.fileExists(atPath: filename) {
+        if FileManager.default.fileExists(atPath: filename) {
             Log.i("overwriting already existing filename \(filename)")
-            try fileManager.removeItem(atPath: filename)
+            try FileManager.default.removeItem(atPath: filename)
         }
 
         // write to file
-        fileManager.createFile(atPath: filename,
+        FileManager.default.createFile(atPath: filename,
                                 contents: swiftString.data(using: .utf8),
                                 attributes: nil)
 
@@ -291,7 +291,7 @@ actor DecisionTreeGenerator {
         
         // check to see if this file exists or not
         /*
-        if fileManager.fileExists(atPath: filename) {
+        if FileManager.default.fileExists(atPath: filename) {
             // Don't do anything
             throw "decision tree already exists at \(filename)"
         }
@@ -1092,26 +1092,29 @@ fileprivate func decisionTreeNode(withTrainingData trainingData: ClassifiedData,
 
 
 
-fileprivate struct RankedResult<T>: Comparable {
+fileprivate struct RankedResult<T> where T: Sendable  {
     let rank: Double
     let type: OutlierGroup.Feature
     let result: T
+}
 
-    public static func ==(lhs: RankedResult<T>, rhs: RankedResult<T>) -> Bool {
+extension RankedResult: Comparable, Sendable {
+
+    public static func ==(lhs: RankedResult, rhs: RankedResult) -> Bool {
         return lhs.rank == rhs.rank
     }
     
-    public static func <(lhs: RankedResult<T>, rhs: RankedResult<T>) -> Bool {
+    public static func <(lhs: RankedResult, rhs: RankedResult) -> Bool {
         return lhs.rank < rhs.rank
     }        
 }
 
-fileprivate struct DecisionTypeValuesResult {
+fileprivate struct DecisionTypeValuesResult: Sendable {
     let type: OutlierGroup.Feature
     let values: [Double]
 }
 
-fileprivate struct FeatureResult {
+fileprivate struct FeatureResult: Sendable {
     init(type: OutlierGroup.Feature) {
         self.type = type
     }
@@ -1122,7 +1125,7 @@ fileprivate struct FeatureResult {
     var negativeDist: ValueDistribution?
 }
 
-fileprivate struct ValueDistribution {
+fileprivate struct ValueDistribution: Sendable {
     let type: OutlierGroup.Feature
     let min: Double
     let max: Double
@@ -1130,8 +1133,8 @@ fileprivate struct ValueDistribution {
     let median: Double
 }
 
-fileprivate struct TreeResponse {
-    enum Place {
+fileprivate struct TreeResponse: Sendable {
+    enum Place: Sendable {
         case less
         case greater
     }
@@ -1141,7 +1144,7 @@ fileprivate struct TreeResponse {
     let stumpValue: Double
 }
     
-fileprivate struct DecisionResult {
+fileprivate struct DecisionResult: Sendable {
     let type: OutlierGroup.Feature
     let value: Double
     let lessThanPositive: [OutlierFeatureData]
@@ -1333,4 +1336,3 @@ fileprivate func prune(tree: SwiftDecisionTree,
     return tree
 }
 
-fileprivate let fileManager = FileManager.default

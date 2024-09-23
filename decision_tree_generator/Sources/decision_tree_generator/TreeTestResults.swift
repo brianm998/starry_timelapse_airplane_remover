@@ -2,7 +2,7 @@ import Foundation
 
 // results for multiple trees indexed by name
 
-class TreeTestResults {
+class TreeTestResults: @unchecked Sendable {
     var numberGood: [String:Int] = [:]
     var numberBad: [String:Int] = [:]
 

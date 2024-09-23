@@ -4,7 +4,7 @@ import StarCore
 
 // decision node which decides upon a value of some type
 // delegating to one of two further code paths
-class DecisionTreeNode: SwiftDecisionTree {
+class DecisionTreeNode: SwiftDecisionTree, @unchecked Sendable {
 
     public init (type: OutlierGroup.Feature,
                  value: Double,
@@ -47,8 +47,8 @@ class DecisionTreeNode: SwiftDecisionTree {
     let indent: Int
 
     // runtime execution
-    func classification(of group: ClassifiableOutlierGroup) -> Double {
-        let outlierValue = group.decisionTreeValue(for: type)
+    func classification(of group: ClassifiableOutlierGroup) async -> Double {
+        let outlierValue = await group.decisionTreeValue(for: type)
         if stump {
             if outlierValue < value {
                 return lessThanStumpValue
@@ -57,9 +57,9 @@ class DecisionTreeNode: SwiftDecisionTree {
             }
         } else {
             if outlierValue < value {
-                return lessThan.classification(of: group)
+                return await lessThan.classification(of: group)
             } else {
-                return greaterThan.classification(of: group)
+                return await greaterThan.classification(of: group)
             }
         }
     }

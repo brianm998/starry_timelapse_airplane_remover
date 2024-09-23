@@ -3,7 +3,7 @@ import logging
 
 // outlier feature data which is classified for structured learning
 
-public class ClassifiedData {
+public class ClassifiedData: @unchecked Sendable { // XXX unchecked :(
     public init() { }
 
     public init(positiveData: [OutlierFeatureData],

@@ -5,13 +5,13 @@ import logging
 // an older alternative to task groups, looking for thread stability
 // still used by the decision tree generator
 
-fileprivate var numberRunning = NumberRunning()
+fileprivate let numberRunning = NumberRunning()
 
 public class TaskRunnerOld {
     // XXX getting this number right is hard
     // too big and the swift runtime barfs underneath
     // too small and the process runs without available cpu resources
-    public static var maxConcurrentTasks: UInt = determineMax() {
+    nonisolated(unsafe) public static var maxConcurrentTasks: UInt = determineMax() {
         didSet {
             Log.i("using maximum of \(maxConcurrentTasks) concurrent tasks")
         }
@@ -38,8 +38,9 @@ fileprivate func determineMax() -> UInt {
     // handle each response
  }
  */
-public func runTaskOld<Type>(_ closure: @escaping () async -> Type,
-                             withCPUCount numCPUs: UInt = 1) async -> Task<Type,Never>
+nonisolated(unsafe) public func runTaskOld<Type>(_ closure: @escaping @Sendable () async -> Type,
+                                                 withCPUCount numCPUs: UInt = 1)
+  async -> Task<Type,Never>
 {
     //Log.i("runtask with cpuUsage \(cpuUsage())")
     let baseMax = TaskRunnerOld.maxConcurrentTasks
@@ -72,7 +73,7 @@ public func runTaskOld<Type>(_ closure: @escaping () async -> Type,
     // handle each response
  }
  */
-public func runThrowingTaskOld<Type>(_ closure: @escaping () async throws -> Type,
+public func runThrowingTaskOld<Type>(_ closure: @escaping @Sendable () async throws -> Type,
                                      withCPUCount numCPUs: UInt = 1) async throws -> Task<Type,Error>
 {
     let baseMax = TaskRunnerOld.maxConcurrentTasks

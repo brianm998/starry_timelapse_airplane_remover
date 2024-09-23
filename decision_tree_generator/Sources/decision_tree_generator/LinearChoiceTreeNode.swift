@@ -1,7 +1,7 @@
 import Foundation
 import StarCore
 
-class LinearChoiceTreeNode: SwiftDecisionTree {
+final class LinearChoiceTreeNode: SwiftDecisionTree {
     public init (type: OutlierGroup.Feature,
                 min: Double,   // returns -1 if input value is equal to min
                 max: Double,   // returns +1 if input value is equal to max
@@ -24,8 +24,8 @@ class LinearChoiceTreeNode: SwiftDecisionTree {
     let indent: Int
 
     // runtime execution
-    func classification(of group: ClassifiableOutlierGroup) -> Double {
-        let outlierValue = group.decisionTreeValue(for: type)
+    func classification(of group: ClassifiableOutlierGroup) async -> Double {
+        let outlierValue = await group.decisionTreeValue(for: type)
 
         return (outlierValue - min) / (max - min)*2 - 1;
     }

@@ -8,7 +8,7 @@ import Foundation
 public protocol OutlierGroupClassifier: Sendable {
 
     // returns -1 for negative, +1 for positive
-    func classification(of group: ClassifiableOutlierGroup) -> Double
+    func classification(of group: ClassifiableOutlierGroup) async -> Double
 
     // returns -1 for negative, +1 for positive
     func classification (

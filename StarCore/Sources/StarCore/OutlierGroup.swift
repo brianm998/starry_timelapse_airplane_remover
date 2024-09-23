@@ -36,41 +36,41 @@ public actor OutlierGroup: CustomStringConvertible,
                            Comparable,
                            ClassifiableOutlierGroup
 {
-    public let id: UInt16              // unique across a frame, non zero
-    public let size: UInt              // number of pixels in this outlier group
-    public let bounds: BoundingBox     // a bounding box on the image that contains this group
-    public let brightness: UInt        // the average amount per pixel of brightness over the limit 
+    nonisolated public let id: UInt16              // unique across a frame, non zero
+    nonisolated public let size: UInt              // number of pixels in this outlier group
+    nonisolated public let bounds: BoundingBox     // a bounding box on the image that contains this group
+    nonisolated public let brightness: UInt        // the average amount per pixel of brightness over the limit 
 
     // a bounding box on the image that contains this group
     public func getBounds() -> BoundingBox { bounds }
     
     // how far away from the most dominant line in this outlier group are
     // the pixels in it, on average?
-    public let averageLineVariance: Double
+    nonisolated public let averageLineVariance: Double
 
     // on median?
-    public let medianLineVariance: Double
+    nonisolated public let medianLineVariance: Double
 
     // what is the length of the assumed line? 
-    public let lineLength: Double
+    nonisolated public let lineLength: Double
 
     // pixel value is zero if pixel is not part of group,
     // otherwise it's the amount brighter this pixel was than those in the adjecent frames 
-    public let pixels: [UInt16]        // indexed by y * bounds.width + x
+    nonisolated public let pixels: [UInt16]        // indexed by y * bounds.width + x
 
     // a set of the pixels in this outlier 
-    public let pixelSet: Set<StatusPixel>
+    nonisolated public let pixelSet: Set<StatusPixel>
 
     public func getPixelSet() -> Set<StatusPixel> { pixelSet }
     
-    public let surfaceAreaToSizeRatio: Double
+    nonisolated public let surfaceAreaToSizeRatio: Double
 
     public var shouldPaintDidChange: ((UInt16, PaintReason?) -> Void)? // keyed by id
     
     // after init, shouldPaint is usually set to a base value based upon different statistics 
     public var shouldPaint: PaintReason?  // should we paint this group, and why?
     
-    public let frameIndex: Int
+    nonisolated public let frameIndex: Int
 
     // has to be optional so we can read OuterlierGroups as codable
     public var frame: FrameAirplaneRemover?

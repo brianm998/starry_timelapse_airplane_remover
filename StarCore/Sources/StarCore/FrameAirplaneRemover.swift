@@ -38,13 +38,13 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         hasher.combine(frameIndex)
     }
     
-    public let width: Int
-    public let height: Int
-    public let bytesPerPixel: Int
-    public let bytesPerRow: Int
-    public let frameIndex: Int
+    nonisolated public let width: Int
+    nonisolated public let height: Int
+    nonisolated public let bytesPerPixel: Int
+    nonisolated public let bytesPerRow: Int
+    nonisolated public let frameIndex: Int
 
-    public let outlierOutputDirname: String
+    nonisolated public let outlierOutputDirname: String
     
     // populated by pruning
     public var outlierGroups: OutlierGroups? 

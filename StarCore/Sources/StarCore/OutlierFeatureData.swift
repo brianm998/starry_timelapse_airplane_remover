@@ -1,7 +1,7 @@
 import Foundation
 
 // a typed vector of values for a single outlier group
-public struct OutlierFeatureData {
+public struct OutlierFeatureData: Sendable {
     // indexed by OutlierGroup.Feature.sortOrder
     public let values: [Double]
     public init(_ values: [Double]) {

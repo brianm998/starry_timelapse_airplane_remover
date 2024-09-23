@@ -5,7 +5,8 @@ import logging
 import CryptoKit
 import StarDecisionTrees
 
-var startTime: Date = Date()
+// XXX WTF
+nonisolated(unsafe) var startTime: Date = Date()
 
 // how much do we truncate the sha256 hash when embedding it into code
 let shaPrefixSize = 8
@@ -28,7 +29,7 @@ func hostCPULoadInfo() -> host_cpu_load_info? {
 }
 
 @main
-struct decision_tree_generator: AsyncParsableCommand {
+struct decision_tree_generator: AsyncParsableCommand, @unchecked Sendable {
 
     @Flag(name: [.customShort("v"), .customLong("verify")],
           help:"""
@@ -116,7 +117,7 @@ struct decision_tree_generator: AsyncParsableCommand {
                 // this ignores given test data,
                 // instead separating out the input data
                 // into train, validate and test segments
-                try await generateForestFromTrainingData(with: forestSize)                
+                try await generateForestFromTrainingData(with: forestSize)
             } else {
                 // generate a single tree
                 // this prunes from the give test data
@@ -140,16 +141,15 @@ struct decision_tree_generator: AsyncParsableCommand {
         let config = try await Config.read(fromJsonFilename: jsonConfigFileName)
         Log.d("got config from \(jsonConfigFileName)")
         
-        let callbacks = Callbacks()
+        var callbacks = Callbacks()
 
-        var frames: [FrameAirplaneRemover] = []
-        
-        var endClosure: () -> Void = { }
+        // XXX turn this into an actor that receives tham async
+
+        let newFrames = ArrayActor<FrameAirplaneRemover>()
         
         // called when we should check a frame
         callbacks.frameCheckClosure = { newFrame in
-            frames.append(newFrame)
-            endClosure()
+            Task { await newFrames.append(newFrame) }
             Log.d("frameCheckClosure for frame \(newFrame.frameIndex)")
         }
         
@@ -158,17 +158,13 @@ struct decision_tree_generator: AsyncParsableCommand {
                                                         processExistingFiles: true,
                                                         fullyProcess: false)
         let sequenceSize = await eraser.imageSequence.filenames.count
-        endClosure = {
-            if frames.count == sequenceSize {
-                //eraser.shouldRun = false
-                // XXX double check this works still
-            }
-        }
         
         Log.i("got \(sequenceSize) frames")
         // XXX run it and get the outlier groups
 
         try await eraser.run()
+
+        let frames = await newFrames.elements()
         
         Log.i("loading outliers")
         // after the eraser is done running we should have received all the frames
@@ -201,14 +197,14 @@ struct decision_tree_generator: AsyncParsableCommand {
                 }
                 
                 //Log.d("should check frame \(frame.frameIndex)")
-                if let outlierGroupList = frame.outlierGroupList() {
+                if let outlierGroupList = await frame.outlierGroupList() {
                     for outlierGroup in outlierGroupList {
-                        if let numberGoodShouldPaint = outlierGroup.shouldPaint {
+                        if let numberGoodShouldPaint = await outlierGroup.shouldPaintFunc() {
                             await withLimitedTaskGroup(of: (treeKey:String, shouldPaint:Bool).self) { taskGroup in
                                 for (treeKey, tree) in decisionTrees {
                                     await taskGroup.addTask() {
                                         let decisionTreeShouldPaint =  
-                                          tree.classification(of: outlierGroup) > 0
+                                          await tree.classification(of: outlierGroup) > 0
                                         
                                         return (treeKey, decisionTreeShouldPaint == numberGoodShouldPaint.willPaint)
                                     }
@@ -255,7 +251,7 @@ struct decision_tree_generator: AsyncParsableCommand {
         let classifiedData = ClassifiedData()
         for inputDirname in inputFilenames {
             Log.d("runVerification inputDirname \(inputDirname)")
-            if fileManager.fileExists(atPath: inputDirname) {
+            if FileManager.default.fileExists(atPath: inputDirname) {
                 Log.d("runVerification inputDirname exists \(inputDirname)")
                 classifiedData += try await loadDataFrom(dirname: inputDirname)
                 Log.d("runVerification inputDirname loaded \(inputDirname)")
@@ -304,17 +300,14 @@ struct decision_tree_generator: AsyncParsableCommand {
         let config = try await Config.read(fromJsonFilename: jsonConfigFileName)
         Log.d("got config from \(jsonConfigFileName)")
         
-        let callbacks = Callbacks()
+        var callbacks = Callbacks()
 
-        var frames: [FrameAirplaneRemover] = []
-        
-        var endClosure: () -> Void = { }
+        let newFrames = ArrayActor<FrameAirplaneRemover>()
         
         // called when we should check a frame
         callbacks.frameCheckClosure = { newFrame in
+            Task { await newFrames.append(newFrame) }
             Log.d("frameCheckClosure for frame \(newFrame.frameIndex)")
-            frames.append(newFrame)
-            endClosure()
         }
         
         let eraser = try await NighttimeAirplaneRemover(with: config,
@@ -322,19 +315,14 @@ struct decision_tree_generator: AsyncParsableCommand {
                                                         processExistingFiles: true,
                                                         fullyProcess: false)
         let sequenceSize = await eraser.imageSequence.filenames.count
-        endClosure = {
-            Log.d("end enclosure frames.count \(frames.count) sequenceSize \(sequenceSize)")
-            if frames.count == sequenceSize {
-                //eraser.shouldRun = false
-                // XXX double check this works still
-            }
-        }
         
         Log.d("got \(sequenceSize) frames")
         // XXX run it and get the outlier groups
 
         try await eraser.run()
 
+        let frames = await newFrames.elements()
+        
         Log.d("eraser done running")
         
         // after the eraser is done running we should have received all the frames
@@ -359,13 +347,13 @@ struct decision_tree_generator: AsyncParsableCommand {
                 
                 var localPositiveData: [OutlierFeatureData] = []
                 var localNegativeData: [OutlierFeatureData] = []
-                if let outlierGroups = frame.outlierGroupList() {
+                if let outlierGroups = await frame.outlierGroupList() {
                     for outlierGroup in outlierGroups {
                         let name = outlierGroup.id
-                        if let shouldPaint = outlierGroup.shouldPaint {
+                        if let shouldPaint = await outlierGroup.shouldPaintFunc() {
                             let willPaint = shouldPaint.willPaint
                             
-                            let values = outlierGroup.decisionTreeGroupValues
+                            let values = await outlierGroup.decisionTreeGroupValues()
                             
                             if willPaint {
                                 localPositiveData.append(values)
@@ -435,7 +423,7 @@ struct decision_tree_generator: AsyncParsableCommand {
         
         // load testData 
         for dirname in testDataDirnames {
-            if fileManager.fileExists(atPath: dirname) {
+            if FileManager.default.fileExists(atPath: dirname) {
                 // load here
                 let result = try await loadDataFrom(dirname: dirname)
                 testData.positiveData += result.positiveData
@@ -469,7 +457,7 @@ struct decision_tree_generator: AsyncParsableCommand {
                 }
             } else {
                 // here we are reading pre-computed values for each data point
-                if fileManager.fileExists(atPath: jsonConfigFileName) {
+                if FileManager.default.fileExists(atPath: jsonConfigFileName) {
                     // load here
                     let result = try await loadDataFrom(dirname: jsonConfigFileName)
                     trainingData.positiveData += result.positiveData
@@ -641,15 +629,15 @@ struct decision_tree_generator: AsyncParsableCommand {
                                                 treeResponse.name)
 
         // save this generated swift code to a file
-        if fileManager.fileExists(atPath: filename) {
+        if FileManager.default.fileExists(atPath: filename) {
             Log.i("overwriting already existing filename \(filename)")
-            try fileManager.removeItem(atPath: filename)
+            try FileManager.default.removeItem(atPath: filename)
         }
 
         // write to file
-        fileManager.createFile(atPath: filename,
-                            contents: treeSwiftCode.data(using: .utf8),
-                            attributes: nil)
+        FileManager.default.createFile(atPath: filename,
+                                       contents: treeSwiftCode.data(using: .utf8),
+                                       attributes: nil)
         Log.i("wrote \(filename)")
 
         return hashPrefix
@@ -677,5 +665,3 @@ extension OutlierGroup.Feature: ExpressibleByArgument {
         }
     }
 }
-
-fileprivate let fileManager = FileManager.default
