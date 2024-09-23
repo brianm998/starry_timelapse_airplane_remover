@@ -33,7 +33,7 @@ struct Main: AsyncParsableCommand {
          
          */
         
-        if fileManager.fileExists(atPath: validatedSequenceJsonFilename) {
+        if FileManager.default.fileExists(atPath: validatedSequenceJsonFilename) {
             let sequences: [String:[String]] =
               try await read(fromJsonFilename: validatedSequenceJsonFilename)
             for (dirname, dirlist) in sequences {
@@ -50,7 +50,7 @@ struct Main: AsyncParsableCommand {
         print("\(dirname)")
 
         let outliersDirname = "\(dirname)-outliers"
-        let contents = try fileManager.contentsOfDirectory(atPath: outliersDirname)
+        let contents = try FileManager.default.contentsOfDirectory(atPath: outliersDirname)
 
         try await withLimitedThrowingTaskGroup(of: Void.self) { group in
             for frameIndex in contents {
@@ -71,10 +71,10 @@ struct Main: AsyncParsableCommand {
         let positiveOutlierDataCSVFilename = "\(dirname)/positive_data.csv"
         let negativeOutlierDataCSVFilename = "\(dirname)/negative_data.csv"
 
-        if fileManager.fileExists(atPath: paintDataJsonFilename) {
+        if FileManager.default.fileExists(atPath: paintDataJsonFilename) {
             let paintReasonMap: [UInt16:PaintReason] =
               try await read(fromJsonFilename: paintDataJsonFilename)
-            if fileManager.fileExists(atPath: outlierDataCSVFilename) {
+            if FileManager.default.fileExists(atPath: outlierDataCSVFilename) {
                 let allCSVData = try await readCSV(from: outlierDataCSVFilename)
                 
                 var positiveRows: [[Double]] = []
@@ -117,10 +117,10 @@ struct Main: AsyncParsableCommand {
             outlierString += "\n"
         }
         let outlierData = outlierString.data(using: .utf8)
-        if fileManager.fileExists(atPath: filename) {
-            try fileManager.removeItem(atPath: filename)
+        if FileManager.default.fileExists(atPath: filename) {
+            try FileManager.default.removeItem(atPath: filename)
         }
-        fileManager.createFile(atPath: filename,
+        FileManager.default.createFile(atPath: filename,
                                contents: outlierData,
                                attributes: nil)
     }
@@ -142,5 +142,4 @@ struct Main: AsyncParsableCommand {
     }
 }
 
-fileprivate let fileManager = FileManager.default
 
