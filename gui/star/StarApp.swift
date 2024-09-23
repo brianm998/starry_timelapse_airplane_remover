@@ -94,9 +94,9 @@ import StarDecisionTrees
 
 
 @main
-class StarApp: App {
+struct StarApp: App {
     
-    required init() {
+    init() {
         Task {
             for window in NSApp.windows {
                 if window.title.hasPrefix("Outlier") {

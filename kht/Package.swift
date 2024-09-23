@@ -28,7 +28,7 @@ let package = Package(
                 .linkedFramework("OpenCL"),
                 .unsafeFlags([
                                // use old, slower linker for now to avoid so many linker warnings
-                               //"-Xlinker", "-ld_classic",
+                               "-Xlinker", "-ld_classic",
                                
                                // link in pre compiled .a file for opencv2 
                                "-L../opencv/lib/",
@@ -41,7 +41,8 @@ let package = Package(
       ),      
       .target(name: "kht_bridge", // Objective C
               dependencies: ["kht"],
-              cxxSettings: [ .unsafeFlags([ "-I", "../opencv/include" ])]
+              cSettings: [ .unsafeFlags([ "-I", "../../opencv/include", // for the gui
+                                          "-I", "../opencv/include" ])] // for everything else
       ),   
       .target(name: "KHTSwift", // Swift
               dependencies: [
