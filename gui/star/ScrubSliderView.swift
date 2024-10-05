@@ -4,7 +4,7 @@ import logging
 
 // slider at the bottom that scrubs the frame position
 struct ScrubSliderView: View {
-    @EnvironmentObject var viewModel: ViewModel
+    @Environment(ViewModel.self) var viewModel: ViewModel
 
     @State private var sliderValue = 0.0
 

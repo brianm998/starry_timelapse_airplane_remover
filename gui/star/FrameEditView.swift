@@ -6,7 +6,7 @@ import logging
 // the view for when the user wants to edit what outlier groups are painted and not
 
 struct FrameEditView: View {
-    @EnvironmentObject var viewModel: ViewModel
+    @Environment(ViewModel.self) var viewModel: ViewModel
     @Environment(\.openWindow) private var openWindow
 
     @Binding private var interactionMode: InteractionMode
@@ -15,6 +15,7 @@ struct FrameEditView: View {
     public init(interactionMode: Binding<InteractionMode>,
                 showFullResolution: Binding<Bool>)
     {
+        //$interactionMode = interactionMode // ?? try this
         _interactionMode = interactionMode
         _showFullResolution = showFullResolution
     }

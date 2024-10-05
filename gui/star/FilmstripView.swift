@@ -4,7 +4,7 @@ import StarCore
 // the filmstrip at the bottom
 
 struct FilmstripView: View {
-    @EnvironmentObject var viewModel: ViewModel
+    @Environment(ViewModel.self) var viewModel: ViewModel
     let imageSequenceView: ImageSequenceView
 
     var body: some View {

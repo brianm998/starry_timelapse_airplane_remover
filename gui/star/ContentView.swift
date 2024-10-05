@@ -10,7 +10,7 @@ import SwiftUI
 // the overall view of the app
 @available(macOS 13.0, *) 
 struct ContentView: View {
-    @EnvironmentObject var viewModel: ViewModel
+    @Environment(ViewModel.self) var viewModel: ViewModel
     
     var body: some View {
         if viewModel.sequenceLoaded {
@@ -23,7 +23,7 @@ struct ContentView: View {
 
 @available(macOS 13.0, *) 
 struct ContentView_Previews: PreviewProvider {
-    @EnvironmentObject var viewModel: ViewModel
+    @Environment(ViewModel.self) var viewModel: ViewModel
 
     static var previews: some View {
         ContentView()

@@ -4,7 +4,7 @@ import StarCore
 // a view that shows the current frame number being shown,
 // and on double tap, allows editing of what number to show
 struct EditableFrameNumberView: View {
-    @EnvironmentObject var viewModel: ViewModel
+    @Environment(ViewModel.self) var viewModel: ViewModel
 
     @State private var editFrameNumberMode = false
     @State private var editFrameNumberModeString = ""

@@ -8,7 +8,7 @@ import logging
 
 struct OutlierGroupView: View {
 
-    @ObservedObject var groupViewModel: OutlierGroupViewModel
+    @State var groupViewModel: OutlierGroupViewModel
 
     @Environment(\.openWindow) private var openWindow
 
@@ -228,7 +228,7 @@ struct OutlierGroupView: View {
         
         // update the view model to show the change quickly
         self.groupViewModel.group.shouldPaint = shouldPaint
-        self.groupViewModel.objectWillChange.send() 
+        //self.groupViewModel.objectWillChange.send() 
 
         Task {
             if let frame = self.groupViewModel.viewModel.currentFrame,

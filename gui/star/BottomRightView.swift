@@ -7,10 +7,12 @@ import Combine
 // below the image frame and above the filmstrip and scrub bar
 
 struct BottomRightView: View {
-    @EnvironmentObject var viewModel: ViewModel
+    @Environment(ViewModel.self) var viewModel: ViewModel
 
     var body: some View {
-        HStack() {
+        
+        return HStack() {
+            @Bindable var viewModel = viewModel
             if viewModel.interactionMode == .edit {
                 let frameView = viewModel.currentFrameView
                 VStack(alignment: .trailing) {
@@ -69,16 +71,16 @@ struct BottomRightView: View {
                 
                 toggleViews()
               .sheet(isPresented: $viewModel.settingsSheetShowing) {
-                  SettingsSheetView(isVisible: self.$viewModel.settingsSheetShowing,
+                  SettingsSheetView(isVisible: $viewModel.settingsSheetShowing,
                                     fastSkipAmount: $viewModel.fastSkipAmount,
-                                    videoPlaybackFramerate: self.$viewModel.videoPlaybackFramerate,
+                                    videoPlaybackFramerate: $viewModel.videoPlaybackFramerate,
                                     fastAdvancementType: $viewModel.fastAdvancementType)
               }
               .sheet(isPresented: $viewModel.multiChoiceSheetShowing) {
                   if let multiChoiceOutlierView = viewModel.multiChoiceOutlierView {
-                      MultiChoiceSheetView(isVisible: self.$viewModel.multiChoiceSheetShowing,
-                                           multiChoicePaintType: self.$viewModel.multiChoicePaintType,
-                                           multiChoiceType: self.$viewModel.multiChoiceType,
+                      MultiChoiceSheetView(isVisible: $viewModel.multiChoiceSheetShowing,
+                                           multiChoicePaintType: $viewModel.multiChoicePaintType,
+                                           multiChoiceType: $viewModel.multiChoiceType,
                                            frames: $viewModel.frames,
                                            currentIndex: $viewModel.currentIndex,
                                            number_of_frames: $viewModel.number_of_frames,
@@ -86,7 +88,7 @@ struct BottomRightView: View {
                   }
               }
               .sheet(isPresented: $viewModel.multiSelectSheetShowing) {
-                  MultiSelectSheetView(isVisible: self.$viewModel.multiSelectSheetShowing,
+                  MultiSelectSheetView(isVisible: $viewModel.multiSelectSheetShowing,
                                        multiSelectionType: $viewModel.multiSelectionType,
                                        multiSelectionPaintType: $viewModel.multiSelectionPaintType,
                                        frames: $viewModel.frames,
@@ -96,7 +98,7 @@ struct BottomRightView: View {
                                        number_of_frames: $viewModel.number_of_frames)
               }
               .sheet(isPresented: $viewModel.paintSheetShowing) {
-                  MassivePaintSheetView(isVisible: self.$viewModel.paintSheetShowing) { shouldPaint, startIndex, endIndex in
+                  MassivePaintSheetView(isVisible: $viewModel.paintSheetShowing) { shouldPaint, startIndex, endIndex in
                       
                       viewModel.updatingFrameBatch = true
                       
@@ -129,7 +131,9 @@ struct BottomRightView: View {
     }
 
     func toggleViews() -> some View {
-        VStack(alignment: .leading) {
+        @Bindable var viewModel = viewModel
+
+        return VStack(alignment: .leading) {
             Picker("selection mode", selection: $viewModel.selectionMode) {
                 ForEach(SelectionMode.allCases, id: \.self) { value in
                     Text(value.localizedName).tag(value)

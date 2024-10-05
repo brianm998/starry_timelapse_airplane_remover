@@ -2,7 +2,7 @@ import SwiftUI
 import StarCore
 
 struct ApplyDecisionTreeButton: View {
-    @EnvironmentObject var viewModel: ViewModel
+    @Environment(ViewModel.self) var viewModel: ViewModel
     
     var body: some View {
         let action: () -> Void = {

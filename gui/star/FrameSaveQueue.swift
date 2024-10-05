@@ -5,7 +5,8 @@ import StarCore
 import Zoomable
 import logging
 
-class FrameSaveQueue: ObservableObject {
+@Observable
+class FrameSaveQueue {
 
     class Purgatory {
         var timer: Timer
@@ -25,8 +26,8 @@ class FrameSaveQueue: ObservableObject {
         }
     }
 
-    @Published var purgatory: [Int: Purgatory] = [:] // both indexed by frameIndex
-    @Published var saving: [Int: FrameAirplaneRemover] = [:]
+    var purgatory: [Int: Purgatory] = [:] // both indexed by frameIndex
+    var saving: [Int: FrameAirplaneRemover] = [:]
 
     init() { }
 

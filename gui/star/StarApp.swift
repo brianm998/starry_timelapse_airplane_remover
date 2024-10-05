@@ -117,7 +117,7 @@ struct StarApp: App {
         
         WindowGroup {
             ContentView()
-              .environmentObject(viewModel)
+              .environment(viewModel)
         }.commands {
            StarCommands(viewModel: viewModel)
         }
@@ -127,7 +127,7 @@ struct StarApp: App {
               { 
                   // XXX don't really care it's dismissed
               }
-              .environmentObject(viewModel)
+              .environment(viewModel)
         }.commands {
            StarCommands(viewModel: viewModel)
         }

@@ -3,7 +3,8 @@ import StarCore
 
 // the view model for a single outlier group
 
-class OutlierGroupViewModel: ObservableObject {
+@Observable
+class OutlierGroupViewModel {
 
     init (viewModel: ViewModel,
           group: OutlierGroup,
@@ -17,20 +18,24 @@ class OutlierGroupViewModel: ObservableObject {
         self.bounds = bounds
         self.image = image
 
-        self.group.shouldPaintDidChange = { [weak self] group, paintReason in
-            if let self {
-                self.setWillPaint(from: paintReason)
-            }
-        }
+        Task {
+            await self.group.set(shouldPaintDidChange: { [weak self] group, paintReason in
+                if let self {
+                    self.setWillPaint(from: paintReason)
+                }
+            })
 
-        self.setWillPaint(from: group.shouldPaint)
+            self.setWillPaint(from: await group.shouldPaint)
+        }
     }
 
     fileprivate func setWillPaint(from paintReason: PaintReason?) {
-        if let paintReason {
-            self.willPaint = paintReason.willPaint
-        } else {
-            self.willPaint = nil
+        Task { @MainActor in 
+            if let paintReason {
+                self.willPaint = paintReason.willPaint
+            } else {
+                self.willPaint = nil
+            }
         }
     }
     
@@ -38,13 +43,13 @@ class OutlierGroupViewModel: ObservableObject {
       Task { await self.group.set(shouldPaintDidChange: nil) }
     }
     
-    @ObservedObject var viewModel: ViewModel
+    var viewModel: ViewModel
     
-    @Published var arrowSelected = false // hovered over on frame view
+    var arrowSelected = false // hovered over on frame view
 
-    @Published var isSelected = false // selected for the details view
+    var isSelected = false // selected for the details view
 
-    @Published var willPaint: Bool?
+    var willPaint: Bool?
 
     let group: OutlierGroup
     let name: UInt16
@@ -52,20 +57,26 @@ class OutlierGroupViewModel: ObservableObject {
     let image: NSImage
 
     func selectArrow(_ selected: Bool) {
-        if selected,
-           let frame = group.frame,
-           let outlierViewModels = viewModel.frames[frame.frameIndex].outlierViews
-        {
-            // deselect all others first
-            for outlierViewModel in outlierViewModels {
-                if outlierViewModel.name != name,
-                   outlierViewModel.arrowSelected
-                {
-                    outlierViewModel.arrowSelected = false
+        Task {
+            if selected,
+               let frame = await group.frame,
+               let outlierViewModels = await viewModel.frames[frame.frameIndex].outlierViews
+            {
+                // deselect all others first
+                for outlierViewModel in outlierViewModels {
+                    if outlierViewModel.name != name,
+                       outlierViewModel.arrowSelected
+                    {
+                        await MainActor.run {
+                            outlierViewModel.arrowSelected = false
+                        }
+                    }
                 }
             }
+            await MainActor.run {
+                arrowSelected = selected
+            }
         }
-        arrowSelected = selected
     }
     
     var groupColor: Color {
@@ -101,7 +112,7 @@ class OutlierGroupViewModel: ObservableObject {
 
     var view: some View {
         return OutlierGroupView(groupViewModel: self)
-          .environmentObject(viewModel)
+          .environment(viewModel)
     }
     
 }

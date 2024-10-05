@@ -3,7 +3,7 @@ import StarCore
 
 // the view for each frame in the filmstrip at the bottom
 struct FilmstripImageView: View {
-    @EnvironmentObject var viewModel: ViewModel
+    @Environment(ViewModel.self) var viewModel: ViewModel
     let frameIndex: Int
 
     var body: some View {

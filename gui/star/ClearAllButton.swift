@@ -4,7 +4,7 @@ import StarCore
 // this button clears everything
 
 struct ClearAllButton: View {
-    @EnvironmentObject var viewModel: ViewModel
+    @Environment(ViewModel.self) var viewModel: ViewModel
 
     var body: some View {
         Button(action: {

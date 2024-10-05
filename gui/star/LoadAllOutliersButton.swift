@@ -8,7 +8,7 @@ enum OutlierLodingType {
 }
 
 struct LoadAllOutliersButton: View {
-    @EnvironmentObject var viewModel: ViewModel
+    @Environment(ViewModel.self) var viewModel: ViewModel
     let loadingType: OutlierLodingType
     
     var body: some View {

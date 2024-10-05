@@ -6,7 +6,7 @@ import StarCore
 // and may be one of many different types (original, processed, etc)
 
 public struct FrameImageView: View {
-    @EnvironmentObject var viewModel: ViewModel
+    @Environment(ViewModel.self) var viewModel: ViewModel
     @Binding private var interactionMode: InteractionMode
     @Binding private var showFullResolution: Bool
 

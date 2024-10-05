@@ -2,7 +2,7 @@ import SwiftUI
 import StarCore
 
 struct MassivePaintSheetView: View {
-    @EnvironmentObject var viewModel: ViewModel
+    @Environment(ViewModel.self) var viewModel: ViewModel
     @Binding var isVisible: Bool
     var closure: (Bool, Int, Int) -> Void
 

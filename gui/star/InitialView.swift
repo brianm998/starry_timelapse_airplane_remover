@@ -3,7 +3,7 @@ import StarCore
 import logging
 
 struct InitialView: View {
-    @EnvironmentObject var viewModel: ViewModel
+    @Environment(ViewModel.self) var viewModel: ViewModel
 
     @State private var previously_opened_sheet_showing_item: String =
       UserPreferences.shared.sortedSequenceList.count > 0 ?

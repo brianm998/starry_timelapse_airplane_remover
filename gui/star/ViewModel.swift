@@ -32,38 +32,38 @@ public enum InteractionMode: String, Equatable, CaseIterable {
 }
 
 // the overall view model
-@MainActor
-public final class ViewModel: ObservableObject {
+@MainActor @Observable
+public final class ViewModel {
     var config: Config?
     var eraser: NighttimeAirplaneRemover?
     var noImageExplainationText: String = "Loading..."
 
-    @Environment(\.openWindow) private var openWindow
+//    @Environment(\.openWindow) private var openWindow
 
-    @Published var frameSaveQueue: FrameSaveQueue?
+    var frameSaveQueue: FrameSaveQueue?
 
-    @Published var videoPlayMode: VideoPlayMode = .forward
+    var videoPlayMode: VideoPlayMode = .forward
     
-    @Published var videoPlaying = false
+    var videoPlaying = false
 
-    @Published var fastAdvancementType: FastAdvancementType = .normal
+    var fastAdvancementType: FastAdvancementType = .normal
 
     // if fastAdvancementType == .normal, fast forward and reverse do a set number of frames
-    @Published var fastSkipAmount = 20
+    var fastSkipAmount = 20
     
-    @Published var sequenceLoaded = false
+    var sequenceLoaded = false
     
-    @Published var frameWidth: CGFloat = 600 // placeholders until first frame is read
-    @Published var frameHeight: CGFloat = 450
+    var frameWidth: CGFloat = 600 // placeholders until first frame is read
+    var frameHeight: CGFloat = 450
 
     // how long the arrows are
-    @Published var outlierArrowLength: CGFloat = 70 // relative to the frame width above
+    var outlierArrowLength: CGFloat = 70 // relative to the frame width above
 
     // how high they are (if pointing sideways)
-    @Published var outlierArrowHeight: CGFloat = 180
+    var outlierArrowHeight: CGFloat = 180
     
-    @Published var showErrorAlert = false
-    @Published var errorMessage: String = ""
+    var showErrorAlert = false
+    var errorMessage: String = ""
     
     var labelText: String = "Started"
 
@@ -72,21 +72,21 @@ public final class ViewModel: ObservableObject {
 
     // the view mode that we set this image with
 
-    @Published var initialLoadInProgress = false
-    @Published var loadingAllOutliers = false
-    @Published var loadingOutliers = false
+    var initialLoadInProgress = false
+    var loadingAllOutliers = false
+    var loadingOutliers = false
     
-    @Published var numberOfFramesWithOutliersLoaded = 0
+    var numberOfFramesWithOutliersLoaded = 0
     
-    @Published var numberOfFramesLoaded = 0
+    var numberOfFramesLoaded = 0
 
-    @Published var outlierGroupTableRows: [OutlierGroupTableRow] = []
-    @Published var outlierGroupWindowFrame: FrameAirplaneRemover?
+    var outlierGroupTableRows: [OutlierGroupTableRow] = []
+    var outlierGroupWindowFrame: FrameAirplaneRemover?
 
-    @Published var selectedOutliers = Set<OutlierGroupTableRow.ID>()
+    var selectedOutliers = Set<OutlierGroupTableRow.ID>()
 
-    @Published var selectionMode = SelectionMode.paint
-    @Published var renderingCurrentFrame = false
+    var selectionMode = SelectionMode.paint
+    var renderingCurrentFrame = false
 
     var selectionColor: Color {
         switch self.selectionMode {
@@ -103,58 +103,58 @@ public final class ViewModel: ObservableObject {
         }
     }
 
-    @Published var outlierOpacity = 1.0
+    var outlierOpacity = 1.0
 
-    @Published var interactionMode: InteractionMode = .scrub
+    var interactionMode: InteractionMode = .scrub
 
-    @Published var previousInteractionMode: InteractionMode = .scrub
+    var previousInteractionMode: InteractionMode = .scrub
 
     // enum for how we show each frame
-    @Published var frameViewMode = FrameViewMode.processed
+    var frameViewMode = FrameViewMode.processed
 
     // should we show full resolution images on the main frame?
     // faster low res previews otherwise
-    @Published var showFullResolution = false
+    var showFullResolution = false
 
-    @Published var showFilmstrip = true
+    var showFilmstrip = true
 
     // causes tapping an outlier to open a dialog with multiple choices
-    @Published var multiChoice = false
+    var multiChoice = false
 
-    @Published var backgroundColor: Color = .gray
+    var backgroundColor: Color = .gray
 
-    @Published var renderingAllFrames = false
-    @Published var updatingFrameBatch = false
+    var renderingAllFrames = false
+    var updatingFrameBatch = false
 
-    @Published var videoPlaybackFramerate = 30
+    var videoPlaybackFramerate = 30
 
-    @Published var settingsSheetShowing = false
-    @Published var paintSheetShowing = false
+    var settingsSheetShowing = false
+    var paintSheetShowing = false
 
-    @Published var multiSelectSheetShowing = false
+    var multiSelectSheetShowing = false
 
-    @Published var multiSelectionType: MultiSelectionType = .all
-    @Published var multiSelectionPaintType: MultiSelectionPaintType = .clear
+    var multiSelectionType: MultiSelectionType = .all
+    var multiSelectionPaintType: MultiSelectionPaintType = .clear
 
-    @Published var multiChoiceSheetShowing = false
-    @Published var multiChoicePaintType: MultiChoicePaintType = .clear
-    @Published var multiChoiceType: MultiSelectionType = .all
+    var multiChoiceSheetShowing = false
+    var multiChoicePaintType: MultiChoicePaintType = .clear
+    var multiChoiceType: MultiSelectionType = .all
 
     // the outlier grop we're starting a multi choice from
     var multiChoiceOutlierView: OutlierGroupView?
     
-    @Published var selectionStart: CGPoint? 
-    @Published var selectionEnd: CGPoint?
+    var selectionStart: CGPoint? 
+    var selectionEnd: CGPoint?
     
-    @Published var number_of_frames: Int = 50
+    var number_of_frames: Int = 50
     
     // the frame number of the frame we're currently showing
-    @Published var currentIndex = 0
+    var currentIndex = 0
 
     // number of frames in the sequence we're processing
     var imageSequenceSize: Int = 0
 
-    @Published var inTransition = false
+    var inTransition = false
 
 
     fileprivate var videoPlaybackTask: Task<Void,Never>?
@@ -290,9 +290,9 @@ public final class ViewModel: ObservableObject {
             if let outlierTask { await outlierTask.value }
 
             // refresh if this is the current index
-            if frame.frameIndex == self.currentIndex {
-                 self.objectWillChange.send()
-            }
+         //   if frame.frameIndex == self.currentIndex {
+         //        self.objectWillChange.send()
+         //   }
         }
     }
 
@@ -356,7 +356,7 @@ public final class ViewModel: ObservableObject {
                 let foo = newOutlierGroups
                 await MainActor.run {
                     self.frames[frame.frameIndex].outlierViews = foo
-                    self.objectWillChange.send()
+                   // self.objectWillChange.send()
                 }
             }
         }

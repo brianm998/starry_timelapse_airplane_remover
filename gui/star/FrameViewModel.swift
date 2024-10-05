@@ -7,7 +7,8 @@ import KHTSwift
 import Combine
 
 // UI view class used for each frame
-public class FrameViewModel: ObservableObject {
+@Observable
+public class FrameViewModel {
     init(_ frameIndex: Int) {
         self.frameIndex = frameIndex
     }
@@ -26,6 +27,7 @@ public class FrameViewModel: ObservableObject {
                     // XXX run on main actor?
                     await frame.numberOfPositiveOutliersPublisher()
                       .sink { [weak self] value in
+                          print("EAT ME \(value) positive")
                           self?.numberOfPositiveOutliers = value
                       } 
                       .store(in: &cancelBag)
@@ -50,31 +52,31 @@ public class FrameViewModel: ObservableObject {
     // have the FrameAirplaneRemover be able to both knows these values,
     // and transmit changes to the UI with a callback that updates view state
 
-    @Published var numberOfPositiveOutliers: Int? 
-    @Published var numberOfNegativeOutliers: Int? 
-    @Published var numberOfUndecidedOutliers: Int?
+    var numberOfPositiveOutliers: Int? 
+    var numberOfNegativeOutliers: Int? 
+    var numberOfUndecidedOutliers: Int?
     
     // optional to distinguish between not loaded and empty list
-    @Published var outlierViews: [OutlierGroupViewModel]?
-    @Published var loadingOutlierViews: Bool = false
+    var outlierViews: [OutlierGroupViewModel]?
+    var loadingOutlierViews: Bool = false
 
     // we don't keep full resolution images here
 
-    @Published var thumbnailImage: Image = initialImage
-    @Published var previewImage: Image = initialImage
-    @Published var processedPreviewImage: Image = initialImage
-    @Published var subtractionPreviewImage: Image = initialImage
-    @Published var blobsPreviewImage: Image = initialImage
-    @Published var khtbPreviewImage: Image = initialImage
-    @Published var filter1PreviewImage: Image = initialImage
-    @Published var filter2PreviewImage: Image = initialImage
-    @Published var filter3PreviewImage: Image = initialImage
-    @Published var filter4PreviewImage: Image = initialImage
-    @Published var filter5PreviewImage: Image = initialImage
-    @Published var filter6PreviewImage: Image = initialImage
-    @Published var paintMaskPreviewImage: Image = initialImage
-    @Published var houghLinesPreviewImage: Image = initialImage
-    @Published var validationPreviewImage: Image = initialImage
+    var thumbnailImage: Image = initialImage
+    var previewImage: Image = initialImage
+    var processedPreviewImage: Image = initialImage
+    var subtractionPreviewImage: Image = initialImage
+    var blobsPreviewImage: Image = initialImage
+    var khtbPreviewImage: Image = initialImage
+    var filter1PreviewImage: Image = initialImage
+    var filter2PreviewImage: Image = initialImage
+    var filter3PreviewImage: Image = initialImage
+    var filter4PreviewImage: Image = initialImage
+    var filter5PreviewImage: Image = initialImage
+    var filter6PreviewImage: Image = initialImage
+    var paintMaskPreviewImage: Image = initialImage
+    var houghLinesPreviewImage: Image = initialImage
+    var validationPreviewImage: Image = initialImage
 
     fileprivate func boundsFromGesture(between startLocation: CGPoint,
                                        and endLocation: CGPoint) -> BoundingBox

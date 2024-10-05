@@ -98,7 +98,7 @@ struct OutlierGroupTableRow: Identifiable {
 }
 
 struct OutlierGroupTable: View {
-    @EnvironmentObject var viewModel: ViewModel
+    @Environment(ViewModel.self) var viewModel: ViewModel
 
     var closure: () -> Void
 
@@ -281,7 +281,9 @@ struct OutlierGroupTable: View {
 
 //        let displayDtSizeColumn = viewModel.outlierGroupTableDisplayGroups[.size] ?? true
         //let displayDtSizeColumn = true
-        
+      @Bindable var viewModel = viewModel
+
+            return
         HStack {
             Spacer()
             VStack {

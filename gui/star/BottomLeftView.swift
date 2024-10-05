@@ -6,12 +6,14 @@ import logging
 // below the image frame and above the filmstrip and scrub bar
 
 struct BottomLeftView: View {
-    @EnvironmentObject var viewModel: ViewModel
+    @Environment(ViewModel.self) var viewModel: ViewModel
 
     let pickerWidth: CGFloat = 160
     
     var body: some View {
-        HStack {
+        @Bindable var viewModel = viewModel
+
+        return HStack {
             Grid(horizontalSpacing: 0, verticalSpacing: 0) {
                 GridRow {
                     Text("I will")

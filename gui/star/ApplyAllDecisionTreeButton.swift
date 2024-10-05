@@ -3,7 +3,7 @@ import StarCore
 import logging
 
 struct ApplyAllDecisionTreeButton: View {
-    @EnvironmentObject var viewModel: ViewModel
+    @Environment(ViewModel.self) var viewModel: ViewModel
     
     var body: some View {
         Log.d("applyAllDecisionTreeButton")

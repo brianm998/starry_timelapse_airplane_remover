@@ -10,7 +10,7 @@ enum BottomControlLayout {
 }
 
 struct BottomControls: View {
-    @EnvironmentObject var viewModel: ViewModel
+    @Environment(ViewModel.self) var viewModel: ViewModel
 
     @State private var layout: BottomControlLayout = .fullyHorizontal
 

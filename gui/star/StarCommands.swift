@@ -10,29 +10,29 @@ struct StarCommands: Commands {
         CommandMenu("Actions") {
 
             PaintAllButton()
-              .environmentObject(viewModel)
+              .environment(viewModel)
               .keyboardShortcut("p", modifiers: [])
             ClearAllButton()
-              .environmentObject(viewModel)
+              .environment(viewModel)
               .keyboardShortcut("c", modifiers: [])
             ClearUndecidedButton()
-              .environmentObject(viewModel)
+              .environment(viewModel)
               .keyboardShortcut("k", modifiers: [])
             /*
             contentView.outlierInfoButton()
              */
             ApplyAllDecisionTreeButton()
-              .environmentObject(viewModel)
+              .environment(viewModel)
             ApplyDecisionTreeButton()
-              .environmentObject(viewModel)
+              .environment(viewModel)
             RenderCurrentFrameButton()
-              .environmentObject(viewModel)
+              .environment(viewModel)
             RenderAllFramesButton()
-              .environmentObject(viewModel)
+              .environment(viewModel)
             LoadAllOutliersButton(loadingType: .fromCurrentFrame)
-              .environmentObject(viewModel)
+              .environment(viewModel)
             LoadAllOutliersButton(loadingType: .all)
-              .environmentObject(viewModel)
+              .environment(viewModel)
         }
 
         // remove File -> New Window 

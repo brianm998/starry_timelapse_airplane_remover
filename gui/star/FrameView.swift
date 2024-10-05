@@ -6,7 +6,7 @@ import StarCore
 // just the frame itself for scrubbing and video playback
 
 public struct FrameView: View {
-    @EnvironmentObject var viewModel: ViewModel
+    @Environment(ViewModel.self) var viewModel: ViewModel
     @Binding private var interactionMode: InteractionMode
     @Binding private var showFullResolution: Bool
 

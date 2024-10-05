@@ -6,10 +6,12 @@ import StarCore
 // user can scrub, play, edit frames, etc
 
 struct ImageSequenceView: View {
-    @EnvironmentObject var viewModel: ViewModel
+    @Environment(ViewModel.self) var viewModel: ViewModel
 
     var body: some View {
-        VStack {
+        @Bindable var viewModel = viewModel
+        return VStack {
+            
             let shouldShowProgress =
               viewModel.renderingCurrentFrame            ||
               viewModel.updatingFrameBatch               ||
@@ -18,8 +20,8 @@ struct ImageSequenceView: View {
             
             // selected frame 
             ZStack {
-                FrameView(interactionMode: self.$viewModel.interactionMode,
-                          showFullResolution: self.$viewModel.showFullResolution)
+                FrameView(interactionMode: $viewModel.interactionMode,
+                          showFullResolution: $viewModel.showFullResolution)
                   .frame(maxWidth: .infinity, alignment: .center)
                   .overlay(
                     ProgressView() // XXX this overlay sucks, change it
