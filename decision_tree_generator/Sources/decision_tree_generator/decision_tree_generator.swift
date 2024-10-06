@@ -625,8 +625,8 @@ struct decision_tree_generator: AsyncParsableCommand, @unchecked Sendable {
                                            baseFilename: baseFilename)
         
         let (treeSwiftCode, filename, hashPrefix) = (treeResponse.swiftCode,
-                                                treeResponse.filename,
-                                                treeResponse.name)
+                                                     treeResponse.filename,
+                                                     treeResponse.name)
 
         // save this generated swift code to a file
         if FileManager.default.fileExists(atPath: filename) {

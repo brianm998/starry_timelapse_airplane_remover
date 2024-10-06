@@ -123,8 +123,8 @@ actor DecisionTreeGenerator {
             Log.i("have tree \(name) w/ score \(score)")
 
             treesDeclarationString += "    let tree_\(name) = OutlierGroupDecisionTreeForest_\(name)()\n"
-            treesClassificationString1 += "        total += self.tree_\(name).classification(of: group) * \(score)\n"
-            treesClassificationString2 += "        total += self.tree_\(name).classification(of: featureData) * \(score)\n"
+            treesClassificationString1 += "        total += await self.tree_\(name).classification(of: group) * \(score)\n"
+            treesClassificationString2 += "        total += await self.tree_\(name).classification(of: featureData) * \(score)\n"
             treesNameListString += " \"\(name)\","
 
             treesTypeString += "   \(tree.tree.type)\n\n"
@@ -188,7 +188,7 @@ actor DecisionTreeGenerator {
 
              \(treesDeclarationString)
                  // returns -1 for negative, +1 for positive
-                 public func classification(of group: ClassifiableOutlierGroup) -> Double {
+                 public func classification(of group: ClassifiableOutlierGroup) async -> Double {
                      var total: Double = 0.0
              
              \(treesClassificationString1)
@@ -199,7 +199,7 @@ actor DecisionTreeGenerator {
                  public func classification (
                     of features: [OutlierGroup.Feature],   // parallel
                     and values: [Double]                   // arrays
-                 ) -> Double
+                 ) async -> Double
                  {
                      var total: Double = 0.0
                      
@@ -433,15 +433,15 @@ actor DecisionTreeGenerator {
               public func classification(
                  of features: [OutlierGroup.Feature], // parallel
                  and values: [Double]                 // arrays
-                ) -> Double
+                ) async -> Double
               {
                   let featureData = OutlierGroupFeatureData(features: features, values: values)
-                  return classification(of: featureData)
+                  return await classification(of: featureData)
               }
 
               // the actual tree resides here
               // return value is between -1 and 1, 1 is paint
-              public func classification(of group: ClassifiableOutlierGroup) -> Double 
+              public func classification(of group: ClassifiableOutlierGroup) async -> Double 
               {
           \(generatedSwiftCode)
               }
@@ -1230,8 +1230,8 @@ public func runTest(of classifier: OutlierGroupClassifier,
     var numberBad = 0
     
     for positiveData in classifiedData.positiveData {
-        let classification = classifier.classification(of: features,
-                                                       and: positiveData.values)
+        let classification = await classifier.classification(of: features,
+                                                             and: positiveData.values)
         if classification < 0 {
             // wrong
             numberBad += 1
@@ -1242,8 +1242,8 @@ public func runTest(of classifier: OutlierGroupClassifier,
     }
 
     for negativeData in classifiedData.negativeData {
-        let classification = classifier.classification(of: features,
-                                                       and: negativeData.values)
+        let classification = await classifier.classification(of: features,
+                                                             and: negativeData.values)
         if classification < 0 {
             //right
             numberGood += 1

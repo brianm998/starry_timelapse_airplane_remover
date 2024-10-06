@@ -6,7 +6,7 @@ import PackageDescription
 let package = Package(
     name: "outlier_feature_data_classifier",
     platforms: [
-        .macOS(.v13)
+        .macOS(.v14)
     ],
     dependencies: [
         // Dependencies declare other packages that this package depends on.

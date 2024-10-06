@@ -68,7 +68,7 @@ class DecisionTreeNode: SwiftDecisionTree, @unchecked Sendable {
       (
         of features: [OutlierGroup.Feature], // parallel
         and values: [Double]                 // arrays
-      ) -> Double
+      ) async -> Double
     {
         for i in 0 ..< features.count {
             if features[i] == type {
@@ -82,9 +82,9 @@ class DecisionTreeNode: SwiftDecisionTree, @unchecked Sendable {
                     }
                 } else {
                     if outlierValue < value {
-                        return lessThan.classification(of: features, and: values)
+                        return await lessThan.classification(of: features, and: values)
                     } else {
-                        return greaterThan.classification(of: features, and: values)
+                        return await greaterThan.classification(of: features, and: values)
                     }
                 }
                 
@@ -99,7 +99,7 @@ class DecisionTreeNode: SwiftDecisionTree, @unchecked Sendable {
         for _ in 0..<indent { indentation += "    " }
         if stump {
             return """
-              \(indentation)if group.decisionTreeValue(for: .\(type)) < \(value) {
+              \(indentation)if await group.decisionTreeValue(for: .\(type)) < \(value) {
               \(indentation)    return \(lessThanStumpValue)
               \(indentation)} else {
               \(indentation)    return \(greaterThanStumpValue)
@@ -108,7 +108,7 @@ class DecisionTreeNode: SwiftDecisionTree, @unchecked Sendable {
         } else {
             // recurse on an if statement
             return """
-              \(indentation)if group.decisionTreeValue(for: .\(type)) < \(value) {
+              \(indentation)if await group.decisionTreeValue(for: .\(type)) < \(value) {
               \(lessThan.swiftCode)
               \(indentation)} else {
               \(greaterThan.swiftCode)

@@ -45,8 +45,8 @@ public struct DecisionTreeStruct: DecisionTree {
     public func classification (
       of features: [OutlierGroup.Feature],  // parallel
       and values: [Double]                  // arrays
-    ) -> Double
+    ) async -> Double
     {
-        tree.classification(of: features, and: values)
+        await tree.classification(of: features, and: values)
     }
 }

@@ -52,7 +52,7 @@ final class LinearChoiceTreeNode: SwiftDecisionTree {
         var indentation = ""
         for _ in 0..<indent { indentation += "    " }
         return """
-          \(indentation)return (group.decisionTreeValue(for: .\(type)) - \(min)) / (\(max) - \(min)) * 2 - 1
+          \(indentation)return (await group.decisionTreeValue(for: .\(type)) - \(min)) / (\(max) - \(min)) * 2 - 1
           """
     }
 }

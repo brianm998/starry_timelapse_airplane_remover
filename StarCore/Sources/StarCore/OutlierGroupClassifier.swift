@@ -14,6 +14,6 @@ public protocol OutlierGroupClassifier: Sendable {
     func classification (
       of features: [OutlierGroup.Feature],        // parallel
       and values: [Double]                        // arrays
-    ) -> Double
+    ) async -> Double
 }
 
