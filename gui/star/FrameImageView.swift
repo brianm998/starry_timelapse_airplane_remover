@@ -78,12 +78,14 @@ public struct FrameImageView: View {
         {
             frameView.loadingOutlierViews = true
             viewModel.loadingOutliers = true
-            Task.detached(priority: .userInitiated) {
+
+            let FU = viewModel
+            Task {
                 let _ = try await frame.loadOutliers()
                 await self.viewModel.setOutlierGroups(forFrame: frame)
-                Task { @MainActor in
+                await MainActor.run {
                     frameView.loadingOutlierViews = false
-                    self.viewModel.loadingOutliers = self.viewModel.loadingOutlierGroups
+                    FU.loadingOutliers = FU.loadingOutlierGroups
                 }
             }
         } 
@@ -105,11 +107,8 @@ public struct FrameImageView: View {
                 ZStack() {
                     // in edit mode, show outliers groups 
                     if let outlierViews = frameView.outlierViews {
-                        ForEach(0 ..< outlierViews.count, id: \.self) { idx in
-                            if idx < outlierViews.count {
-                                // the actual outlier view
-                                outlierViews[idx].view
-                            }
+                        ForEach(outlierViews) { outlierViewModel in
+                            OutlierGroupView(groupViewModel: outlierViewModel)
                         }
                     }
                 }.opacity(viewModel.outlierOpacity)

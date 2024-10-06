@@ -253,20 +253,29 @@ struct MultiSelectSheetView: View {
     }
 
     private func deleteFromFrames(startIndex: Int = 0, endIndex: Int? = nil) {
-        Task.detached(priority: .userInitiated) {
-            Log.w("deleteFromFrames(startIndex: \(startIndex), endIndex: \(endIndex)")
-            let end = endIndex ?? frames.count
-            if let selectionStart = selectionStart,
-               let selectionEnd = selectionEnd
-            {
-                for frame in frames {
-                    if frame.frameIndex >= startIndex,
-                       frame.frameIndex <= end
-                    {
-                        deleteFrom(frame: frame,
-                                   between: selectionStart,
-                                   and: selectionEnd)
-                        {
+        let end = endIndex ?? frames.count
+        let frames = self.frames
+        let currentIndex = currentIndex
+        if let selectionStart = selectionStart,
+           let selectionEnd = selectionEnd
+        {
+            for frameView in frames {
+                if frameView.frameIndex >= startIndex,
+                   frameView.frameIndex <= end
+                {
+                    let gestureBounds = frameView.deleteOutliers(between: selectionStart,
+                                                             and: selectionEnd)
+
+                    if let frame = frameView.frame {
+                        Task.detached(priority: .userInitiated) {
+                            do {
+                                try await frame.deleteOutliers(in: gestureBounds)
+                                // save outlier paintability changes here
+                                await frame.writeOutliersBinary()
+                            } catch {
+                                // XXX handle errors here better
+                                Log.e("failed to delete outliers: \(error)")
+                            }
                             if currentIndex == frame.frameIndex {
                                 Task {
                                     await MainActor.run {
@@ -286,21 +295,27 @@ struct MultiSelectSheetView: View {
                               startIndex: Int = 0,
                               endIndex: Int? = nil)
     {
-        Task.detached(priority: .userInitiated) {
-            Log.w("updateFrames(shouldPaint: \(shouldPaint), startIndex: \(startIndex), endIndex: \(endIndex)")
-            let end = endIndex ?? frames.count
-            if let selectionStart = selectionStart,
-               let selectionEnd = selectionEnd
-            {
-                for frame in frames {
-                    if frame.frameIndex >= startIndex,
-                       frame.frameIndex <= end
-                    {
-                        update(frame: frame,
-                               shouldPaint: shouldPaint,
-                               between: selectionStart,
-                               and: selectionEnd)
-                        {
+        let end = endIndex ?? frames.count
+        let frames: [FrameViewModel] = frames
+        let currentIndex = currentIndex
+        Log.w("updateFrames(shouldPaint: \(shouldPaint), startIndex: \(startIndex), endIndex: \(endIndex)")
+        if let selectionStart = selectionStart,
+           let selectionEnd = selectionEnd
+        {
+            for frameView in frames {
+                if frameView.frameIndex >= startIndex,
+                   frameView.frameIndex <= end,
+                   let frame = frameView.frame 
+                {
+                    let new_value = shouldPaint
+                    Task {
+                        await frame.userSelectAllOutliers(toShouldPaint: new_value,
+                                                          between: selectionStart,
+                                                          and: selectionEnd)
+                        // save outlier paintability changes here
+                        await frame.writeOutliersBinary()
+
+                        await MainActor.run {
                             if currentIndex == frame.frameIndex {
                                 self.selectionStart = nil
                                 self.selectionEnd = nil
@@ -312,113 +327,45 @@ struct MultiSelectSheetView: View {
         }
     }
 
-    // XXX call this from somewhere
     private func updateOverlappersInFrames(shouldPaint: Bool,
                                            startIndex: Int = 0,
                                            endIndex: Int? = nil) 
     {
-        Task.detached(priority: .userInitiated) {
-            Log.w("updateFrames(shouldPaint: \(shouldPaint), startIndex: \(startIndex), endIndex: \(endIndex)")
-            let end = endIndex ?? frames.count
-            if let selectionStart = selectionStart,
-               let selectionEnd = selectionEnd
-            {
-                for frame in frames {
-                    if frame.frameIndex >= startIndex,
-                       frame.frameIndex <= end
-                    {
-                        await updateOverlappers(frame: frame,
-                                                shouldPaint: shouldPaint,
-                                                between: selectionStart,
-                                                and: selectionEnd)
-                        {
-                            if currentIndex == frame.frameIndex {
-                                self.selectionStart = nil
-                                self.selectionEnd = nil
+        let end = endIndex ?? frames.count
+        let frames: [FrameViewModel] = frames
+        let currentIndex = currentIndex
+
+        Log.w("updateFrames(shouldPaint: \(shouldPaint), startIndex: \(startIndex), endIndex: \(endIndex)")
+        if let selectionStart = selectionStart,
+           let selectionEnd = selectionEnd 
+        {
+            for frameView in frames {
+                if frameView.frameIndex >= startIndex,
+                   frameView.frameIndex <= end
+                {
+                    if let frame = frameView.frame {
+                        Task {
+                            let new_value = shouldPaint
+                            await frame.foreachOutlierGroupAsync(between: selectionStart,
+                                                                 and: selectionEnd)
+                            { group in
+                                await frame.userSelectAllOutliers(toShouldPaint: new_value,
+                                                                  overlapping: group)
+
+                                return .continue
+                            }
+                            // save outlier paintability changes here
+                            await frame.writeOutliersBinary()
+                            
+                            await MainActor.run {
+                                if currentIndex == frame.frameIndex {
+                                    self.selectionStart = nil
+                                    self.selectionEnd = nil
+                                }
                             }
                         }
                     }
                 }
-            }
-        }
-    }
-    
-    private func deleteFrom(frame frameView: FrameViewModel,
-                            between selectionStart: CGPoint,
-                            and end_location: CGPoint,
-                            closure: @escaping () -> Void)
-    {
-        Task<Void,Never> { @MainActor in
-            let gestureBounds = frameView.deleteOutliers(between: selectionStart, and: end_location)
-            Task.detached(priority: .userInitiated) {
-
-                if let frame = frameView.frame {
-                    do {
-                        try await frame.deleteOutliers(in: gestureBounds)
-                        // save outlier paintability changes here
-                        await frame.writeOutliersBinary()
-                    } catch {
-                        // XXX handle errors here better
-                        Log.e("failed to delete outliers: \(error)")
-                    }
-
-                    closure()
-                }
-            }
-        }
-    }
-
-    private func update(frame frameView: FrameViewModel,
-                        shouldPaint: Bool,
-                        between selectionStart: CGPoint,
-                        and end_location: CGPoint,
-                        closure: @escaping () -> Void)
-    {
-        if let frame = frameView.frame {
-            let new_value = shouldPaint
-            Task.detached(priority: .userInitiated) {
-                await frame.userSelectAllOutliers(toShouldPaint: new_value,
-                                                  between: selectionStart,
-                                                  and: end_location)
-                // save outlier paintability changes here
-                await frame.writeOutliersBinary()
-                
-                await MainActor.run {
-                    closure()
-                }
-            }
-        } else {
-            closure()
-        }
-    }
-
-    private func updateOverlappers(frame frameView: FrameViewModel,
-                                   shouldPaint: Bool,
-                                   between selectionStart: CGPoint,
-                                   and end_location: CGPoint,
-                                   closure: @escaping () -> Void) async
-    {
-        if let frame = frameView.frame {
-            let new_value = shouldPaint
-            Task.detached(priority: .userInitiated) {
-                await frame.foreachOutlierGroupAsync(between: selectionStart,
-                                                     and: end_location)
-                { group in
-                    await frame.userSelectAllOutliers(toShouldPaint: new_value,
-                                                      overlapping: group)
-
-                    return .continue
-                }
-                // save outlier paintability changes here
-                await frame.writeOutliersBinary()
-                    
-                await MainActor.run {
-                    closure()
-                }
-            }
-        } else {
-            await MainActor.run {
-                closure()
             }
         }
     }

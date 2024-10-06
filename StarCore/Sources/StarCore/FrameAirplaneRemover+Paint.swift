@@ -73,8 +73,8 @@ extension FrameAirplaneRemover {
 
                 for pixel in group.pixelSet {
                     // start in frame coords
-                    let maskStartX = pixel._pixel.x - paintMaskIntRadius
-                    let maskStartY = pixel._pixel.y - paintMaskIntRadius
+                    let maskStartX = pixel.x - paintMaskIntRadius
+                    let maskStartY = pixel.y - paintMaskIntRadius
 
                     for maskX in 0..<paintMask.size {
                         for maskY in 0..<paintMask.size {

@@ -17,11 +17,24 @@ import Foundation
 import KHTSwift
 import logging
 import Cocoa
+import Combine
 
 // these need to be setup at startup so the decision tree values are right
 // XXX these suck, find a better way
 nonisolated(unsafe) public var IMAGE_WIDTH: Double?
 nonisolated(unsafe) public var IMAGE_HEIGHT: Double?
+
+@MainActor
+@Observable
+public class OutlierPaintObserver {
+    public init() { }
+    
+    public var shouldPaint: PaintReason?
+
+    public func set(shouldPaint: PaintReason?) {
+        self.shouldPaint = shouldPaint
+    }
+}
 
 // used for both outlier groups and raw data
 public protocol ClassifiableOutlierGroup {
@@ -59,20 +72,16 @@ public actor OutlierGroup: CustomStringConvertible,
     nonisolated public let pixels: [UInt16]        // indexed by y * bounds.width + x
 
     // a set of the pixels in this outlier 
-    nonisolated public let pixelSet: Set<StatusPixel>
+    nonisolated public let pixelSet: Set<SortablePixel>
 
-    public func getPixelSet() -> Set<StatusPixel> { pixelSet }
+    public func getPixelSet() -> Set<SortablePixel> { pixelSet }
     
     nonisolated public let surfaceAreaToSizeRatio: Double
 
-    public var shouldPaintDidChange: ((UInt16, PaintReason?) -> Void)? // keyed by id
 
-    public func set(shouldPaintDidChange: ((UInt16, PaintReason?) -> Void)?) {
-        self.shouldPaintDidChange = shouldPaintDidChange
-    }
-    
     // after init, shouldPaint is usually set to a base value based upon different statistics 
     public var shouldPaint: PaintReason?  // should we paint this group, and why?
+
     
     nonisolated public let frameIndex: Int
 
@@ -116,7 +125,7 @@ public actor OutlierGroup: CustomStringConvertible,
                 bounds: BoundingBox,
                 frameIndex: Int,
                 pixels: [UInt16],
-                pixelSet: Set<StatusPixel>,
+                pixelSet: Set<SortablePixel>,
                 line: Line?)
     {
         self._line = line
@@ -143,7 +152,7 @@ public actor OutlierGroup: CustomStringConvertible,
         }
     }
 
-    fileprivate static func averageMedianMaxDistance(for pixelSet: Set<StatusPixel>,
+    fileprivate static func averageMedianMaxDistance(for pixelSet: Set<SortablePixel>,
                                                      from line: Line,
                                                      with bounds: BoundingBox)
       -> (Double, Double, Double)
@@ -156,7 +165,7 @@ public actor OutlierGroup: CustomStringConvertible,
         for pixel in pixelSet {
             // calculate how close each pixel is to this line
 
-            let distance = standardLine.distanceTo(x: pixel._pixel.x, y: pixel._pixel.y)
+            let distance = standardLine.distanceTo(x: pixel.x, y: pixel.y)
             distanceSum += distance
             distances.append(distance)
             if distance > max { max = distance }
@@ -190,6 +199,12 @@ public actor OutlierGroup: CustomStringConvertible,
     }
 
     public func shouldPaintFunc() -> PaintReason? { shouldPaint } // XXX rename this
+
+    public var paintObserver: OutlierPaintObserver?
+
+    public func set(paintObserver: OutlierPaintObserver) {
+        self.paintObserver = paintObserver
+    }
     
     public func shouldPaint(_ _shouldPaint: PaintReason) async {
         //Log.d("\(self) should paint \(shouldPaint) self.frame \(self.frame)")
@@ -197,15 +212,8 @@ public actor OutlierGroup: CustomStringConvertible,
 
         // XXX update frame that it's different 
         await self.frame?.markAsChanged()
-        if let shouldPaintDidChange {
-            //Log.d("shouldPaint did change 1")
-//            Task { @MainActor in
-                let fuck = _shouldPaint
-                //Log.d("shouldPaint did change 2")
-                let id = self.id
-                shouldPaintDidChange(id, fuck) // XXX this isn't on the main actor :(
-//            }
-        }
+        await paintObserver?.set(shouldPaint: _shouldPaint)
+        
     }
 
     // a local cache of other nearby groups - NO LONGER CACHED AFTER SWIFT 6 :( 
@@ -302,8 +310,8 @@ public actor OutlierGroup: CustomStringConvertible,
 
             var nextValue = pixelToWrite.value
             
-            let offset = (Int(pixel._pixel.y-bounds.min.y) * bytesPerPixel*self.bounds.width) +
-                         (Int(pixel._pixel.x-bounds.min.x) * bytesPerPixel)
+            let offset = (Int(pixel.y-bounds.min.y) * bytesPerPixel*self.bounds.width) +
+                         (Int(pixel.x-bounds.min.x) * bytesPerPixel)
             
             imageData.replaceSubrange(offset ..< offset+bytesPerPixel,
                                       with: &nextValue,
@@ -650,7 +658,7 @@ public actor OutlierGroup: CustomStringConvertible,
     fileprivate var maxBrightness: Double {
         var max: UInt16 = 0
         for pixel in pixelSet {  
-            if pixel._pixel.intensity > max { max = pixel._pixel.intensity }
+            if pixel.intensity > max { max = pixel.intensity }
         }
         return Double(max)
     }
@@ -658,8 +666,8 @@ public actor OutlierGroup: CustomStringConvertible,
     fileprivate var medianBrightness: Double {
         var values: [UInt16] = []
         for pixel in pixelSet {  
-            if pixel._pixel.intensity > 0 {
-                values.append(pixel._pixel.intensity)
+            if pixel.intensity > 0 {
+                values.append(pixel.intensity)
             }
         }
         // XXX all zero pixels :(
@@ -757,7 +765,7 @@ public actor OutlierGroup: CustomStringConvertible,
             let nextFrame = await frame.getNextFrame()
 
             for pixel in pixelSet {
-                let index = pixel._pixel.y * Int(IMAGE_WIDTH!) + pixel._pixel.x
+                let index = pixel.y * Int(IMAGE_WIDTH!) + pixel.x
                 if let previousFrame,
                    let previousOutlierGroups = await previousFrame.getOutlierGroups(),
                    await previousOutlierGroups.outlierImageDataFunc()[index] != 0
@@ -831,8 +839,8 @@ public actor OutlierGroup: CustomStringConvertible,
         var totalSize: Int = 0
 
         for pixel in pixelSet {
-            let x = pixel._pixel.x - bounds.min.x
-            let y = pixel._pixel.y - bounds.min.y
+            let x = pixel.x - bounds.min.x
+            let y = pixel.y - bounds.min.y
             
             totalSize += 1
 
@@ -862,10 +870,10 @@ public actor OutlierGroup: CustomStringConvertible,
     func blob() -> Blob {
         Blob(pixelSet, id: id, frameIndex: frameIndex)
     }
-}
+    }
 
 public func ratioOfSurfaceAreaToSize(of pixels: [UInt16],
-                                     and pixelSet: Set<StatusPixel>,
+                                     and pixelSet: Set<SortablePixel>,
                                      bounds: BoundingBox) -> Double
 {
     let width = bounds.width
@@ -873,8 +881,8 @@ public func ratioOfSurfaceAreaToSize(of pixels: [UInt16],
     var size: Int = 0
     var surfaceArea: Int = 0
     for pixel in pixelSet {
-        let x = pixel._pixel.x - bounds.min.x
-        let y = pixel._pixel.y - bounds.min.y
+        let x = pixel.x - bounds.min.x
+        let y = pixel.y - bounds.min.y
 
         size += 1
 

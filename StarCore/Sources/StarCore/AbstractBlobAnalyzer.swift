@@ -71,8 +71,8 @@ public actor BlobAnalyzer {
         
         for blob in blobMap.values {
             for pixel in await blob.getPixels() {
-//                Log.d("frame \(frameIndex) has pixel [\(pixel._pixel.x), \(pixel._pixel.y)]")
-                let blobRefIndex = pixel._pixel.y*width+pixel._pixel.x
+//                Log.d("frame \(frameIndex) has pixel [\(pixel.x), \(pixel.y)]")
+                let blobRefIndex = pixel.y*width+pixel.x
                 _blobRefs[blobRefIndex] = blob.id
             }
         }

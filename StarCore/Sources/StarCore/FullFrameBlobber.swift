@@ -72,10 +72,10 @@ public class FullFrameBlobber {
     private let config: Config
     
     // sorted by brightness
-    public var sortedPixels: [StatusPixel] = []
+    public var sortedPixels: [SortablePixel] = []
 
     // [x][y] accessable array
-    public var pixels: [[StatusPixel?]]
+    public var pixels: [[SortablePixel?]]
 
     public let imageWidth: Int
     public let imageHeight: Int
@@ -90,6 +90,8 @@ public class FullFrameBlobber {
     // how we search for neighbors
     public let neighborType: NeighborType
 
+    public let pixelStatusTracker = PixelStatusTracker()
+    
     // how close to zero (in percentage) can the intensity of pixels decrease before
     // being left out of a blob
     // zero means that only pixels of minimumLocalMaximum or higher will be in blobs
@@ -143,7 +145,7 @@ public class FullFrameBlobber {
         
         Log.v("frame \(frameIndex) blobbing image of size (\(imageWidth), \(imageHeight))")
 
-        pixels = [[StatusPixel?]](repeating: [StatusPixel?](repeating: nil,
+        pixels = [[SortablePixel?]](repeating: [SortablePixel?](repeating: nil,
                                                                 count: imageHeight),
                                     count: imageWidth)
 
@@ -161,7 +163,7 @@ public class FullFrameBlobber {
 
                 if intensity > minIntensity {
                     // these pixels are both sorted and added to the pixels multi array
-                    let pixel = StatusPixel(SortablePixel(x: x, y: y, intensity: intensity))
+                    let pixel = SortablePixel(x: x, y: y, intensity: intensity)
                     pixels[x][y] = pixel
                     sortedPixels.append(pixel)
                 } else {
@@ -173,7 +175,7 @@ public class FullFrameBlobber {
 
                     // some pixels are too dim to even track
                     if contrast < minContrast {
-                        let pixel = StatusPixel(SortablePixel(x: x, y: y, intensity: intensity))
+                        let pixel = SortablePixel(x: x, y: y, intensity: intensity)
                         pixels[x][y] = pixel
                     }
                 }
@@ -183,7 +185,7 @@ public class FullFrameBlobber {
 
     public func sortPixels() {
         Log.d("frame \(frameIndex) sorting pixel values")
-        sortedPixels.sort { $0._pixel.intensity > $1._pixel.intensity }
+        sortedPixels.sort { $0.intensity > $1.intensity }
     }
     
     public func process() async {
@@ -191,19 +193,22 @@ public class FullFrameBlobber {
 
         for pixel in sortedPixels {
 
-            if await pixel.status() != .unknown { continue }
+            if await pixelStatusTracker.status(of: pixel) != .unknown { continue }
 
             //Log.d("examining pixel \(pixel.x) \(pixel.y) \(pixel.intensity)")
             let allNeighbors = self.neighbors(of: pixel)
             //let allNeighbors = self.allNeighbors(of: pixel, within: 4)
-            let higherNeighbors = allNeighbors.filter { $0._pixel.intensity > pixel._pixel.intensity } 
+            let higherNeighbors = allNeighbors.filter { $0.intensity > pixel.intensity } 
             //Log.d("found \(higherNeighbors) higherNeighbors")
             if higherNeighbors.count == 0 {
                 // no higher neighbors
                 // a local maximum, this pixel is a blob seed
 
                 if newBlobId < UInt16.max {
-                    let newBlob = Blob(pixel, id: newBlobId, frameIndex: frameIndex)
+                    let newBlob = Blob(pixel,
+                                       id: newBlobId,
+                                       frameIndex: frameIndex,
+                                       statusTracker: pixelStatusTracker)
 
 
                     await expand(blob: newBlob, seedPixel: pixel)
@@ -243,7 +248,7 @@ public class FullFrameBlobber {
                 
             } else {
                 // but only if it's bright enough
-                await pixel.set(status: .background)
+                await pixelStatusTracker.record(status: .background, for: pixel)
             }                    
         }
 
@@ -275,40 +280,40 @@ public class FullFrameBlobber {
     }
 
     // for the NeighborType of this Blobber
-    public func neighbors(of pixel: StatusPixel) -> [StatusPixel] {
+    public func neighbors(of pixel: SortablePixel) -> [SortablePixel] {
         return neighborsInt(pixel, self.neighborType)
     }
 
-    fileprivate func neighbor(_ direction: NeighborDirection, for pixel: StatusPixel) -> StatusPixel? {
-        if pixel._pixel.x == 0,
+    fileprivate func neighbor(_ direction: NeighborDirection, for pixel: SortablePixel) -> SortablePixel? {
+        if pixel.x == 0,
            (direction == .left || 
             direction == .lowerLeft ||
             direction == .upperLeft)
         {
             return nil
         }
-        if pixel._pixel.y == 0,
+        if pixel.y == 0,
            (direction == .up ||
             direction == .upperRight ||
             direction == .upperLeft)
         {
             return nil
         }
-        if pixel._pixel.x == 0,
+        if pixel.x == 0,
            (direction == .left ||
             direction == .lowerLeft ||
             direction == .upperLeft)
         {
             return nil
         }
-        if pixel._pixel.y == imageHeight - 1,
+        if pixel.y == imageHeight - 1,
            (direction == .down ||
             direction == .lowerLeft ||
             direction == .lowerRight)
         {
             return nil
         }
-        if pixel._pixel.x == imageWidth - 1,
+        if pixel.x == imageWidth - 1,
            (direction == .right ||
             direction == .lowerRight ||
             direction == .upperRight)
@@ -317,21 +322,21 @@ public class FullFrameBlobber {
         }
         switch direction {
         case .up:
-            return pixels[pixel._pixel.x][pixel._pixel.y-1]
+            return pixels[pixel.x][pixel.y-1]
         case .down:
-            return pixels[pixel._pixel.x][pixel._pixel.y+1]
+            return pixels[pixel.x][pixel.y+1]
         case .left:
-            return pixels[pixel._pixel.x-1][pixel._pixel.y]
+            return pixels[pixel.x-1][pixel.y]
         case .right:
-            return pixels[pixel._pixel.x+1][pixel._pixel.y]
+            return pixels[pixel.x+1][pixel.y]
         case .lowerRight:
-            return pixels[pixel._pixel.x+1][pixel._pixel.y+1]
+            return pixels[pixel.x+1][pixel.y+1]
         case .upperRight:
-            return pixels[pixel._pixel.x+1][pixel._pixel.y-1]
+            return pixels[pixel.x+1][pixel.y-1]
         case .lowerLeft:
-            return pixels[pixel._pixel.x-1][pixel._pixel.y+1]
+            return pixels[pixel.x-1][pixel.y+1]
         case .upperLeft:
-            return pixels[pixel._pixel.x-1][pixel._pixel.y-1]
+            return pixels[pixel.x-1][pixel.y-1]
         }
     }
 
@@ -349,8 +354,8 @@ public class FullFrameBlobber {
             //Log.v("writing out \(blob.size) pixel blob")
             for pixel in await blob.getPixels() {
                 // maybe adjust by size?
-                //ret[pixel._pixel.y*imageWidth+pixel._pixel.x] = 0xFFFF / 4 + (blob.intensity/4)*3
-                ret[pixel._pixel.y*imageWidth+pixel._pixel.x] = value
+                //ret[pixel.y*imageWidth+pixel.x] = 0xFFFF / 4 + (blob.intensity/4)*3
+                ret[pixel.y*imageWidth+pixel.x] = value
             }
             if value >= max { value = min }
             value += step
@@ -358,25 +363,26 @@ public class FullFrameBlobber {
         return ret
     }
 
-    public func expand(blob: Blob, seedPixel firstSeed: StatusPixel) async {
+    public func expand(blob: Blob, seedPixel firstSeed: SortablePixel) async {
         //Log.d("expanding initially seed blob")
 
-        var seedPixels: [StatusPixel] = [firstSeed]
+        var seedPixels: [SortablePixel] = [firstSeed]
 
         while let seedPixel = seedPixels.popLast() {
             // set this pixel to be part of this blob
             await blob.add(pixel: seedPixel)
 
             // look at direct neighbors in unknown status
-            for neighbor in self.neighbors(of: seedPixel) {
-                if await neighbor.status() == .unknown {
+            for var neighbor in self.neighbors(of: seedPixel) {
+
+                if await pixelStatusTracker.status(of: neighbor) == .unknown {
                     // if unknown status, check contrast with initial seed pixel
-                    let firstSeedContrast = firstSeed._pixel.contrast(with: neighbor._pixel)
+                    let firstSeedContrast = firstSeed.contrast(with: neighbor)
                     if firstSeedContrast < minContrast {
                         //Log.v("contrast \(firstSeedContrast) seedPixel.intensity neighbor.intensity \(neighbor.intensity) firstSeed.intensity \(firstSeed.intensity)")
                         seedPixels.append(neighbor)
                     } else {
-                        await neighbor.set(status: .background)
+                        await pixelStatusTracker.record(status: .background, for: neighbor)
                     }
                 }
             }
@@ -386,10 +392,10 @@ public class FullFrameBlobber {
     }
     
     // for any NeighborType
-    fileprivate func neighborsInt(_ pixel: StatusPixel,
-                                  _ type: NeighborType) -> [StatusPixel]
+    fileprivate func neighborsInt(_ pixel: SortablePixel,
+                                  _ type: NeighborType) -> [SortablePixel]
     {
-        var ret: [StatusPixel] = []
+        var ret: [SortablePixel] = []
         switch type {
             // up and down, left and right, no corners
         case .fourCardinal:

@@ -20,11 +20,51 @@ You should have received a copy of the GNU General Public License along with sta
 
 // the first pass is done upon init, finding and pruning outlier groups
 
+@MainActor
+@Observable
+public class FrameObserver {
+    public init() { }
+
+    public var numberOfPositiveOutliers: Int? 
+    public var numberOfNegativeOutliers: Int? 
+    public var numberOfUndecidedOutliers: Int?
+
+    // XXX stick more here, like state
+    
+    public func set(numberOfPositiveOutliers: Int) {
+        self.numberOfPositiveOutliers = numberOfPositiveOutliers
+    }
+
+    public func set(numberOfNegativeOutliers: Int) {
+        self.numberOfNegativeOutliers = numberOfNegativeOutliers
+    }
+
+    public func set(numberOfUndecidedOutliers: Int) {
+        self.numberOfUndecidedOutliers = numberOfUndecidedOutliers
+    }
+
+    func set(numberOfPositiveOutliers: Int,
+             numberOfNegativeOutliers: Int,
+             numberOfUndecidedOutliers: Int)
+    {
+        self.numberOfPositiveOutliers = numberOfPositiveOutliers
+        self.numberOfNegativeOutliers = numberOfNegativeOutliers
+        self.numberOfUndecidedOutliers = numberOfUndecidedOutliers
+    }
+
+}
+
 
 final public actor FrameAirplaneRemover: Equatable, Hashable {
 
     fileprivate var state: FrameProcessingState = .unprocessed 
 
+    public var observer: FrameObserver?
+
+    public func set(observer: FrameObserver) {
+        self.observer = observer
+    }
+    
     public func set(state: FrameProcessingState) {
         Log.i("frame \(frameIndex) transitioning to state \(state)")
         self.state = state
@@ -56,22 +96,6 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
     public func changesHandled() { didChange = false }
 
-    private let numberOfPositiveOutliersSubject = CurrentValueSubject<Int,Never>(0)
-    private let numberOfNegativeOutliersSubject = CurrentValueSubject<Int,Never>(0)
-    private let numberOfUnknownOutliersSubject = CurrentValueSubject<Int,Never>(0)
-
-    public func numberOfPositiveOutliersPublisher() -> AnyPublisher<Int,Never> {
-        numberOfPositiveOutliersSubject.eraseToAnyPublisher()
-    }
-    
-    public func numberOfNegativeOutliersPublisher() -> AnyPublisher<Int,Never> {
-        numberOfNegativeOutliersSubject.eraseToAnyPublisher()
-    }
-    
-    public func numberOfUnknownOutliersPublisher() -> AnyPublisher<Int,Never> {
-        numberOfUnknownOutliersSubject.eraseToAnyPublisher()
-    }
-    
     public func updateCombineSubjects() async {
         if let outliers = await outlierGroups?.getMembers() {
             var totalPositive: Int = 0
@@ -88,19 +112,19 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                     totalUnknown += 1
                 }
             }
-            // update combine subjects here
-//            await MainActor.run {
-                numberOfPositiveOutliersSubject.send(totalPositive)
-                numberOfNegativeOutliersSubject.send(totalNegative)
-                numberOfUnknownOutliersSubject.send(totalUnknown)
-//            }
+
+            // update the observer here
+          await observer?.set(numberOfPositiveOutliers: totalPositive,
+                               numberOfNegativeOutliers: totalNegative,
+                               numberOfUndecidedOutliers: totalUnknown)
         }
     }
 
     // when this happens, re-calculate and send to all the combine subjects
-    public func markAsChanged() {
+    public func markAsChanged() async {
         didChange = true
-        Task { await self.updateCombineSubjects() }
+        //Task { await self.updateCombineSubjects() }
+        await self.updateCombineSubjects()
     }
 
     public func hasChanges() -> Bool { didChange }
@@ -136,7 +160,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     // if this is false, just write out outlier data
     let writeOutputFiles: Bool
 
-    public let imageAccessor: ImageAccessor
+    nonisolated public let imageAccessor: ImageAccessor
 
     private let completion: (() async -> Void)?
     

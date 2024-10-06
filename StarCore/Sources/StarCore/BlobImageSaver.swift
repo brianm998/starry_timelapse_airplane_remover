@@ -59,9 +59,9 @@ public actor BlobImageSaver {
 
         for blob in blobMap.values {
             for pixel in await blob.getPixels() {
-                let blobRefIndex = pixel._pixel.y*width+pixel._pixel.x
+                let blobRefIndex = pixel.y*width+pixel.x
                 blobRefs[blobRefIndex] = blob.id
-                yAxis[pixel._pixel.y] = 0xFF
+                yAxis[pixel.y] = 0xFF
             }
         }
     }

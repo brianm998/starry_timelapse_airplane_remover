@@ -19,8 +19,8 @@ struct OutlierGroupView: View {
             let frameWidth = self.groupViewModel.viewModel.frameWidth
             let frameHeight = self.groupViewModel.viewModel.frameHeight
             let bounds = self.groupViewModel.bounds
-            let unknown_paint = self.groupViewModel.willPaint == nil
-            let will_paint = self.groupViewModel.willPaint ?? false
+            let unknown_paint = self.groupViewModel.paintObserver.shouldPaint?.willPaint == nil
+            let will_paint = self.groupViewModel.paintObserver.shouldPaint?.willPaint ?? false
             let paint_color = self.groupViewModel.groupColor
             let arrow_length = self.arrowLength
             let arrow_height = self.arrowHeight
@@ -140,19 +140,26 @@ struct OutlierGroupView: View {
             
             // tap gesture toggles paintability of the tapped group
               .onTapGesture {
-                  if let origShouldPaint = self.groupViewModel.group.shouldPaint {
-                      // change the paintability of this outlier group
-                      // set it to user selected opposite previous value
-                      if self.groupViewModel.viewModel.selectionMode == .details {
-                          handleDetailsMode()
-                      } else if self.groupViewModel.viewModel.multiChoice {
-                          openMultiChoiceSheet()
-                      } else {
-                          togglePaintReason(origShouldPaint)
+                  Task {
+                      let origShouldPaint = await self.groupViewModel.group.shouldPaintFunc() 
+
+                      await MainActor.run {
+                          if let origShouldPaint {
+                              // change the paintability of this outlier group
+                              // set it to user selected opposite previous value
+                              
+                              if self.groupViewModel.viewModel.selectionMode == .details {
+                                  handleDetailsMode()
+                              } else if self.groupViewModel.viewModel.multiChoice {
+                                  openMultiChoiceSheet()
+                              } else {
+                                  togglePaintReason(origShouldPaint)
+                              }
+                          } else {
+                              // handle outliers without a paint decision 
+                              togglePaintReason()
+                          }
                       }
-                  } else {
-                      // handle outliers without a paint decision 
-                      togglePaintReason()
                   }
               }
         }
@@ -206,15 +213,20 @@ struct OutlierGroupView: View {
         // frames which have any pixels in the same spot
         self.groupViewModel.viewModel.multiChoiceSheetShowing = true
         self.groupViewModel.viewModel.multiChoiceOutlierView = self
-        if let shouldPaint = self.groupViewModel.group.shouldPaint {
-            if shouldPaint.willPaint {
-                self.groupViewModel.viewModel.multiChoicePaintType = .clear
-            } else {
-                self.groupViewModel.viewModel.multiChoicePaintType = .paint
+        Task {
+            let shouldPaint = await self.groupViewModel.group.shouldPaintFunc()
+            await MainActor.run {
+                if let shouldPaint {
+                    if shouldPaint.willPaint {
+                        self.groupViewModel.viewModel.multiChoicePaintType = .clear
+                    } else {
+                        self.groupViewModel.viewModel.multiChoicePaintType = .paint
+                    }
+                } else {
+                    // this is aguess
+                    self.groupViewModel.viewModel.multiChoicePaintType = .clear
+                }
             }
-        } else {
-            // this is aguess
-            self.groupViewModel.viewModel.multiChoicePaintType = .clear
         }
     }
     
@@ -226,14 +238,14 @@ struct OutlierGroupView: View {
         }
         let shouldPaint = PaintReason.userSelected(!will_paint)
         
-        // update the view model to show the change quickly
-        self.groupViewModel.group.shouldPaint = shouldPaint
-        //self.groupViewModel.objectWillChange.send() 
 
         Task {
+            // update the view model to show the change quickly
+            await self.groupViewModel.group.shouldPaint(shouldPaint)
+            
             if let frame = self.groupViewModel.viewModel.currentFrame,
-               let outlierGroups = frame.outlierGroups,
-               let outlier_group = outlierGroups.members[self.groupViewModel.group.id]
+               let outlierGroups = await frame.outlierGroups,
+               let outlier_group = await outlierGroups.members[self.groupViewModel.group.id]
             {
                 // update the outlier group in the background
                 await outlier_group.shouldPaint(shouldPaint)
@@ -250,7 +262,13 @@ struct OutlierGroupView: View {
           .foregroundColor(self.groupViewModel.arrowColor)
           .onHover { self.groupViewModel.selectArrow($0) }
           .onTapGesture {
-              togglePaintReason(self.groupViewModel.group.shouldPaint)
+              let group = self.groupViewModel.group
+              Task {
+                  let shouldPaint = await group.shouldPaintFunc()
+                  await MainActor.run {
+                      togglePaintReason(shouldPaint)
+                  }
+              }
           }
     }
 

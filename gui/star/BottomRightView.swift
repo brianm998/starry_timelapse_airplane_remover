@@ -21,7 +21,7 @@ struct BottomRightView: View {
                         Text("\(numChanged) frames changed")
                           .foregroundColor(.yellow)
                     }
-                    let numSaving = viewModel.frameSaveQueue?.saving.count ?? -1
+                    let numSaving = viewModel.frameSaveQueueSize
                     if numSaving > 0 {
                         Text("saving \(numSaving) frames")
                           .foregroundColor(.green)
@@ -30,15 +30,16 @@ struct BottomRightView: View {
                 VStack {
                     EditableFrameNumberView()
                     if let _ = frameView.outlierViews {
-                        if let numPositive = frameView.numberOfPositiveOutliers {
+                         
+                        if let numPositive = frameView.frameObserver.numberOfPositiveOutliers {
                             Text("\(numPositive) will paint")
                               .foregroundColor(numPositive == 0 ? .white : .red)
                         }
-                        if let numNegative = frameView.numberOfNegativeOutliers {
+                        if let numNegative = frameView.frameObserver.numberOfNegativeOutliers {
                             Text("\(numNegative) will not paint")
                               .foregroundColor(numNegative == 0 ? .white : .green)
                         }
-                        if let numUndecided = frameView.numberOfUndecidedOutliers,
+                        if let numUndecided = frameView.frameObserver.numberOfUndecidedOutliers,
                            numUndecided > 0
                         {
                             Text("\(numUndecided) undecided")

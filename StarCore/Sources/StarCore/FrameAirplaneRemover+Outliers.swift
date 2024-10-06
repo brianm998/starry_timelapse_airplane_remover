@@ -50,6 +50,8 @@ extension FrameAirplaneRemover {
                 {
                     let endTime = Date().timeIntervalSinceReferenceDate
                     Log.i("frame \(frameIndex) loaded \(await groups.members.count) outliers in \(endTime-startTime) seconds")
+
+                    
                     return groups
                 }
             } catch {
@@ -113,7 +115,7 @@ extension FrameAirplaneRemover {
                 for outlier in await outlierGroups.getMembers().values {
                     await outlier.set(frame: self) 
                 }
-                                                                  
+
                 self.outlierGroups = outlierGroups
                 // while these have already decided outlier groups,
                 // we still need to inter frame process them so that
@@ -122,6 +124,8 @@ extension FrameAirplaneRemover {
                 self.set(state: .readyForInterFrameProcessing)
                 self.outliersLoadedFromFile = true
                 Log.i("loaded \(String(describing: await self.outlierGroups?.getMembers().count)) outlier groups for frame \(frameIndex)")
+                await self.updateCombineSubjects()
+                
             } else {
                 Log.d("frame \(frameIndex) calculating outliers")
                 self.outlierGroups = OutlierGroups(frameIndex: frameIndex,
@@ -133,6 +137,8 @@ extension FrameAirplaneRemover {
                 // this can take a long time
                 try await self.findOutliers()
 
+                await self.updateCombineSubjects()
+                
                 // perhaps apply validation image to outliers here if possible
             }
         }
@@ -220,7 +226,7 @@ extension FrameAirplaneRemover {
             case .eightBit(let validationArr):
                 await classifyOutliers(with: validationArr)
                 shouldUseDecisionTree = false
-                self.markAsChanged()
+              await self.markAsChanged()
                 
             case .sixteenBit(_):
                 Log.e("frame \(frameIndex) cannot load 16 bit validation image")
@@ -295,7 +301,7 @@ extension FrameAirplaneRemover {
         var blobImageData = [UInt8](repeating: 0, count: width*height)
         for blob in blobs {
             for pixel in await blob.getPixels() {
-                blobImageData[pixel._pixel.y*width+pixel._pixel.x] = 0xFF // make different per blob?
+                blobImageData[pixel.y*width+pixel.x] = 0xFF // make different per blob?
             }
         }
         let fuck = frameImageType
@@ -311,7 +317,7 @@ extension FrameAirplaneRemover {
     public func deleteOutliers(in boundingBox: BoundingBox) async throws {
         await outlierGroups?.deleteOutliers(in: boundingBox)
 
-        self.markAsChanged()
+      await self.markAsChanged()
         
         let frame_outliers_dirname = "\(self.outlierOutputDirname)/\(frameIndex)"
 //        mkdir(frame_outliers_dirname)

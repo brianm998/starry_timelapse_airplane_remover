@@ -38,9 +38,28 @@ public final class ViewModel {
     var eraser: NighttimeAirplaneRemover?
     var noImageExplainationText: String = "Loading..."
 
+    var userPreferences: UserPreferences = UserPreferences()
+
+    init() {
+        Task {
+            if let newPrefs = await UserPreferences.initialize() {
+                await MainActor.run {
+                    userPreferences = newPrefs
+                }
+            }
+            await frameSaveQueue.sizeUpdated() { newSize in
+                await MainActor.run {
+                    self.frameSaveQueueSize = newSize
+                }
+            }
+        }
+    }
+    
 //    @Environment(\.openWindow) private var openWindow
 
-    var frameSaveQueue: FrameSaveQueue?
+    var frameSaveQueueSize: Int = 0
+    
+    var frameSaveQueue = FrameSaveQueue()
 
     var videoPlayMode: VideoPlayMode = .forward
     
@@ -187,7 +206,7 @@ public final class ViewModel {
 
     // XX set this up to use combine
     var numberOfFramesChanged: Int {
-        0
+        0                       // XXX is this used anymore
     }
 
     /*
@@ -451,7 +470,7 @@ public final class ViewModel {
 
             try await withThrowingTaskGroup(of: FrameAirplaneRemover.self) { taskGroup in
 
-                UserPreferences.shared.justOpened(filename: jsonConfigFilename)
+                self.userPreferences.justOpened(filename: jsonConfigFilename) // make sure this works
                 
                 let config = try await Config.read(fromJsonFilename: jsonConfigFilename)
                 // overwrite global constants constant :( make this better
@@ -480,7 +499,6 @@ public final class ViewModel {
 
                 await MainActor.run {
                     self.config = config
-                    self.frameSaveQueue = FrameSaveQueue()
                 }
 
                 for (frameIndex, filename) in await imageSequence.filenames.enumerated() {
@@ -594,7 +612,6 @@ public final class ViewModel {
 
         self.eraser = eraser // XXX rename this crap
         self.config = config
-        self.frameSaveQueue = FrameSaveQueue()
     }
     
     @MainActor func makeCallbacks() -> Callbacks {
@@ -689,7 +706,9 @@ public extension ViewModel {
                 if renderImmediately {
                     // XXX make render here an option in settings
                     await render(frame: frame) {
-                        self.refresh(frame: frame)
+                        await MainActor.run {
+                            self.refresh(frame: frame)
+                        }
                     }
                 }
             }
@@ -713,7 +732,9 @@ public extension ViewModel {
                 if renderImmediately {
                     // XXX make render here an option in settings
                     await render(frame: frame) {
-                        self.refresh(frame: frame)
+                        await MainActor.run {
+                            self.refresh(frame: frame)
+                        }
                     }
                 }
             }
@@ -722,14 +743,16 @@ public extension ViewModel {
         }
     }
 
-    func render(frame: FrameAirplaneRemover, closure: (() -> Void)? = nil) async {
-        if let frameSaveQueue = self.frameSaveQueue {
-            self.renderingCurrentFrame = true // XXX might not be right anymore
-            frameSaveQueue.saveNow(frame: frame) {
+    func render(frame: FrameAirplaneRemover, closure: (@Sendable () async -> Void)? = nil) async {
+        self.renderingCurrentFrame = true // XXX might not be right anymore
+        await self.frameSaveQueue.saveNow(frame: frame) {
+            await MainActor.run {
                 self.refresh(frame: frame)
                 self.renderingCurrentFrame = false
-                closure?()
+                //                await MainActor.run {
+                //                }
             }
+            await closure?()
         }
     }
 
@@ -786,17 +809,17 @@ public extension ViewModel {
             }
 
         case .toNextPositive:
-            if let num = nextFrameView.numberOfPositiveOutliers {
+          if let num = nextFrameView.frameObserver.numberOfPositiveOutliers {
                 skip = num == 0
             }
 
         case .toNextNegative:
-            if let num = nextFrameView.numberOfNegativeOutliers {
+          if let num = nextFrameView.frameObserver.numberOfNegativeOutliers {
                 skip = num == 0
             }
 
         case .toNextUnknown:
-            if let num = nextFrameView.numberOfUndecidedOutliers {
+          if let num = nextFrameView.frameObserver.numberOfUndecidedOutliers {
                 skip = num == 0
             }
         }
@@ -813,13 +836,14 @@ public extension ViewModel {
     }
 
     // used when advancing between frames
-    func saveToFile(frame frameToSave: FrameAirplaneRemover, completionClosure: @escaping () -> Void) {
+    func saveToFile(frame frameToSave: FrameAirplaneRemover,
+                    completionClosure: @Sendable @escaping () async -> Void)
+    {
         Log.d("saveToFile frame \(frameToSave.frameIndex)")
-        if let frameSaveQueue = self.frameSaveQueue {
-            frameSaveQueue.readyToSave(frame: frameToSave, completionClosure: completionClosure)
-        } else {
-            Log.e("FUCK")
-            fatalError("SETUP WRONG")
+        let frameSaveQueue = self.frameSaveQueue 
+        Task {
+            await frameSaveQueue.readyToSave(frame: frameToSave,
+                                             completionClosure: completionClosure)
         }
     }
 

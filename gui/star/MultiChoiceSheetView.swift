@@ -207,28 +207,28 @@ struct MultiChoiceSheetView: View {
                               startIndex: Int = 0,
                               endIndex: Int? = nil)
     {
-        Task.detached(priority: .userInitiated) {
+//        Task.detached(priority: .userInitiated) {
             Log.d("update frames shouldPaint \(shouldPaint) startIndex \(startIndex) endIndex \(endIndex)")
             let end = endIndex ?? frames.count
             for frame in frames {
                 if frame.frameIndex >= startIndex,
                    frame.frameIndex <= end
                 {
-                    await self.update(frame: frame, shouldPaint: shouldPaint)
+                  Task { await self.update(frame: frame, shouldPaint: shouldPaint) }
                 }
             }
-        }
+//        }
     }
         
     private func update(frame frameView: FrameViewModel, shouldPaint: Bool) async {
         if let frame = frameView.frame {
             let new_value = shouldPaint
-            Task.detached(priority: .userInitiated) {
+//            Task.detached(priority: .userInitiated) {
                 await frame.userSelectAllOutliers(toShouldPaint: new_value,
                                                   overlapping: multiChoiceOutlierView.groupViewModel.group)
                 // save outlier paintability changes here
                 await frame.writeOutliersBinary()
             }
-        }
+//        }
     }
 }

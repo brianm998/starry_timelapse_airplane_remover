@@ -5,6 +5,13 @@ import logging
 
 // the view for when the user wants to edit what outlier groups are painted and not
 
+actor ArrayActor<T> {
+    private var elements: [T] = []
+    
+    public func getElements() -> [T] { elements }
+    public func append(_ element: T) { elements.append(element) }
+}
+
 struct FrameEditView: View {
     @Environment(ViewModel.self) var viewModel: ViewModel
     @Environment(\.openWindow) private var openWindow
@@ -45,13 +52,17 @@ struct FrameEditView: View {
                      oldValue < self.viewModel.frames.count
                   {
                       let frameView = self.viewModel.frames[oldValue]
-                      if let frameToSave = frameView.frame,
-                         frameToSave.hasChanges()
-                      {
-                          Task {
-                              self.viewModel.saveToFile(frame: frameToSave) {
-                                  Log.d("saving frame \(frameToSave.frameIndex)")
-                                  self.viewModel.refresh(frame: frameToSave)
+                      Task {
+                          if let frameToSave = frameView.frame,
+                             await frameToSave.hasChanges()
+                          {
+                              await MainActor.run {
+                                  self.viewModel.saveToFile(frame: frameToSave) {
+                                      Log.d("saving frame \(frameToSave.frameIndex)")
+                                      await MainActor.run {
+                                          self.viewModel.refresh(frame: frameToSave)
+                                      }
+                                  }
                               }
                           }
                       }
@@ -132,17 +143,18 @@ struct FrameEditView: View {
                       if let frame = frameView.frame {
                           Task {
                               //var new_outlier_info: [OutlierGroup] = []
-                              var _outlierGroupTableRows: [OutlierGroupTableRow] = []
+                              let _outlierGroupTableRows = ArrayActor<OutlierGroupTableRow>()
                               
-                            await frame.foreachOutlierGroupAsync(between: selectionStart,
-                                                             and: end_location) { group in
-                              let new_row = await OutlierGroupTableRow(group)
-                                  _outlierGroupTableRows.append(new_row)
+                              await frame.foreachOutlierGroupAsync(between: selectionStart,
+                                                                   and: end_location) { group in
+                                  let new_row = await OutlierGroupTableRow(group)
+                                  await _outlierGroupTableRows.append(new_row)
                                   return .continue
                               }
+                              let elements = await _outlierGroupTableRows.getElements()
                               await MainActor.run {
                                   self.viewModel.outlierGroupWindowFrame = frame
-                                  self.viewModel.outlierGroupTableRows = _outlierGroupTableRows
+                                  self.viewModel.outlierGroupTableRows = elements
                                   //Log.d("outlierGroupTableRows \(viewModel.outlierGroupTableRows.count)")
                                   if self.viewModel.shouldShowOutlierGroupTableWindow() {
                                       openWindow(id: "foobar") 

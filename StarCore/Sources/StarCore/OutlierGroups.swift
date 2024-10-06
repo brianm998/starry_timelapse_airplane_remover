@@ -143,7 +143,7 @@ public actor OutlierGroups {
                         let blobId = imageArr[index]
                         if blobId != 0 {
                             let pixelValue = subtractionArr[index]
-                            let pixel = StatusPixel(x: x, y: y, intensity: pixelValue)
+                            let pixel = SortablePixel(x: x, y: y, intensity: pixelValue)
                             if let blob = blobMap[blobId] {
                                 // add this pixel to existing blob
                                 await blob.add(pixel: pixel)
@@ -189,7 +189,7 @@ public actor OutlierGroups {
         var ret: [UInt16: OutlierGroup] = [:]
 
         for pixel in await group.getPixelSet() {
-            let index = pixel._pixel.y * width + pixel._pixel.x
+            let index = pixel.y * width + pixel.x
             let outlierId = outlierImageData[index]
             if outlierId != 0 {
                 ret[outlierId] = members[outlierId]

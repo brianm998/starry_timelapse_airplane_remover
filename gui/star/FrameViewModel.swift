@@ -7,11 +7,13 @@ import KHTSwift
 import Combine
 
 // UI view class used for each frame
-@Observable
+@MainActor @Observable
 public class FrameViewModel {
     init(_ frameIndex: Int) {
         self.frameIndex = frameIndex
     }
+
+    var frameObserver = FrameObserver()
 
     private var cancelBag = Set<AnyCancellable>()
 
@@ -21,9 +23,22 @@ public class FrameViewModel {
     var frame: FrameAirplaneRemover? {
         didSet {
             Log.d("frame \(frameIndex) set frame to \(String(describing: frame))")
+
             cancelBag.removeAll()
             if let frame {
                 Task {
+                    await frame.set(observer: frameObserver)
+                    /*
+
+                     
+
+                     XXX not hooked up to the UI or from the frame either yet :(
+
+
+
+
+                     VVV these go away
+                     
                     // XXX run on main actor?
                     await frame.numberOfPositiveOutliersPublisher()
                       .sink { [weak self] value in
@@ -43,6 +58,7 @@ public class FrameViewModel {
                           self?.numberOfUndecidedOutliers = value
                       } 
                       .store(in: &cancelBag)
+ */
                 }
             }
         }
@@ -52,9 +68,9 @@ public class FrameViewModel {
     // have the FrameAirplaneRemover be able to both knows these values,
     // and transmit changes to the UI with a callback that updates view state
 
-    var numberOfPositiveOutliers: Int? 
-    var numberOfNegativeOutliers: Int? 
-    var numberOfUndecidedOutliers: Int?
+//    var numberOfPositiveOutliers: Int? 
+//    var numberOfNegativeOutliers: Int? 
+//    var numberOfUndecidedOutliers: Int?
     
     // optional to distinguish between not loaded and empty list
     var outlierViews: [OutlierGroupViewModel]?

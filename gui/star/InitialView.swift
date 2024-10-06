@@ -5,9 +5,7 @@ import logging
 struct InitialView: View {
     @Environment(ViewModel.self) var viewModel: ViewModel
 
-    @State private var previously_opened_sheet_showing_item: String =
-      UserPreferences.shared.sortedSequenceList.count > 0 ?
-      UserPreferences.shared.sortedSequenceList[0] : ""      
+    @State private var previously_opened_sheet_showing_item: String = ""
 
     var body: some View {
         VStack {
@@ -36,7 +34,7 @@ struct InitialView: View {
                         }.buttonStyle(ShrinkingButton())
                           .help("Load an image sequence yet to be processed by star")
                     }
-                    if UserPreferences.shared.recentlyOpenedSequencelist.count > 0 {
+                    if viewModel.userPreferences.recentlyOpenedSequencelist.count > 0 {
                         HStack {
                             Button(action: self.loadRecent) {
                                 Text("Open Recent").font(.largeTitle)
@@ -44,7 +42,7 @@ struct InitialView: View {
                               .help("open a recently processed sequence")
                             
                             Picker("\u{27F6}", selection: $previously_opened_sheet_showing_item) {
-                                let array = UserPreferences.shared.sortedSequenceList
+                                let array = viewModel.userPreferences.sortedSequenceList
                                 ForEach(array, id: \.self) { option in
                                     Text(option)
                                 }
@@ -58,6 +56,11 @@ struct InitialView: View {
             }
         }
           .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+          .onAppear {
+              if viewModel.userPreferences.sortedSequenceList.count > 0 {
+                  previously_opened_sheet_showing_item = viewModel.userPreferences.sortedSequenceList[0]
+              }
+          }
     }
 
     func loadConfig()  {

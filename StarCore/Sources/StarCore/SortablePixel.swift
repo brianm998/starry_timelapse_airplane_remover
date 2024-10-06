@@ -1,45 +1,39 @@
 import Foundation
 
-public actor StatusPixel: Hashable {
-
-    nonisolated public let _pixel: SortablePixel // XXX rename this
-    private var _status = Status.unknown
-
-    public init(_ pixel: SortablePixel) {
-        self._pixel = pixel
-    }
-
+// a monochrome pixel that is used by the blobber
+public struct SortablePixel: AbstractPixel,
+                             Hashable,
+                             /*@preconcurrency*/ CustomStringConvertible,
+                             Codable,
+                             Sendable,
+                             Identifiable
+{
+    public let x: Int
+    public let y: Int
+    public let intensity: UInt16
+    
     public init(x: Int = 0,
                 y: Int = 0,
                 intensity: UInt16 = 0)
     {
-        self._pixel = SortablePixel(x: x, y: y, intensity: intensity)
+        self.x = x
+        self.y = y
+        self.intensity = intensity
     }
+
+    fileprivate let impossibilyLargeImageWidth = 5000000000000
+    public var id: String { "\(y*impossibilyLargeImageWidth+x)" } 
     
-    public func status() -> Status  { _status }
-    public func set(status: Status) { _status = status }
-
-    nonisolated public func hash(into hasher: inout Hasher) {
-        hasher.combine(_pixel)
-    }
-    
-    public static func == (lhs: StatusPixel, rhs: StatusPixel) -> Bool {
-        return lhs._pixel == rhs._pixel
-    }
-
-//    public func pixel() -> SortablePixel  { _pixel } // necessary? 
-//    public func set(pixel: SortablePixel) { _pixel = pixel }
-
     public enum Status: Sendable {
         case unknown
         case background
         case blobbed(Blob)
 
-        public static func != (lhs: StatusPixel.Status, rhs: StatusPixel.Status) -> Bool {
+        public static func != (lhs: SortablePixel.Status, rhs: SortablePixel.Status) -> Bool {
             !(lhs == rhs)
         }
         
-        public static func == (lhs: StatusPixel.Status, rhs: StatusPixel.Status) -> Bool {
+        public static func == (lhs: SortablePixel.Status, rhs: SortablePixel.Status) -> Bool {
             switch lhs {
             case .unknown:
                 switch rhs {
@@ -65,19 +59,7 @@ public actor StatusPixel: Hashable {
             }
         }
     }
-}
 
-// a monochrome pixel that is used by the blobber
-public struct SortablePixel: AbstractPixel,
-                             Hashable,
-                             /*@preconcurrency*/ CustomStringConvertible,
-                             Codable,
-                             Sendable
-{
-    public let x: Int
-    public let y: Int
-    public let intensity: UInt16
-    
     enum CodingKeys: String, CodingKey {
         case x
         case y
@@ -88,21 +70,13 @@ public struct SortablePixel: AbstractPixel,
         return lhs.x == rhs.x && lhs.y == rhs.y
     }
 
-    nonisolated public func hash(into hasher: inout Hasher) {
+    public func hash(into hasher: inout Hasher) {
         hasher.combine(x)
         hasher.combine(y)
     }
 
     public var description: String { "[\(x), \(y)]" }
 
-    public init(x: Int = 0,
-                y: Int = 0,
-                intensity: UInt16 = 0)
-    {
-        self.x = x
-        self.y = y
-        self.intensity = intensity
-    }
 
     /*
       returns percentage that they are similar
@@ -127,7 +101,7 @@ public struct SortablePixel: AbstractPixel,
         intensity = try values.decode(UInt16.self, forKey: .intensity)
     }
 
-    nonisolated public func encode(to encoder: Encoder) throws {
+     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(x, forKey: .x)
         try container.encode(y, forKey: .y)

@@ -39,15 +39,15 @@ public struct CodableBlob: Codable,
         self.pixels = Set<SortablePixel>()
     }
     
-    public init(_ pixel: StatusPixel, id: UInt16, frameIndex: Int) {
-        self.pixels = [pixel._pixel]
+    public init(_ pixel: SortablePixel, id: UInt16, frameIndex: Int) {
+        self.pixels = [pixel]
         self.id = id
         self.frameIndex = frameIndex
         //Log.d("frame \(frameIndex) blob \(self.id) alloc")
     }
 
-    public init(_ pixels: Set<StatusPixel>, id: UInt16, frameIndex: Int) {
-        self.pixels = Set(pixels.map { $0._pixel })
+    public init(_ pixels: Set<SortablePixel>, id: UInt16, frameIndex: Int) {
+        self.pixels = Set(pixels.map { $0 })
         self.id = id
         self.frameIndex = frameIndex
     }
@@ -67,14 +67,16 @@ public struct CodableBlob: Codable,
     }
 }
 
+// XXX combine Blob and CodableBlob
 public actor Blob: CustomStringConvertible,
                    Hashable
 {
     public let id: UInt16
     public let frameIndex: Int
-    public var pixels: Set<StatusPixel> = []
-
-    public func getPixels() -> Set<StatusPixel> { pixels }
+    public var pixels: Set<SortablePixel> = []
+    public let statusTracker: PixelStatusTracker?
+    
+    public func getPixels() -> Set<SortablePixel> { pixels }
 
     public func codableBlob() -> CodableBlob {
         CodableBlob(pixels, id: id, frameIndex: frameIndex)
@@ -84,27 +86,41 @@ public actor Blob: CustomStringConvertible,
         hasher.combine(id)
     }
     
-    public init(_ pixels: Set<StatusPixel>, id: UInt16, frameIndex: Int) {
+    public init(_ pixels: Set<SortablePixel>,
+                id: UInt16, frameIndex: Int,
+                statusTracker: PixelStatusTracker? = nil)
+    {
         self.pixels = pixels
         self.id = id
         self.frameIndex = frameIndex
+        self.statusTracker = statusTracker
     }
     
-    public init(id: UInt16, frameIndex: Int) {
+    public init(id: UInt16,
+                frameIndex: Int,
+                statusTracker: PixelStatusTracker? = nil)
+    {
         self.id = id
         self.frameIndex = frameIndex
+        self.statusTracker = statusTracker
     }
     
-    public init(_ pixel: StatusPixel, id: UInt16, frameIndex: Int) {
+    public init(_ pixel: SortablePixel,
+                id: UInt16,
+                frameIndex: Int,
+                statusTracker: PixelStatusTracker? = nil)
+    {
         self.pixels = [ pixel ]
         self.id = id
         self.frameIndex = frameIndex
+        self.statusTracker = statusTracker
     }
     
     public init(_ codableBlob: CodableBlob) {
         self.id = codableBlob.id
         self.frameIndex = codableBlob.frameIndex
-        self.pixels = Set(codableBlob.pixels.map { StatusPixel($0) })
+        self.pixels = codableBlob.pixels
+        self.statusTracker = nil
     }
     
     // actual size in number of pixels
@@ -112,17 +128,18 @@ public actor Blob: CustomStringConvertible,
 
     nonisolated public var description: String  { "Blob id: \(self.id)" }
 
-    public func add(pixels newPixels: Set<StatusPixel>) async {
-        for pixel in pixels {
-            await pixel.set(status: .blobbed(self))
+    public func add(pixels newPixels: Set<SortablePixel>) async {
+        for (index, var pixel) in newPixels.enumerated() {
+            await statusTracker?.record(status: .blobbed(self), for: pixel)
+            self.pixels.update(with: pixel)
         }
-        self.pixels = self.pixels.union(newPixels)
         reset()
     }
 
-    public func add(pixel: StatusPixel) async {
-        await pixel.set(status: .blobbed(self))
-        /*self.pixels = */self.pixels.insert(pixel)
+    public func add(pixel: SortablePixel) async {
+        var newPixel = pixel
+        await statusTracker?.record(status: .blobbed(self), for: pixel)
+        /*self.pixels = */self.pixels.update(with: newPixel)
         reset()
     }
 
@@ -137,7 +154,7 @@ public actor Blob: CustomStringConvertible,
     // the best fitting line we have, if any
     public var line: Line? {
         if let _blobLine { return _blobLine }
-        _blobLine = HoughLineFinder(pixels: Array(self.pixels).map { $0._pixel },
+        _blobLine = HoughLineFinder(pixels: Array(self.pixels).map { $0 },
                                     bounds: self.boundingBox()).line
         return _blobLine
     }
@@ -162,21 +179,21 @@ public actor Blob: CustomStringConvertible,
     // ones with very few neighboring pixels
     public func fancyLineTrim(by minNeighbors: Int = 3) {
         if let line = self.originZeroLine {
-            var newPixels = Set<StatusPixel>()
+            var newPixels = Set<SortablePixel>()
             
             let standardLine = line.standardLine
             let (_, median, _) = averageMedianMaxDistance(from: line)
 
             for pixel in pixels {
 
-                let pixelDistance = standardLine.distanceTo(x: pixel._pixel.x, y: pixel._pixel.y)
+                let pixelDistance = standardLine.distanceTo(x: pixel.x, y: pixel.y)
                 if pixelDistance < 2 {
-                    newPixels.insert(pixel)
+                    newPixels.update(with: pixel)
                 } else {
 
                     let bounds = self.boundingBox()
-                    let x = pixel._pixel.x - bounds.min.x
-                    let y = pixel._pixel.y - bounds.min.y
+                    let x = pixel.x - bounds.min.x
+                    let y = pixel.y - bounds.min.y
 
                     var neighborCount: Int = 0
                     neighborCount += self.hasPixel(x: x-1, y: y-1)
@@ -185,13 +202,13 @@ public actor Blob: CustomStringConvertible,
                     neighborCount += self.hasPixel(x: x-1, y: y)
                     neighborCount += self.hasPixel(x: x+1, y: y)
                     neighborCount += self.hasPixel(x: x-1, y: y+1)
-                    neighborCount += self.hasPixel(x: x,   y: y+1)
+                    neighborCount += self.hasPixel(x: x,  y: y+1)
                     neighborCount += self.hasPixel(x: x+1, y: y+1)
 
                     if pixelDistance < median {
-                        if neighborCount > 2 { newPixels.insert(pixel) }
+                        if neighborCount > 2 { newPixels.update(with: pixel) }
                     } else if neighborCount > 1 {
-                        newPixels.insert(pixel)
+                        newPixels.update(with: pixel)
                     }
                 }
             }
@@ -223,8 +240,8 @@ public actor Blob: CustomStringConvertible,
                              count: bounds.width*bounds.height)
 
         for pixel in pixels {
-            let x = pixel._pixel.x - bounds.min.x
-            let y = pixel._pixel.y - bounds.min.y
+            let x = pixel.x - bounds.min.x
+            let y = pixel.y - bounds.min.y
             
             let index = y*bounds.width+x
             if index < 0 || index >= members.count {
@@ -242,12 +259,12 @@ public actor Blob: CustomStringConvertible,
          if no other pixels are next to it, discard it
          */
 
-        var trimmedPixels = Set<StatusPixel>()
+        var trimmedPixels = Set<SortablePixel>()
         let bounds = self.boundingBox()
 
         for pixel in pixels {
-            let x = pixel._pixel.x - bounds.min.x
-            let y = pixel._pixel.y - bounds.min.y
+            let x = pixel.x - bounds.min.x
+            let y = pixel.y - bounds.min.y
             
             var neighborCount: Int = 0
             neighborCount += self.hasPixel(x: x-1, y: y-1)
@@ -259,7 +276,7 @@ public actor Blob: CustomStringConvertible,
             neighborCount += self.hasPixel(x: x,   y: y+1)
             neighborCount += self.hasPixel(x: x+1, y: y+1)
 
-            if neighborCount > minNeighbors { trimmedPixels.insert(pixel) }
+            if neighborCount > minNeighbors { trimmedPixels.update(with: pixel) }
         }
 
         if trimmedPixels.count != self.pixels.count {
@@ -289,7 +306,7 @@ public actor Blob: CustomStringConvertible,
     // close enough to the ideal line for this group
     public func lineTrim() {
         if let line = self.originZeroLine {
-            var newPixels = Set<StatusPixel>()
+            var newPixels = Set<SortablePixel>()
             
             let standardLine = line.standardLine
             let (_, median, max) = averageMedianMaxDistance(from: line)
@@ -297,9 +314,9 @@ public actor Blob: CustomStringConvertible,
             let maxDistanceFromLine = (median+max)/2 // guess
 
             for pixel in pixels {
-                let pixelDistance = standardLine.distanceTo(x: pixel._pixel.x, y: pixel._pixel.y)
+                let pixelDistance = standardLine.distanceTo(x: pixel.x, y: pixel.y)
                 if pixelDistance <= maxDistanceFromLine {
-                    newPixels.insert(pixel)
+                    newPixels.update(with: pixel)
                 }
             }
             let diff = self.pixels.count - newPixels.count
@@ -314,7 +331,7 @@ public actor Blob: CustomStringConvertible,
         let standardLine = line.standardLine
         var distanceSum: Double = 0.0
         for pixel in pixels {
-            distanceSum += standardLine.distanceTo(x: pixel._pixel.x, y: pixel._pixel.y)
+            distanceSum += standardLine.distanceTo(x: pixel.x, y: pixel.y)
         }
         return distanceSum/Double(pixels.count)
     }
@@ -330,13 +347,13 @@ public actor Blob: CustomStringConvertible,
         var distanceSum: Double = 0.0
         for pixel in pixels {
 
-            let distance = standardLine.distanceTo(x: pixel._pixel.x, y: pixel._pixel.y)
+            let distance = standardLine.distanceTo(x: pixel.x, y: pixel.y)
             
             if distance < 4 { // XXX another constant :(
-                if pixel._pixel.y < minY { minY = pixel._pixel.y }
-                if pixel._pixel.x < minX { minX = pixel._pixel.x }
-                if pixel._pixel.y > maxY { maxY = pixel._pixel.y }
-                if pixel._pixel.x > maxX { maxX = pixel._pixel.x }
+                if pixel.y < minY { minY = pixel.y }
+                if pixel.x < minX { minX = pixel.x }
+                if pixel.y > maxY { maxY = pixel.y }
+                if pixel.x > maxX { maxX = pixel.x }
             }
 
             distanceSum += distance 
@@ -354,7 +371,7 @@ public actor Blob: CustomStringConvertible,
         var distances:[Double] = []
         var max: Double = 0
         for pixel in pixels {
-            let distance = standardLine.distanceTo(x: pixel._pixel.x, y: pixel._pixel.y)
+            let distance = standardLine.distanceTo(x: pixel.x, y: pixel.y)
             distanceSum += distance
             distances.append(distance)
             if distance > max { max = distance }
@@ -393,7 +410,7 @@ public actor Blob: CustomStringConvertible,
         if let _intensity { return _intensity }
         var max: UInt64 = 0
         for pixel in pixels {
-            max += UInt64(pixel._pixel.intensity)
+            max += UInt64(pixel.intensity)
         }
         max /= UInt64(pixels.count)
         let ret = UInt16(max)
@@ -404,7 +421,7 @@ public actor Blob: CustomStringConvertible,
     public func medianIntensity() -> UInt16 {
         if pixels.count == 0 { return 0 }
         if let _medianIntensity { return _medianIntensity }
-        let intensities = pixels.map { $0._pixel.intensity }
+        let intensities = pixels.map { $0.intensity }
         if intensities.count == 0 {
             _medianIntensity = 0
             return 0
@@ -415,9 +432,9 @@ public actor Blob: CustomStringConvertible,
     }
 
     public func makeBackground() async {
-        for pixel in pixels {
-            await pixel.set(status: .background)
-        }
+//        for var pixel in pixels {
+//            pixel.set(status: .background)
+//        }
         pixels = []
         reset()
     }
@@ -428,10 +445,10 @@ public actor Blob: CustomStringConvertible,
             //let selfBeforeSize = self.size
             
             let newPixels = await otherBlob.getPixels()
-            for otherPixel in newPixels {
-                await otherPixel.set(status: .blobbed(self))
+            for var otherPixel in newPixels {
+                await statusTracker?.record(status: .blobbed(self), for: otherPixel)
+                self.pixels.update(with: otherPixel)
             }
-            self.pixels = self.pixels.union(newPixels)
             reset()
 
             //let selfAfterSize = self.size
@@ -459,10 +476,10 @@ public actor Blob: CustomStringConvertible,
             min_y = 0
         } else {
             for pixel in pixels {
-                if pixel._pixel.x < min_x { min_x = pixel._pixel.x }
-                if pixel._pixel.y < min_y { min_y = pixel._pixel.y }
-                if pixel._pixel.x > max_x { max_x = pixel._pixel.x }
-                if pixel._pixel.y > max_y { max_y = pixel._pixel.y }
+                if pixel.x < min_x { min_x = pixel.x }
+                if pixel.y < min_y { min_y = pixel.y }
+                if pixel.x > max_x { max_x = pixel.x }
+                if pixel.y > max_y { max_y = pixel.y }
             }
         }
         let ret = BoundingBox(min: Coord(x: min_x, y: min_y),
@@ -479,7 +496,7 @@ public actor Blob: CustomStringConvertible,
         let boundingBox = self.boundingBox()
         var ret = [UInt16](repeating: 0, count: boundingBox.size)
         for pixel in pixels {
-            ret[(pixel._pixel.y-boundingBox.min.y)*boundingBox.width+(pixel._pixel.x-boundingBox.min.x)] = pixel._pixel.intensity
+            ret[(pixel.y-boundingBox.min.y)*boundingBox.width+(pixel.x-boundingBox.min.x)] = pixel.intensity
         }
         _pixelValues = ret
         return ret
@@ -539,7 +556,7 @@ public actor Blob: CustomStringConvertible,
     public func distanceTo(line: StandardLine) -> Double {
         var min: Double = 1_000_000_000_000
         for pixel in pixels {
-            let distance = line.distanceTo(x: pixel._pixel.x, y: pixel._pixel.y)
+            let distance = line.distanceTo(x: pixel.x, y: pixel.y)
             if distance < min { min = distance }
         }
         return min
@@ -548,8 +565,8 @@ public actor Blob: CustomStringConvertible,
     public func distanceTo(x: Int, y: Int) -> Double {
         var min: Double = 1_000_000_000_000
         for pixel in pixels {
-            let x_diff = Double(x - pixel._pixel.x)
-            let y_diff = Double(y - pixel._pixel.y)
+            let x_diff = Double(x - pixel.x)
+            let y_diff = Double(y - pixel.y)
             let distance = sqrt(x_diff*x_diff+y_diff*y_diff)
             if distance < min { min = distance }
         }
@@ -574,16 +591,16 @@ public actor Blob: CustomStringConvertible,
              coming from, then throw away this blob
              */
 
-            if let i = originalImage.intensity(atX: pixel._pixel.x, andY: pixel._pixel.y) {
+            if let i = originalImage.intensity(atX: pixel.x, andY: pixel.y) {
                 let neighbors = [
-                  (pixel._pixel.x - 1, pixel._pixel.y - 1),
-                  (pixel._pixel.x,     pixel._pixel.y - 1),
-                  (pixel._pixel.x + 1, pixel._pixel.y - 1),
-                  (pixel._pixel.x - 1, pixel._pixel.y    ),
-                  (pixel._pixel.x + 1, pixel._pixel.y    ),
-                  (pixel._pixel.x - 1, pixel._pixel.y + 1),
-                  (pixel._pixel.x,     pixel._pixel.y + 1),
-                  (pixel._pixel.x + 1, pixel._pixel.y + 1),
+                  (pixel.x - 1, pixel.y - 1),
+                  (pixel.x,     pixel.y - 1),
+                  (pixel.x + 1, pixel.y - 1),
+                  (pixel.x - 1, pixel.y    ),
+                  (pixel.x + 1, pixel.y    ),
+                  (pixel.x - 1, pixel.y + 1),
+                  (pixel.x,     pixel.y + 1),
+                  (pixel.x + 1, pixel.y + 1),
                 ]
 
                 for neighbor in neighbors {
@@ -609,14 +626,14 @@ public actor Blob: CustomStringConvertible,
     fileprivate func image(_ image: RawPixelData,
                            isBrighterAt at: (Int, Int),
                            than intensity: UInt,
-                           ignoring blobPixels: Set<StatusPixel>) -> Bool?
+                           ignoring blobPixels: Set<SortablePixel>) -> Bool?
     {
         let x = at.0
         let y = at.1
 
         if x < 0 || y < 0 { return nil }
         
-        let sortablePixel = StatusPixel(x: x, y: y,
+        let sortablePixel = SortablePixel(x: x, y: y,
                                         intensity: 0) // not used here
 
         if blobPixels.contains(sortablePixel) { return nil }

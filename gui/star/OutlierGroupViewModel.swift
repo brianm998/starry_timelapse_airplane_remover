@@ -1,11 +1,17 @@
 import SwiftUI
 import StarCore
+import Combine
 
 // the view model for a single outlier group
 
-@Observable
-class OutlierGroupViewModel {
+@MainActor @Observable
+class OutlierGroupViewModel: Identifiable {
 
+    private var cancelBag = Set<AnyCancellable>()
+
+    // XXX make the UI use this to see changes in paintability
+    var paintObserver = OutlierPaintObserver() 
+    
     init (viewModel: ViewModel,
           group: OutlierGroup,
           name: UInt16,
@@ -19,28 +25,23 @@ class OutlierGroupViewModel {
         self.image = image
 
         Task {
-            await self.group.set(shouldPaintDidChange: { [weak self] group, paintReason in
-                if let self {
-                    self.setWillPaint(from: paintReason)
-                }
-            })
-
-            self.setWillPaint(from: await group.shouldPaint)
-        }
-    }
-
-    fileprivate func setWillPaint(from paintReason: PaintReason?) {
-        Task { @MainActor in 
-            if let paintReason {
-                self.willPaint = paintReason.willPaint
-            } else {
-                self.willPaint = nil
+            await group.set(paintObserver: paintObserver)
+            if let shouldPaint = await group.shouldPaintFunc() {
+                paintObserver.shouldPaint = shouldPaint
             }
         }
     }
+
+    let id = UUID()
+    
+    fileprivate func setWillPaint(from paintReason: PaintReason?) {
+        paintObserver.shouldPaint = paintReason
+    }
+
     
     deinit {
-      Task { await self.group.set(shouldPaintDidChange: nil) }
+     // let group = self.group
+    //  Task { await group.set(shouldPaintDidChange: nil) }
     }
     
     var viewModel: ViewModel
@@ -49,7 +50,7 @@ class OutlierGroupViewModel {
 
     var isSelected = false // selected for the details view
 
-    var willPaint: Bool?
+//    var willPaint: Bool?
 
     let group: OutlierGroup
     let name: UInt16
@@ -57,24 +58,24 @@ class OutlierGroupViewModel {
     let image: NSImage
 
     func selectArrow(_ selected: Bool) {
+        arrowSelected = selected
         Task {
             if selected,
-               let frame = await group.frame,
-               let outlierViewModels = await viewModel.frames[frame.frameIndex].outlierViews
+               let frame = await group.frame
             {
-                // deselect all others first
-                for outlierViewModel in outlierViewModels {
-                    if outlierViewModel.name != name,
-                       outlierViewModel.arrowSelected
-                    {
-                        await MainActor.run {
-                            outlierViewModel.arrowSelected = false
+                let frameIndex = frame.frameIndex
+                await MainActor.run {
+                    if let outlierViewModels = viewModel.frames[frameIndex].outlierViews {
+                        // deselect all others first
+                        for outlierViewModel in outlierViewModels {
+                            if outlierViewModel.name != name,
+                               outlierViewModel.arrowSelected
+                            {
+                                outlierViewModel.arrowSelected = false
+                            }
                         }
                     }
                 }
-            }
-            await MainActor.run {
-                arrowSelected = selected
             }
         }
     }
@@ -82,8 +83,8 @@ class OutlierGroupViewModel {
     var groupColor: Color {
         if isSelected { return .blue }
 
-        if let will_paint = self.willPaint {
-            if will_paint {
+        if let will_paint = self.paintObserver.shouldPaint {
+          if will_paint.willPaint {
                 return .red
             } else {
                 return .green
@@ -95,9 +96,9 @@ class OutlierGroupViewModel {
     
     var arrowColor: Color {
 
-        if let will_paint = self.willPaint {
+        if let will_paint = self.paintObserver.shouldPaint {
             if self.arrowSelected {            
-                if will_paint {
+              if will_paint.willPaint {
                     return .red
                 } else {
                     return .green
@@ -109,10 +110,10 @@ class OutlierGroupViewModel {
             return .orange
         }
     }
-
+/*
     var view: some View {
-        return OutlierGroupView(groupViewModel: self)
+        OutlierGroupView(groupViewModel: self)
           .environment(viewModel)
     }
-    
+  */  
 }
