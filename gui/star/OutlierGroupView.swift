@@ -141,7 +141,7 @@ struct OutlierGroupView: View {
             // tap gesture toggles paintability of the tapped group
               .onTapGesture {
                   Task {
-                      let origShouldPaint = await self.groupViewModel.group.shouldPaintFunc() 
+                      let origShouldPaint = await self.groupViewModel.group.shouldPaint() 
 
                       await MainActor.run {
                           if let origShouldPaint {
@@ -214,7 +214,7 @@ struct OutlierGroupView: View {
         self.groupViewModel.viewModel.multiChoiceSheetShowing = true
         self.groupViewModel.viewModel.multiChoiceOutlierView = self
         Task {
-            let shouldPaint = await self.groupViewModel.group.shouldPaintFunc()
+            let shouldPaint = await self.groupViewModel.group.shouldPaint()
             await MainActor.run {
                 if let shouldPaint {
                     if shouldPaint.willPaint {
@@ -264,7 +264,7 @@ struct OutlierGroupView: View {
           .onTapGesture {
               let group = self.groupViewModel.group
               Task {
-                  let shouldPaint = await group.shouldPaintFunc()
+                  let shouldPaint = await group.shouldPaint()
                   await MainActor.run {
                       togglePaintReason(shouldPaint)
                   }

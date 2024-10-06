@@ -78,9 +78,24 @@ public actor OutlierGroup: CustomStringConvertible,
     
     nonisolated public let surfaceAreaToSizeRatio: Double
 
+    private var _shouldPaint: PaintReason?  // should we paint this group, and why?
 
-    // after init, shouldPaint is usually set to a base value based upon different statistics 
-    public var shouldPaint: PaintReason?  // should we paint this group, and why?
+    public func shouldPaint() -> PaintReason? { _shouldPaint }
+
+    public var paintObserver: OutlierPaintObserver?
+
+    public func set(paintObserver: OutlierPaintObserver) {
+        self.paintObserver = paintObserver
+    }
+    
+    public func shouldPaint(_ shouldPaint: PaintReason) async {
+        //Log.d("\(self) should paint \(shouldPaint) self.frame \(self.frame)")
+        self._shouldPaint = shouldPaint
+
+        // XXX update frame that it's different 
+        await self.frame?.markAsChanged()
+        await paintObserver?.set(shouldPaint: shouldPaint)
+    }
 
     
     nonisolated public let frameIndex: Int
@@ -196,24 +211,6 @@ public actor OutlierGroup: CustomStringConvertible,
     nonisolated public func hash(into hasher: inout Hasher) {
         hasher.combine(id)
         hasher.combine(frameIndex)
-    }
-
-    public func shouldPaintFunc() -> PaintReason? { shouldPaint } // XXX rename this
-
-    public var paintObserver: OutlierPaintObserver?
-
-    public func set(paintObserver: OutlierPaintObserver) {
-        self.paintObserver = paintObserver
-    }
-    
-    public func shouldPaint(_ _shouldPaint: PaintReason) async {
-        //Log.d("\(self) should paint \(shouldPaint) self.frame \(self.frame)")
-        self.shouldPaint = _shouldPaint
-
-        // XXX update frame that it's different 
-        await self.frame?.markAsChanged()
-        await paintObserver?.set(shouldPaint: _shouldPaint)
-        
     }
 
     // a local cache of other nearby groups - NO LONGER CACHED AFTER SWIFT 6 :( 

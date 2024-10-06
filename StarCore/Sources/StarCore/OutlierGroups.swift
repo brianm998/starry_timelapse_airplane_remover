@@ -278,7 +278,7 @@ public actor OutlierGroups {
         
         for group in members.values {
             // collate paint reasons for each group
-            if let shouldPaint = await group.shouldPaintFunc() {
+            if let shouldPaint = await group.shouldPaint() {
                 outlierGroupPaintData[group.id] = shouldPaint
             }
         }
@@ -320,7 +320,7 @@ public actor OutlierGroups {
 
         // write into this array from the pixels in this group
         for (_, group) in self.members {
-            if let shouldPaint = await group.shouldPaintFunc(),
+            if let shouldPaint = await group.shouldPaint(),
                shouldPaint.willPaint
             {
                 /*

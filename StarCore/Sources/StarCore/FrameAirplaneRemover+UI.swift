@@ -25,7 +25,7 @@ extension FrameAirplaneRemover {
         if let classifier = currentClassifier {
             await foreachOutlierGroupAsync() { group in
                 var apply = true
-                if let shouldPaint = await group.shouldPaintFunc() {
+                if let shouldPaint = await group.shouldPaint() {
                     switch shouldPaint {
                     case .userSelected(_):
                         // leave user selected ones in place
@@ -57,7 +57,7 @@ extension FrameAirplaneRemover {
         if let classifier = currentClassifier {
             let startTime = NSDate().timeIntervalSince1970
             await foreachOutlierGroupAsync() { group in
-                if await group.shouldPaintFunc() == nil {
+                if await group.shouldPaint() == nil {
                     // only apply classifier when no other classification is otherwise present
                     await group.shouldPaint(.fromClassifier(classifier.classification(of: group)))
                 }
@@ -80,7 +80,7 @@ extension FrameAirplaneRemover {
 
     public func userSelectUndecidedOutliers(toShouldPaint shouldPaint: Bool) async {
         await foreachOutlierGroupAsync() { group in
-            if await group.shouldPaintFunc() == nil { // XXX gross syntax :(
+            if await group.shouldPaint() == nil {
                 await group.shouldPaint(.userSelected(shouldPaint))
             }
             return .continue

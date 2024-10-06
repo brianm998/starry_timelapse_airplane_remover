@@ -65,7 +65,7 @@ extension FrameAirplaneRemover {
         var shouldPaint = false
         
         for (_, group) in await outlierGroups.getMembers() {
-            if let reason = await group.shouldPaint,
+            if let reason = await group.shouldPaint(),
                reason.willPaint
             {
                 shouldPaint = true

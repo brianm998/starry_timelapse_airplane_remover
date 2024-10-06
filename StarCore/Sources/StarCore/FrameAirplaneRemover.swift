@@ -102,7 +102,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             var totalNegative: Int = 0
             var totalUnknown: Int = 0
             for (id, group) in outliers {
-                if let shouldPaint = await group.shouldPaintFunc() {
+                if let shouldPaint = await group.shouldPaint() {
                     if shouldPaint.willPaint {
                         totalPositive += 1
                     } else {

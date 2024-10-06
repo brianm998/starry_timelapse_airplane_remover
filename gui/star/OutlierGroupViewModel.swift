@@ -7,8 +7,6 @@ import Combine
 @MainActor @Observable
 class OutlierGroupViewModel: Identifiable {
 
-    private var cancelBag = Set<AnyCancellable>()
-
     // XXX make the UI use this to see changes in paintability
     var paintObserver = OutlierPaintObserver() 
     
@@ -26,7 +24,7 @@ class OutlierGroupViewModel: Identifiable {
 
         Task {
             await group.set(paintObserver: paintObserver)
-            if let shouldPaint = await group.shouldPaintFunc() {
+            if let shouldPaint = await group.shouldPaint() {
                 paintObserver.shouldPaint = shouldPaint
             }
         }
