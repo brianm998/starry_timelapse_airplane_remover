@@ -898,8 +898,8 @@ fileprivate extension Log {
         let logTime = NSDate().timeIntervalSince1970
 
         Task {
-            /*
-             await pendingLogCounter.logIsPending()
+            
+            await pendingLogCounter.logIsPending()
             var string = ""
             
             if let message = message {
@@ -909,19 +909,22 @@ fileprivate extension Log {
             }
             
             var extraData: LogData?
- */
+
             
-//            if let data = data {
+            if let data = data {
+
                 /*
+
+ XXX swift 6 makes this not compile, and it's not really used, so it's in the dustbin for now
+                 
                 if let encodableData = data as? Encodable,
                    let encodableLogData = EncodableLogData(with: encodableData)
                 {
                     // first we try to json encode any Encodable data
                     extraData = encodableLogData
-                    } else*/
+                } else
 
-
-/*
+*/
                 
                 if let stringConvertibleData = data as? CustomStringConvertible {
                     // then we try the description of any CustomStringConvertible data
@@ -929,17 +932,15 @@ fileprivate extension Log {
                 } else {
                     // our final fallback for data we don't have a better way to encode
                     extraData = StringLogData(with: data)
-                    }
-                    
- */
-//            }
-/*
+                }
+
+            }
+
             await gremlin.log(string, at: logLevel,
                               logTime: logTime, extraData: extraData,
                               file, function, line)
             await pendingLogCounter.logHasFinished()
 
- */
         }
     }
 }

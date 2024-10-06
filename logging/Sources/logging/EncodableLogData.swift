@@ -20,6 +20,9 @@ public extension Data {
     var utf8String: String? { return String(data: self, encoding: .utf8) }
 }
 /*
+
+ XXX swift 6 makes this not compile, and it's not really used, so it's in the dustbin for now
+ 
 public struct EncodableLogData: LogData {
 
     public let encodable: Encodable? 
