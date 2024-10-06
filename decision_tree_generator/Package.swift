@@ -6,7 +6,7 @@ import PackageDescription
 let package = Package(
     name: "decision_tree_generator",
     platforms: [
-        .macOS(.v13)
+        .macOS(.v14)
     ],
     dependencies: [
         // Dependencies declare other packages that this package depends on.

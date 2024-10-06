@@ -199,7 +199,7 @@ struct decision_tree_generator: AsyncParsableCommand, @unchecked Sendable {
                 //Log.d("should check frame \(frame.frameIndex)")
                 if let outlierGroupList = await frame.outlierGroupList() {
                     for outlierGroup in outlierGroupList {
-                        if let numberGoodShouldPaint = await outlierGroup.shouldPaintFunc() {
+                        if let numberGoodShouldPaint = await outlierGroup.shouldPaint() {
                             await withLimitedTaskGroup(of: (treeKey:String, shouldPaint:Bool).self) { taskGroup in
                                 for (treeKey, tree) in decisionTrees {
                                     await taskGroup.addTask() {
@@ -350,7 +350,7 @@ struct decision_tree_generator: AsyncParsableCommand, @unchecked Sendable {
                 if let outlierGroups = await frame.outlierGroupList() {
                     for outlierGroup in outlierGroups {
                         let name = outlierGroup.id
-                        if let shouldPaint = await outlierGroup.shouldPaintFunc() {
+                        if let shouldPaint = await outlierGroup.shouldPaint() {
                             let willPaint = shouldPaint.willPaint
                             
                             let values = await outlierGroup.decisionTreeGroupValues()
