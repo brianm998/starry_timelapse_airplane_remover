@@ -135,12 +135,12 @@ Given the layer mask from step #6, and the (hopefully aligned) neighbor frame fr
 
 If all has gone well with detection and classification for this frame, then the output image will not include the vast majority of unwanted airplane and satellite signals.
 
-Still hard to detect as of Star 0.6.7, sorted by hardest to detect first:
+Still hard to detect as of Star 0.7.0, sorted by hardest to detect first:
 
  - really slow moving satellites
  - really dim satellites, even when moving fast
- - airplanes close to the horizon
- - airplanes that don't show up as a streak, but only a set of unconnected dots
+ - airplanes really close to the horizon
+
 
 
 
