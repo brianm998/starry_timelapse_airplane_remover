@@ -73,7 +73,7 @@ public class BlobProcessor {
           .process() { blobs in
               var ret: [UInt16: Blob] = [:]
 
-              for (id, blob) in blobs {
+              for (_, blob) in blobs {
                   /* XXX checked before pixel creation as well
                   if let ignoreLowerPixels = frame.config.ignoreLowerPixels,
                      await blob.boundingBox().min.y + ignoreLowerPixels > frame.height
@@ -155,7 +155,7 @@ public class BlobProcessor {
 
               var ret: [UInt16: Blob] = [:]
 
-              for (id, blob) in blobs {
+              for (_, blob) in blobs {
                   // discard any blobs that are still too small or dim
                   if await blob.size() >= constants.finalMinBlobSize,
                      await constants.finalSmallDimBlobQualifier.allows(blob),

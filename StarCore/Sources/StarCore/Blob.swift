@@ -129,7 +129,7 @@ public actor Blob: CustomStringConvertible,
     nonisolated public var description: String  { "Blob id: \(self.id)" }
 
     public func add(pixels newPixels: Set<SortablePixel>) async {
-        for (index, var pixel) in newPixels.enumerated() {
+        for pixel in newPixels {
             await statusTracker?.record(status: .blobbed(self), for: pixel)
             self.pixels.update(with: pixel)
         }
@@ -137,7 +137,7 @@ public actor Blob: CustomStringConvertible,
     }
 
     public func add(pixel: SortablePixel) async {
-        var newPixel = pixel
+        let newPixel = pixel
         await statusTracker?.record(status: .blobbed(self), for: pixel)
         /*self.pixels = */self.pixels.update(with: newPixel)
         reset()
@@ -445,7 +445,7 @@ public actor Blob: CustomStringConvertible,
             //let selfBeforeSize = self.size
             
             let newPixels = await otherBlob.getPixels()
-            for var otherPixel in newPixels {
+            for otherPixel in newPixels {
                 await statusTracker?.record(status: .blobbed(self), for: otherPixel)
                 self.pixels.update(with: otherPixel)
             }

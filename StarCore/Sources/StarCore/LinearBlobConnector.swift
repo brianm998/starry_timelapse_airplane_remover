@@ -93,7 +93,7 @@ public actor LinearBlobConnector {
             // Or or may be 50-80% small blobs on the same line.
 
 
-            Log.d("blob \(id) fullBlob has \(await fullBlob.getPixels().count) pixels boundingBox \(await fullBlob.boundingBox()) line \(await fullBlob.line)")
+            //Log.d("blob \(id) fullBlob has \(await fullBlob.getPixels().count) pixels boundingBox \(await fullBlob.boundingBox()) line \(await fullBlob.line)")
 
             
             // render a KHT on this full blob

@@ -43,7 +43,6 @@ public protocol ClassifiableOutlierGroup {
 }
 
 // represents a single outler group in a frame
-// XXX make this an actor, seen crashes with multiple threads accessing at once
 public actor OutlierGroup: CustomStringConvertible,
                            Hashable,
                            Equatable,
@@ -55,9 +54,6 @@ public actor OutlierGroup: CustomStringConvertible,
     nonisolated public let bounds: BoundingBox     // a bounding box on the image that contains this group
     nonisolated public let brightness: UInt        // the average amount per pixel of brightness over the limit 
 
-    // a bounding box on the image that contains this group
-    public func getBounds() -> BoundingBox { bounds }
-    
     // how far away from the most dominant line in this outlier group are
     // the pixels in it, on average?
     nonisolated public let averageLineVariance: Double
@@ -74,20 +70,14 @@ public actor OutlierGroup: CustomStringConvertible,
 
     // a set of the pixels in this outlier 
     nonisolated public let pixelSet: Set<SortablePixel>
-
-    public func getPixelSet() -> Set<SortablePixel> { pixelSet }
     
     nonisolated public let surfaceAreaToSizeRatio: Double
-
     nonisolated public let medianBrightness: Double 
-
     nonisolated public let maxBrightness: Double
-    
     nonisolated public let maxHoughTransformCount: Double
-
     nonisolated public let pixelBorderAmount: Double
-
     nonisolated public let lineFillAmount: Double
+    nonisolated public let frameIndex: Int
     
     private var _shouldPaint: PaintReason?  // should we paint this group, and why?
 
@@ -108,8 +98,6 @@ public actor OutlierGroup: CustomStringConvertible,
         await paintObserver?.set(shouldPaint: shouldPaint)
     }
 
-    
-    nonisolated public let frameIndex: Int
 
     // has to be optional so we can read OuterlierGroups as codable
     public var frame: FrameAirplaneRemover?
@@ -120,21 +108,21 @@ public actor OutlierGroup: CustomStringConvertible,
     
     // returns the best line, if any
 
-    fileprivate var _line: Line?
-    
+    nonisolated public let line: Line?
+/*    
     var line: Line? { 
         if let _line { return _line }
         _line = HoughLineFinder(pixels: self.pixels, bounds: self.bounds).line
         return _line
     }
-
+*/
     // a line with (0,0) origin calculated from the pixels in this group, if possible
     public var originZeroLine: Line? {
         if let line { return originZeroLine(from: line) }
         return nil
     }
 
-    nonisolated public func originZeroLine(from line: Line) -> Line {
+    public func originZeroLine(from line: Line) -> Line {
         let minX = self.bounds.min.x
         let minY = self.bounds.min.y
         let (ap1, ap2) = line.twoPoints
@@ -154,7 +142,7 @@ public actor OutlierGroup: CustomStringConvertible,
                 pixelSet: Set<SortablePixel>,
                 line: Line?)
     {
-        self._line = line
+        self.line = line
         self.id = id
         self.size = size
         self.brightness = brightness

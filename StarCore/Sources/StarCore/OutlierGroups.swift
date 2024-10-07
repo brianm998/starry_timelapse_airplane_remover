@@ -188,7 +188,7 @@ public actor OutlierGroups {
     public func groups(overlapping group: OutlierGroup) async -> [OutlierGroup] {
         var ret: [UInt16: OutlierGroup] = [:]
 
-        for pixel in await group.getPixelSet() {
+        for pixel in group.pixelSet {
             let index = pixel.y * width + pixel.x
             let outlierId = outlierImageData[index]
             if outlierId != 0 {

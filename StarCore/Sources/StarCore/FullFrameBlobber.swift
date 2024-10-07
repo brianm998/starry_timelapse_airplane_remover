@@ -373,7 +373,7 @@ public class FullFrameBlobber {
             await blob.add(pixel: seedPixel)
 
             // look at direct neighbors in unknown status
-            for var neighbor in self.neighbors(of: seedPixel) {
+            for neighbor in self.neighbors(of: seedPixel) {
 
                 if await pixelStatusTracker.status(of: neighbor) == .unknown {
                     // if unknown status, check contrast with initial seed pixel

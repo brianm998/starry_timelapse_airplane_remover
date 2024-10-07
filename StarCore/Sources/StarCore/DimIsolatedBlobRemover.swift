@@ -52,7 +52,7 @@ public actor DimIsolatedBlobRemover {
     }
 
     public func process(_ args: Args) async {
-        var filteredBlobs = await analyzer.blobs()
+        let filteredBlobs = await analyzer.blobs()
 
         if filteredBlobs.count == 0 { return }
 
