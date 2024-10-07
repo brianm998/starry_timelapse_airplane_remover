@@ -565,7 +565,7 @@ struct decision_tree_generator: AsyncParsableCommand, @unchecked Sendable {
                 Log.e("ERROR \(dirname) not usable :(")
             }
         } else {
-            throw "fuck"        // XXX un-fuck this
+            throw "Cannot load from \(dirname)"
         }
         return ClassifiedData(
           positiveData: positiveData,

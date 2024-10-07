@@ -15,6 +15,10 @@ public class OutlierGroupFeatureData: ClassifiableOutlierGroup {
         self.values = _values
     }
 
+    public func decisionTreeValueAsync(for type: OutlierGroup.Feature) async -> Double {
+        decisionTreeValue(for: type)
+    }
+    
     public func decisionTreeValue(for type: OutlierGroup.Feature) -> Double  {
         let index = type.sortOrder
         if index >= 0,

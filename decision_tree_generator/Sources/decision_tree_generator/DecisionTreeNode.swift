@@ -48,7 +48,7 @@ class DecisionTreeNode: SwiftDecisionTree, @unchecked Sendable {
 
     // runtime execution
     func classification(of group: ClassifiableOutlierGroup) async -> Double {
-        let outlierValue = await group.decisionTreeValue(for: type)
+        let outlierValue = await group.decisionTreeValueAsync(for: type)
         if stump {
             if outlierValue < value {
                 return lessThanStumpValue
@@ -98,8 +98,14 @@ class DecisionTreeNode: SwiftDecisionTree, @unchecked Sendable {
         var indentation = ""
         for _ in 0..<indent { indentation += "    " }
         if stump {
+            var awaitStr = ""
+            var asyncStr = ""
+            if type.needsAsync {
+                awaitStr = "await "
+                asyncStr = "Async"
+            }
             return """
-              \(indentation)if await group.decisionTreeValue(for: .\(type)) < \(value) {
+              \(indentation)if \(awaitStr)group.decisionTreeValue\(asyncStr)(for: .\(type)) < \(value) {
               \(indentation)    return \(lessThanStumpValue)
               \(indentation)} else {
               \(indentation)    return \(greaterThanStumpValue)
@@ -107,8 +113,14 @@ class DecisionTreeNode: SwiftDecisionTree, @unchecked Sendable {
               """
         } else {
             // recurse on an if statement
+            var awaitStr = ""
+            var asyncStr = ""
+            if type.needsAsync {
+                awaitStr = "await "
+                asyncStr = "Async"
+            }
             return """
-              \(indentation)if await group.decisionTreeValue(for: .\(type)) < \(value) {
+              \(indentation)if \(awaitStr)group.decisionTreeValue\(asyncStr)(for: .\(type)) < \(value) {
               \(lessThan.swiftCode)
               \(indentation)} else {
               \(greaterThan.swiftCode)
