@@ -90,7 +90,7 @@ struct decision_tree_generator: AsyncParsableCommand, @unchecked Sendable {
             Turn off pruning of trees, which can be slow
             """)
     var noPrune = false
-    
+
     @Argument(help: """
             A list of files, which can be either a reference to a config.json file,
             or a reference to a directory containing data csv files.
@@ -204,7 +204,7 @@ struct decision_tree_generator: AsyncParsableCommand, @unchecked Sendable {
                                 for (treeKey, tree) in decisionTrees {
                                     await taskGroup.addTask() {
                                         let decisionTreeShouldPaint =  
-                                          await tree.classification(of: outlierGroup) > 0
+                                          await tree.asyncClassification(of: outlierGroup) > 0
                                         
                                         return (treeKey, decisionTreeShouldPaint == numberGoodShouldPaint.willPaint)
                                     }

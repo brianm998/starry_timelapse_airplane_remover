@@ -36,7 +36,7 @@ extension FrameAirplaneRemover {
                 }
                 if apply {
                     Log.d("applying decision tree")
-                    await group.shouldPaint(.fromClassifier(classifier.classification(of: group)))
+                    await group.shouldPaint(.fromClassifier(await classifier.asyncClassification(of: group)))
                 }
                 return .continue
             }
@@ -59,7 +59,7 @@ extension FrameAirplaneRemover {
             await foreachOutlierGroupAsync() { group in
                 if await group.shouldPaint() == nil {
                     // only apply classifier when no other classification is otherwise present
-                    await group.shouldPaint(.fromClassifier(classifier.classification(of: group)))
+                    await group.shouldPaint(.fromClassifier(await classifier.asyncClassification(of: group)))
                 }
                 return .continue
             }

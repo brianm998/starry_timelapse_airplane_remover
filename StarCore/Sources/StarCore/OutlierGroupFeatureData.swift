@@ -1,7 +1,9 @@
 import Foundation
 
-// a class that holds raw outlier group features for classification
-public class OutlierGroupFeatureData: ClassifiableOutlierGroup {
+// a class that holds the data for raw outlier group features for classification
+public struct OutlierGroupFeatureData: ClassifiableOutlierGroup,
+                                       Sendable
+{
     let values: [Double]
     
     public init(features: [OutlierGroup.Feature],
@@ -15,10 +17,6 @@ public class OutlierGroupFeatureData: ClassifiableOutlierGroup {
         self.values = _values
     }
 
-    public func decisionTreeValueAsync(for type: OutlierGroup.Feature) async -> Double {
-        decisionTreeValue(for: type)
-    }
-    
     public func decisionTreeValue(for type: OutlierGroup.Feature) -> Double  {
         let index = type.sortOrder
         if index >= 0,

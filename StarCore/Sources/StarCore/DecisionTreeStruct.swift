@@ -36,9 +36,13 @@ public struct DecisionTreeStruct: DecisionTree {
         self.decisionTypes = decisionTypes
         self.type = type
     }
+
+    public func asyncClassification(of group: OutlierGroup) async -> Double {
+        await tree.asyncClassification(of: group)
+    }
     
-    public func classification(of group: ClassifiableOutlierGroup) async -> Double {
-        await tree.classification(of: group)
+    public func classification(of group: ClassifiableOutlierGroup) -> Double {
+        tree.classification(of: group)
     }
 
     // returns -1 for negative, +1 for positive

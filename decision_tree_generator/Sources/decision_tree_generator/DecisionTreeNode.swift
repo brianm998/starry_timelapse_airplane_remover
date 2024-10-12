@@ -24,7 +24,7 @@ class DecisionSubtree: SwiftDecisionSubtree, @unchecked Sendable {
         let swift = """
 
           
-              fileprivate func \(methodName)(_ group: ClassifiableOutlierGroup) async -> Double {
+              fileprivate func \(methodName)(_ group: ClassifiableOutlierGroup) -> Double {
           \(nodeSwift)
               }
           """
@@ -88,8 +88,10 @@ class DecisionTreeNode: SwiftDecisionTree, @unchecked Sendable {
     let newMethodLevel: Int
     
     // runtime execution
-    func classification(of group: ClassifiableOutlierGroup) async -> Double {
+
+    func asyncClassification(of group: OutlierGroup) async -> Double { 
         let outlierValue = await group.decisionTreeValueAsync(for: type)
+        
         if stump {
             if outlierValue < value {
                 return lessThanStumpValue
@@ -98,9 +100,26 @@ class DecisionTreeNode: SwiftDecisionTree, @unchecked Sendable {
             }
         } else {
             if outlierValue < value {
-                return await lessThan.classification(of: group)
+                return await lessThan.asyncClassification(of: group)
             } else {
-                return await greaterThan.classification(of: group)
+                return await greaterThan.asyncClassification(of: group)
+            }
+        }
+    }
+    
+    func classification(of group: ClassifiableOutlierGroup) -> Double {
+        let outlierValue = group.decisionTreeValue(for: type)
+        if stump {
+            if outlierValue < value {
+                return lessThanStumpValue
+            } else {
+                return greaterThanStumpValue
+            }
+        } else {
+            if outlierValue < value {
+                return lessThan.classification(of: group)
+            } else {
+                return greaterThan.classification(of: group)
             }
         }
     }
@@ -141,15 +160,9 @@ class DecisionTreeNode: SwiftDecisionTree, @unchecked Sendable {
 
         var indentation = ""
         for _ in 0..<initialIndent+(indent % newMethodLevel) { indentation += "    " }
-        var awaitStr = ""
-        var asyncStr = ""
-        if type.needsAsync {
-            awaitStr = "await "
-            asyncStr = "Async"
-        }
-        
+
         let swift = """
-          \(indentation)if \(awaitStr)group.decisionTreeValue\(asyncStr)(for: .\(type)) < \(value) {
+          \(indentation)if group.decisionTreeValue(for: .\(type)) < \(value) {
           \(lessThanSwift)
           \(indentation)} else {
           \(greaterThanSwift)
@@ -162,15 +175,10 @@ class DecisionTreeNode: SwiftDecisionTree, @unchecked Sendable {
     var swiftCode: (String, [SwiftDecisionSubtree]) {
         var indentation = ""
         for _ in 0..<initialIndent+(indent % newMethodLevel) { indentation += "    " }
-        var awaitStr = ""
-        var asyncStr = ""
-        if type.needsAsync {
-            awaitStr = "await "
-            asyncStr = "Async"
-        }
+
         if stump {
             let swift = """
-              \(indentation)if \(awaitStr)group.decisionTreeValue\(asyncStr)(for: .\(type)) < \(value) {
+              \(indentation)if group.decisionTreeValue(for: .\(type)) < \(value) {
               \(indentation)    return \(lessThanStumpValue)
               \(indentation)} else {
               \(indentation)    return \(greaterThanStumpValue)
@@ -188,7 +196,7 @@ class DecisionTreeNode: SwiftDecisionTree, @unchecked Sendable {
                 for _ in 0..<initialIndent+newMethodLevel { specialIndentation += "    " }
                 
                 let swift = """
-                  \(specialIndentation)return await \(subtree.methodName)(group)
+                  \(specialIndentation)return \(subtree.methodName)(group)
                   """
                 return (swift, [subtree])
             } else {

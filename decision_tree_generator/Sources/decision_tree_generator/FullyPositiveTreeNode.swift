@@ -15,9 +15,8 @@ struct FullyPositiveTreeNode: SwiftDecisionTree {
         return ("\(indentation)return 1", [])
     }
 
-    func classification(of group: ClassifiableOutlierGroup) -> Double {
-        return 1
-    }
+    func asyncClassification(of group: OutlierGroup) async -> Double { 1 }
+    func classification(of group: ClassifiableOutlierGroup) -> Double { 1 }
 
     public func classification
       (
@@ -25,6 +24,6 @@ struct FullyPositiveTreeNode: SwiftDecisionTree {
         and values: [Double]                 // arrays
       ) -> Double
     {
-        return 1
+        1
     }
 }

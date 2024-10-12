@@ -39,15 +39,13 @@ public class OutlierPaintObserver {
 // used for both outlier groups and raw data
 public protocol ClassifiableOutlierGroup {
     func decisionTreeValue(for type: OutlierGroup.Feature) -> Double 
-    func decisionTreeValueAsync(for type: OutlierGroup.Feature) async -> Double 
 }
 
 // represents a single outler group in a frame
 public actor OutlierGroup: CustomStringConvertible,
                            Hashable,
                            Equatable,
-                           Comparable,
-                           ClassifiableOutlierGroup
+                           Comparable
 {
     nonisolated public let id: UInt16              // unique across a frame, non zero
     nonisolated public let size: UInt              // number of pixels in this outlier group
@@ -220,6 +218,16 @@ public actor OutlierGroup: CustomStringConvertible,
         }
     }
 
+    public func featureData() async -> OutlierGroupFeatureData {
+        var values = [Double](repeating: 0, count: Feature.allCases.count)
+        var features = [Feature](repeating: .size, count: Feature.allCases.count)
+        for type in OutlierGroup.Feature.allCases {
+            features[type.sortOrder] = type
+            values[type.sortOrder] = await decisionTreeValueAsync(for: type)
+        }
+        return OutlierGroupFeatureData(features: features, values: values)
+    }
+    
     fileprivate static func averageMedianMaxDistance(for pixelSet: Set<SortablePixel>,
                                                      from line: Line,
                                                      with bounds: BoundingBox)
@@ -711,7 +719,7 @@ public actor OutlierGroup: CustomStringConvertible,
 //        featureValueCache[type] = ret
         return ret
     }
-    
+
     public func decisionTreeValueAsync(for type: Feature) async -> Double {
         let height = IMAGE_HEIGHT!
         let width = IMAGE_WIDTH!
