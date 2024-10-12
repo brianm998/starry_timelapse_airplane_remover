@@ -48,11 +48,12 @@ final class LinearChoiceTreeNode: SwiftDecisionTree {
     }
     
     // write swift code to do the same thing
-    var swiftCode: String {
+    var swiftCode: (String, [SwiftDecisionSubtree]) {
         var indentation = ""
         for _ in 0..<indent { indentation += "    " }
-        return """
+        let ret = """
           \(indentation)return (await group.decisionTreeValueAsync(for: .\(type)) - \(min)) / (\(max) - \(min)) * 2 - 1
           """
+        return (ret, [])
     }
 }

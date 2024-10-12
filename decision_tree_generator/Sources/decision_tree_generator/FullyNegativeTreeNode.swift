@@ -4,10 +4,14 @@ import StarCore
 // end leaf node which always returns 100% negative
 struct FullyNegativeTreeNode: SwiftDecisionTree {
     let indent: Int
-    var swiftCode: String {
+    var swiftCode: (String, [SwiftDecisionSubtree]) {
         var indentation = ""
-        for _ in 0..<indent { indentation += "    " }
-        return "\(indentation)return -1"
+        if indent % globalMaxIfDepth == 0 {
+            for _ in 0..<initialIndent+(globalMaxIfDepth) { indentation += "    " }
+        } else {
+            for _ in 0..<initialIndent+(indent%globalMaxIfDepth) { indentation += "    " }
+        }
+        return ("\(indentation)return -1", [])
     }
 
     func classification(of group: ClassifiableOutlierGroup) -> Double {

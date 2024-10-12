@@ -7,6 +7,10 @@ import CryptoKit
 // number of levels (groups of '    ') of indentation to start with 
 let initialIndent = 2
 
+// how deep can the if/else statements get before we make new methods?
+let globalMaxIfDepth = 8        // this is a guess
+
+
 struct TreeForestResult {
     let tree: DecisionTreeStruct
     let testScore: Double
@@ -344,20 +348,31 @@ actor DecisionTreeGenerator {
 
         // the root tree node with all of the test data 
         var tree = await decisionTreeNode(withTrainingData: trainingData,
-                                          indented: initialIndent,
+                                          indented: 0,
                                           decisionTypes: decisionTypes,
                                           decisionSplitTypes: decisionSplitTypes,
                                           maxDepth: maxDepth)
 
 
-        var generatedSwiftCode: String = ""
         if pruneTree {
             // prune this mother fucker with test data
             // this can take a long time
             tree = await prune(tree: tree, with: testData)
         }
-        generatedSwiftCode = tree.swiftCode
+        let (generatedSwiftCode, subtrees) = tree.swiftCode
 
+        var swiftSubtreeCode = ""
+
+        var subtreesToProcess = subtrees
+
+        // deal with subtrees
+        while subtreesToProcess.count > 0 {
+            let nextSubtree = subtreesToProcess.removeFirst()
+            let (subtreeSwiftCode, moreSubtrees) = nextSubtree.swiftCode
+            swiftSubtreeCode += subtreeSwiftCode
+            subtreesToProcess += moreSubtrees
+        }
+        
         Log.d("got root")
 
         var treeString = ""
@@ -375,7 +390,7 @@ actor DecisionTreeGenerator {
         if pruneTree {
             pruneString =
               """
-                 This tree was pruned with test data
+              This tree was pruned with test data
               
               """
         } else {
@@ -445,6 +460,7 @@ actor DecisionTreeGenerator {
               {
           \(generatedSwiftCode)
               }
+          \(swiftSubtreeCode)
           }
           """
 
@@ -604,6 +620,7 @@ fileprivate func recurseOn(result: DecisionResult, indent: Int,
                                 greaterThan: FullyPositiveTreeNode(indent: 0), // not used
                                 greaterThanStumpValue: greaterThanStumpValue,
                                 indent: indent/* + 1*/,
+                                newMethodLevel: globalMaxIfDepth,
                                 stump: true)
     } else {
         
@@ -655,7 +672,7 @@ fileprivate func recurseOn(result: DecisionResult, indent: Int,
               decisionSplitTypes: _decisionSplitTypes,
               maxDepth: maxDepth)
         greaterResponse = TreeResponse(treeNode: greaterTree, position: .greater,
-                                        stumpValue: greaterThanStumpValue)
+                                       stumpValue: greaterThanStumpValue)
         
         lessResponse = await lessResponseTask.value
     }
@@ -664,12 +681,13 @@ fileprivate func recurseOn(result: DecisionResult, indent: Int,
        let greaterResponse = greaterResponse
     {
         let ret = DecisionTreeNode(type: result.type,
-                                value: result.value,
-                                lessThan: lessResponse.treeNode,
-                                lessThanStumpValue: lessResponse.stumpValue,
-                                greaterThan: greaterResponse.treeNode,
-                                greaterThanStumpValue: greaterResponse.stumpValue,
-                                indent: indent)
+                                   value: result.value,
+                                   lessThan: lessResponse.treeNode,
+                                   lessThanStumpValue: lessResponse.stumpValue,
+                                   greaterThan: greaterResponse.treeNode,
+                                   greaterThanStumpValue: greaterResponse.stumpValue,
+                                   indent: indent,
+                                   newMethodLevel: globalMaxIfDepth)
         
         return ret
     } else {
@@ -823,7 +841,8 @@ fileprivate func decisionTreeNode(withTrainingData trainingData: ClassifiedData,
                                        lessThanStumpValue: 1,
                                        greaterThan: FullyNegativeTreeNode(indent: indent + 1),
                                        greaterThanStumpValue: -1,
-                                       indent: indent)
+                                       indent: indent,
+                                       newMethodLevel: globalMaxIfDepth)
                      /*
                       // this LinearChoiceTreeNode underperformed the above by 1-2%
                       LinearChoiceTreeNode(type: type,
@@ -848,7 +867,8 @@ fileprivate func decisionTreeNode(withTrainingData trainingData: ClassifiedData,
                                        lessThanStumpValue: -1,
                                        greaterThan: FullyPositiveTreeNode(indent: indent + 1),
                                        greaterThanStumpValue: 1,
-                                       indent: indent)
+                                       indent: indent,
+                                       newMethodLevel: globalMaxIfDepth)
                       /*
                       LinearChoiceTreeNode(type: type,
                                            min: notPaintDist.median,
