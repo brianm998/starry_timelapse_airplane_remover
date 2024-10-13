@@ -333,7 +333,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         var otherFrame = await imageAccessor.load(type: .aligned, atSize: .original)
         if otherFrame == nil {
             // try creating the star aligned image if we can't load it
-            Log.w("doing star alignment at finish")
+            Log.i("doing star alignment at finish")
             otherFrame = await starAlignedImage()
         }
         
