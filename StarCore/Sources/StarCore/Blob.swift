@@ -546,8 +546,7 @@ public actor Blob: CustomStringConvertible,
                                  bounds: self.boundingBox(),
                                  frameIndex: frameIndex,
                                  pixels: self.pixelValues,
-                                 pixelSet: self.pixels,
-                                 line: self.line)
+                                 pixelSet: self.pixels)
         _outlierGroup = group
         return group
     }

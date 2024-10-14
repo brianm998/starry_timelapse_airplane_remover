@@ -16,6 +16,7 @@ You should have received a copy of the GNU General Public License along with sta
 
 */
 
+
 // recurse on finding nearby blobs to find groups of neighbors in a set
 // use the KHT to try to combine some of them into a line (if we get a good enough line)
 public actor LinearBlobConnector {
@@ -33,8 +34,8 @@ public actor LinearBlobConnector {
                                       frameIndex: frameIndex)
     }
     
-    public func blobMap() async -> [UInt16:Blob] {
-        await analyzer.mapOfBlobs()
+    public func blobMap() -> [UInt16:Blob] {
+        analyzer.mapOfBlobs()
     }
     
     public struct Args: Sendable {
@@ -53,10 +54,10 @@ public actor LinearBlobConnector {
     }
 
     public func process(_ args: Args) async {
+        let processedBlobs = ProcessedBlobs()
         await analyzer.iterateOverAllBlobsAsync() { id, blob in
-            var processedBlobs: Set<UInt16> = []
-            if processedBlobs.contains(id) { return }
-            processedBlobs.insert(id)
+            if await processedBlobs.contains(id) { return }
+            await processedBlobs.insert(id)
             
             // only deal with blobs in a certain size range
             let blobSize = await blob.size()
@@ -75,8 +76,8 @@ public actor LinearBlobConnector {
                                            scanSize: args.scanSize,
                                            processedBlobs: processedBlobs)
 
-            processedBlobs = processedBlobs.union(newProcessedBlobs)
-
+            await processedBlobs.union(with: newProcessedBlobs)
+            
             if neighborCloud.count == 0 { return }
             
             Log.d("blob \(id) has \(neighborCloud.count) neighbors")
@@ -121,13 +122,16 @@ public actor LinearBlobConnector {
                 // maybe recurse on a better line from a smaller amount
                 await iterate(on: blobLine, over: fullBlob)
             }
+
+            
+            // trim the blob here?
         }
     }
 
     fileprivate func iterate(on blobLine: Line,
                              over fullBlob: Blob,
                              // how much furter to look at the ends of the line
-                             lineBorder: Int = 0,
+                             lineBorder: Int = 10,
                              iterationCount: Int = 0) async
     {
         // we have an ideal origin zero line for this blob
@@ -186,7 +190,7 @@ public actor LinearBlobConnector {
                 }
             }
 
-            var linearBlobSet = await analyzer.blobs(with: linearBlobIds)
+            var linearBlobSet = analyzer.blobs(with: linearBlobIds)
             
             if linearBlobSet.count > 1 {
                 
@@ -200,7 +204,7 @@ public actor LinearBlobConnector {
                 // the others will get eaten and thrown away :(
                 for otherBlob in linearBlobSet {
                     _ = await firstBlob.absorb(otherBlob, always: true)
-                    await analyzer.remove(blob: otherBlob)
+                    analyzer.remove(blob: otherBlob)
                 }
                 //blobMap[firstBlob.id] = firstBlob // just in case
 
@@ -218,7 +222,7 @@ public actor LinearBlobConnector {
                     Log.d("frame \(analyzer.frameIndex) ITERATING iterationCount \(iterationCount)")
                     await self.iterate(on: line,
                                        over: firstBlob,
-                                       lineBorder: 100, // XXX constnat
+                                       lineBorder: lineBorder,
                                        iterationCount: iterationCount + 1)
                 } else {
                     Log.d("frame \(analyzer.frameIndex) NOT ITERATING iterationCount \(iterationCount)")

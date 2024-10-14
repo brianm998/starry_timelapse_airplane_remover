@@ -20,7 +20,7 @@ You should have received a copy of the GNU General Public License along with sta
 // use the size of the neighbor set to determine if we keep a blob or not
 public actor DisconnectedBlobRemover {
 
-    let analyzer: BlobAnalyzer
+    fileprivate let analyzer: BlobAnalyzer
     
     init(blobMap: [UInt16: Blob],
          width: Int,
@@ -33,8 +33,8 @@ public actor DisconnectedBlobRemover {
                                       frameIndex: frameIndex)
     }
 
-    public func blobMap() async -> [UInt16:Blob] {
-        await analyzer.mapOfBlobs()
+    public func blobMap() -> [UInt16:Blob] {
+        analyzer.mapOfBlobs()
     }
     
     public struct Args: Sendable {
@@ -56,11 +56,11 @@ public actor DisconnectedBlobRemover {
     }
 
     public func process(_ args: Args) async {
+        let processedBlobs = ProcessedBlobs()
         await analyzer.iterateOverAllBlobsAsync() { id, blob in
-            var processedBlobs: Set<UInt16> = []
             
-            if processedBlobs.contains(id) { return }
-            processedBlobs.insert(id)
+            if await processedBlobs.contains(id) { return }
+            await processedBlobs.insert(id)
             
             // only deal with blobs in a certain size range
             let blobSize = await blob.size()
@@ -77,7 +77,7 @@ public actor DisconnectedBlobRemover {
                                            scanSize: args.scanSize,
                                            processedBlobs: processedBlobs)
 
-            processedBlobs = processedBlobs.union(newProcessedBlobs)
+            await processedBlobs.union(with: newProcessedBlobs)
 
             var totalBlobSize = await blob.size()
             for neighborBlob in neighborCloud {
@@ -90,10 +90,10 @@ public actor DisconnectedBlobRemover {
             {
                 Log.i("blob of size \(await blob.size()) only has \(neighborCloud.count) neighbors")
                 // remove the blob we're iterating over
-                await analyzer.remove(blob: blob)
+                analyzer.remove(blob: blob)
                 // and remove all of its (few) neighbors as well
                 for blob in neighborCloud {
-                    await analyzer.remove(blob: blob)
+                    analyzer.remove(blob: blob)
                 }
             } else {
                 Log.i("blob of size \(await blob.size()) has \(neighborCloud.count) neighbors")

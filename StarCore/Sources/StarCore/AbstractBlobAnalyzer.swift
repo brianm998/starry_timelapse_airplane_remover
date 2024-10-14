@@ -22,10 +22,10 @@ public class LastBlob {
 }
 
 // skeleton for analyzer of blobs that can then manipulate the blobs in some way
-public actor BlobAnalyzer {
+final public class BlobAnalyzer: @unchecked Sendable {
 
     // map of all known blobs keyed by blob id
-    var blobMap: [UInt16: Blob]
+    private var blobMap: [UInt16: Blob]
 
     // width of the frame
     internal let width: Int
@@ -146,17 +146,16 @@ public actor BlobAnalyzer {
     // pixels of some other member of the set.
     internal func neighborCloud(of blob: Blob,
                                 scanSize: Int = 12,
-                                processedBlobs: Set<UInt16> = []) async -> (Set<Blob>, Set<UInt16>)
+                                processedBlobs: ProcessedBlobs) async -> (Set<Blob>, ProcessedBlobs)
     {
         var blobsToProcess = [blob]
         var ret: Set<Blob> = []
-        var processedBlobs = processedBlobs
 
         while blobsToProcess.count > 0 {
             let blobToProcess = blobsToProcess.removeFirst()
             for otherBlob in await self.directNeighbors(of: blobToProcess, scanSize: scanSize) {
-                if !processedBlobs.contains(otherBlob.id) {
-                    processedBlobs.insert(otherBlob.id)
+                if !(await processedBlobs.contains(otherBlob.id)) {
+                    await processedBlobs.insert(otherBlob.id)
                     ret.insert(otherBlob)
                     blobsToProcess.append(otherBlob)
                 }

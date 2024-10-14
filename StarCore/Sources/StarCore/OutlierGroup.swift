@@ -52,15 +52,6 @@ public actor OutlierGroup: CustomStringConvertible,
     nonisolated public let bounds: BoundingBox     // a bounding box on the image that contains this group
     nonisolated public let brightness: UInt        // the average amount per pixel of brightness over the limit 
 
-    // how far away from the most dominant line in this outlier group are
-    // the pixels in it, on average?
-    nonisolated public let averageLineVariance: Double
-
-    // on median?
-    nonisolated public let medianLineVariance: Double
-
-    // what is the length of the assumed line? 
-    nonisolated public let lineLength: Double
 
     // pixel value is zero if pixel is not part of group,
     // otherwise it's the amount brighter this pixel was than those in the adjecent frames 
@@ -69,17 +60,120 @@ public actor OutlierGroup: CustomStringConvertible,
     // a set of the pixels in this outlier 
     nonisolated public let pixelSet: Set<SortablePixel>
     
-    nonisolated public let surfaceAreaToSizeRatio: Double
-    nonisolated public let medianBrightness: Double 
-    nonisolated public let maxBrightness: Double
-    nonisolated public let maxHoughTransformCount: Double
-    nonisolated public let pixelBorderAmount: Double
-    nonisolated public let lineFillAmount: Double
     nonisolated public let frameIndex: Int
+
+    // lazy calculcated properties
+
+    public func line() -> Line? { _line }
+
+    fileprivate lazy var _line: Line? = {
+        HoughLineFinder(pixels: self.pixels, bounds: self.bounds).line
+        //HoughLineFinder(pixels: Array(self.pixelSet).map { $0 }, bounds: self.bounds).line
+    }()
     
-    private var _shouldPaint: PaintReason?  // should we paint this group, and why?
+    public func medianBrightness() -> Double { _medianBrightness }
+    
+    fileprivate lazy var _medianBrightness: Double = {
+        var values: [UInt16] = []
+        for pixel in pixelSet {  
+            if pixel.intensity > 0 {
+                values.append(pixel.intensity)
+            }
+        }
+        // XXX all zero pixels :(
+        if values.count == 0 {
+            return 0
+        } else {
+            return Double(values.sorted()[values.count/2])
+        }
+    }()
+
+
+    public func surfaceAreaToSizeRatio() -> Double { _surfaceAreaToSizeRatio }
+
+    fileprivate lazy var _surfaceAreaToSizeRatio: Double = {
+        ratioOfSurfaceAreaToSize(of: pixels,
+                                 and: pixelSet,
+                                 bounds: bounds)
+    }()
+
+
+    public func maxBrightness() -> Double { _maxBrightness }
+    
+    fileprivate lazy var _maxBrightness: Double = {
+        var max: UInt16 = 0
+        for pixel in pixelSet {  
+            if pixel.intensity > max { max = pixel.intensity }
+        }
+        return Double(max)
+    }()
+
+
+    public func maxHoughTransformCount() -> Double {
+        if let _maxHoughTransformCount { return _maxHoughTransformCount }
+
+        var ret = 0.0
+        if let line = self.line() {
+            ret = Double(line.votes)/Double(self.size)
+        }
+        _maxHoughTransformCount = ret
+        return ret
+    }
+
+    fileprivate var _maxHoughTransformCount: Double? = nil
+        
+    public func pixelBorderAmount() -> Double { _pixelBorderAmount }
+
+    fileprivate lazy var _pixelBorderAmount: Double = {
+        OutlierGroup.calculatePixelBorderAmount(from: pixelSet,
+                                                with: bounds,
+                                                and: pixels)
+    }()
+
+
+    public func lineFillAmount() -> Double {
+        if let _lineFillAmount { return _lineFillAmount }
+
+        var ret = 0.0
+        if let line = self.line() {
+            ret = OutlierGroup.calculateLineFillAmount(from: line,
+                                                        with: bounds,
+                                                        and: pixels)
+        }
+        _lineFillAmount = ret
+        return ret
+    }
+    
+    fileprivate lazy var _lineFillAmount: Double? = nil
+    
+    // how far away from the most dominant line in this outlier group are
+    // the pixels in it, on average?
+    public func averageLineVariance() -> Double {
+        if let _averageLineVariance { return _averageLineVariance }
+        setLineProperties()
+        return _averageLineVariance!
+    }
+    fileprivate var _averageLineVariance: Double? = nil
+
+    // on median?
+    public func medianLineVariance() -> Double {
+        if let _medianLineVariance { return _medianLineVariance }
+        setLineProperties()
+        return _medianLineVariance!
+    }
+    fileprivate var _medianLineVariance: Double? = nil
+
+    // what is the length of the assumed line? 
+    public func lineLength() -> Double {
+        if let _lineLength { return _lineLength }
+        setLineProperties()
+        return _lineLength!
+    }
+    fileprivate var _lineLength: Double? = nil
 
     public func shouldPaint() -> PaintReason? { _shouldPaint }
+
+    fileprivate var _shouldPaint: PaintReason?  // should we paint this group, and why?
 
     public var paintObserver: OutlierPaintObserver?
 
@@ -96,7 +190,6 @@ public actor OutlierGroup: CustomStringConvertible,
         await paintObserver?.set(shouldPaint: shouldPaint)
     }
 
-
     // has to be optional so we can read OuterlierGroups as codable
     public var frame: FrameAirplaneRemover?
 
@@ -104,19 +197,9 @@ public actor OutlierGroup: CustomStringConvertible,
         self.frame = frame
     }
     
-    // returns the best line, if any
-
-    nonisolated public let line: Line?
-/*    
-    var line: Line? { 
-        if let _line { return _line }
-        _line = HoughLineFinder(pixels: self.pixels, bounds: self.bounds).line
-        return _line
-    }
-*/
     // a line with (0,0) origin calculated from the pixels in this group, if possible
     public var originZeroLine: Line? {
-        if let line { return originZeroLine(from: line) }
+        if let line = self.line() { return originZeroLine(from: line) }
         return nil
     }
 
@@ -137,10 +220,8 @@ public actor OutlierGroup: CustomStringConvertible,
                 bounds: BoundingBox,
                 frameIndex: Int,
                 pixels: [UInt16],
-                pixelSet: Set<SortablePixel>,
-                line: Line?)
+                pixelSet: Set<SortablePixel>)
     {
-        self.line = line
         self.id = id
         self.size = size
         self.brightness = brightness
@@ -148,73 +229,19 @@ public actor OutlierGroup: CustomStringConvertible,
         self.frameIndex = frameIndex
         self.pixels = pixels
         self.pixelSet = pixelSet
-        self.surfaceAreaToSizeRatio = ratioOfSurfaceAreaToSize(of: pixels,
-                                                               and: pixelSet,
-                                                               bounds: bounds)
-        ///
-
-        // calculate median brightness
-
-        var values: [UInt16] = []
-        for pixel in pixelSet {  
-            if pixel.intensity > 0 {
-                values.append(pixel.intensity)
-            }
-        }
-        // XXX all zero pixels :(
-        if values.count == 0 {
-            self.medianBrightness = 0
-        } else {
-            self.medianBrightness = Double(values.sorted()[values.count/2])
-        }
-
-        /// 
+    }
 
 
-        // calculate max brightness
-
-        var max: UInt16 = 0
-        for pixel in pixelSet {  
-            if pixel.intensity > max { max = pixel.intensity }
-        }
-        self.maxBrightness = Double(max)
-
-        // calculate maxHoughTransformCount
-        if let line {
-            maxHoughTransformCount = Double(line.votes)/Double(self.size)
-        } else  {
-            maxHoughTransformCount = 0
-        }
-        
-
-        // calculate pixelBorderAmount
-
-        self.pixelBorderAmount =
-          OutlierGroup.calculatePixelBorderAmount(from: pixelSet,
-                                                  with: bounds,
-                                                  and: pixels)
-
-
-        // calculate line fill amount
-
-        if let line {
-            self.lineFillAmount =
-              OutlierGroup.calculateLineFillAmount(from: line,
-                                                   with: bounds,
-                                                   and: pixels)
-        } else {
-            self.lineFillAmount = 0
-        }
-        
-        if let line {
-            (self.averageLineVariance, self.medianLineVariance, self.lineLength) = 
+    private func setLineProperties() {
+        if let line = self.line() {
+            (self._averageLineVariance, self._medianLineVariance, self._lineLength) = 
               OutlierGroup.averageMedianMaxDistance(for: pixelSet,
                                                     from: line,
                                                     with: bounds)
         } else {
-            self.averageLineVariance = 0xFFFFFFFF
-            self.medianLineVariance = 0xFFFFFFFF
-            self.lineLength = 0
+            self._averageLineVariance = 0xFFFFFFFF
+            self._medianLineVariance = 0xFFFFFFFF
+            self._lineLength = 0
         }
     }
 
@@ -339,7 +366,7 @@ public actor OutlierGroup: CustomStringConvertible,
         // maybe write out the line
         if writeLine,
 //           self.size > 150,
-           let line = self.line
+           let line = self.line()
         {
             Log.d("have LINE \(line)")
             var pixel = Pixel()
@@ -651,75 +678,6 @@ public actor OutlierGroup: CustomStringConvertible,
 
     public func clearFeatureValueCache() { featureValueCache = [:] }
 
-    nonisolated public func decisionTreeValue(for type: Feature) -> Double {
-        let height = IMAGE_HEIGHT!
-        let width = IMAGE_WIDTH!
-
-        //if let value = featureValueCache[type] { return value }
-
-        //let t0 = NSDate().timeIntervalSince1970
-
-        var ret: Double = 0.0
-        
-        switch type {
-        case .size:
-            ret = Double(self.size)/(height*width)
-        case .width:
-            ret = Double(self.bounds.width)/width
-        case .height:
-            ret = Double(self.bounds.height)/height
-        case .centerX:
-            ret = Double(self.bounds.center.x)/width
-        case .minX:
-            ret = Double(self.bounds.min.x)/width
-        case .maxX:
-            ret = Double(self.bounds.max.x)/width
-        case .minY:
-            ret = Double(self.bounds.min.y)/height
-        case .maxY:
-            ret = Double(self.bounds.max.y)/height
-        case .centerY:
-            ret = Double(self.bounds.center.y)/height
-        case .hypotenuse:
-            ret = Double(self.bounds.hypotenuse)/(height*width)
-        case .aspectRatio:
-            ret = Double(self.bounds.width) / Double(self.bounds.height)
-        case .fillAmount:
-            ret = Double(size)/(Double(self.bounds.width)*Double(self.bounds.height))
-        case .surfaceAreaRatio:
-            ret = self.surfaceAreaToSizeRatio
-        case .averagebrightness:
-            ret = Double(self.brightness)
-        case .medianBrightness:            
-            ret = self.medianBrightness
-        case .maxBrightness:    
-            ret = self.maxBrightness
-        case .maxHoughTransformCount:
-            ret = self.maxHoughTransformCount
-        case .numberOfNearbyOutliersInSameFrame:
-            fatalError("not allowed, call decisionTreeValueAsync(for: .numberOfNearbyOutliersInSameFrame) instead")
-        case .nearbyDirectOverlapScore:
-            fatalError("not allowed, call decisionTreeValueAsync(for: .nearbyDirectOverlapScore) instead")
-        case .boundingBoxOverlapScore:
-            fatalError("not allowed, call decisionTreeValueAsync(for: .boundingBoxOverlapScore) instead")
-        case .pixelBorderAmount:
-            ret = self.pixelBorderAmount
-        case .averageLineVariance:
-            ret = self.averageLineVariance
-        case .medianLineVariance:
-            ret = self.medianLineVariance
-        case .lineLength:
-            ret = self.lineLength
-        case .lineFillAmount:
-            ret = self.lineFillAmount
-        }
-        //let t1 = NSDate().timeIntervalSince1970
-        //Log.d("group \(id) @ frame \(frameIndex) decisionTreeValue(for: \(type)) = \(ret) after \(t1-t0)s")
-
-//        featureValueCache[type] = ret
-        return ret
-    }
-
     public func decisionTreeValueAsync(for type: Feature) async -> Double {
         let height = IMAGE_HEIGHT!
         let width = IMAGE_WIDTH!
@@ -756,31 +714,31 @@ public actor OutlierGroup: CustomStringConvertible,
         case .fillAmount:
             ret = Double(size)/(Double(self.bounds.width)*Double(self.bounds.height))
         case .surfaceAreaRatio:
-            ret = self.surfaceAreaToSizeRatio
+            ret = self.surfaceAreaToSizeRatio()
         case .averagebrightness:
             ret = Double(self.brightness)
         case .medianBrightness:            
-            ret = self.medianBrightness
+            ret = self.medianBrightness()
         case .maxBrightness:    
-            ret = self.maxBrightness
+            ret = self.maxBrightness()
         case .maxHoughTransformCount:
-            ret = self.maxHoughTransformCount
-        case .numberOfNearbyOutliersInSameFrame: // keep out
+            ret = self.maxHoughTransformCount()
+        case .numberOfNearbyOutliersInSameFrame:
             ret = await self.numberOfNearbyOutliersInSameFrame()
         case .nearbyDirectOverlapScore:
             ret = await self.nearbyDirectOverlapScore()
         case .boundingBoxOverlapScore:
             ret = await self.boundingBoxOverlapScore()
-        case .pixelBorderAmount: // keep out
-            ret = self.pixelBorderAmount
+        case .pixelBorderAmount:
+            ret = self.pixelBorderAmount()
         case .averageLineVariance:
-            ret = self.averageLineVariance
+            ret = self.averageLineVariance()
         case .medianLineVariance:
-            ret = self.medianLineVariance
+            ret = self.medianLineVariance()
         case .lineLength:
-            ret = self.lineLength
+            ret = self.lineLength()
         case .lineFillAmount:
-            ret = self.lineFillAmount
+            ret = self.lineFillAmount()
         }
         //let t1 = NSDate().timeIntervalSince1970
         //Log.d("group \(id) @ frame \(frameIndex) decisionTreeValue(for: \(type)) = \(ret) after \(t1-t0)s")
