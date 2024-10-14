@@ -72,7 +72,7 @@ public actor DimIsolatedBlobRemover {
         let quarterBlobMedianIntensity = await quarterBlob.medianIntensity()
         let midBlobMedianIntensity = await midBlob.medianIntensity()
         
-        await analyzer.iterateOverAllBlobsAsync() { _, blob in
+        await analyzer.iterateOverAllBlobs() { _, blob in
             // only deal with small blobs
             if await blob.size() > args.minBlobSize { return }
             

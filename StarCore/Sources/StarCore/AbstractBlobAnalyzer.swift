@@ -80,7 +80,7 @@ final public class BlobAnalyzer: @unchecked Sendable {
     }
 
     // skips blobs that are absorbed during iteration
-    internal func iterateOverAllBlobsAsync(closure: @Sendable (UInt16, Blob) async -> Void) async {
+    internal func iterateOverAllBlobs(closure: @Sendable (UInt16, Blob) async -> Void) async {
         // iterate over largest blobs first
 
         // prepare synchronous sorting with separate map 

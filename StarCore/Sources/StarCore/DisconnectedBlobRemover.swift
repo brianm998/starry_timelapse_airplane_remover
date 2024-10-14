@@ -57,7 +57,7 @@ public actor DisconnectedBlobRemover {
 
     public func process(_ args: Args) async {
         let processedBlobs = ProcessedBlobs()
-        await analyzer.iterateOverAllBlobsAsync() { id, blob in
+        await analyzer.iterateOverAllBlobs() { id, blob in
             
             if await processedBlobs.contains(id) { return }
             await processedBlobs.insert(id)

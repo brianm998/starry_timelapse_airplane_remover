@@ -55,7 +55,7 @@ public actor IsolatedBlobRemover {
     }
 
     public func process(_ args: Args) async {
-        await analyzer.iterateOverAllBlobsAsync() { _, blob in
+        await analyzer.iterateOverAllBlobs() { _, blob in
             // only deal with small blobs
             if await blob.size() > args.minBlobSize { return }
             
