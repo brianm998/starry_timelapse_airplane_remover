@@ -70,7 +70,7 @@ public actor OutlierGroup: CustomStringConvertible,
         HoughLineFinder(pixels: self.pixels, bounds: self.bounds).line
         //HoughLineFinder(pixels: Array(self.pixelSet).map { $0 }, bounds: self.bounds).line
     }()
-    
+
     public func medianBrightness() -> Double { _medianBrightness }
     
     fileprivate lazy var _medianBrightness: Double = {
@@ -137,8 +137,8 @@ public actor OutlierGroup: CustomStringConvertible,
         var ret = 0.0
         if let line = self.line() {
             ret = OutlierGroup.calculateLineFillAmount(from: line,
-                                                        with: bounds,
-                                                        and: pixels)
+                                                       with: bounds,
+                                                       and: pixels)
         }
         _lineFillAmount = ret
         return ret
@@ -166,11 +166,47 @@ public actor OutlierGroup: CustomStringConvertible,
     // what is the length of the assumed line? 
     public func lineLength() -> Double {
         if let _lineLength { return _lineLength }
-        setLineProperties()
+
+        if let line = self.originZeroLine {
+            let (_, _length) = averageDistanceAndLineLength(from: line)
+            _lineLength = _length
+        } else {
+            _lineLength = 0
+        }
+
         return _lineLength!
     }
     fileprivate var _lineLength: Double? = nil
 
+    // assumes line has 0,0 origin
+    public func averageDistanceAndLineLength(from line: Line) -> (Double, Double) {
+        var minX = Int.max
+        var minY = Int.max
+        var maxX = 0
+        var maxY = 0
+        
+        let standardLine = line.standardLine
+        var distanceSum: Double = 0.0
+        for pixel in pixelSet {
+
+            let distance = standardLine.distanceTo(x: pixel.x, y: pixel.y)
+            
+            if distance < 4 { // XXX another constant :(
+                if pixel.y < minY { minY = pixel.y }
+                if pixel.x < minX { minX = pixel.x }
+                if pixel.y > maxY { maxY = pixel.y }
+                if pixel.x > maxX { maxX = pixel.x }
+            }
+
+            distanceSum += distance 
+        }
+        let xDiff = Double(maxX-minX)
+        let yDiff = Double(maxY-minY)
+        let totalLength = sqrt(xDiff*xDiff+yDiff*yDiff)
+        
+        return (distanceSum/Double(pixels.count), totalLength)
+    }
+    
     public func shouldPaint() -> PaintReason? { _shouldPaint }
 
     fileprivate var _shouldPaint: PaintReason?  // should we paint this group, and why?
@@ -231,17 +267,15 @@ public actor OutlierGroup: CustomStringConvertible,
         self.pixelSet = pixelSet
     }
 
-
     private func setLineProperties() {
-        if let line = self.line() {
-            (self._averageLineVariance, self._medianLineVariance, self._lineLength) = 
+        if let line = self.originZeroLine {
+            (self._averageLineVariance, self._medianLineVariance, _) = 
               OutlierGroup.averageMedianMaxDistance(for: pixelSet,
                                                     from: line,
                                                     with: bounds)
         } else {
             self._averageLineVariance = 0xFFFFFFFF
             self._medianLineVariance = 0xFFFFFFFF
-            self._lineLength = 0
         }
     }
 
@@ -870,9 +904,9 @@ public actor OutlierGroup: CustomStringConvertible,
        0 if no line or no pixels on line
        1 if all line pixels are filled by this outlier group
      */
-    static fileprivate func calculateLineFillAmount(from line: Line,
-                                                    with bounds: BoundingBox,
-                                                    and pixels: [UInt16]) -> Double
+    static func calculateLineFillAmount(from line: Line,
+                                        with bounds: BoundingBox,
+                                        and pixels: [UInt16]) -> Double
     {
         let minX = bounds.min.x
         let minY = bounds.min.y

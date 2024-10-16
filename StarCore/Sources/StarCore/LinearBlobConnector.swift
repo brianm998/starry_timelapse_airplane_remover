@@ -42,14 +42,17 @@ public actor LinearBlobConnector {
         let scanSize: Int         // how far in each direction to look for neighbors
         let blobsSmallerThan: Int // ignore blobs larger than this
         let blobsLargerThan: Int  // ignore blobs smaller than this
+        let lineBorder: Int       // how much furter to look at the ends of the line
 
         public init(scanSize: Int = 28,
                     blobsSmallerThan: Int = 24, 
-                    blobsLargerThan: Int = 0)
+                    blobsLargerThan: Int = 0,
+                    lineBorder: Int = 0)
         {
             self.scanSize = scanSize
             self.blobsSmallerThan = blobsSmallerThan
             self.blobsLargerThan = blobsLargerThan
+            self.lineBorder = lineBorder
         }
     }
 
@@ -98,8 +101,14 @@ public actor LinearBlobConnector {
 
             
             // render a KHT on this full blob
-            if let blobLine = await fullBlob.originZeroLine {
+            if let blobLine = await fullBlob.originZeroLine,
+               await fullBlob.averageDistanceFromIdealLine < 50 // XXX constant
+            {
 
+                // only iterate on blob lines if they are a decent fit
+                // XXX determine best fit
+
+                
                 // XXX for testing, write out this big blob as json
 /* 
                 let blobJsonFilename = "/tmp/Blob_frame_\(frameIndex)_\(fullBlob).json"
@@ -120,7 +129,9 @@ public actor LinearBlobConnector {
 
                 // first iterate on the best line for the full blob
                 // maybe recurse on a better line from a smaller amount
-                await iterate(on: blobLine, over: fullBlob)
+                await iterate(on: blobLine,
+                              over: fullBlob,
+                              lineBorder: args.lineBorder)
             }
 
             
@@ -131,7 +142,7 @@ public actor LinearBlobConnector {
     fileprivate func iterate(on blobLine: Line,
                              over fullBlob: Blob,
                              // how much furter to look at the ends of the line
-                             lineBorder: Int = 10,
+                             lineBorder: Int = 0,
                              iterationCount: Int = 0) async
     {
         // we have an ideal origin zero line for this blob
@@ -196,7 +207,7 @@ public actor LinearBlobConnector {
                 
                 Log.d("frame \(analyzer.frameIndex) blob \(fullBlob.id) found \(linearBlobIds.count) linear blobs")
                 
-                // we found more than one blob alone the line
+                // we found more than one blob along the line
 
                 // the first blob in the set will absorb the others and survive
                 let firstBlob = linearBlobSet.removeFirst() 
@@ -216,16 +227,23 @@ public actor LinearBlobConnector {
                  to see what we might find.
                  */
 
-                if let line = await firstBlob.originZeroLine,
-                   iterationCount < 10 // XXX constant
-                {
-                    Log.d("frame \(analyzer.frameIndex) ITERATING iterationCount \(iterationCount)")
-                    await self.iterate(on: line,
-                                       over: firstBlob,
-                                       lineBorder: lineBorder,
-                                       iterationCount: iterationCount + 1)
-                } else {
-                    Log.d("frame \(analyzer.frameIndex) NOT ITERATING iterationCount \(iterationCount)")
+                if let line = await firstBlob.originZeroLine {
+                    if iterationCount < 10 { // XXX constant
+                        Log.d("frame \(analyzer.frameIndex) ITERATING iterationCount \(iterationCount)")
+                        await self.iterate(on: line,
+                                           over: firstBlob,
+                                           lineBorder: lineBorder,
+                                           iterationCount: iterationCount + 1)
+                    } else {
+                        Log.d("frame \(analyzer.frameIndex) NOT ITERATING iterationCount \(iterationCount)")
+                    }
+
+                    if iterationCount == 0 {
+                        // try to trim firstBlob if we can, we may have some pixels
+                        // that don't really fit the final line we ended up with
+                        await firstBlob.lineTrim()
+                        await firstBlob.fancyLineTrim(by: 2)
+                    }
                 }
             } else {
                 Log.d("frame \(analyzer.frameIndex) only found \(linearBlobSet.count) linear blobs")

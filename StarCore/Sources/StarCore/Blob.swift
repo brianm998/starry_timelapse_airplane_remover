@@ -143,6 +143,7 @@ public actor Blob: CustomStringConvertible,
         reset()
     }
 
+    private var _lineFillAmount: Double? 
     private var _intensity: UInt16?
     private var _medianIntensity: UInt16?
     private var _boundingBox: BoundingBox?
@@ -220,6 +221,7 @@ public actor Blob: CustomStringConvertible,
     }
 
     private func reset() {
+        _lineFillAmount = nil
         _intensity = nil
         _medianIntensity = nil
         _boundingBox = nil
@@ -488,6 +490,21 @@ public actor Blob: CustomStringConvertible,
         return ret
     }
 
+
+    public func lineFillAmount() -> Double {
+        if let _lineFillAmount { return _lineFillAmount }
+
+        var ret = 0.0
+        if let line = self.line {
+            ret = OutlierGroup.calculateLineFillAmount(from: line,
+                                                       with: self.boundingBox(),
+                                                       and: self.pixelValues)
+        }
+        _lineFillAmount = ret
+        return ret
+    }
+    
+    
     // XXX replace this with passing in the full outlier image
     // to each outlier, and having them deal with it directly
     // will hopefully speed things up by reducing memory allocations

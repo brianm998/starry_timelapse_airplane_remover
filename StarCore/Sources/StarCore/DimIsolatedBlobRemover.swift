@@ -33,7 +33,7 @@ public actor DimIsolatedBlobRemover {
     }
     
     public func blobMap() async -> [UInt16:Blob] {
-        await analyzer.mapOfBlobs()
+        analyzer.mapOfBlobs()
     }
     
     public struct Args: Sendable {
@@ -52,7 +52,7 @@ public actor DimIsolatedBlobRemover {
     }
 
     public func process(_ args: Args) async {
-        let filteredBlobs = await analyzer.blobs()
+        let filteredBlobs = analyzer.blobs()
 
         if filteredBlobs.count == 0 { return }
 
@@ -88,7 +88,7 @@ public actor DimIsolatedBlobRemover {
             }
                                                           
             if otherBlobsNearby.count < args.requiredNeighbors {
-                await analyzer.remove(blob: blob)
+                analyzer.remove(blob: blob)
             }
         }
     }

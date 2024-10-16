@@ -68,6 +68,8 @@ public class BlobProcessor {
           // align frame, subtract it, sort pixels, then initial blob detection
           .create(findBlobs),
 
+          .save(.blobs),          
+          
           // a first pass at cutting out individual blobs based upon size, brightness
           // or being too close to the bottom
           .process() { blobs in
@@ -97,27 +99,43 @@ public class BlobProcessor {
               return ret
           },
 
-          .save(.blobs),          
+          .save(.filter1),
           .frameState(.isolatedBlobRemoval1),
 
+
+          // find really close linear blobs
+          .linearBlobConnector(.init(scanSize: 24, 
+                                     blobsSmallerThan: 80,
+                                     lineBorder: 20)),
+
+          .save(.filter2),
+          
           // a first pass on dim isolated blob removal
-          .dimIsolatedBlobRemover(.init(scanSize: 30,
+          .dimIsolatedBlobRemover(.init(scanSize: 50,
                                         requiredNeighbors: 2)),
           
-          .save(.filter1),
           .frameState(.isolatedBlobRemoval2),
+
+          .save(.filter3),
 
           // remove isolated blobs
           .isolatedBlobRemover(.init(minNeighborSize: 6, scanSize: 24)),
           
-          .save(.filter2),
+          .save(.filter4),
           .frameState(.isolatedBlobRemoval3),
 
           // remove smaller disconected blobs
           .disconnectedBlobRemover(.init(scanSize: 60,
                                          blobsSmallerThan: 18,
                                          requiredNeighbors: 2)),
-          .save(.filter3),
+
+          .frameState(.smallLinearBlobAbsorbtion),
+          
+          // find really close linear blobs
+          .linearBlobConnector(.init(scanSize: 30,
+                                     blobsSmallerThan: 120,
+                                     lineBorder: 10)),
+
           .frameState(.isolatedBlobRemoval4),
 
           // remove larger disconected blobs
@@ -125,30 +143,58 @@ public class BlobProcessor {
                                          blobsSmallerThan: 50,
                                          blobsLargerThan: 18,
                                          requiredNeighbors: 2)),
-          .save(.filter4),
-          .frameState(.smallLinearBlobAbsorbtion),
-          
-          // find really close linear blobs
-          .linearBlobConnector(.init(scanSize: 12,
-                                     blobsSmallerThan: 30)),
-
           .frameState(.largerLinearBlobAbsorbtion),
           
           // then try to connect more distant linear blobs
-          .linearBlobConnector(.init(scanSize: 35,
-                                     blobsSmallerThan: 50)),
+          .linearBlobConnector(.init(scanSize: 50,
+                                     blobsSmallerThan: 500)),
+
+
+          // get rid of really big blobs with a line but that aren't close to it
+          .process() { blobs in
+              // weed out blobs that are too small and not bright enough
+
+              var ret: [UInt16: Blob] = [:]
+
+              for (_, blob) in blobs {
+                  // discard any blobs that are still too small or dim
+                  if let line = await blob.originZeroLine {
+                      let (distance, lineLength) = await blob.averageDistanceAndLineLength(from: line)
+                      if distance < lineLength {
+                          let lineFillAmount = await blob.lineFillAmount()
+
+
+                          if lineLength > 400,
+                             lineFillAmount < 0.01
+                          {
+                              // big blobby in the house
+                              
+                          } else  if lineLength > 400, // XXX constants
+                                     distance > 15
+                          {
+                              // another big blob we don't want
+                              
+                          } else if lineLength > 100, // XXX constants
+                             distance > 10,
+                             lineFillAmount < 0.1
+                          {
+                              // don't keep it, it's a cloud of junk
+                          } else  {
+                              // this blob is good enough for now
+                              ret[blob.id] = blob
+                          }
+                      }
+                  } else {
+                      // keep blobs with no line just in case
+                      ret[blob.id] = blob
+                  }
+              }
+              return ret
+          },
 
           .save(.filter5),
           .frameState(.finalCrunch),
 
-
-          /*
-           add a stop where we look at blobs which have a line, and attempt to trim them a bit
-
-           looks like excessive mode could use that 
-           */
-
-          
           // eviscerate any remaining small and dim blobs with no mercy 
           .process() { blobs in
               // weed out blobs that are too small and not bright enough
