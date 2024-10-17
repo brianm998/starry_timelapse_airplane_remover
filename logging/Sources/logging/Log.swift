@@ -940,7 +940,6 @@ fileprivate extension Log {
                               logTime: logTime, extraData: extraData,
                               file, function, line)
             await pendingLogCounter.logHasFinished()
-
         }
     }
 }
@@ -967,22 +966,29 @@ public actor LogGremlin {
         repeat {
             try? await Task.sleep(nanoseconds: 100_000_000)
         } while await pendingLogCounter.isPending()
+
+        repeat { await logNext() } while pendingLogCount() > 0
+    }
+
+    fileprivate func logNext() async {
+        if let log = await gremlin.nextLog() {
+            for handler in await gremlin.getHandlers().values {
+                if log.logLevel <= handler.level {
+                    handler.log(message: log.message,
+                                at: log.fileLocation,
+                                with: log.data,
+                                at: log.logLevel,
+                                logTime: log.logTime)
+                }
+            }
+        }
     }
     
     public init() {
         Task {
             while(await self.isRunning()) {
-                if let log = await gremlin.nextLog() {
-                    for handler in await gremlin.getHandlers().values {
-                        if log.logLevel <= handler.level {
-                            handler.log(message: log.message,
-                                        at: log.fileLocation,
-                                        with: log.data,
-                                        at: log.logLevel,
-                                        logTime: log.logTime)
-                        }
-                    }
-                }
+                await self.logNext()
+                try? await Task.sleep(nanoseconds: 1_000_000) // 1ms
             }
         }
     }
