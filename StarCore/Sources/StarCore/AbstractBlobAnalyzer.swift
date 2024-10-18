@@ -43,6 +43,10 @@ final public class BlobAnalyzer: @unchecked Sendable {
     func blobs(with blobIdSet: Set<UInt16>) -> [Blob] {
         blobIdSet.compactMap { blobMap[$0] }
     }
+
+    func update(blob: Blob) {
+        blobMap[blob.id] = blob
+    }
     
     func remove(blob: Blob) {
         blobMap.removeValue(forKey: blob.id)
@@ -162,6 +166,13 @@ final public class BlobAnalyzer: @unchecked Sendable {
             }
         }
         return (ret, processedBlobs)
+    }
+
+    public func logBlobs() async {
+        Log.d("frame \(frameIndex) has \(blobMap.count) blobs")
+        for (id, blob) in blobMap {
+            Log.d("frame \(frameIndex) blob.id \(blob.id) \(await blob.size()) pixels \(await blob.pixels)")
+        }
     }
 }
     

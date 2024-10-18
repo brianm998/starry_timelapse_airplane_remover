@@ -33,11 +33,11 @@ public actor LinearBlobConnector {
                                       height: height,
                                       frameIndex: frameIndex)
     }
-    
+
     public func blobMap() -> [UInt16:Blob] {
         analyzer.mapOfBlobs()
     }
-    
+
     public struct Args: Sendable {
         let scanSize: Int         // how far in each direction to look for neighbors
         let blobsSmallerThan: Int // ignore blobs larger than this
@@ -58,6 +58,7 @@ public actor LinearBlobConnector {
 
     public func process(_ args: Args) async {
         let processedBlobs = ProcessedBlobs()
+        //await analyzer.logBlobs()     // XXX
         await analyzer.iterateOverAllBlobs() { id, blob in
             if await processedBlobs.contains(id) { return }
             await processedBlobs.insert(id)
@@ -137,6 +138,7 @@ public actor LinearBlobConnector {
             
             // trim the blob here?
         }
+        //await analyzer.logBlobs()     // XXX 
     }
 
     fileprivate func iterate(on blobLine: Line,
@@ -192,7 +194,7 @@ public actor LinearBlobConnector {
                     if index < analyzer.blobRefs.count {
                         let blobId = analyzer.blobRefs[index]
                         if blobId != 0 {
-                            Log.d("frame \(analyzer.frameIndex) blob \(fullBlob.id) found linear blob \(blobId) @ [\(x), \(y)]")
+                            //Log.d("frame \(analyzer.frameIndex) blob \(fullBlob.id) found linear blob \(blobId) @ [\(x), \(y)]")
                             linearBlobIds.insert(blobId)
                         } else {
                             //Log.d("frame \(frameIndex) blob \(fullBlob.id) nothing found @ [\(x), \(y)]")
@@ -209,16 +211,17 @@ public actor LinearBlobConnector {
                 
                 // we found more than one blob along the line
 
-                // the first blob in the set will absorb the others and survive
-                let firstBlob = linearBlobSet.removeFirst() 
-
                 // the others will get eaten and thrown away :(
                 for otherBlob in linearBlobSet {
-                    _ = await firstBlob.absorb(otherBlob, always: true)
+                    _ = await fullBlob.absorb(otherBlob, always: true)
+                    //Log.d("frame \(analyzer.frameIndex) removing \(otherBlob) \(await otherBlob.pixels.count) pixels \(await otherBlob.pixels)")
                     analyzer.remove(blob: otherBlob)
                 }
-                //blobMap[firstBlob.id] = firstBlob // just in case
 
+                analyzer.update(blob: fullBlob)
+
+                //Log.d("frame \(analyzer.frameIndex) fullBlob \(fullBlob.id) after absorb \(await fullBlob.pixels.count) pixels \(await fullBlob.pixels)")
+                
                 /*
                  If we have a line from this new blob, it is likely
                  more accurate than the one we iterated on before.
@@ -227,11 +230,11 @@ public actor LinearBlobConnector {
                  to see what we might find.
                  */
 
-                if let line = await firstBlob.originZeroLine {
+                if let line = await fullBlob.originZeroLine {
                     if iterationCount < 10 { // XXX constant
                         Log.d("frame \(analyzer.frameIndex) ITERATING iterationCount \(iterationCount)")
                         await self.iterate(on: line,
-                                           over: firstBlob,
+                                           over: fullBlob,
                                            lineBorder: lineBorder,
                                            iterationCount: iterationCount + 1)
                     } else {
@@ -239,10 +242,11 @@ public actor LinearBlobConnector {
                     }
 
                     if iterationCount == 0 {
-                        // try to trim firstBlob if we can, we may have some pixels
+                        // try to trim fullBlob if we can, we may have some pixels
                         // that don't really fit the final line we ended up with
-                        await firstBlob.lineTrim()
-                        await firstBlob.fancyLineTrim(by: 2)
+                        await fullBlob.lineTrim()
+//                        await fullBlob.fancyLineTrim(by: 2)
+                        analyzer.update(blob: fullBlob) 
                     }
                 }
             } else {

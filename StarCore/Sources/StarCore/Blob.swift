@@ -443,18 +443,27 @@ public actor Blob: CustomStringConvertible,
 
     public func absorb(_ otherBlob: Blob, always: Bool = false) async -> Bool {
         if always || self.id != otherBlob.id {
-
-            //let selfBeforeSize = self.size
+            
+            let selfBeforeSize = self.size()
             
             let newPixels = await otherBlob.getPixels()
+            var updatedPixels = self.pixels
             for otherPixel in newPixels {
                 await statusTracker?.record(status: .blobbed(self), for: otherPixel)
-                self.pixels.update(with: otherPixel)
+                updatedPixels.update(with: otherPixel)
             }
+            self.pixels = updatedPixels
             reset()
 
-            //let selfAfterSize = self.size
+            let selfAfterSize = self.size()
 
+            if selfAfterSize != selfBeforeSize + (await otherBlob.size()) {
+                //Log.w("frame \(frameIndex) blob \(self.id) \(selfAfterSize) != \(selfBeforeSize) + \(await otherBlob.size())")
+                if frameIndex == 0 {
+                  //  Log.i("frame \(frameIndex) blob \(self.id) \(self.pixels.count) pixels \(self.pixels)")
+                    //Log.i("frame \(frameIndex) other blob \(otherBlob.id) pixels \(await otherBlob.pixels)")
+                }
+            }
             //if selfAfterSize != selfBeforeSize + otherBlob.size {
                 // here the blobs overlapped, which isn't supposed to happen
                 //Log.w("frame \(frameIndex) blob \(self.id) size \(selfBeforeSize) -> \(selfAfterSize) absorbed blob \(otherBlob.id) size \(otherBlob.size)")

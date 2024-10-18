@@ -72,6 +72,10 @@ public class BlobProcessor {
           
           // a first pass at cutting out individual blobs based upon size, brightness
           // or being too close to the bottom
+
+          // XXX sometimes this gets rid of blobs from lines that we want :(
+          // XXX maybe do linear analysis first?
+          // XXX or use dim isolated blobber instead of this VVV
           .process() { blobs in
               var ret: [UInt16: Blob] = [:]
 
@@ -104,6 +108,8 @@ public class BlobProcessor {
 
 
           // find really close linear blobs
+          // XXX does this really get rid of pixels on the line? (frame 72 fx3-2)
+          // may have fixed that, let's see
           .linearBlobConnector(.init(scanSize: 24, 
                                      blobsSmallerThan: 80,
                                      lineBorder: 20)),
@@ -116,12 +122,10 @@ public class BlobProcessor {
           
           .frameState(.isolatedBlobRemoval2),
 
-          .save(.filter3),
 
           // remove isolated blobs
           .isolatedBlobRemover(.init(minNeighborSize: 6, scanSize: 24)),
           
-          .save(.filter4),
           .frameState(.isolatedBlobRemoval3),
 
           // remove smaller disconected blobs
@@ -136,6 +140,7 @@ public class BlobProcessor {
                                      blobsSmallerThan: 120,
                                      lineBorder: 10)),
 
+          .save(.filter3),
           .frameState(.isolatedBlobRemoval4),
 
           // remove larger disconected blobs
@@ -150,6 +155,7 @@ public class BlobProcessor {
                                      blobsSmallerThan: 500)),
 
 
+          .save(.filter4),
           // get rid of really big blobs with a line but that aren't close to it
           .process() { blobs in
               // weed out blobs that are too small and not bright enough
@@ -159,30 +165,44 @@ public class BlobProcessor {
               for (_, blob) in blobs {
                   // discard any blobs that are still too small or dim
                   if let line = await blob.originZeroLine {
-                      let (distance, lineLength) = await blob.averageDistanceAndLineLength(from: line)
+
+                      // XXX use median?
+                      let (distance, lineLength) =
+                        await blob.averageDistanceAndLineLength(from: line)
+
+                      let (averageDistance, medianDistance, maxDistance) =
+                        await blob.averageMedianMaxDistance(from: line)
+
+                      // XXX maybe try trimming lines here, this is a little too agressive,
+                      // some really good lines get dumped because of some errant outlying pixels
+
+                      
                       if distance < lineLength {
                           let lineFillAmount = await blob.lineFillAmount()
-
 
                           if lineLength > 400,
                              lineFillAmount < 0.01
                           {
                               // big blobby in the house
-                              
+                              //Log.d("frame \(frame.frameIndex) discarding blob \(blob)")
                           } else  if lineLength > 400, // XXX constants
-                                     distance > 15
+                                     medianDistance > 15
                           {
                               // another big blob we don't want
+                              //Log.d("frame \(frame.frameIndex) discarding blob \(blob)")
                               
                           } else if lineLength > 100, // XXX constants
-                             distance > 10,
-                             lineFillAmount < 0.1
+                                    medianDistance > 10,
+                                    lineFillAmount < 0.01
                           {
+                              //Log.d("frame \(frame.frameIndex) discarding blob \(blob) because lineLength \(lineLength) medianDistance \(medianDistance) lineFillAmount \(lineFillAmount)")
                               // don't keep it, it's a cloud of junk
                           } else  {
                               // this blob is good enough for now
                               ret[blob.id] = blob
                           }
+                      } else {
+                          //Log.d("frame \(frame.frameIndex) discarding blob \(blob)")
                       }
                   } else {
                       // keep blobs with no line just in case
