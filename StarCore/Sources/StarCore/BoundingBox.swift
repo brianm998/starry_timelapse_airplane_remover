@@ -25,6 +25,12 @@ public struct BoundingBox: Codable,
         return sqrt(width*width + height*height)
     }
 
+    public var zeroCentered: BoundingBox {
+        BoundingBox(min: Coord(x: 0, y: 0),
+                    max: Coord(x: self.max.x-self.min.x,
+                               y: self.max.y-self.min.y))
+    }
+
     public static func == (lhs: BoundingBox, rhs: BoundingBox) -> Bool {
         lhs.min == rhs.min && lhs.max == rhs.max 
     }
