@@ -2,6 +2,7 @@ import SwiftUI
 import StarCore
 import Combine
 import KHTSwift
+import logging
 
 // the view model for a single outlier group
 
@@ -27,18 +28,6 @@ class OutlierGroupViewModel: Identifiable {
         if let shouldPaint = await group.shouldPaint() {
             paintObserver.shouldPaint = shouldPaint
         }
-        Task.detached {
-            if let line = await group.line() {
-                await MainActor.run {
-                    self.line = line
-                    self.lineIsLoading = false
-                }
-            } else {
-                await MainActor.run {
-                    self.lineIsLoading = false
-                }
-            }
-        }
     }
 
     let id = UUID()
@@ -47,7 +36,30 @@ class OutlierGroupViewModel: Identifiable {
         paintObserver.shouldPaint = paintReason
     }
 
-    var line: Line?
+    private var _line: Line?
+
+    private var lineLoaded = false
+    
+    var line: Line? {
+
+        if !lineLoaded {        // lazy load in the background, can take awhile
+            Task.detached {
+                if let line = await self.group.line() {
+                    await MainActor.run {
+                        self._line = line
+                        self.lineIsLoading = false
+                    }
+                } else {
+                    await MainActor.run {
+                        self.lineIsLoading = false
+                    }
+                }
+            }
+        }
+        
+        return _line
+    }
+    
     var lineIsLoading = true
     
     var pointsForLineOnBounds: [CGPoint] {
