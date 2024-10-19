@@ -114,7 +114,7 @@ struct OutlierGroupView: View {
                             bottom_line_height / 2 + half_bounds_height)
             }
             
-            ZStack() {
+            ZStack(alignment: .topLeading) {
                 if self.groupViewModel.arrowSelected {
                     // underlay for when this outlier group is hovered over
                     Rectangle() // fill that is transparent
@@ -125,12 +125,30 @@ struct OutlierGroupView: View {
                       .foregroundColor(paint_color)
                       .blendMode(.difference)
                       .opacity(0.5)
+
+                    if self.groupViewModel.lineIsLoading {
+                        Text("calculating line ...")
+                          .foregroundColor(.white)
+                    }
+                    
+                    // draw line here
+                    if let line = self.groupViewModel.line {
+                        Path { path in
+                            path.addLines(self.groupViewModel.pointsForLineOnBounds)
+                            path.closeSubpath()
+                        }
+                          .stroke(.white, lineWidth: 8)
+                          .opacity(0.33)
+                    }
+                    
                 }
                 // the actual outlier group image
                 Image(nsImage: self.groupViewModel.image)
                   .renderingMode(.template) // makes this VV color work
                   .foregroundColor(paint_color)
                   .blendMode(.hardLight)
+
+                
             }
               .offset(x: CGFloat(bounds.min.x) - half_frame_width + half_bounds_width,
                       y: CGFloat(bounds.min.y) - half_frame_height + half_bounds_height)

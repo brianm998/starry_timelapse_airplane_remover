@@ -1,6 +1,7 @@
 import SwiftUI
 import StarCore
 import Combine
+import KHTSwift
 
 // the view model for a single outlier group
 
@@ -14,7 +15,7 @@ class OutlierGroupViewModel: Identifiable {
           group: OutlierGroup,
           name: UInt16,
           bounds: BoundingBox,
-          image: NSImage)
+          image: NSImage) async
     {
         self.viewModel = viewModel
         self.group = group
@@ -22,10 +23,20 @@ class OutlierGroupViewModel: Identifiable {
         self.bounds = bounds
         self.image = image
 
-        Task {
-            await group.set(paintObserver: paintObserver)
-            if let shouldPaint = await group.shouldPaint() {
-                paintObserver.shouldPaint = shouldPaint
+        await group.set(paintObserver: paintObserver)
+        if let shouldPaint = await group.shouldPaint() {
+            paintObserver.shouldPaint = shouldPaint
+        }
+        Task.detached {
+            if let line = await group.line() {
+                await MainActor.run {
+                    self.line = line
+                    self.lineIsLoading = false
+                }
+            } else {
+                await MainActor.run {
+                    self.lineIsLoading = false
+                }
             }
         }
     }
@@ -36,6 +47,17 @@ class OutlierGroupViewModel: Identifiable {
         paintObserver.shouldPaint = paintReason
     }
 
+    var line: Line?
+    var lineIsLoading = true
+    
+    var pointsForLineOnBounds: [CGPoint] {
+        if let line {
+            let zeroCentered = self.group.bounds.zeroCentered
+            let points = zeroCentered.intersections(with: line.standardLine)
+            return points.map { CGPoint(x: $0.x, y: $0.y) }
+        }
+        return []
+    }
     
     deinit {
      // let group = self.group

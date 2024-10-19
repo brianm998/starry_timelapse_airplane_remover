@@ -175,7 +175,6 @@ public final class ViewModel {
 
     var inTransition = false
 
-
     fileprivate var videoPlaybackTask: Task<Void,Never>?
     
     var outlierLoadingProgress: Double {
@@ -229,11 +228,11 @@ public final class ViewModel {
     var eraserTask: Task<(),Never>?
     
     func set(numberOfFrames: Int) {
-        Task {
-            await MainActor.run {
-                frames = [FrameViewModel](count: numberOfFrames) { i in FrameViewModel(i) }
-            }
-        }
+//        Task.detached {
+//            await MainActor.run {
+              self.frames = [FrameViewModel](count: numberOfFrames) { i in FrameViewModel(i) }
+//            }
+//        }
     }
     
     func refresh(frame: FrameAirplaneRemover) {
@@ -252,19 +251,19 @@ public final class ViewModel {
             
             let acc = await frame.imageAccessor
 
-            let vpTask = Task { acc.loadImage(type: .validated,  atSize: .preview)?.resizable() }
-            let spTask = Task { acc.loadImage(type: .subtracted, atSize: .preview)?.resizable() }
-            let bpTask = Task { acc.loadImage(type: .blobs,      atSize: .preview)?.resizable() }
-            let f1Task = Task { acc.loadImage(type: .filter1,    atSize: .preview)?.resizable() }
-            let f2Task = Task { acc.loadImage(type: .filter2,    atSize: .preview)?.resizable() }
-            let f3Task = Task { acc.loadImage(type: .filter3,    atSize: .preview)?.resizable() }
-            let f4Task = Task { acc.loadImage(type: .filter4,    atSize: .preview)?.resizable() }
-            let f5Task = Task { acc.loadImage(type: .filter5,    atSize: .preview)?.resizable() }
-            let f6Task = Task { acc.loadImage(type: .filter6,    atSize: .preview)?.resizable() }
-            let ppTask = Task { acc.loadImage(type: .paintMask,  atSize: .preview)?.resizable() }
-            let prTask = Task { acc.loadImage(type: .processed,  atSize: .preview)?.resizable() }
-            let opTask = Task { acc.loadImage(type: .original,   atSize: .preview)?.resizable() }
-            let otTask = Task { acc.loadImage(type: .original,   atSize: .thumbnail) }
+            let vpTask = Task.detached { acc.loadImage(type: .validated,  atSize: .preview)?.resizable() }
+            let spTask = Task.detached { acc.loadImage(type: .subtracted, atSize: .preview)?.resizable() }
+            let bpTask = Task.detached { acc.loadImage(type: .blobs,      atSize: .preview)?.resizable() }
+            let f1Task = Task.detached { acc.loadImage(type: .filter1,    atSize: .preview)?.resizable() }
+            let f2Task = Task.detached { acc.loadImage(type: .filter2,    atSize: .preview)?.resizable() }
+            let f3Task = Task.detached { acc.loadImage(type: .filter3,    atSize: .preview)?.resizable() }
+            let f4Task = Task.detached { acc.loadImage(type: .filter4,    atSize: .preview)?.resizable() }
+            let f5Task = Task.detached { acc.loadImage(type: .filter5,    atSize: .preview)?.resizable() }
+            let f6Task = Task.detached { acc.loadImage(type: .filter6,    atSize: .preview)?.resizable() }
+            let ppTask = Task.detached { acc.loadImage(type: .paintMask,  atSize: .preview)?.resizable() }
+            let prTask = Task.detached { acc.loadImage(type: .processed,  atSize: .preview)?.resizable() }
+            let opTask = Task.detached { acc.loadImage(type: .original,   atSize: .preview)?.resizable() }
+            let otTask = Task.detached { acc.loadImage(type: .original,   atSize: .thumbnail) }
 
             if let image = await vpTask.value {
                 self.frames[frame.frameIndex].validationPreviewImage = image
