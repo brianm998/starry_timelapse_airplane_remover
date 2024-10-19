@@ -69,6 +69,21 @@ public class BlobProcessor {
           .create(findBlobs),
 
           .save(.blobs),          
+
+
+
+
+          .frameState(.isolatedBlobRemoval1),
+
+
+          // find really close linear blobs
+          // XXX does this really get rid of pixels on the line? (frame 72 fx3-2)
+          // may have fixed that, let's see
+          .linearBlobConnector(.init(scanSize: 24, 
+                                     blobsSmallerThan: 80,
+                                     lineBorder: 20)),
+
+          .save(.filter1),
           
           // a first pass at cutting out individual blobs based upon size, brightness
           // or being too close to the bottom
@@ -102,18 +117,6 @@ public class BlobProcessor {
               }
               return ret
           },
-
-          .save(.filter1),
-          .frameState(.isolatedBlobRemoval1),
-
-
-          // find really close linear blobs
-          // XXX does this really get rid of pixels on the line? (frame 72 fx3-2)
-          // may have fixed that, let's see
-          .linearBlobConnector(.init(scanSize: 24, 
-                                     blobsSmallerThan: 80,
-                                     lineBorder: 20)),
-
           .save(.filter2),
           
           // a first pass on dim isolated blob removal

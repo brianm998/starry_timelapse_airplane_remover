@@ -133,10 +133,9 @@ public actor LinearBlobConnector {
                 await iterate(on: blobLine,
                               over: fullBlob,
                               lineBorder: args.lineBorder)
-            }
 
-            
-            // trim the blob here?
+                // trim the blob here?
+            }
         }
         //await analyzer.logBlobs()     // XXX 
     }
@@ -244,7 +243,7 @@ public actor LinearBlobConnector {
                     if iterationCount == 0 {
                         // try to trim fullBlob if we can, we may have some pixels
                         // that don't really fit the final line we ended up with
-                        await fullBlob.lineTrim()
+                        //await fullBlob.lineTrim() // needs to be better
 //                        await fullBlob.fancyLineTrim(by: 2)
                         analyzer.update(blob: fullBlob) 
                     }
