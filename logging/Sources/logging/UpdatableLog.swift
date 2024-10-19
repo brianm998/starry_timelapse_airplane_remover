@@ -180,9 +180,9 @@ public actor UpdatableLog {
     {
         var found = false
         let new_logline = UpdatableLogLine(name: name,
-                                            message: message,
-                                            value: value,
-                                            value2: value2);
+                                           message: message,
+                                           value: value,
+                                           value2: value2);
         // first look at is it in the list
         for line in self.list {
             if line.name == name {

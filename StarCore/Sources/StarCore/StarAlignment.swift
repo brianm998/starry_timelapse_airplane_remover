@@ -70,8 +70,19 @@ push enter
     // the file should be an aligned version of alignmentImageName
     public static func align(_ alignmentImageName: String,
                              to referenceImageName: String,
-                             inDir outputDirname: String) -> String? {
-
+                             inDir outputDirname: String) async throws -> String?
+    {
+        try await fileSystemMonitor.load() {
+            StarAlignment.alignInt(alignmentImageName,
+                                   to: referenceImageName,
+                                   inDir: outputDirname)
+        }
+    }
+    
+    private static func alignInt(_ alignmentImageName: String,
+                                 to referenceImageName: String,
+                                 inDir outputDirname: String) -> String?
+    {
         let comps = referenceImageName.components(separatedBy: "/")
         let baseFile = comps[comps.count-1]
         let comps2 = baseFile.components(separatedBy: ".")

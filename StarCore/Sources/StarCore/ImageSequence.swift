@@ -95,8 +95,13 @@ public actor ImageSequence {
     private var loadedFilenames: [String] = []
 
     private var maxImages: Int? // XXX set this low for gui, eating more ram than necessary
+
+    // use file access monitor
+    public func getImage(withName filename: String) async throws -> ImageLoader {
+        try await fileSystemMonitor.load() { await self.getImageInt(withName: filename) }
+    }
     
-    public func getImage(withName filename: String) -> ImageLoader {
+    private func getImageInt(withName filename: String) -> ImageLoader {
         Log.d("getImage(withName: \(filename))")
         if let image = images[filename] {
             Log.d("image was cached")
@@ -113,7 +118,7 @@ public actor ImageSequence {
         if let maxImages = maxImages {
             _maxImages = maxImages
         } else if ImageSequence.imageWidth != 0,
-                 ImageSequence.imageHeight != 0
+                  ImageSequence.imageHeight != 0
         {
             // calculate the max number of images to keep in ram at once
             // use the amount of physical ram / size of images

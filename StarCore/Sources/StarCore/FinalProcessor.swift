@@ -142,7 +142,7 @@ public actor FinalProcessor {
                     Log.d("adding frame \(frame.frameIndex) to final queue")
                     try await taskGroup.addTask() {
 
-                        await frame.maybeApplyOutlierGroupClassifier()
+                        try await frame.maybeApplyOutlierGroupClassifier()
 
                         await frame.set(state: .outlierProcessingComplete)
                         try await self.finish(frame: frame)
@@ -272,7 +272,7 @@ public actor FinalProcessor {
                                 
                                 await frameToFinish.clearOutlierGroupValueCaches()
 
-                                await frameToFinish.maybeApplyOutlierGroupClassifier()
+                                try await frameToFinish.maybeApplyOutlierGroupClassifier()
                                 await frameToFinish.set(state: .outlierProcessingComplete)
 
                                 Log.v("FINAL THREAD frame \(indexToProcess) classified")

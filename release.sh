@@ -11,9 +11,10 @@ set -e
 # this is a large c++ library that is used by the kernel hough transform 
 ####
 
-cd opencv
-./release.sh
-cd ..
+# doesn't properly build for all archs on i86 :(
+#cd opencv
+#./release.sh
+#cd ..
 
 # results end up here:
 # opencv/lib

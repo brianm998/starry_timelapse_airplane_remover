@@ -381,10 +381,10 @@ struct StarCli: AsyncParsableCommand {
                 if let _ = callbacks.updatable {
                     // setup sequence monitor
                     let updatableProgressMonitor =
-                      await UpdatableProgressMonitor(frameCount: frameCount,
-                                                     numConcurrentRenders: 30, // xXX
-                                                     config: config,
-                                                     callbacks: callbacks)
+                      UpdatableProgressMonitor(frameCount: frameCount,
+                                               numConcurrentRenders: 30, // xXX
+                                               config: config,
+                                               callbacks: callbacks)
                     callbacks.frameStateChangeCallback = { frame, state in
                         // XXX make sure to wait for this
                         Task(priority: .userInitiated) {
@@ -407,7 +407,7 @@ struct StarCli: AsyncParsableCommand {
             throw ValidationError("need to provide input")
         }
         await TaskWaiter.shared.finish()
-        await logging.gremlin.finishLogging() 
+        await logging.gremlin.finishLogging() // XXX broken on swift6 :(
     }
 }
 

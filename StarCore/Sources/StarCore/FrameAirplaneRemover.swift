@@ -225,13 +225,13 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     private let baseFilename: String
     
     // lazy loaded aligned a neighboring frame
-    public func starAlignedImage() async -> PixelatedImage? {
+    public func starAlignedImage() async throws -> PixelatedImage? {
         
         let alignmentFilename = otherFilename
 
 //        let accessor = imageAccessor
         
-        if let alignedFrame = await imageAccessor.load(type: .aligned, atSize: .original) {
+        if let alignedFrame = try await imageAccessor.load(type: .aligned, atSize: .original) {
             Log.d("frame \(frameIndex) loaded existing aligned frame")
             return alignedFrame
         } else {
@@ -246,14 +246,14 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 //                }
                 Log.d("frame \(frameIndex) alignedFilename start")
                 
-                let alignedFilename = StarAlignment.align(alignmentFilename,
-                                                          to: baseFilename,
-                                                          inDir: dirname)
+                let alignedFilename = try await StarAlignment.align(alignmentFilename,
+                                                                    to: baseFilename,
+                                                                    inDir: dirname)
 
                 Log.d("frame \(frameIndex) alignedFilename \(String(describing: alignedFilename))")
                 if let alignedFilename {
                     Log.d("frame \(frameIndex) got aligned filename \(alignedFilename)")
-                    if let alignedFrame = await imageAccessor.load(type: .aligned, atSize: .original) {
+                    if let alignedFrame = try await imageAccessor.load(type: .aligned, atSize: .original) {
                         return alignedFrame
                     } else {
                         Log.e("frame \(frameIndex) could not load aligned frame")
@@ -324,17 +324,17 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         
         Log.i("frame \(self.frameIndex) finishing")
 
-        guard let image = await imageAccessor.load(type: .original, atSize: .original)
+        guard let image = try await imageAccessor.load(type: .original, atSize: .original)
         else { throw "couldn't load original file for finishing" }
         
         try await imageAccessor.save(image, as: .original, atSize: .preview, overwrite: false)
         try await imageAccessor.save(image, as: .original, atSize: .thumbnail, overwrite: false)
 
-        var otherFrame = await imageAccessor.load(type: .aligned, atSize: .original)
+        var otherFrame = try await imageAccessor.load(type: .aligned, atSize: .original)
         if otherFrame == nil {
             // try creating the star aligned image if we can't load it
             Log.i("doing star alignment at finish")
-            otherFrame = await starAlignedImage()
+            otherFrame = try await starAlignedImage()
         }
         
         guard let otherFrame else {

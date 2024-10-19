@@ -17,20 +17,23 @@ my $last_arg = pop @ARGV;
 my $args = join(' ', @ARGV);
 
 my $restarts = 0;
-my $encode_results = 0;
+my $encode_results = 1;
+my $run_star = 0;
 
 my $ntar_last_arg = $last_arg;
 
-if(-f $last_arg) {
-  validate();
-  validate_exiftool();
-  $encode_results = 1;
-  $ntar_last_arg = extract_image_sequence_from_video($last_arg, "FRAME_", "tiff");
-}
+#if(-f $last_arg) {
+#  validate();
+#  validate_exiftool();
+#  $encode_results = 1;
+#  $ntar_last_arg = extract_image_sequence_from_video($last_arg, "IMG_", "tiff");
+#}
 
-while(system("ntar $args $ntar_last_arg") != 0) {
-  $restarts++;
-  print "trying again\n";
+if($run_star) {
+    while(system("ntar $args $ntar_last_arg") != 0) {
+	$restarts++;
+	print "trying again\n";
+    }
 }
 
 print "doh!, ntar crashed $restarts times :(\n" unless($restarts == 0);
@@ -38,15 +41,16 @@ print "doh!, ntar crashed $restarts times :(\n" unless($restarts == 0);
 if($encode_results) {
   # find output dirname from ntar
   $ntar_last_arg =~ s/[.][^.]+$//; # remove any file extension
-  open my $fh, "ls -d $ntar_last_arg"."-ntar* |" or die $!;
+#  open my $fh, "ls -d $ntar_last_arg"."-ntar* |" or die $!;
+  open my $fh, "ls -d $ntar_last_arg |" or die $!;
   my $ntar_output_dir = <$fh>;
   chomp $ntar_output_dir;
   close $fh;
 
-  my $output_video_filename = render($ntar_output_dir, "FRAME_");
+  my $output_video_filename = render($ntar_output_dir, "IMG_");
 
-  system("rm -rf $ntar_output_dir");
-  system("rm -rf $ntar_last_arg");
+#  system("rm -rf $ntar_output_dir");
+#  system("rm -rf $ntar_last_arg");
 
   print("rendered $output_video_filename\n");
 }

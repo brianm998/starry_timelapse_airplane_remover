@@ -22,7 +22,7 @@ public final class UpdatableLogHandler: LogHandler {
                     at logLevel: Log.Level,
                     logTime: TimeInterval)
     {
-        Task {
+        Task.detached {
             var logMessage = ""
             if let data {
                 logMessage = "\(logLevel.emo) \(logLevel) | \(fileLocation): \(message) | \(data.description)"
@@ -32,7 +32,7 @@ public final class UpdatableLogHandler: LogHandler {
 
             await self.updatable.log(name: "\(logTime)",
                                      message: logMessage,
-                                     value: logTime)
+                                     value: logTime) // XXX fix this
         }
     }
     
@@ -68,14 +68,14 @@ public actor UpdatableProgressMonitor {
             padding = String(repeating: " ", count: (config.progressBarLength - self.numConcurrentRenders))
         }
         self.padding = padding
-        Task {
+        Task.detached {
             await self.startLoop()
         }
     }
 
     private func startLoop() {
         DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-            Task {
+            Task.detached {
                 await self.redraw()
                 await self.startLoop()
             }

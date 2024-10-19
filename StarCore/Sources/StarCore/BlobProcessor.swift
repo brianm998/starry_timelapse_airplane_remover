@@ -136,6 +136,7 @@ public class BlobProcessor {
                                          blobsSmallerThan: 18,
                                          requiredNeighbors: 2)),
 
+          .save(.filter3),
           .frameState(.smallLinearBlobAbsorbtion),
           
           // find really close linear blobs
@@ -143,23 +144,24 @@ public class BlobProcessor {
                                      blobsSmallerThan: 120,
                                      lineBorder: 10)),
 
-          .save(.filter3),
           .frameState(.isolatedBlobRemoval4),
 
+          .save(.filter4),
+          
           // remove larger disconected blobs
           .disconnectedBlobRemover(.init(scanSize: 60,
                                          blobsSmallerThan: 50,
                                          blobsLargerThan: 18,
                                          requiredNeighbors: 2)),
           .frameState(.largerLinearBlobAbsorbtion),
-          
+
           // then try to connect more distant linear blobs
           .linearBlobConnector(.init(scanSize: 50,
                                      blobsSmallerThan: 500)),
 
 
-          .save(.filter4),
           // get rid of really big blobs with a line but that aren't close to it
+          /*
           .process() { blobs in
               // weed out blobs that are too small and not bright enough
 
@@ -214,7 +216,7 @@ public class BlobProcessor {
               }
               return ret
           },
-
+          */
           .save(.filter5),
           .frameState(.finalCrunch),
 
@@ -332,7 +334,7 @@ public class BlobProcessor {
         do {
             // try to load the image subtraction from a pre-processed file
 
-            if let image = await imageAccessor.load(type: .subtracted, atSize: .original) {
+            if let image = try await imageAccessor.load(type: .subtracted, atSize: .original) {
                 Log.d("frame \(frameIndex) loaded subtraction image")
                 subtractionImage = image
                 switch image.imageData {
@@ -366,7 +368,7 @@ public class BlobProcessor {
             Log.d("frame \(frameIndex) loaded subtractionArray with \(subtractionArray.count) items")
         }
 
-        guard let originalImage = await imageAccessor.load(type: .original, atSize: .original)
+        guard let originalImage = try await imageAccessor.load(type: .original, atSize: .original)
         else { throw "couldn't load original file for finishing" }
 
         switch originalImage.imageData {

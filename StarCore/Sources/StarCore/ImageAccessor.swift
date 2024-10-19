@@ -49,14 +49,14 @@ public protocol ImageAccess: Sendable {
 
     // load an image of some type and size
     func load(type imageType: FrameImageType,
-              atSize size: ImageDisplaySize) async -> PixelatedImage?
+              atSize size: ImageDisplaySize) async throws -> PixelatedImage?
 
     func urlForImage(ofType imageType: FrameImageType,
                      atSize size: ImageDisplaySize) -> URL?
     
     // load an image of some type and size
-    func loadNSImage(type imageType: FrameImageType,
-                     atSize size: ImageDisplaySize) -> NSImage?
+//    func loadNSImage(type imageType: FrameImageType,
+//                     atSize size: ImageDisplaySize) -> NSImage?
     
     // load an image of some type and size
     func loadImage(type imageType: FrameImageType,
@@ -76,7 +76,7 @@ public protocol ImageAccess: Sendable {
 }
 
 // read and write access to different image types for a given frame
-public struct ImageAccessor: ImageAccess, @unchecked Sendable {
+public struct ImageAccessor: ImageAccess, Sendable {
     let config: Config
     let baseDirName: String
     let baseFileName: String
@@ -177,7 +177,7 @@ public struct ImageAccessor: ImageAccess, @unchecked Sendable {
                             atSize size: ImageDisplaySize) -> URL?
     {
         if let filename = nameForImage(ofType: imageType, atSize: size) {
-            if fileManager.fileExists(atPath: filename) {
+            if FileManager.default.fileExists(atPath: filename) {
                 return URL(fileURLWithPath: filename)
             } else {
                 Log.w("file does not exist at \(filename)")
@@ -188,15 +188,22 @@ public struct ImageAccessor: ImageAccess, @unchecked Sendable {
         return nil
     }
 
+    // load using the file system monitor
     public func load(type imageType: FrameImageType,
-                     atSize size: ImageDisplaySize) async -> PixelatedImage?
+                     atSize size: ImageDisplaySize) async throws -> PixelatedImage?
+    {
+        try await fileSystemMonitor.load() { await loadInt(type: imageType, atSize: size) }
+    }
+
+    private func loadInt(type imageType: FrameImageType,
+                         atSize size: ImageDisplaySize) async -> PixelatedImage?
     {
         var numRetries = 4
 
         while numRetries > 0 {
             do {
                 if let filename = nameForImage(ofType: imageType, atSize: size) {
-                    if fileManager.fileExists(atPath: filename) {
+                    if FileManager.default.fileExists(atPath: filename) {
                         return try await imageSequence.getImage(withName: filename).image()
                         //return try await PixelatedImage(fromFile: filename)
                     } else {
@@ -234,10 +241,25 @@ public struct ImageAccessor: ImageAccess, @unchecked Sendable {
         return nil
     }
 
+    // save using the file system monitor
     public func save(_ image: PixelatedImage,
                      as type: FrameImageType,
                      atSize size: ImageDisplaySize,
                      overwrite: Bool) async throws
+    {
+        try await fileSystemMonitor.save() {
+            try await saveInt(image,
+                              as: type,
+                              atSize: size,
+                              overwrite: overwrite)
+        }
+    }
+            
+    // make this use the file access guard
+    private func saveInt(_ image: PixelatedImage,
+                         as type: FrameImageType,
+                         atSize size: ImageDisplaySize,
+                         overwrite: Bool) async throws
     {
         if let filename = nameForImage(ofType: type, atSize: size) {
             var dataToSave: Data? = nil
@@ -252,10 +274,10 @@ public struct ImageAccessor: ImageAccess, @unchecked Sendable {
             if let dataToSave = dataToSave {
                 // only used for previews and thumbnails
                 var canCreate = true
-                if fileManager.fileExists(atPath: filename) {
+                if FileManager.default.fileExists(atPath: filename) {
                     if overwrite {
                         Log.i("overwriting already existing file \(filename)")
-                        try fileManager.removeItem(atPath: filename)
+                        try FileManager.default.removeItem(atPath: filename)
                     } else {
                         Log.i("not overwriting already existing file \(filename)")
                         canCreate = false
@@ -264,7 +286,7 @@ public struct ImageAccessor: ImageAccess, @unchecked Sendable {
 
                 if canCreate {
                     // write to file
-                    fileManager.createFile(atPath: filename,
+                    FileManager.default.createFile(atPath: filename,
                                            contents: dataToSave,
                                            attributes: nil)
                 }
@@ -403,7 +425,7 @@ public struct ImageAccessor: ImageAccess, @unchecked Sendable {
                             atSize size: ImageDisplaySize) -> Bool
     {
         if let filename = nameForImage(ofType: type, atSize: size) {
-            return fileManager.fileExists(atPath: filename)
+            return FileManager.default.fileExists(atPath: filename)
         }
         return false
     }
@@ -442,18 +464,18 @@ public struct ImageAccessor: ImageAccess, @unchecked Sendable {
     {
         if let filename = nameForImage(ofType: type, atSize: size),
            let smallerSize = sizeOf(size),
-           let fullResImage = await load(type: type, atSize: .original),
+           let fullResImage = try await load(type: type, atSize: .original),
            let scaledImageData = fullResImage.nsImage(ofSize: smallerSize)
         {
             let dataToSave = scaledImageData.jpegData
             
-            if fileManager.fileExists(atPath: filename) {
+            if FileManager.default.fileExists(atPath: filename) {
                 Log.i("overwriting already existing file \(filename)")
-                try fileManager.removeItem(atPath: filename)
+                try FileManager.default.removeItem(atPath: filename)
             }
 
             // write to file
-            fileManager.createFile(atPath: filename,
+            FileManager.default.createFile(atPath: filename,
                                 contents: dataToSave,
                                 attributes: nil)
 
@@ -469,4 +491,3 @@ public struct ImageAccessor: ImageAccess, @unchecked Sendable {
     
 }
 
-nonisolated(unsafe) fileprivate let fileManager = FileManager.default

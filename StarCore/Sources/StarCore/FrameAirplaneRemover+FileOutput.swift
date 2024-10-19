@@ -25,6 +25,10 @@ extension FrameAirplaneRemover {
     // write out just the OutlierGroupValueMatrix, which just what
     // the decision tree needs, and not very large
     public func writeOutlierValuesCSV() async throws {
+        try await fileSystemMonitor.save() { try await self.writeOutlierValuesCSVInt() }
+    }
+    
+    private func writeOutlierValuesCSVInt() async throws {
 
         Log.d("frame \(self.frameIndex) writeOutlierValuesCSV")
         if config.writeOutlierGroupFiles {
@@ -68,7 +72,9 @@ extension FrameAirplaneRemover {
     public func writeOutliersBinary() async {
         if config.writeOutlierGroupFiles {
             do {
-                try await self.outlierGroups?.write(to: self.outlierOutputDirname)
+                try await fileSystemMonitor.save() {
+                    try await self.outlierGroups?.write(to: self.outlierOutputDirname)
+                }
             } catch {
                 Log.e("error \(error)")
             }                

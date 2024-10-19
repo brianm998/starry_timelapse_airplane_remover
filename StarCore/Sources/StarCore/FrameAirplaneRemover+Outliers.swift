@@ -28,10 +28,10 @@ extension FrameAirplaneRemover {
 
     // loads outliers from a combination of the outliers.tiff image and the subtraction image,
     // if they are present
-    public func loadOutliersFromFile() async -> OutlierGroups? {
+    public func loadOutliersFromFile() async throws -> OutlierGroups? {
         let startTime = Date().timeIntervalSinceReferenceDate
 
-        guard let subtractionImage = await self.imageAccessor.load(type: .subtracted, atSize: .original)
+        guard let subtractionImage = try await self.imageAccessor.load(type: .subtracted, atSize: .original)
         else {
             Log.i("couldn't load subtraction image for loading outliers")
             return nil
@@ -110,7 +110,7 @@ extension FrameAirplaneRemover {
     public func loadOutliers() async throws {
         if self.outlierGroups == nil {
             Log.d("frame \(frameIndex) loading outliers")
-            if let outlierGroups = await loadOutliersFromFile() {
+            if let outlierGroups = try await loadOutliersFromFile() {
                 Log.d("frame \(frameIndex) loading outliers from file")
                 for outlier in await outlierGroups.getMembers().values {
                     await outlier.set(frame: self) 
@@ -207,7 +207,7 @@ extension FrameAirplaneRemover {
         }
     }
 
-    public func maybeApplyOutlierGroupClassifier() async {
+    public func maybeApplyOutlierGroupClassifier() async throws {
 
         var shouldUseDecisionTree = true
         /*
@@ -221,7 +221,7 @@ extension FrameAirplaneRemover {
            - don't apply decision tree, use the validation image instead
          */
 
-        if let image = await imageAccessor.load(type: .validated, atSize: .original) {
+        if let image = try await imageAccessor.load(type: .validated, atSize: .original) {
             switch image.imageData {
             case .eightBit(let validationArr):
                 await classifyOutliers(with: validationArr)

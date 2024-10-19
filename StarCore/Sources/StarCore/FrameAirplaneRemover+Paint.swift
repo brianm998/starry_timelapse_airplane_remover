@@ -42,7 +42,7 @@ extension FrameAirplaneRemover {
             return
         }
 
-        guard let image = await imageAccessor.load(type: .original, atSize: .original)
+        guard let image = try await imageAccessor.load(type: .original, atSize: .original)
         else { throw "couldn't load image" }
         
         // the alpha level to apply to each pixel in the image

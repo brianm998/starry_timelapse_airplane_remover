@@ -30,7 +30,7 @@ fi
 # the OutlierGroup classification features are updated, to either
 # give different values for existing features, or to add or remove features.
 
-./regen_outlier_values.pl
+#./regen_outlier_values.pl
 
 # apply outlier group classification to the raw outlier feature data
 # to sort them into positive_data.csv and negative_data.csv files
@@ -38,18 +38,18 @@ fi
 # or if there are changes from regenerating the outlier values above
 
 cd ../outlier_feature_data_classifier
-swift run -Xswiftc -O  outlier_feature_data_classifier -v ../decision_tree_generator/validated_sequences.json
+#swift run -Xswiftc -O  outlier_feature_data_classifier -v ../decision_tree_generator/validated_sequences.json
 cd ../decision_tree_generator
 
 # condense the csv files into a single spot
-./condense_outlier_csv_files.pl /qp/star_validated/$1
+#./condense_outlier_csv_files.pl /qp/star_validated/$1
 
 
 # split them for test/train
-./outlier_csv_split.pl /qp/star_validated/$1
+#./outlier_csv_split.pl /qp/star_validated/$1
 
 # build trees
-.build/debug/decision_tree_generator --forest 8 --no-prune -t /qp/star_validated/$1-test /qp/star_validated/$1-train
+#swift run -Xswiftc -O decision_tree_generator --forest 8 --no-prune -t /qp/star_validated/$1-test /qp/star_validated/$1-train
 #.build/debug/decision_tree_generator --forest 12 --no-prune -n 28 -t /qp/star_validated/$1-test /qp/star_validated/$1-train
 #.build/debug/decision_tree_generator --forest 16 --no-prune -n 28 -t /qp/star_validated/$1-test /qp/star_validated/$1-train
 #.build/debug/decision_tree_generator --forest 24 --no-prune -n 28 -t /qp/star_validated/$1-test /qp/star_validated/$1-train

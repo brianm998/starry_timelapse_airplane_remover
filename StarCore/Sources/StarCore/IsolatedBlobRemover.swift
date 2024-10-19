@@ -32,8 +32,8 @@ public actor IsolatedBlobRemover {
                                       frameIndex: frameIndex)
     }
     
-    public func blobMap() async -> [UInt16:Blob] {
-        await analyzer.mapOfBlobs()
+    public func blobMap() -> [UInt16:Blob] {
+        analyzer.mapOfBlobs()
     }
     
     public struct Args: Sendable {
@@ -66,7 +66,7 @@ public actor IsolatedBlobRemover {
             }
 
             if otherBlobsNearby.count < args.requiredNeighbors {
-                await analyzer.remove(blob: blob)
+                analyzer.remove(blob: blob)
             }
         }
     }

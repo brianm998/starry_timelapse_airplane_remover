@@ -1,10 +1,27 @@
 {
-    "/qp/star_validated" : [
-	"LRT_09_16_2023-a9-2-aurora-topaz-star-v-0_4_2",
-	"LRT_09_16_2023-a7sii-1-aurora-topaz-star-v-0_4_2",
-	"LRT_08_11_2023-a7iv-3-aurora-topaz-star-v-0_4_2"
-    ],
-    "/sp/star_validated" : [
-	"LRT_07_15_2023-a7riiia-2-aurora-topaz-star-v-0_4_2"
+    "/mammoth/star_validated" : [
+	"LRT_09_16_2023-a9-2-aurora-topaz-star-v-0_7_0-strong",
+	"LRT_08_11_2023-a7iv-3-aurora-topaz-star-v-0_7_0-strong",
+	"LRT_09_16_2023-a7sii-1-aurora-topaz-star-v-0_7_0-strong"
+	"LRT_02_18_2023-a7iv-2-aurora-topaz-star-v-0_7_0-strong",
+	"LRT_02_18_2023-a7riiia-2-aurora-topaz-star-v-0_7_0-strong",
+	"LRT_04_22_2023-a7iv-3-aurora-topaz-star-v-0_7_0-strong",
+	"LRT_05_20_2023-a7sii-2-aurora-topaz-star-v-0_7_0-strong",
+	"LRT_09_24_2022-a7iv-2-aurora-topaz-star-v-0_7_0-strong"
+	"LRT_07_15_2023-a7riiia-2-aurora-topaz-star-v-0_7_0-strong"
+	"LRT_03_16_2024-a7iv-2-aurora-topaz-star-v-0_7_0-strong",
+	"LRT_03_16_2024-fx3-2-aurora-topaz-star-v-0_7_0-strong"
+	"LRT_02_18_2023-a7riii-1-aurora-topaz-star-v-0_7_0-strong",
+	"LRT_02_18_2023-a7sii-2-aurora-topaz-star-v-0_7_0-strong",
+	"LRT_03_25_2023-a7iv-3-aurora-topaz-star-v-0_7_0-strong",
+	"LRT_03_25_2023-a7sii-2-aurora-topaz-star-v-0_7_0-strong",
+	"LRT_03_25_2023-a9-3-aurora-topaz-star-v-0_7_0-strong",
+	"LRT_04_22_2023-a7sii-2-aurora-topaz-star-v-0_7_0-strong",
+	"LRT_04_22_2023-a7riii-1-aurora-topaz-star-v-0_7_0-strong",
+	"LRT_12_22_2022-a9-2-aurora-topaz-star-v-0_7_0-strong"
     ]
 }
+
+
+
+

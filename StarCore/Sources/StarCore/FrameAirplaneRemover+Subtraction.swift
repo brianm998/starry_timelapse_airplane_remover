@@ -29,7 +29,7 @@ extension FrameAirplaneRemover {
 
         let accessor = imageAccessor
         
-        if let image = await imageAccessor.load(type: .subtracted, atSize: .original) {
+        if let image = try await imageAccessor.load(type: .subtracted, atSize: .original) {
             return image
         }
 
@@ -38,7 +38,7 @@ extension FrameAirplaneRemover {
 
 
         // load the original
-        guard let image = await accessor.load(type: .original, atSize: .original)
+        guard let image = try await accessor.load(type: .original, atSize: .original)
         else {
             Log.e("frame \(frameIndex) couldn't load original image")
             // XXX these should really throw an error, and that really should
@@ -49,10 +49,10 @@ extension FrameAirplaneRemover {
         Log.d("frame \(frameIndex) got orig image")
         
         // load or create the aligned frame
-        var alignedFrame = await accessor.load(type: .aligned, atSize: .original)
+        var alignedFrame = try await accessor.load(type: .aligned, atSize: .original)
         if alignedFrame == nil {
             // try creating the star aligned image if we can't load it
-            alignedFrame = await starAlignedImage()
+            alignedFrame = try await starAlignedImage()
         }
 
         guard let alignedFrame else {
