@@ -129,6 +129,7 @@ public class BlobProcessor {
           // remove isolated blobs
           .isolatedBlobRemover(.init(minNeighborSize: 6, scanSize: 24)),
           
+          .save(.filter3),
           .frameState(.isolatedBlobRemoval3),
 
           // remove smaller disconected blobs
@@ -146,8 +147,8 @@ public class BlobProcessor {
           .frameState(.isolatedBlobRemoval4),
           
 
-          .save(.filter3),
-
+          .save(.filter4),
+  
           // remove larger disconected blobs
           .disconnectedBlobRemover(.init(scanSize: 60,
                                          blobsSmallerThan: 50,
@@ -156,11 +157,11 @@ public class BlobProcessor {
           .frameState(.largerLinearBlobAbsorbtion),
 
           // then try to connect more distant linear blobs
-          .linearBlobConnector(.init(scanSize: 50,
-                                     blobsSmallerThan: 500)),
+          // not necessary?
+//          .linearBlobConnector(.init(scanSize: 50,
+//                                     blobsSmallerThan: 500)),
 
 
-          .save(.filter4),
           .frameState(.finalCrunch),
 
           .isolatedBlobRemover(.init(scanSize: 12,
