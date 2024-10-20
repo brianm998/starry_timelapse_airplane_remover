@@ -94,35 +94,10 @@ public class FrameViewModel {
     var houghLinesPreviewImage: Image = initialImage
     var validationPreviewImage: Image = initialImage
 
-    fileprivate func boundsFromGesture(between startLocation: CGPoint,
-                                       and endLocation: CGPoint) -> BoundingBox
-    {
-
-        // first get bounding box from start and end location
-        var minX: CGFloat = CGFLOAT_MAX
-        var maxX: CGFloat = 0
-        var minY: CGFloat = CGFLOAT_MAX
-        var maxY: CGFloat = 0
-
-        if startLocation.x < minX { minX = startLocation.x }
-        if startLocation.x > maxX { maxX = startLocation.x }
-        if startLocation.y < minY { minY = startLocation.y }
-        if startLocation.y > maxY { maxY = startLocation.y }
-        
-        if endLocation.x < minX { minX = endLocation.x }
-        if endLocation.x > maxX { maxX = endLocation.x }
-        if endLocation.y < minY { minY = endLocation.y }
-        if endLocation.y > maxY { maxY = endLocation.y }
-
-        return BoundingBox(min: Coord(x: Int(minX), y: Int(minY)),
-                           max: Coord(x: Int(maxX), y: Int(maxY)))
-        
-    }
-    
     public func deleteOutliers(between selectionStart: CGPoint,
                                and end_location: CGPoint) -> BoundingBox
     {
-        let gestureBounds = boundsFromGesture(between: selectionStart, and: end_location)
+        let gestureBounds = BoundingBox(between: selectionStart, and: end_location)
 
         Log.d("deleteOutliers with gestureBounds \(gestureBounds)")
         

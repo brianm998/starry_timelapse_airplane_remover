@@ -314,10 +314,28 @@ extension FrameAirplaneRemover {
         
     }
 
+    public func applyRazor(in boundingBox: BoundingBox) async throws {
+        /*
+         - find all outliers that have some match with this bounding box
+         - remove them from outlier groups list
+         - convert them to blobs
+         - do intersection with bounding box to create new blob
+         - convert all of them back to outlier groups
+         */
+
+        await outlierGroups?.applyRazor(in: boundingBox)
+
+        let frame_outliers_dirname = "\(self.outlierOutputDirname)/\(frameIndex)"
+
+        await self.markAsChanged()
+
+        try await outlierGroups?.writeOutliersImage(to: frame_outliers_dirname)
+    }
+    
     public func deleteOutliers(in boundingBox: BoundingBox) async throws {
         await outlierGroups?.deleteOutliers(in: boundingBox)
 
-      await self.markAsChanged()
+        await self.markAsChanged()
         
         let frame_outliers_dirname = "\(self.outlierOutputDirname)/\(frameIndex)"
 //        mkdir(frame_outliers_dirname)

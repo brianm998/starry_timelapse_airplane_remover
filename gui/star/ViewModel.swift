@@ -13,6 +13,7 @@ public enum VideoPlayMode: String, Equatable, CaseIterable {
 public enum SelectionMode: String, Equatable, CaseIterable {
     case paint
     case clear
+    case razor
     case delete
     case multi
     case details
@@ -113,6 +114,8 @@ public final class ViewModel {
             return .red
         case .clear:
             return .green
+        case .razor:
+            return .yellow
         case .delete:
             return .orange
         case .details:

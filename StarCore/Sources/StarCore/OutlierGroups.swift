@@ -235,7 +235,32 @@ public actor OutlierGroups {
 
         return Array(ret.values)
     }
-    
+
+    public func applyRazor(in boundingBox: BoundingBox) async {
+        var newBlobPixels: Set<SortablePixel> = []
+        var newOutlierGroups: [OutlierGroup] = []
+        var maxKey: UInt16 = 0
+        for (key, group) in members {
+            if key > maxKey { maxKey = key }
+            if let overlap = boundingBox.overlap(with: group.bounds) {
+              var blobToSlice = await group.blob()
+              let newPixels = await blobToSlice.slice(with: overlap)
+                newBlobPixels.formUnion(newPixels)
+                members.removeValue(forKey: key)
+              let newOutlierGroup = await blobToSlice.outlierGroup(at: frameIndex)
+                newOutlierGroups.append(newOutlierGroup)
+            }
+        }
+        maxKey += 1
+        for newOutlier in newOutlierGroups {
+            members[newOutlier.id] = newOutlier
+        }
+        if newBlobPixels.count > 0 {
+          let slicedOutlier = await Blob(newBlobPixels, id: maxKey, frameIndex: frameIndex).outlierGroup(at: frameIndex)
+          members[slicedOutlier.id] = slicedOutlier
+        }
+    }
+
     public func deleteOutliers(in gestureBounds: BoundingBox) {
         for (key, group) in members {
             if gestureBounds.contains(group.bounds) {

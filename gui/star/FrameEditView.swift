@@ -131,9 +131,14 @@ struct FrameEditView: View {
                   case .clear:
                       update(frame: frameView, shouldPaint: false,
                              between: selectionStart, and: end_location)
+                  case .razor:
+                      applyRazor(to: frameView,
+                                 between: selectionStart,
+                                 and: end_location)
+                      
                   case .delete:
                       //let _ = Log.d("DELETE")
-                      deleteOutliers(frame: frameView,
+                      deleteOutliers(from: frameView,
                                      between: selectionStart,
                                      and: end_location) 
 
@@ -173,8 +178,29 @@ struct FrameEditView: View {
          }
     }
 
+    private func applyRazor(to frameView: FrameViewModel,
+                            between selectionStart: CGPoint,
+                            and end_location: CGPoint)
+    {
+        let gestureBounds = BoundingBox(between: selectionStart, and: end_location)
 
-    private func deleteOutliers(frame frameView: FrameViewModel,
+        if let frame = frameView.frame {
+            Task.detached(priority: .userInitiated) {
+                try await frame.applyRazor(in: gestureBounds)
+                await viewModel.setOutlierGroups(forFrame: frame)
+                await MainActor.run {
+                    viewModel.selectionStart = nil
+                    viewModel.selectionEnd = nil
+                }
+            }
+        } else {
+            viewModel.selectionStart = nil
+            viewModel.selectionEnd = nil
+        }
+    }
+
+    
+    private func deleteOutliers(from frameView: FrameViewModel,
                                 between selectionStart: CGPoint,
                                 and end_location: CGPoint)
     {
