@@ -487,6 +487,8 @@ public actor Blob: CustomStringConvertible,
 
     public func boundingBox() -> BoundingBox {
         if let _boundingBox { return _boundingBox }
+
+        // XXX move to a BoundingBox constructor
         var min_x:Int = Int.max
         var min_y:Int = Int.max
         var max_x:Int = 0
@@ -522,7 +524,24 @@ public actor Blob: CustomStringConvertible,
         _lineFillAmount = ret
         return ret
     }
-    
+
+
+    // remove any pixels within this bounding box from this blob and return them
+    public func slice(with boundingBox: BoundingBox) -> Set<SortablePixel> {
+        var ret: Set<SortablePixel> = []
+        
+        let bounds = self.boundingBox()
+        if let overlap = bounds.overlap(with: boundingBox) {
+            for pixel in pixels {
+                if overlap.contains(pixel) {
+                    ret.update(with: pixel)
+                    pixels.remove(pixel)
+                }
+            }
+        }
+        if ret.count > 0 { reset() }
+        return ret
+    }
     
     // XXX replace this with passing in the full outlier image
     // to each outlier, and having them deal with it directly
