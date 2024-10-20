@@ -8,7 +8,7 @@ fileprivate actor CounterActor {
     func increment() { count += 1 }
     func decrement() { count -= 1 }
 
-    func value() { count }
+    func value() -> Int { count }
 
     func isAboveZero() -> Bool { count > 0 }
 }
