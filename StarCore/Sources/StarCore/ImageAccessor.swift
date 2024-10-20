@@ -51,28 +51,15 @@ public protocol ImageAccess: Sendable {
     func load(type imageType: FrameImageType,
               atSize size: ImageDisplaySize) async throws -> PixelatedImage?
 
-    func urlForImage(ofType imageType: FrameImageType,
-                     atSize size: ImageDisplaySize) -> URL?
-    
-    // load an image of some type and size
-//    func loadNSImage(type imageType: FrameImageType,
-//                     atSize size: ImageDisplaySize) -> NSImage?
-    
     // load an image of some type and size
     func loadImage(type imageType: FrameImageType,
-                   atSize size: ImageDisplaySize) -> Image?
-    
-    // where to load or save this type of image from
+                   atSize size: ImageDisplaySize) async -> Image?
+
     func dirForImage(ofType type: FrameImageType,
                      atSize size: ImageDisplaySize) -> String?
 
-    func nameForImage(ofType type: FrameImageType,
-                      atSize size: ImageDisplaySize) -> String?
-
-    func imageExists(ofType type: FrameImageType,
-                      atSize size: ImageDisplaySize) -> Bool
-    
-    func mkdirs() throws
+    func urlForImage(ofType imageType: FrameImageType,
+                     atSize size: ImageDisplaySize) -> URL?
 }
 
 // read and write access to different image types for a given frame
@@ -103,15 +90,15 @@ public struct ImageAccessor: ImageAccess, Sendable {
         return NSSize(width: thumbnailWidth, height: thumbnailHeight)
     }
 
-    func mkdir(ofType type: FrameImageType,
-               andSize size: ImageDisplaySize = .original) 
+    nonisolated func mkdir(ofType type: FrameImageType,
+                           andSize size: ImageDisplaySize = .original) 
     {
         if let dirname = dirForImage(ofType: type, atSize: size) {
             StarCore.mkdir(dirname)
         }
     }
     
-    public func mkdirs() {
+    nonisolated private func mkdirs() {
         mkdir(ofType: .aligned)
         mkdir(ofType: .subtracted)
         mkdir(ofType: .blobs)
@@ -162,19 +149,8 @@ public struct ImageAccessor: ImageAccess, Sendable {
         return nil
     }
 
-    public func loadNSImage(type imageType: FrameImageType,
-                            atSize size: ImageDisplaySize) -> NSImage?
-    {
-        if let url = urlForImage(ofType: imageType, atSize: size),
-           let image = NSImage(contentsOf: url)
-        {
-            return image
-        }
-        return nil
-    }
-
-    public func urlForImage(ofType imageType: FrameImageType,
-                            atSize size: ImageDisplaySize) -> URL?
+    nonisolated public func urlForImage(ofType imageType: FrameImageType,
+                                        atSize size: ImageDisplaySize) -> URL?
     {
         if let filename = nameForImage(ofType: imageType, atSize: size) {
             if FileManager.default.fileExists(atPath: filename) {
@@ -192,7 +168,8 @@ public struct ImageAccessor: ImageAccess, Sendable {
     public func load(type imageType: FrameImageType,
                      atSize size: ImageDisplaySize) async throws -> PixelatedImage?
     {
-        try await fileSystemMonitor.load() { await loadInt(type: imageType, atSize: size) }
+        // XXX keep soft references in ram?
+        try await fileSystemMonitor.load() { await self.loadInt(type: imageType, atSize: size) }
     }
 
     private func loadInt(type imageType: FrameImageType,
@@ -248,7 +225,7 @@ public struct ImageAccessor: ImageAccess, Sendable {
                      overwrite: Bool) async throws
     {
         try await fileSystemMonitor.save() {
-            try await saveInt(image,
+          try await self.saveInt(image,
                               as: type,
                               atSize: size,
                               overwrite: overwrite)
@@ -296,8 +273,8 @@ public struct ImageAccessor: ImageAccess, Sendable {
         }
     }
 
-    public func dirForImage(ofType type: FrameImageType,
-                         atSize size: ImageDisplaySize) -> String?
+    nonisolated public func dirForImage(ofType type: FrameImageType,
+                                        atSize size: ImageDisplaySize) -> String?
     {
         switch type {
         case .original:
@@ -421,18 +398,8 @@ public struct ImageAccessor: ImageAccess, Sendable {
         }
     }
 
-    public func imageExists(ofType type: FrameImageType,
-                            atSize size: ImageDisplaySize) -> Bool
-    {
-        if let filename = nameForImage(ofType: type, atSize: size) {
-            return FileManager.default.fileExists(atPath: filename)
-        }
-        return false
-    }
-    
-    
-    public func nameForImage(ofType type: FrameImageType,
-                             atSize size: ImageDisplaySize) -> String?
+    nonisolated private func nameForImage(ofType type: FrameImageType,
+                                          atSize size: ImageDisplaySize) -> String?
     {
         if let dir = dirForImage(ofType: type, atSize: size) {
             switch size {
@@ -459,7 +426,7 @@ public struct ImageAccessor: ImageAccess, Sendable {
     }
     
     private func createMissingImage(ofType type: FrameImageType,
-                                andSize size: ImageDisplaySize)
+                                    andSize size: ImageDisplaySize)
       async throws -> PixelatedImage?
     {
         if let filename = nameForImage(ofType: type, atSize: size),

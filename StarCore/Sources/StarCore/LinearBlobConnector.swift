@@ -202,7 +202,7 @@ public actor LinearBlobConnector {
                 }
             }
 
-            var linearBlobSet = analyzer.blobs(with: linearBlobIds)
+            let linearBlobSet = analyzer.blobs(with: linearBlobIds)
             
             if linearBlobSet.count > 1 {
                 

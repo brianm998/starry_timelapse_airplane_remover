@@ -45,10 +45,12 @@ public enum FrameProcessingState: Int,
     case readyForInterFrameProcessing
     case interFrameProcessing
     case outlierProcessingComplete
+    case finishing
     // XXX add gui check step?
 
     case writingOutlierValues
     
+    case loadingImages
     case painting
     case painting2
     case writingOutputFile
@@ -90,8 +92,12 @@ public enum FrameProcessingState: Int,
             return "classifing outlier groups"
         case .outlierProcessingComplete:
             return "ready to finish"
+        case .finishing:
+            return "finishing"
         case .writingOutlierValues:
             return "writing outlier classification values"
+        case .loadingImages:
+            return "loading images"
         case .painting:
             return "creating paint mask"
         case .painting2:

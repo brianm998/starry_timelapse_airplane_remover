@@ -160,7 +160,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     // if this is false, just write out outlier data
     let writeOutputFiles: Bool
 
-    nonisolated public let imageAccessor: ImageAccessor
+    nonisolated public let imageAccessor: ImageAccess
 
     private let completion: (() async -> Void)?
     
@@ -236,7 +236,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             return alignedFrame
         } else {
             Log.d("frame \(frameIndex) creating aligned frame")
-            if let dirname = imageAccessor.dirForImage(ofType: .aligned, atSize: .original) {
+            if let dirname = await imageAccessor.dirForImage(ofType: .aligned, atSize: .original) {
                 Log.d("frame \(frameIndex) creating aligned frame in \(dirname)")
                 self.set(state: .starAlignment)
 
@@ -298,7 +298,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     // does the final painting and then writes out the output files
     public func finish() async throws {
         Log.d("frame \(self.frameIndex) starting to finish")
-
+        self.set(state: .finishing)
         if didChange {
             // write out the outliers binary if it is not there
             // only overwrite the paint reason if it is there
@@ -324,6 +324,8 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         
         Log.i("frame \(self.frameIndex) finishing")
 
+        self.set(state: .loadingImages)
+        
         guard let image = try await imageAccessor.load(type: .original, atSize: .original)
         else { throw "couldn't load original file for finishing" }
         
@@ -346,8 +348,6 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         case .eightBit(_):
             Log.e("8 bit not supported here now")
         case .sixteenBit(var outputData):
-            self.set(state: .painting)
-
             Log.d("frame \(self.frameIndex) painting over airplanes")
 
             try await self.paintOverAirplanes(toData: &outputData, otherFrame: otherFrame)

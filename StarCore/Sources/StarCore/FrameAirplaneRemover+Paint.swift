@@ -45,6 +45,8 @@ extension FrameAirplaneRemover {
         guard let image = try await imageAccessor.load(type: .original, atSize: .original)
         else { throw "couldn't load image" }
         
+        self.set(state: .painting)
+
         // the alpha level to apply to each pixel in the image
         // indexed by y*width+x
         // this is esentially a layer mask for the frame, 

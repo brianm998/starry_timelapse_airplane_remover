@@ -413,8 +413,8 @@ struct StarCli: AsyncParsableCommand {
 
 // needs ArgumentParser, so it's here in cli land
 // allows the log level to be expressed on the command line as an argument
-extension Log.Level: ExpressibleByArgument { }
+extension Log.Level: @retroactive ExpressibleByArgument { }
 
-extension DetectionType: ExpressibleByArgument { }
+extension DetectionType: @retroactive ExpressibleByArgument { }
 
 

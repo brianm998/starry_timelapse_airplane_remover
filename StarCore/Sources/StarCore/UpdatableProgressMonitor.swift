@@ -40,7 +40,8 @@ public final class UpdatableLogHandler: LogHandler {
     let updatable: UpdatableLog
     
     public init(_ updatable: UpdatableLog) {
-        self.level = .warn
+        //self.level = .warn
+        self.level = .error
         self.updatable = updatable
     }
 }
@@ -191,8 +192,16 @@ public actor UpdatableProgressMonitor {
         if let update = progressLine(for: .outlierProcessingComplete) {
             updates.append(update)
         }
+        
+        if let update = progressLine(for: .finishing) {
+            updates.append(update)
+        }
 
         if let update = progressLine(for: .writingOutlierValues) {
+            updates.append(update)
+        }
+        
+        if let update = progressLine(for: .loadingImages) {
             updates.append(update)
         }
         
