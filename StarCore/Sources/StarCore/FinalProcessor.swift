@@ -135,8 +135,8 @@ public actor FinalProcessor {
     
     func finishAll() async throws {
         Log.d("finishing all")
-        try await withLimitedThrowingTaskGroup(of: Void.self,
-                                               at: .medium) { taskGroup in
+        try await withThrowingTaskGroup(of: Void.self/*,
+                                        at: .medium*/) { taskGroup in
             for (_, frame) in await frames.enumerated() {
                 if let frame {
                     Log.d("adding frame \(frame.frameIndex) to final queue")
@@ -185,8 +185,8 @@ public actor FinalProcessor {
         // wait here for at least one frame to be published
         await semaphore.wait()
         
-        try await withLimitedThrowingTaskGroup(of: Void.self,
-                                               at: .medium) { taskGroup in
+        try await withThrowingTaskGroup(of: Void.self/*,
+                                               at: .medium*/) { taskGroup in
             var done = false
             while(!done) {
                 //Log.v("FINAL THREAD running")
@@ -268,7 +268,7 @@ public actor FinalProcessor {
                             await self.clearFrame(at: immutableStart - 1)
                             
                             // run as a deferred task so we never block here 
-                            try await taskGroup.addDeferredTask() {
+                            try await taskGroup.addTask() {
                                 
                                 await frameToFinish.clearOutlierGroupValueCaches()
 
