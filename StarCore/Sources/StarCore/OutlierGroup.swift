@@ -991,7 +991,7 @@ public actor OutlierGroup: CustomStringConvertible,
     func blob() -> Blob {
         Blob(pixelSet, id: id, frameIndex: frameIndex)
     }
-    }
+}
 
 public func ratioOfSurfaceAreaToSize(of pixels: [UInt16],
                                      and pixelSet: Set<SortablePixel>,
