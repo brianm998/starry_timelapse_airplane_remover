@@ -14,7 +14,31 @@ public struct BoundingBox: Codable,
         self.min = min
         self.max = max
     }
-    
+
+    // create a bounding box from two points on the screen
+    public init(between startLocation: CGPoint,
+                and endLocation: CGPoint)
+    {
+        // first get bounding box from start and end location
+        var minX: CGFloat = CGFLOAT_MAX
+        var maxX: CGFloat = 0
+        var minY: CGFloat = CGFLOAT_MAX
+        var maxY: CGFloat = 0
+
+        if startLocation.x < minX { minX = startLocation.x }
+        if startLocation.x > maxX { maxX = startLocation.x }
+        if startLocation.y < minY { minY = startLocation.y }
+        if startLocation.y > maxY { maxY = startLocation.y }
+        
+        if endLocation.x < minX { minX = endLocation.x }
+        if endLocation.x > maxX { maxX = endLocation.x }
+        if endLocation.y < minY { minY = endLocation.y }
+        if endLocation.y > maxY { maxY = endLocation.y }
+
+        self.min = Coord(x: Int(minX), y: Int(minY))
+        self.max = Coord(x: Int(maxX), y: Int(maxY))
+    }
+
     public var width:  Int { self.max.x - self.min.x + 1 }
     public var height: Int { return self.max.y - self.min.y + 1 }
     public var size:   Int { width * height }
@@ -270,6 +294,11 @@ public struct BoundingBox: Codable,
         }
     }
 
+    public func contains(_ pixel: SortablePixel) -> Bool {
+        self.min.x <= pixel.x && pixel.x <= self.max.x &&
+        self.min.y <= pixel.y && pixel.y <= self.max.y
+    }
+    
     public func contains(_ other: BoundingBox) -> Bool {
         self.contains(coord: DoubleCoord(other.min)) && self.contains(coord: DoubleCoord(other.max))
     }
