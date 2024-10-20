@@ -146,7 +146,7 @@ struct BottomRightView: View {
                       clear   - they will be marked for not painting
                       details - they will be shown in the info window
                       """)
-              .frame(maxWidth: 320)
+              .frame(maxWidth: 360)
               .pickerStyle(.segmented)
 
             HStack {
