@@ -323,13 +323,62 @@ extension FrameAirplaneRemover {
          - convert all of them back to outlier groups
          */
 
-        await outlierGroups?.applyRazor(in: boundingBox)
+        if await outlierGroups?.applyRazor(in: boundingBox) ?? false {
 
-        let frame_outliers_dirname = "\(self.outlierOutputDirname)/\(frameIndex)"
+            let frame_outliers_dirname = "\(self.outlierOutputDirname)/\(frameIndex)"
 
-        await self.markAsChanged()
+            await self.markAsChanged()
 
-        try await outlierGroups?.writeOutliersImage(to: frame_outliers_dirname)
+            try await outlierGroups?.writeOutliersImage(to: frame_outliers_dirname)
+
+            updateUserSlices(with: boundingBox)
+        }
+    }
+
+    private func updateUserSlices(with newSlice: BoundingBox) {
+        var newSlices: [BoundingBox] = [newSlice]
+
+        // append bounding box to this frame's razor list
+        // if any overlap, keep the latest
+            
+        for slice in userSlices {
+            if slice.overlap(with: newSlice) == nil {
+                newSlices.append(slice)
+            }
+        }
+
+        self.userSlices = newSlices
+        saveUserSlices()
+    }
+    
+    public func saveUserSlices() {
+        let encoder = JSONEncoder()
+        do {
+            let jsonData = try encoder.encode(self.userSlices)
+
+            let fullPath = self.userSliceFilename
+            if FileManager.default.fileExists(atPath: fullPath) {
+                try FileManager.default.removeItem(atPath: fullPath)
+            } 
+            Log.i("creating \(fullPath)")                      
+            FileManager.default.createFile(atPath: fullPath, contents: jsonData, attributes: nil)
+        } catch {
+            Log.e("\(error)")
+        }
+    }
+    
+    public func loadUserSlices() async {
+        do {
+            let dirname = self.userSliceDirname
+            let slices_url = NSURL(fileURLWithPath: self.userSliceFilename, isDirectory: false) as URL
+            let (data, _) = try await URLSession.shared.data(for: URLRequest(url: slices_url))
+            let decoder = JSONDecoder()
+            self.userSlices = try decoder.decode([BoundingBox].self, from: data)
+        } catch {
+            //Log.e("cannot load user slices: \(error)")
+
+            mkdir(self.userSliceDirname)
+        }
     }
     
     public func deleteOutliers(in boundingBox: BoundingBox) async throws {

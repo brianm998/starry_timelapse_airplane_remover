@@ -180,32 +180,9 @@ public class BlobProcessor {
                                      minBlobSize: 50)),
         
           .save(.filter6),
-          /*
 
-           this kills crossed lines in an X :(
-          .process() { blobs in
-              var ret: [UInt16: Blob] = [:]
-
-              for (_, blob) in blobs {
-                  if let (medianDist, lineLength) = await blob.medianDistanceFromIdealLine() {
-
-                      if lineLength > 40,
-                         medianDist > 20
-                      {
-                          // too big and not close enough
-                      } else {
-                          ret[blob.id] = blob
-                      }
-                      
-                  } else {
-                      // keep blobs with no line just incase
-                      ret[blob.id] = blob
-                  }
-              }
-              return ret
-          },
-          
-           */
+          // split up blobs 
+          .process(applyUserSlices),
         ]
     }
 
@@ -217,7 +194,6 @@ public class BlobProcessor {
             case .create(let method):
                 blobMap = try await method()
 
-                
             case .process(let method):
                 blobMap = try await method(blobMap)
 
@@ -287,6 +263,35 @@ public class BlobProcessor {
 
     // Mark - internals
 
+    // slice up blobs as directed by the user
+    fileprivate func applyUserSlices(_ blobMap: [UInt16:Blob]) async throws -> BlobMap {
+        guard let frame else { return [:] }
+
+        var newBlobs: [UInt16:Blob] = blobMap
+        
+        var maxKey: UInt16 = 0
+        
+        for slice in await frame.userSlices {
+            var newBlobPixels: Set<SortablePixel> = []
+            for (key, blob) in blobMap {
+                if key > maxKey { maxKey = key }
+                if let overlap = await slice.overlap(with: blob.boundingBox()) {
+                    let newPixels = await blob.slice(with: overlap)
+                    newBlobPixels.formUnion(newPixels)
+                }
+                newBlobs[blob.id] = blob
+            }
+            if newBlobPixels.count > 0 {
+                maxKey += 1
+                newBlobs[maxKey] = Blob(newBlobPixels,
+                                        id: maxKey,
+                                        frameIndex: frame.frameIndex) 
+            }
+        }
+        
+        return newBlobs
+    }
+    
     // use the subtraction and original image for this frame to find an initial set of blobs
     fileprivate func findBlobs() async throws -> BlobMap {
         guard let frame else { return [:] }

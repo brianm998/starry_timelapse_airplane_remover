@@ -218,12 +218,24 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             frameStateChangeCallback(self, self.state)
         }
 
+        await self.loadUserSlices()
+        
         await self.updateCombineSubjects()
     }
 
     private var otherFilename: String = ""
     private let baseFilename: String
+
+    internal var userSlices: [BoundingBox] = []
     
+    public var userSliceDirname: String {
+        "\(config.outputPath)/\(config.imageSequenceDirname)-star-user-slices"
+    }
+
+    public var userSliceFilename: String {
+        "\(self.userSliceDirname)/slices_\(frameIndex).json"
+    }
+
     // lazy loaded aligned a neighboring frame
     public func starAlignedImage() async throws -> PixelatedImage? {
         
