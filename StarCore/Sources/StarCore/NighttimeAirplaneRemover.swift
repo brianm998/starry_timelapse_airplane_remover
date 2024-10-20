@@ -262,30 +262,10 @@ public actor NighttimeAirplaneRemover {
             Log.e("should have a processor")
             fatalError("no processor")
         }
-        // setup the final processor 
-        let finalProcessorTask = Task(priority: .high) {
-            // XXX really should have the enter before the task
-            // run the final processor as a single separate thread
-            try await finalProcessor.run()
-        }
 
         try await superRun()
-
-        while(await numberLeft.hasMore()) {
-            // XXX use semaphore
-            try await Task.sleep(nanoseconds: 1_000_000_000)
-        }
         
-        // XXX add semaphore here to track final progress?
-
-        /*
-
-         app can exit early, if there is nothing in the final queue
-         and the input sequence no longer waiting to progress
-
-         */
-        
-        _ = try await finalProcessorTask.value
+        await finalProcessor.semaphore.wait()
     }
 
     // called at startup
