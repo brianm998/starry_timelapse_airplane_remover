@@ -236,7 +236,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             return alignedFrame
         } else {
             Log.d("frame \(frameIndex) creating aligned frame")
-            if let dirname = await imageAccessor.dirForImage(ofType: .aligned, atSize: .original) {
+            if let dirname = imageAccessor.dirForImage(ofType: .aligned, atSize: .original) {
                 Log.d("frame \(frameIndex) creating aligned frame in \(dirname)")
                 self.set(state: .starAlignment)
 

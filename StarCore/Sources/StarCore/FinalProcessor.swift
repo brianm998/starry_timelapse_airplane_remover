@@ -137,10 +137,10 @@ public actor FinalProcessor {
         Log.d("finishing all")
         try await withThrowingTaskGroup(of: Void.self/*,
                                         at: .medium*/) { taskGroup in
-            for (_, frame) in await frames.enumerated() {
+            for (_, frame) in frames.enumerated() {
                 if let frame {
                     Log.d("adding frame \(frame.frameIndex) to final queue")
-                    try await taskGroup.addTask() {
+                    taskGroup.addTask() {
 
                         try await frame.maybeApplyOutlierGroupClassifier()
 
@@ -268,7 +268,7 @@ public actor FinalProcessor {
                             await self.clearFrame(at: immutableStart - 1)
                             
                             // run as a deferred task so we never block here 
-                            try await taskGroup.addTask() {
+                            taskGroup.addTask() {
                                 
                                 await frameToFinish.clearOutlierGroupValueCaches()
 

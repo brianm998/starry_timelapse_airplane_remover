@@ -121,7 +121,7 @@ public struct HoughLineFinder {
                 
                 for i in 0..<max {
                     let originZeroLine = self.originZeroLine(from: lines[i])
-                    let (avg, median, max) = self.averageMedianMaxDistance(from: originZeroLine)
+                    let (_, median, _) = self.averageMedianMaxDistance(from: originZeroLine)
                     
                     if median < closestDistance {
                         //Log.d("line \(i) is best theta \(lines[i].theta) avg median max \(avg) \(median) \(max)")
