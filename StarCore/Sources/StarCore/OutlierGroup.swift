@@ -64,12 +64,23 @@ public actor OutlierGroup: CustomStringConvertible,
 
     // lazy calculcated properties
 
-    public func line() -> Line? { _line }
+    fileprivate var _line: Line? = nil
 
-    fileprivate lazy var _line: Line? = {
-        HoughLineFinder(pixels: self.pixels, bounds: self.bounds).line
-        //HoughLineFinder(pixels: Array(self.pixelSet).map { $0 }, bounds: self.bounds).line
-    }()
+    fileprivate var lineLoaded = false
+
+    fileprivate func set(line: Line) { _line = line }
+    
+    public func line() -> Line? {
+        if !lineLoaded {
+            lineLoaded = true
+            Task.detached {
+                if let line = HoughLineFinder(pixels: self.pixels, bounds: self.bounds).line {
+                    await self.set(line: line)
+                }
+            }
+        }
+        return _line
+    }
 
     public func medianBrightness() -> Double { _medianBrightness }
     

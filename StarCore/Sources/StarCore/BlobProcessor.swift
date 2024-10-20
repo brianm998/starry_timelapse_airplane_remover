@@ -136,7 +136,6 @@ public class BlobProcessor {
                                          blobsSmallerThan: 18,
                                          requiredNeighbors: 2)),
 
-          .save(.filter3),
           .frameState(.smallLinearBlobAbsorbtion),
           
           // find really close linear blobs
@@ -145,9 +144,10 @@ public class BlobProcessor {
                                      lineBorder: 10)),
 
           .frameState(.isolatedBlobRemoval4),
-
-          .save(.filter4),
           
+
+          .save(.filter3),
+
           // remove larger disconected blobs
           .disconnectedBlobRemover(.init(scanSize: 60,
                                          blobsSmallerThan: 50,
@@ -160,87 +160,51 @@ public class BlobProcessor {
                                      blobsSmallerThan: 500)),
 
 
-          // get rid of really big blobs with a line but that aren't close to it
-          /*
-          .process() { blobs in
-              // weed out blobs that are too small and not bright enough
-
-              var ret: [UInt16: Blob] = [:]
-
-              for (_, blob) in blobs {
-                  // discard any blobs that are still too small or dim
-                  if let line = await blob.originZeroLine {
-
-                      // XXX use median?
-                      let (distance, lineLength) =
-                        await blob.averageDistanceAndLineLength(from: line)
-
-                      let (averageDistance, medianDistance, maxDistance) =
-                        await blob.averageMedianMaxDistance(from: line)
-
-                      // XXX maybe try trimming lines here, this is a little too agressive,
-                      // some really good lines get dumped because of some errant outlying pixels
-
-                      
-                      if distance < lineLength {
-                          let lineFillAmount = await blob.lineFillAmount()
-
-                          if lineLength > 400,
-                             lineFillAmount < 0.01
-                          {
-                              // big blobby in the house
-                              //Log.d("frame \(frame.frameIndex) discarding blob \(blob)")
-                          } else  if lineLength > 400, // XXX constants
-                                     medianDistance > 15
-                          {
-                              // another big blob we don't want
-                              //Log.d("frame \(frame.frameIndex) discarding blob \(blob)")
-                              
-                          } else if lineLength > 100, // XXX constants
-                                    medianDistance > 10,
-                                    lineFillAmount < 0.01
-                          {
-                              //Log.d("frame \(frame.frameIndex) discarding blob \(blob) because lineLength \(lineLength) medianDistance \(medianDistance) lineFillAmount \(lineFillAmount)")
-                              // don't keep it, it's a cloud of junk
-                          } else  {
-                              // this blob is good enough for now
-                              ret[blob.id] = blob
-                          }
-                      } else {
-                          //Log.d("frame \(frame.frameIndex) discarding blob \(blob)")
-                      }
-                  } else {
-                      // keep blobs with no line just in case
-                      ret[blob.id] = blob
-                  }
-              }
-              return ret
-          },
-          */
-          .save(.filter5),
+          .save(.filter4),
           .frameState(.finalCrunch),
 
-          // eviscerate any remaining small and dim blobs with no mercy 
-          .process() { blobs in
-              // weed out blobs that are too small and not bright enough
+          .isolatedBlobRemover(.init(scanSize: 12,
+                                     requiredNeighbors: 1,
+                                     minBlobSize: 24)),
+        
+          .save(.filter5),
 
+          // try to do more line adjustment after removing some isolated blobs
+          .linearBlobConnector(.init(scanSize: 20,
+                                     blobsSmallerThan: 80)),
+
+
+          .isolatedBlobRemover(.init(scanSize: 6,
+                                     requiredNeighbors: 1,
+                                     minBlobSize: 50)),
+        
+          .save(.filter6),
+          /*
+
+           this kills crossed lines in an X :(
+          .process() { blobs in
               var ret: [UInt16: Blob] = [:]
 
               for (_, blob) in blobs {
-                  // discard any blobs that are still too small or dim
-                  if await blob.size() >= constants.finalMinBlobSize,
-                     await constants.finalSmallDimBlobQualifier.allows(blob),
-                     await constants.finalMediumDimBlobQualifier.allows(blob),
-                     await constants.finalLargeDimBlobQualifier.allows(blob)
-                  {
-                      // this blob is good enough for machine learning classification
+                  if let (medianDist, lineLength) = await blob.medianDistanceFromIdealLine() {
+
+                      if lineLength > 40,
+                         medianDist > 20
+                      {
+                          // too big and not close enough
+                      } else {
+                          ret[blob.id] = blob
+                      }
+                      
+                  } else {
+                      // keep blobs with no line just incase
                       ret[blob.id] = blob
                   }
               }
               return ret
           },
-
-          .save(.filter6),
+          
+           */
         ]
     }
 

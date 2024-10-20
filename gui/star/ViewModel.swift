@@ -47,7 +47,7 @@ public final class ViewModel {
                     userPreferences = newPrefs
                 }
             }
-            await frameSaveQueue.sizeUpdated() { newSize in
+            frameSaveQueue.sizeUpdated() { newSize in
                 await MainActor.run {
                     self.frameSaveQueueSize = newSize
                 }
@@ -249,7 +249,7 @@ public final class ViewModel {
                 outlierTask = Task { await self.setOutlierGroups(forFrame: frame) }
             }
             
-            let acc = await frame.imageAccessor
+            let acc = frame.imageAccessor
 
             let vpTask = Task.detached { acc.loadImage(type: .validated,  atSize: .preview)?.resizable() }
             let spTask = Task.detached { acc.loadImage(type: .subtracted, atSize: .preview)?.resizable() }

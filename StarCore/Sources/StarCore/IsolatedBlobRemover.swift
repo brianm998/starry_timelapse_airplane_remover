@@ -40,7 +40,7 @@ public actor IsolatedBlobRemover {
         let minNeighborSize: Int   // how big does a neighbor need to be to count?
         let scanSize: Int          // how far in each direction to look for neighbors
         let requiredNeighbors: Int // how many neighbors does each one need?
-        let minBlobSize: Int       // blobs smaller than this are ignored
+        let minBlobSize: Int       // blobs larger than this are ignored
 
         public init(minNeighborSize: Int = 0,
                     scanSize: Int = 12,     

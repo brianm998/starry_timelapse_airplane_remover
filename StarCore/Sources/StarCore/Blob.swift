@@ -176,6 +176,16 @@ public actor Blob: CustomStringConvertible,
         return 420420420
     }
 
+    public func medianDistanceFromIdealLine() -> (Double, Double)? {
+        if let line = self.originZeroLine {
+            let (_, lineLength) = averageDistanceAndLineLength(from: line)
+            let (_, median, _) = averageMedianMaxDistance(from: line)
+            return (median, lineLength)
+        } else {
+            return nil
+        }
+    }
+    
     // trims outlying pixels from the group, especially
     // ones with very few neighboring pixels
     public func fancyLineTrim(by minNeighbors: Int = 3) {

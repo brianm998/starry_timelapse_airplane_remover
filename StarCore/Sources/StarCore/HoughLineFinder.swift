@@ -116,8 +116,10 @@ public struct HoughLineFinder {
             if lines.count > 0 {
                 var closestDistance: Double = 9999999999999
                 var bestLineIndex = 0
+                var max = lines.count
+                if max > 800 { max = 800 } // XXX constant
                 
-                for i in 0..<lines.count {
+                for i in 0..<max {
                     let originZeroLine = self.originZeroLine(from: lines[i])
                     let (avg, median, max) = self.averageMedianMaxDistance(from: originZeroLine)
                     
