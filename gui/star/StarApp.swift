@@ -106,7 +106,7 @@ struct StarApp: App {
         }
 
         // maybe move this elsewhere
-     //   StarCore.currentClassifier = OutlierGroupForestClassifier_3c8d0d49()
+        StarCore.currentClassifier = OutlierGroupForestClassifier_13227c6d()
         
         Log.add(handler: ConsoleLogHandler(at: .debug), for: .console)
         Log.i("Starting Up")
