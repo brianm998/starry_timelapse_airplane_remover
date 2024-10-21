@@ -166,7 +166,7 @@ public actor FinalProcessor {
                         self.clearFrame(at: immutableStart - 1)
                         
                         // run as a deferred task so we never block here
-                        Task.detached {
+                        Task(priority: .high) {
                             do {
                                 await frameToFinish.clearOutlierGroupValueCaches()
 
@@ -183,7 +183,8 @@ public actor FinalProcessor {
 
                                 // XXX mark this frame as done
 
-                                if await self.frameHasBeenProcessed() {
+                                if self.frameHasBeenProcessed() {
+                                    // we have processed the final frame
                                     self.semaphore.signal()
                                 }
                             } catch {

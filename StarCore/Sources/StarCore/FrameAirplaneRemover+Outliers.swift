@@ -369,7 +369,6 @@ extension FrameAirplaneRemover {
     
     public func loadUserSlices() async {
         do {
-            let dirname = self.userSliceDirname
             let slices_url = NSURL(fileURLWithPath: self.userSliceFilename, isDirectory: false) as URL
             let (data, _) = try await URLSession.shared.data(for: URLRequest(url: slices_url))
             let decoder = JSONDecoder()

@@ -170,7 +170,7 @@ final public class BlobAnalyzer: @unchecked Sendable {
 
     public func logBlobs() async {
         Log.d("frame \(frameIndex) has \(blobMap.count) blobs")
-        for (id, blob) in blobMap {
+        for (_, blob) in blobMap {
             Log.d("frame \(frameIndex) blob.id \(blob.id) \(await blob.size()) pixels \(await blob.pixels)")
         }
     }

@@ -156,11 +156,6 @@ public class BlobProcessor {
                                          requiredNeighbors: 2)),
           .frameState(.largerLinearBlobAbsorbtion),
 
-          // then try to connect more distant linear blobs
-          // not necessary?
-//          .linearBlobConnector(.init(scanSize: 50,
-//                                     blobsSmallerThan: 500)),
-
 
           .frameState(.finalCrunch),
 
