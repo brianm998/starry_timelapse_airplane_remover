@@ -26,7 +26,8 @@ You should have received a copy of the GNU General Public License along with sta
 extension FrameAirplaneRemover {
 
     // actually paint over outlier groups that have been selected as airplane tracks
-    internal func paintOverAirplanes(toData data: inout [UInt16],
+    internal func paintOverAirplanes(image: PixelatedImage,
+                                     toData data: inout [UInt16],
                                      otherFrame: PixelatedImage) async throws
     {
         Log.i("frame \(frameIndex) painting airplane outlier groups")
@@ -41,9 +42,6 @@ extension FrameAirplaneRemover {
             Log.v("no outliers, not painting")
             return
         }
-
-        guard let image = try await imageAccessor.load(type: .original, atSize: .original)
-        else { throw "couldn't load image" }
         
         self.set(state: .painting)
 

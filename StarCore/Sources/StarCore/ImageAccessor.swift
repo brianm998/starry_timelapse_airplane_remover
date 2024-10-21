@@ -51,9 +51,22 @@ public protocol ImageAccess: Sendable {
     func load(type imageType: FrameImageType,
               atSize size: ImageDisplaySize) async throws -> PixelatedImage?
 
+    func saveFinal(_ image: PixelatedImage,
+                   as type: FrameImageType,
+                   atSize size: ImageDisplaySize,
+                   overwrite: Bool) async throws
+
+    // load an image of some type and size
+    func loadFinal(type imageType: FrameImageType,
+                   atSize size: ImageDisplaySize) async throws -> PixelatedImage?
+
     // load an image of some type and size
     func loadImage(type imageType: FrameImageType,
                    atSize size: ImageDisplaySize) async -> Image?
+
+    // bypass loading restrictions
+    func loadInt(type imageType: FrameImageType,
+                 atSize size: ImageDisplaySize) async -> PixelatedImage?
 
     func dirForImage(ofType type: FrameImageType,
                      atSize size: ImageDisplaySize) -> String?
@@ -165,14 +178,20 @@ public struct ImageAccessor: ImageAccess, Sendable {
     }
 
     // load using the file system monitor
+    public func loadFinal(type imageType: FrameImageType,
+                          atSize size: ImageDisplaySize) async throws -> PixelatedImage?
+    {
+        try await finalFileSystemMonitor.load() { await self.loadInt(type: imageType, atSize: size) }
+    }
+
+    // load using the file system monitor
     public func load(type imageType: FrameImageType,
                      atSize size: ImageDisplaySize) async throws -> PixelatedImage?
     {
-        // XXX keep soft references in ram?
         try await fileSystemMonitor.load() { await self.loadInt(type: imageType, atSize: size) }
     }
 
-    private func loadInt(type imageType: FrameImageType,
+    public func loadInt(type imageType: FrameImageType,
                          atSize size: ImageDisplaySize) async -> PixelatedImage?
     {
         var numRetries = 4
@@ -218,6 +237,21 @@ public struct ImageAccessor: ImageAccess, Sendable {
         return nil
     }
 
+    
+    // save using the file system monitor
+    public func saveFinal(_ image: PixelatedImage,
+                          as type: FrameImageType,
+                          atSize size: ImageDisplaySize,
+                          overwrite: Bool) async throws
+    {
+        try await finalFileSystemMonitor.save() {
+          try await self.saveInt(image,
+                                 as: type,
+                                 atSize: size,
+                                 overwrite: overwrite)
+        }
+    }
+            
     // save using the file system monitor
     public func save(_ image: PixelatedImage,
                      as type: FrameImageType,
@@ -226,9 +260,9 @@ public struct ImageAccessor: ImageAccess, Sendable {
     {
         try await fileSystemMonitor.save() {
           try await self.saveInt(image,
-                              as: type,
-                              atSize: size,
-                              overwrite: overwrite)
+                                 as: type,
+                                 atSize: size,
+                                 overwrite: overwrite)
         }
     }
             

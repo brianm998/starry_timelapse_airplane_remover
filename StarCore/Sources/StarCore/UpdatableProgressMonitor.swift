@@ -205,6 +205,10 @@ public actor UpdatableProgressMonitor {
             updates.append(update)
         }
         
+        if let update = progressLine(for: .loadingImages1) {
+            updates.append(update)
+        }
+        
         if let update = progressLine(for: .painting) {
             updates.append(update)
         }

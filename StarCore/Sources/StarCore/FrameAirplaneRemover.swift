@@ -337,32 +337,44 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         Log.i("frame \(self.frameIndex) finishing")
 
         self.set(state: .loadingImages)
-        
-        guard let image = try await imageAccessor.load(type: .original, atSize: .original)
+
+        var (image, otherFrame) = try await finalFileSystemMonitor.load() {
+            await (imageAccessor.loadInt(type: .original, atSize: .original),
+                   imageAccessor.loadInt(type: .aligned, atSize: .original))
+        }
+
+        guard let image = image//try await imageAccessor.loadFinal(type: .original, atSize: .original)
         else { throw "couldn't load original file for finishing" }
         
-        try await imageAccessor.save(image, as: .original, atSize: .preview, overwrite: false)
-        try await imageAccessor.save(image, as: .original, atSize: .thumbnail, overwrite: false)
+        if self.writeOutputFiles {
+            self.set(state: .loadingImages1)
+            try await imageAccessor.saveFinal(image, as: .original, atSize: .preview, overwrite: false)
+            try await imageAccessor.saveFinal(image, as: .original, atSize: .thumbnail, overwrite: false)
+        }
 
-        var otherFrame = try await imageAccessor.load(type: .aligned, atSize: .original)
+        
         if otherFrame == nil {
             // try creating the star aligned image if we can't load it
             Log.i("doing star alignment at finish")
             otherFrame = try await starAlignedImage()
         }
+
         
         guard let otherFrame else {
             throw "couldn't load aligned file for finishing"
         }
         
         let format = image.imageData // make a copy
+
         switch format {
         case .eightBit(_):
             Log.e("8 bit not supported here now")
         case .sixteenBit(var outputData):
             Log.d("frame \(self.frameIndex) painting over airplanes")
 
-            try await self.paintOverAirplanes(toData: &outputData, otherFrame: otherFrame)
+            try await self.paintOverAirplanes(image: image,
+                                              toData: &outputData,
+                                              otherFrame: otherFrame)
 
             Log.d("frame \(self.frameIndex) writing output files")
             self.set(state: .writingOutputFile)
@@ -372,11 +384,11 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             // write frame out as processed versions
             do {
                 Log.d("frame \(self.frameIndex) processed file")
-                try await imageAccessor.save(processedImage, as: .processed,
-                                             atSize: .original, overwrite: true)
+                try await imageAccessor.saveFinal(processedImage, as: .processed,
+                                                  atSize: .original, overwrite: true)
                 Log.d("frame \(self.frameIndex) writing processed preview")
-                try await imageAccessor.save(processedImage, as: .processed,
-                                             atSize: .preview, overwrite: true)
+                try await imageAccessor.saveFinal(processedImage, as: .processed,
+                                                  atSize: .preview, overwrite: true)
             } catch {
                 // XXX for some reason this error gets missed if we don't catch it here :(
                 Log.d("frame \(self.frameIndex) ERROR \(error)")
@@ -386,11 +398,11 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 Log.d("frame \(self.frameIndex) getting validating image")
                 let validationImage = await outlierGroups.validationImage()
                 Log.d("frame \(self.frameIndex) writing validated image")
-                try await imageAccessor.save(validationImage, as: .validated,
-                                             atSize: .original, overwrite: false)
+                try await imageAccessor.saveFinal(validationImage, as: .validated,
+                                                  atSize: .original, overwrite: false)
                 Log.d("frame \(self.frameIndex) writing validated preview")
-                try await imageAccessor.save(validationImage, as: .validated,
-                                             atSize: .preview, overwrite: false)
+                try await imageAccessor.saveFinal(validationImage, as: .validated,
+                                                  atSize: .preview, overwrite: false)
             }
             Log.d("frame \(self.frameIndex) done writing toutut files")
         }

@@ -243,7 +243,7 @@ public actor OutlierGroups {
         for (key, group) in members {
             if key > maxKey { maxKey = key }
             if let overlap = boundingBox.overlap(with: group.bounds) {
-                var blobToSlice = await group.blob()
+                let blobToSlice = await group.blob()
                 let newPixels = await blobToSlice.slice(with: overlap)
                 newBlobPixels.formUnion(newPixels)
                 members.removeValue(forKey: key)

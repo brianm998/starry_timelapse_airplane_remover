@@ -97,8 +97,8 @@ public actor ImageSequence {
     private var maxImages: Int? // XXX set this low for gui, eating more ram than necessary
 
     // use file access monitor
-    public func getImage(withName filename: String) async throws -> ImageLoader {
-        try await fileSystemMonitor.load() { await self.getImageInt(withName: filename) }
+    public func getImage(withName filename: String) -> ImageLoader {
+        self.getImageInt(withName: filename)
     }
     
     private func getImageInt(withName filename: String) -> ImageLoader {

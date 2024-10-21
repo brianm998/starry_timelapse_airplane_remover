@@ -168,26 +168,7 @@ push enter
     }
 }
 
-fileprivate let starAlignmentMonitor = StarAlignmentMonitor(max: 8) // XXX calculate number of cpus / 4
-
-fileprivate actor StarAlignmentMonitor {
-
-    var numberRunning: Int = 0
-    let max: Int
-    
-    init(max: Int) {
-        self.max = max
-    }
-
-    public func load(_ closure: @Sendable @escaping () async throws -> String?) async throws -> String? {
-        while numberRunning >= max {
-            try? await Task.sleep(nanoseconds: 1_000_000_000)
-        }
-
-        numberRunning += 1        
-        defer { numberRunning -= 1 }
-        return try await closure()
-    }
-}
+// XXX make this max a parameter
+fileprivate let starAlignmentMonitor = FileSystemMonitor(max: 8) // XXX calculate number of cpus / 4
 
 

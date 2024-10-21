@@ -51,6 +51,7 @@ public enum FrameProcessingState: Int,
     case writingOutlierValues
     
     case loadingImages
+    case loadingImages1
     case painting
     case painting2
     case writingOutputFile
@@ -98,6 +99,8 @@ public enum FrameProcessingState: Int,
             return "writing outlier classification values"
         case .loadingImages:
             return "loading images"
+        case .loadingImages1:
+            return "loading images 1"
         case .painting:
             return "creating paint mask"
         case .painting2:
