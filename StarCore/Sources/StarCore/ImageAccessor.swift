@@ -62,7 +62,7 @@ public protocol ImageAccess: Sendable {
 
     // load an image of some type and size
     func loadImage(type imageType: FrameImageType,
-                   atSize size: ImageDisplaySize) async -> Image?
+                   atSize size: ImageDisplaySize) async throws -> Image?
 
     // bypass loading restrictions
     func loadInt(type imageType: FrameImageType,
@@ -148,13 +148,13 @@ public struct ImageAccessor: ImageAccess, Sendable {
     }
 
     public func loadImage(type imageType: FrameImageType,
-                          atSize size: ImageDisplaySize) -> Image?
+                          atSize size: ImageDisplaySize) async throws -> Image?
     {
-        if let url = urlForImage(ofType: imageType, atSize: size) {
-            if let image = NSImage(contentsOf: url) {
+        if let filename = nameForImage(ofType: imageType, atSize: size) {
+            if let image = try await imageCache.loadImage(filename: filename) {
                 return Image(nsImage: image)
             } else {
-                Log.w("cannot create image from url \(url)")
+                Log.w("cannot create image from filename \(filename)")
             }
         } else {
             Log.w("cannot get url for image")

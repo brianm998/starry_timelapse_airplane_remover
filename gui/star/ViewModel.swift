@@ -239,7 +239,7 @@ public final class ViewModel {
     }
     
     func refresh(frame: FrameAirplaneRemover) {
-        Task {
+        Task {                  // XXX errors thrown from here are not handled :(
             Log.d("refreshing frame \(frame.frameIndex)")
             
             // load the view frames from the main image
@@ -254,57 +254,57 @@ public final class ViewModel {
             
             let acc = frame.imageAccessor
 
-            let vpTask = Task.detached { await acc.loadImage(type: .validated,  atSize: .preview)?.resizable() }
-            let spTask = Task.detached { await acc.loadImage(type: .subtracted, atSize: .preview)?.resizable() }
-            let bpTask = Task.detached { await acc.loadImage(type: .blobs,      atSize: .preview)?.resizable() }
-            let f1Task = Task.detached { await acc.loadImage(type: .filter1,    atSize: .preview)?.resizable() }
-            let f2Task = Task.detached { await acc.loadImage(type: .filter2,    atSize: .preview)?.resizable() }
-            let f3Task = Task.detached { await acc.loadImage(type: .filter3,    atSize: .preview)?.resizable() }
-            let f4Task = Task.detached { await acc.loadImage(type: .filter4,    atSize: .preview)?.resizable() }
-            let f5Task = Task.detached { await acc.loadImage(type: .filter5,    atSize: .preview)?.resizable() }
-            let f6Task = Task.detached { await acc.loadImage(type: .filter6,    atSize: .preview)?.resizable() }
-            let ppTask = Task.detached { await acc.loadImage(type: .paintMask,  atSize: .preview)?.resizable() }
-            let prTask = Task.detached { await acc.loadImage(type: .processed,  atSize: .preview)?.resizable() }
-            let opTask = Task.detached { await acc.loadImage(type: .original,   atSize: .preview)?.resizable() }
-            let otTask = Task.detached { await acc.loadImage(type: .original,   atSize: .thumbnail) }
+            let vpTask = Task.detached { try await acc.loadImage(type: .validated,  atSize: .preview)?.resizable() }
+            let spTask = Task.detached { try await acc.loadImage(type: .subtracted, atSize: .preview)?.resizable() }
+            let bpTask = Task.detached { try await acc.loadImage(type: .blobs,      atSize: .preview)?.resizable() }
+            let f1Task = Task.detached { try await acc.loadImage(type: .filter1,    atSize: .preview)?.resizable() }
+            let f2Task = Task.detached { try await acc.loadImage(type: .filter2,    atSize: .preview)?.resizable() }
+            let f3Task = Task.detached { try await acc.loadImage(type: .filter3,    atSize: .preview)?.resizable() }
+            let f4Task = Task.detached { try await acc.loadImage(type: .filter4,    atSize: .preview)?.resizable() }
+            let f5Task = Task.detached { try await acc.loadImage(type: .filter5,    atSize: .preview)?.resizable() }
+            let f6Task = Task.detached { try await acc.loadImage(type: .filter6,    atSize: .preview)?.resizable() }
+            let ppTask = Task.detached { try await acc.loadImage(type: .paintMask,  atSize: .preview)?.resizable() }
+            let prTask = Task.detached { try await acc.loadImage(type: .processed,  atSize: .preview)?.resizable() }
+            let opTask = Task.detached { try await acc.loadImage(type: .original,   atSize: .preview)?.resizable() }
+            let otTask = Task.detached { try await acc.loadImage(type: .original,   atSize: .thumbnail) }
 
-            if let image = await vpTask.value {
+            if let image = try await vpTask.value {
                 self.frames[frame.frameIndex].validationPreviewImage = image
             }
-            if let image = await spTask.value  {
+            if let image = try await spTask.value  {
                 self.frames[frame.frameIndex].subtractionPreviewImage = image
             }
-            if let image = await bpTask.value {
+            if let image = try await bpTask.value {
                 self.frames[frame.frameIndex].blobsPreviewImage = image
             }
-            if let image = await f1Task.value {
+            if let image = try await f1Task.value {
                 self.frames[frame.frameIndex].filter1PreviewImage = image
             }
-            if let image = await f2Task.value {
+            if let image = try await f2Task.value {
                 self.frames[frame.frameIndex].filter2PreviewImage = image
             }
-            if let image = await f3Task.value {
+            if let image = try await f3Task.value {
                 self.frames[frame.frameIndex].filter3PreviewImage = image
             }
-            if let image = await f4Task.value {
+            if let image = try await f4Task.value {
                 self.frames[frame.frameIndex].filter4PreviewImage = image
             }
-            if let image = await f5Task.value {
+            if let image = try await f5Task.value {
                 self.frames[frame.frameIndex].filter5PreviewImage = image
             }
-            if let image = await f6Task.value {
+            if let image = try await f6Task.value {
                 self.frames[frame.frameIndex].filter6PreviewImage = image
             }
-            if let image = await ppTask.value {
+            if let image = try await ppTask.value {
                 self.frames[frame.frameIndex].paintMaskPreviewImage = image
             }
-            if let image = await prTask.value {
+            if let image = try await prTask.value {
                 self.frames[frame.frameIndex].processedPreviewImage = image
             }
-            if let image = await opTask.value {
+            if let image = try await opTask.value {
                 self.frames[frame.frameIndex].previewImage = image
             }
-            if let image = await otTask.value {
+            if let image = try await otTask.value {
                 self.frames[frame.frameIndex].thumbnailImage = image
             }
 

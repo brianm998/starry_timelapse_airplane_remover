@@ -64,7 +64,7 @@ public struct PixelatedImage: Sendable {
     }
 
     public init?(fromFile filename: String) async throws {
-        if let nsImage = try await loadImage(fromFile: filename) {
+        if let nsImage = try await imageCache.loadImage(filename: filename) {
             if let cgImage = nsImage.cgImage(forProposedRect: nil, context: nil, hints: nil) {
                 self.init(cgImage)
             } else {
@@ -430,20 +430,3 @@ extension Array<UInt8> {
         return data
     }
 }
-
-fileprivate func loadImage(fromFile filename: String) async throws -> NSImage? {
-    //Log.d("Loading image from \(filename)")
-    let imageURL = NSURL(fileURLWithPath: filename, isDirectory: false)
-    //Log.d("loaded image url \(imageURL)")
-
-    let (data, _) = try await URLSession.shared.data(for: URLRequest(url: imageURL as URL))
-    //Log.d("got data for url \(imageURL)")
-    if let image = NSImage(data: data) {
-        Log.d("got image for url \(imageURL)")
-        return image
-    } else {
-        return nil
-    }
-}
-
-
