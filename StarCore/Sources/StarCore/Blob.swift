@@ -13,61 +13,6 @@ import logging
  blobs can grow in size, and be combined with other blobs.
  */
 
-public struct CodableBlob: Codable,
-                           Sendable
-{
-    public let id: UInt16
-    public let pixels: Set<SortablePixel>
-    public let frameIndex: Int
-
-    enum CodingKeys: String, CodingKey {
-        case id
-        case pixels
-        case frameIndex
-    }
-
-    public init(_ other: CodableBlob) {
-        self.id = other.id
-        self.pixels = other.pixels // same reference or new map?
-        self.frameIndex = other.frameIndex
-        //Log.d("frame \(frameIndex) blob \(self.id) alloc")
-    }
-
-    public init(id: UInt16, frameIndex: Int) {
-        self.id = id
-        self.frameIndex = frameIndex
-        self.pixels = Set<SortablePixel>()
-    }
-    
-    public init(_ pixel: SortablePixel, id: UInt16, frameIndex: Int) {
-        self.pixels = [pixel]
-        self.id = id
-        self.frameIndex = frameIndex
-        //Log.d("frame \(frameIndex) blob \(self.id) alloc")
-    }
-
-    public init(_ pixels: Set<SortablePixel>, id: UInt16, frameIndex: Int) {
-        self.pixels = Set(pixels.map { $0 })
-        self.id = id
-        self.frameIndex = frameIndex
-    }
-
-    public init(from decoder: Decoder) throws {
-        let values = try decoder.container(keyedBy: CodingKeys.self)
-        pixels = try values.decode(Set<SortablePixel>.self, forKey: .pixels)
-        id = try values.decode(UInt16.self, forKey: .id)
-        frameIndex = try values.decode(Int.self, forKey: .frameIndex)
-    }
-
-    public func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(pixels, forKey: .pixels)
-        try container.encode(id, forKey: .id)
-        try container.encode(frameIndex, forKey: .frameIndex)
-    }
-}
-
-// XXX combine Blob and CodableBlob
 public actor Blob: CustomStringConvertible,
                    Hashable
 {
@@ -78,16 +23,13 @@ public actor Blob: CustomStringConvertible,
     
     public func getPixels() -> Set<SortablePixel> { pixels }
 
-    public func codableBlob() -> CodableBlob {
-        CodableBlob(pixels, id: id, frameIndex: frameIndex)
-    }
-    
     nonisolated public func hash(into hasher: inout Hasher) {
         hasher.combine(id)
     }
     
     public init(_ pixels: Set<SortablePixel>,
-                id: UInt16, frameIndex: Int,
+                id: UInt16,
+                frameIndex: Int,
                 statusTracker: PixelStatusTracker? = nil)
     {
         self.pixels = pixels
@@ -114,13 +56,6 @@ public actor Blob: CustomStringConvertible,
         self.id = id
         self.frameIndex = frameIndex
         self.statusTracker = statusTracker
-    }
-    
-    public init(_ codableBlob: CodableBlob) {
-        self.id = codableBlob.id
-        self.frameIndex = codableBlob.frameIndex
-        self.pixels = codableBlob.pixels
-        self.statusTracker = nil
     }
     
     // actual size in number of pixels
@@ -213,7 +148,7 @@ public actor Blob: CustomStringConvertible,
                     neighborCount += self.hasPixel(x: x-1, y: y)
                     neighborCount += self.hasPixel(x: x+1, y: y)
                     neighborCount += self.hasPixel(x: x-1, y: y+1)
-                    neighborCount += self.hasPixel(x: x,  y: y+1)
+                    neighborCount += self.hasPixel(x: x,   y: y+1)
                     neighborCount += self.hasPixel(x: x+1, y: y+1)
 
                     if pixelDistance < median {
@@ -631,73 +566,6 @@ public actor Blob: CustomStringConvertible,
         return lhs.id == rhs.id
     }
 
-    public func borderBrightness(in originalImage: RawPixelData) -> Double {
-        let b = self.pixels
-        
-        var dimmerCount = 0.0
-        var brighterCount = 0.0
-        
-        for pixel in self.pixels {
-            /*
-             for every pixel in this newly expanded self, examine every neighbor pixel
-             in the original image which is not part of the blob.
-             if this neighbor pixel is the same brightness or more than the pixel we're
-             coming from, then throw away this blob
-             */
-
-            if let i = originalImage.intensity(atX: pixel.x, andY: pixel.y) {
-                let neighbors = [
-                  (pixel.x - 1, pixel.y - 1),
-                  (pixel.x,     pixel.y - 1),
-                  (pixel.x + 1, pixel.y - 1),
-                  (pixel.x - 1, pixel.y    ),
-                  (pixel.x + 1, pixel.y    ),
-                  (pixel.x - 1, pixel.y + 1),
-                  (pixel.x,     pixel.y + 1),
-                  (pixel.x + 1, pixel.y + 1),
-                ]
-
-                for neighbor in neighbors {
-                    if let value = image(originalImage, isBrighterAt: neighbor, than: i, ignoring: b) {
-                        if value {
-                            brighterCount += 1
-                        } else {
-                            dimmerCount += 1
-                        }
-                    }
-                }
-            }
-        }
-
-        brighterCount /= Double(self.pixels.count)
-        dimmerCount   /= Double(self.pixels.count)
-
-        // the ratio of brighter to dimmer
-        // higher is brighter
-        return brighterCount/dimmerCount
-    }
-
-    fileprivate func image(_ image: RawPixelData,
-                           isBrighterAt at: (Int, Int),
-                           than intensity: UInt,
-                           ignoring blobPixels: Set<SortablePixel>) -> Bool?
-    {
-        let x = at.0
-        let y = at.1
-
-        if x < 0 || y < 0 { return nil }
-        
-        let sortablePixel = SortablePixel(x: x, y: y,
-                                        intensity: 0) // not used here
-
-        if blobPixels.contains(sortablePixel) { return nil }
-
-        if let imageIntensity = image.intensity(atX: x, andY: y) {
-            return imageIntensity > intensity
-        }
-
-        return nil
-    }
 }
 
 public func medianIntensities(of blobs: [Blob]) async -> [UInt16] {

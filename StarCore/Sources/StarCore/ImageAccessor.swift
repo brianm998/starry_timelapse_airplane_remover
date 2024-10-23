@@ -60,9 +60,9 @@ public protocol ImageAccess: Sendable {
     func loadFinal(type imageType: FrameImageType,
                    atSize size: ImageDisplaySize) async throws -> PixelatedImage?
 
-    // load an image of some type and size
+    // load an image of some type and size for the GUI as a SwiftUI Image
     func loadImage(type imageType: FrameImageType,
-                   atSize size: ImageDisplaySize) async throws -> Image?
+                   atSize size: ImageDisplaySize) -> Image?
 
     // bypass loading restrictions
     func loadInt(type imageType: FrameImageType,
@@ -148,13 +148,13 @@ public struct ImageAccessor: ImageAccess, Sendable {
     }
 
     public func loadImage(type imageType: FrameImageType,
-                          atSize size: ImageDisplaySize) async throws -> Image?
+                          atSize size: ImageDisplaySize) -> Image?
     {
-        if let filename = nameForImage(ofType: imageType, atSize: size) {
-            if let image = try await imageCache.loadImage(filename: filename) {
+        if let url = urlForImage(ofType: imageType, atSize: size) {
+            if let image = NSImage(contentsOf: url) {
                 return Image(nsImage: image)
             } else {
-                Log.w("cannot create image from filename \(filename)")
+                Log.w("cannot create image from url \(url)")
             }
         } else {
             Log.w("cannot get url for image")

@@ -16,43 +16,6 @@ You should have received a copy of the GNU General Public License along with sta
 
 */
 
-public struct RawPixelData: Sendable {
-    public let pixels: [UInt16]
-    public let bytesPerRow: Int
-    public let bytesPerPixel: Int
-    public let width: Int
-    public let height: Int
-
-    public func intensity(atX x: Int, andY y: Int) -> UInt? {
-        if x < 0 || y < 0 || x >= width || y >= height { return nil }
-        
-        let baseIndex = (y * bytesPerRow/2) + (x * bytesPerPixel/2)
-        if bytesPerPixel == 2 {
-
-            if baseIndex >= pixels.count {
-                fatalError("bad index \(baseIndex) pixels.count \(pixels.count)")
-            }
-            
-            // monochorome input image
-            return(UInt(pixels[baseIndex]))
-        } else if bytesPerPixel >= 6 {
-            // at least three colors in the input image
-
-            if baseIndex >= pixels.count-2 {
-                fatalError("bad index \(baseIndex) pixels.count \(pixels.count) (atX \(x), andY \(y)) width \(width) height \(height)")
-            }
-            
-            let red = UInt(pixels[baseIndex])
-            let blue = UInt(pixels[baseIndex+1])
-            let green = UInt(pixels[baseIndex+2])
-
-            return red+blue+green
-        } else {
-            fatalError("invalid bytesPerPixel \(bytesPerPixel)")
-        }
-    }
-}
-
 /*
  A bright blob detector.
 
@@ -81,7 +44,7 @@ public class FullFrameBlobber {
     public let imageHeight: Int
     public let subtractionPixelData: [UInt16]
 
-    public let originalImage: RawPixelData
+    public let originalImage: PixelatedImage
     public let frameIndex: Int
     
     // running blob bucket
@@ -124,7 +87,7 @@ public class FullFrameBlobber {
                 imageWidth: Int,
                 imageHeight: Int,
                 subtractionPixelData: [UInt16],
-                originalImage: RawPixelData,
+                originalImage: PixelatedImage,
                 frameIndex: Int,
                 neighborType: NeighborType)
     {
@@ -231,8 +194,27 @@ public class FullFrameBlobber {
 
                     // XXX maybe make this a classification criteria instead
                     // of just dumping them outright here?
+                    /*
+                     XXX this is blowing away some blobs that we want, even bright ones.
+                     it does get rid of lots of horizon blobs however.
 
-                    if await newBlob.borderBrightness(in: originalImage) < 0.1 { // XXX guess
+                     need to expose this as a classification feature
+
+                     but it requires the original image, so
+
+                     use imageCache inside of Outlier group to allow
+                     calculating this value
+
+                     */
+
+                    let borderBrightness = await originalImage.borderBrightness(of: newBlob.pixels)
+
+//                    Log.d("frame \(frameIndex) blob \(newBlob) has borderBrightness \(borderBrightness)") 
+
+                    // XXX delay this check until later in the process
+                    // XXX make original image avilalbe to blob for this
+                    
+                    if borderBrightness < 0.5 { // XXX guess
                         newBlobId += 1
                         blobs.append(newBlob)
                     }

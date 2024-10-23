@@ -216,6 +216,34 @@ public struct PixelatedImage: Sendable {
         }
     }
 
+    func intensity(at pixel: SortablePixel) -> UInt {
+        intensity(atX: pixel.x, andY: pixel.y)
+    }
+
+    func intensity(atX x: Int, andY y: Int) -> UInt {
+        switch imageData {
+        case .sixteenBit(let arr):
+            let offset = (y * width*self.componentsPerPixel) + (x * self.componentsPerPixel)
+            var pixel = Pixel()
+            pixel.red = arr[offset]
+            var intensity: UInt = 0
+            if self.componentsPerPixel >= 2 {
+                intensity += UInt(arr[offset+1])
+            }
+            if self.componentsPerPixel >= 3 {
+                intensity += UInt(arr[offset+2])
+            }
+            if self.componentsPerPixel == 4 {
+                intensity += UInt(arr[offset+3])
+            }
+            return intensity
+
+        case .eightBit(_):
+            fatalError("not supported yet")
+            break
+        }
+    }
+
     public func nsImage(ofSize size: NSSize) -> NSImage? {
         return self.nsImage?.resized(to: size)
     }
@@ -292,7 +320,7 @@ public struct PixelatedImage: Sendable {
         let context = CIContext()
         let fileURL = NSURL(fileURLWithPath: imageFilename, isDirectory: false) as URL
         let options: [CIImageRepresentationOption: CGFloat] = [:]
-
+        
         try context.writeTIFFRepresentation(
           of: CIImage(cgImage: newImage),
           to: fileURL,
@@ -362,6 +390,75 @@ public struct PixelatedImage: Sendable {
             }
         }
     }
+
+    // used as a classification criteria
+    // values below 0.1 are more likely to be airplanes,
+    // a small number of airplanes give higher values
+    public func borderBrightness(of pixels: Set<SortablePixel>) -> Double
+    {
+        var dimmerCount = 0.0
+        var brighterCount = 0.0
+        
+        for pixel in pixels {
+            /*
+             for every pixel in this newly expanded self, examine every neighbor pixel
+             in the original image which is not part of the blob.
+             if this neighbor pixel is the same brightness or more than the pixel we're
+             coming from, then throw away this blob
+             */
+
+            let i = self.intensity(at: pixel) 
+            let neighbors = [
+              (pixel.x - 1, pixel.y - 1),
+              (pixel.x,     pixel.y - 1),
+              (pixel.x + 1, pixel.y - 1),
+              (pixel.x - 1, pixel.y    ),
+              (pixel.x + 1, pixel.y    ),
+              (pixel.x - 1, pixel.y + 1),
+              (pixel.x,     pixel.y + 1),
+              (pixel.x + 1, pixel.y + 1),
+            ]
+
+            for neighbor in neighbors {
+                if let value = isImage(self,
+                                       brighterAt: neighbor,
+                                       than: i,
+                                       ignoring: pixels)
+                {
+                    if value {
+                        brighterCount += 1
+                    } else {
+                        dimmerCount += 1
+                    }
+                }
+            }
+        }
+
+        brighterCount /= Double(pixels.count)
+        dimmerCount   /= Double(pixels.count)
+
+        // the ratio of brighter to dimmer
+        // higher is brighter
+        return brighterCount/dimmerCount
+    }
+}
+
+fileprivate func isImage(_ image: PixelatedImage,
+                         brighterAt at: (Int, Int),
+                         than intensity: UInt,
+                         ignoring blobPixels: Set<SortablePixel>) -> Bool?
+{
+    let x = at.0
+    let y = at.1
+
+    if x < 0 || y < 0 { return nil }
+    
+    let sortablePixel = SortablePixel(x: x, y: y,
+                                      intensity: 0) // not used here
+
+    if blobPixels.contains(sortablePixel) { return nil }
+
+    return image.intensity(atX: x, andY: y)  > intensity
 }
 
 extension NSImage {

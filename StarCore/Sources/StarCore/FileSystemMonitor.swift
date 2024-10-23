@@ -7,7 +7,8 @@ import Semaphore
 // which can result in timeout errors.
 
 // XXX make this max a parameter
-public let fileSystemMonitor = FileSystemMonitor(max: 10)
+//public let fileSystemMonitor = FileSystemMonitor(max: 10)
+public let fileSystemMonitor = FileSystemMonitor(max: 80)
 public let finalFileSystemMonitor = FileSystemMonitor(max: 20)
 
 public actor FileSystemMonitor {

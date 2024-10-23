@@ -45,6 +45,36 @@ public class BlobProcessor {
     
     public init(frame: FrameAirplaneRemover) {
         self.frame = frame
+
+        /*
+
+         Next steps after moving border brightness outside of the FullFrameBlobber
+         and into a new OutlierGroup classification feature:
+
+
+         develop a working lineTrim() method for Blobs
+
+         use things like line length, median distance from line, etc
+         to figure out if line based trimming makes sense for each blob
+
+         if the percentage of blobs anywhere the line is low, then don't touch it
+
+         if there is a calculated line which goes very close to more than half
+         of the pixels, then remove the farthest 10% that are more than X pixels
+         from the line, then iterate again by re-calculating the line and trying again
+
+         Keep track of all of these removed pixels, and try to see if there is another
+         line to be found within.  Can help for cases with airplanes close to horizon
+
+
+
+         
+         use linear blob connector on larger blobs like before
+         
+         */
+
+        
+
         
         /*
          Outlier Detection Logic:
@@ -294,7 +324,6 @@ public class BlobProcessor {
         let imageAccessor = frame.imageAccessor
         
         var subtractionArray: [UInt16] = []
-        var originalImageArray: [UInt16] = []
         var subtractionImage: PixelatedImage?
         do {
             // try to load the image subtraction from a pre-processed file
@@ -334,25 +363,8 @@ public class BlobProcessor {
         }
 
         guard let originalImage = try await imageAccessor.load(type: .original, atSize: .original)
-        else { throw "couldn't load original file for finishing" }
+        else { throw "couldn't load original file for blobbing" }
 
-        switch originalImage.imageData {
-        case .sixteenBit(let array):
-            originalImageArray = array
-        case .eightBit(_):
-            throw "8 bit images are not currently supported by Star, only 16 bit images"
-        }
-        
-        await frame.set(state: .assemblingPixels)
-
-        Log.d("frame \(frameIndex) running blobber")
-
-        let rawOriginalImage = RawPixelData(pixels: originalImageArray,
-                                            bytesPerRow: originalImage.bytesPerRow,
-                                            bytesPerPixel: originalImage.bytesPerPixel,
-                                            width: frame.width,
-                                            height: frame.height)
-        
         // detect blobs of difference in brightness in the subtraction array
         // airplanes show up as lines or dots in a line
         // because the image subtracted from this frame had the sky aligned,
@@ -361,7 +373,7 @@ public class BlobProcessor {
                                        imageWidth: frame.width,
                                        imageHeight: frame.height,
                                        subtractionPixelData: subtractionArray,
-                                       originalImage: rawOriginalImage,
+                                       originalImage: originalImage,
                                        frameIndex: frameIndex,
                                        neighborType: .eight)//.fourCardinal
 

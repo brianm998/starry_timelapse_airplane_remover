@@ -149,7 +149,7 @@ public actor OutlierGroups {
                                 await blob.add(pixel: pixel)
                             } else {
                                 // start a new blob with this pixel
-                                let blob = Blob(CodableBlob(pixel, id: blobId, frameIndex: frameIndex))
+                                let blob = Blob(pixel, id: blobId, frameIndex: frameIndex)
                                 blobMap[blobId] = blob
                             }
                         }
