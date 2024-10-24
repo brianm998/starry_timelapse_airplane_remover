@@ -27,14 +27,18 @@ public typealias BlobMap = [UInt16:Blob]
  */
 
 public enum BlobProcessingType {
-    case create(() async throws -> BlobMap)
+    case initiate(() async throws -> ([UInt16], PixelatedImage)) // subtraction image andoriginal image
+    case create(([UInt16], PixelatedImage) async throws -> BlobMap)
     case save(FrameImageType)
     case frameState(FrameProcessingState)
+    case processWithOriginalImage((BlobMap,PixelatedImage) async throws -> BlobMap)
     case process((BlobMap) async throws -> BlobMap)
     case dimIsolatedBlobRemover(DimIsolatedBlobRemover.Args)
     case isolatedBlobRemover(IsolatedBlobRemover.Args)
     case disconnectedBlobRemover(DisconnectedBlobRemover.Args)
     case linearBlobConnector(LinearBlobConnector.Args)
+    case borderBrightnessLessThan(Double)
+    case lineSplit(HoughLineFinder.LineSplitArgs)
 }
 
 // load and process all blobs for a frame, using a defined sequence of steps
@@ -94,26 +98,28 @@ public class BlobProcessor {
          */
         
         self.steps = [
-
-          // align frame, subtract it, sort pixels, then initial blob detection
+          // align neighbor frame, subtract it, sort pixels
+          .initiate(setup),
+        
+          // create the first blobs from subtraction image
           .create(findBlobs),
 
           .save(.blobs),          
 
-
-
-
           .frameState(.isolatedBlobRemoval1),
 
-
           // find really close linear blobs
-          // XXX does this really get rid of pixels on the line? (frame 72 fx3-2)
-          // may have fixed that, let's see
           .linearBlobConnector(.init(scanSize: 24, 
                                      blobsSmallerThan: 80,
                                      lineBorder: 20)),
 
           .save(.filter1),
+
+          .frameState(.isolatedBlobRemoval2),
+
+          .borderBrightnessLessThan(0.4),
+          
+          .save(.filter2),
           
           // a first pass at cutting out individual blobs based upon size, brightness
           // or being too close to the bottom
@@ -125,14 +131,6 @@ public class BlobProcessor {
               var ret: [UInt16: Blob] = [:]
 
               for (_, blob) in blobs {
-                  /* XXX checked before pixel creation as well
-                  if let ignoreLowerPixels = frame.config.ignoreLowerPixels,
-                     await blob.boundingBox().min.y + ignoreLowerPixels > frame.height
-                  {
-                      // too close to the bottom 
-                      return nil
-                  }
-*/
                   // anything this small is noise
                   if await blob.size() <= constants.blobberMinBlobSize { continue }
 
@@ -147,14 +145,11 @@ public class BlobProcessor {
               }
               return ret
           },
-          .save(.filter2),
           
           // a first pass on dim isolated blob removal
           .dimIsolatedBlobRemover(.init(scanSize: 50,
                                         requiredNeighbors: 2)),
           
-          .frameState(.isolatedBlobRemoval2),
-
 
           // remove isolated blobs
           .isolatedBlobRemover(.init(minNeighborSize: 6, scanSize: 24)),
@@ -170,15 +165,19 @@ public class BlobProcessor {
           .frameState(.smallLinearBlobAbsorbtion),
           
           // find really close linear blobs
-          .linearBlobConnector(.init(scanSize: 30,
+          .linearBlobConnector(.init(scanSize: 20,
                                      blobsSmallerThan: 120,
                                      lineBorder: 10)),
 
           .frameState(.isolatedBlobRemoval4),
           
-
+          
           .save(.filter4),
-  
+
+          // perhaps make sure we don't discard any lines merged in with bad blobs somehow
+
+          .borderBrightnessLessThan(0.15),
+          
           // remove larger disconected blobs
           .disconnectedBlobRemover(.init(scanSize: 60,
                                          blobsSmallerThan: 50,
@@ -197,32 +196,108 @@ public class BlobProcessor {
 
           // try to do more line adjustment after removing some isolated blobs
           .linearBlobConnector(.init(scanSize: 20,
-                                     blobsSmallerThan: 80)),
+                                     blobsSmallerThan: 200)),
 
 
           .isolatedBlobRemover(.init(scanSize: 6,
                                      requiredNeighbors: 1,
                                      minBlobSize: 50)),
         
+
+
           .save(.filter6),
+
+          .lineSplit(.init(maxLines: 8000,
+                           maxDistance: 12,
+                           minLineScore: 12,
+                           minLineCount: 10)),
 
           // split up blobs 
           .process(applyUserSlices),
+          
+          // final pass on getting rid of really small blobs
+          .process() { blobs in
+              var ret: [UInt16: Blob] = [:]
+
+              for (_, blob) in blobs {
+                  if await blob.size() > 10 { // XXX constant
+                      ret[blob.id] = blob
+                  }
+              }
+              return ret
+          }, 
+
         ]
     }
 
     public func run() async throws -> BlobMap {
         guard let frame else { throw "need frame" }
         var blobMap: BlobMap = [:]
+
+        var subtractionArray: [UInt16]?
+        var originalImage: PixelatedImage?
+
+        
         for step in steps {
             switch step {
+            case .initiate(let method):
+                (subtractionArray, originalImage) = try await method()
+
             case .create(let method):
-                blobMap = try await method()
+                blobMap = try await method(subtractionArray!, originalImage!)
 
             case .process(let method):
                 blobMap = try await method(blobMap)
 
+            case .processWithOriginalImage(let method):
+                blobMap = try await method(blobMap, originalImage!)
 
+            case .lineSplit(let args):
+                var ret: [UInt16: Blob] = [:]
+                var maxIndex: UInt16 = 0
+
+                for (id, _) in blobMap {
+                    if id > maxIndex { maxIndex = id }
+                }
+                
+                for (_, blob) in blobMap {
+
+                    if await blob.size() < 80 { continue } // XXX constant
+                    
+                    // look and see if any pixels in this blob align with different
+                    // lines, and if so, split them apart into separate groups
+                    let lineSplitList = await blob.lineSplit(args: args)
+
+                    if lineSplitList.count > 0 {
+
+                        ret[blob.id] = blob
+                        // we have extra blobs to make here
+                        for pixelList in lineSplitList {
+                            maxIndex += 1
+                            let newBlob = Blob(Set(pixelList),
+                                               id: maxIndex,
+                                               frameIndex: frame.frameIndex)
+
+                            ret[newBlob.id] = newBlob
+                        }
+                    } else {
+                        ret[blob.id] = blob
+                    }
+                }
+                Log.d("frame \(frame.frameIndex) after lineSplit, blobMap has \(ret.count) blobs")
+                blobMap = ret
+
+                
+            case .borderBrightnessLessThan(let amount):
+                var ret: [UInt16: Blob] = [:]
+                for (_, blob) in blobMap {
+                    if await originalImage!.borderBrightness(of: blob.pixels) < amount {
+                        ret[blob.id] = blob
+                    }
+                }
+                blobMap = ret
+                
+                
             case .linearBlobConnector(let args):
                 let connector = await LinearBlobConnector(blobMap: blobMap,
                                                           width: frame.width,
@@ -318,8 +393,9 @@ public class BlobProcessor {
     }
     
     // use the subtraction and original image for this frame to find an initial set of blobs
-    fileprivate func findBlobs() async throws -> BlobMap {
-        guard let frame else { return [:] }
+
+    fileprivate func setup() async throws -> ([UInt16], PixelatedImage) {
+        guard let frame else { fatalError("need frame") } // XXX ???
         let frameIndex = frame.frameIndex
         let imageAccessor = frame.imageAccessor
         
@@ -365,6 +441,12 @@ public class BlobProcessor {
         guard let originalImage = try await imageAccessor.load(type: .original, atSize: .original)
         else { throw "couldn't load original file for blobbing" }
 
+        return (subtractionArray, originalImage)
+    }
+
+    fileprivate func findBlobs(subtractionArray: [UInt16], originalImage: PixelatedImage) async throws -> BlobMap {
+        guard let frame else { fatalError("need frame") } // XXX ???
+        
         // detect blobs of difference in brightness in the subtraction array
         // airplanes show up as lines or dots in a line
         // because the image subtracted from this frame had the sky aligned,
@@ -374,7 +456,7 @@ public class BlobProcessor {
                                        imageHeight: frame.height,
                                        subtractionPixelData: subtractionArray,
                                        originalImage: originalImage,
-                                       frameIndex: frameIndex,
+                                       frameIndex: frame.frameIndex,
                                        neighborType: .eight)//.fourCardinal
 
         blobber.sortPixels()
@@ -383,8 +465,8 @@ public class BlobProcessor {
         
         // run the blobber
         await blobber.process()
-
-        Log.d("frame \(frameIndex) blobber done")
+        
+        Log.d("frame \(frame.frameIndex) blobber done")
 
         return blobber.blobMap
     }

@@ -1,0 +1,53 @@
+
+
+on 3_16_2024-fx3-2
+
+planes and ground getting stuck together:
+
+frames:
+
+534
+535
+537
+538
+707
+710
+711
+742
+744
+745
+748
+783
+785
+789
+790
+792
+793
+794
+849
+850
+851
+1001
+1002
+1032
+1036
+1127
+1128
+1598
+1625
+1629
+1666
+
+
+This will be really hard to fix in the detection code.
+There will always have some errors close to horizon where ground and sky meet
+
+Need to implement outlier group razor feature:
+
+ - on a frame, user can select razor selection mode
+ - draw an area on the frame that includes some area with outlier pixels
+ - app should:
+   - record area selected in json on file (if -w)
+   - create new outlier group with just the pixels in the selected area
+   - remove these pixels from any other outlier group they may be part of
+   - have future blob detection respect these saved boundaries

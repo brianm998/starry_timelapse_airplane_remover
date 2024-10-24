@@ -14,34 +14,20 @@ import Foundation
 import KHTSwift
 import logging
 
-public protocol AbstractPixel {
-    var x: Int { get }
-    var y: Int { get }
-}
-
-// process either row major image data, or a list of abstract pixels
-fileprivate enum DataType {
-    // row major image data
-    case rowMajor([UInt16])
-
-    // a random list of x,y pixels
-    case list([AbstractPixel])
+fileprivate struct LineSplitResult {
+    let score: Double
+    let line: Line
 }
 
 // use the KHT to find lines, and then return the one which best fits the input data,
 // i.e. has the lowest mean distance of pixels to the line
 public struct HoughLineFinder {
 
-    fileprivate let data: DataType
+    let data: [SortablePixel]
     let bounds: BoundingBox
-    
-    public init(pixels: [UInt16], bounds: BoundingBox) {
-        data = .rowMajor(pixels)
-        self.bounds = bounds
-    }
 
-    public init(pixels: [AbstractPixel], bounds: BoundingBox) {
-        data = .list(pixels)
+    public init(pixels: [SortablePixel], bounds: BoundingBox) {
+        data = pixels
         self.bounds = bounds
     }
     
@@ -68,41 +54,154 @@ public struct HoughLineFinder {
         
         let minX = self.bounds.min.x
         let minY = self.bounds.min.y
-        switch data {
-        case .list(let pixels):
-            for pixel in pixels {
-                let imageIndex = (pixel.y - minY)*imageDataWidth + 
-                  (pixel.x - minX)
-                imageData[imageIndex] = 0xFF
-            }
 
-        case .rowMajor(let pixels):
-            for x in 0..<self.bounds.width {
-                for y in 0..<self.bounds.height {
-                    let index = y*self.bounds.width+x
-                    if pixels[index] > 0 {
-                        let imageIndex = y*imageDataWidth + x
-
-                        if imageIndex < 0 || imageIndex >= imageData.count {
-                            fatalError("from [\(x), \(y)] and \(self.bounds) BAD IMAGEINDEX \(imageIndex) for imageData.count \(imageData.count)")
-                        }
-                        
-                        imageData[imageIndex] = 0xFF
-                    }
-                }
-            }
+        for pixel in data {
+            let imageIndex = (pixel.y - minY)*imageDataWidth + 
+              (pixel.x - minX)
+            imageData[imageIndex] = 0xFF
         }
+
         return imageData
     }
 
-    public var line: Line? {
-        let imageData = self.imageData
-        let pixelImage = PixelatedImage(width: self.imageDataWidth,
-                                        height: self.imageDataHeight,
-                                        grayscale8BitImageData: imageData)
+    public struct LineSplitArgs: Sendable {
+        let maxLines: Int        // max number of lines to look at
+        let maxDistance: Double  // pixels at least this far away from a line give zero score
+        let minLineScore: Double // sub lines must have at least this score to be included
+        let minLineCount: Int    // sub lines must have at least this number of pixels
 
+        public init(
+          maxLines: Int = 8000,  
+          maxDistance: Double = 8,
+          minLineScore: Double = 12,
+          minLineCount: Int = 10
+        ) {
+            self.maxLines = maxLines
+            self.maxDistance = maxDistance
+            self.minLineScore = minLineScore
+            self.minLineCount = minLineCount
+        }
+    }
+    
+    // iterate through all lines and see if any of them have a match
+    // with a certain number of pixels.
+    // If so, sort them by number of closest pixels, and iterate over
+    // them to split this group out into more than one
+    public func lineSplit(args: LineSplitArgs)
+      -> ([SortablePixel], [[SortablePixel]])
+      // first return value is the original, possibly reduced, set of pixels we started with
+      // the second return value is a list of any sub-blobs we found that are close to a line
+    {
+
+        let pixelImage = self.pixelImage
         if let image = pixelImage.nsImage {
-            let lines = kernelHoughTransform(image: image, maxResults: 400) // XXX guess
+            let lines = kernelHoughTransform(image: image, maxResults: args.maxLines)
+            if lines.count > 0 {
+                var max = lines.count
+                if max > args.maxLines { max = args.maxLines } 
+
+                var results: [LineSplitResult] = []
+                
+                for i in 0..<max {
+                    /*
+                     call a function here to see many pixels are close to this
+                     line
+
+                     a per pixel score where 1 means on line,
+                     0 means X pixels from line
+                     score for line is sum of values for all pixels
+
+                     return a sortable struct that we can sort by
+                     number of close pixels (over some threshold),
+                     and then iterate over that to split up this group up
+                     */
+                    
+                    let originZeroLine = self.originZeroLine(from: lines[i])
+                    let linePixelScore = pixelScore(for: originZeroLine,
+                                                    maxDistance: args.maxDistance)
+
+                    if linePixelScore > args.minLineScore {
+                        results.append(LineSplitResult(score: linePixelScore,
+                                                       line: originZeroLine))
+
+                    }
+                }
+
+                let sortedResults = results.sorted() { $0.score > $1.score } 
+
+                if sortedResults.count > 0 {
+                    // we found at least one sorted result
+                    var pixelsForLines: [Line:[SortablePixel]] = [:]
+                    var pixelsToKeep: [SortablePixel] = []
+                    
+                    for pixel in data {
+                        var closestLine: Line?
+                        var closestDistance: Double = 99999999999999
+                        for result in sortedResults {
+                            let standardLine = result.line.standardLine
+                            let distance = standardLine.distanceTo(x: pixel.x, y: pixel.y)
+                            if distance < closestDistance {
+                                closestDistance = distance
+                                closestLine = result.line
+                            }
+                        }
+                        if let closestLine {
+                            if var pixelList = pixelsForLines[closestLine] {
+                                pixelList.append(pixel)
+                                pixelsForLines[closestLine] = pixelList
+                            } else {
+                                pixelsForLines[closestLine] = [pixel]
+                            }
+                        } else {
+                            pixelsToKeep.append(pixel)
+                        }
+                    }
+
+                    var newPixelSets: [[SortablePixel]] = []
+                    
+                    for (line, pixelList) in pixelsForLines {
+                        if pixelList.count >= args.minLineCount { 
+                            newPixelSets.append(pixelList)
+                        } else {
+                            pixelsToKeep.append(contentsOf: pixelList)
+                        }
+                    }
+                    return (pixelsToKeep, newPixelSets)
+                }
+            }
+        }
+
+        return ([], [])
+    }
+
+    public func pixelScore(for line: Line, maxDistance: Double = 5) -> Double {
+        let standardLine = line.standardLine
+        var ret: Double = 0.0
+        for pixel in data {
+            let distance = standardLine.distanceTo(x: pixel.x, y: pixel.y)
+            if distance <= maxDistance {
+                // 0 for maxDistance or furter from the line
+                // 1 for spot on the line
+                ret += (maxDistance-distance)/maxDistance
+            }
+        }
+        return ret
+    }
+    
+    var pixelImage: PixelatedImage {
+        let imageData = self.imageData
+        return PixelatedImage(width: self.imageDataWidth,
+                              height: self.imageDataHeight,
+                              grayscale8BitImageData: imageData)
+     }
+    
+    public var line: Line? {
+        let pixelImage = self.pixelImage
+        
+        let maxLineConstant = 800 // XXX constant for how many lines to look at
+        
+        if let image = pixelImage.nsImage {
+            let lines = kernelHoughTransform(image: image, maxResults: maxLineConstant)
 //            for (index, line) in lines.enumerated() {
 //                Log.d("line \(index): \(line)")
 //            }
@@ -117,7 +216,7 @@ public struct HoughLineFinder {
                 var closestDistance: Double = 9999999999999
                 var bestLineIndex = 0
                 var max = lines.count
-                if max > 800 { max = 800 } // XXX constant
+                if max > maxLineConstant { max = maxLineConstant } 
                 
                 for i in 0..<max {
                     let originZeroLine = self.originZeroLine(from: lines[i])
@@ -142,29 +241,13 @@ public struct HoughLineFinder {
         var distances:[Double] = []
         var max: Double = 0
         var numPixels: Int = 0
-        switch data {
-        case .list(let pixels):
-            numPixels = pixels.count
-            for pixel in pixels {
-                let distance = standardLine.distanceTo(x: pixel.x, y: pixel.y)
-                distanceSum += distance
-                distances.append(distance)
-                if distance > max { max = distance }                
-            }
-        case .rowMajor(let pixels):
-            for x in 0..<self.bounds.width {
-                for y in 0..<self.bounds.height {
-                    let index = y*self.bounds.width+x
-                    if pixels[index] > 0 {
-                        numPixels += 1
-                        let distance = standardLine.distanceTo(x: x+bounds.min.x,
-                                                               y: y+bounds.min.y) 
-                        distanceSum += distance
-                        distances.append(distance)
-                        if distance > max { max = distance }
-                    }
-                }
-            }
+
+        numPixels = data.count
+        for pixel in data {
+            let distance = standardLine.distanceTo(x: pixel.x, y: pixel.y)
+            distanceSum += distance
+            distances.append(distance)
+            if distance > max { max = distance }                
         }
         distances.sort { $0 > $1 }
         if numPixels == 0 {

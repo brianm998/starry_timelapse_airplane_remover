@@ -1,8 +1,7 @@
 import Foundation
 
 // a monochrome pixel that is used by the blobber
-public struct SortablePixel: AbstractPixel,
-                             Hashable,
+public struct SortablePixel: Hashable,
                              /*@preconcurrency*/ CustomStringConvertible,
                              Codable,
                              Sendable,

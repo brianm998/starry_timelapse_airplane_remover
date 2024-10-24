@@ -57,6 +57,11 @@ struct OutlierGroupTableRow: Identifiable {
     let dt_averageLineVariance: Double
     let dt_lineLength: Double
 
+    let dt_nearbyDirectOverlapScore: Double
+    let dt_boundingBoxOverlapScore: Double
+    let dt_lineFillAmount: Double
+    let dt_borderBrightness : Double
+    
     init(_ group: OutlierGroup) async {
         name = group.id
         size = group.size
@@ -94,6 +99,11 @@ struct OutlierGroupTableRow: Identifiable {
         dt_pixelBorderAmount = await group.decisionTreeValueAsync(for: .pixelBorderAmount)
         dt_averageLineVariance = await group.decisionTreeValueAsync(for: .averageLineVariance)
         dt_lineLength = await group.decisionTreeValueAsync(for: .lineLength)
+
+        dt_nearbyDirectOverlapScore = await group.decisionTreeValueAsync(for: .nearbyDirectOverlapScore)
+        dt_boundingBoxOverlapScore = await group.decisionTreeValueAsync(for: .boundingBoxOverlapScore)
+        dt_lineFillAmount = await group.decisionTreeValueAsync(for: .lineFillAmount)
+      dt_borderBrightness = await group.decisionTreeValueAsync(for: .borderBrightness)
     }
 }
 
@@ -263,7 +273,35 @@ struct OutlierGroupTable: View {
             row.dt_lineLength
         }
     }
-    
+
+    var dtNearbyDirectOverlapScore: DTColumn {
+        self.tableColumn(for: "nearbyDirectOverlapScore",
+                         value: \.dt_nearbyDirectOverlapScore) { row in
+            row.dt_nearbyDirectOverlapScore
+        }
+    }
+
+    var dtLineFillAmount: DTColumn {
+        self.tableColumn(for: "lineFillAmount",
+                         value: \.dt_lineFillAmount) { row in
+            row.dt_lineFillAmount
+        }
+    }
+
+    var dtBoundingBoxOverlapScore: DTColumn {
+        self.tableColumn(for: "boundingBoxOverlapScore",
+                         value: \.dt_boundingBoxOverlapScore) { row in
+            row.dt_boundingBoxOverlapScore
+        }
+    }
+
+    var dtBorderBrightness: DTColumn {
+        self.tableColumn(for: "borderBrightness",
+                         value: \.dt_borderBrightness) { row in
+            row.dt_borderBrightness
+        }
+    }
+
     func tableColumn(for name: String,
                      value: KeyPath<OutlierGroupTableRow,Double>,
                      closure: @escaping (OutlierGroupTableRow) -> Double) -> DTColumn
@@ -331,6 +369,10 @@ struct OutlierGroupTable: View {
                     Group {
                         dtAverageLineVariance
                         dtLineLength
+                        dtNearbyDirectOverlapScore
+                        dtLineFillAmount
+                        dtBoundingBoxOverlapScore
+                        dtBorderBrightness
                     }
 
                 } .onChange(of: viewModel.selectedOutliers) {newValue in 

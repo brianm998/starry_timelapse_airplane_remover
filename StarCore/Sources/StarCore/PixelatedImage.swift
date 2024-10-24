@@ -224,17 +224,19 @@ public struct PixelatedImage: Sendable {
         switch imageData {
         case .sixteenBit(let arr):
             let offset = (y * width*self.componentsPerPixel) + (x * self.componentsPerPixel)
-            var pixel = Pixel()
-            pixel.red = arr[offset]
             var intensity: UInt = 0
-            if self.componentsPerPixel >= 2 {
-                intensity += UInt(arr[offset+1])
-            }
-            if self.componentsPerPixel >= 3 {
-                intensity += UInt(arr[offset+2])
-            }
-            if self.componentsPerPixel == 4 {
-                intensity += UInt(arr[offset+3])
+            if offset < arr.count {
+                var pixel = Pixel()
+                pixel.red = arr[offset]
+                if self.componentsPerPixel >= 2 {
+                    intensity += UInt(arr[offset+1])
+                }
+                if self.componentsPerPixel >= 3 {
+                    intensity += UInt(arr[offset+2])
+                }
+                if self.componentsPerPixel == 4 {
+                    intensity += UInt(arr[offset+3])
+                }
             }
             return intensity
 

@@ -88,7 +88,7 @@ public struct ImageAccessor: ImageAccess, Sendable {
         self.baseDirName = config.basename
         self.baseFileName = baseFileName
         self.imageSequence = imageSequence
-        mkdirs()
+        mkdirs()                // XXX called more than needed
     }
     
     var previewSize: NSSize {

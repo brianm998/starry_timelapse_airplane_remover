@@ -74,7 +74,9 @@ public actor OutlierGroup: CustomStringConvertible,
         if !lineLoaded {
             lineLoaded = true
             Task.detached {
-                if let line = HoughLineFinder(pixels: self.pixels, bounds: self.bounds).line {
+                if let line = HoughLineFinder(pixels: Array(self.pixelSet),
+                                              bounds: self.bounds).line
+                {
                     await self.set(line: line)
                 }
             }
@@ -141,7 +143,22 @@ public actor OutlierGroup: CustomStringConvertible,
                                                 and: pixels)
     }()
 
-
+    public func borderBrightness() async -> Double {
+        if let frame {
+            do {
+                let accessor = frame.imageAccessor
+                if let originalImage = try await accessor.loadFinal(type: .original,
+                                                                    atSize: .original)
+                {
+                    return originalImage.borderBrightness(of: self.pixelSet)
+                }
+            } catch {
+                Log.e("error calculating border brightness: \(error)")
+            }
+        }
+        return 3.1415926535897 // XXX over 1.0 is a bad value, airplanes are closer to 0.1
+    }
+    
     public func lineFillAmount() -> Double {
         if let _lineFillAmount { return _lineFillAmount }
 
@@ -215,7 +232,7 @@ public actor OutlierGroup: CustomStringConvertible,
         let yDiff = Double(maxY-minY)
         let totalLength = sqrt(xDiff*xDiff+yDiff*yDiff)
         
-        return (distanceSum/Double(pixels.count), totalLength)
+        return (distanceSum/Double(pixelSet.count), totalLength)
     }
     
     public func shouldPaint() -> PaintReason? { _shouldPaint }
@@ -611,6 +628,7 @@ public actor OutlierGroup: CustomStringConvertible,
         case nearbyDirectOverlapScore
         case boundingBoxOverlapScore
         case lineFillAmount
+        case borderBrightness 
 
         /*
          XXX add:
@@ -707,6 +725,8 @@ public actor OutlierGroup: CustomStringConvertible,
                 return 23
             case .lineFillAmount:
                 return 24
+            case .borderBrightness:
+                return 25
             }
         }
 
@@ -784,6 +804,8 @@ public actor OutlierGroup: CustomStringConvertible,
             ret = self.lineLength()
         case .lineFillAmount:
             ret = self.lineFillAmount()
+        case .borderBrightness:
+            ret = await self.borderBrightness()
         }
         //let t1 = NSDate().timeIntervalSince1970
         //Log.d("group \(id) @ frame \(frameIndex) decisionTreeValue(for: \(type)) = \(ret) after \(t1-t0)s")

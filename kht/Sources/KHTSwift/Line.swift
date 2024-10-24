@@ -2,7 +2,7 @@ import Foundation
 import logging
 
 // polar coordinates for right angle intersection with line from origin of [0, 0]
-public struct Line: Codable, Sendable {
+public struct Line: Codable, Sendable, Hashable {
     public let theta: Double           // angle in degrees
     public let rho: Double             // distance in pixels
     public let votes: Int
@@ -25,6 +25,11 @@ public struct Line: Codable, Sendable {
         self.votes = votes
     }
 
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(theta)
+        hasher.combine(rho)
+    }
+    
     // returns to points that are on this line
     public var twoPoints: (DoubleCoord, DoubleCoord) {
         // this point is always on the line
