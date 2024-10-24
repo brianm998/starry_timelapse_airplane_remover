@@ -480,9 +480,9 @@ public actor Blob: CustomStringConvertible,
 
         var ret = 0.0
         if let line = self.line {
-            ret = OutlierGroup.calculateLineFillAmount(from: line,
-                                                       with: self.boundingBox(),
-                                                       and: self.pixelValues)
+            ret = calculateLineFillAmount(from: line,
+                                          with: self.boundingBox(),
+                                          and: self.pixelValues)
         }
         _lineFillAmount = ret
         return ret

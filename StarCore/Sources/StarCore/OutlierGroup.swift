@@ -41,27 +41,6 @@ public protocol ClassifiableOutlierGroup {
     func decisionTreeValue(for type: OutlierGroupFeature) -> Double 
 }
 
-/*
-
- It appears that this actor has gotten too big
-
- adding further methods or properties does compile,
- but fails with a segfault deep in the swift concurrency code
- every time it is run :(
-
- FIX:
-
- split up this code so that there is less in it.
-
- - move out the feature classification to a struct
- - keep the cached classification values in the outlier group still
- 
- 
-
- 
- */
-
-
 // represents a single outler group in a frame
 public actor OutlierGroup: CustomStringConvertible,
                            Hashable,
@@ -105,95 +84,6 @@ public actor OutlierGroup: CustomStringConvertible,
         return _line
     }
 
-    public func medianBrightness() -> Double { _medianBrightness }
-    
-    fileprivate lazy var _medianBrightness: Double = {
-        var values: [UInt16] = []
-        for pixel in pixelSet {  
-            if pixel.intensity > 0 {
-                values.append(pixel.intensity)
-            }
-        }
-        // XXX all zero pixels :(
-        if values.count == 0 {
-            return 0
-        } else {
-            return Double(values.sorted()[values.count/2])
-        }
-    }()
-
-
-    public func surfaceAreaToSizeRatio() -> Double { _surfaceAreaToSizeRatio }
-
-    fileprivate lazy var _surfaceAreaToSizeRatio: Double = {
-        ratioOfSurfaceAreaToSize(of: pixels,
-                                 and: pixelSet,
-                                 bounds: bounds)
-    }()
-
-
-    public func maxBrightness() -> Double { _maxBrightness }
-    
-    fileprivate lazy var _maxBrightness: Double = {
-        var max: UInt16 = 0
-        for pixel in pixelSet {  
-            if pixel.intensity > max { max = pixel.intensity }
-        }
-        return Double(max)
-    }()
-
-
-    public func maxHoughTransformCount() -> Double {
-        if let _maxHoughTransformCount { return _maxHoughTransformCount }
-
-        var ret = 0.0
-        if let line = self.line() {
-            ret = Double(line.votes)/Double(self.size)
-        }
-        _maxHoughTransformCount = ret
-        return ret
-    }
-
-    fileprivate var _maxHoughTransformCount: Double? = nil
-        
-    public func pixelBorderAmount() -> Double { _pixelBorderAmount }
-
-    fileprivate lazy var _pixelBorderAmount: Double = {
-        OutlierGroup.calculatePixelBorderAmount(from: pixelSet,
-                                                with: bounds,
-                                                and: pixels)
-    }()
-
-    public func borderBrightness() async -> Double {
-        if let frame {
-            do {
-                let accessor = frame.imageAccessor
-                if let originalImage = try await accessor.loadFinal(type: .original,
-                                                                    atSize: .original)
-                {
-                    return originalImage.borderBrightness(of: self.pixelSet)
-                }
-            } catch {
-                Log.e("error calculating border brightness: \(error)")
-            }
-        }
-        return 3.1415926535897 // XXX over 1.0 is a bad value, airplanes are closer to 0.1
-    }
-
-    public func lineFillAmount() -> Double {
-        if let _lineFillAmount { return _lineFillAmount }
-
-        var ret = 0.0
-        if let line = self.line() {
-            ret = OutlierGroup.calculateLineFillAmount(from: line,
-                                                       with: bounds,
-                                                       and: pixels)
-        }
-        _lineFillAmount = ret
-        return ret
-    }
-    
-    fileprivate lazy var _lineFillAmount: Double? = nil
     
     // how far away from the most dominant line in this outlier group are
     // the pixels in it, on average?
@@ -211,21 +101,6 @@ public actor OutlierGroup: CustomStringConvertible,
         return _medianLineVariance!
     }
     fileprivate var _medianLineVariance: Double? = nil
-
-    // what is the length of the assumed line? 
-    public func lineLength() -> Double {
-        if let _lineLength { return _lineLength }
-
-        if let line = self.originZeroLine {
-            let (_, _length) = averageDistanceAndLineLength(from: line)
-            _lineLength = _length
-        } else {
-            _lineLength = 0
-        }
-
-        return _lineLength!
-    }
-    fileprivate var _lineLength: Double? = nil
 
     // assumes line has 0,0 origin
     public func averageDistanceAndLineLength(from line: Line) -> (Double, Double) {
@@ -392,25 +267,6 @@ public actor OutlierGroup: CustomStringConvertible,
     
     private var cachedTestImage: CGImage? 
 
-    // x,y origin at 0,0
-    static fileprivate func hasPixelAt(x: Int, y: Int,
-                                       with bounds: BoundingBox,
-                                       and pixels: [UInt16]) -> Bool
-    {
-        if x < 0 || y < 0 {
-            return false
-        } else {
-            let index = (y-bounds.min.y)*bounds.width + (x-bounds.min.x)
-            if index >= 0,
-               index < pixels.count
-            {
-                return pixels[index] != 0
-            } else {
-                return false
-            }
-        }
-    }
-    
     fileprivate func testPaintAt(x: Int, y: Int, pixel: Pixel, imageData: inout Data) -> Bool {
         
         let bytesPerPixel = 64/8
@@ -562,14 +418,8 @@ public actor OutlierGroup: CustomStringConvertible,
     // decision code moved from extension because of swift bug:
     // https://forums.swift.org/t/actor-isolation-delegates-in-extensions/60571/6
 
-    // cached value
-    //private var _decisionTreeValues: [Double]?
-    
     // ordered by the list of features below
     func decisionTreeValues() async -> [Double] {
-//        if let _decisionTreeValues = _decisionTreeValues {
-//            return _decisionTreeValues
-//        }
         var ret: [Double] = []
         ret.append(Double(self.id))
         for type in OutlierGroupFeature.allCases {
@@ -578,24 +428,12 @@ public actor OutlierGroup: CustomStringConvertible,
             //let t1 = NSDate().timeIntervalSince1970
             //Log.i("frame \(frameIndex) group \(self) took \(t1-t0) seconds to calculate value for \(type)")
         }
-  //      _decisionTreeValues = ret
         return ret
     }
 
-    // cached value
-    nonisolated(unsafe) private static var _decisionTreeValueTypes: [OutlierGroupFeature]?
-    
     // the ordering of the list of values above
     static var decisionTreeValueTypes: [OutlierGroupFeature] {
-        if let _decisionTreeValueTypes = _decisionTreeValueTypes {
-            return _decisionTreeValueTypes
-        }
-        var ret: [OutlierGroupFeature] = []
-        for type in OutlierGroupFeature.allCases {
-            ret.append(type)
-        }
-        _decisionTreeValueTypes = ret
-        return ret
+        OutlierGroupFeature.allCases 
     }
 
     public func decisionTreeGroupValues() async -> OutlierFeatureData {
@@ -617,69 +455,11 @@ public actor OutlierGroup: CustomStringConvertible,
     public func clearFeatureValueCache() { featureValueCache = [:] }
 
     public func decisionTreeValueAsync(for type: OutlierGroupFeature) async -> Double {
-        let height = IMAGE_HEIGHT!
-        let width = IMAGE_WIDTH!
-
         if let value = featureValueCache[type] { return value }
 
         //let t0 = NSDate().timeIntervalSince1970
 
-        var ret: Double = 0.0
-        
-        switch type {
-        case .size:
-            ret = Double(self.size)/(height*width)
-        case .width:
-            ret = Double(self.bounds.width)/width
-        case .height:
-            ret = Double(self.bounds.height)/height
-        case .centerX:
-            ret = Double(self.bounds.center.x)/width
-        case .minX:
-            ret = Double(self.bounds.min.x)/width
-        case .maxX:
-            ret = Double(self.bounds.max.x)/width
-        case .minY:
-            ret = Double(self.bounds.min.y)/height
-        case .maxY:
-            ret = Double(self.bounds.max.y)/height
-        case .centerY:
-            ret = Double(self.bounds.center.y)/height
-        case .hypotenuse:
-            ret = Double(self.bounds.hypotenuse)/(height*width)
-        case .aspectRatio:
-            ret = Double(self.bounds.width) / Double(self.bounds.height)
-        case .fillAmount:
-            ret = Double(size)/(Double(self.bounds.width)*Double(self.bounds.height))
-        case .surfaceAreaRatio:
-            ret = self.surfaceAreaToSizeRatio()
-        case .averagebrightness:
-            ret = Double(self.brightness)
-        case .medianBrightness:            
-            ret = self.medianBrightness()
-        case .maxBrightness:    
-            ret = self.maxBrightness()
-        case .maxHoughTransformCount:
-            ret = self.maxHoughTransformCount()
-        case .numberOfNearbyOutliersInSameFrame:
-            ret = await self.numberOfNearbyOutliersInSameFrame()
-        case .nearbyDirectOverlapScore:
-            ret = await self.nearbyDirectOverlapScore()
-        case .boundingBoxOverlapScore:
-            ret = await self.boundingBoxOverlapScore()
-        case .pixelBorderAmount:
-            ret = self.pixelBorderAmount()
-        case .averageLineVariance:
-            ret = self.averageLineVariance()
-        case .medianLineVariance:
-            ret = self.medianLineVariance()
-        case .lineLength:
-            ret = self.lineLength()
-        case .lineFillAmount:
-            ret = self.lineFillAmount()
-        case .borderBrightness:
-            ret = 0//await self.borderBrightness()
-        }
+        let ret = await type.decisionTreeValue(of: self)
         //let t1 = NSDate().timeIntervalSince1970
         //Log.d("group \(id) @ frame \(frameIndex) decisionTreeValue(for: \(type)) = \(ret) after \(t1-t0)s")
 
@@ -687,200 +467,8 @@ public actor OutlierGroup: CustomStringConvertible,
         return ret
     }
 
-    fileprivate func numberOfNearbyOutliersInSameFrame() async -> Double {
-        if let frame = frame,
-           let nearbyGroups = await frame.outlierGroups(within: OutlierGroup.maxNearbyGroupDistance, of: self)
-        {
-            return Double(nearbyGroups.count)
-        } else {
-            fatalError("Died on frame \(frameIndex)")
-        }
-
-    }
-
     public static var maxNearbyGroupDistance: Double {
         IMAGE_WIDTH!/8 // XXX hardcoded constant
-    }
-
-    // 0 if no pixels are found withing the bounding box in neighboring frames
-    // 1 if all pixels withing the bounding box in neighboring frames are filled
-    // airplane streaks typically do not overlap the same pixels on neighboring frames
-    fileprivate func boundingBoxOverlapScore() async -> Double {
-
-        if bounds.max.y - bounds.min.y < 2 { return 0 }
-        
-        if let frame {
-            var matchCount = 0
-            var numberFrames = 0
-
-            if let previousFrame = await frame.getPreviousFrame(),
-               let previousOutlierGroups = await previousFrame.getOutlierGroups()
-            {
-                let previousOutlierGroupsOutlierYAxisImageData = await previousOutlierGroups.outlierYAxisImageData
-                let previousOutlierGroupsOutlierImageData = await previousOutlierGroups.outlierImageData
-                numberFrames += 1
-                for y in bounds.min.y...bounds.max.y {
-                    if let yAxis = previousOutlierGroupsOutlierYAxisImageData,
-                       yAxis[y] == 0 { continue }
-                    
-                    for x in bounds.min.x...bounds.max.x {
-                        let index = y*Int(IMAGE_WIDTH!) + x
-                        if previousOutlierGroupsOutlierImageData[index] != 0 {
-                            // there is an outlier here
-                            matchCount += 1
-                        }
-                    }
-                }
-            }
-            if let nextFrame = await frame.getNextFrame(),
-               let nextOutlierGroups = await nextFrame.getOutlierGroups()
-            {
-                let nextOutlierGroupsOutlierYAxisImageData = await nextOutlierGroups.outlierYAxisImageData
-                let nextOutlierGroupsOutlierImageData = await nextOutlierGroups.outlierImageData
-                numberFrames += 1
-                for y in bounds.min.y...bounds.max.y {
-                    if let yAxis = nextOutlierGroupsOutlierYAxisImageData,
-                       yAxis[y] == 0 { continue }
-                    
-                    for x in bounds.min.x...bounds.max.x {
-                        let index = y*Int(IMAGE_WIDTH!) + x
-                        if nextOutlierGroupsOutlierImageData[index] != 0 {
-                            // there is an outlier here
-                            matchCount += 1
-                        }
-                    }
-                }
-            }
-
-            if numberFrames == 0 { return 0 }
-            return Double(matchCount)/(Double(numberFrames)*Double(bounds.width*bounds.height))
-        } else {
-            fatalError("NO FRAME for boundingBoxOverlapScore @ index \(frameIndex)")
-        }
-    }
-    
-    // 1.0 if all pixels in this group overlap all pixels of outliers in all neighboring frames
-    // 0 if none of the pixels overlap
-    // airplane streaks typically do not overlap the same pixels on neighboring frames
-    fileprivate func nearbyDirectOverlapScore() async -> Double {
-        if let frame {
-            let pixelCount = self.pixelSet.count
-            var matchCount = 0
-            let previousFrame = await frame.getPreviousFrame()
-            let nextFrame = await frame.getNextFrame()
-
-            for pixel in pixelSet {
-                let index = pixel.y * Int(IMAGE_WIDTH!) + pixel.x
-                if let previousFrame,
-                   let previousOutlierGroups = await previousFrame.getOutlierGroups(),
-                   await previousOutlierGroups.outlierImageDataFunc()[index] != 0
-                {
-                    matchCount += 1
-                }
-
-                if let nextFrame,
-                   let nextOutlierGroups = await nextFrame.getOutlierGroups(),
-                   await nextOutlierGroups.outlierImageDataFunc()[index] != 0
-                {
-                    matchCount += 1
-                }
-            }
-
-            var numberFrames = 0
-            if previousFrame != nil {
-                numberFrames += 1
-            }
-            if nextFrame != nil {
-                numberFrames += 1
-            }
-            if numberFrames == 0 { return 0 }
-            return Double(matchCount)/(Double(numberFrames)*Double(pixelCount))
-        } else {
-            fatalError("NO FRAME for nearbyDirectOverlapScore @ index \(frameIndex)")
-        }
-    }
-
-
-    /*
-     - A feature that accounts for empty space along the line
-       given a line for the outlier group, what percentage of the pixels
-       along that line (withing a small distance) are filled in by the
-       outlier group, and what ones are not?  Airplane lines have more
-       pixels along the line, random other assortments do not.
-       0 if no line or no pixels on line
-       1 if all line pixels are filled by this outlier group
-     */
-    static func calculateLineFillAmount(from line: Line,
-                                        with bounds: BoundingBox,
-                                        and pixels: [UInt16]) -> Double
-    {
-        let minX = bounds.min.x
-        let minY = bounds.min.y
-        let (ap1, ap2) = line.twoPoints
-
-        let originZeroLine = Line(point1: DoubleCoord(x: ap1.x+Double(minX),
-                                                      y: ap1.y+Double(minY)),
-                                  point2: DoubleCoord(x: ap2.x+Double(minX),
-                                                      y: ap2.y+Double(minY)),
-                                  votes: 0)
-
-        let borders = bounds.intersections(with: originZeroLine.standardLine)
-        if borders.count > 1 {
-            var totalPixels = 0
-            var linePixels = 0
-            
-            originZeroLine.iterate(between: borders[0],
-                                   and: borders[1],
-                                   numberOfAdjecentPixels: 1)
-            { x, y, iterationDirection in
-                totalPixels += 1
-                if self.hasPixelAt(x: x, y: y, with: bounds, and: pixels) {
-                    linePixels += 1
-                }
-            }
-            return Double(linePixels)/Double(totalPixels)
-        } else {
-            return 0
-        }
-    }
-    
-    // how many neighors does each of the pixels in this outlier group have?
-    // higher numbers mean they are packed closer together
-    // lower numbers mean they are more of a disparate cloud
-
-    fileprivate static func calculatePixelBorderAmount(from pixelSet: Set<SortablePixel>,
-                                                       with bounds: BoundingBox,
-                                                       and pixels: [UInt16]) -> Double {
-        var totalNeighbors: Double = 0.0
-        var totalSize: Int = 0
-
-        for pixel in pixelSet {
-            let x = pixel.x - bounds.min.x
-            let y = pixel.y - bounds.min.y
-            
-            totalSize += 1
-
-            var leftIndex = x - 1
-            var rightIndex = x + 1
-            var topIndex = y - 1
-            var bottomIndex = y + 1
-            if leftIndex < 0 { leftIndex = 0 }
-            if topIndex < 0 { topIndex = 0 }
-            if rightIndex >= bounds.width { rightIndex = bounds.width - 1 }
-            if bottomIndex >= bounds.height { bottomIndex = bounds.height - 1 }
-
-            for neighborX in leftIndex...rightIndex {
-                for neighborY in topIndex...bottomIndex {
-                    if neighborX != x,
-                       neighborY != y,
-                       pixels[neighborY*bounds.width + neighborX] != 0
-                    {
-                        totalNeighbors += 1
-                    }
-                }
-            }
-        }
-        return totalNeighbors/Double(totalSize)
     }
     
     func blob() -> Blob {
@@ -888,206 +476,5 @@ public actor OutlierGroup: CustomStringConvertible,
     }
 }
 
-public func ratioOfSurfaceAreaToSize(of pixels: [UInt16],
-                                     and pixelSet: Set<SortablePixel>,
-                                     bounds: BoundingBox) -> Double
-{
-    let width = bounds.width
-    let height = bounds.height
-    var size: Int = 0
-    var surfaceArea: Int = 0
-    for pixel in pixelSet {
-        let x = pixel.x - bounds.min.x
-        let y = pixel.y - bounds.min.y
-
-        size += 1
-
-        var hasTopNeighbor = false
-        var hasBottomNeighbor = false
-        var hasLeftNeighbor = false
-        var hasRightNeighbor = false
-        
-        if x > 0 {
-            if pixels[y * width + x - 1] != 0 {
-                hasLeftNeighbor = true
-            }
-        }
-        if y > 0 {
-            if pixels[(y - 1) * width + x] != 0 {
-                hasTopNeighbor = true
-            }
-        }
-        if x + 1 < width {
-            if pixels[y * width + x + 1] != 0 {
-                hasRightNeighbor = true
-            }
-        }
-        if y + 1 < height {
-            if pixels[(y + 1) * width + x] != 0 {
-                hasBottomNeighbor = true
-            }
-        }
-        
-        if hasTopNeighbor,
-           hasBottomNeighbor,
-           hasLeftNeighbor,
-           hasRightNeighbor
-        {
-            
-        } else {
-            surfaceArea += 1
-        }
-
-    }
-    return Double(surfaceArea)/Double(size)
-}
 
 
-// we derive a Double value from each of these
-// all switches on this enum are in this file
-// add a new case, handle all switches here, and the
-// decision tree generator will use it after recompile
-// all existing outlier value files will need to be regenerated to include it
-public enum OutlierGroupFeature: String,
-                                 CaseIterable,
-                                 Hashable,
-                                 Codable,
-                                 Comparable,
-                                 Sendable
-{
-    case size
-    case width
-    case height
-    case centerX
-    case centerY
-    case minX
-    case minY
-    case maxX
-    case maxY
-    case hypotenuse
-    case aspectRatio
-    case fillAmount
-    case surfaceAreaRatio
-    case averagebrightness
-    case medianBrightness
-    case maxBrightness
-    case numberOfNearbyOutliersInSameFrame
-    case maxHoughTransformCount
-    case pixelBorderAmount
-    case averageLineVariance
-    case medianLineVariance
-    case lineLength
-
-    case nearbyDirectOverlapScore
-    case boundingBoxOverlapScore
-    case lineFillAmount
-    case borderBrightness 
-
-    /*
-     XXX add:
-     - now that we've gotten good lines out of the KHT, try rewriting the old streak
-     detection logic to iterate on an outliers line outside of its bounding box.
-     score can be how good a fit is found on either side.  Fit can be determined
-     by a combination of size, brightness, and line similarity, 0-1 where 1 is identical.
-
-     */
-    
-    /*
-     add score based upon number of close with hough line histogram values
-     add score based upon how many overlapping outliers there are in
-     adjecent frames, and how close their thetas are 
-     
-     some more numbers about hough lines
-
-     add some kind of decision based upon other outliers,
-     both within this frame, and in others
-     
-     */
-
-    public static var allCasesString: String {
-        var ret = ""
-        for type in OutlierGroupFeature.allCases {
-            ret += "\(type.rawValue)\n"
-        }
-
-        return ret
-    }
-    
-    public var needsAsync: Bool {
-        switch self {
-        case .numberOfNearbyOutliersInSameFrame:
-            return true
-        case .nearbyDirectOverlapScore:
-            return true
-        case .boundingBoxOverlapScore:
-            return true
-        default:
-            return false
-        }
-    }
-
-    public var sortOrder: Int {
-        switch self {
-        case .size:
-            return 0
-        case .width:
-            return 1
-        case .height:
-            return 2
-        case .centerX:
-            return 3
-        case .centerY:
-            return 4
-        case .minX:
-            return 5
-        case .minY:
-            return 6
-        case .maxX:
-            return 7
-        case .maxY:
-            return 8
-        case .hypotenuse:
-            return 9
-        case .aspectRatio:
-            return 10
-        case .fillAmount:
-            return 11
-        case .surfaceAreaRatio:
-            return 12
-        case .averagebrightness:
-            return 13
-        case .medianBrightness:
-            return 14
-        case .maxBrightness:
-            return 15
-        case .numberOfNearbyOutliersInSameFrame:
-            return 16
-        case .maxHoughTransformCount:
-            return 17
-        case .pixelBorderAmount:
-            return 18
-        case .averageLineVariance:
-            return 19
-        case .medianLineVariance:
-            return 20
-        case .lineLength:
-            return 21
-        case .nearbyDirectOverlapScore:
-            return 22
-        case .boundingBoxOverlapScore:
-            return 23
-        case .lineFillAmount:
-            return 24
-        case .borderBrightness:
-            return 25
-        }
-    }
-
-    public static func ==(lhs: OutlierGroupFeature, rhs: OutlierGroupFeature) -> Bool {
-        return lhs.sortOrder == rhs.sortOrder
-    }
-
-    public static func <(lhs: OutlierGroupFeature, rhs: OutlierGroupFeature) -> Bool {
-        return lhs.sortOrder < rhs.sortOrder
-    }        
-}

@@ -31,9 +31,6 @@ let package = Package(
             ],
             linkerSettings: [
               .unsafeFlags([
-                             // use old, slower linker for now to avoid so many linker warnings
-                             "-Xlinker", "-ld_classic",
-                             
                              // link in pre compiled .a file for the decision trees 
                              "-L../StarDecisionTrees/lib/debug",
                              "-Xlinker", "../StarDecisionTrees/lib/debug/libStarDecisionTrees.a"
