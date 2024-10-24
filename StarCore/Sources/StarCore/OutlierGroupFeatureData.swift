@@ -6,7 +6,7 @@ public struct OutlierGroupFeatureData: ClassifiableOutlierGroup,
 {
     let values: [Double]
     
-    public init(features: [OutlierGroup.Feature],
+    public init(features: [OutlierGroupFeature],
                 values: [Double])
 
     {
@@ -17,7 +17,7 @@ public struct OutlierGroupFeatureData: ClassifiableOutlierGroup,
         self.values = _values
     }
 
-    public func decisionTreeValue(for type: OutlierGroup.Feature) -> Double  {
+    public func decisionTreeValue(for type: OutlierGroupFeature) -> Double  {
         let index = type.sortOrder
         if index >= 0,
            index < values.count

@@ -2,7 +2,7 @@ import Foundation
 import StarCore
 
 final class LinearChoiceTreeNode: SwiftDecisionTree {
-    public init (type: OutlierGroup.Feature,
+    public init (type: OutlierGroupFeature,
                 min: Double,   // returns -1 if input value is equal to min
                 max: Double,   // returns +1 if input value is equal to max
                 indent: Int)
@@ -14,7 +14,7 @@ final class LinearChoiceTreeNode: SwiftDecisionTree {
     }
 
     // the kind of value we are deciding upon
-    let type: OutlierGroup.Feature
+    let type: OutlierGroupFeature
 
     let min: Double
 
@@ -38,7 +38,7 @@ final class LinearChoiceTreeNode: SwiftDecisionTree {
 
     func classification
       (
-        of features: [OutlierGroup.Feature], // parallel
+        of features: [OutlierGroupFeature], // parallel
         and values: [Double]                        // arrays
       ) -> Double
     {

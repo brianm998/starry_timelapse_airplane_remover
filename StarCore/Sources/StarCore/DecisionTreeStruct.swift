@@ -8,7 +8,7 @@ public struct DecisionTreeStruct: DecisionTree {
     public let filename: String
     public let generationSecondsSince1970: TimeInterval
     public let inputSequences: [String]
-    public let decisionTypes: [OutlierGroup.Feature]
+    public let decisionTypes: [OutlierGroupFeature]
     public let tree: SwiftDecisionTree
     public var type: ClassifierType
     
@@ -23,7 +23,7 @@ public struct DecisionTreeStruct: DecisionTree {
                 sha256: String,
                 generationSecondsSince1970: TimeInterval,
                 inputSequences: [String],
-                decisionTypes: [OutlierGroup.Feature],
+                decisionTypes: [OutlierGroupFeature],
                 type: ClassifierType)
     {
         self.name = name
@@ -47,7 +47,7 @@ public struct DecisionTreeStruct: DecisionTree {
 
     // returns -1 for negative, +1 for positive
     public func classification (
-      of features: [OutlierGroup.Feature],  // parallel
+      of features: [OutlierGroupFeature],  // parallel
       and values: [Double]                  // arrays
     ) async -> Double
     {

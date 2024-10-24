@@ -59,7 +59,7 @@ struct decision_tree_generator: AsyncParsableCommand, @unchecked Sendable {
           help:"""
             Specify a comma delimited list of features from this list:
             
-            \(OutlierGroup.Feature.allCasesString)
+            \(OutlierGroupFeature.allCasesString)
             """)
     var decisionTypesString: String = ""
 
@@ -388,7 +388,7 @@ struct decision_tree_generator: AsyncParsableCommand, @unchecked Sendable {
     // actually generate a decision tree forest
     func generateForestFromTrainingData(with forestSize: Int) async throws {
 
-        let generator = DecisionTreeGenerator(withTypes: OutlierGroup.Feature.allCases,
+        let generator = DecisionTreeGenerator(withTypes: OutlierGroupFeature.allCases,
                                               andSplitTypes: [.median],
                                               pruneTree: !noPrune,
                                               maxDepth: maxDepth)
@@ -471,21 +471,21 @@ struct decision_tree_generator: AsyncParsableCommand, @unchecked Sendable {
     // actually generate a decision tree
     func generateTreeFromTrainingData() async throws {
         
-        var decisionTypes: [OutlierGroup.Feature] = []
+        var decisionTypes: [OutlierGroupFeature] = []
 
         Log.d("decisionTypesString \(decisionTypesString)")
         
         if decisionTypesString == "" {
             // if not specfied, use all types
-            decisionTypes = OutlierGroup.Feature.allCases
+            decisionTypes = OutlierGroupFeature.allCases
         } else {
             // split out given types
             let rawValues = decisionTypesString.components(separatedBy: ",")
             for rawValue in rawValues {
-                if let enumValue = OutlierGroup.Feature(rawValue: rawValue) {
+                if let enumValue = OutlierGroupFeature(rawValue: rawValue) {
                     decisionTypes.append(enumValue)
                 } else {
-                    Log.w("type \(rawValue) is not a member of OutlierGroup.Feature")
+                    Log.w("type \(rawValue) is not a member of OutlierGroupFeature")
                 }
             }
         }
@@ -500,8 +500,8 @@ struct decision_tree_generator: AsyncParsableCommand, @unchecked Sendable {
         
         do {
             if produceAllTypeCombinations {
-                let min = OutlierGroup.Feature.allCases.count-1 // XXX make a parameter
-                let max = OutlierGroup.Feature.allCases.count
+                let min = OutlierGroupFeature.allCases.count-1 // XXX make a parameter
+                let max = OutlierGroupFeature.allCases.count
                 let combinations = decisionTypes.combinations(ofCount: min..<max)
                 Log.i("calculating \(combinations.count) different decision trees")
 
@@ -544,7 +544,7 @@ struct decision_tree_generator: AsyncParsableCommand, @unchecked Sendable {
             var usable = true
             
             // XXX make sure the types in the matrix match up with what we expect
-            for type in OutlierGroup.Feature.allCases {
+            for type in OutlierGroupFeature.allCases {
                 if type.sortOrder < matrix.types.count {
                     if matrix.types[type.sortOrder] != type {
                         Log.e("@ sort order \(type.sortOrder) \(matrix.types[type.sortOrder]) != \(type), cannot use this data from \(dirname)")
@@ -572,7 +572,7 @@ struct decision_tree_generator: AsyncParsableCommand, @unchecked Sendable {
           negativeData: negativeData)
     }
     
-    func writeTree(withTypes decisionTypes: [OutlierGroup.Feature],
+    func writeTree(withTypes decisionTypes: [OutlierGroupFeature],
                    withTrainingData trainingData: ClassifiedData,
                    andTestData testData: ClassifiedData,
                    inputFilenames: [String],
@@ -600,7 +600,7 @@ struct decision_tree_generator: AsyncParsableCommand, @unchecked Sendable {
  */
     }
     
-    func writeTree(withTypes decisionTypes: [OutlierGroup.Feature],
+    func writeTree(withTypes decisionTypes: [OutlierGroupFeature],
                    andSplitTypes splitTypes: [DecisionSplitType],
                    withTrainingData trainingData: ClassifiedData,
                    andTestData testData: ClassifiedData,
@@ -646,7 +646,7 @@ struct decision_tree_generator: AsyncParsableCommand, @unchecked Sendable {
     func log(valueMaps: [OutlierFeatureData]) async {
         for (index, valueMap) in valueMaps.enumerated() {
             var log = "\(index) - "
-            for type in OutlierGroup.Feature.allCases {
+            for type in OutlierGroupFeature.allCases {
                  let value = valueMap.values[type.sortOrder] 
                  log += "\(String(format: "%.3g", value)) "
             }
@@ -655,10 +655,10 @@ struct decision_tree_generator: AsyncParsableCommand, @unchecked Sendable {
     }
 }
 
-extension OutlierGroup.Feature: ExpressibleByArgument {
+extension OutlierGroupFeature: ExpressibleByArgument {
 
     public init?(argument: String) {
-        if let me = OutlierGroup.Feature(rawValue: argument) {
+        if let me = OutlierGroupFeature(rawValue: argument) {
             self = me
         } else {
             return nil

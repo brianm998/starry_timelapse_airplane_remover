@@ -4,7 +4,7 @@ import Foundation
 // this one is used for reading condensed and categorized data
 public class OutlierGroupValueMatrix {
     
-    public var types: [OutlierGroup.Feature]
+    public var types: [OutlierGroupFeature]
 
     public var positiveValues: [[Double]]
     public var negativeValues: [[Double]]
@@ -21,7 +21,7 @@ public class OutlierGroupValueMatrix {
 
             let (data, _) = try await URLSession.shared.data(for: URLRequest(url: url as URL))
             let csv_string = String(decoding: data, as: UTF8.self)
-            self.types = csv_string.components(separatedBy: ",").map { OutlierGroup.Feature(rawValue: $0)! }
+            self.types = csv_string.components(separatedBy: ",").map { OutlierGroupFeature(rawValue: $0)! }
         } else {
             return nil
         }

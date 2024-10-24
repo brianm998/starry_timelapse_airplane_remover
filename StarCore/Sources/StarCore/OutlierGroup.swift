@@ -38,8 +38,29 @@ public class OutlierPaintObserver {
 
 // used for both outlier groups and raw data
 public protocol ClassifiableOutlierGroup {
-    func decisionTreeValue(for type: OutlierGroup.Feature) -> Double 
+    func decisionTreeValue(for type: OutlierGroupFeature) -> Double 
 }
+
+/*
+
+ It appears that this actor has gotten too big
+
+ adding further methods or properties does compile,
+ but fails with a segfault deep in the swift concurrency code
+ every time it is run :(
+
+ FIX:
+
+ split up this code so that there is less in it.
+
+ - move out the feature classification to a struct
+ - keep the cached classification values in the outlier group still
+ 
+ 
+
+ 
+ */
+
 
 // represents a single outler group in a frame
 public actor OutlierGroup: CustomStringConvertible,
@@ -47,20 +68,20 @@ public actor OutlierGroup: CustomStringConvertible,
                            Equatable,
                            Comparable
 {
-    nonisolated public let id: UInt16              // unique across a frame, non zero
-    nonisolated public let size: UInt              // number of pixels in this outlier group
-    nonisolated public let bounds: BoundingBox     // a bounding box on the image that contains this group
-    nonisolated public let brightness: UInt        // the average amount per pixel of brightness over the limit 
+    public let id: UInt16              // unique across a frame, non zero
+    public let size: UInt              // number of pixels in this outlier group
+    public let bounds: BoundingBox     // a bounding box on the image that contains this group
+    public let brightness: UInt        // the average amount per pixel of brightness over the limit 
 
 
     // pixel value is zero if pixel is not part of group,
     // otherwise it's the amount brighter this pixel was than those in the adjecent frames 
-    nonisolated public let pixels: [UInt16]        // indexed by y * bounds.width + x
+    public let pixels: [UInt16]        // indexed by y * bounds.width + x
 
     // a set of the pixels in this outlier 
-    nonisolated public let pixelSet: Set<SortablePixel>
+    public let pixelSet: Set<SortablePixel>
     
-    nonisolated public let frameIndex: Int
+    public let frameIndex: Int
 
     // lazy calculcated properties
 
@@ -158,7 +179,7 @@ public actor OutlierGroup: CustomStringConvertible,
         }
         return 3.1415926535897 // XXX over 1.0 is a bad value, airplanes are closer to 0.1
     }
-    
+
     public func lineFillAmount() -> Double {
         if let _lineFillAmount { return _lineFillAmount }
 
@@ -308,9 +329,9 @@ public actor OutlierGroup: CustomStringConvertible,
     }
 
     public func featureData() async -> OutlierGroupFeatureData {
-        var values = [Double](repeating: 0, count: Feature.allCases.count)
-        var features = [Feature](repeating: .size, count: Feature.allCases.count)
-        for type in OutlierGroup.Feature.allCases {
+        var values = [Double](repeating: 0, count: OutlierGroupFeature.allCases.count)
+        var features = [OutlierGroupFeature](repeating: .size, count: OutlierGroupFeature.allCases.count)
+        for type in OutlierGroupFeature.allCases {
             features[type.sortOrder] = type
             values[type.sortOrder] = await decisionTreeValueAsync(for: type)
         }
@@ -542,35 +563,35 @@ public actor OutlierGroup: CustomStringConvertible,
     // https://forums.swift.org/t/actor-isolation-delegates-in-extensions/60571/6
 
     // cached value
-    private var _decisionTreeValues: [Double]?
+    //private var _decisionTreeValues: [Double]?
     
     // ordered by the list of features below
     func decisionTreeValues() async -> [Double] {
-        if let _decisionTreeValues = _decisionTreeValues {
-            return _decisionTreeValues
-        }
+//        if let _decisionTreeValues = _decisionTreeValues {
+//            return _decisionTreeValues
+//        }
         var ret: [Double] = []
         ret.append(Double(self.id))
-        for type in OutlierGroup.Feature.allCases {
+        for type in OutlierGroupFeature.allCases {
             //let t0 = NSDate().timeIntervalSince1970
             ret.append(await self.decisionTreeValueAsync(for: type))
             //let t1 = NSDate().timeIntervalSince1970
             //Log.i("frame \(frameIndex) group \(self) took \(t1-t0) seconds to calculate value for \(type)")
         }
-        _decisionTreeValues = ret
+  //      _decisionTreeValues = ret
         return ret
     }
 
     // cached value
-    nonisolated(unsafe) private static var _decisionTreeValueTypes: [OutlierGroup.Feature]?
+    nonisolated(unsafe) private static var _decisionTreeValueTypes: [OutlierGroupFeature]?
     
     // the ordering of the list of values above
-    static var decisionTreeValueTypes: [OutlierGroup.Feature] {
+    static var decisionTreeValueTypes: [OutlierGroupFeature] {
         if let _decisionTreeValueTypes = _decisionTreeValueTypes {
             return _decisionTreeValueTypes
         }
-        var ret: [OutlierGroup.Feature] = []
-        for type in OutlierGroup.Feature.allCases {
+        var ret: [OutlierGroupFeature] = []
+        for type in OutlierGroupFeature.allCases {
             ret.append(type)
         }
         _decisionTreeValueTypes = ret
@@ -579,7 +600,7 @@ public actor OutlierGroup: CustomStringConvertible,
 
     public func decisionTreeGroupValues() async -> OutlierFeatureData {
          var rawValues = OutlierFeatureData.rawValues()
-         for type in OutlierGroup.Feature.allCases {
+         for type in OutlierGroupFeature.allCases {
              let t0 = NSDate().timeIntervalSince1970
              let value = await self.decisionTreeValueAsync(for: type)
              let t1 = NSDate().timeIntervalSince1970
@@ -590,160 +611,12 @@ public actor OutlierGroup: CustomStringConvertible,
          return OutlierFeatureData(rawValues)
     }
     
-    // we derive a Double value from each of these
-    // all switches on this enum are in this file
-    // add a new case, handle all switches here, and the
-    // decision tree generator will use it after recompile
-    // all existing outlier value files will need to be regenerated to include it
-    public enum Feature: String,
-                         CaseIterable,
-                         Hashable,
-                         Codable,
-                         Comparable,
-                         Sendable
-    {
-        case size
-        case width
-        case height
-        case centerX
-        case centerY
-        case minX
-        case minY
-        case maxX
-        case maxY
-        case hypotenuse
-        case aspectRatio
-        case fillAmount
-        case surfaceAreaRatio
-        case averagebrightness
-        case medianBrightness
-        case maxBrightness
-        case numberOfNearbyOutliersInSameFrame
-        case maxHoughTransformCount
-        case pixelBorderAmount
-        case averageLineVariance
-        case medianLineVariance
-        case lineLength
 
-        case nearbyDirectOverlapScore
-        case boundingBoxOverlapScore
-        case lineFillAmount
-        case borderBrightness 
-
-        /*
-         XXX add:
-           - now that we've gotten good lines out of the KHT, try rewriting the old streak
-             detection logic to iterate on an outliers line outside of its bounding box.
-             score can be how good a fit is found on either side.  Fit can be determined
-             by a combination of size, brightness, and line similarity, 0-1 where 1 is identical.
-
-         */
-        
-        /*
-         add score based upon number of close with hough line histogram values
-         add score based upon how many overlapping outliers there are in
-             adjecent frames, and how close their thetas are 
-         
-         some more numbers about hough lines
-
-         add some kind of decision based upon other outliers,
-         both within this frame, and in others
-         
-         */
-
-        public static var allCasesString: String {
-            var ret = ""
-            for type in OutlierGroup.Feature.allCases {
-                ret += "\(type.rawValue)\n"
-            }
-
-            return ret
-        }
-        
-        public var needsAsync: Bool {
-            switch self {
-            case .numberOfNearbyOutliersInSameFrame:
-                return true
-            case .nearbyDirectOverlapScore:
-                return true
-            case .boundingBoxOverlapScore:
-                return true
-            default:
-                return false
-            }
-        }
-
-        public var sortOrder: Int {
-            switch self {
-            case .size:
-                return 0
-            case .width:
-                return 1
-            case .height:
-                return 2
-            case .centerX:
-                return 3
-            case .centerY:
-                return 4
-            case .minX:
-                return 5
-            case .minY:
-                return 6
-            case .maxX:
-                return 7
-            case .maxY:
-                return 8
-            case .hypotenuse:
-                return 9
-            case .aspectRatio:
-                return 10
-            case .fillAmount:
-                return 11
-            case .surfaceAreaRatio:
-                return 12
-            case .averagebrightness:
-                return 13
-            case .medianBrightness:
-                return 14
-            case .maxBrightness:
-                return 15
-            case .numberOfNearbyOutliersInSameFrame:
-                return 16
-            case .maxHoughTransformCount:
-                return 17
-            case .pixelBorderAmount:
-                return 18
-            case .averageLineVariance:
-                return 19
-            case .medianLineVariance:
-                return 20
-            case .lineLength:
-                return 21
-            case .nearbyDirectOverlapScore:
-                return 22
-            case .boundingBoxOverlapScore:
-                return 23
-            case .lineFillAmount:
-                return 24
-            case .borderBrightness:
-                return 25
-            }
-        }
-
-        public static func ==(lhs: Feature, rhs: Feature) -> Bool {
-            return lhs.sortOrder == rhs.sortOrder
-        }
-
-        public static func <(lhs: Feature, rhs: Feature) -> Bool {
-            return lhs.sortOrder < rhs.sortOrder
-        }        
-    }
-
-    fileprivate var featureValueCache: [Feature: Double] = [:]
+    fileprivate var featureValueCache: [OutlierGroupFeature: Double] = [:]
 
     public func clearFeatureValueCache() { featureValueCache = [:] }
 
-    public func decisionTreeValueAsync(for type: Feature) async -> Double {
+    public func decisionTreeValueAsync(for type: OutlierGroupFeature) async -> Double {
         let height = IMAGE_HEIGHT!
         let width = IMAGE_WIDTH!
 
@@ -805,7 +678,7 @@ public actor OutlierGroup: CustomStringConvertible,
         case .lineFillAmount:
             ret = self.lineFillAmount()
         case .borderBrightness:
-            ret = await self.borderBrightness()
+            ret = 0//await self.borderBrightness()
         }
         //let t1 = NSDate().timeIntervalSince1970
         //Log.d("group \(id) @ frame \(frameIndex) decisionTreeValue(for: \(type)) = \(ret) after \(t1-t0)s")
@@ -1069,3 +942,152 @@ public func ratioOfSurfaceAreaToSize(of pixels: [UInt16],
     return Double(surfaceArea)/Double(size)
 }
 
+
+// we derive a Double value from each of these
+// all switches on this enum are in this file
+// add a new case, handle all switches here, and the
+// decision tree generator will use it after recompile
+// all existing outlier value files will need to be regenerated to include it
+public enum OutlierGroupFeature: String,
+                                 CaseIterable,
+                                 Hashable,
+                                 Codable,
+                                 Comparable,
+                                 Sendable
+{
+    case size
+    case width
+    case height
+    case centerX
+    case centerY
+    case minX
+    case minY
+    case maxX
+    case maxY
+    case hypotenuse
+    case aspectRatio
+    case fillAmount
+    case surfaceAreaRatio
+    case averagebrightness
+    case medianBrightness
+    case maxBrightness
+    case numberOfNearbyOutliersInSameFrame
+    case maxHoughTransformCount
+    case pixelBorderAmount
+    case averageLineVariance
+    case medianLineVariance
+    case lineLength
+
+    case nearbyDirectOverlapScore
+    case boundingBoxOverlapScore
+    case lineFillAmount
+    case borderBrightness 
+
+    /*
+     XXX add:
+     - now that we've gotten good lines out of the KHT, try rewriting the old streak
+     detection logic to iterate on an outliers line outside of its bounding box.
+     score can be how good a fit is found on either side.  Fit can be determined
+     by a combination of size, brightness, and line similarity, 0-1 where 1 is identical.
+
+     */
+    
+    /*
+     add score based upon number of close with hough line histogram values
+     add score based upon how many overlapping outliers there are in
+     adjecent frames, and how close their thetas are 
+     
+     some more numbers about hough lines
+
+     add some kind of decision based upon other outliers,
+     both within this frame, and in others
+     
+     */
+
+    public static var allCasesString: String {
+        var ret = ""
+        for type in OutlierGroupFeature.allCases {
+            ret += "\(type.rawValue)\n"
+        }
+
+        return ret
+    }
+    
+    public var needsAsync: Bool {
+        switch self {
+        case .numberOfNearbyOutliersInSameFrame:
+            return true
+        case .nearbyDirectOverlapScore:
+            return true
+        case .boundingBoxOverlapScore:
+            return true
+        default:
+            return false
+        }
+    }
+
+    public var sortOrder: Int {
+        switch self {
+        case .size:
+            return 0
+        case .width:
+            return 1
+        case .height:
+            return 2
+        case .centerX:
+            return 3
+        case .centerY:
+            return 4
+        case .minX:
+            return 5
+        case .minY:
+            return 6
+        case .maxX:
+            return 7
+        case .maxY:
+            return 8
+        case .hypotenuse:
+            return 9
+        case .aspectRatio:
+            return 10
+        case .fillAmount:
+            return 11
+        case .surfaceAreaRatio:
+            return 12
+        case .averagebrightness:
+            return 13
+        case .medianBrightness:
+            return 14
+        case .maxBrightness:
+            return 15
+        case .numberOfNearbyOutliersInSameFrame:
+            return 16
+        case .maxHoughTransformCount:
+            return 17
+        case .pixelBorderAmount:
+            return 18
+        case .averageLineVariance:
+            return 19
+        case .medianLineVariance:
+            return 20
+        case .lineLength:
+            return 21
+        case .nearbyDirectOverlapScore:
+            return 22
+        case .boundingBoxOverlapScore:
+            return 23
+        case .lineFillAmount:
+            return 24
+        case .borderBrightness:
+            return 25
+        }
+    }
+
+    public static func ==(lhs: OutlierGroupFeature, rhs: OutlierGroupFeature) -> Bool {
+        return lhs.sortOrder == rhs.sortOrder
+    }
+
+    public static func <(lhs: OutlierGroupFeature, rhs: OutlierGroupFeature) -> Bool {
+        return lhs.sortOrder < rhs.sortOrder
+    }        
+}

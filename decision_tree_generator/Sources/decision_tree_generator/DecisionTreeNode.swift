@@ -36,7 +36,7 @@ class DecisionSubtree: SwiftDecisionSubtree, @unchecked Sendable {
 // delegating to one of two further code paths
 class DecisionTreeNode: SwiftDecisionTree, @unchecked Sendable {
 
-    public init (type: OutlierGroup.Feature,
+    public init (type: OutlierGroupFeature,
                  value: Double,
                  lessThan: SwiftDecisionTree,
                  lessThanStumpValue: Double,
@@ -64,7 +64,7 @@ class DecisionTreeNode: SwiftDecisionTree, @unchecked Sendable {
     let greaterThanStumpValue: Double
       
     // the kind of value we are deciding upon
-    let type: OutlierGroup.Feature
+    let type: OutlierGroupFeature
 
     // the value that we are splitting upon
     let value: Double
@@ -126,7 +126,7 @@ class DecisionTreeNode: SwiftDecisionTree, @unchecked Sendable {
 
     func classification
       (
-        of features: [OutlierGroup.Feature], // parallel
+        of features: [OutlierGroupFeature], // parallel
         and values: [Double]                 // arrays
       ) async -> Double
     {

@@ -15,7 +15,7 @@ public protocol OutlierGroupClassifier: Sendable {
 
     // returns -1 for negative, +1 for positive
     func classification (
-      of features: [OutlierGroup.Feature],        // parallel
+      of features: [OutlierGroupFeature],        // parallel
       and values: [Double]                        // arrays
     ) async -> Double
 }

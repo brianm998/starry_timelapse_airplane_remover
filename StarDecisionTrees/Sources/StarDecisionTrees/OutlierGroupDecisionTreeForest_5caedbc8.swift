@@ -71,7 +71,7 @@ public struct OutlierGroupDecisionTreeForest_5caedbc8: DecisionTree {
     public let generationSecondsSince1970 = 1729454757.3375769
 
     // the list of decision types this tree did not use
-    public let notUsedDecisionTypes: [OutlierGroup.Feature] = [
+    public let notUsedDecisionTypes: [OutlierGroupFeature] = [
 
     ]
 
@@ -80,7 +80,7 @@ public struct OutlierGroupDecisionTreeForest_5caedbc8: DecisionTree {
     // it's going to blow up unless supplied with the expected set of features
     // return value is between -1 and 1, 1 is paint
     public func classification(
-       of features: [OutlierGroup.Feature], // parallel
+       of features: [OutlierGroupFeature], // parallel
        and values: [Double]                 // arrays
       ) -> Double
     {

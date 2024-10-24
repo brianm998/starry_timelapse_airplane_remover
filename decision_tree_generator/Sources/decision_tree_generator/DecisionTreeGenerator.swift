@@ -19,12 +19,12 @@ struct TreeForestResult {
 
 actor DecisionTreeGenerator {
 
-    let decisionTypes: [OutlierGroup.Feature]
+    let decisionTypes: [OutlierGroupFeature]
     let decisionSplitTypes: [DecisionSplitType]
     let maxDepth: Int
     let pruneTree: Bool
     
-    public init(withTypes types: [OutlierGroup.Feature] = OutlierGroup.Feature.allCases,
+    public init(withTypes types: [OutlierGroupFeature] = OutlierGroupFeature.allCases,
                 andSplitTypes splitTypes: [DecisionSplitType] = [.median],
                 pruneTree: Bool = true,
                 maxDepth: Int? = nil)
@@ -207,7 +207,7 @@ actor DecisionTreeGenerator {
 
                  // returns -1 for negative, +1 for positive
                  public func classification (
-                    of features: [OutlierGroup.Feature],   // parallel
+                    of features: [OutlierGroupFeature],   // parallel
                     and values: [Double]                   // arrays
                  ) -> Double
                  {
@@ -317,10 +317,10 @@ actor DecisionTreeGenerator {
         decisionTypeString += "\n    ]\n"
         
 
-        var skippedDecisionTypeString = "    public let notUsedDecisionTypes: [OutlierGroup.Feature] = [\n"
+        var skippedDecisionTypeString = "    public let notUsedDecisionTypes: [OutlierGroupFeature] = [\n"
 
         var wasAdded = false
-        for type in OutlierGroup.Feature.allCases {
+        for type in OutlierGroupFeature.allCases {
             var shouldAdd = true
             for requestedType in decisionTypes {
                 if type == requestedType {
@@ -452,7 +452,7 @@ actor DecisionTreeGenerator {
               // it's going to blow up unless supplied with the expected set of features
               // return value is between -1 and 1, 1 is paint
               public func classification(
-                 of features: [OutlierGroup.Feature], // parallel
+                 of features: [OutlierGroupFeature], // parallel
                  and values: [Double]                 // arrays
                 ) -> Double
               {
@@ -501,10 +501,10 @@ actor DecisionTreeGenerator {
 
 // XXX document what this does
 fileprivate func getValueDistributions(of values: [[Double]],
-                                       on decisionTypes: [OutlierGroup.Feature])
+                                       on decisionTypes: [OutlierGroupFeature])
       async -> [ValueDistribution?]
 {
-    let typeCount = OutlierGroup.Feature.allCases.count
+    let typeCount = OutlierGroupFeature.allCases.count
     
     var array = [ValueDistribution?](repeating: nil, count: typeCount)
     
@@ -551,10 +551,10 @@ fileprivate func getValueDistributions(of values: [[Double]],
 
     // XXX document what this does
     fileprivate func transform(testData: [OutlierFeatureData],
-                               on decisionTypes: [OutlierGroup.Feature]) 
+                               on decisionTypes: [OutlierGroupFeature]) 
       async -> [[Double]]
 {
-    let typeCount = OutlierGroup.Feature.allCases.count
+    let typeCount = OutlierGroupFeature.allCases.count
     
     var array = [Array<Double>](repeating: [],
                                 count: typeCount)
@@ -591,7 +591,7 @@ fileprivate func getValueDistributions(of values: [[Double]],
 
     // XXX document what this does
 fileprivate func recurseOn(result: DecisionResult, indent: Int,
-                           decisionTypes: [OutlierGroup.Feature],
+                           decisionTypes: [OutlierGroupFeature],
                            decisionSplitTypes: [DecisionSplitType],
                            maxDepth: Int) async -> DecisionTreeNode {
     //Log.d("best at indent \(indent) was \(result.type) \(String(format: "%g", result.lessThanSplit)) \(String(format: "%g", result.greaterThanSplit)) \(String(format: "%g", result.value)) < Should \(await result.lessThanPositive.count) < ShouldNot \(await result.lessThanNegative.count) > Should  \(await result.lessThanPositive.count) > ShouldNot \(await result.greaterThanNegative.count)")
@@ -714,7 +714,7 @@ fileprivate func at(max indent: Int, at maxDepth: Int) -> Bool {
     return indent - initialIndent > maxDepth
 }
 
-fileprivate func result(for type: OutlierGroup.Feature,
+fileprivate func result(for type: OutlierGroupFeature,
                         decisionValue: Double,
                         withTrainingData trainingData: ClassifiedData)
   async -> FeatureResult
@@ -766,7 +766,7 @@ fileprivate func result(for type: OutlierGroup.Feature,
 // recursively return a decision tree that differentiates the test data
 fileprivate func decisionTreeNode(withTrainingData trainingData: ClassifiedData,
                                   indented indent: Int,
-                                  decisionTypes: [OutlierGroup.Feature],
+                                  decisionTypes: [OutlierGroupFeature],
                                   decisionSplitTypes: [DecisionSplitType],
                                   maxDepth: Int)
   async -> SwiftDecisionTree
@@ -1127,7 +1127,7 @@ fileprivate func decisionTreeNode(withTrainingData trainingData: ClassifiedData,
 
 fileprivate struct RankedResult<T> where T: Sendable  {
     let rank: Double
-    let type: OutlierGroup.Feature
+    let type: OutlierGroupFeature
     let result: T
 }
 
@@ -1143,15 +1143,15 @@ extension RankedResult: Comparable, Sendable {
 }
 
 fileprivate struct DecisionTypeValuesResult: Sendable {
-    let type: OutlierGroup.Feature
+    let type: OutlierGroupFeature
     let values: [Double]
 }
 
 fileprivate struct FeatureResult: Sendable {
-    init(type: OutlierGroup.Feature) {
+    init(type: OutlierGroupFeature) {
         self.type = type
     }
-    let type: OutlierGroup.Feature
+    let type: OutlierGroupFeature
     var decisionResult: DecisionResult?
     var decisionTreeNode: SwiftDecisionTree?
     var positiveDist: ValueDistribution?
@@ -1159,7 +1159,7 @@ fileprivate struct FeatureResult: Sendable {
 }
 
 fileprivate struct ValueDistribution: Sendable {
-    let type: OutlierGroup.Feature
+    let type: OutlierGroupFeature
     let min: Double
     let max: Double
     let mean: Double
@@ -1178,7 +1178,7 @@ fileprivate struct TreeResponse: Sendable {
 }
     
 fileprivate struct DecisionResult: Sendable {
-    let type: OutlierGroup.Feature
+    let type: OutlierGroupFeature
     let value: Double
     let lessThanPositive: [OutlierFeatureData]
     let lessThanNegative: [OutlierFeatureData]
@@ -1187,7 +1187,7 @@ fileprivate struct DecisionResult: Sendable {
     let lessThanSplit: Double
     let greaterThanSplit: Double
     
-    public init(type: OutlierGroup.Feature,
+    public init(type: OutlierGroupFeature,
                 value: Double = 0,
                 lessThanPositive: [OutlierFeatureData],
                 lessThanNegative: [OutlierFeatureData],
@@ -1257,7 +1257,7 @@ public func runTest(of classifier: OutlierGroupClassifier,
 public func runTest(of classifier: OutlierGroupClassifier,
                     on classifiedData: ClassifiedData) async -> (Int, Int)
 {
-    let features = OutlierGroup.Feature.allCases
+    let features = OutlierGroupFeature.allCases
 
     var numberGood = 0
     var numberBad = 0

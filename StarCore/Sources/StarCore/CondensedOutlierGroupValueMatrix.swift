@@ -4,7 +4,7 @@ import Foundation
 // this one is used for writing out initial values
 public class CondensedOutlierGroupValueMatrix {
     
-    public var types: [OutlierGroup.Feature]
+    public var types: [OutlierGroupFeature]
 
     public var outlierValues: [[Double]]
     

@@ -22,7 +22,7 @@ public struct DecisionTreeParams: Sendable {
                inputSequences: [String],
                positiveTrainingSize: Int,
                negativeTrainingSize: Int,
-               decisionTypes: [OutlierGroup.Feature],
+               decisionTypes: [OutlierGroupFeature],
                decisionSplitTypes: [DecisionSplitType],
                maxDepth: Int?,
                pruned: Bool)
@@ -41,7 +41,7 @@ public struct DecisionTreeParams: Sendable {
     let inputSequences: [String]
     let positiveTrainingSize: Int
     let negativeTrainingSize: Int
-    let decisionTypes: [OutlierGroup.Feature]
+    let decisionTypes: [OutlierGroupFeature]
     let decisionSplitTypes: [DecisionSplitType]
     let maxDepth: Int?
     let pruned: Bool
