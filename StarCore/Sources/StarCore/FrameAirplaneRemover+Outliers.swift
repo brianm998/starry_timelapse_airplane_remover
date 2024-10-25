@@ -144,6 +144,19 @@ extension FrameAirplaneRemover {
         }
     }
 
+    public func foreachOutlierGroupMulti(_ closure: @Sendable @escaping (OutlierGroup) async -> Void) async {
+        if let outlierGroups {
+            await withTaskGroup(of: Void.self) { taskGroup in
+                for (_, group) in await outlierGroups.getMembers() {
+                    taskGroup.addTask() {
+                        let result = await closure(group)
+                    }
+                }
+                await taskGroup.waitForAll()
+            }
+        } 
+    }
+
     public func foreachOutlierGroupAsync(_ closure: @Sendable (OutlierGroup) async -> LoopReturn) async {
         if let outlierGroups {
             for (_, group) in await outlierGroups.getMembers() {

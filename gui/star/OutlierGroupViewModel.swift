@@ -38,7 +38,7 @@ class OutlierGroupViewModel: Identifiable {
 
     private var _line: Line?
 
-    private var lineLoaded = false
+    public var lineLoaded = false
     
     var line: Line? {
 
@@ -48,6 +48,7 @@ class OutlierGroupViewModel: Identifiable {
                     await MainActor.run {
                         self._line = line
                         self.lineIsLoading = false
+                        self.hasLine = false
                     }
                 } else {
                     await MainActor.run {
@@ -59,7 +60,8 @@ class OutlierGroupViewModel: Identifiable {
         
         return _line
     }
-    
+
+    var hasLine = false
     var lineIsLoading = true
     
     var pointsForLineOnBounds: [CGPoint] {

@@ -23,7 +23,7 @@ extension FrameAirplaneRemover {
     
     public func applyDecisionTreeToAutoSelectedOutliers() async {
         if let classifier = currentClassifier {
-            await foreachOutlierGroupAsync() { group in
+            await foreachOutlierGroupMulti() { group in
                 var apply = true
                 if let shouldPaint = await group.shouldPaint() {
                     switch shouldPaint {
@@ -38,7 +38,6 @@ extension FrameAirplaneRemover {
                     Log.d("applying decision tree")
                     await group.shouldPaint(.fromClassifier(await classifier.asyncClassification(of: group)))
                 }
-                return .continue
             }
         } else {
             Log.w("no classifier")
@@ -46,9 +45,8 @@ extension FrameAirplaneRemover {
     }
 
     public func clearOutlierGroupValueCaches() async {
-        await foreachOutlierGroupAsync() { group in
+        await foreachOutlierGroupMulti() { group in
             await group.clearFeatureValueCache()
-            return .continue
         }
     }
 
@@ -56,12 +54,11 @@ extension FrameAirplaneRemover {
         //Log.d("frame \(self.frameIndex) applyDecisionTreeToAll \(self.outlierGroups?.members.count ?? 0) Outliers")
         if let classifier = currentClassifier {
             let startTime = NSDate().timeIntervalSince1970
-            await foreachOutlierGroupAsync() { group in
+            await foreachOutlierGroupMulti() { group in
                 if await group.shouldPaint() == nil {
                     // only apply classifier when no other classification is otherwise present
                     await group.shouldPaint(.fromClassifier(await classifier.asyncClassification(of: group)))
                 }
-                return .continue
             }
             let endTime = NSDate().timeIntervalSince1970
             Log.i("frame \(self.frameIndex) spent \(endTime - startTime) seconds classifing outlier groups");
@@ -72,18 +69,16 @@ extension FrameAirplaneRemover {
     }
     
     public func userSelectAllOutliers(toShouldPaint shouldPaint: Bool) async {
-        await foreachOutlierGroupAsync() { group in
+        await foreachOutlierGroupMulti() { group in
             await group.shouldPaint(.userSelected(shouldPaint))
-            return .continue
         }
     }
 
     public func userSelectUndecidedOutliers(toShouldPaint shouldPaint: Bool) async {
-        await foreachOutlierGroupAsync() { group in
+        await foreachOutlierGroupMulti() { group in
             if await group.shouldPaint() == nil {
                 await group.shouldPaint(.userSelected(shouldPaint))
             }
-            return .continue
         }
     }
 

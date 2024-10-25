@@ -139,6 +139,15 @@ public actor Blob: CustomStringConvertible,
         return 420420420
     }
 
+    public func lineLength() -> Double? {
+        if let line = self.originZeroLine {
+            let (_, lineLength) = averageDistanceAndLineLength(from: line)
+            return lineLength
+        } else {
+            return nil
+        }
+    }
+
     public func medianDistanceFromIdealLine() -> (Double, Double)? {
         if let line = self.originZeroLine {
             let (_, lineLength) = averageDistanceAndLineLength(from: line)
@@ -291,6 +300,27 @@ public actor Blob: CustomStringConvertible,
             for pixel in pixels {
                 let pixelDistance = standardLine.distanceTo(x: pixel.x, y: pixel.y)
                 if pixelDistance <= maxDistanceFromLine {
+                    newPixels.update(with: pixel)
+                }
+            }
+            let diff = self.pixels.count - newPixels.count
+            self.pixels = newPixels
+            Log.d("blog \(self) trimming \(diff) pixels")
+            reset()
+        }
+    }
+    
+    // trims outlying pixels from the group, ones that are not
+    // close enough to the ideal line for this group
+    public func lineTrim(by maxDistance: Double = 12) {
+        if let line = self.originZeroLine {
+            var newPixels = Set<SortablePixel>()
+            
+            let standardLine = line.standardLine
+
+            for pixel in pixels {
+                let pixelDistance = standardLine.distanceTo(x: pixel.x, y: pixel.y)
+                if pixelDistance <= maxDistance {
                     newPixels.update(with: pixel)
                 }
             }
@@ -482,7 +512,8 @@ public actor Blob: CustomStringConvertible,
         if let line = self.line {
             ret = calculateLineFillAmount(from: line,
                                           with: self.boundingBox(),
-                                          and: self.pixelValues)
+                                          and: self.pixelValues,
+                                          and: self.pixels)
         }
         _lineFillAmount = ret
         return ret

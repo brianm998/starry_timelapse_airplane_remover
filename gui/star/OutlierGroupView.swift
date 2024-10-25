@@ -139,6 +139,11 @@ struct OutlierGroupView: View {
                         }
                           .stroke(.white, lineWidth: 8)
                           .opacity(0.33)
+                    } else if !self.groupViewModel.lineIsLoading,
+                              !self.groupViewModel.hasLine
+                    {
+                        Text("No Line")
+                          .foregroundColor(.red)
                     }
                     
                 }

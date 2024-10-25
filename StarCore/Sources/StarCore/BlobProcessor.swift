@@ -27,7 +27,7 @@ public typealias BlobMap = [UInt16:Blob]
  */
 
 public enum BlobProcessingType {
-    case initiate(() async throws -> ([UInt16], PixelatedImage)) // subtraction image andoriginal image
+    case initiate(() async throws -> ([UInt16], PixelatedImage)) // subtraction image and original image
     case create(([UInt16], PixelatedImage) async throws -> BlobMap)
     case save(FrameImageType)
     case frameState(FrameProcessingState)
@@ -154,7 +154,6 @@ public class BlobProcessor {
           // remove isolated blobs
           .isolatedBlobRemover(.init(minNeighborSize: 6, scanSize: 24)),
           
-          .save(.filter3),
           .frameState(.isolatedBlobRemoval3),
 
           // remove smaller disconected blobs
@@ -172,7 +171,6 @@ public class BlobProcessor {
           .frameState(.isolatedBlobRemoval4),
           
           
-          .save(.filter4),
 
           // perhaps make sure we don't discard any lines merged in with bad blobs somehow
 
@@ -192,7 +190,6 @@ public class BlobProcessor {
                                      requiredNeighbors: 1,
                                      minBlobSize: 24)),
         
-          .save(.filter5),
 
           // try to do more line adjustment after removing some isolated blobs
           .linearBlobConnector(.init(scanSize: 20,
@@ -204,16 +201,47 @@ public class BlobProcessor {
                                      minBlobSize: 50)),
         
 
-
-          .save(.filter6),
-
+          // try to split up blobs with more than one line in them
           .lineSplit(.init(maxLines: 8000,
                            maxDistance: 12,
                            minLineScore: 12,
                            minLineCount: 10)),
 
-          // split up blobs 
+          .save(.filter3),
+
+          // reconnect some lines that may have been split up
+          .linearBlobConnector(.init(scanSize: 2, 
+                                     blobsSmallerThan: 80,
+                                     lineBorder: 2)),
+          
+          .save(.filter4),
+
+          // blob line trim
+          .process() { blobs in
+              var ret: [UInt16: Blob] = [:]
+
+              for (_, blob) in blobs {
+                  if let line = await blob.line,
+                     let lineLength = await blob.lineLength(),
+                     lineLength > 80
+                  {
+                      let lineFillAmount = await blob.lineFillAmount()
+
+                      if lineFillAmount > 0.33 {
+                          // XXX trim that shit
+                          await blob.lineTrim(by: 15)
+                      }
+                  }
+                  ret[blob.id] = blob
+              }
+              return ret
+          }, 
+
+          
+          // split up blobs based upon user input
           .process(applyUserSlices),
+          
+          .save(.filter5),
           
           // final pass on getting rid of really small blobs
           .process() { blobs in
@@ -227,6 +255,7 @@ public class BlobProcessor {
               return ret
           }, 
 
+          .save(.filter6),
         ]
     }
 
@@ -261,8 +290,6 @@ public class BlobProcessor {
                 }
                 
                 for (_, blob) in blobMap {
-
-                    if await blob.size() < 80 { continue } // XXX constant
                     
                     // look and see if any pixels in this blob align with different
                     // lines, and if so, split them apart into separate groups

@@ -47,57 +47,65 @@ public actor OutlierGroup: CustomStringConvertible,
                            Equatable,
                            Comparable
 {
-    public let id: UInt16              // unique across a frame, non zero
-    public let size: UInt              // number of pixels in this outlier group
-    public let bounds: BoundingBox     // a bounding box on the image that contains this group
-    public let brightness: UInt        // the average amount per pixel of brightness over the limit 
+    nonisolated public let id: UInt16              // unique across a frame, non zero
+    nonisolated public let size: UInt              // number of pixels in this outlier group
+    nonisolated public let bounds: BoundingBox     // a bounding box on the image that contains this group
+    nonisolated public let brightness: UInt        // the average amount per pixel of brightness over the limit 
 
 
     // pixel value is zero if pixel is not part of group,
     // otherwise it's the amount brighter this pixel was than those in the adjecent frames 
-    public let pixels: [UInt16]        // indexed by y * bounds.width + x
+    nonisolated public let pixels: [UInt16]        // indexed by y * bounds.width + x
 
     // a set of the pixels in this outlier 
-    public let pixelSet: Set<SortablePixel>
+    nonisolated public let pixelSet: Set<SortablePixel>
     
-    public let frameIndex: Int
+    nonisolated public let frameIndex: Int
 
     // lazy calculcated properties
 
     fileprivate var _line: Line? = nil
 
     fileprivate var lineLoaded = false
-
-    fileprivate func set(line: Line) { _line = line }
+    fileprivate var shouldLoadLine = true
     
-    public func line() -> Line? {
-        if !lineLoaded {
-            lineLoaded = true
-            Task.detached {
+    fileprivate func set(line: Line) {
+        _line = line
+        lineLoaded = true
+    }
+    
+    public func line() async -> Line? {
+        if shouldLoadLine {
+            shouldLoadLine = false
+            return await Task<Line?,Never>.detached {
                 if let line = HoughLineFinder(pixels: Array(self.pixelSet),
                                               bounds: self.bounds).line
                 {
                     await self.set(line: line)
+                    return line
+                } else {
+                    return nil
                 }
-            }
+            }.value
+        } else {
+            return _line
         }
-        return _line
     }
 
     
     // how far away from the most dominant line in this outlier group are
     // the pixels in it, on average?
-    public func averageLineVariance() -> Double {
+    public func averageLineVariance() async -> Double {
         if let _averageLineVariance { return _averageLineVariance }
-        setLineProperties()
+        await setLineProperties()
         return _averageLineVariance!
     }
     fileprivate var _averageLineVariance: Double? = nil
 
     // on median?
-    public func medianLineVariance() -> Double {
+    public func medianLineVariance() async -> Double {
         if let _medianLineVariance { return _medianLineVariance }
-        setLineProperties()
+        await setLineProperties()
         return _medianLineVariance!
     }
     fileprivate var _medianLineVariance: Double? = nil
@@ -159,8 +167,10 @@ public actor OutlierGroup: CustomStringConvertible,
     
     // a line with (0,0) origin calculated from the pixels in this group, if possible
     public var originZeroLine: Line? {
-        if let line = self.line() { return originZeroLine(from: line) }
-        return nil
+        get async {
+            if let line = await self.line() { return originZeroLine(from: line) }
+            return nil
+        }
     }
 
     public func originZeroLine(from line: Line) -> Line {
@@ -191,8 +201,8 @@ public actor OutlierGroup: CustomStringConvertible,
         self.pixelSet = pixelSet
     }
 
-    private func setLineProperties() {
-        if let line = self.originZeroLine {
+    private func setLineProperties() async {
+        if let line = await self.originZeroLine {
             (self._averageLineVariance, self._medianLineVariance, _) = 
               OutlierGroup.averageMedianMaxDistance(for: pixelSet,
                                                     from: line,
@@ -291,7 +301,7 @@ public actor OutlierGroup: CustomStringConvertible,
     
     // outputs an image the same size as this outlier's bounding box,
     // coloring the outlier pixels red if will paint, green if not
-    public func testImage() -> CGImage? {
+    public func testImage() async -> CGImage? {
 
         let bytesPerPixel = 64/8
         
@@ -305,7 +315,7 @@ public actor OutlierGroup: CustomStringConvertible,
         // maybe write out the line
         if writeLine,
 //           self.size > 150,
-           let line = self.line()
+           let line = await self.line()
         {
             Log.d("have LINE \(line)")
             var pixel = Pixel()

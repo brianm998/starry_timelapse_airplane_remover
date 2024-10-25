@@ -236,14 +236,16 @@ fileprivate func calculateLineFillAmount(of group: OutlierGroup) async -> Double
     if let line = await group.line() {
         ret = calculateLineFillAmount(from: line,
                                       with: group.bounds,
-                                      and: group.pixels)
+                                      and: group.pixels,
+                                      and: group.pixelSet)
     }
     return ret
 }
 
 internal func calculateLineFillAmount(from line: Line,
                                       with bounds: BoundingBox,
-                                      and pixels: [UInt16]) -> Double
+                                      and pixels: [UInt16],
+                                      and pixelSet: Set<SortablePixel>) -> Double
 {
     let minX = bounds.min.x
     let minY = bounds.min.y
@@ -257,19 +259,17 @@ internal func calculateLineFillAmount(from line: Line,
 
     let borders = bounds.intersections(with: originZeroLine.standardLine)
     if borders.count > 1 {
-        var totalPixels = 0
         var linePixels = 0
         
         originZeroLine.iterate(between: borders[0],
                                and: borders[1],
-                               numberOfAdjecentPixels: 1)
+                               numberOfAdjecentPixels: 3)
         { x, y, iterationDirection in
-            totalPixels += 1
             if hasPixelAt(x: x, y: y, with: bounds, and: pixels) {
                 linePixels += 1
             }
         }
-        return Double(linePixels)/Double(totalPixels)
+        return Double(linePixels)/Double(pixelSet.count)
     } else {
         return 0
     }
