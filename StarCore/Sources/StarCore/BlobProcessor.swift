@@ -29,7 +29,7 @@ public typealias BlobMap = [UInt16:Blob]
 public enum BlobProcessingType {
     case initiate(() async throws -> ([UInt16], PixelatedImage)) // subtraction image and original image
     case create(([UInt16], PixelatedImage) async throws -> BlobMap)
-    case save(FrameImageType)
+    case save(FrameViewMode)
     case frameState(FrameProcessingState)
     case processWithOriginalImage((BlobMap,PixelatedImage) async throws -> BlobMap)
     case process((BlobMap) async throws -> BlobMap)
@@ -145,6 +145,7 @@ public class BlobProcessor {
               }
               return ret
           },
+          .save(.filter3),
           
           // a first pass on dim isolated blob removal
           .dimIsolatedBlobRemover(.init(scanSize: 50,
@@ -154,6 +155,8 @@ public class BlobProcessor {
           // remove isolated blobs
           .isolatedBlobRemover(.init(minNeighborSize: 6, scanSize: 24)),
           
+
+          .save(.filter4),
           .frameState(.isolatedBlobRemoval3),
 
           // remove smaller disconected blobs
@@ -161,6 +164,7 @@ public class BlobProcessor {
                                          blobsSmallerThan: 18,
                                          requiredNeighbors: 2)),
 
+          .save(.filter5),
           .frameState(.smallLinearBlobAbsorbtion),
           
           // find really close linear blobs
@@ -170,33 +174,34 @@ public class BlobProcessor {
 
           .frameState(.isolatedBlobRemoval4),
           
-          
-          .save(.filter3),
+          .save(.filter6),
 
           // perhaps make sure we don't discard any lines merged in with bad blobs somehow
 
           .borderBrightnessLessThan(0.3),
           
+
+          .save(.filter7),
+
           // remove larger disconected blobs
           .disconnectedBlobRemover(.init(scanSize: 60,
                                          blobsSmallerThan: 50,
                                          blobsLargerThan: 18,
                                          requiredNeighbors: 2)),
-          .frameState(.largerLinearBlobAbsorbtion),
-
-          .save(.filter4),
-
-          .frameState(.finalCrunch),
-
           .isolatedBlobRemover(.init(scanSize: 12,
                                      requiredNeighbors: 1,
                                      minBlobSize: 24)),
         
-          .save(.filter5),
+          .save(.filter8),
+
+          .frameState(.largerLinearBlobAbsorbtion),
+
 
           // try to do more line adjustment after removing some isolated blobs
           .linearBlobConnector(.init(scanSize: 20,
                                      blobsSmallerThan: 200)),
+
+          .frameState(.finalCrunch),
 
 
           .isolatedBlobRemover(.init(scanSize: 6,
@@ -204,11 +209,15 @@ public class BlobProcessor {
                                      minBlobSize: 50)),
         
 
+          .save(.filter9),
           // try to split up blobs with more than one line in them
           .lineSplit(.init(maxLines: 8000,
                            maxDistance: 12,
                            minLineScore: 12,
                            minLineCount: 10)),
+
+
+          .save(.filter10),
 
           
           // reconnect some lines that may have been split up
@@ -255,6 +264,8 @@ public class BlobProcessor {
               return ret
           }, 
 
+          .save(.filter11),
+          
           // get rid of any big blobs with a line that really doesn't fit
           .process() { blobs in
               var ret: [UInt16: Blob] = [:]
@@ -279,7 +290,7 @@ public class BlobProcessor {
               return ret
           }, 
 
-          .save(.filter6),
+          .save(.filter12),
         ]
     }
 
@@ -466,7 +477,7 @@ public class BlobProcessor {
         do {
             // try to load the image subtraction from a pre-processed file
 
-            if let image = try await imageAccessor.load(type: .subtracted, atSize: .original) {
+            if let image = try await imageAccessor.load(type: .subtraction, atSize: .original) {
                 Log.d("frame \(frameIndex) loaded subtraction image")
                 subtractionImage = image
                 switch image.imageData {
@@ -477,7 +488,7 @@ public class BlobProcessor {
                 }
                 Log.d("frame \(frameIndex) loaded outlier amounts from subtraction image")
 
-                try await imageAccessor.save(image, as: .subtracted,
+                try await imageAccessor.save(image, as: .subtraction,
                                              atSize: .preview, overwrite: false)
                 Log.d("frame \(frameIndex) saved subtraction image preview") 
             }

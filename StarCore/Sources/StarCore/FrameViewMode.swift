@@ -1,10 +1,13 @@
 import Foundation
-import SwiftUI
-import StarCore
+import CoreGraphics
+import logging
+import Cocoa
+
 
 // different ways that an individual frame from a sequence can be displayed
-public enum FrameViewMode: String, Equatable, CaseIterable {
+public enum FrameViewMode: String, Equatable, CaseIterable, Sendable {
     case original               // source frame with no changes
+    case aligned                // aligned neighbor frame
     case subtraction            // the result of subtracting an aligned neighbor frame
     case blobs                  // blobs detected from the subtraction frame
     case filter1                // further blob processing
@@ -13,45 +16,22 @@ public enum FrameViewMode: String, Equatable, CaseIterable {
     case filter4                // ..
     case filter5                // ..
     case filter6                // ..
+    case filter7                // ..
+    case filter8                // ..
+    case filter9                // ..
+    case filter10               // ..
+    case filter11               // ..
+    case filter12               // ..
     case validation             // an image of exactly what pixels have been identified as unwanted
     case paintMask              // the paint mask created from the validation image
     case processed              // the final processed image, 
                                 // the paint mask is used as a layer mask for the aligned neighbor 
 
-    var localizedName: LocalizedStringKey {
+    public var localizedName: LocalizedStringKey {
         LocalizedStringKey(rawValue)
     }
 
-    var frameImageType: FrameImageType { // these two enums should probably be one
-        switch self {
-        case .original:
-            return .original
-        case .subtraction:
-            return .subtracted
-        case .blobs:
-            return .blobs
-        case .filter1:
-            return .filter1
-        case .filter2:
-            return .filter2
-        case .filter3:
-            return .filter3
-        case .filter4:
-            return .filter4
-        case .filter5:
-            return .filter5
-        case .filter6:
-            return .filter6
-        case .paintMask:
-            return .paintMask
-        case .validation:
-            return .validated
-        case .processed:
-            return .processed
-        }
-    }
-    
-    var shortName: String {
+    public var shortName: String {
         switch self {
         case .original:
             return "orig"
@@ -71,16 +51,30 @@ public enum FrameViewMode: String, Equatable, CaseIterable {
             return "f5"
         case .filter6:
             return "f6"
+        case .filter7:
+            return "f7"
+        case .filter8:
+            return "f8"
+        case .filter9:
+            return "f9"
+        case .filter10:
+            return "f10"
+        case .filter11:
+            return "f11"
+        case .filter12:
+            return "f12"
         case .paintMask:
             return "pmask"
         case .validation:
             return "valid"
         case .processed:
             return "proc"
+        case .aligned:
+            return "aligned"
         }
     }
 
-    var longName: String {
+    public var longName: String {
         switch self {
         case .original:
             return "original frame"
@@ -100,12 +94,26 @@ public enum FrameViewMode: String, Equatable, CaseIterable {
             return "blob filter level 5"
         case .filter6:
             return "blob filter level 6"
+        case .filter7:
+            return "blob filter level 7"
+        case .filter8:
+            return "blob filter level 8"
+        case .filter9:
+            return "blob filter level 9"
+        case .filter10:
+            return "blob filter level 10"
+        case .filter11:
+            return "blob filter level 11"
+        case .filter12:
+            return "blob filter level 12"
         case .paintMask:
             return "computed paint mask"
         case .validation:
             return "validation data"
         case .processed:
             return "processed frame"
+        case .aligned:
+            return "aligned frame"
         }
     }
 }

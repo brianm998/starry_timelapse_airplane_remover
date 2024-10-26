@@ -4,6 +4,7 @@ import logging
 import Cocoa
 import SwiftUI
 
+
 /*
 
 This file is part of the Starry Timelapse Airplane Remover (star).
@@ -24,54 +25,39 @@ public enum ImageDisplaySize: Sendable {
     case thumbnail
 }
 
-public enum FrameImageType: Sendable {
-    case original       // original image
-    case aligned        // aligned neighbor frame
-    case subtracted     // result of subtracting the aligned neighbor from original frame
-    case blobs          // full results of the initial blog detection
-    case filter1        // 
-    case filter2        // 
-    case filter3        // 
-    case filter4        // 
-    case filter5        // 
-    case filter6        // 
-    case validated      // outlier group validation image
-    case paintMask      // layer mask used in painting
-    case processed      // final processed image
-}
 
 public protocol ImageAccess: Sendable {
     // save image, will rescale and jpeg if necessary
     func save(_ image: PixelatedImage,
-              as type: FrameImageType,
+              as type: FrameViewMode,
               atSize size: ImageDisplaySize,
               overwrite: Bool) async throws
 
     // load an image of some type and size
-    func load(type imageType: FrameImageType,
+    func load(type imageType: FrameViewMode,
               atSize size: ImageDisplaySize) async throws -> PixelatedImage?
 
     func saveFinal(_ image: PixelatedImage,
-                   as type: FrameImageType,
+                   as type: FrameViewMode,
                    atSize size: ImageDisplaySize,
                    overwrite: Bool) async throws
 
     // load an image of some type and size
-    func loadFinal(type imageType: FrameImageType,
+    func loadFinal(type imageType: FrameViewMode,
                    atSize size: ImageDisplaySize) async throws -> PixelatedImage?
 
     // load an image of some type and size for the GUI as a SwiftUI Image
-    func loadImage(type imageType: FrameImageType,
+    func loadImage(type imageType: FrameViewMode,
                    atSize size: ImageDisplaySize) -> Image?
 
     // bypass loading restrictions
-    func loadInt(type imageType: FrameImageType,
+    func loadInt(type imageType: FrameViewMode,
                  atSize size: ImageDisplaySize) async -> PixelatedImage?
 
-    func dirForImage(ofType type: FrameImageType,
+    func dirForImage(ofType type: FrameViewMode,
                      atSize size: ImageDisplaySize) -> String?
 
-    func urlForImage(ofType imageType: FrameImageType,
+    func urlForImage(ofType imageType: FrameViewMode,
                      atSize size: ImageDisplaySize) -> URL?
 }
 
@@ -103,7 +89,7 @@ public struct ImageAccessor: ImageAccess, Sendable {
         return NSSize(width: thumbnailWidth, height: thumbnailHeight)
     }
 
-    nonisolated func mkdir(ofType type: FrameImageType,
+    nonisolated func mkdir(ofType type: FrameViewMode,
                            andSize size: ImageDisplaySize = .original) 
     {
         if let dirname = dirForImage(ofType: type, atSize: size) {
@@ -113,23 +99,23 @@ public struct ImageAccessor: ImageAccess, Sendable {
     
     nonisolated private func mkdirs() {
         mkdir(ofType: .aligned)
-        mkdir(ofType: .subtracted)
-        mkdir(ofType: .blobs)
-        mkdir(ofType: .filter1)
-        mkdir(ofType: .filter2)
-        mkdir(ofType: .filter3)
-        mkdir(ofType: .filter4)
-        mkdir(ofType: .filter5)
-        mkdir(ofType: .filter6)
-        mkdir(ofType: .paintMask)
-        mkdir(ofType: .validated)
+        mkdir(ofType: .subtraction)
+//        mkdir(ofType: .blobs)
+//        mkdir(ofType: .filter1)
+//        mkdir(ofType: .filter2)
+//        mkdir(ofType: .filter3)
+//        mkdir(ofType: .filter4)
+//        mkdir(ofType: .filter5)
+//        mkdir(ofType: .filter6)
+//        mkdir(ofType: .paintMask)
+        mkdir(ofType: .validation)
         mkdir(ofType: .processed)
         
         if config.writeFramePreviewFiles {
             mkdir(ofType: .original, andSize: .preview)
             mkdir(ofType: .aligned, andSize: .preview)
-            mkdir(ofType: .subtracted, andSize: .preview)
-            mkdir(ofType: .validated, andSize: .preview)
+            mkdir(ofType: .subtraction, andSize: .preview)
+            mkdir(ofType: .validation, andSize: .preview)
             mkdir(ofType: .blobs, andSize: .preview)
             mkdir(ofType: .filter1, andSize: .preview)
             mkdir(ofType: .filter2, andSize: .preview)
@@ -137,6 +123,12 @@ public struct ImageAccessor: ImageAccess, Sendable {
             mkdir(ofType: .filter4, andSize: .preview)
             mkdir(ofType: .filter5, andSize: .preview)
             mkdir(ofType: .filter6, andSize: .preview)
+            mkdir(ofType: .filter7, andSize: .preview)
+            mkdir(ofType: .filter8, andSize: .preview)
+            mkdir(ofType: .filter9, andSize: .preview)
+            mkdir(ofType: .filter10, andSize: .preview)
+            mkdir(ofType: .filter11, andSize: .preview)
+            mkdir(ofType: .filter12, andSize: .preview)
             mkdir(ofType: .paintMask, andSize: .preview)
         }
         if config.writeFrameThumbnailFiles {
@@ -147,7 +139,7 @@ public struct ImageAccessor: ImageAccess, Sendable {
         }
     }
 
-    public func loadImage(type imageType: FrameImageType,
+    public func loadImage(type imageType: FrameViewMode,
                           atSize size: ImageDisplaySize) -> Image?
     {
         if let url = urlForImage(ofType: imageType, atSize: size) {
@@ -162,7 +154,7 @@ public struct ImageAccessor: ImageAccess, Sendable {
         return nil
     }
 
-    nonisolated public func urlForImage(ofType imageType: FrameImageType,
+    nonisolated public func urlForImage(ofType imageType: FrameViewMode,
                                         atSize size: ImageDisplaySize) -> URL?
     {
         if let filename = nameForImage(ofType: imageType, atSize: size) {
@@ -178,20 +170,20 @@ public struct ImageAccessor: ImageAccess, Sendable {
     }
 
     // load using the file system monitor
-    public func loadFinal(type imageType: FrameImageType,
+    public func loadFinal(type imageType: FrameViewMode,
                           atSize size: ImageDisplaySize) async throws -> PixelatedImage?
     {
         try await finalFileSystemMonitor.load() { await self.loadInt(type: imageType, atSize: size) }
     }
 
     // load using the file system monitor
-    public func load(type imageType: FrameImageType,
+    public func load(type imageType: FrameViewMode,
                      atSize size: ImageDisplaySize) async throws -> PixelatedImage?
     {
         try await fileSystemMonitor.load() { await self.loadInt(type: imageType, atSize: size) }
     }
 
-    public func loadInt(type imageType: FrameImageType,
+    public func loadInt(type imageType: FrameViewMode,
                          atSize size: ImageDisplaySize) async -> PixelatedImage?
     {
         var numRetries = 4
@@ -236,11 +228,10 @@ public struct ImageAccessor: ImageAccess, Sendable {
         }
         return nil
     }
-
     
     // save using the file system monitor
     public func saveFinal(_ image: PixelatedImage,
-                          as type: FrameImageType,
+                          as type: FrameViewMode,
                           atSize size: ImageDisplaySize,
                           overwrite: Bool) async throws
     {
@@ -254,7 +245,7 @@ public struct ImageAccessor: ImageAccess, Sendable {
             
     // save using the file system monitor
     public func save(_ image: PixelatedImage,
-                     as type: FrameImageType,
+                     as type: FrameViewMode,
                      atSize size: ImageDisplaySize,
                      overwrite: Bool) async throws
     {
@@ -268,7 +259,7 @@ public struct ImageAccessor: ImageAccess, Sendable {
             
     // make this use the file access guard
     private func saveInt(_ image: PixelatedImage,
-                         as type: FrameImageType,
+                         as type: FrameViewMode,
                          atSize size: ImageDisplaySize,
                          overwrite: Bool) async throws
     {
@@ -307,7 +298,7 @@ public struct ImageAccessor: ImageAccess, Sendable {
         }
     }
 
-    nonisolated public func dirForImage(ofType type: FrameImageType,
+    nonisolated public func dirForImage(ofType type: FrameViewMode,
                                         atSize size: ImageDisplaySize) -> String?
     {
         switch type {
@@ -330,7 +321,7 @@ public struct ImageAccessor: ImageAccess, Sendable {
             case .thumbnail:
                 return nil
             }
-        case .subtracted:
+        case .subtraction:
             switch size {
             case .original:
                 return "\(config.outputPath)/\(config.imageSequenceDirname)-star-aligned-subtracted"
@@ -342,7 +333,7 @@ public struct ImageAccessor: ImageAccess, Sendable {
         case .blobs:
             switch size {
             case .original:
-                return "\(config.outputPath)/\(baseDirName)-blobs"
+                return nil
             case .preview:
                 return "\(config.outputPath)/\(baseDirName)-blobs-preview"
             case .thumbnail:
@@ -351,7 +342,7 @@ public struct ImageAccessor: ImageAccess, Sendable {
         case .filter1:
             switch size {
             case .original:
-                return "\(config.outputPath)/\(baseDirName)-blobs-filter1"
+                return nil
             case .preview:
                 return "\(config.outputPath)/\(baseDirName)-blobs-filter1-preview"
             case .thumbnail:
@@ -360,7 +351,7 @@ public struct ImageAccessor: ImageAccess, Sendable {
         case .filter2:
             switch size {
             case .original:
-                return "\(config.outputPath)/\(baseDirName)-blobs-filter2"
+                return nil
             case .preview:
                 return "\(config.outputPath)/\(baseDirName)-blobs-filter2-preview"
             case .thumbnail:
@@ -369,7 +360,7 @@ public struct ImageAccessor: ImageAccess, Sendable {
         case .filter3:
             switch size {
             case .original:
-                return "\(config.outputPath)/\(baseDirName)-blobs-filter3"
+                return nil
             case .preview:
                 return "\(config.outputPath)/\(baseDirName)-blobs-filter3-preview"
             case .thumbnail:
@@ -378,7 +369,7 @@ public struct ImageAccessor: ImageAccess, Sendable {
         case .filter4:
             switch size {
             case .original:
-                return "\(config.outputPath)/\(baseDirName)-blobs-filter4"
+                return nil
             case .preview:
                 return "\(config.outputPath)/\(baseDirName)-blobs-filter4-preview"
             case .thumbnail:
@@ -387,7 +378,7 @@ public struct ImageAccessor: ImageAccess, Sendable {
         case .filter5:
             switch size {
             case .original:
-                return "\(config.outputPath)/\(baseDirName)-blobs-filter5"
+                return nil
             case .preview:
                 return "\(config.outputPath)/\(baseDirName)-blobs-filter5-preview"
             case .thumbnail:
@@ -396,12 +387,72 @@ public struct ImageAccessor: ImageAccess, Sendable {
         case .filter6:
             switch size {
             case .original:
-                return "\(config.outputPath)/\(baseDirName)-blobs-filter6"
+                return nil
             case .preview:
                 return "\(config.outputPath)/\(baseDirName)-blobs-filter6-preview"
             case .thumbnail:
                 return nil
             }
+        case .filter7:
+            switch size {
+            case .original:
+                return nil
+            case .preview:
+                return "\(config.outputPath)/\(baseDirName)-blobs-filter7-preview"
+            case .thumbnail:
+                return nil
+            }
+
+        case .filter8:
+            switch size {
+            case .original:
+                return nil
+            case .preview:
+                return "\(config.outputPath)/\(baseDirName)-blobs-filter8-preview"
+            case .thumbnail:
+                return nil
+            }
+
+        case .filter9:
+            switch size {
+            case .original:
+                return nil
+            case .preview:
+                return "\(config.outputPath)/\(baseDirName)-blobs-filter9-preview"
+            case .thumbnail:
+                return nil
+            }
+
+        case .filter10:
+            switch size {
+            case .original:
+                return nil
+            case .preview:
+                return "\(config.outputPath)/\(baseDirName)-blobs-filter10-preview"
+            case .thumbnail:
+                return nil
+            }
+
+        case .filter11:
+            switch size {
+            case .original:
+                return nil
+            case .preview:
+                return "\(config.outputPath)/\(baseDirName)-blobs-filter11-preview"
+            case .thumbnail:
+                return nil
+            }
+
+        case .filter12:
+            switch size {
+            case .original:
+                return nil
+            case .preview:
+                return "\(config.outputPath)/\(baseDirName)-blobs-filter12-preview"
+            case .thumbnail:
+                return nil
+            }
+
         case .paintMask:
             switch size {
             case .original:
@@ -411,7 +462,7 @@ public struct ImageAccessor: ImageAccess, Sendable {
             case .thumbnail:
                 return nil
             }
-        case .validated:
+        case .validation:
             switch size {
             case .original:
                 return "\(config.outputPath)/\(config.imageSequenceDirname)-star-validated-outlier-images"
@@ -432,13 +483,26 @@ public struct ImageAccessor: ImageAccess, Sendable {
         }
     }
 
-    nonisolated private func nameForImage(ofType type: FrameImageType,
+    nonisolated private func nameForImage(ofType type: FrameViewMode,
                                           atSize size: ImageDisplaySize) -> String?
     {
         if let dir = dirForImage(ofType: type, atSize: size) {
             switch size {
             case .original:
-                return "\(dir)/\(baseFileName)"
+                switch type {
+                case .subtraction:
+                    return "\(dir)/\(baseFileName)"
+                case .aligned:
+                    return "\(dir)/\(baseFileName)"
+                case .original:
+                    return "\(dir)/\(baseFileName)"
+                case .processed:
+                    return "\(dir)/\(baseFileName)"
+                case .validation:
+                    return "\(dir)/\(baseFileName)"
+                default:
+                    return nil
+                }
             case .preview:
                 return "\(dir)/\(baseFileName).jpg"
             case .thumbnail:
@@ -459,7 +523,7 @@ public struct ImageAccessor: ImageAccess, Sendable {
         }
     }
     
-    private func createMissingImage(ofType type: FrameImageType,
+    private func createMissingImage(ofType type: FrameViewMode,
                                     andSize size: ImageDisplaySize)
       async throws -> PixelatedImage?
     {

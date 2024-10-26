@@ -29,7 +29,7 @@ extension FrameAirplaneRemover {
 
         let accessor = imageAccessor
         
-        if let image = try await imageAccessor.load(type: .subtracted, atSize: .original) {
+        if let image = try await imageAccessor.load(type: .subtraction, atSize: .original) {
             return image
         }
 
@@ -76,9 +76,9 @@ extension FrameAirplaneRemover {
         if config.writeOutlierGroupFiles {
             // write out image of outlier amounts
             do {
-                try await accessor.save(subtractionImage, as: .subtracted,
+                try await accessor.save(subtractionImage, as: .subtraction,
                                              atSize: .original, overwrite: false)
-                try await accessor.save(subtractionImage, as: .subtracted,
+                try await accessor.save(subtractionImage, as: .subtraction,
                                              atSize: .preview, overwrite: false)
             } catch {
                 Log.e("frame \(frameIndex) can't write subtraction image: \(error)")

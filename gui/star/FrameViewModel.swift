@@ -81,6 +81,7 @@ public class FrameViewModel {
     var thumbnailImage: Image = initialImage
     var previewImage: Image = initialImage
     var processedPreviewImage: Image = initialImage
+    var alignedPreviewImage: Image = initialImage
     var subtractionPreviewImage: Image = initialImage
     var blobsPreviewImage: Image = initialImage
     var khtbPreviewImage: Image = initialImage
@@ -90,6 +91,12 @@ public class FrameViewModel {
     var filter4PreviewImage: Image = initialImage
     var filter5PreviewImage: Image = initialImage
     var filter6PreviewImage: Image = initialImage
+    var filter7PreviewImage: Image = initialImage
+    var filter8PreviewImage: Image = initialImage
+    var filter9PreviewImage: Image = initialImage
+    var filter10PreviewImage: Image = initialImage
+    var filter11PreviewImage: Image = initialImage
+    var filter12PreviewImage: Image = initialImage
     var paintMaskPreviewImage: Image = initialImage
     var houghLinesPreviewImage: Image = initialImage
     var validationPreviewImage: Image = initialImage

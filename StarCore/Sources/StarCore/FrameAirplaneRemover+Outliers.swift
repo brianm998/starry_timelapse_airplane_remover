@@ -31,7 +31,7 @@ extension FrameAirplaneRemover {
     public func loadOutliersFromFile() async throws -> OutlierGroups? {
         let startTime = Date().timeIntervalSinceReferenceDate
 
-        guard let subtractionImage = try await self.imageAccessor.load(type: .subtracted, atSize: .original)
+        guard let subtractionImage = try await self.imageAccessor.load(type: .subtraction, atSize: .original)
         else {
             Log.i("couldn't load subtraction image for loading outliers")
             return nil
@@ -234,7 +234,7 @@ extension FrameAirplaneRemover {
            - don't apply decision tree, use the validation image instead
          */
 
-        if let image = try await imageAccessor.load(type: .validated, atSize: .original) {
+        if let image = try await imageAccessor.load(type: .validation, atSize: .original) {
             switch image.imageData {
             case .eightBit(let validationArr):
                 await classifyOutliers(with: validationArr)
@@ -310,7 +310,7 @@ extension FrameAirplaneRemover {
     }
 
     // used for saving different images of blobs
-    public func saveImages(for blobs: [Blob], as frameImageType: FrameImageType) async throws {
+    public func saveImages(for blobs: [Blob], as frameImageType: FrameViewMode) async throws {
         var blobImageData = [UInt8](repeating: 0, count: width*height)
         for blob in blobs {
             for pixel in await blob.getPixels() {
@@ -320,8 +320,8 @@ extension FrameAirplaneRemover {
         let fuck = frameImageType
         let blobImage = PixelatedImage(width: width, height: height,
                                        grayscale8BitImageData: blobImageData)
-        let (_, _) = await (try imageAccessor.save(blobImage, as: fuck,
-                                                   atSize: .original, overwrite: true),
+        let (_) = await (/*try imageAccessor.save(blobImage, as: fuck,
+                                                   atSize: .original, overwrite: true),*/
                             try imageAccessor.save(blobImage, as: fuck,
                                                    atSize: .preview, overwrite: true))
         

@@ -65,7 +65,7 @@ struct BottomLeftView: View {
                               Show each frame as either the original   
                               or with star processing applied.
                               """)
-                      .frame(width: 450)
+                      .frame(width: 750)
                       .help("show original or processed frame")
                       .pickerStyle(.segmented)
                     Spacer().frame(maxWidth: 6, maxHeight: 10)

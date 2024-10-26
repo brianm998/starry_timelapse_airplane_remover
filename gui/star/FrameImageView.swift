@@ -22,7 +22,7 @@ public struct FrameImageView: View {
             let frameView = self.viewModel.currentFrameView
 
             if let nextFrame = frameView.frame,
-               let url = nextFrame.imageAccessor.urlForImage(ofType: viewModel.frameViewMode.frameImageType,
+               let url = nextFrame.imageAccessor.urlForImage(ofType: viewModel.frameViewMode,
                                                              atSize: .original)
             {
                 AsyncImage(url: url) { phase in
@@ -59,12 +59,26 @@ public struct FrameImageView: View {
             return frameView.filter5PreviewImage
         case .filter6:
             return frameView.filter6PreviewImage
+        case .filter7:
+            return frameView.filter7PreviewImage
+        case .filter8:
+            return frameView.filter8PreviewImage
+        case .filter9:
+            return frameView.filter9PreviewImage
+        case .filter10:
+            return frameView.filter10PreviewImage
+        case .filter11:
+            return frameView.filter11PreviewImage
+        case .filter12:
+            return frameView.filter12PreviewImage
         case .paintMask:
             return frameView.paintMaskPreviewImage
         case .validation:
             return frameView.validationPreviewImage
         case .processed:
             return frameView.processedPreviewImage
+        case .aligned:
+            return frameView.alignedPreviewImage
         }
     }
 

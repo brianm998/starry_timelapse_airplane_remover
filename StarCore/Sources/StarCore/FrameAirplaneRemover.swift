@@ -266,6 +266,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 if let alignedFilename {
                     Log.d("frame \(frameIndex) got aligned filename \(alignedFilename)")
                     if let alignedFrame = try await imageAccessor.load(type: .aligned, atSize: .original) {
+                        try await imageAccessor.save(alignedFrame, as: .aligned, atSize: .preview, overwrite: false)
                         return alignedFrame
                     } else {
                         Log.e("frame \(frameIndex) could not load aligned frame")
@@ -398,10 +399,10 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 Log.d("frame \(self.frameIndex) getting validating image")
                 let validationImage = await outlierGroups.validationImage()
                 Log.d("frame \(self.frameIndex) writing validated image")
-                try await imageAccessor.saveFinal(validationImage, as: .validated,
+                try await imageAccessor.saveFinal(validationImage, as: .validation,
                                                   atSize: .original, overwrite: false)
                 Log.d("frame \(self.frameIndex) writing validated preview")
-                try await imageAccessor.saveFinal(validationImage, as: .validated,
+                try await imageAccessor.saveFinal(validationImage, as: .validation,
                                                   atSize: .preview, overwrite: false)
             }
             Log.d("frame \(self.frameIndex) done writing toutut files")

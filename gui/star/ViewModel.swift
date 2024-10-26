@@ -254,8 +254,9 @@ public final class ViewModel {
             
             let acc = frame.imageAccessor
 
-            let vpTask = Task.detached { acc.loadImage(type: .validated,  atSize: .preview)?.resizable() }
-            let spTask = Task.detached { acc.loadImage(type: .subtracted, atSize: .preview)?.resizable() }
+            let vpTask = Task.detached { acc.loadImage(type: .validation,  atSize: .preview)?.resizable() }
+            let apTask = Task.detached { acc.loadImage(type: .aligned, atSize: .preview)?.resizable() }
+            let spTask = Task.detached { acc.loadImage(type: .subtraction, atSize: .preview)?.resizable() }
             let bpTask = Task.detached { acc.loadImage(type: .blobs,      atSize: .preview)?.resizable() }
             let f1Task = Task.detached { acc.loadImage(type: .filter1,    atSize: .preview)?.resizable() }
             let f2Task = Task.detached { acc.loadImage(type: .filter2,    atSize: .preview)?.resizable() }
@@ -263,6 +264,12 @@ public final class ViewModel {
             let f4Task = Task.detached { acc.loadImage(type: .filter4,    atSize: .preview)?.resizable() }
             let f5Task = Task.detached { acc.loadImage(type: .filter5,    atSize: .preview)?.resizable() }
             let f6Task = Task.detached { acc.loadImage(type: .filter6,    atSize: .preview)?.resizable() }
+            let f7Task = Task.detached { acc.loadImage(type: .filter7,    atSize: .preview)?.resizable() }
+            let f8Task = Task.detached { acc.loadImage(type: .filter8,    atSize: .preview)?.resizable() }
+            let f9Task = Task.detached { acc.loadImage(type: .filter9,    atSize: .preview)?.resizable() }
+            let f10Task = Task.detached { acc.loadImage(type: .filter10,    atSize: .preview)?.resizable() }
+            let f11Task = Task.detached { acc.loadImage(type: .filter11,    atSize: .preview)?.resizable() }
+            let f12Task = Task.detached { acc.loadImage(type: .filter12,    atSize: .preview)?.resizable() }
             let ppTask = Task.detached { acc.loadImage(type: .paintMask,  atSize: .preview)?.resizable() }
             let prTask = Task.detached { acc.loadImage(type: .processed,  atSize: .preview)?.resizable() }
             let opTask = Task.detached { acc.loadImage(type: .original,   atSize: .preview)?.resizable() }
@@ -270,6 +277,9 @@ public final class ViewModel {
 
             if let image = await vpTask.value {
                 self.frames[frame.frameIndex].validationPreviewImage = image
+            }
+            if let image = await apTask.value {
+                self.frames[frame.frameIndex].alignedPreviewImage = image
             }
             if let image = await spTask.value  {
                 self.frames[frame.frameIndex].subtractionPreviewImage = image
@@ -294,6 +304,24 @@ public final class ViewModel {
             }
             if let image = await f6Task.value {
                 self.frames[frame.frameIndex].filter6PreviewImage = image
+            }
+            if let image = await f7Task.value {
+                self.frames[frame.frameIndex].filter7PreviewImage = image
+            }
+            if let image = await f8Task.value {
+                self.frames[frame.frameIndex].filter8PreviewImage = image
+            }
+            if let image = await f9Task.value {
+                self.frames[frame.frameIndex].filter9PreviewImage = image
+            }
+            if let image = await f10Task.value {
+                self.frames[frame.frameIndex].filter10PreviewImage = image
+            }
+            if let image = await f11Task.value {
+                self.frames[frame.frameIndex].filter11PreviewImage = image
+            }
+            if let image = await f12Task.value {
+                self.frames[frame.frameIndex].filter12PreviewImage = image
             }
             if let image = await ppTask.value {
                 self.frames[frame.frameIndex].paintMaskPreviewImage = image
