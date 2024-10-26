@@ -2,6 +2,7 @@ import Foundation
 import CoreGraphics
 import logging
 import Cocoa
+import SwiftUI
 
 
 // different ways that an individual frame from a sequence can be displayed

@@ -501,7 +501,7 @@ public struct ImageAccessor: ImageAccess, Sendable {
                 case .validation:
                     return "\(dir)/\(baseFileName)"
                 default:
-                    return nil
+                    return nil  // no full frame images for these other types
                 }
             case .preview:
                 return "\(dir)/\(baseFileName).jpg"

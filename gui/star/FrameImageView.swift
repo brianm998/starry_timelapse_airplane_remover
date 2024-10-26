@@ -21,19 +21,30 @@ public struct FrameImageView: View {
         Group {
             let frameView = self.viewModel.currentFrameView
 
-            if let nextFrame = frameView.frame,
-               let url = nextFrame.imageAccessor.urlForImage(ofType: viewModel.frameViewMode,
-                                                             atSize: .original)
-            {
-                AsyncImage(url: url) { phase in
-                    if let image = phase.image {
-                        image
-                    } else {
-                        self.previewImage
+            if let nextFrame = frameView.frame {
+                if let url = nextFrame.imageAccessor.urlForImage(ofType: viewModel.frameViewMode,
+                                                                 atSize: .original)
+                {
+                    AsyncImage(url: url) { phase in
+                        if let image = phase.image {
+                            image
+                        } else {
+                            self.previewImage
+                        }
+                    }
+                } else if let url = nextFrame.imageAccessor.urlForImage(ofType: viewModel.frameViewMode,
+                                                                        atSize: .preview) {
+                    AsyncImage(url: url) { phase in
+                        if let image = phase.image {
+                            image
+                              .resizable()
+                        } else {
+                            ProgressView()
+                        }
                     }
                 }
             } else {
-                Text("no url for image :(") // XXX make this better
+                Text("image witn no frame :(") // XXX make this better
             }
         }
     }

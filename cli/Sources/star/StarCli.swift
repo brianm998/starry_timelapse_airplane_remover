@@ -382,7 +382,7 @@ struct StarCli: AsyncParsableCommand {
                     // setup sequence monitor
                     let updatableProgressMonitor =
                       UpdatableProgressMonitor(frameCount: frameCount,
-                                               numConcurrentRenders: 30, // xXX
+                                               numConcurrentRenders: 30, // XXX use num cpus?
                                                config: config,
                                                callbacks: callbacks)
                     callbacks.frameStateChangeCallback = { frame, state in
