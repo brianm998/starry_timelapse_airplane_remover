@@ -171,10 +171,11 @@ public class BlobProcessor {
           .frameState(.isolatedBlobRemoval4),
           
           
+          .save(.filter3),
 
           // perhaps make sure we don't discard any lines merged in with bad blobs somehow
 
-          .borderBrightnessLessThan(0.15),
+          .borderBrightnessLessThan(0.3),
           
           // remove larger disconected blobs
           .disconnectedBlobRemover(.init(scanSize: 60,
@@ -183,6 +184,7 @@ public class BlobProcessor {
                                          requiredNeighbors: 2)),
           .frameState(.largerLinearBlobAbsorbtion),
 
+          .save(.filter4),
 
           .frameState(.finalCrunch),
 
@@ -190,6 +192,7 @@ public class BlobProcessor {
                                      requiredNeighbors: 1,
                                      minBlobSize: 24)),
         
+          .save(.filter5),
 
           // try to do more line adjustment after removing some isolated blobs
           .linearBlobConnector(.init(scanSize: 20,
@@ -207,14 +210,12 @@ public class BlobProcessor {
                            minLineScore: 12,
                            minLineCount: 10)),
 
-          .save(.filter3),
-
+          
           // reconnect some lines that may have been split up
           .linearBlobConnector(.init(scanSize: 2, 
                                      blobsSmallerThan: 80,
                                      lineBorder: 2)),
           
-          .save(.filter4),
 
           // blob line trim
           .process() { blobs in
@@ -223,11 +224,11 @@ public class BlobProcessor {
               for (_, blob) in blobs {
                   if let line = await blob.line,
                      let lineLength = await blob.lineLength(),
-                     lineLength > 80
+                     lineLength > 60
                   {
                       let lineFillAmount = await blob.lineFillAmount()
 
-                      if lineFillAmount > 0.33 {
+                      if lineFillAmount > 0.20 {
                           // XXX trim that shit
                           await blob.lineTrim(by: 15)
                       }
@@ -241,14 +242,37 @@ public class BlobProcessor {
           // split up blobs based upon user input
           .process(applyUserSlices),
           
-          .save(.filter5),
           
           // final pass on getting rid of really small blobs
           .process() { blobs in
               var ret: [UInt16: Blob] = [:]
 
               for (_, blob) in blobs {
-                  if await blob.size() > 10 { // XXX constant
+                  if await blob.size() > 20 { // XXX constant
+                      ret[blob.id] = blob
+                  }
+              }
+              return ret
+          }, 
+
+          // get rid of any big blobs with a line that really doesn't fit
+          .process() { blobs in
+              var ret: [UInt16: Blob] = [:]
+
+              for (_, blob) in blobs {
+                  if await blob.size() > 100, // XXX constant
+                     let line = await blob.line,
+                     let (medianDist, lineLength) = await blob.medianDistanceFromIdealLine()
+                  {
+                      let lineFillAmount = await blob.lineFillAmount()
+
+                      if lineFillAmount > 0.1, // XXX constant
+                         medianDist < lineLength/5 // XXX constant
+                      {
+                          ret[blob.id] = blob
+                      }
+                  } else {
+                      // no line, or too small, keep them
                       ret[blob.id] = blob
                   }
               }
@@ -290,22 +314,33 @@ public class BlobProcessor {
                 }
                 
                 for (_, blob) in blobMap {
-                    
-                    // look and see if any pixels in this blob align with different
-                    // lines, and if so, split them apart into separate groups
-                    let lineSplitList = await blob.lineSplit(args: args)
 
-                    if lineSplitList.count > 0 {
+                    let blobSize = await blob.size()
+                    let lineFillAmount = await blob.lineFillAmount()
+                    let avgDist = await blob.averageDistanceFromIdealLine
 
-                        ret[blob.id] = blob
-                        // we have extra blobs to make here
-                        for pixelList in lineSplitList {
-                            maxIndex += 1
-                            let newBlob = Blob(Set(pixelList),
-                                               id: maxIndex,
-                                               frameIndex: frame.frameIndex)
+                    if avgDist > 5, // not close to the line
+                       lineFillAmount < 0.5, // less than half pixels are on line
+                       blobSize > 500        //  big blobs only
+                    {
+                        // look and see if any pixels in this blob align with different
+                        // lines, and if so, split them apart into separate groups
+                        let lineSplitList = await blob.lineSplit(args: args)
 
-                            ret[newBlob.id] = newBlob
+                        if lineSplitList.count > 0 {
+
+                            ret[blob.id] = blob
+                            // we have extra blobs to make here
+                            for pixelList in lineSplitList {
+                                maxIndex += 1
+                                let newBlob = Blob(Set(pixelList),
+                                                   id: maxIndex,
+                                                   frameIndex: frame.frameIndex)
+
+                                ret[newBlob.id] = newBlob
+                            }
+                        } else {
+                            ret[blob.id] = blob
                         }
                     } else {
                         ret[blob.id] = blob
