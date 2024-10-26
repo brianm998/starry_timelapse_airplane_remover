@@ -32,7 +32,7 @@ public final class UpdatableLogHandler: LogHandler {
 
             await self.updatable.log(name: "\(logTime)",
                                      message: logMessage,
-                                     value: logTime) // XXX fix this
+                                     value: logTime) // XXX fix this, lots of errors at the bottom obscure the other data, better to have errors and warnings above the other data
         }
     }
     
@@ -52,7 +52,7 @@ public actor UpdatableProgressMonitor {
     let callbacks: Callbacks
     let numConcurrentRenders: Int
     let padding: String
-
+    var framesAlreadyProcessed: Int = 0
     var frames: [FrameProcessingState: Set<FrameAirplaneRemover>] = [:]
     public init(frameCount: Int,
                 numConcurrentRenders: Int,
@@ -84,7 +84,7 @@ public actor UpdatableProgressMonitor {
     }
 
     private var lastUpdateTime: TimeInterval?
-    
+
     public func stateChange(for frame: FrameAirplaneRemover,
                             to newState: FrameProcessingState) async 
     {
@@ -105,6 +105,10 @@ public actor UpdatableProgressMonitor {
         await redraw()
     }
 
+    public func notProcesssingFrame(at frameIndex: Int) {
+        framesAlreadyProcessed += 1
+    }
+
     func progressLine(for processingState: FrameProcessingState) -> (() async -> Void)?
     {
         if let group = frames[processingState],
@@ -119,7 +123,7 @@ public actor UpdatableProgressMonitor {
                 await updatable.log(name: "processingState \(processingState.rawValue)",
                                     message: self.padding + progressBar(length: self.numConcurrentRenders,
                                                                      progress: progress) +
-                                       " \(group.count) frames \(processingState.message)",
+                                      " \(group.count) frames \(processingState.message)",
                                      value: myValue)
             }
         }
@@ -221,15 +225,17 @@ public actor UpdatableProgressMonitor {
             updates.append(update)
         }
 
-        if let complete = frames[.complete] {
-            let progress =
-              Double(complete.count) /
-              Double(self.numberOfFrames)
+        let complete = frames[.complete]?.count ?? 0
+
+        let done = complete + framesAlreadyProcessed
+        
+        if done > 0 {
+            let progress = Double(done) / Double(self.numberOfFrames)
             updates.append() {
                 await updatable.log(name: "complete",
                                     message: progressBar(length: self.config.progressBarLength,
                                                          progress: progress) +
-                                      " \(complete.count) / \(self.numberOfFrames) frames complete",
+                                      " \(done) / \(self.numberOfFrames) frames complete",
                                     value: self.value)
             }
         } else {

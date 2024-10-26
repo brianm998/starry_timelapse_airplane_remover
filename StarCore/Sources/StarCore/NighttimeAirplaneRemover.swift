@@ -111,6 +111,12 @@ public actor NighttimeAirplaneRemover {
                                                        baseName: basename) 
                 }
             } else {
+                // update progress monitor via this callback
+                if let callback = callbacks.exisingFrameStateChangeCallback {
+                    callback(index)
+                } else {
+                    framesAlreadyProcessed += 1
+                }
                 Log.i("not processing existing file \(filename)")
             }
         }
@@ -159,7 +165,7 @@ public actor NighttimeAirplaneRemover {
         Log.i("done")
     }
 
-
+    private var framesAlreadyProcessed: Int = 0
 
     // ImageSequenceProcessor code
 
@@ -168,6 +174,13 @@ public actor NighttimeAirplaneRemover {
 
     public func set(callbacks: Callbacks) {
         self.callbacks = callbacks
+
+        // call exisingFrameStateChangeCallback for number of frames not procssed
+        if let callback = callbacks.exisingFrameStateChangeCallback {
+            for i in 0..<framesAlreadyProcessed {
+                callback(i)
+            }
+        }
     }
     
     public var numberLeft = NumberLeft()

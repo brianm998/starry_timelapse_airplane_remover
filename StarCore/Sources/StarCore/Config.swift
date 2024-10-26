@@ -117,7 +117,7 @@ public struct Config: Codable, Sendable {
     nonisolated(unsafe) public static var defaultThumbnailHeight: Int = 60
 
     // how far away from an outlier group pixel do we keep painting?
-    public static let defaultOutlierGroupPaintBorderPixels: Double = 6
+    public static let defaultOutlierGroupPaintBorderPixels: Double = 12
 
     // how far away from an outlier group pixel do we paint fully?
     // the distance between here and defaultOutlierGroupPaintBorderPixels is blended
@@ -209,6 +209,8 @@ public struct Callbacks: Sendable {
     public var updatable: UpdatableLog?
 
     public var frameStateChangeCallback: (@Sendable (FrameAirplaneRemover, FrameProcessingState) -> ())?
+
+    public var exisingFrameStateChangeCallback: (@Sendable (Int) -> ())?
 
     // called for the user to see a frame
     public var frameCheckClosure: (@Sendable (FrameAirplaneRemover) -> ())?
