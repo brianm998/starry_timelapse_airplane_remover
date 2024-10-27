@@ -72,7 +72,7 @@ public actor LinearBlobConnector {
                 return
             }
 
-            Log.d("iterating over blob \(id)")
+            //Log.d("iterating over blob \(id)")
 
             // find a cloud of neighbors 
             let (neighborCloud, newProcessedBlobs) =
@@ -84,7 +84,7 @@ public actor LinearBlobConnector {
             
             if neighborCloud.count == 0 { return }
             
-            Log.d("blob \(id) has \(neighborCloud.count) neighbors")
+            //Log.d("blob \(id) has \(neighborCloud.count) neighbors")
 
             let frameIndex = neighborCloud.first?.frameIndex ?? -1
             let id = neighborCloud.first?.id ?? 0
@@ -206,7 +206,7 @@ public actor LinearBlobConnector {
             
             if linearBlobSet.count > 1 {
                 
-                Log.d("frame \(analyzer.frameIndex) blob \(fullBlob.id) found \(linearBlobIds.count) linear blobs")
+                //Log.d("frame \(analyzer.frameIndex) blob \(fullBlob.id) found \(linearBlobIds.count) linear blobs")
                 
                 // we found more than one blob along the line
 
@@ -231,13 +231,13 @@ public actor LinearBlobConnector {
 
                 if let line = await fullBlob.originZeroLine {
                     if iterationCount < 10 { // XXX constant
-                        Log.d("frame \(analyzer.frameIndex) ITERATING iterationCount \(iterationCount)")
+                        //Log.d("frame \(analyzer.frameIndex) ITERATING iterationCount \(iterationCount)")
                         await self.iterate(on: line,
                                            over: fullBlob,
                                            lineBorder: lineBorder,
                                            iterationCount: iterationCount + 1)
                     } else {
-                        Log.d("frame \(analyzer.frameIndex) NOT ITERATING iterationCount \(iterationCount)")
+                        //Log.d("frame \(analyzer.frameIndex) NOT ITERATING iterationCount \(iterationCount)")
                     }
 
                     if iterationCount == 0 {
@@ -249,7 +249,7 @@ public actor LinearBlobConnector {
                     }
                 }
             } else {
-                Log.d("frame \(analyzer.frameIndex) only found \(linearBlobSet.count) linear blobs")
+                //Log.d("frame \(analyzer.frameIndex) only found \(linearBlobSet.count) linear blobs")
             }
         }
     }

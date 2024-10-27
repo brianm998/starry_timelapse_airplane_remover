@@ -12,7 +12,6 @@ import logging
 
  blobs can grow in size, and be combined with other blobs.
  */
-
 public actor Blob: CustomStringConvertible,
                    Hashable
 {
@@ -57,6 +56,76 @@ public actor Blob: CustomStringConvertible,
         self.frameIndex = frameIndex
         self.statusTracker = statusTracker
     }
+
+    public init(frameIndex: Int,
+                with persitentDataArray: [UInt16],
+                atIndex index: Int,
+                statusTracker: PixelStatusTracker? = nil)
+    {
+        self.statusTracker = statusTracker
+        var index = index
+
+        self.frameIndex = frameIndex
+        self.pixels = [ ]
+
+        self.id = persitentDataArray[index]
+        index += 1
+        
+        let pixelCount = persitentDataArray[index]
+        index += 1
+        
+        for _ in 0..<pixelCount {
+            pixels.update(with: SortablePixel(x: Int(persitentDataArray[index]),
+                                              y: Int(persitentDataArray[index+1]),
+                                              intensity: persitentDataArray[index+2]))
+            index += 3
+        }
+    }
+
+    public func persistentDataArray() -> [UInt16] {
+        let size = self.persistentDataSizeBytes()
+        var array = [UInt16](repeating: 0, count: size/2)
+
+        var index: Int = 0
+
+        let pixelCount = UInt16(pixels.count)
+
+        array[index] = self.id
+        index += 1
+
+        array[index] = pixelCount
+        index += 1
+
+        for pixel in pixels {
+            array[index] = UInt16(pixel.x)
+            index += 1
+
+            array[index] = UInt16(pixel.y)
+            index += 1
+
+            array[index] = pixel.intensity
+            index += 1
+        }
+
+        return array
+    }
+    
+    public func persistentDataSizeBytes() -> Int {
+
+        var size = 0
+
+        // id UInt16
+        size += 2
+
+        // numberPixels UInt16
+        size += 2
+
+        // three UInt16 values for each pixel (x, y, intensity)
+        size += self.pixels.count*6 
+        
+        return size
+    }
+    
     
     // actual size in number of pixels
     public func size() -> Int { pixels.count }

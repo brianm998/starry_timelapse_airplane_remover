@@ -29,6 +29,21 @@ extension FrameAirplaneRemover {
     // loads outliers from a combination of the outliers.tiff image and the subtraction image,
     // if they are present
     public func loadOutliersFromFile() async throws -> OutlierGroups? {
+        do {
+            return try await loadOutliersFromBinaryFile()
+        } catch {
+            // XXX log here
+        }
+        return try await loadOutliersFromImageFile()
+    }
+    
+    public func loadOutliersFromBinaryFile() async throws -> OutlierGroups? {
+        let dirname = "\(self.outlierOutputDirname)/\(frameIndex)"
+
+        return try await OutlierGroups(at: frameIndex, fromOutlierDir: dirname)
+    }
+    
+    public func loadOutliersFromImageFile() async throws -> OutlierGroups? {
         let startTime = Date().timeIntervalSinceReferenceDate
 
         guard let subtractionImage = try await self.imageAccessor.load(type: .subtraction, atSize: .original)
@@ -36,6 +51,8 @@ extension FrameAirplaneRemover {
             Log.i("couldn't load subtraction image for loading outliers")
             return nil
         }
+
+        Log.i("frame \(frameIndex) loaded subtraction image in \(Date().timeIntervalSinceReferenceDate-startTime) seconds")
 
         switch subtractionImage.imageData {
         case .eightBit(_):
@@ -46,6 +63,7 @@ extension FrameAirplaneRemover {
             do {
                 if let groups = try await OutlierGroups(at: frameIndex,
                                                         withSubtractionArr: subtractionArr,
+
                                                         fromOutlierDir: "\(self.outlierOutputDirname)/\(frameIndex)")
                 {
                     let endTime = Date().timeIntervalSinceReferenceDate
@@ -63,32 +81,14 @@ extension FrameAirplaneRemover {
 
     public func findOutliers() async throws {
         
-        let blobMap = try await BlobProcessor(frame: self).run()
-
-        // save blobs to blob image here
-        var blobImageSaver: BlobImageSaver? = await .init(blobMap: blobMap,
-                                                          width: width,
-                                                          height: height,
-                                                          frameIndex: frameIndex)
-        
-        if let blobImageSaver {
-            // keep the blobRefs from this for later analysis of nearby outliers
-            await outlierGroups?.set(outlierImageData: blobImageSaver.blobRefs)
-            await outlierGroups?.set(outlierYAxisImageData: blobImageSaver.yAxis)
-            // XXX keep the y-axis too?
-
-            // make sure the OutlierGroups object we created before has this data
-            //self.outlierGroups?.outlierImageData = blobImageSaver.blobRefs
-        }
-        
         let frame_outliers_dirname = "\(self.outlierOutputDirname)/\(frameIndex)"
-
         mkdir(frame_outliers_dirname)
         
-        await blobImageSaver?.save(to: frame_outliers_dirname)
+        let blobMap = try await BlobProcessor(frame: self).run()
 
-        blobImageSaver = nil
-
+        let blobBinarySaver = BlobBinarySaver(blobMap: blobMap)
+        await blobBinarySaver.save(to: frame_outliers_dirname)
+        
         // blobs to promote to outlier groups
         let blobs = Array(blobMap.values)
 
@@ -342,7 +342,7 @@ extension FrameAirplaneRemover {
 
             await self.markAsChanged()
 
-            try await outlierGroups?.writeOutliersImage(to: frame_outliers_dirname)
+            try await outlierGroups?.writeOutliersBinary(to: frame_outliers_dirname)
 
             updateUserSlices(with: boundingBox)
         }
@@ -400,7 +400,7 @@ extension FrameAirplaneRemover {
         
         let frame_outliers_dirname = "\(self.outlierOutputDirname)/\(frameIndex)"
 //        mkdir(frame_outliers_dirname)
-        try await outlierGroups?.writeOutliersImage(to: frame_outliers_dirname)
+        try await outlierGroups?.writeOutliersBinary(to: frame_outliers_dirname)
         // XXX add y-axis here too
     }
 }

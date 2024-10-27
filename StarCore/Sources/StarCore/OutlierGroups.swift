@@ -76,7 +76,29 @@ public actor OutlierGroups {
     }
 
     public static let outlierGroupPaintJsonFilename = "OutlierGroupPaintData.json"
-    
+
+    // uses the newer binary blob format
+    public init(at frameIndex: Int,
+                fromOutlierDir outlierDir: String) async throws
+    {
+        self.frameIndex = frameIndex
+        let blobBinaryLoader = BlobBinaryLoader()
+        let blobs = try await blobBinaryLoader.load(from: outlierDir, with: frameIndex)
+        let outlierGroupPaintDataFilename = "\(outlierDir)/\(OutlierGroups.outlierGroupPaintJsonFilename)"
+        let outlierGroupPaintData = try await OutlierGroups.loadOutlierGroupPaintData(from: outlierGroupPaintDataFilename)
+        self.members = [:]
+        for (id, blob) in blobs {
+            let outlierGroup = await blob.outlierGroup(at: frameIndex)
+            if let outlierGroupPaintData,
+               let shouldPaint = outlierGroupPaintData[outlierGroup.id]
+            {
+                await outlierGroup.shouldPaint(shouldPaint)
+            }
+            self.members[id] = outlierGroup
+        }
+    }
+
+    // uses the older blob image, will remove this eventually
     public init?(at frameIndex: Int,
                  withSubtractionArr subtractionArr: [UInt16],
                  fromOutlierDir outlierDir: String) async throws
@@ -189,8 +211,8 @@ public actor OutlierGroups {
                 //Log.d("check 5")
             }
         } else {
-            Log.d("FUCKED \(imageFilename)")
-         //   return nil
+            Log.d("Cannot load outliers from \(imageFilename)")
+            return nil
         }
         Log.i("frame \(frameIndex) done loading outliers after \(Date().timeIntervalSinceReferenceDate-startTime) seconds")
     }
@@ -283,8 +305,8 @@ public actor OutlierGroups {
         }
     }
 
-    public func writeOutliersImage(to dirname: String) async throws {
-
+    // hopefully faster version to just write out what we need
+    public func writeOutliersBinary(to dirname: String) async throws {
         var blobMap: [UInt16: Blob] = [:]
 
         for outlier in members.values {
@@ -292,19 +314,13 @@ public actor OutlierGroups {
             blobMap[blob.id] = blob
         }
 
-        let blobImageSaver: BlobImageSaver = await .init(blobMap: blobMap,
-                                                         width: width,
-                                                         height: height,
-                                                         frameIndex: frameIndex)
-        
-        self.outlierImageData = await blobImageSaver.blobRefs
-        self.outlierYAxisImageData = await blobImageSaver.yAxis
-
         mkdir(dirname)
-        
-        await blobImageSaver.save(to: dirname)
+
+        let blobBinarySaver = BlobBinarySaver(blobMap: blobMap)
+
+        await blobBinarySaver.save(to: dirname)
     }
-    
+
     // only writes the paint reasons now, outlier image is written elsewhere
     public func write(to dir: String) async throws {
         Log.d("writing  \(self.members.count) outlier groups for frame \(self.frameIndex) to binary file")

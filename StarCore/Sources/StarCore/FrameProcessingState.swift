@@ -64,7 +64,7 @@ public enum FrameProcessingState: Int,
         case .starAlignment:
             return "aligning stars"
         case .subtractingNeighbor:
-            return "subtracting aligned neighbor frame"
+            return "subtracting aligned stars"
         case .assemblingPixels:
             return "assembling pixels"
         case .sortingPixels:

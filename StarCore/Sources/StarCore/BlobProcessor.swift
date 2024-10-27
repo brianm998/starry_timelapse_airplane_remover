@@ -105,18 +105,18 @@ public class BlobProcessor {
           .frameState(.isolatedBlobRemoval1),
 
           // find really close linear blobs
-          .linearBlobConnector(.init(scanSize: 24, 
-                                     blobsSmallerThan: 80,
-                                     lineBorder: 20)),
+          .linearBlobConnector(.init(scanSize: 16, 
+                                     blobsSmallerThan: 120,
+                                     lineBorder: 12)),
 
           .save(.filter1),
 
           .frameState(.isolatedBlobRemoval2),
 
           .borderBrightnessLessThan(0.4),
-          
+
           .save(.filter2),
-          
+
           // a first pass at cutting out individual blobs based upon size, brightness
           // or being too close to the bottom
 
@@ -129,7 +129,7 @@ public class BlobProcessor {
               for (_, blob) in blobs {
                   // anything this small is noise
                   if await blob.size() <= constants.blobberMinBlobSize {
-                      Log.d("frame \(frame.frameIndex) dumping blob \(blob) of size \(await blob.size()) <= \(constants.blobberMinBlobSize)")
+                      //Log.d("frame \(frame.frameIndex) dumping blob \(blob) of size \(await blob.size()) <= \(constants.blobberMinBlobSize)")
                       continue
                   }
 
@@ -141,7 +141,7 @@ public class BlobProcessor {
                   
                   // only keep smaller blobs if they are bright enough
                   if !(await constants.blobberSmallBlobQualifier.allows(blob)) {
-                      Log.d("frame \(frame.frameIndex) dumping blob \(blob)")
+                      //Log.d("frame \(frame.frameIndex) dumping blob \(blob)")
                       continue
                   }
 
@@ -237,6 +237,7 @@ public class BlobProcessor {
                                      lineBorder: 2)),
           
 
+          .save(.filter13),
           
           // blob line trim
           .process() { blobs in
@@ -244,13 +245,13 @@ public class BlobProcessor {
 
               for (_, blob) in blobs {
                   if let lineLength = await blob.lineLength(),
-                     lineLength > 60
+                     lineLength > 65
                   {
                       let lineFillAmount = await blob.lineFillAmount()
 
-                      if lineFillAmount > 0.20 {
+                      if lineFillAmount > 0.50 {
                           // XXX trim that shit
-                          await blob.lineTrim(by: 15)
+                          await blob.lineTrim(by: 16)
                       }
                   }
                   ret[blob.id] = blob
@@ -259,59 +260,28 @@ public class BlobProcessor {
           }, 
 
           
-          .save(.filter13),
+          .save(.filter14),
 
           // split up blobs based upon user input
           .process(applyUserSlices),
           
-          .save(.filter14),
+          .save(.filter15),
           
           // final pass on getting rid of really small blobs
           .process() { blobs in
               var ret: [UInt16: Blob] = [:]
 
               for (_, blob) in blobs {
-                  if await blob.size() > 20 { // XXX constant
+                  if await blob.size() > 24 { // XXX constant
                       ret[blob.id] = blob
                   } else {
-                      Log.d("frame \(frame.frameIndex) dumping blob \(blob) of size \(await blob.size())")
+                      //Log.d("frame \(frame.frameIndex) dumping blob \(blob) of size \(await blob.size())")
                   }
               }
               return ret
           }, 
 
-          .save(.filter15),
           
-          // get rid of any big blobs with a line that really doesn't fit
-          .process() { blobs in
-              var ret: [UInt16: Blob] = [:]
-
-              for (_, blob) in blobs {
-                  if await blob.size() > 100, // XXX constant
-                     let (medianDist, lineLength) = await blob.medianDistanceFromIdealLine()
-                  {
-                      let lineFillAmount = await blob.lineFillAmount()
-                      let medianIntensity = await blob.medianIntensity()
-
-                      if lineFillAmount > 0.1, // XXX constant
-                         medianDist < lineLength/5 // XXX constant
-                      {
-                          // this blob is close to a line
-                          ret[blob.id] = blob
-                      } else if medianIntensity > 10000 {
-                          // keep bright ones anyways
-                          ret[blob.id] = blob
-                      } else {
-                          Log.d("frame \(frame.frameIndex) dumping blob \(blob) with lineFillAmount \(lineFillAmount) medianDist \(medianDist) lineLength \(lineLength) size \(await blob.size())")
-                      }
-                  } else {
-                      // no line, or too small, keep them
-                      ret[blob.id] = blob
-                  }
-              }
-              return ret
-          }, 
-
           .save(.filter16),
         ]
     }
