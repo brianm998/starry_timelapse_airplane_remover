@@ -81,6 +81,7 @@ public actor OutlierGroups {
                  withSubtractionArr subtractionArr: [UInt16],
                  fromOutlierDir outlierDir: String) async throws
     {
+        let startTime = Date().timeIntervalSinceReferenceDate
         //Log.d("start")
         self.frameIndex = frameIndex
         let outlierGroupPaintDataFilename = "\(outlierDir)/\(OutlierGroups.outlierGroupPaintJsonFilename)"
@@ -89,6 +90,10 @@ public actor OutlierGroups {
         let yAxisImageFilename = "\(outlierDir)/\(BlobImageSaver.outlierYAxisBinaryFilename)"
         let outlierGroupPaintData = try await OutlierGroups.loadOutlierGroupPaintData(from: outlierGroupPaintDataFilename)
 
+
+        Log.i("frame \(frameIndex) loaded outlier group paint data after \(Date().timeIntervalSinceReferenceDate-startTime) seconds")
+
+        
         // XXX
         
         let _outlierGroupPaintData = outlierGroupPaintData
@@ -108,6 +113,8 @@ public actor OutlierGroups {
             //Log.w("no y axis :(")
         }
         
+        Log.i("frame \(frameIndex) loaded y axis image data after \(Date().timeIntervalSinceReferenceDate-startTime) seconds")
+
         //Log.d("check 2")
         if FileManager.default.fileExists(atPath: imageFilename),
            let outlierImage = try await PixelatedImage(fromFile: imageFilename)
@@ -124,6 +131,8 @@ public actor OutlierGroups {
             case .sixteenBit(let imageArr):
                 //Log.d("check 3")
 
+                Log.i("frame \(frameIndex) check after \(Date().timeIntervalSinceReferenceDate-startTime) seconds")
+                
                 self.outlierImageData = imageArr
                 var blobMap: [UInt16: Blob] = [:]
 
@@ -156,6 +165,7 @@ public actor OutlierGroups {
                     }
                 }
 
+                Log.i("frame \(frameIndex) check 2 after \(Date().timeIntervalSinceReferenceDate-startTime) seconds")
                 //Log.d("check 4 coutinueCount \(coutinueCount)")
                 // promote found blobs to outlier groups for further processing
                 // apply should paint if loaded
@@ -180,8 +190,9 @@ public actor OutlierGroups {
             }
         } else {
             Log.d("FUCKED \(imageFilename)")
-            return nil
+         //   return nil
         }
+        Log.i("frame \(frameIndex) done loading outliers after \(Date().timeIntervalSinceReferenceDate-startTime) seconds")
     }
 
     // returns outlier groups from this frame that overlap with the given group from another frame

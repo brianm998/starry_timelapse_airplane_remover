@@ -129,6 +129,10 @@ public struct ImageAccessor: ImageAccess, Sendable {
             mkdir(ofType: .filter10, andSize: .preview)
             mkdir(ofType: .filter11, andSize: .preview)
             mkdir(ofType: .filter12, andSize: .preview)
+            mkdir(ofType: .filter13, andSize: .preview)
+            mkdir(ofType: .filter14, andSize: .preview)
+            mkdir(ofType: .filter15, andSize: .preview)
+            mkdir(ofType: .filter16, andSize: .preview)
             mkdir(ofType: .paintMask, andSize: .preview)
         }
         if config.writeFrameThumbnailFiles {
