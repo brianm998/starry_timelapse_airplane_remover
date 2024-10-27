@@ -92,6 +92,36 @@ public actor OutlierGroup: CustomStringConvertible,
         }
     }
 
+    fileprivate var _bunchCount: Int? = nil
+    fileprivate var _medianBunchSize: Int? = nil
+    fileprivate var _maxBunchSize: Int? = nil
+    
+    public func bunchCount() -> Int {
+        if let _bunchCount { return _bunchCount }
+
+        (_bunchCount, _medianBunchSize, _maxBunchSize) =
+          calculateBunchData(from: self, maxPixelDistance: maxBunchDistance)
+
+        return _bunchCount!
+    }
+    
+    public func medianBunchSize() -> Int {
+        if let _medianBunchSize { return _medianBunchSize }
+
+        (_bunchCount, _medianBunchSize, _maxBunchSize) =
+          calculateBunchData(from: self, maxPixelDistance: maxBunchDistance)
+
+        return _medianBunchSize!
+    }
+    
+    public func maxBunchSize() -> Int {
+        if let _maxBunchSize { return _maxBunchSize }
+
+        (_bunchCount, _medianBunchSize, _maxBunchSize) =
+          calculateBunchData(from: self, maxPixelDistance: maxBunchDistance)
+
+        return _maxBunchSize!
+    }
     
     // how far away from the most dominant line in this outlier group are
     // the pixels in it, on average?

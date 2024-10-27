@@ -505,13 +505,37 @@ public actor Blob: CustomStringConvertible,
         return ret
     }
 
-    public func makeBackground() async {
-//        for var pixel in pixels {
-//            pixel.set(status: .background)
-//        }
-        pixels = []
-        reset()
+    fileprivate var _bunchCount: Int? = nil
+    fileprivate var _medianBunchSize: Int? = nil
+    fileprivate var _maxBunchSize: Int? = nil
+    
+    public func bunchCount() async -> Int {
+        if let _bunchCount { return _bunchCount }
+
+        (_bunchCount, _medianBunchSize, _maxBunchSize) =
+          await calculateBunchData(from: self, maxPixelDistance: maxBunchDistance)
+
+        return _bunchCount!
     }
+    
+    public func medianBunchSize() async -> Int {
+        if let _medianBunchSize { return _medianBunchSize }
+
+        (_bunchCount, _medianBunchSize, _maxBunchSize) =
+          await calculateBunchData(from: self, maxPixelDistance: maxBunchDistance)
+
+        return _medianBunchSize!
+    }
+    
+    public func maxBunchSize() async -> Int {
+        if let _maxBunchSize { return _maxBunchSize }
+
+        (_bunchCount, _medianBunchSize, _maxBunchSize) =
+          await calculateBunchData(from: self, maxPixelDistance: maxBunchDistance)
+
+        return _maxBunchSize!
+    }
+    
 
     public func absorb(_ otherBlob: Blob, always: Bool = false) async -> Bool {
         if always || self.id != otherBlob.id {
@@ -606,9 +630,6 @@ public actor Blob: CustomStringConvertible,
         return ret
     }
     
-    // XXX replace this with passing in the full outlier image
-    // to each outlier, and having them deal with it directly
-    // will hopefully speed things up by reducing memory allocations
     public var pixelValues: [UInt16] {
         if let _pixelValues { return _pixelValues }
         let boundingBox = self.boundingBox()

@@ -96,9 +96,8 @@ extension FrameAirplaneRemover {
                                       between startLocation: CGPoint,
                                       and endLocation: CGPoint) async
     {
-        await foreachOutlierGroupAsync(between: startLocation, and: endLocation) { group in
+        await foreachOutlierGroupMulti(between: startLocation, and: endLocation) { group in
             await group.shouldPaint(.userSelected(shouldPaint))
-            return .continue
         }
     }
 }

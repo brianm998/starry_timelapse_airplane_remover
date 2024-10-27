@@ -68,9 +68,6 @@ public actor BlobBinarySaver {
         // save the blob refs as an image here
         let filename = "\(dirname)/\(BlobBinarySaver.outlierBinaryFilename)"
 
-        var elementsToSave: Int = 1 // number of blobs
-
-
         let blobCount = UInt16(blobMap.count)
         var buffer = [blobCount].data
 

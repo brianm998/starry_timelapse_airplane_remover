@@ -346,13 +346,12 @@ struct MultiSelectSheetView: View {
                     if let frame = frameView.frame {
                         Task {
                             let new_value = shouldPaint
-                            await frame.foreachOutlierGroupAsync(between: selectionStart,
+                            await frame.foreachOutlierGroupMulti(between: selectionStart,
                                                                  and: selectionEnd)
                             { group in
                                 await frame.userSelectAllOutliers(toShouldPaint: new_value,
                                                                   overlapping: group)
 
-                                return .continue
                             }
                             // save outlier paintability changes here
                             await frame.writeOutliersBinary()

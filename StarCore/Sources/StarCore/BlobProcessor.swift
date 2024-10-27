@@ -249,7 +249,8 @@ public class BlobProcessor {
                   {
                       let lineFillAmount = await blob.lineFillAmount()
 
-                      if lineFillAmount > 0.50 {
+                      if await blob.maxBunchSize() > 500 || lineFillAmount > 0.50 
+                      {
                           // XXX trim that shit
                           await blob.lineTrim(by: 16)
                       }
@@ -265,8 +266,6 @@ public class BlobProcessor {
           // split up blobs based upon user input
           .process(applyUserSlices),
           
-          .save(.filter15),
-          
           // final pass on getting rid of really small blobs
           .process() { blobs in
               var ret: [UInt16: Blob] = [:]
@@ -276,6 +275,31 @@ public class BlobProcessor {
                       ret[blob.id] = blob
                   } else {
                       //Log.d("frame \(frame.frameIndex) dumping blob \(blob) of size \(await blob.size())")
+                  }
+              }
+              return ret
+          }, 
+
+          .save(.filter15),
+          
+          // any really big blobs with lots of small bunches that are dim can go away
+       
+          .process() { blobs in
+              var ret: [UInt16: Blob] = [:]
+
+              for (_, blob) in blobs {
+                  let blobSize = await blob.size()
+
+                  if blobSize > 1000,
+                     await blob.bunchCount() > 100,
+                     await blob.medianBunchSize() < 10,
+                     await blob.medianIntensity() < 6000
+                  {
+                    Log.d("frame \(frame.frameIndex) dumping blob \(blob) of size \(blobSize) bunch count \(await blob.bunchCount()) medianBunchSize \(await blob.medianBunchSize()) medianIntensity \(await blob.medianIntensity())")
+                      // try processing this further by getting rid of dim blobs?
+                      // for now just kick it out
+                  } else {
+                      ret[blob.id] = blob
                   }
               }
               return ret

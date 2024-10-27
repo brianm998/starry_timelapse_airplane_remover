@@ -61,6 +61,10 @@ struct OutlierGroupTableRow: Identifiable {
     let dt_boundingBoxOverlapScore: Double
     let dt_lineFillAmount: Double
     let dt_borderBrightness : Double
+
+    let dt_bunchCount : Double
+    let dt_medianBunchSize : Double
+    let dt_maxBunchSize : Double
     
     init(_ group: OutlierGroup) async {
         name = group.id
@@ -103,7 +107,11 @@ struct OutlierGroupTableRow: Identifiable {
         dt_nearbyDirectOverlapScore = await group.decisionTreeValueAsync(for: .nearbyDirectOverlapScore)
         dt_boundingBoxOverlapScore = await group.decisionTreeValueAsync(for: .boundingBoxOverlapScore)
         dt_lineFillAmount = await group.decisionTreeValueAsync(for: .lineFillAmount)
-      dt_borderBrightness = await group.decisionTreeValueAsync(for: .borderBrightness)
+        dt_borderBrightness = await group.decisionTreeValueAsync(for: .borderBrightness)
+
+        dt_bunchCount = await group.decisionTreeValueAsync(for: .bunchCount)
+        dt_medianBunchSize = await group.decisionTreeValueAsync(for: .medianBunchSize)
+        dt_maxBunchSize = await group.decisionTreeValueAsync(for: .maxBunchSize)
     }
 }
 
@@ -302,6 +310,27 @@ struct OutlierGroupTable: View {
         }
     }
 
+    var dtBunchCount: DTColumn {
+        self.tableColumn(for: "bunchCount",
+                         value: \.dt_bunchCount) { row in
+            row.dt_bunchCount
+        }
+    }
+
+    var dtMedianBunchSize: DTColumn {
+        self.tableColumn(for: "medianBunchSize",
+                         value: \.dt_medianBunchSize) { row in
+            row.dt_medianBunchSize
+        }
+    }
+
+    var dtMaxBunchSize: DTColumn {
+        self.tableColumn(for: "maxBunchSize",
+                         value: \.dt_maxBunchSize) { row in
+            row.dt_maxBunchSize
+        }
+    }
+    
     func tableColumn(for name: String,
                      value: KeyPath<OutlierGroupTableRow,Double>,
                      closure: @escaping (OutlierGroupTableRow) -> Double) -> DTColumn
@@ -365,14 +394,17 @@ struct OutlierGroupTable: View {
                     Group {
                         dtNumberOfNearbyOutliersInSameFrameColumn
                         dtPixelBorderAmount
-                    }
-                    Group {
                         dtAverageLineVariance
                         dtLineLength
                         dtNearbyDirectOverlapScore
+                    }
+                    Group {
                         dtLineFillAmount
                         dtBoundingBoxOverlapScore
                         dtBorderBrightness
+                        dtBunchCount
+                        dtMedianBunchSize
+                        dtMaxBunchSize
                     }
 
                 } .onChange(of: viewModel.selectedOutliers) {newValue in 

@@ -56,6 +56,19 @@ public enum OutlierGroupFeature: String,
     case lineFillAmount
     case borderBrightness 
 
+    case bunchCount
+    case medianBunchSize
+    case maxBunchSize
+    
+    /*
+
+     add new classification criteria based upon how closely the pixels are bunched:
+      - number of unique bunches
+      - largest bunch size
+      - median bunch size
+     */
+
+    
     /*
      XXX add:
      - now that we've gotten good lines out of the KHT, try rewriting the old streak
@@ -140,6 +153,12 @@ public enum OutlierGroupFeature: String,
             return 24
         case .borderBrightness:
             return 25
+        case .bunchCount:
+            return 26
+        case .medianBunchSize:
+            return 27
+        case .maxBunchSize:
+            return 28
         }
     }
 
@@ -209,6 +228,12 @@ public enum OutlierGroupFeature: String,
             return await calculateLineFillAmount(of: group)
         case .borderBrightness:
             return await calculateBorderBrightness(of: group)
+        case .bunchCount:
+            return await Double(group.bunchCount())
+        case .medianBunchSize:
+            return await Double(group.medianBunchSize())
+        case .maxBunchSize:
+            return await Double(group.maxBunchSize())
         }
     }
     
@@ -549,3 +574,4 @@ public func ratioOfSurfaceAreaToSize(of pixels: [UInt16],
     }
     return Double(surfaceArea)/Double(size)
 }
+

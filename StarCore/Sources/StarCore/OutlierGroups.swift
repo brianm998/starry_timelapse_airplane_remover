@@ -35,7 +35,12 @@ public actor OutlierGroups {
     public var outlierImageData: [UInt16] = [] // outlier ids for frame, row major indexed
     public var outlierYAxisImageData: [UInt8]? // y axis of the outlierImage data
 
-    public func outlierImageDataFunc() -> [UInt16] { outlierImageData } // XXX rename this
+    public func outlierImageDataFunc() -> [UInt16] { // XXX rename this
+        if outlierImageData.count == 0 {
+            calculateOutlierImageData()
+        }
+        return outlierImageData
+    } 
     
     public func set(outlierImageData: [UInt16]) {
         self.outlierImageData = outlierImageData
@@ -43,6 +48,16 @@ public actor OutlierGroups {
 
     public func set(outlierYAxisImageData: [UInt8]) {
         self.outlierYAxisImageData = outlierYAxisImageData
+    }
+
+    public func calculateOutlierImageData() {
+        self.outlierImageData = [UInt16](repeating: 0, count: width*height)
+        for (id, group) in members {
+            for pixel in group.pixelSet {
+                let index = pixel.y*width+pixel.x
+                outlierImageData[index] = id
+            }
+        }
     }
     
     public init(frameIndex: Int,
@@ -87,6 +102,7 @@ public actor OutlierGroups {
         let outlierGroupPaintDataFilename = "\(outlierDir)/\(OutlierGroups.outlierGroupPaintJsonFilename)"
         let outlierGroupPaintData = try await OutlierGroups.loadOutlierGroupPaintData(from: outlierGroupPaintDataFilename)
         self.members = [:]
+        
         for (id, blob) in blobs {
             let outlierGroup = await blob.outlierGroup(at: frameIndex)
             if let outlierGroupPaintData,
@@ -155,7 +171,7 @@ public actor OutlierGroups {
 
                 Log.i("frame \(frameIndex) check after \(Date().timeIntervalSinceReferenceDate-startTime) seconds")
                 
-                self.outlierImageData = imageArr
+                self.outlierImageData = imageArr // XXX we need this elsewhere ;(
                 var blobMap: [UInt16: Blob] = [:]
 
                 var coutinueCount = 0
@@ -219,6 +235,8 @@ public actor OutlierGroups {
 
     // returns outlier groups from this frame that overlap with the given group from another frame
     public func groups(overlapping group: OutlierGroup) async -> [OutlierGroup] {
+        if outlierImageData.count == 0 { calculateOutlierImageData() }
+        
         var ret: [UInt16: OutlierGroup] = [:]
 
         for pixel in group.pixelSet {
@@ -235,6 +253,8 @@ public actor OutlierGroups {
     public func groups(nearby group: OutlierGroup,
                        within searchDistance: Double) -> [OutlierGroup]
     {
+        if outlierImageData.count == 0 { calculateOutlierImageData() }
+
         var ret: [UInt16: OutlierGroup] = [:]
 
         let intSearchDistance = Int(searchDistance)

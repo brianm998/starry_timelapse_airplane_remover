@@ -150,11 +150,10 @@ struct FrameEditView: View {
                               //var new_outlier_info: [OutlierGroup] = []
                               let _outlierGroupTableRows = ArrayActor<OutlierGroupTableRow>()
                               
-                              await frame.foreachOutlierGroupAsync(between: selectionStart,
+                              await frame.foreachOutlierGroupMulti(between: selectionStart,
                                                                    and: end_location) { group in
                                   let new_row = await OutlierGroupTableRow(group)
                                   await _outlierGroupTableRows.append(new_row)
-                                  return .continue
                               }
                               let elements = await _outlierGroupTableRows.getElements()
                               await MainActor.run {
