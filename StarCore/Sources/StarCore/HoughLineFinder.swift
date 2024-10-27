@@ -159,7 +159,7 @@ public struct HoughLineFinder {
 
                     var newPixelSets: [[SortablePixel]] = []
                     
-                    for (line, pixelList) in pixelsForLines {
+                    for (_, pixelList) in pixelsForLines {
                         if pixelList.count >= args.minLineCount { 
                             newPixelSets.append(pixelList)
                         } else {

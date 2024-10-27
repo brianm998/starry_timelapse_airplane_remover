@@ -97,6 +97,10 @@ public class FrameViewModel {
     var filter10PreviewImage: Image = initialImage
     var filter11PreviewImage: Image = initialImage
     var filter12PreviewImage: Image = initialImage
+    var filter13PreviewImage: Image = initialImage
+    var filter14PreviewImage: Image = initialImage
+    var filter15PreviewImage: Image = initialImage
+    var filter16PreviewImage: Image = initialImage
     var paintMaskPreviewImage: Image = initialImage
     var houghLinesPreviewImage: Image = initialImage
     var validationPreviewImage: Image = initialImage

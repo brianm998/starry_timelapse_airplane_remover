@@ -16,13 +16,9 @@ public typealias BlobMap = [UInt16:Blob]
 
 /*
 
- chnages:
+ problems:
 
- - initial check in FullFrameBlobber needs to update
-   - losen the ones that are dumped immediately a lot
-   - include this checked value as a classification feature for outliers that persist
- - final cruch can be too much
- - try blobbing close ones together sooner, with tigher params, looser ones later after pruning
+  - line split on real lines can split them when it shoudln't
  
  */
 
@@ -132,13 +128,22 @@ public class BlobProcessor {
 
               for (_, blob) in blobs {
                   // anything this small is noise
-                  if await blob.size() <= constants.blobberMinBlobSize { continue }
+                  if await blob.size() <= constants.blobberMinBlobSize {
+                      Log.d("frame \(frame.frameIndex) dumping blob \(blob) of size \(await blob.size()) <= \(constants.blobberMinBlobSize)")
+                      continue
+                  }
 
                   // these blobs are just too dim
-                  if await blob.medianIntensity() < constants.blobberMinBlobIntensity { continue }
+                  if await blob.medianIntensity() < constants.blobberMinBlobIntensity {
+                      Log.d("frame \(frame.frameIndex) dumping blob \(blob) of median intensity \(await blob.medianIntensity()) <= \(constants.blobberMinBlobIntensity)")
+                      continue
+                  }
                   
                   // only keep smaller blobs if they are bright enough
-                  if !(await constants.blobberSmallBlobQualifier.allows(blob)) { continue }
+                  if !(await constants.blobberSmallBlobQualifier.allows(blob)) {
+                      Log.d("frame \(frame.frameIndex) dumping blob \(blob)")
+                      continue
+                  }
 
                   // this blob has passed these checks, keep it for now
                   ret[blob.id] = blob
@@ -188,11 +193,13 @@ public class BlobProcessor {
                                          blobsSmallerThan: 50,
                                          blobsLargerThan: 18,
                                          requiredNeighbors: 2)),
+          .save(.filter8),
+
           .isolatedBlobRemover(.init(scanSize: 12,
                                      requiredNeighbors: 1,
                                      minBlobSize: 24)),
         
-          .save(.filter8),
+          .save(.filter9),
 
           .frameState(.largerLinearBlobAbsorbtion),
 
@@ -203,13 +210,17 @@ public class BlobProcessor {
 
           .frameState(.finalCrunch),
 
+          .save(.filter10),
+
+          
 
           .isolatedBlobRemover(.init(scanSize: 6,
                                      requiredNeighbors: 1,
                                      minBlobSize: 50)),
         
 
-          .save(.filter9),
+          .save(.filter11),
+
           // try to split up blobs with more than one line in them
           .lineSplit(.init(maxLines: 8000,
                            maxDistance: 12,
@@ -217,7 +228,7 @@ public class BlobProcessor {
                            minLineCount: 10)),
 
 
-          .save(.filter10),
+          .save(.filter12),
 
           
           // reconnect some lines that may have been split up
@@ -226,13 +237,13 @@ public class BlobProcessor {
                                      lineBorder: 2)),
           
 
+          
           // blob line trim
           .process() { blobs in
               var ret: [UInt16: Blob] = [:]
 
               for (_, blob) in blobs {
-                  if let line = await blob.line,
-                     let lineLength = await blob.lineLength(),
+                  if let lineLength = await blob.lineLength(),
                      lineLength > 60
                   {
                       let lineFillAmount = await blob.lineFillAmount()
@@ -248,9 +259,12 @@ public class BlobProcessor {
           }, 
 
           
+          .save(.filter13),
+
           // split up blobs based upon user input
           .process(applyUserSlices),
           
+          .save(.filter14),
           
           // final pass on getting rid of really small blobs
           .process() { blobs in
@@ -259,12 +273,14 @@ public class BlobProcessor {
               for (_, blob) in blobs {
                   if await blob.size() > 20 { // XXX constant
                       ret[blob.id] = blob
+                  } else {
+                      Log.d("frame \(frame.frameIndex) dumping blob \(blob) of size \(await blob.size())")
                   }
               }
               return ret
           }, 
 
-          .save(.filter11),
+          .save(.filter15),
           
           // get rid of any big blobs with a line that really doesn't fit
           .process() { blobs in
@@ -272,15 +288,21 @@ public class BlobProcessor {
 
               for (_, blob) in blobs {
                   if await blob.size() > 100, // XXX constant
-                     let line = await blob.line,
                      let (medianDist, lineLength) = await blob.medianDistanceFromIdealLine()
                   {
                       let lineFillAmount = await blob.lineFillAmount()
+                      let medianIntensity = await blob.medianIntensity()
 
                       if lineFillAmount > 0.1, // XXX constant
                          medianDist < lineLength/5 // XXX constant
                       {
+                          // this blob is close to a line
                           ret[blob.id] = blob
+                      } else if medianIntensity > 10000 {
+                          // keep bright ones anyways
+                          ret[blob.id] = blob
+                      } else {
+                          Log.d("frame \(frame.frameIndex) dumping blob \(blob) with lineFillAmount \(lineFillAmount) medianDist \(medianDist) lineLength \(lineLength) size \(await blob.size())")
                       }
                   } else {
                       // no line, or too small, keep them
@@ -290,7 +312,7 @@ public class BlobProcessor {
               return ret
           }, 
 
-          .save(.filter12),
+          .save(.filter16),
         ]
     }
 

@@ -23,11 +23,15 @@ public enum FrameViewMode: String, Equatable, CaseIterable, Sendable {
     case filter10               // ..
     case filter11               // ..
     case filter12               // ..
+    case filter13               // ..
+    case filter14               // ..
+    case filter15               // ..
+    case filter16               // ..
     case validation             // an image of exactly what pixels have been identified as unwanted
     case paintMask              // the paint mask created from the validation image
     case processed              // the final processed image, 
                                 // the paint mask is used as a layer mask for the aligned neighbor 
-
+ 
     public var localizedName: LocalizedStringKey {
         LocalizedStringKey(rawValue)
     }
@@ -64,6 +68,14 @@ public enum FrameViewMode: String, Equatable, CaseIterable, Sendable {
             return "f11"
         case .filter12:
             return "f12"
+        case .filter13:
+            return "f13"
+        case .filter14:
+            return "f14"
+        case .filter15:
+            return "f15"
+        case .filter16:
+            return "f16"
         case .paintMask:
             return "pmask"
         case .validation:
@@ -107,6 +119,14 @@ public enum FrameViewMode: String, Equatable, CaseIterable, Sendable {
             return "blob filter level 11"
         case .filter12:
             return "blob filter level 12"
+        case .filter13:
+            return "blob filter level 13"
+        case .filter14:
+            return "blob filter level 14"
+        case .filter15:
+            return "blob filter level 15"
+        case .filter16:
+            return "blob filter level 16"
         case .paintMask:
             return "computed paint mask"
         case .validation:

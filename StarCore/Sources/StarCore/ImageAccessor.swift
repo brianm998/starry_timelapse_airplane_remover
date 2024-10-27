@@ -453,6 +453,46 @@ public struct ImageAccessor: ImageAccess, Sendable {
                 return nil
             }
 
+        case .filter13:
+            switch size {
+            case .original:
+                return nil
+            case .preview:
+                return "\(config.outputPath)/\(baseDirName)-blobs-filter13-preview"
+            case .thumbnail:
+                return nil
+            }
+
+        case .filter14:
+            switch size {
+            case .original:
+                return nil
+            case .preview:
+                return "\(config.outputPath)/\(baseDirName)-blobs-filter14-preview"
+            case .thumbnail:
+                return nil
+            }
+
+        case .filter15:
+            switch size {
+            case .original:
+                return nil
+            case .preview:
+                return "\(config.outputPath)/\(baseDirName)-blobs-filter15-preview"
+            case .thumbnail:
+                return nil
+            }
+
+        case .filter16:
+            switch size {
+            case .original:
+                return nil
+            case .preview:
+                return "\(config.outputPath)/\(baseDirName)-blobs-filter16-preview"
+            case .thumbnail:
+                return nil
+            }
+
         case .paintMask:
             switch size {
             case .original:

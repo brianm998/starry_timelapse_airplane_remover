@@ -149,7 +149,7 @@ extension FrameAirplaneRemover {
             await withTaskGroup(of: Void.self) { taskGroup in
                 for (_, group) in await outlierGroups.getMembers() {
                     taskGroup.addTask() {
-                        let result = await closure(group)
+                        await closure(group)
                     }
                 }
                 await taskGroup.waitForAll()
