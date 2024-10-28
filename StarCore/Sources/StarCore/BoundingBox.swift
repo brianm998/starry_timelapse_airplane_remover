@@ -2,6 +2,11 @@ import Foundation
 import KHTSwift
 import logging
 
+public enum Edge {
+    case vertical
+    case horizontal
+}
+
 // the bounding box of an outlier group
 public struct BoundingBox: Codable,
                            Equatable,
