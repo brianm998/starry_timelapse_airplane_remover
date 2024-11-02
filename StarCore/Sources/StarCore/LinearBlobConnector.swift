@@ -22,16 +22,18 @@ You should have received a copy of the GNU General Public License along with sta
 public actor LinearBlobConnector {
 
     let analyzer: BlobAnalyzer
+    let frameIndex: Int
     
     init(blobMap: [UInt16: Blob],
          width: Int,
          height: Int,
          frameIndex: Int) async
     {
-        analyzer = await BlobAnalyzer(blobMap: blobMap,
-                                      width: width,
-                                      height: height,
-                                      frameIndex: frameIndex)
+        self.frameIndex = frameIndex
+        self.analyzer = await BlobAnalyzer(blobMap: blobMap,
+                                           width: width,
+                                           height: height,
+                                           frameIndex: frameIndex)
     }
 
     public func blobMap() -> [UInt16:Blob] {
@@ -203,22 +205,25 @@ public actor LinearBlobConnector {
             }
 
             let linearBlobSet = analyzer.blobs(with: linearBlobIds)
-            
+
             if linearBlobSet.count > 1 {
                 
+                let linearBlob = Blob(id: analyzer.maxBlobId + 1,
+                                      frameIndex: frameIndex)
+                analyzer.maxBlobId += 1
                 //Log.d("frame \(analyzer.frameIndex) blob \(fullBlob.id) found \(linearBlobIds.count) linear blobs")
                 
                 // we found more than one blob along the line
 
                 // the others will get eaten and thrown away :(
                 for otherBlob in linearBlobSet {
-                    if await fullBlob.absorb(otherBlob, always: true) {
+                    if await linearBlob.absorb(otherBlob, always: true) {
                     //Log.d("frame \(analyzer.frameIndex) removing \(otherBlob) \(await otherBlob.pixels.count) pixels \(await otherBlob.pixels)")
                         await analyzer.remove(blob: otherBlob)
                     }
                 }
 
-                await analyzer.update(blob: fullBlob)
+                await analyzer.update(blob: linearBlob)
 
                 //Log.d("frame \(analyzer.frameIndex) fullBlob \(fullBlob.id) after absorb \(await fullBlob.pixels.count) pixels \(await fullBlob.pixels)")
                 
@@ -234,19 +239,11 @@ public actor LinearBlobConnector {
                     if iterationCount < 10 { // XXX constant
                         //Log.d("frame \(analyzer.frameIndex) ITERATING iterationCount \(iterationCount)")
                         await self.iterate(on: line,
-                                           over: fullBlob,
+                                           over: linearBlob,
                                            lineBorder: lineBorder,
                                            iterationCount: iterationCount + 1)
                     } else {
                         //Log.d("frame \(analyzer.frameIndex) NOT ITERATING iterationCount \(iterationCount)")
-                    }
-
-                    if iterationCount == 0 {
-                        // try to trim fullBlob if we can, we may have some pixels
-                        // that don't really fit the final line we ended up with
-                        //await fullBlob.lineTrim() // needs to be better
-//                        await fullBlob.fancyLineTrim(by: 2)
-                        await analyzer.update(blob: fullBlob) 
                     }
                 }
             } else {

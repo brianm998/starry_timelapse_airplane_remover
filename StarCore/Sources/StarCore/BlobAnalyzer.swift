@@ -40,6 +40,9 @@ final public class BlobAnalyzer: @unchecked Sendable {
     // non zero values reference a blob
     internal var blobRefs: [UInt16]
 
+    internal var maxBlobId: UInt16 = 0
+
+    
     func blobs(with blobIdSet: Set<UInt16>) -> [Blob] {
         blobIdSet.compactMap { blobMap[$0] }
     }
@@ -97,6 +100,7 @@ final public class BlobAnalyzer: @unchecked Sendable {
         Log.d("frame \(frameIndex) has \(blobMap.count) blobs")
         
         for blob in blobMap.values {
+            if blob.id > maxBlobId { maxBlobId = blob.id }
             for pixel in await blob.getPixels() {
 //                Log.d("frame \(frameIndex) has pixel [\(pixel.x), \(pixel.y)]")
                 let blobRefIndex = pixel.y*width+pixel.x
