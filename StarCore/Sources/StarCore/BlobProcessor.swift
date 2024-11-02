@@ -33,6 +33,7 @@ public enum BlobProcessingType {
     case isolatedBlobRemover(IsolatedBlobRemover.Args)
     case disconnectedBlobRemover(DisconnectedBlobRemover.Args)
     case linearBlobConnector(LinearBlobConnector.Args)
+    case blobLineTrim(BlobLineTrim.Args)
     case borderBrightnessLessThan(Double)
     case lineSplit(HoughLineFinder.LineSplitArgs)
 }
@@ -239,28 +240,11 @@ public class BlobProcessor {
           
 
           .save(.filter13),
-          
+
           // blob line trim
-          .process() { blobs in
-              var ret: [UInt16: Blob] = [:]
-
-              for (_, blob) in blobs {
-                  if let lineLength = await blob.lineLength(),
-                     lineLength > 65
-                  {
-                      let lineFillAmount = await blob.lineFillAmount()
-
-                      if /*await blob.maxBunchSize() > 500 || */lineFillAmount > 0.50 {
-                          // XXX trim that shit
-                          await blob.lineTrim(by: 16)
-                      }
-                  }
-                  ret[blob.id] = blob
-              }
-              return ret
-          }, 
-
-          
+          .blobLineTrim(.init(minLineLength: 65,
+                              minLineFillAmount: 0.5,
+                              trimAmount: 16)),
 
           // split up blobs based upon user input
           .process(applyUserSlices),
@@ -321,6 +305,7 @@ public class BlobProcessor {
               }
               return ret
           },
+
            */
           .save(.filter15),
           
@@ -442,6 +427,10 @@ public class BlobProcessor {
                 blobMap = await connector.blobMap()
 
 
+            case .blobLineTrim(let args):
+                let trimmer = BlobLineTrim(blobMap: blobMap, frameIndex: frame.frameIndex)
+                blobMap = await trimmer.process(args)
+                
             case .isolatedBlobRemover(let args):
                 let remover = await IsolatedBlobRemover(blobMap: blobMap,
                                                         width: frame.width,
