@@ -90,10 +90,10 @@ public actor DisconnectedBlobRemover {
             {
                 Log.i("blob of size \(await blob.size()) only has \(neighborCloud.count) neighbors")
                 // remove the blob we're iterating over
-                analyzer.remove(blob: blob)
+                await analyzer.remove(blob: blob)
                 // and remove all of its (few) neighbors as well
                 for blob in neighborCloud {
-                    analyzer.remove(blob: blob)
+                    await analyzer.remove(blob: blob)
                 }
             } else {
                 Log.i("blob of size \(await blob.size()) has \(neighborCloud.count) neighbors")

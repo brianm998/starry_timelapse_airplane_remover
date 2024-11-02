@@ -212,12 +212,13 @@ public actor LinearBlobConnector {
 
                 // the others will get eaten and thrown away :(
                 for otherBlob in linearBlobSet {
-                    _ = await fullBlob.absorb(otherBlob, always: true)
+                    if await fullBlob.absorb(otherBlob, always: true) {
                     //Log.d("frame \(analyzer.frameIndex) removing \(otherBlob) \(await otherBlob.pixels.count) pixels \(await otherBlob.pixels)")
-                    analyzer.remove(blob: otherBlob)
+                        await analyzer.remove(blob: otherBlob)
+                    }
                 }
 
-                analyzer.update(blob: fullBlob)
+                await analyzer.update(blob: fullBlob)
 
                 //Log.d("frame \(analyzer.frameIndex) fullBlob \(fullBlob.id) after absorb \(await fullBlob.pixels.count) pixels \(await fullBlob.pixels)")
                 
@@ -245,7 +246,7 @@ public actor LinearBlobConnector {
                         // that don't really fit the final line we ended up with
                         //await fullBlob.lineTrim() // needs to be better
 //                        await fullBlob.fancyLineTrim(by: 2)
-                        analyzer.update(blob: fullBlob) 
+                        await analyzer.update(blob: fullBlob) 
                     }
                 }
             } else {

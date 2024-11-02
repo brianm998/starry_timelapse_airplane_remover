@@ -53,7 +53,7 @@ public class FullFrameBlobber {
     // how we search for neighbors
     public let neighborType: NeighborType
 
-    public let pixelStatusTracker = PixelStatusTracker()
+    public let pixelStatusTracker: PixelStatusTracker
     
     // how close to zero (in percentage) can the intensity of pixels decrease before
     // being left out of a blob
@@ -93,6 +93,9 @@ public class FullFrameBlobber {
     {
         // pixels that are local maximums, but have a value lower than this are ignored
         let minIntensity = constants.blobberMinPixelIntensity
+        self.pixelStatusTracker = PixelStatusTracker(frameIndex: frameIndex,
+                                                     imageWidth: imageWidth,
+                                                     imageHeight: imageHeight)
         self.config = config
         self.imageWidth = imageWidth
         self.imageHeight = imageHeight

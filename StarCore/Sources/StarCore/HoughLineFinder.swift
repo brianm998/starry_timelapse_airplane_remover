@@ -199,8 +199,9 @@ public struct HoughLineFinder {
     }
     
     var pixelImage: PixelatedImage {
-
-        if maxIntensity/medianIntensity > 2 {
+        if medianIntensity != 0,
+           maxIntensity/medianIntensity > 2
+        {
             let imageData = self.imageData(ignoringPixlesDimmerThan: medianIntensity)
             return PixelatedImage(width: self.imageDataWidth,
                                   height: self.imageDataHeight,

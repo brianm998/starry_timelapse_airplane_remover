@@ -88,7 +88,7 @@ public actor DimIsolatedBlobRemover {
             }
                                                           
             if otherBlobsNearby.count < args.requiredNeighbors {
-                analyzer.remove(blob: blob)
+                await analyzer.remove(blob: blob)
             }
         }
     }

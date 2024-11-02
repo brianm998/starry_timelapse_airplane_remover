@@ -1,17 +1,33 @@
 import Foundation
+import logging
 
 public actor PixelStatusTracker {
-    // indexed by id
-    private var pixelStatus: [String: SortablePixel.Status] = [:]
 
+    public let frameIndex: Int
+    // row major indexed
+    private var pixelStatus: [SortablePixel.Status]
+    let imageWidth: Int
+    let imageHeight: Int
+
+    public init(frameIndex: Int,
+                imageWidth: Int,
+                imageHeight: Int)
+    {
+        self.frameIndex = frameIndex
+        self.imageWidth = imageWidth
+        self.imageHeight = imageHeight
+        self.pixelStatus = [SortablePixel.Status](repeating: .unknown,
+                                                  count: imageWidth*imageHeight)
+    }
+    
     public func status(of pixel: SortablePixel) -> SortablePixel.Status {
-        if let status = pixelStatus[pixel.id] {
-            return status
-        }
-        return .unknown
+        pixelStatus[pixel.y*imageWidth+pixel.x]
     }
 
     public func record(status: SortablePixel.Status, for pixel: SortablePixel) {
-        pixelStatus[pixel.id] = status
+//        if frameIndex == 9 {
+//            Log.d("frame \(frameIndex) record status \(status) for pixel \(pixel)")
+//        }
+        pixelStatus[pixel.y*imageWidth+pixel.x] = status
     }
 }

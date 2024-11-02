@@ -35,21 +35,43 @@ final public class BlobAnalyzer: @unchecked Sendable {
 
     // what frame are we on?
     internal let frameIndex: Int
-    
+
     // a reference for each pixel for each blob it might belong to
     // non zero values reference a blob
-    internal let blobRefs: [UInt16]
+    internal var blobRefs: [UInt16]
 
     func blobs(with blobIdSet: Set<UInt16>) -> [Blob] {
         blobIdSet.compactMap { blobMap[$0] }
     }
 
-    func update(blob: Blob) {
+    func update(blob: Blob) async {
         blobMap[blob.id] = blob
+
+        // update blob refs, check for errors
+        for pixel in await blob.getPixels() {
+            let index = pixel.y*width+pixel.x
+            let existingBlobId = blobRefs[index]
+            if existingBlobId != 0,
+               existingBlobId != blob.id
+            {
+                if let existingBlob = blobMap[existingBlobId] {
+                    await existingBlob.remove(pixel: pixel)
+                }
+            }
+            blobRefs[index] = blob.id
+        }
     }
     
-    func remove(blob: Blob) {
+    func remove(blob: Blob) async {
         blobMap.removeValue(forKey: blob.id)
+
+        // update blob refs
+        for pixel in await blob.getPixels() {
+            let index = pixel.y*width+pixel.x
+            if blobRefs[index] == blob.id {
+                blobRefs[index] = 0
+            }
+        }
     }
 
     func mapOfBlobs() -> [UInt16: Blob] { blobMap }
@@ -61,22 +83,33 @@ final public class BlobAnalyzer: @unchecked Sendable {
     init(blobMap: [UInt16: Blob],
          width: Int,
          height: Int,
-         frameIndex: Int) async
+         frameIndex: Int,
+         step: String = "??",
+         logDupeBlobs: Bool = false) async
     {
-
-        self.blobMap =  blobMap
+        self.blobMap = blobMap
         self.width = width
         self.height = height
         self.frameIndex = frameIndex
 
         var _blobRefs = [UInt16](repeating: 0, count: width*height)
-
+        
         Log.d("frame \(frameIndex) has \(blobMap.count) blobs")
         
         for blob in blobMap.values {
             for pixel in await blob.getPixels() {
 //                Log.d("frame \(frameIndex) has pixel [\(pixel.x), \(pixel.y)]")
                 let blobRefIndex = pixel.y*width+pixel.x
+
+                if logDupeBlobs,
+                   _blobRefs[blobRefIndex] != 0
+                {
+                    let errorString =
+                      "frame \(frameIndex) step \(step) has duplicate blob at \(pixel)"
+                    Log.w(errorString)
+                    fatalError(errorString)
+                }
+                
                 _blobRefs[blobRefIndex] = blob.id
             }
         }

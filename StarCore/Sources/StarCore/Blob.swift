@@ -387,6 +387,10 @@ public actor Blob: CustomStringConvertible,
         self.pixels.subtract(pixels)
     }
         
+    public func remove(pixel: SortablePixel) {
+        self.pixels.remove(pixel)
+    }
+        
     // mutates the blob by removing all pixels with lesser intensity
     public func removePixels(dimmerThan intensity: UInt16) {
         var shouldReset = false
@@ -592,7 +596,6 @@ public actor Blob: CustomStringConvertible,
         return _maxBunchSize!
     }
     
-
     public func absorb(_ otherBlob: Blob, always: Bool = false) async -> Bool {
         if always || self.id != otherBlob.id {
             

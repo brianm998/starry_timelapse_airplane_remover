@@ -36,6 +36,7 @@ public enum BlobProcessingType {
     case blobLineTrim(BlobLineTrim.Args)
     case borderBrightnessLessThan(Double)
     case lineSplit(HoughLineFinder.LineSplitArgs)
+    case blobDupeCheck(String)
 }
 
 // load and process all blobs for a frame, using a defined sequence of steps
@@ -102,14 +103,19 @@ public class BlobProcessor {
           // create the first blobs from subtraction image
           .create(findBlobs),
 
+          // check to see if any pixel is in more than one blob
+          //.blobDupeCheck("init"),
+
           .save(.blobs),          
 
           .frameState(.isolatedBlobRemoval1),
+
 
           // find really close linear blobs
           .linearBlobConnector(.init(scanSize: 16, 
                                      blobsSmallerThan: 120,
                                      lineBorder: 12)),
+
 
           .save(.filter1),
 
@@ -183,7 +189,8 @@ public class BlobProcessor {
           
           .save(.filter6),
 
-          // perhaps make sure we don't discard any lines merged in with bad blobs somehow
+
+        // perhaps make sure we don't discard any lines merged in with bad blobs somehow
 
           .borderBrightnessLessThan(0.3),
           
@@ -332,7 +339,10 @@ public class BlobProcessor {
                   }
               }
               return ret
-          }, 
+          },
+
+          // check to see if any pixel is in more than one blob
+          //.blobDupeCheck("end"),
 
           .save(.filter16),
         ]
@@ -360,6 +370,13 @@ public class BlobProcessor {
             case .processWithOriginalImage(let method):
                 blobMap = try await method(blobMap, originalImage!)
 
+            case .blobDupeCheck(let step):
+                let dupeCheck = await BlobDupeCheck(blobMap: blobMap,
+                                                    width: frame.width,
+                                                    height: frame.height,
+                                                    frameIndex: frame.frameIndex,
+                                                    step: step)
+                
             case .lineSplit(let args):
                 var ret: [UInt16: Blob] = [:]
                 var maxIndex: UInt16 = 0
