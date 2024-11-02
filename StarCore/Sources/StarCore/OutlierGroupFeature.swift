@@ -288,7 +288,7 @@ internal func calculateLineFillAmount(from line: Line,
         
         originZeroLine.iterate(between: borders[0],
                                and: borders[1],
-                               numberOfAdjecentPixels: 3)
+                               numberOfAdjecentPixels: 12) // XXX should be argument
         { x, y, iterationDirection in
             if hasPixelAt(x: x, y: y, with: bounds, and: pixels) {
                 linePixels += 1
