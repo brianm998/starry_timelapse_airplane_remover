@@ -37,6 +37,7 @@ public enum BlobProcessingType {
     case borderBrightnessLessThan(Double)
     case lineSplit(HoughLineFinder.LineSplitArgs)
     case blobDupeCheck(String)
+    case smallBlobRemover(SmallBlobRemover.Args)
 }
 
 // load and process all blobs for a frame, using a defined sequence of steps
@@ -79,19 +80,19 @@ public class BlobProcessor {
 
         
         /*
-         Outlier Detection Logic (not 100% accuracte anymore):
+         Outlier Detection Logic is defined by the following set of steps
 
+         starting with:
+         
           - align neighboring frame
           - subtract aligned frame from this frame
           - sort pixels on subtracted frame by intensity
           - detect blobs from sorted pixels
-          - absorb linear blobs together
-          - remove isolated dimmer blobs
-          - remove small isolated blobs
-          - filter out small dim blobs
-          - remove more small dim blobs
-          - final pass at more isolation removal
-          - absorb linear blobs together
+
+          with lots of steps in the middle to refine the list of blobs
+
+          ending with:
+          
           - save image of final blobs before promotion to outlier groups
           - promote remaining blobs to outlier groups for further analysis
          */
@@ -251,26 +252,15 @@ public class BlobProcessor {
 
           // blob line trim
           .blobLineTrim(.init(minLineLength: 65,
-                              minLineFillAmount: 0.5,
+                              minLineFillAmount: 0.9,
                               trimAmount: 16)),
 
           // split up blobs based upon user input
           .process(applyUserSlices),
-          
+
           // final pass on getting rid of really small blobs
-          .process() { blobs in
-              var ret: [UInt16: Blob] = [:]
-
-              for (_, blob) in blobs {
-                  if await blob.size() > 24 { // XXX constant
-                      ret[blob.id] = blob
-                  } else {
-                      //Log.d("frame \(frame.frameIndex) dumping blob \(blob) of size \(await blob.size())")
-                  }
-              }
-              return ret
-          }, 
-
+          .smallBlobRemover(.init(minBlobSize: 24)),
+          
           .save(.filter14),
           // look and see if any blobs with more than one bunch have bunches with a better
           // line fit than the blob as a whole.  If so, break them out if the aren't tiny.
@@ -371,12 +361,19 @@ public class BlobProcessor {
             case .processWithOriginalImage(let method):
                 blobMap = try await method(blobMap, originalImage!)
 
+            case .smallBlobRemover(let args):
+                let remover = SmallBlobRemover(blobMap: blobMap,
+                                               frameIndex: frame.frameIndex)
+
+                await remover.process(args)
+                blobMap = await remover.blobMap()
+                
             case .blobDupeCheck(let step):
-                let dupeCheck = await BlobDupeCheck(blobMap: blobMap,
-                                                    width: frame.width,
-                                                    height: frame.height,
-                                                    frameIndex: frame.frameIndex,
-                                                    step: step)
+                let _ = await BlobDupeCheck(blobMap: blobMap,
+                                            width: frame.width,
+                                            height: frame.height,
+                                            frameIndex: frame.frameIndex,
+                                            step: step)
                 
             case .lineSplit(let args):
                 var ret: [UInt16: Blob] = [:]
