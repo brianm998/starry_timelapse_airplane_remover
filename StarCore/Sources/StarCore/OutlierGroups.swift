@@ -270,8 +270,8 @@ public actor OutlierGroups {
         if maxY >= height { maxY = height - 1 }
 
         for y in minY...maxY {
-            if let outlierYAxisImageData,
-               outlierYAxisImageData[y] == 0 { continue }
+//            if let outlierYAxisImageData,
+//               outlierYAxisImageData[y] == 0 { continue }
             
             for x in minX...maxX {
                 let index = y * width + x

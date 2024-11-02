@@ -77,12 +77,13 @@ public class BlobProcessor {
 
         
         /*
-         Outlier Detection Logic:
+         Outlier Detection Logic (not 100% accuracte anymore):
 
           - align neighboring frame
           - subtract aligned frame from this frame
           - sort pixels on subtracted frame by intensity
           - detect blobs from sorted pixels
+          - absorb linear blobs together
           - remove isolated dimmer blobs
           - remove small isolated blobs
           - filter out small dim blobs
@@ -249,8 +250,7 @@ public class BlobProcessor {
                   {
                       let lineFillAmount = await blob.lineFillAmount()
 
-                      if await blob.maxBunchSize() > 500 || lineFillAmount > 0.50 
-                      {
+                      if /*await blob.maxBunchSize() > 500 || */lineFillAmount > 0.50 {
                           // XXX trim that shit
                           await blob.lineTrim(by: 16)
                       }
@@ -261,7 +261,6 @@ public class BlobProcessor {
           }, 
 
           
-          .save(.filter14),
 
           // split up blobs based upon user input
           .process(applyUserSlices),
@@ -280,10 +279,53 @@ public class BlobProcessor {
               return ret
           }, 
 
+          .save(.filter14),
+          // look and see if any blobs with more than one bunch have bunches with a better
+          // line fit than the blob as a whole.  If so, break them out if the aren't tiny.
+          // XXX this doesn't seem to help
+          // try breaking them up by intensity instead of by bunch?
+          // only work on larger blobs here, do a separate blob intensity pass too
+
+          /*
+          .process() { blobs in
+              var ret: [UInt16: Blob] = [:]
+              var maxBlobID: UInt16 = 0
+              for (id, _) in blobs {
+                  if id > maxBlobID { maxBlobID = id }
+              }
+              for (_, blob) in blobs {
+                  if await blob.size() > 100 {
+                      let bunches = await blob.bunches()
+                      if bunches.count > 1,
+                         let (fullBlobDist, _) = await blob.medianDistanceFromIdealLine()
+                      {
+                          for bunch in bunches {
+                              let bunchBlob = Blob(bunch,
+                                                   id: maxBlobID+1,
+                                                   frameIndex: blob.frameIndex)
+                              
+                              if let (bunchBlobDist, _) = await bunchBlob.medianDistanceFromIdealLine(),
+                                 bunchBlobDist + 6 < fullBlobDist
+                              {
+                                  // this bunch blob has a better line fit than the whole,
+                                  // split it out as a separate blob
+                                  ret[bunchBlob.id] = bunchBlob
+                                  // remove bunch blob pixels from blob
+                                  await blob.remove(pixels: bunchBlob.pixels)
+                                  maxBlobID += 1
+                              }
+                          }
+                      }
+                  }
+                  ret[blob.id] = blob
+              }
+              return ret
+          },
+           */
           .save(.filter15),
           
+        
           // any really big blobs with lots of small bunches that are dim can go away
-       
           .process() { blobs in
               var ret: [UInt16: Blob] = [:]
 
@@ -295,9 +337,11 @@ public class BlobProcessor {
                      await blob.medianBunchSize() < 10,
                      await blob.medianIntensity() < 6000
                   {
-                    Log.d("frame \(frame.frameIndex) dumping blob \(blob) of size \(blobSize) bunch count \(await blob.bunchCount()) medianBunchSize \(await blob.medianBunchSize()) medianIntensity \(await blob.medianIntensity())")
+                      Log.d("frame \(frame.frameIndex) dumping blob \(blob) of size \(blobSize) bunch count \(await blob.bunchCount()) medianBunchSize \(await blob.medianBunchSize()) medianIntensity \(await blob.medianIntensity())")
                       // try processing this further by getting rid of dim blobs?
                       // for now just kick it out
+                      await blob.removePixels(dimmerThan: 6000)
+                      ret[blob.id] = blob
                   } else {
                       ret[blob.id] = blob
                   }
@@ -305,7 +349,6 @@ public class BlobProcessor {
               return ret
           }, 
 
-          
           .save(.filter16),
         ]
     }
@@ -352,6 +395,9 @@ public class BlobProcessor {
                     {
                         // look and see if any pixels in this blob align with different
                         // lines, and if so, split them apart into separate groups
+                        // XXX sometimes this splits up really close pixels into very
+                        // slightly different lines, best to avoid that
+                        // maybe use bunches?
                         let lineSplitList = await blob.lineSplit(args: args)
 
                         if lineSplitList.count > 0 {

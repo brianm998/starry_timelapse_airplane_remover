@@ -421,12 +421,12 @@ fileprivate func calculateBoundingBoxOverlapScore(of group: OutlierGroup) async 
         if let previousFrame = await frame.getPreviousFrame(),
            let previousOutlierGroups = await previousFrame.getOutlierGroups()
         {
-            let previousOutlierGroupsOutlierYAxisImageData = await previousOutlierGroups.outlierYAxisImageData
+            //let previousOutlierGroupsOutlierYAxisImageData = await previousOutlierGroups.outlierYAxisImageData
             let previousOutlierGroupsOutlierImageData = await previousOutlierGroups.outlierImageData
             numberFrames += 1
             for y in group.bounds.min.y...group.bounds.max.y {
-                if let yAxis = previousOutlierGroupsOutlierYAxisImageData,
-                   yAxis[y] == 0 { continue }
+//                if let yAxis = previousOutlierGroupsOutlierYAxisImageData,
+//                   yAxis[y] == 0 { continue }
                 
                 for x in group.bounds.min.x...group.bounds.max.x {
                     let index = y*Int(IMAGE_WIDTH!) + x
@@ -440,12 +440,12 @@ fileprivate func calculateBoundingBoxOverlapScore(of group: OutlierGroup) async 
         if let nextFrame = await frame.getNextFrame(),
            let nextOutlierGroups = await nextFrame.getOutlierGroups()
         {
-            let nextOutlierGroupsOutlierYAxisImageData = await nextOutlierGroups.outlierYAxisImageData
+            //let nextOutlierGroupsOutlierYAxisImageData = await nextOutlierGroups.outlierYAxisImageData
             let nextOutlierGroupsOutlierImageData = await nextOutlierGroups.outlierImageData
             numberFrames += 1
             for y in group.bounds.min.y...group.bounds.max.y {
-                if let yAxis = nextOutlierGroupsOutlierYAxisImageData,
-                   yAxis[y] == 0 { continue }
+//                if let yAxis = nextOutlierGroupsOutlierYAxisImageData,
+//                   yAxis[y] == 0 { continue }
                 
                 for x in group.bounds.min.x...group.bounds.max.x {
                     let index = y*Int(IMAGE_WIDTH!) + x

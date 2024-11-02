@@ -160,7 +160,9 @@ public actor Blob: CustomStringConvertible,
     public var line: Line? {
         if let _blobLine { return _blobLine }
         _blobLine = HoughLineFinder(pixels: Array(self.pixels),
-                                    bounds: self.boundingBox()).line
+                                    bounds: self.boundingBox(),
+                                    medianIntensity: self.medianIntensity(),
+                                    maxIntensity: self.maxIntensity()).line
         return _blobLine
     }
 
@@ -175,11 +177,12 @@ public actor Blob: CustomStringConvertible,
      
      */
     // use KHT to see if we have more than one line in this group of pixels
-    public func lineSplit(args: HoughLineFinder.LineSplitArgs)
-      -> [[SortablePixel]]
+    public func lineSplit(args: HoughLineFinder.LineSplitArgs) -> [[SortablePixel]]
     {
         let hlf = HoughLineFinder(pixels: Array(self.pixels),
-                                  bounds: self.boundingBox())
+                                  bounds: self.boundingBox(),
+                                  medianIntensity: self.medianIntensity(),
+                                  maxIntensity: self.maxIntensity())
 
         let (pixelsToKeep, newPixelSets) = hlf.lineSplit(args: args)
         
@@ -271,6 +274,26 @@ public actor Blob: CustomStringConvertible,
         }
     }
 
+    private var _bunchCalculator: BunchCalculator?
+
+    private var _bunches: [Set<SortablePixel>]?
+
+    public func bunches() -> [Set<SortablePixel>] {
+        if let _bunches { return _bunches }
+        let ret = self.bunchCalculator().calculateBunches()
+        _bunches = ret
+        return ret
+    }
+    
+    public func bunchCalculator() -> BunchCalculator {
+        if let _bunchCalculator { return _bunchCalculator }
+        let ret = BunchCalculator(from: self.pixels,
+                                  with: self.boundingBox(),
+                                  maxPixelDistance: maxBunchDistance)
+        _bunchCalculator = ret
+        return ret
+    }
+    
     private func reset() {
         _lineFillAmount = nil
         _intensity = nil
@@ -281,6 +304,11 @@ public actor Blob: CustomStringConvertible,
         _blobLine = nil
         _averageDistanceFromIdealLine = nil
         _membersArray = nil
+        _maxIntensity = nil
+        _bunchCount = nil
+        _medianBunchSize = nil
+        _maxBunchSize = nil
+        _bunchCalculator = nil
     }
 
     private var _membersArray: ([Bool])?
@@ -353,6 +381,22 @@ public actor Blob: CustomStringConvertible,
         } else {
             return 0
         }
+    }
+
+    public func remove(pixels: Set<SortablePixel>) {
+        self.pixels.subtract(pixels)
+    }
+        
+    // mutates the blob by removing all pixels with lesser intensity
+    public func removePixels(dimmerThan intensity: UInt16) {
+        var shouldReset = false
+        for pixel in pixels {
+            if pixel.intensity < intensity {
+                pixels.remove(pixel)
+                shouldReset = true
+            }
+        }
+        if shouldReset { reset() }
     }
     
     // trims outlying pixels from the group, ones that are not
@@ -505,9 +549,21 @@ public actor Blob: CustomStringConvertible,
         return ret
     }
 
+    public func maxIntensity() -> UInt16 {
+        if pixels.count == 0 { return 0 }
+        if let _maxIntensity { return _maxIntensity }
+        var ret: UInt16 = 0
+        for pixel in pixels {
+            if pixel.intensity > ret { ret = pixel.intensity }
+        }
+        _maxIntensity = ret
+        return ret
+    }
+
     fileprivate var _bunchCount: Int? = nil
     fileprivate var _medianBunchSize: Int? = nil
     fileprivate var _maxBunchSize: Int? = nil
+    fileprivate var _maxIntensity: UInt16? = nil
     
     public func bunchCount() async -> Int {
         if let _bunchCount { return _bunchCount }

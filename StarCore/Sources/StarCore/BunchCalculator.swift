@@ -47,6 +47,8 @@ private func calculateBunchData(from pixelSet: Set<SortablePixel>,
                                           with: bounds,
                                           maxPixelDistance: maxPixelDistance)
 
+    // XXX move list of bunches into Blob so we can filter pixels by bunch in
+    // the blob processor
     let bunches = bunchCalculator.calculateBunches()
 
     var largestSize: Int = 0
@@ -64,7 +66,7 @@ private func calculateBunchData(from pixelSet: Set<SortablePixel>,
     return (bunches.count, medianSize, largestSize)
 }
 
-private class BunchCalculator {
+public class BunchCalculator {
     let pixelSet: Set<SortablePixel>
     let bounds: BoundingBox
     let pixels: [SortablePixel?] // row major indexed two dimentional array 

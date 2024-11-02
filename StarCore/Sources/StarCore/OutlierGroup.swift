@@ -1,5 +1,4 @@
 /*
-
 This file is part of the Starry Timelapse Airplane Remover (star).
 
 star is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
@@ -78,8 +77,10 @@ public actor OutlierGroup: CustomStringConvertible,
         if shouldLoadLine {
             shouldLoadLine = false
             return await Task<Line?,Never>.detached {
-                if let line = HoughLineFinder(pixels: Array(self.pixelSet),
-                                              bounds: self.bounds).line
+                if let line = await HoughLineFinder(pixels: Array(self.pixelSet),
+                                                    bounds: self.bounds,
+                                                    medianIntensity: self.medianIntensity(),
+                                                    maxIntensity: self.maxIntensity()).line
                 {
                     await self.set(line: line)
                     return line
@@ -514,6 +515,33 @@ public actor OutlierGroup: CustomStringConvertible,
     func blob() -> Blob {
         Blob(pixelSet, id: id, frameIndex: frameIndex)
     }
+
+    public func medianIntensity() -> UInt16 {
+        if pixelSet.count == 0 { return 0 }
+        if let _medianIntensity { return _medianIntensity }
+        let intensities = pixelSet.map { $0.intensity }
+        if intensities.count == 0 {
+            _medianIntensity = 0
+            return 0
+        }
+        let ret = intensities.sorted()[intensities.count/2]
+        _medianIntensity = ret
+        return ret
+    }
+
+    public func maxIntensity() -> UInt16 {
+        if pixelSet.count == 0 { return 0 }
+        if let _maxIntensity { return _maxIntensity }
+        var ret: UInt16 = 0
+        for pixel in pixelSet {
+            if pixel.intensity > ret { ret = pixel.intensity }
+        }
+        _maxIntensity = ret
+        return ret
+    }
+
+    fileprivate var _maxIntensity: UInt16?
+    fileprivate var _medianIntensity: UInt16?
 }
 
 

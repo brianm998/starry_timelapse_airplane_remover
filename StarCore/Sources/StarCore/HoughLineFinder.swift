@@ -25,17 +25,24 @@ public struct HoughLineFinder {
 
     let data: [SortablePixel]
     let bounds: BoundingBox
+    let medianIntensity: UInt16
+    let maxIntensity: UInt16
 
-    public init(pixels: [SortablePixel], bounds: BoundingBox) {
+    public init(pixels: [SortablePixel],
+                bounds: BoundingBox,
+                medianIntensity: UInt16,
+                maxIntensity: UInt16)
+    {
         data = pixels
         self.bounds = bounds
+        self.medianIntensity = medianIntensity
+        self.maxIntensity = maxIntensity
     }
     
-
     // it's best to keep the important pixel data away from the middle of the image,
     // as the KHT uses the center of the image as the origin for its lines.
     // we get better results this way, instead of giving the KHT algorithm a small image with a
-    // line right throught the middle of it
+    // line right through the middle of it
     
     let imageDataBorderSize = 80
     
@@ -47,7 +54,7 @@ public struct HoughLineFinder {
         self.bounds.height+imageDataBorderSize*6
     }
 
-    public var imageData: [UInt8] {
+    public func imageData(ignoringPixlesDimmerThan minIntensity: UInt16 = 0) -> [UInt8] {
         var imageData = [UInt8](repeating: 0, count: self.imageDataWidth * self.imageDataHeight)
         
         //Log.d("frame \(frameIndex) blob image data with \(pixels.count) pixels")
@@ -56,9 +63,12 @@ public struct HoughLineFinder {
         let minY = self.bounds.min.y
 
         for pixel in data {
-            let imageIndex = (pixel.y - minY)*imageDataWidth + 
-              (pixel.x - minX)
-            imageData[imageIndex] = 0xFF
+            if pixel.intensity > minIntensity {
+                let imageIndex = (pixel.y - minY)*imageDataWidth + 
+                  (pixel.x - minX)
+                //imageData[imageIndex] = 0xFF
+                imageData[imageIndex] = UInt8(pixel.intensity>>8)
+            }
         }
 
         return imageData
@@ -182,17 +192,25 @@ public struct HoughLineFinder {
             if distance <= maxDistance {
                 // 0 for maxDistance or furter from the line
                 // 1 for spot on the line
-                ret += (maxDistance-distance)/maxDistance
+                ret += ((maxDistance-distance)/maxDistance)*Double(pixel.intensity)
             }
         }
         return ret
     }
     
     var pixelImage: PixelatedImage {
-        let imageData = self.imageData
-        return PixelatedImage(width: self.imageDataWidth,
-                              height: self.imageDataHeight,
-                              grayscale8BitImageData: imageData)
+
+        if maxIntensity/medianIntensity > 2 {
+            let imageData = self.imageData(ignoringPixlesDimmerThan: medianIntensity)
+            return PixelatedImage(width: self.imageDataWidth,
+                                  height: self.imageDataHeight,
+                                  grayscale8BitImageData: imageData)
+        } else {
+            let imageData = self.imageData()
+            return PixelatedImage(width: self.imageDataWidth,
+                                  height: self.imageDataHeight,
+                                  grayscale8BitImageData: imageData)
+        }
      }
     
     public var line: Line? {
@@ -213,18 +231,20 @@ public struct HoughLineFinder {
              */
 
             if lines.count > 0 {
-                var closestDistance: Double = 9999999999999
+                var bestScore: Double = 0
                 var bestLineIndex = 0
                 var max = lines.count
                 if max > maxLineConstant { max = maxLineConstant } 
                 
                 for i in 0..<max {
                     let originZeroLine = self.originZeroLine(from: lines[i])
-                    let (_, median, _) = self.averageMedianMaxDistance(from: originZeroLine)
+
+                    let lineScore = pixelScore(for: originZeroLine,
+                                               maxDistance: 24)
                     
-                    if median < closestDistance {
+                    if lineScore > bestScore {
                         //Log.d("line \(i) is best theta \(lines[i].theta) avg median max \(avg) \(median) \(max)")
-                        closestDistance = median
+                        bestScore = lineScore
                         bestLineIndex = i
                     }
                 }
