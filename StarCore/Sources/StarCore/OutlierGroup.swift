@@ -80,7 +80,8 @@ public actor OutlierGroup: CustomStringConvertible,
                 if let line = await HoughLineFinder(pixels: Array(self.pixelSet),
                                                     bounds: self.bounds,
                                                     medianIntensity: self.medianIntensity(),
-                                                    maxIntensity: self.maxIntensity()).line
+                                                    maxIntensity: self.maxIntensity(),
+                                                    frameIndex: self.frameIndex).line
                 {
                     await self.set(line: line)
                     return line

@@ -162,7 +162,8 @@ public actor Blob: CustomStringConvertible,
         _blobLine = HoughLineFinder(pixels: Array(self.pixels),
                                     bounds: self.boundingBox(),
                                     medianIntensity: self.medianIntensity(),
-                                    maxIntensity: self.maxIntensity()).line
+                                    maxIntensity: self.maxIntensity(),
+                                    frameIndex: frameIndex).line
         return _blobLine
     }
 
@@ -182,9 +183,11 @@ public actor Blob: CustomStringConvertible,
         let hlf = HoughLineFinder(pixels: Array(self.pixels),
                                   bounds: self.boundingBox(),
                                   medianIntensity: self.medianIntensity(),
-                                  maxIntensity: self.maxIntensity())
+                                  maxIntensity: self.maxIntensity(),
+                                  frameIndex: frameIndex)
 
-        let (pixelsToKeep, newPixelSets) = hlf.lineSplit(args: args)
+        let (pixelsToKeep, newPixelSets) =
+          hlf.lineSplit(args: args, optimalLine: hlf.line)
         
         if newPixelSets.count > 0 {
             Log.d("frame \(frameIndex) blob \(self.size()) lineSplit found \(newPixelSets.count) new pixel sets, reducing size of blob by \(self.pixels.count-pixelsToKeep.count) pixels")

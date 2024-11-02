@@ -45,16 +45,25 @@ public actor LinearBlobConnector {
         let blobsSmallerThan: Int // ignore blobs larger than this
         let blobsLargerThan: Int  // ignore blobs smaller than this
         let lineBorder: Int       // how much furter to look at the ends of the line
-
+        let maxAverageLineDistance: Double // don't process full blobs with > average line dist
+        let adjecentPixelsOnIteration: Int // how far to iterate on adject pixels
+        let maxIterationCount: Int // maximum times to iterate on line improvement
+        
         public init(scanSize: Int = 28,
                     blobsSmallerThan: Int = 24, 
                     blobsLargerThan: Int = 0,
-                    lineBorder: Int = 0)
+                    lineBorder: Int = 0,
+                    maxAverageLineDistance: Double = 50,
+                    adjecentPixelsOnIteration: Int = 5,
+                    maxIterationCount: Int = 10)
         {
             self.scanSize = scanSize
             self.blobsSmallerThan = blobsSmallerThan
             self.blobsLargerThan = blobsLargerThan
             self.lineBorder = lineBorder
+            self.maxAverageLineDistance = maxAverageLineDistance
+            self.adjecentPixelsOnIteration = adjecentPixelsOnIteration
+            self.maxIterationCount = maxIterationCount
         }
     }
 
@@ -91,7 +100,7 @@ public actor LinearBlobConnector {
             let frameIndex = neighborCloud.first?.frameIndex ?? -1
             let id = neighborCloud.first?.id ?? 0
             
-            // first create a temporary blob that combines all of the nearby blobs
+            // then create a temporary blob that combines all of the nearby blobs
             let fullBlob = Blob(id: id, frameIndex: frameIndex) // values not used
             for blob in neighborCloud { _ = await fullBlob.absorb(blob, always: true) }
 
@@ -105,12 +114,10 @@ public actor LinearBlobConnector {
             
             // render a KHT on this full blob
             if let blobLine = await fullBlob.originZeroLine,
-               await fullBlob.averageDistanceFromIdealLine < 50 // XXX constant
+               await fullBlob.averageDistanceFromIdealLine < args.maxAverageLineDistance
             {
 
                 // only iterate on blob lines if they are a decent fit
-                // XXX determine best fit
-
                 
                 // XXX for testing, write out this big blob as json
 /* 
@@ -134,7 +141,9 @@ public actor LinearBlobConnector {
                 // maybe recurse on a better line from a smaller amount
                 await iterate(on: blobLine,
                               over: fullBlob,
-                              lineBorder: args.lineBorder)
+                              lineBorder: args.lineBorder,
+                              maxIterationCount: args.maxIterationCount,
+                              adjecentPixelsOnIteration: args.adjecentPixelsOnIteration)
 
                 // trim the blob here?
             }
@@ -145,8 +154,10 @@ public actor LinearBlobConnector {
     fileprivate func iterate(on blobLine: Line,
                              over fullBlob: Blob,
                              // how much furter to look at the ends of the line
-                             lineBorder: Int = 0,
-                             iterationCount: Int = 0) async
+                             lineBorder: Int,
+                             iterationCount: Int = 0,
+                             maxIterationCount: Int,
+                             adjecentPixelsOnIteration: Int) async
     {
         // we have an ideal origin zero line for this blob
         //Log.d("frame \(frameIndex) blob \(fullBlob.id) has line \(blobLine)")
@@ -183,7 +194,7 @@ public actor LinearBlobConnector {
             
             blobLine.iterate(between: start,
                              and: end,
-                             numberOfAdjecentPixels: 5) // XXX constant
+                             numberOfAdjecentPixels: adjecentPixelsOnIteration)
             { x, y, orientation in
                 if x >= 0,
                    y >= 0,
@@ -236,12 +247,14 @@ public actor LinearBlobConnector {
                  */
 
                 if let line = await fullBlob.originZeroLine {
-                    if iterationCount < 10 { // XXX constant
+                    if iterationCount < maxIterationCount {
                         //Log.d("frame \(analyzer.frameIndex) ITERATING iterationCount \(iterationCount)")
                         await self.iterate(on: line,
                                            over: linearBlob,
                                            lineBorder: lineBorder,
-                                           iterationCount: iterationCount + 1)
+                                           iterationCount: iterationCount + 1,
+                                           maxIterationCount: maxIterationCount,
+                                           adjecentPixelsOnIteration: adjecentPixelsOnIteration)
                     } else {
                         //Log.d("frame \(analyzer.frameIndex) NOT ITERATING iterationCount \(iterationCount)")
                     }

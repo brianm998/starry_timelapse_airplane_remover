@@ -231,11 +231,12 @@ public class BlobProcessor {
           .save(.filter11),
 
           // try to split up blobs with more than one line in them
+
+          // call with more args?
           .lineSplit(.init(maxLines: 8000,
                            maxDistance: 12,
                            minLineScore: 12,
                            minLineCount: 10)),
-
 
           .save(.filter12),
 

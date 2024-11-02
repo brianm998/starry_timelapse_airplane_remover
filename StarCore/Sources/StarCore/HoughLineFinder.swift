@@ -27,16 +27,19 @@ public struct HoughLineFinder {
     let bounds: BoundingBox
     let medianIntensity: UInt16
     let maxIntensity: UInt16
+    let frameIndex: Int
 
     public init(pixels: [SortablePixel],
                 bounds: BoundingBox,
                 medianIntensity: UInt16,
-                maxIntensity: UInt16)
+                maxIntensity: UInt16,
+                frameIndex: Int)
     {
         data = pixels
         self.bounds = bounds
-        self.medianIntensity = medianIntensity
+        self.frameIndex = frameIndex
         self.maxIntensity = maxIntensity
+        self.medianIntensity = medianIntensity
     }
     
     // it's best to keep the important pixel data away from the middle of the image,
@@ -97,10 +100,10 @@ public struct HoughLineFinder {
     // with a certain number of pixels.
     // If so, sort them by number of closest pixels, and iterate over
     // them to split this group out into more than one
-    public func lineSplit(args: LineSplitArgs)
+    public func lineSplit(args: LineSplitArgs, optimalLine: Line?)
       -> ([SortablePixel], [[SortablePixel]])
       // first return value is the original, possibly reduced, set of pixels we started with
-      // the second return value is a list of any sub-blobs we found that are close to a line
+      // the second return value is a list of any sub-blobs we found that are close to another line
     {
 
         let pixelImage = self.pixelImage
@@ -139,44 +142,67 @@ public struct HoughLineFinder {
 
                 let sortedResults = results.sorted() { $0.score > $1.score } 
 
+                var linesToProcess: [Line] = []
+                if let optimalLine { linesToProcess.append(optimalLine) }
+
+                let minThetaDiff: Double = 10 // XXX degrees XXX should be parameter
+                let minRhoDiff: Double = 10
+                
                 if sortedResults.count > 0 {
                     // we found at least one sorted result
                     var pixelsForLines: [Line:[SortablePixel]] = [:]
-                    var pixelsToKeep: [SortablePixel] = []
-                    
-                    for pixel in data {
-                        var closestLine: Line?
-                        var closestDistance: Double = 99999999999999
-                        for result in sortedResults {
-                            let standardLine = result.line.standardLine
-                            let distance = standardLine.distanceTo(x: pixel.x, y: pixel.y)
-                            if distance < closestDistance {
-                                closestDistance = distance
-                                closestLine = result.line
+                    var pixelsToKeep: Set<SortablePixel> = Set(data)
+
+                    // filter out lines with similar theta
+                    for result in sortedResults {
+                        var shouldProcessThisLine = true
+
+                        for existingLine in linesToProcess {
+                            if abs(existingLine.theta-result.line.theta) < minThetaDiff || 
+                               abs(existingLine.rho-result.line.rho) < minRhoDiff
+                            {
+                                shouldProcessThisLine = false
+                                break
                             }
                         }
-                        if let closestLine {
-                            if var pixelList = pixelsForLines[closestLine] {
-                                pixelList.append(pixel)
-                                pixelsForLines[closestLine] = pixelList
-                            } else {
-                                pixelsForLines[closestLine] = [pixel]
+                        
+                        if shouldProcessThisLine {
+                            linesToProcess.append(result.line)
+                        }
+                    }
+
+                    //Log.d("frame \(frameIndex) linesToProcess \(linesToProcess)")
+
+                    for line in linesToProcess {
+                        let standardLine = line.standardLine
+                        for pixel in pixelsToKeep {
+                            let distance = standardLine.distanceTo(x: pixel.x, y: pixel.y)
+                            if distance < 12 { // XXX constant should be arg
+
+                                // this line gets this pixel
+                                if var pixelList = pixelsForLines[line] {
+                                    pixelList.append(pixel)
+                                    pixelsForLines[line] = pixelList
+                                } else {
+                                    pixelsForLines[line] = [pixel]
+                                }
+                                pixelsToKeep.remove(pixel)
                             }
-                        } else {
-                            pixelsToKeep.append(pixel)
                         }
                     }
 
                     var newPixelSets: [[SortablePixel]] = []
+
+                    var pixelArrayToKeep = Array(pixelsToKeep)
                     
                     for (_, pixelList) in pixelsForLines {
                         if pixelList.count >= args.minLineCount { 
                             newPixelSets.append(pixelList)
                         } else {
-                            pixelsToKeep.append(contentsOf: pixelList)
+                            pixelArrayToKeep.append(contentsOf: pixelList)
                         }
                     }
-                    return (pixelsToKeep, newPixelSets)
+                    return (pixelArrayToKeep, newPixelSets)
                 }
             }
         }
