@@ -26,7 +26,7 @@ public actor Blob: CustomStringConvertible,
         hasher.combine(id)
     }
     
-    public init(_ pixels: Set<SortablePixel>,
+    public init(_ pixels: Set<SortablePixel>, // more than UInt16.max pixels is bad
                 id: UInt16,
                 frameIndex: Int,
                 statusTracker: PixelStatusTracker? = nil)
@@ -88,6 +88,7 @@ public actor Blob: CustomStringConvertible,
 
         var index: Int = 0
 
+        // can crash if pixels.count > UInt16.max 
         let pixelCount = UInt16(pixels.count)
 
         array[index] = self.id
@@ -600,6 +601,11 @@ public actor Blob: CustomStringConvertible,
     }
     
     public func absorb(_ otherBlob: Blob, always: Bool = false) async -> Bool {
+        let otherBlobSize = await otherBlob.size()
+
+        // hard max size on blobs because of how we save them
+        if otherBlobSize + self.size() > UInt16.max { return false }
+        
         if always || self.id != otherBlob.id {
             
             let selfBeforeSize = self.size()
