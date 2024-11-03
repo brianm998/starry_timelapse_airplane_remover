@@ -86,7 +86,7 @@ public class FrameViewModel {
     var previewImage: Image = initialImage
     var processedPreviewImage: Image = initialImage
  
-    public func previewImage(type: FrameViewMode, cachedOnly: Bool = false) -> some View {
+    public func previewImage(type: FrameViewMode) -> some View {
         Group {
             switch type {
             case .original:

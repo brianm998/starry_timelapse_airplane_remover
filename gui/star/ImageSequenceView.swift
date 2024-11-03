@@ -52,7 +52,7 @@ struct ImageSequenceView: View {
             {
                 Spacer().frame(maxHeight: 30)
                 // the filmstrip at the bottom
-                FilmstripView(imageSequenceView: self)
+                FilmstripView()
                   .frame(maxWidth: .infinity)
                   .transition(.slide)
                 Spacer().frame(minHeight: 15, maxHeight: 25)

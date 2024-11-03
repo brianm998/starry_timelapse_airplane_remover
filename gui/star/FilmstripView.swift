@@ -5,7 +5,6 @@ import StarCore
 
 struct FilmstripView: View {
     @Environment(ViewModel.self) var viewModel: ViewModel
-    let imageSequenceView: ImageSequenceView
 
     var body: some View {
         HStack {
