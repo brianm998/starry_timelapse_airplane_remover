@@ -305,6 +305,7 @@ public class FrameViewModel {
     {
         if let storage { return storage }
         if cachedOnly { return initialImage }
+
         if let frame {
             Task {
                 let bgTask = Task.detached {
@@ -326,60 +327,84 @@ public class FrameViewModel {
 
             // XXX show loading icon on top
 //            print("FUCKING viewModel.previousFrameViewMode \(viewModel.previousFrameViewMode)")
-            return previewImage(type: viewModel.previousFrameViewMode, cachedOnly: true)
-        } else {
-            return initialImage
+            if let image = cachedPreviewImage(type: viewModel.previousFrameViewMode) {
+                return image
+            } 
         }
+
+        // fall back to empty image view
+        return initialImage
     }
-    
-    public func previewImage(type: FrameViewMode, cachedOnly: Bool = false) -> Image {
+
+    public func cachedPreviewImage(type: FrameViewMode) -> Image? {
         switch type {
         case .original:
             return self.previewImage
         case .processed:
             return self.processedPreviewImage
         case .subtraction:
-            return self.subtractionPreviewImage(cachedOnly: cachedOnly)
+            return _subtractionPreviewImage
         case .blobs:
-            return self.blobsPreviewImage(cachedOnly: cachedOnly)
+            return _blobsPreviewImage
         case .filter1:
-            return self.filter1PreviewImage(cachedOnly: cachedOnly)
+            return _filter1PreviewImage
         case .filter2:
-            return self.filter2PreviewImage(cachedOnly: cachedOnly)
+            return _filter2PreviewImage
         case .filter3:
-            return self.filter3PreviewImage(cachedOnly: cachedOnly)
+            return _filter3PreviewImage
         case .filter4:
-            return self.filter4PreviewImage(cachedOnly: cachedOnly)
+            return _filter4PreviewImage
         case .filter5:
-            return self.filter5PreviewImage(cachedOnly: cachedOnly)
+            return _filter5PreviewImage
         case .filter6:
-            return self.filter6PreviewImage(cachedOnly: cachedOnly)
+            return _filter6PreviewImage
         case .filter7:
-            return self.filter7PreviewImage(cachedOnly: cachedOnly)
+            return _filter7PreviewImage
         case .filter8:
-            return self.filter8PreviewImage(cachedOnly: cachedOnly)
+            return _filter8PreviewImage
         case .filter9:
-            return self.filter9PreviewImage(cachedOnly: cachedOnly)
+            return _filter9PreviewImage
         case .filter10:
-            return self.filter10PreviewImage(cachedOnly: cachedOnly)
+            return _filter10PreviewImage
         case .filter11:
-            return self.filter11PreviewImage(cachedOnly: cachedOnly)
+            return _filter11PreviewImage
         case .filter12:
-            return self.filter12PreviewImage(cachedOnly: cachedOnly)
+            return _filter12PreviewImage
         case .filter13:
-            return self.filter13PreviewImage(cachedOnly: cachedOnly)
+            return _filter13PreviewImage
         case .filter14:
-            return self.filter14PreviewImage(cachedOnly: cachedOnly)
+            return _filter14PreviewImage
         case .filter15:
-            return self.filter15PreviewImage(cachedOnly: cachedOnly)
+            return _filter15PreviewImage
         case .filter16:
-            return self.filter16PreviewImage(cachedOnly: cachedOnly)
+            return _filter16PreviewImage
         case .paintMask:
-            return self.paintMaskPreviewImage(cachedOnly: cachedOnly)
+            return _paintMaskPreviewImage
         case .validation:
-            return self.validationPreviewImage(cachedOnly: cachedOnly)
+            return _validationPreviewImage
         case .aligned:
-            return self.alignedPreviewImage(cachedOnly: cachedOnly)
+            return _alignedPreviewImage
+        }
+    }
+    
+    public func previewImage(type: FrameViewMode, cachedOnly: Bool = false) -> some View {
+        Group {
+            switch type {
+            case .original:
+                self.previewImage
+            case .processed:
+                self.processedPreviewImage
+            default: 
+                if let frame {
+                    AsyncImage(url: frame.imageAccessor.urlForImage(ofType: type, atSize: .preview)) { image in
+                        image.resizable()
+                    } placeholder: {
+                        initialImage
+                    }
+                } else {
+                    initialImage
+                }
+            }
         }
     }
 
