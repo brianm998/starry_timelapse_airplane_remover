@@ -128,10 +128,6 @@ public class BlobProcessor {
 
           // a first pass at cutting out individual blobs based upon size, brightness
           // or being too close to the bottom
-
-          // XXX sometimes this gets rid of blobs from lines that we want :(
-          // XXX maybe do linear analysis first?
-          // XXX or use dim isolated blobber instead of this VVV
           .process() { blobs in
               var ret: [UInt16: Blob] = [:]
 
@@ -190,29 +186,21 @@ public class BlobProcessor {
           
           .save(.filter6),
 
-
-        // perhaps make sure we don't discard any lines merged in with bad blobs somehow
-
-          .borderBrightnessLessThan(0.3),
-          
-
-          .save(.filter7),
-
           // remove larger disconected blobs
           .disconnectedBlobRemover(.init(scanSize: 60,
                                          blobsSmallerThan: 50,
                                          blobsLargerThan: 18,
                                          requiredNeighbors: 2)),
-          .save(.filter8),
+          .save(.filter7),
+
 
           .isolatedBlobRemover(.init(scanSize: 12,
                                      requiredNeighbors: 1,
                                      minBlobSize: 24)),
         
-          .save(.filter9),
+          .save(.filter8),
 
           .frameState(.largerLinearBlobAbsorbtion),
-
 
           // try to do more line adjustment after removing some isolated blobs
           .linearBlobConnector(.init(scanSize: 20,
@@ -220,16 +208,13 @@ public class BlobProcessor {
 
           .frameState(.finalCrunch),
 
-          .save(.filter10),
-
-          
+          .save(.filter9),
 
           .isolatedBlobRemover(.init(scanSize: 6,
                                      requiredNeighbors: 1,
                                      minBlobSize: 50)),
         
-
-          .save(.filter11),
+          .save(.filter10),
 
           // try to split up blobs with more than one line in them
 
@@ -239,74 +224,31 @@ public class BlobProcessor {
                            minLineScore: 12,
                            minLineCount: 10)),
 
-          .save(.filter12),
-
+          .save(.filter11),
           
           // reconnect some lines that may have been split up
           .linearBlobConnector(.init(scanSize: 2, 
                                      blobsSmallerThan: 80,
                                      lineBorder: 2)),
-          
 
-          .save(.filter13),
+          .save(.filter12),
 
           // blob line trim
           .blobLineTrim(.init(minLineLength: 65,
                               minLineFillAmount: 0.9,
                               trimAmount: 16)),
 
+          .save(.filter13),
+          
           // split up blobs based upon user input
           .process(applyUserSlices),
+
+          .save(.filter14),
 
           // final pass on getting rid of really small blobs
           .smallBlobRemover(.init(minBlobSize: 24)),
           
-          .save(.filter14),
-          // look and see if any blobs with more than one bunch have bunches with a better
-          // line fit than the blob as a whole.  If so, break them out if the aren't tiny.
-          // XXX this doesn't seem to help
-          // try breaking them up by intensity instead of by bunch?
-          // only work on larger blobs here, do a separate blob intensity pass too
-
-          /*
-          .process() { blobs in
-              var ret: [UInt16: Blob] = [:]
-              var maxBlobID: UInt16 = 0
-              for (id, _) in blobs {
-                  if id > maxBlobID { maxBlobID = id }
-              }
-              for (_, blob) in blobs {
-                  if await blob.size() > 100 {
-                      let bunches = await blob.bunches()
-                      if bunches.count > 1,
-                         let (fullBlobDist, _) = await blob.medianDistanceFromIdealLine()
-                      {
-                          for bunch in bunches {
-                              let bunchBlob = Blob(bunch,
-                                                   id: maxBlobID+1,
-                                                   frameIndex: blob.frameIndex)
-                              
-                              if let (bunchBlobDist, _) = await bunchBlob.medianDistanceFromIdealLine(),
-                                 bunchBlobDist + 6 < fullBlobDist
-                              {
-                                  // this bunch blob has a better line fit than the whole,
-                                  // split it out as a separate blob
-                                  ret[bunchBlob.id] = bunchBlob
-                                  // remove bunch blob pixels from blob
-                                  await blob.remove(pixels: bunchBlob.pixels)
-                                  maxBlobID += 1
-                              }
-                          }
-                      }
-                  }
-                  ret[blob.id] = blob
-              }
-              return ret
-          },
-
-           */
           .save(.filter15),
-          
         
           // any really big blobs with lots of small bunches that are dim can go away
           .process() { blobs in
@@ -426,7 +368,10 @@ public class BlobProcessor {
             case .borderBrightnessLessThan(let amount):
                 var ret: [UInt16: Blob] = [:]
                 for (_, blob) in blobMap {
-                    if await originalImage!.borderBrightness(of: blob.pixels) < amount {
+                    let medianIntensity = await blob.medianIntensity()
+                    if await originalImage!.borderBrightness(of: blob.pixels) < amount ||
+                       medianIntensity > 10000 // XXX constant
+                    {
                         ret[blob.id] = blob
                     }
                 }
