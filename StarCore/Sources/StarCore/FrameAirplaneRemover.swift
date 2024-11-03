@@ -57,7 +57,13 @@ public class FrameObserver {
 
 final public actor FrameAirplaneRemover: Equatable, Hashable {
 
-    fileprivate var state: FrameProcessingState = .unprocessed 
+    fileprivate var state: FrameProcessingState = .unprocessed {
+        didSet {
+            if let frameStateChangeCallback = self.callbacks.frameStateChangeCallback {
+                frameStateChangeCallback(self, state)
+            }
+        }
+    }
 
     public var observer: FrameObserver?
 
@@ -68,9 +74,6 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     public func set(state: FrameProcessingState) {
         Log.i("frame \(frameIndex) transitioning to state \(state)")
         self.state = state
-        if let frameStateChangeCallback = self.callbacks.frameStateChangeCallback {
-            frameStateChangeCallback(self, state)
-        }
     }
     
     public func processingState() -> FrameProcessingState { return state }
@@ -92,9 +95,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
     public func getOutlierGroups() -> OutlierGroups?  { outlierGroups }
     
-    fileprivate var didChange = false
-
-    public func changesHandled() { didChange = false }
+    public func changesHandled() { self.state = .complete }
 
     public func updateCombineSubjects() async {
         if let outliers = await outlierGroups?.getMembers() {
@@ -122,12 +123,13 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
     // when this happens, re-calculate and send to all the combine subjects
     public func markAsChanged() async {
-        didChange = true
+        Log.d("mark as changed")
+        self.state = .userModified
         //Task { await self.updateCombineSubjects() }
         await self.updateCombineSubjects()
     }
 
-    public func hasChanges() -> Bool { didChange }
+    public func hasChanges() -> Bool { self.state == .userModified }
 
     public let outputFilename: String
 
@@ -214,6 +216,10 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             otherFilename = imageSequence.filenames[frameIndex+1]
         }
 
+        if imageAccessor.imageExists(ofType: .processed, atSize: .original) {
+            self.state = .complete
+        }
+        
         if let frameStateChangeCallback = callbacks.frameStateChangeCallback {
             frameStateChangeCallback(self, self.state)
         }
@@ -312,7 +318,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     public func finish() async throws {
         Log.d("frame \(self.frameIndex) starting to finish")
         self.set(state: .finishing)
-        if didChange {
+        if hasChanges() {
             // write out the outliers binary if it is not there
             // only overwrite the paint reason if it is there
             await self.writeOutliersBinary()

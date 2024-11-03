@@ -1,6 +1,7 @@
 import Foundation
 import CoreGraphics
 import Cocoa
+import SwiftUI
 
 /*
 
@@ -46,7 +47,8 @@ public enum FrameProcessingState: Int,
     case interFrameProcessing
     case outlierProcessingComplete
     case finishing
-    // XXX add gui check step?
+
+    case userModified
 
     case writingOutlierValues
     
@@ -95,6 +97,8 @@ public enum FrameProcessingState: Int,
             return "ready to finish"
         case .finishing:
             return "finishing"
+        case .userModified:
+            return "user modified"
         case .writingOutlierValues:
             return "writing outlier classification values"
         case .loadingImages:
@@ -109,6 +113,64 @@ public enum FrameProcessingState: Int,
             return "frames writing to disk"
         case .complete:
             return "frames complete"
+        }
+    }
+
+    public var color: Color {
+        print("FUCKING color for state \(self)")
+        switch self {
+        case .unprocessed:
+            return .red
+        case .starAlignment:
+            return .yellow
+        case .subtractingNeighbor:
+            return .orange
+        case .assemblingPixels:
+            return .blue
+        case .sortingPixels:
+            return .cyan
+        case .detectingBlobs:
+            return .yellow
+        case .isolatedBlobRemoval1:
+            return .orange
+        case .isolatedBlobRemoval2:
+            return .blue
+        case .isolatedBlobRemoval3:
+            return .cyan
+        case .isolatedBlobRemoval4:
+            return .blue
+        case .smallLinearBlobAbsorbtion:
+            return .yellow
+        case .largerLinearBlobAbsorbtion:
+            return .yellow
+        case .finalCrunch:
+            return .yellow
+        case .populatingOutlierGroups:
+            return .yellow
+        case .readyForInterFrameProcessing:
+            return .yellow
+        case .interFrameProcessing:
+            return .yellow
+        case .outlierProcessingComplete:
+            return .yellow
+        case .finishing:
+            return .yellow
+        case .writingOutlierValues:
+            return .yellow
+        case .userModified:
+            return .yellow
+        case .loadingImages:
+            return .yellow
+        case .loadingImages1:
+            return .yellow
+        case .painting:
+            return .yellow
+        case .painting2:
+            return .yellow
+        case .writingOutputFile:
+            return .yellow
+        case .complete:
+            return .green
         }
     }
 }

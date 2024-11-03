@@ -121,7 +121,6 @@ extension FrameAirplaneRemover {
                 // we still need to inter frame process them so that
                 // frames are linked with their neighbors and outlier
                 // groups can use these links for decision tree values
-                self.set(state: .readyForInterFrameProcessing)
                 self.outliersLoadedFromFile = true
                 Log.i("loaded \(String(describing: await self.outlierGroups?.getMembers().count)) outlier groups for frame \(frameIndex)")
                 await self.updateCombineSubjects()

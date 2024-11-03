@@ -15,13 +15,19 @@ struct FilmstripImageView: View {
             }.frame(maxHeight: 10)
             if frameIndex >= 0 && frameIndex < viewModel.frames.count {
                 let frameView = viewModel.frames[frameIndex]
-                if viewModel.currentIndex == frameIndex {
-                    
-                    frameView.thumbnailImage
-                      .foregroundColor(.orange)
-                    
-                } else {
-                    frameView.thumbnailImage
+                ZStack(alignment: .bottomTrailing) {
+                    if viewModel.currentIndex == frameIndex {
+                        frameView.thumbnailImage
+                          .foregroundColor(.orange)
+                    } else {
+                        frameView.thumbnailImage
+                    }
+                    if let frameState = frameView.frameState {
+                        Circle()
+                          .fill(frameState.color)
+                          .opacity(0.6)
+                          .frame(maxWidth: 12, maxHeight: 12)
+                    }
                 }
             }
             Spacer().frame(maxHeight: 8)

@@ -27,6 +27,10 @@ public enum ImageDisplaySize: Sendable {
 
 
 public protocol ImageAccess: Sendable {
+    // does this image exist?
+    func imageExists(ofType imageType: FrameViewMode,
+                     atSize size: ImageDisplaySize) -> Bool
+
     // save image, will rescale and jpeg if necessary
     func save(_ image: PixelatedImage,
               as type: FrameViewMode,
@@ -171,6 +175,18 @@ public struct ImageAccessor: ImageAccess, Sendable {
             Log.w("no filename for type \(imageType) at size \(size)")
         }
         return nil
+    }
+
+    public func imageExists(ofType imageType: FrameViewMode,
+                            atSize size: ImageDisplaySize) -> Bool
+    {
+        if let filename = nameForImage(ofType: imageType, atSize: size),
+           FileManager.default.fileExists(atPath: filename)
+        {
+            return true
+        } else {
+            return false
+        }
     }
 
     // load using the file system monitor

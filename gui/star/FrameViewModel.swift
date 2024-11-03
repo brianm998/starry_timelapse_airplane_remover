@@ -19,6 +19,8 @@ public class FrameViewModel {
     
     var frameObserver = FrameObserver()
 
+    var frameState: FrameProcessingState?
+    
     private var cancelBag = Set<AnyCancellable>()
 
     var isCurrentFrame: Bool = false

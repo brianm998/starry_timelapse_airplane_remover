@@ -575,7 +575,7 @@ public final class ViewModel {
         self.eraser = eraser // XXX rename this crap
         self.config = config
     }
-    
+
     @MainActor func makeCallbacks() -> Callbacks {
         var callbacks = Callbacks()
 
@@ -590,14 +590,9 @@ public final class ViewModel {
         }
         
         callbacks.frameStateChangeCallback = { frame, state in
-            // XXX do something here
-//            Log.d("frame \(frame.frameIndex) changed to state \(state)")
-//            Task {
-//                await MainActor.run {
-//                    //self.frame_states[frame.frameIndex] = state
-//                    self.objectWillChange.send()
-//                }
-//            }
+            Task { @MainActor in
+                self.frames[frame.frameIndex].frameState = state
+            }
         }
 
         // called when we should check a frame
