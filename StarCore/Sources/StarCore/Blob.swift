@@ -15,7 +15,7 @@ import logging
 public actor Blob: CustomStringConvertible,
                    Hashable
 {
-    public let id: UInt16
+    nonisolated(unsafe) public var id: UInt16
     public let frameIndex: Int
     public var pixels: Set<SortablePixel> = []
     public let statusTracker: PixelStatusTracker?
@@ -25,7 +25,7 @@ public actor Blob: CustomStringConvertible,
     nonisolated public func hash(into hasher: inout Hasher) {
         hasher.combine(id)
     }
-    
+
     public init(_ pixels: Set<SortablePixel>, // more than UInt16.max pixels is bad
                 id: UInt16,
                 frameIndex: Int,
@@ -82,6 +82,8 @@ public actor Blob: CustomStringConvertible,
         }
     }
 
+    public func update(id: UInt16) { self.id = id }
+    
     public func persistentDataArray() -> [UInt16] {
         let size = self.persistentDataSizeBytes()
         var array = [UInt16](repeating: 0, count: size/2)
@@ -179,7 +181,7 @@ public actor Blob: CustomStringConvertible,
      
      */
     // use KHT to see if we have more than one line in this group of pixels
-    public func lineSplit(args: HoughLineFinder.LineSplitArgs) -> [[SortablePixel]]
+    public func lineSplit(args: BlobLineSplitter.Args) -> [[SortablePixel]]
     {
         let hlf = HoughLineFinder(pixels: Array(self.pixels),
                                   bounds: self.boundingBox(),
@@ -598,6 +600,14 @@ public actor Blob: CustomStringConvertible,
           await calculateBunchData(from: self, maxPixelDistance: maxBunchDistance)
 
         return _maxBunchSize!
+    }
+
+    public func absorb(_ pixels: Set<SortablePixel>) {
+        self.pixels.formUnion(pixels)
+    }
+    
+    public func absorb(_ pixels: [SortablePixel]) {
+        self.pixels.formUnion(pixels)
     }
     
     public func absorb(_ otherBlob: Blob, always: Bool = false) async -> Bool {

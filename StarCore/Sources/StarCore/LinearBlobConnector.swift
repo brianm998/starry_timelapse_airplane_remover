@@ -218,10 +218,12 @@ public actor LinearBlobConnector {
             let linearBlobSet = analyzer.blobs(with: linearBlobIds)
 
             if linearBlobSet.count > 1 {
-                
-                let linearBlob = Blob(id: analyzer.maxBlobId + 1,
+                // use nextIndex(from blobMap:) here?
+                // re-use analyzer.maxBlobId until we absorb another blob
+                // and then grab its id instead, as maxBlobId is already used 
+                let linearBlob = Blob(id: analyzer.maxBlobId,
                                       frameIndex: frameIndex)
-                analyzer.maxBlobId += 1
+
                 //Log.d("frame \(analyzer.frameIndex) blob \(fullBlob.id) found \(linearBlobIds.count) linear blobs")
                 
                 // we found more than one blob along the line
@@ -231,6 +233,10 @@ public actor LinearBlobConnector {
                     if await linearBlob.absorb(otherBlob, always: true) {
                     //Log.d("frame \(analyzer.frameIndex) removing \(otherBlob) \(await otherBlob.pixels.count) pixels \(await otherBlob.pixels)")
                         await analyzer.remove(blob: otherBlob)
+                        if linearBlob.id == analyzer.maxBlobId {
+                            // reuse other blob's id to avoid overrunning UInt16.max
+                            await linearBlob.update(id: otherBlob.id)
+                        }
                     }
                 }
 

@@ -77,30 +77,11 @@ public struct HoughLineFinder {
         return imageData
     }
 
-    public struct LineSplitArgs: Sendable {
-        let maxLines: Int        // max number of lines to look at
-        let maxDistance: Double  // pixels at least this far away from a line give zero score
-        let minLineScore: Double // sub lines must have at least this score to be included
-        let minLineCount: Int    // sub lines must have at least this number of pixels
-
-        public init(
-          maxLines: Int = 8000,  
-          maxDistance: Double = 8,
-          minLineScore: Double = 12,
-          minLineCount: Int = 10
-        ) {
-            self.maxLines = maxLines
-            self.maxDistance = maxDistance
-            self.minLineScore = minLineScore
-            self.minLineCount = minLineCount
-        }
-    }
-    
     // iterate through all lines and see if any of them have a match
     // with a certain number of pixels.
     // If so, sort them by number of closest pixels, and iterate over
     // them to split this group out into more than one
-    public func lineSplit(args: LineSplitArgs, optimalLine: Line?)
+    public func lineSplit(args: BlobLineSplitter.Args, optimalLine: Line?)
       -> ([SortablePixel], [[SortablePixel]])
       // first return value is the original, possibly reduced, set of pixels we started with
       // the second return value is a list of any sub-blobs we found that are close to another line

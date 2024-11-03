@@ -35,7 +35,7 @@ public enum BlobProcessingType {
     case linearBlobConnector(LinearBlobConnector.Args)
     case blobLineTrim(BlobLineTrim.Args)
     case borderBrightnessLessThan(Double)
-    case lineSplit(HoughLineFinder.LineSplitArgs)
+    case lineSplit(BlobLineSplitter.Args)
     case blobDupeCheck(String)
     case smallBlobRemover(SmallBlobRemover.Args)
 }
@@ -218,8 +218,10 @@ public class BlobProcessor {
 
           // try to split up blobs with more than one line in them
 
-          // call with more args?
-          .lineSplit(.init(maxLines: 8000,
+          .lineSplit(.init(minAvgDistance: 5,
+                           maxLineFillAmount: 0.5,
+                           minBlobsize: 500,
+                           maxLines: 8000,
                            maxDistance: 12,
                            minLineScore: 12,
                            minLineCount: 10)),
@@ -281,6 +283,7 @@ public class BlobProcessor {
         ]
     }
 
+    // runs each step in sequence and returns the result
     public func run() async throws -> BlobMap {
         guard let frame else { throw "need frame" }
         var blobMap: BlobMap = [:]
@@ -318,51 +321,10 @@ public class BlobProcessor {
                                             step: step)
                 
             case .lineSplit(let args):
-                var ret: [UInt16: Blob] = [:]
-                var maxIndex: UInt16 = 0
-
-                for (id, _) in blobMap {
-                    if id > maxIndex { maxIndex = id }
-                }
-                
-                for (_, blob) in blobMap {
-
-                    let blobSize = await blob.size()
-                    let lineFillAmount = await blob.lineFillAmount()
-                    let avgDist = await blob.averageDistanceFromIdealLine
-
-                    if avgDist > 5, // not close to the line
-                       lineFillAmount < 0.5, // less than half pixels are on line
-                       blobSize > 500        //  big blobs only
-                    {
-                        // look and see if any pixels in this blob align with different
-                        // lines, and if so, split them apart into separate groups
-                        // XXX sometimes this splits up really close pixels into very
-                        // slightly different lines, best to avoid that
-                        // maybe use bunches?
-                        let lineSplitList = await blob.lineSplit(args: args)
-
-                        if lineSplitList.count > 0 {
-
-                            ret[blob.id] = blob
-                            // we have extra blobs to make here
-                            for pixelList in lineSplitList {
-                                maxIndex += 1
-                                let newBlob = Blob(Set(pixelList),
-                                                   id: maxIndex,
-                                                   frameIndex: frame.frameIndex)
-
-                                ret[newBlob.id] = newBlob
-                            }
-                        } else {
-                            ret[blob.id] = blob
-                        }
-                    } else {
-                        ret[blob.id] = blob
-                    }
-                }
-                Log.d("frame \(frame.frameIndex) after lineSplit, blobMap has \(ret.count) blobs")
-                blobMap = ret
+                let splitter = BlobLineSplitter(blobMap: blobMap,
+                                                frameIndex: frame.frameIndex)
+                await splitter.process(args)
+                blobMap = await splitter.blobMap()
 
                 
             case .borderBrightnessLessThan(let amount):
@@ -570,4 +532,13 @@ public class BlobProcessor {
             if count > max { shouldContinue = false }
         }
     }
+}
+
+public func nextIndex(from blobMap: [UInt16:Blob]) -> UInt16? {
+    for i in 1..<UInt16.max {
+        if blobMap[i] == nil {
+            return i
+        }
+    }
+    return nil
 }
